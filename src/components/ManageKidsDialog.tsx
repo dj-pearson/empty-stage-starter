@@ -66,7 +66,7 @@ export interface ManageKidsDialogRef {
   openForEdit: (kidId: string) => void;
 }
 
-export const ManageKidsDialog = forwardRef<ManageKidsDialogRef>((props, ref) => {
+const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) => {
   const { kids, addKid, updateKid, deleteKid } = useApp();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -500,3 +500,7 @@ export const ManageKidsDialog = forwardRef<ManageKidsDialogRef>((props, ref) => 
     </>
   );
 });
+
+ManageKidsDialogComponent.displayName = 'ManageKidsDialog';
+
+export const ManageKidsDialog = ManageKidsDialogComponent;
