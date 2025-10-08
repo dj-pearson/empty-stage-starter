@@ -79,7 +79,13 @@ export function AIMealCoach() {
 
       if (error) throw error;
 
-      setConversations(data || []);
+      setConversations((data || []).map(conv => ({
+        id: conv.id,
+        conversation_title: conv.conversation_title || "New Conversation",
+        created_at: conv.created_at,
+        updated_at: conv.updated_at,
+        is_archived: conv.is_archived || false
+      })));
     } catch (error: any) {
       console.error("Error loading conversations:", error);
     }
@@ -97,7 +103,12 @@ export function AIMealCoach() {
 
       if (error) throw error;
 
-      setMessages(data || []);
+      setMessages((data || []).map(msg => ({
+        id: msg.id,
+        role: msg.role as "user" | "assistant" | "system",
+        content: msg.content,
+        created_at: msg.created_at
+      })));
     } catch (error: any) {
       console.error("Error loading messages:", error);
       toast.error("Failed to load conversation");

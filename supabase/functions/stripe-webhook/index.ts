@@ -63,7 +63,8 @@ serve(async (req) => {
     });
   } catch (err) {
     console.error("Webhook error:", err);
-    return new Response(`Webhook Error: ${err.message}`, { status: 400 });
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    return new Response(`Webhook Error: ${errorMessage}`, { status: 400 });
   }
 });
 

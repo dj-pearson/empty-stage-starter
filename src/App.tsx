@@ -21,6 +21,7 @@ import FoodTracker from "./pages/FoodTracker";
 import AICoach from "./pages/AICoach";
 import MealBuilder from "./pages/MealBuilder";
 import FoodChaining from "./pages/FoodChaining";
+import Pricing from "./pages/Pricing";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/pricing" element={<Pricing />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/dashboard" element={<Dashboard />}>
               <Route index element={<Home />} />
