@@ -248,226 +248,233 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
 
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{editingId ? "Edit Child" : "Add Child"}</DialogTitle>
-          <DialogDescription>
-            {editingId ? "Update child information" : "Add a new child to create personalized meal plans"}
-          </DialogDescription>
-        </DialogHeader>
+        <DialogContent className="sm:max-w-[600px] p-0">
+          <DialogHeader className="px-6 pt-6">
+            <DialogTitle>{editingId ? "Edit Child" : "Add Child"}</DialogTitle>
+            <DialogDescription>
+              {editingId
+                ? "Update child information"
+                : "Add a new child to create personalized meal plans"}
+            </DialogDescription>
+          </DialogHeader>
 
-          <div ref={formRef}>
-            <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-            <div className="space-y-3">
-              <Label>Profile Picture</Label>
-              <div className="flex items-center gap-4">
-                <Avatar className="h-20 w-20">
-                  <AvatarImage src={formData.profile_picture_url} />
-                  <AvatarFallback>
-                    <UserCircle className="h-12 w-12 text-muted-foreground" />
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1">
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    disabled={uploading}
-                    className="cursor-pointer"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Upload a profile picture (max 5MB)
-                  </p>
+          <form onSubmit={handleSubmit} className="flex flex-col max-h-[85vh]">
+            <div ref={formRef} className="px-6 pb-6 space-y-4 overflow-y-auto">
+              <div className="space-y-3">
+                <Label>Profile Picture</Label>
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-20 w-20">
+                    <AvatarImage src={formData.profile_picture_url} />
+                    <AvatarFallback>
+                      <UserCircle className="h-12 w-12 text-muted-foreground" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      disabled={uploading}
+                      className="cursor-pointer"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Upload a profile picture (max 5MB)
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="name">Child's Name</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Enter name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Date of Birth</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !formData.date_of_birth && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.date_of_birth ? (
-                      <>
-                        {format(formData.date_of_birth, "PPP")}
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          (Age: {calculateAge(formData.date_of_birth)})
-                        </span>
-                      </>
-                    ) : (
-                      <span>Pick a date</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <div className="p-3 border-b space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <Label className="text-xs mb-1">Month</Label>
-                        <Select
-                          value={calendarMonth.getMonth().toString()}
-                          onValueChange={(value) => {
-                            const newDate = new Date(calendarMonth);
-                            newDate.setMonth(parseInt(value));
-                            setCalendarMonth(newDate);
-                          }}
-                        >
-                          <SelectTrigger className="h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Array.from({ length: 12 }, (_, i) => (
-                              <SelectItem key={i} value={i.toString()}>
-                                {format(new Date(2000, i, 1), "MMMM")}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label className="text-xs mb-1">Year</Label>
-                        <Select
-                          value={calendarMonth.getFullYear().toString()}
-                          onValueChange={(value) => {
-                            const newDate = new Date(calendarMonth);
-                            newDate.setFullYear(parseInt(value));
-                            setCalendarMonth(newDate);
-                          }}
-                        >
-                          <SelectTrigger className="h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-[200px]">
-                            {Array.from({ length: new Date().getFullYear() - 1999 }, (_, i) => {
-                              const year = new Date().getFullYear() - i;
-                              return (
-                                <SelectItem key={year} value={year.toString()}>
-                                  {year}
+
+              <div className="space-y-2">
+                <Label htmlFor="name">Child's Name</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Enter name"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Date of Birth</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !formData.date_of_birth && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {formData.date_of_birth ? (
+                        <>
+                          {format(formData.date_of_birth, "PPP")}
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            (Age: {calculateAge(formData.date_of_birth)})
+                          </span>
+                        </>
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <div className="p-3 border-b space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs mb-1">Month</Label>
+                          <Select
+                            value={calendarMonth.getMonth().toString()}
+                            onValueChange={(value) => {
+                              const newDate = new Date(calendarMonth);
+                              newDate.setMonth(parseInt(value));
+                              setCalendarMonth(newDate);
+                            }}
+                          >
+                            <SelectTrigger className="h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 12 }, (_, i) => (
+                                <SelectItem key={i} value={i.toString()}>
+                                  {format(new Date(2000, i, 1), "MMMM")}
                                 </SelectItem>
-                              );
-                            })}
-                          </SelectContent>
-                        </Select>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs mb-1">Year</Label>
+                          <Select
+                            value={calendarMonth.getFullYear().toString()}
+                            onValueChange={(value) => {
+                              const newDate = new Date(calendarMonth);
+                              newDate.setFullYear(parseInt(value));
+                              setCalendarMonth(newDate);
+                            }}
+                          >
+                            <SelectTrigger className="h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[200px]">
+                              {Array.from({ length: new Date().getFullYear() - 1999 }, (_, i) => {
+                                const year = new Date().getFullYear() - i;
+                                return (
+                                  <SelectItem key={year} value={year.toString()}>
+                                    {year}
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <Calendar
-                    mode="single"
-                    selected={formData.date_of_birth}
-                    onSelect={(date) => setFormData({ ...formData, date_of_birth: date })}
-                    disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
-                    month={calendarMonth}
-                    onMonthChange={setCalendarMonth}
-                    initialFocus
-                    className="pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes (optional)</Label>
-              <Textarea
-                id="notes"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="Any special notes about dietary needs, preferences, etc."
-                rows={2}
-              />
-            </div>
-            <div className="space-y-3">
-              <Label>Allergens</Label>
-              <div className="grid grid-cols-2 gap-3">
-                {PREDEFINED_ALLERGENS.map((allergen) => (
-                  <div key={allergen} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`allergen-${allergen}`}
-                      checked={formData.allergens.includes(allergen)}
-                      onCheckedChange={() => toggleAllergen(allergen)}
+                    <Calendar
+                      mode="single"
+                      selected={formData.date_of_birth}
+                      onSelect={(date) => setFormData({ ...formData, date_of_birth: date })}
+                      disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
+                      month={calendarMonth}
+                      onMonthChange={setCalendarMonth}
+                      initialFocus
+                      className="pointer-events-auto"
                     />
-                    <Label
-                      htmlFor={`allergen-${allergen}`}
-                      className="text-sm font-normal cursor-pointer capitalize"
-                    >
-                      {allergen}
-                    </Label>
-                  </div>
-                ))}
+                  </PopoverContent>
+                </Popover>
               </div>
-              {formData.allergens.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t">
-                  {formData.allergens.map((allergen) => (
-                    <Badge key={allergen} variant="destructive" className="gap-1">
-                      <AlertTriangle className="h-3 w-3" />
-                      {allergen}
-                    </Badge>
+
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes (optional)</Label>
+                <Textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="Any special notes about dietary needs, preferences, etc."
+                  rows={2}
+                />
+              </div>
+
+              <div className="space-y-3">
+                <Label>Allergens</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  {PREDEFINED_ALLERGENS.map((allergen) => (
+                    <div key={allergen} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`allergen-${allergen}`}
+                        checked={formData.allergens.includes(allergen)}
+                        onCheckedChange={() => toggleAllergen(allergen)}
+                      />
+                      <Label
+                        htmlFor={`allergen-${allergen}`}
+                        className="text-sm font-normal cursor-pointer capitalize"
+                      >
+                        {allergen}
+                      </Label>
+                    </div>
                   ))}
                 </div>
-              )}
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Heart className="h-4 w-4 text-primary" />
-                <Label>Favorite Foods</Label>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Select foods your child enjoys to help personalize meal suggestions
-              </p>
-              <div className="grid grid-cols-3 gap-2 max-h-[200px] overflow-y-auto p-2 border rounded-md">
-                {COMMON_FOODS.map((food) => (
-                  <div key={food} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`food-${food}`}
-                      checked={formData.favorite_foods.includes(food)}
-                      onCheckedChange={() => toggleFavoriteFood(food)}
-                    />
-                    <Label
-                      htmlFor={`food-${food}`}
-                      className="text-xs font-normal cursor-pointer"
-                    >
-                      {food}
-                    </Label>
+                {formData.allergens.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t">
+                    {formData.allergens.map((allergen) => (
+                      <Badge key={allergen} variant="destructive" className="gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        {allergen}
+                      </Badge>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
-              {formData.favorite_foods.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t">
-                  {formData.favorite_foods.map((food) => (
-                    <Badge key={food} variant="secondary" className="text-xs gap-1">
-                      <Heart className="h-2 w-2" />
-                      {food}
-                    </Badge>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Heart className="h-4 w-4 text-primary" />
+                  <Label>Favorite Foods</Label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Select foods your child enjoys to help personalize meal suggestions
+                </p>
+                <div className="grid grid-cols-3 gap-2 max-h-[200px] overflow-y-auto p-2 border rounded-md">
+                  {COMMON_FOODS.map((food) => (
+                    <div key={food} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`food-${food}`}
+                        checked={formData.favorite_foods.includes(food)}
+                        onCheckedChange={() => toggleFavoriteFood(food)}
+                      />
+                      <Label htmlFor={`food-${food}`} className="text-xs font-normal cursor-pointer">
+                        {food}
+                      </Label>
+                    </div>
                   ))}
                 </div>
-              )}
+                {formData.favorite_foods.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t">
+                    {formData.favorite_foods.map((food) => (
+                      <Badge key={food} variant="secondary" className="text-xs gap-1">
+                        <Heart className="h-2 w-2" />
+                        {food}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Button type="submit" className="flex-1">
-                <Plus className="h-4 w-4 mr-2" />
-                {editingId ? "Update Child" : "Add Child"}
-              </Button>
-              {editingId && (
-                <Button type="button" variant="outline" onClick={resetForm}>
-                  Cancel
+
+            <div className="sticky bottom-0 w-full px-6 py-4 border-t bg-popover/95 backdrop-blur supports-[backdrop-filter]:bg-popover/75">
+              <div className="flex gap-2">
+                <Button type="submit" className="flex-1">
+                  <Plus className="h-4 w-4 mr-2" />
+                  {editingId ? "Update Child" : "Add Child"}
                 </Button>
-              )}
+                {editingId && (
+                  <Button type="button" variant="outline" onClick={resetForm}>
+                    Cancel
+                  </Button>
+                )}
+              </div>
             </div>
           </form>
-          </div>
         </DialogContent>
       </Dialog>
     );
