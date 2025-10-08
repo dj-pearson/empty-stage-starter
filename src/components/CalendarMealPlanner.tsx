@@ -14,9 +14,11 @@ import {
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Food, PlanEntry, MealSlot } from "@/types";
-import { Sparkles, Calendar as CalendarIcon, AlertTriangle, Package } from "lucide-react";
+import { Sparkles, Calendar as CalendarIcon, AlertTriangle, Package, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, addDays, startOfWeek } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface CalendarMealPlannerProps {
   weekStart: Date;
@@ -52,6 +54,7 @@ export function CalendarMealPlanner({
 }: CalendarMealPlannerProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draggedFood, setDraggedFood] = useState<Food | null>(null);
+  const [mobileViewDay, setMobileViewDay] = useState(0); // For mobile day-by-day view
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -158,31 +161,39 @@ export function CalendarMealPlanner({
     const isLowStock = (food.quantity || 0) > 0 && (food.quantity || 0) <= 2;
 
     return (
-      <div
-        className={`p-2 rounded border ${
-          isDragging ? 'opacity-50' : ''
-        } ${
-          isOutOfStock
-            ? 'bg-destructive/10 border-destructive'
-            : isLowStock
-            ? 'bg-yellow-50 border-yellow-300'
-            : 'bg-card border-border'
-        } cursor-move hover:shadow-md transition-shadow`}
-      >
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-medium truncate flex-1">{food.name}</span>
-          {isOutOfStock ? (
-            <Package className="h-3 w-3 text-destructive flex-shrink-0" />
-          ) : isLowStock ? (
-            <AlertTriangle className="h-3 w-3 text-yellow-600 flex-shrink-0" />
-          ) : null}
-        </div>
-        {food.quantity !== undefined && food.quantity !== null && (
-          <div className="text-xs text-muted-foreground mt-1">
-            Stock: {food.quantity}
-          </div>
-        )}
-      </div>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className={cn(
+                "p-2 rounded border cursor-move hover:shadow-md transition-all",
+                isDragging && "opacity-50",
+                isOutOfStock && "bg-destructive/10 border-destructive",
+                isLowStock && "bg-yellow-50 border-yellow-300",
+                !isOutOfStock && !isLowStock && "bg-card border-border"
+              )}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-xs md:text-sm font-medium truncate flex-1">
+                  {food.name}
+                </span>
+                {isOutOfStock ? (
+                  <Package className="h-3 w-3 text-destructive flex-shrink-0" />
+                ) : isLowStock ? (
+                  <AlertTriangle className="h-3 w-3 text-yellow-600 flex-shrink-0" />
+                ) : null}
+              </div>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <div className="space-y-1">
+              <p className="font-medium">{food.name}</p>
+              <p className="text-xs">Stock: {food.quantity || 0} {food.unit || 'servings'}</p>
+              <p className="text-xs">Category: {food.category}</p>
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   };
 
@@ -232,16 +243,20 @@ export function CalendarMealPlanner({
     return (
       <div
         ref={setNodeRef}
-        className={`min-h-[80px] rounded-lg border-2 border-dashed p-2 ${
-          food ? color : 'bg-muted/30 border-muted'
-        } ${isOver ? 'ring-2 ring-primary' : ''} transition-all cursor-pointer`}
+        className={cn(
+          "min-h-[70px] md:min-h-[80px] rounded-lg border-2 border-dashed p-1.5 md:p-2",
+          food ? color : 'bg-muted/30 border-muted',
+          isOver && 'ring-2 ring-primary',
+          "transition-all cursor-pointer"
+        )}
         onClick={() => !food && onOpenFoodSelector(date, slot)}
       >
         {entry && food ? (
           <DraggableMeal entry={entry} food={food} />
         ) : (
-          <div className="flex items-center justify-center h-full text-xs text-muted-foreground hover:text-primary transition-colors">
-            Click to add
+          <div className="flex items-center justify-center h-full text-[10px] md:text-xs text-muted-foreground hover:text-primary transition-colors">
+            <span className="hidden md:inline">Click to add</span>
+            <span className="md:hidden">+</span>
           </div>
         )}
       </div>
@@ -255,36 +270,101 @@ export function CalendarMealPlanner({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="overflow-x-auto">
-        <div className="min-w-[1000px]">
-          {/* Header with days */}
-          <div className="grid grid-cols-8 gap-2 mb-2">
-            <div className="font-medium text-sm text-muted-foreground">Meals</div>
-            {days.map(day => (
-              <div key={day.date} className="text-center">
-                <div className="text-sm font-semibold">{day.label}</div>
-                <div className="text-xs text-muted-foreground">
-                  {day.month} {day.dayNum}
+      {/* Desktop View */}
+      <div className="hidden lg:block">
+        <div className="overflow-x-auto">
+          <div className="min-w-[1000px]">
+            {/* Header with days */}
+            <div className="grid grid-cols-8 gap-2 mb-2">
+              <div className="font-medium text-sm text-muted-foreground">Meals</div>
+              {days.map(day => (
+                <div key={day.date} className="text-center">
+                  <div className="text-sm font-semibold">{day.label}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {day.month} {day.dayNum}
+                  </div>
                 </div>
+              ))}
+            </div>
+
+            {/* Meal rows */}
+            {MEAL_SLOTS.map(({ slot, label, color }) => (
+              <div key={slot} className="grid grid-cols-8 gap-2 mb-2">
+                <div className={cn("flex items-center justify-center rounded-lg p-2", color)}>
+                  <span className="text-sm font-medium">{label}</span>
+                </div>
+                
+                {days.map(day => {
+                  const entry = getEntryForSlot(day.date, slot);
+                  const food = entry ? getFood(entry.food_id) : null;
+                  const dropId = `${day.date}-${slot}`;
+
+                  return (
+                    <DroppableSlot
+                      key={dropId}
+                      dropId={dropId}
+                      entry={entry}
+                      food={food}
+                      color={color}
+                      date={day.date}
+                      slot={slot}
+                    />
+                  );
+                })}
               </div>
             ))}
           </div>
+        </div>
+      </div>
 
-          {/* Meal rows */}
-          {MEAL_SLOTS.map(({ slot, label, color }) => (
-            <div key={slot} className="grid grid-cols-8 gap-2 mb-2">
-              <div className={`flex items-center justify-center rounded-lg p-2 ${color}`}>
-                <span className="text-sm font-medium">{label}</span>
-              </div>
-              
-              {days.map(day => {
-                const entry = getEntryForSlot(day.date, slot);
-                const food = entry ? getFood(entry.food_id) : null;
-                const dropId = `${day.date}-${slot}`;
+      {/* Mobile View - Day by Day */}
+      <div className="lg:hidden space-y-4">
+        {/* Mobile Day Navigation */}
+        <div className="flex items-center justify-between bg-card p-4 rounded-lg border">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setMobileViewDay(Math.max(0, mobileViewDay - 1))}
+            disabled={mobileViewDay === 0}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <div className="text-center">
+            <div className="font-semibold">
+              {days[mobileViewDay].label}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {days[mobileViewDay].month} {days[mobileViewDay].dayNum}
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setMobileViewDay(Math.min(DAYS_IN_WEEK - 1, mobileViewDay + 1))}
+            disabled={mobileViewDay === DAYS_IN_WEEK - 1}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
 
-                return (
+        {/* Mobile Meal Cards */}
+        <div className="space-y-3">
+          {MEAL_SLOTS.map(({ slot, label, color }) => {
+            const day = days[mobileViewDay];
+            const entry = getEntryForSlot(day.date, slot);
+            const food = entry ? getFood(entry.food_id) : null;
+            const dropId = `${day.date}-${slot}`;
+
+            return (
+              <Card key={slot} className={color}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-sm">{label}</span>
+                    {slot === "try_bite" && <Sparkles className="h-4 w-4 text-try-bite" />}
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-2">
                   <DroppableSlot
-                    key={dropId}
                     dropId={dropId}
                     entry={entry}
                     food={food}
@@ -292,10 +372,10 @@ export function CalendarMealPlanner({
                     date={day.date}
                     slot={slot}
                   />
-                );
-              })}
-            </div>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </div>
 
