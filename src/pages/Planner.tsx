@@ -443,24 +443,25 @@ export default function Planner() {
                       return (
                         <div
                           key={slot}
-                          className="p-4 rounded-lg border bg-card hover:shadow-md transition-shadow"
+                          className="p-4 rounded-lg border-2 bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all hover:border-primary/50"
                         >
-                          <div className="flex items-start justify-between mb-2">
-                            <p className="text-sm font-medium text-muted-foreground">{label}</p>
+                          <div className="flex items-start justify-between mb-3">
+                            <p className="text-sm font-semibold text-foreground uppercase tracking-wide">{label}</p>
                             {slot === "try_bite" && (
-                              <Sparkles className="h-4 w-4 text-try-bite" />
+                              <Sparkles className="h-5 w-5 text-try-bite" />
                             )}
                           </div>
                           
-                          {food && (
+                          {food ? (
                             <>
                               <div className="flex items-start justify-between mb-3">
-                                <p className="font-semibold">{food.name}</p>
+                                <p className="font-bold text-lg text-foreground leading-tight">{food.name}</p>
                                 <Button
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => entry && handleSwapMeal(entry)}
                                   title="Swap this meal"
+                                  className="hover:bg-primary/20"
                                 >
                                   <Shuffle className="h-4 w-4" />
                                 </Button>
@@ -470,17 +471,17 @@ export default function Planner() {
                               {food.quantity !== undefined && food.quantity !== null && (
                                 <div className="mb-3">
                                   {food.quantity === 0 ? (
-                                    <Badge variant="destructive" className="gap-1">
+                                    <Badge variant="destructive" className="gap-1 font-semibold">
                                       <Package className="h-3 w-3" />
                                       Out of Stock
                                     </Badge>
                                   ) : food.quantity <= 2 ? (
-                                    <Badge variant="secondary" className="gap-1">
+                                    <Badge variant="secondary" className="gap-1 font-semibold bg-yellow-500/20 text-yellow-900 dark:text-yellow-100 border-yellow-500/50">
                                       <AlertTriangle className="h-3 w-3" />
                                       Low Stock ({food.quantity})
                                     </Badge>
                                   ) : (
-                                    <Badge variant="outline" className="gap-1">
+                                    <Badge variant="outline" className="gap-1 font-semibold border-green-500/50 bg-green-500/10 text-green-900 dark:text-green-100">
                                       In Stock ({food.quantity})
                                     </Badge>
                                   )}
@@ -488,8 +489,8 @@ export default function Planner() {
                               )}
 
                               {food.allergens && food.allergens.length > 0 && (
-                                <div className="mb-2">
-                                  <Badge variant="secondary" className="text-xs">
+                                <div className="mb-3">
+                                  <Badge variant="secondary" className="text-xs font-semibold bg-orange-500/20 text-orange-900 dark:text-orange-100 border-orange-500/50">
                                     ⚠️ {food.allergens.join(", ")}
                                   </Badge>
                                 </div>
@@ -501,7 +502,7 @@ export default function Planner() {
                                     size="sm"
                                     variant={entry.result === "ate" ? "default" : "outline"}
                                     onClick={() => handleMarkResult(entry, "ate")}
-                                    className={entry.result === "ate" ? "bg-safe-food text-white" : ""}
+                                    className={entry.result === "ate" ? "bg-safe-food hover:bg-safe-food/90 text-white font-semibold" : "font-semibold hover:bg-safe-food/10"}
                                   >
                                     Ate
                                   </Button>
@@ -509,7 +510,7 @@ export default function Planner() {
                                     size="sm"
                                     variant={entry.result === "tasted" ? "default" : "outline"}
                                     onClick={() => handleMarkResult(entry, "tasted")}
-                                    className={entry.result === "tasted" ? "bg-secondary text-white" : ""}
+                                    className={entry.result === "tasted" ? "bg-secondary hover:bg-secondary/90 text-white font-semibold" : "font-semibold hover:bg-secondary/10"}
                                   >
                                     Tasted
                                   </Button>
@@ -517,13 +518,17 @@ export default function Planner() {
                                     size="sm"
                                     variant={entry.result === "refused" ? "default" : "outline"}
                                     onClick={() => handleMarkResult(entry, "refused")}
-                                    className={entry.result === "refused" ? "bg-destructive text-white" : ""}
+                                    className={entry.result === "refused" ? "bg-destructive hover:bg-destructive/90 text-white font-semibold" : "font-semibold hover:bg-destructive/10"}
                                   >
                                     Refused
                                   </Button>
                                 </div>
                               )}
                             </>
+                          ) : (
+                            <div className="text-center py-4">
+                              <p className="text-muted-foreground font-medium">No meal planned</p>
+                            </div>
                           )}
                         </div>
                       );
