@@ -2,13 +2,14 @@ import { Food } from "@/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2, Package } from "lucide-react";
+import { Pencil, Trash2, Package, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface FoodCardProps {
   food: Food;
   onEdit: (food: Food) => void;
   onDelete: (id: string) => void;
+  kidAllergens?: string[];
 }
 
 const categoryColors: Record<string, string> = {
@@ -20,9 +21,20 @@ const categoryColors: Record<string, string> = {
   snack: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
 };
 
-export function FoodCard({ food, onEdit, onDelete }: FoodCardProps) {
+export function FoodCard({ food, onEdit, onDelete, kidAllergens }: FoodCardProps) {
+  // Check if food contains any allergens for the kid
+  const hasAllergen = kidAllergens && food.allergens && 
+    food.allergens.some(allergen => kidAllergens.includes(allergen));
+  
+  const matchingAllergens = hasAllergen && food.allergens 
+    ? food.allergens.filter(allergen => kidAllergens?.includes(allergen))
+    : [];
+
   return (
-    <Card className="p-4 hover:shadow-lg transition-shadow">
+    <Card className={cn(
+      "p-4 hover:shadow-lg transition-shadow",
+      hasAllergen && "border-2 border-destructive"
+    )}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -49,6 +61,25 @@ export function FoodCard({ food, onEdit, onDelete }: FoodCardProps) {
             )}
             {food.is_try_bite && (
               <Badge className="bg-try-bite text-white">Try Bite</Badge>
+            )}
+            {hasAllergen && (
+              <Badge variant="destructive" className="gap-1 animate-pulse">
+                <AlertTriangle className="h-3 w-3" />
+                ALLERGEN WARNING
+              </Badge>
+            )}
+            {food.allergens && food.allergens.length > 0 && (
+              <div className="flex flex-wrap gap-1 w-full mt-1">
+                {food.allergens.map((allergen) => (
+                  <Badge 
+                    key={allergen} 
+                    variant={matchingAllergens.includes(allergen) ? "destructive" : "secondary"}
+                    className="text-xs"
+                  >
+                    {allergen}
+                  </Badge>
+                ))}
+              </div>
             )}
           </div>
         </div>

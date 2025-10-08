@@ -11,7 +11,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Users, Plus, Pencil, Trash2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Users, Plus, Pencil, Trash2, X, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -29,7 +31,13 @@ export function ManageKidsDialog() {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ name: "", age: "" });
+  const [formData, setFormData] = useState({ 
+    name: "", 
+    age: "", 
+    notes: "",
+    allergens: [] as string[]
+  });
+  const [allergenInput, setAllergenInput] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,27 +46,49 @@ export function ManageKidsDialog() {
       return;
     }
 
+    const kidData = {
+      name: formData.name,
+      age: formData.age ? parseInt(formData.age) : undefined,
+      notes: formData.notes || undefined,
+      allergens: formData.allergens.length > 0 ? formData.allergens : undefined,
+    };
+
     if (editingId) {
-      updateKid(editingId, {
-        name: formData.name,
-        age: formData.age ? parseInt(formData.age) : undefined,
-      });
+      updateKid(editingId, kidData);
       toast.success("Child updated!");
     } else {
-      addKid({
-        name: formData.name,
-        age: formData.age ? parseInt(formData.age) : undefined,
-      });
+      addKid(kidData);
       toast.success("Child added!");
     }
 
-    setFormData({ name: "", age: "" });
+    setFormData({ name: "", age: "", notes: "", allergens: [] });
+    setAllergenInput("");
     setEditingId(null);
   };
 
-  const handleEdit = (kid: { id: string; name: string; age?: number }) => {
+  const handleEdit = (kid: { id: string; name: string; age?: number; notes?: string; allergens?: string[] }) => {
     setEditingId(kid.id);
-    setFormData({ name: kid.name, age: kid.age?.toString() || "" });
+    setFormData({ 
+      name: kid.name, 
+      age: kid.age?.toString() || "",
+      notes: kid.notes || "",
+      allergens: kid.allergens || []
+    });
+  };
+
+  const handleAddAllergen = () => {
+    const allergen = allergenInput.trim();
+    if (allergen && !formData.allergens.includes(allergen)) {
+      setFormData({ ...formData, allergens: [...formData.allergens, allergen] });
+      setAllergenInput("");
+    }
+  };
+
+  const handleRemoveAllergen = (allergen: string) => {
+    setFormData({ 
+      ...formData, 
+      allergens: formData.allergens.filter(a => a !== allergen) 
+    });
   };
 
   const handleDelete = (id: string) => {
@@ -72,7 +102,8 @@ export function ManageKidsDialog() {
   };
 
   const resetForm = () => {
-    setFormData({ name: "", age: "" });
+    setFormData({ name: "", age: "", notes: "", allergens: [] });
+    setAllergenInput("");
     setEditingId(null);
   };
 
@@ -115,6 +146,44 @@ export function ManageKidsDialog() {
                 max="18"
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes (optional)</Label>
+              <Textarea
+                id="notes"
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                placeholder="Any special notes about dietary needs, preferences, etc."
+                rows={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Allergens</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={allergenInput}
+                  onChange={(e) => setAllergenInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddAllergen())}
+                  placeholder="e.g., peanuts, dairy, gluten"
+                />
+                <Button type="button" onClick={handleAddAllergen} variant="outline">
+                  Add
+                </Button>
+              </div>
+              {formData.allergens.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {formData.allergens.map((allergen) => (
+                    <Badge key={allergen} variant="destructive" className="gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      {allergen}
+                      <X 
+                        className="h-3 w-3 cursor-pointer" 
+                        onClick={() => handleRemoveAllergen(allergen)}
+                      />
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="flex gap-2">
               <Button type="submit" className="flex-1">
                 <Plus className="h-4 w-4 mr-2" />
@@ -139,6 +208,16 @@ export function ManageKidsDialog() {
                   <div>
                     <p className="font-medium">{kid.name}</p>
                     {kid.age && <p className="text-sm text-muted-foreground">Age {kid.age}</p>}
+                    {kid.allergens && kid.allergens.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {kid.allergens.map((allergen) => (
+                          <Badge key={allergen} variant="destructive" className="text-xs gap-1">
+                            <AlertTriangle className="h-2 w-2" />
+                            {allergen}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <Button

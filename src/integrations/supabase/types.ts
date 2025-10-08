@@ -109,6 +109,7 @@ export type Database = {
       kids: {
         Row: {
           age: number | null
+          allergens: string[] | null
           created_at: string | null
           id: string
           name: string
@@ -118,6 +119,7 @@ export type Database = {
         }
         Insert: {
           age?: number | null
+          allergens?: string[] | null
           created_at?: string | null
           id?: string
           name: string
@@ -127,6 +129,7 @@ export type Database = {
         }
         Update: {
           age?: number | null
+          allergens?: string[] | null
           created_at?: string | null
           id?: string
           name?: string
@@ -306,6 +309,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_food_safe_for_kid: {
+        Args: { _food_allergens: string[]; _kid_allergens: string[] }
         Returns: boolean
       }
     }

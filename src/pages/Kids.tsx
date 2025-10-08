@@ -1,8 +1,10 @@
 import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ManageKidsDialog } from "@/components/ManageKidsDialog";
+import { ProductSafetyChecker } from "@/components/ProductSafetyChecker";
 import { Button } from "@/components/ui/button";
-import { UserCircle, Check } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { UserCircle, Check, AlertTriangle } from "lucide-react";
 
 export default function Kids() {
   const { kids, activeKidId, setActiveKid, planEntries } = useApp();
@@ -52,6 +54,16 @@ export default function Kids() {
                             Age {kid.age}
                           </p>
                         )}
+                        {kid.allergens && kid.allergens.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {kid.allergens.map((allergen) => (
+                              <Badge key={allergen} variant="destructive" className="text-xs gap-1">
+                                <AlertTriangle className="h-2 w-2" />
+                                {allergen}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                     {isActive && (
@@ -62,7 +74,7 @@ export default function Kids() {
                     )}
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-muted-foreground mb-1">
@@ -79,6 +91,15 @@ export default function Kids() {
                       </p>
                     </div>
                   </div>
+                  
+                  {kid.allergens && kid.allergens.length > 0 && (
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <ProductSafetyChecker 
+                        kidName={kid.name}
+                        kidAllergens={kid.allergens}
+                      />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );

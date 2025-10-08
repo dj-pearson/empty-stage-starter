@@ -34,7 +34,7 @@ interface FoodSuggestion {
 }
 
 export default function Pantry() {
-  const { foods, addFood, updateFood, deleteFood, planEntries } = useApp();
+  const { foods, addFood, updateFood, deleteFood, planEntries, kids, activeKidId } = useApp();
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editFood, setEditFood] = useState<Food | null>(null);
@@ -259,14 +259,18 @@ export default function Pantry() {
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredFoods.map(food => (
-                <FoodCard
-                  key={food.id}
-                  food={food}
-                  onEdit={handleEdit}
-                  onDelete={deleteFood}
-                />
-              ))}
+              {filteredFoods.map(food => {
+                const activeKid = kids.find(k => k.id === activeKidId);
+                return (
+                  <FoodCard
+                    key={food.id}
+                    food={food}
+                    onEdit={handleEdit}
+                    onDelete={deleteFood}
+                    kidAllergens={activeKid?.allergens}
+                  />
+                );
+              })}
             </div>
           )}
         </div>

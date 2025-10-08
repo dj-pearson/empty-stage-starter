@@ -21,6 +21,7 @@ export interface Kid {
   name: string;
   age?: number;
   notes?: string;
+  allergens?: string[];
 }
 
 export interface PlanEntry {
