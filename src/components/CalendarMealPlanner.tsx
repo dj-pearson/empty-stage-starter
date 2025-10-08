@@ -22,9 +22,11 @@ interface CalendarMealPlannerProps {
   weekStart: Date;
   planEntries: PlanEntry[];
   foods: Food[];
+  recipes: any[];
   kidId: string;
   onUpdateEntry: (entryId: string, updates: Partial<PlanEntry>) => void;
   onAddEntry: (date: string, slot: MealSlot, foodId: string) => void;
+  onOpenFoodSelector: (date: string, slot: MealSlot) => void;
 }
 
 const MEAL_SLOTS: { slot: MealSlot; label: string; color: string }[] = [
@@ -42,9 +44,11 @@ export function CalendarMealPlanner({
   weekStart,
   planEntries,
   foods,
+  recipes,
   kidId,
   onUpdateEntry,
   onAddEntry,
+  onOpenFoodSelector,
 }: CalendarMealPlannerProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draggedFood, setDraggedFood] = useState<Food | null>(null);
@@ -182,12 +186,16 @@ export function CalendarMealPlanner({
     dropId, 
     entry, 
     food, 
-    color 
+    color,
+    date,
+    slot,
   }: { 
     dropId: string; 
     entry: PlanEntry | undefined; 
     food: Food | null; 
     color: string;
+    date: string;
+    slot: MealSlot;
   }) => {
     const { setNodeRef, isOver } = useDroppable({
       id: dropId,
@@ -198,13 +206,14 @@ export function CalendarMealPlanner({
         ref={setNodeRef}
         className={`min-h-[80px] rounded-lg border-2 border-dashed p-2 ${
           food ? color : 'bg-muted/30 border-muted'
-        } ${isOver ? 'ring-2 ring-primary' : ''} transition-all`}
+        } ${isOver ? 'ring-2 ring-primary' : ''} transition-all cursor-pointer`}
+        onClick={() => !food && onOpenFoodSelector(date, slot)}
       >
         {entry && food ? (
           <DraggableMeal entry={entry} food={food} />
         ) : (
-          <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-            Drop here
+          <div className="flex items-center justify-center h-full text-xs text-muted-foreground hover:text-primary transition-colors">
+            Click to add
           </div>
         )}
       </div>
@@ -252,6 +261,8 @@ export function CalendarMealPlanner({
                     entry={entry}
                     food={food}
                     color={color}
+                    date={day.date}
+                    slot={slot}
                   />
                 );
               })}

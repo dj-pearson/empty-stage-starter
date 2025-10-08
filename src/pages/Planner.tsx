@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CalendarMealPlanner } from "@/components/CalendarMealPlanner";
+import { FoodSelectorDialog } from "@/components/FoodSelectorDialog";
 import { buildWeekPlan, buildDayPlan } from "@/lib/mealPlanner";
 import { Calendar, RefreshCw, Sparkles, Shuffle, AlertTriangle, Package, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -29,6 +30,8 @@ export default function Planner() {
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+  const [foodSelectorOpen, setFoodSelectorOpen] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<{ date: string; slot: MealSlot } | null>(null);
 
   const activeKid = kids.find(k => k.id === activeKidId);
 
@@ -167,6 +170,28 @@ export default function Planner() {
 
   const handleThisWeek = () => {
     setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 0 }));
+  };
+
+  const handleOpenFoodSelector = (date: string, slot: MealSlot) => {
+    setSelectedSlot({ date, slot });
+    setFoodSelectorOpen(true);
+  };
+
+  const handleSelectFood = (foodId: string) => {
+    if (!selectedSlot || !activeKid) return;
+    handleAddEntry(selectedSlot.date, selectedSlot.slot, foodId);
+    toast.success("Meal added to calendar");
+  };
+
+  const handleSelectRecipe = (recipeId: string) => {
+    if (!selectedSlot || !activeKid) return;
+    
+    const recipe = recipes.find(r => r.id === recipeId);
+    if (!recipe || recipe.food_ids.length === 0) return;
+    
+    // Use the first food from the recipe
+    handleAddEntry(selectedSlot.date, selectedSlot.slot, recipe.food_ids[0]);
+    toast.success(`${recipe.name} added to calendar`);
   };
 
   const handleMarkResult = async (entry: PlanEntry, result: "ate" | "tasted" | "refused") => {
@@ -346,11 +371,24 @@ export default function Planner() {
             weekStart={currentWeekStart}
             planEntries={planEntries}
             foods={foods}
+            recipes={recipes}
             kidId={activeKidId!}
             onUpdateEntry={handleUpdateEntry}
             onAddEntry={handleAddEntry}
+            onOpenFoodSelector={handleOpenFoodSelector}
           />
         )}
+
+        <FoodSelectorDialog
+          open={foodSelectorOpen}
+          onOpenChange={setFoodSelectorOpen}
+          foods={foods}
+          recipes={recipes}
+          slot={selectedSlot?.slot || null}
+          date={selectedSlot?.date || null}
+          onSelectFood={handleSelectFood}
+          onSelectRecipe={handleSelectRecipe}
+        />
 
         {planEntries.length === 0 ? (
           <Card className="p-12 text-center">
