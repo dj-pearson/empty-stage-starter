@@ -8,12 +8,18 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "mobile:add:android": "npx cap add android",
+    "mobile:add:ios": "npx cap add ios",
+    "mobile:sync": "npm run build && npx cap sync",
+    "mobile:open:android": "npx cap open android",
+    "mobile:open:ios": "npx cap open ios",
+    "mobile:run:android": "npm run build && npx cap sync && npx cap run android",
+    "mobile:run:ios": "npm run build && npx cap sync && npx cap run ios"
   },
   "dependencies": {
     "@capacitor-community/barcode-scanner": "^4.0.1",
     "@capacitor/android": "^7.4.3",
-    "@capacitor/barcode-scanner": "^2.2.0",
     "@capacitor/cli": "^7.4.3",
     "@capacitor/core": "^7.4.3",
     "@capacitor/ios": "^7.4.3",
