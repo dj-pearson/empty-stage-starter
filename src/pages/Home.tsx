@@ -129,7 +129,7 @@ export default function Home() {
 
         {/* Action Cards */}
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="hover:shadow-lg transition-all cursor-pointer group" onClick={() => navigate("/pantry")}>
+          <Card className="hover:shadow-lg transition-all cursor-pointer group" onClick={() => navigate("/dashboard/pantry")}>
             <CardHeader>
               <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <Utensils className="h-6 w-6 text-primary" />
@@ -146,7 +146,7 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-lg transition-all cursor-pointer group" onClick={() => navigate("/recipes")}>
+          <Card className="hover:shadow-lg transition-all cursor-pointer group" onClick={() => navigate("/dashboard/recipes")}>
             <CardHeader>
               <div className="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <ChefHat className="h-6 w-6 text-secondary" />
@@ -163,7 +163,7 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-lg transition-all cursor-pointer group" onClick={() => navigate("/planner")}>
+          <Card className="hover:shadow-lg transition-all cursor-pointer group" onClick={() => navigate("/dashboard/planner")}>
             <CardHeader>
               <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <Calendar className="h-6 w-6 text-accent" />
@@ -180,7 +180,7 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-lg transition-all cursor-pointer group" onClick={() => navigate("/analytics")}>
+          <Card className="hover:shadow-lg transition-all cursor-pointer group" onClick={() => navigate("/dashboard/analytics")}>
             <CardHeader>
               <div className="w-12 h-12 rounded-full bg-try-bite/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <BarChart3 className="h-6 w-6 text-try-bite" />
