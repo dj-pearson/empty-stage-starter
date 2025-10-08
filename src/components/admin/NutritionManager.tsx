@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import { NutritionImportDialog } from "./NutritionImportDialog";
+import { BarcodeScannerDialog } from "./BarcodeScannerDialog";
 
 type NutritionItem = {
   id: string;
@@ -206,6 +207,7 @@ export const NutritionManager = () => {
           />
         </div>
         <div className="flex gap-2">
+          <BarcodeScannerDialog onFoodAdded={fetchNutritionItems} />
           <NutritionImportDialog onImportComplete={fetchNutritionItems} />
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
