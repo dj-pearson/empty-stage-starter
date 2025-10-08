@@ -14,7 +14,209 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      foods: {
+        Row: {
+          aisle: string | null
+          allergens: string[] | null
+          category: string
+          created_at: string | null
+          id: string
+          is_safe: boolean
+          is_try_bite: boolean
+          name: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          aisle?: string | null
+          allergens?: string[] | null
+          category: string
+          created_at?: string | null
+          id?: string
+          is_safe?: boolean
+          is_try_bite?: boolean
+          name: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          aisle?: string | null
+          allergens?: string[] | null
+          category?: string
+          created_at?: string | null
+          id?: string
+          is_safe?: boolean
+          is_try_bite?: boolean
+          name?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      grocery_items: {
+        Row: {
+          category: string
+          checked: boolean
+          created_at: string | null
+          id: string
+          name: string
+          quantity: number
+          source_plan_entry_id: string | null
+          unit: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category: string
+          checked?: boolean
+          created_at?: string | null
+          id?: string
+          name: string
+          quantity?: number
+          source_plan_entry_id?: string | null
+          unit?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string
+          checked?: boolean
+          created_at?: string | null
+          id?: string
+          name?: string
+          quantity?: number
+          source_plan_entry_id?: string | null
+          unit?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grocery_items_source_plan_entry_id_fkey"
+            columns: ["source_plan_entry_id"]
+            isOneToOne: false
+            referencedRelation: "plan_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kids: {
+        Row: {
+          age: number | null
+          created_at: string | null
+          id: string
+          name: string
+          notes: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          age?: number | null
+          created_at?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          age?: number | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      plan_entries: {
+        Row: {
+          created_at: string | null
+          date: string
+          food_id: string
+          id: string
+          kid_id: string
+          meal_slot: string
+          notes: string | null
+          result: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          food_id: string
+          id?: string
+          kid_id: string
+          meal_slot: string
+          notes?: string | null
+          result?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          food_id?: string
+          id?: string
+          kid_id?: string
+          meal_slot?: string
+          notes?: string | null
+          result?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_entries_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_entries_kid_id_fkey"
+            columns: ["kid_id"]
+            isOneToOne: false
+            referencedRelation: "kids"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipes: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          description: string | null
+          food_ids: string[]
+          id: string
+          name: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          food_ids?: string[]
+          id?: string
+          name: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          food_ids?: string[]
+          id?: string
+          name?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
