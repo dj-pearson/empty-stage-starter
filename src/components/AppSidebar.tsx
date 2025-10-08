@@ -1,0 +1,225 @@
+import { NavLink, useNavigate } from "react-router-dom";
+import {
+  Home,
+  Utensils,
+  Calendar,
+  ShoppingCart,
+  Users,
+  BarChart3,
+  ChefHat,
+  Target,
+  Bot,
+  Sparkles,
+  TrendingUp,
+  Shield,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar,
+  SidebarHeader,
+  SidebarFooter,
+} from "@/components/ui/sidebar";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+
+const mainNavItems = [
+  { to: "/dashboard", icon: Home, label: "Home" },
+  { to: "/dashboard/kids", icon: Users, label: "Kids" },
+  { to: "/dashboard/pantry", icon: Utensils, label: "Pantry" },
+  { to: "/dashboard/recipes", icon: ChefHat, label: "Recipes" },
+  { to: "/dashboard/planner", icon: Calendar, label: "Planner" },
+  { to: "/dashboard/grocery", icon: ShoppingCart, label: "Grocery" },
+];
+
+const toolsNavItems = [
+  { to: "/dashboard/food-tracker", icon: Target, label: "Food Tracker" },
+  { to: "/dashboard/ai-coach", icon: Bot, label: "AI Coach" },
+  { to: "/dashboard/meal-builder", icon: Sparkles, label: "Meal Builder" },
+  { to: "/dashboard/food-chaining", icon: TrendingUp, label: "Food Chaining" },
+];
+
+const insightsNavItems = [
+  { to: "/dashboard/analytics", icon: BarChart3, label: "Analytics" },
+];
+
+export function AppSidebar() {
+  const { state, toggleSidebar } = useSidebar();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+
+      setIsAdmin(!!data);
+    };
+
+    checkAdminStatus();
+  }, []);
+
+  const isCollapsed = state === "collapsed";
+
+  return (
+    <Sidebar collapsible="icon">
+      {/* Header with Logo */}
+      <SidebarHeader className="border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Utensils className="h-6 w-6 text-primary shrink-0" />
+            {!isCollapsed && (
+              <span className="text-xl font-heading font-bold text-primary">
+                EatPal
+              </span>
+            )}
+          </div>
+        </div>
+      </SidebarHeader>
+
+      <SidebarContent>
+        {/* Main Navigation */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Main</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {mainNavItems.map((item) => (
+                <SidebarMenuItem key={item.to}>
+                  <SidebarMenuButton asChild tooltip={item.label}>
+                    <NavLink
+                      to={item.to}
+                      end={item.to === "/dashboard"}
+                      className={({ isActive }) =>
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "hover:bg-muted/50"
+                      }
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {!isCollapsed && <span>{item.label}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Tools */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Tools</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {toolsNavItems.map((item) => (
+                <SidebarMenuItem key={item.to}>
+                  <SidebarMenuButton asChild tooltip={item.label}>
+                    <NavLink
+                      to={item.to}
+                      className={({ isActive }) =>
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "hover:bg-muted/50"
+                      }
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {!isCollapsed && <span>{item.label}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Insights */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Insights</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {insightsNavItems.map((item) => (
+                <SidebarMenuItem key={item.to}>
+                  <SidebarMenuButton asChild tooltip={item.label}>
+                    <NavLink
+                      to={item.to}
+                      className={({ isActive }) =>
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "hover:bg-muted/50"
+                      }
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {!isCollapsed && <span>{item.label}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Admin Section */}
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Admin</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild tooltip="Admin Panel">
+                    <NavLink
+                      to="/admin"
+                      className={({ isActive }) =>
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "hover:bg-muted/50"
+                      }
+                    >
+                      <Shield className="h-4 w-4" />
+                      {!isCollapsed && <span>Admin Panel</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+      </SidebarContent>
+
+      {/* Footer with collapse toggle */}
+      <SidebarFooter className="border-t border-border p-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={toggleSidebar}
+          className="w-full justify-center"
+        >
+          {isCollapsed ? (
+            <ChevronsRight className="h-4 w-4" />
+          ) : (
+            <>
+              <ChevronsLeft className="h-4 w-4 mr-2" />
+              <span>Collapse</span>
+            </>
+          )}
+        </Button>
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
