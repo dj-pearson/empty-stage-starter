@@ -56,4 +56,10 @@ export interface Recipe {
   description?: string;
   food_ids: string[];
   category?: FoodCategory;
+  instructions?: string;
+  prepTime?: string;
+  cookTime?: string;
+  servings?: string;
+  additionalIngredients?: string;
+  tips?: string;
 }

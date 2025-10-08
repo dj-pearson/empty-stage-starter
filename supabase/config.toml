@@ -3,5 +3,8 @@ project_id = "tbuszxkevkpjcjapbrir"
 [functions.suggest-foods]
 verify_jwt = false
 
+[functions.suggest-recipe]
+verify_jwt = true
+
 [functions.test-ai-model]
 verify_jwt = true

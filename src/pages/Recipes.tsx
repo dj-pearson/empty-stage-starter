@@ -3,19 +3,14 @@ import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, ChefHat } from "lucide-react";
+import { Plus, Pencil, Trash2, ChefHat, Clock, Users, Lightbulb } from "lucide-react";
+import { RecipeBuilder } from "@/components/RecipeBuilder";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Recipe } from "@/types";
 import {
@@ -34,50 +29,26 @@ export default function Recipes() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editRecipe, setEditRecipe] = useState<Recipe | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    food_ids: [] as string[],
-  });
 
   const handleEdit = (recipe: Recipe) => {
     setEditRecipe(recipe);
-    setFormData({
-      name: recipe.name,
-      description: recipe.description || "",
-      food_ids: recipe.food_ids,
-    });
     setDialogOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.name.trim()) {
-      toast.error("Please enter a recipe name");
-      return;
-    }
-
-    if (formData.food_ids.length === 0) {
-      toast.error("Please select at least one food");
-      return;
-    }
-
+  const handleSave = (recipeData: any) => {
     if (editRecipe) {
-      updateRecipe(editRecipe.id, formData);
+      updateRecipe(editRecipe.id, recipeData);
       toast.success("Recipe updated!");
     } else {
-      addRecipe(formData);
+      addRecipe(recipeData);
       toast.success("Recipe created!");
     }
-
     handleClose();
   };
 
   const handleClose = () => {
     setDialogOpen(false);
     setEditRecipe(null);
-    setFormData({ name: "", description: "", food_ids: [] });
   };
 
   const handleDelete = (id: string) => {
@@ -86,22 +57,11 @@ export default function Recipes() {
     toast.success("Recipe deleted");
   };
 
-  const toggleFood = (foodId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      food_ids: prev.food_ids.includes(foodId)
-        ? prev.food_ids.filter(id => id !== foodId)
-        : [...prev.food_ids, foodId],
-    }));
-  };
-
   const getRecipeFoods = (recipe: Recipe) => {
     return recipe.food_ids
       .map(id => foods.find(f => f.id === id))
       .filter(Boolean);
   };
-
-  const safeFoods = foods.filter(f => f.is_safe);
 
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
@@ -169,22 +129,74 @@ export default function Recipes() {
                       <p className="text-sm text-muted-foreground mt-2">
                         {recipe.description}
                       </p>
-                    )}
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-muted-foreground">
-                        Includes ({recipeFoods.length} foods):
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {recipeFoods.map((food) => food && (
-                          <Badge key={food.id} variant="outline">
-                            {food.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </CardContent>
+                   )}
+                 </CardHeader>
+                 <CardContent className="space-y-4">
+                   {/* Time and Servings */}
+                   {(recipe.prepTime || recipe.cookTime || recipe.servings) && (
+                     <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+                       {recipe.prepTime && (
+                         <div className="flex items-center gap-1">
+                           <Clock className="h-4 w-4" />
+                           <span>Prep: {recipe.prepTime}</span>
+                         </div>
+                       )}
+                       {recipe.cookTime && (
+                         <div className="flex items-center gap-1">
+                           <Clock className="h-4 w-4" />
+                           <span>Cook: {recipe.cookTime}</span>
+                         </div>
+                       )}
+                       {recipe.servings && (
+                         <div className="flex items-center gap-1">
+                           <Users className="h-4 w-4" />
+                           <span>{recipe.servings} servings</span>
+                         </div>
+                       )}
+                     </div>
+                   )}
+
+                   {/* Ingredients */}
+                   <div className="space-y-2">
+                     <p className="text-sm font-medium text-muted-foreground">
+                       Main Ingredients ({recipeFoods.length}):
+                     </p>
+                     <div className="flex flex-wrap gap-2">
+                       {recipeFoods.map((food) => food && (
+                         <Badge key={food.id} variant="outline">
+                           {food.name}
+                         </Badge>
+                       ))}
+                     </div>
+                   </div>
+
+                   {/* Additional Ingredients */}
+                   {recipe.additionalIngredients && (
+                     <div className="space-y-1">
+                       <p className="text-sm font-medium text-muted-foreground">Also needed:</p>
+                       <p className="text-sm">{recipe.additionalIngredients}</p>
+                     </div>
+                   )}
+
+                   {/* Instructions Preview */}
+                   {recipe.instructions && (
+                     <div className="space-y-1">
+                       <p className="text-sm font-medium text-muted-foreground">Instructions:</p>
+                       <p className="text-sm line-clamp-3">{recipe.instructions}</p>
+                     </div>
+                   )}
+
+                   {/* Tips */}
+                   {recipe.tips && (
+                     <div className="space-y-1 bg-muted/50 p-3 rounded-lg">
+                       <div className="flex items-center gap-1 text-sm font-medium">
+                         <Lightbulb className="h-4 w-4" />
+                         <span>Picky Eater Tips:</span>
+                       </div>
+                       <p className="text-sm">{recipe.tips}</p>
+                     </div>
+                   )}
+                 </CardContent>
                 </Card>
               );
             })}
@@ -196,77 +208,19 @@ export default function Recipes() {
           if (!open) handleClose();
           setDialogOpen(open);
         }}>
-          <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editRecipe ? "Edit Recipe" : "Create Recipe"}
               </DialogTitle>
-              <DialogDescription>
-                Group foods together to create complete meal templates
-              </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Recipe Name *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g., Taco Night, Pizza Party"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description">Description (optional)</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Add notes about this meal..."
-                  rows={3}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Select Foods * ({formData.food_ids.length} selected)</Label>
-                <div className="border rounded-lg p-4 max-h-[300px] overflow-y-auto space-y-3">
-                  {safeFoods.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No safe foods available. Add some in the Pantry first.
-                    </p>
-                  ) : (
-                    safeFoods.map((food) => (
-                      <div key={food.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={food.id}
-                          checked={formData.food_ids.includes(food.id)}
-                          onCheckedChange={() => toggleFood(food.id)}
-                        />
-                        <label
-                          htmlFor={food.id}
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1 cursor-pointer"
-                        >
-                          {food.name}
-                          <span className="text-muted-foreground ml-2">
-                            ({food.category})
-                          </span>
-                        </label>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-4">
-                <Button type="submit" className="flex-1">
-                  {editRecipe ? "Update Recipe" : "Create Recipe"}
-                </Button>
-                <Button type="button" variant="outline" onClick={handleClose}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
+            <RecipeBuilder
+              foods={foods}
+              editRecipe={editRecipe}
+              onSave={handleSave}
+              onCancel={handleClose}
+            />
           </DialogContent>
         </Dialog>
 
