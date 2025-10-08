@@ -4,7 +4,7 @@ import { useAdminCheck } from "@/hooks/useAdminCheck";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Users, Database, ArrowLeft, Brain, UserCog, CreditCard, Target, Share2, BookOpen, Mail, Search } from "lucide-react";
+import { Users, Database, ArrowLeft, Brain, UserCog, CreditCard, Target, Share2, BookOpen, Mail, Search, Percent, Gift } from "lucide-react";
 import { NutritionManager } from "@/components/admin/NutritionManager";
 import { UserRolesManager } from "@/components/admin/UserRolesManager";
 import { AISettingsManager } from "@/components/admin/AISettingsManager";
@@ -15,6 +15,8 @@ import { SocialMediaManager } from "@/components/admin/SocialMediaManager";
 import { BlogCMSManager } from "@/components/admin/BlogCMSManager";
 import { EmailMarketingManager } from "@/components/admin/EmailMarketingManager";
 import { SEOManager } from "@/components/admin/SEOManager";
+import { PromotionalCampaignManager } from "@/components/admin/PromotionalCampaignManager";
+import { ComplementarySubscriptionManager } from "@/components/admin/ComplementarySubscriptionManager";
 
 const Admin = () => {
   const { isAdmin, isLoading } = useAdminCheck();
@@ -49,14 +51,22 @@ const Admin = () => {
       </div>
 
       <Tabs defaultValue="users" className="space-y-6">
-        <TabsList className="grid w-full max-w-7xl grid-cols-5 lg:grid-cols-10 gap-1">
+        <TabsList className="grid w-full max-w-7xl grid-cols-6 lg:grid-cols-12 gap-1">
           <TabsTrigger value="users" className="gap-2">
             <UserCog className="h-4 w-4" />
             Users
           </TabsTrigger>
           <TabsTrigger value="subscriptions" className="gap-2">
             <CreditCard className="h-4 w-4" />
-            Subscriptions
+            Subs
+          </TabsTrigger>
+          <TabsTrigger value="complementary" className="gap-2">
+            <Gift className="h-4 w-4" />
+            Comp
+          </TabsTrigger>
+          <TabsTrigger value="campaigns" className="gap-2">
+            <Percent className="h-4 w-4" />
+            Promos
           </TabsTrigger>
           <TabsTrigger value="leads" className="gap-2">
             <Target className="h-4 w-4" />
@@ -108,6 +118,34 @@ const Admin = () => {
 
         <TabsContent value="subscriptions">
           <SubscriptionManagement />
+        </TabsContent>
+
+        <TabsContent value="complementary">
+          <Card>
+            <CardHeader>
+              <CardTitle>Complementary Subscriptions</CardTitle>
+              <CardDescription>
+                Grant free subscriptions to specific users
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ComplementarySubscriptionManager />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="campaigns">
+          <Card>
+            <CardHeader>
+              <CardTitle>Promotional Campaigns</CardTitle>
+              <CardDescription>
+                Create discount campaigns and special offers
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PromotionalCampaignManager />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="leads">

@@ -442,6 +442,56 @@ export type Database = {
         }
         Relationships: []
       }
+      complementary_subscriptions: {
+        Row: {
+          created_at: string | null
+          end_date: string | null
+          granted_by: string
+          id: string
+          is_permanent: boolean | null
+          plan_id: string
+          reason: string | null
+          start_date: string
+          status: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          end_date?: string | null
+          granted_by: string
+          id?: string
+          is_permanent?: boolean | null
+          plan_id: string
+          reason?: string | null
+          start_date?: string
+          status?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          end_date?: string | null
+          granted_by?: string
+          id?: string
+          is_permanent?: boolean | null
+          plan_id?: string
+          reason?: string | null
+          start_date?: string
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "complementary_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_campaigns: {
         Row: {
           click_rate: number | null
@@ -1701,6 +1751,57 @@ export type Database = {
         }
         Relationships: []
       }
+      promotional_campaigns: {
+        Row: {
+          affected_plan_ids: string[]
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          discount_duration_type: string
+          discount_type: string
+          discount_value: number
+          end_date: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          start_date: string
+          stripe_coupon_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          affected_plan_ids?: string[]
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          discount_duration_type?: string
+          discount_type: string
+          discount_value: number
+          end_date?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          start_date: string
+          stripe_coupon_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          affected_plan_ids?: string[]
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          discount_duration_type?: string
+          discount_type?: string
+          discount_value?: number
+          end_date?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          start_date?: string
+          stripe_coupon_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       recipes: {
         Row: {
           category: string | null
@@ -1998,11 +2099,14 @@ export type Database = {
       user_subscriptions: {
         Row: {
           cancel_at_period_end: boolean | null
+          complementary_subscription_id: string | null
           created_at: string | null
           current_period_end: string | null
           current_period_start: string | null
           id: string
+          is_complementary: boolean | null
           plan_id: string | null
+          promotional_campaign_id: string | null
           status: string
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -2012,11 +2116,14 @@ export type Database = {
         }
         Insert: {
           cancel_at_period_end?: boolean | null
+          complementary_subscription_id?: string | null
           created_at?: string | null
           current_period_end?: string | null
           current_period_start?: string | null
           id?: string
+          is_complementary?: boolean | null
           plan_id?: string | null
+          promotional_campaign_id?: string | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -2026,11 +2133,14 @@ export type Database = {
         }
         Update: {
           cancel_at_period_end?: boolean | null
+          complementary_subscription_id?: string | null
           created_at?: string | null
           current_period_end?: string | null
           current_period_start?: string | null
           id?: string
+          is_complementary?: boolean | null
           plan_id?: string | null
+          promotional_campaign_id?: string | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -2040,10 +2150,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "user_subscriptions_complementary_subscription_id_fkey"
+            columns: ["complementary_subscription_id"]
+            isOneToOne: false
+            referencedRelation: "complementary_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "user_subscriptions_plan_id_fkey"
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_subscriptions_promotional_campaign_id_fkey"
+            columns: ["promotional_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "promotional_campaigns"
             referencedColumns: ["id"]
           },
         ]
@@ -2172,6 +2296,15 @@ export type Database = {
       deduct_food_quantity: {
         Args: { _amount?: number; _food_id: string }
         Returns: undefined
+      }
+      get_active_campaign_for_plan: {
+        Args: { p_plan_id: string }
+        Returns: {
+          campaign_id: string
+          discount_duration_type: string
+          discount_type: string
+          discount_value: number
+        }[]
       }
       get_blog_stats: {
         Args: Record<PropertyKey, never>

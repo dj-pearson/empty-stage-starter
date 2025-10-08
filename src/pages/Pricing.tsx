@@ -29,8 +29,18 @@ interface SubscriptionPlan {
   sort_order: number;
 }
 
+interface Campaign {
+  discount_type: string;
+  discount_value: number;
+}
+
+interface PlanWithDiscount extends SubscriptionPlan {
+  activeCampaign?: Campaign;
+  discountedPrice?: number;
+}
+
 export default function Pricing() {
-  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [plans, setPlans] = useState<PlanWithDiscount[]>([]);
   const [loading, setLoading] = useState(true);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [user, setUser] = useState<User | null>(null);
@@ -71,10 +81,47 @@ export default function Pricing() {
         .order("sort_order");
 
       if (error) throw error;
-      setPlans((data || []).map(plan => ({
-        ...plan,
-        features: Array.isArray(plan.features) ? plan.features as string[] : []
-      })));
+      
+      // Get active promotional campaigns
+      const { data: campaigns } = await supabase
+        .from("promotional_campaigns")
+        .select("*")
+        .eq("is_active", true)
+        .lte("start_date", new Date().toISOString())
+        .or(`end_date.is.null,end_date.gte.${new Date().toISOString()}`);
+
+      const plansWithDiscounts = (data || []).map(plan => {
+        const planData: PlanWithDiscount = {
+          ...plan,
+          features: Array.isArray(plan.features) ? plan.features as string[] : []
+        };
+
+        // Check if there's an active campaign for this plan
+        const activeCampaign = campaigns?.find(c => 
+          c.affected_plan_ids && (c.affected_plan_ids as string[]).includes(plan.id)
+        );
+
+        if (activeCampaign) {
+          const basePrice = billingCycle === "monthly" ? plan.price_monthly : plan.price_yearly;
+          let discountedPrice = basePrice;
+          
+          if (activeCampaign.discount_type === "percentage") {
+            discountedPrice = basePrice * (1 - (activeCampaign.discount_value as number) / 100);
+          } else {
+            discountedPrice = basePrice - (activeCampaign.discount_value as number);
+          }
+
+          planData.activeCampaign = {
+            discount_type: activeCampaign.discount_type as string,
+            discount_value: activeCampaign.discount_value as number,
+          };
+          planData.discountedPrice = Math.max(0, discountedPrice);
+        }
+
+        return planData;
+      });
+
+      setPlans(plansWithDiscounts);
     } catch (error: any) {
       console.error("Error loading plans:", error);
       toast.error("Failed to load pricing plans");
@@ -119,8 +166,18 @@ export default function Pricing() {
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
-  const formatPrice = (plan: SubscriptionPlan) => {
+  const formatPrice = (plan: PlanWithDiscount) => {
     if (plan.price_monthly === 0) return "Free";
+    
+    if (plan.discountedPrice !== undefined) {
+      return `$${plan.discountedPrice.toFixed(2)}`;
+    }
+    
+    const price = billingCycle === "monthly" ? plan.price_monthly : plan.price_yearly;
+    return `$${price}`;
+  };
+
+  const formatOriginalPrice = (plan: PlanWithDiscount) => {
     const price = billingCycle === "monthly" ? plan.price_monthly : plan.price_yearly;
     return `$${price}`;
   };
@@ -296,13 +353,39 @@ export default function Pricing() {
                 <CardTitle className="text-2xl">{plan.name}</CardTitle>
                 <CardDescription>
                   <div className="mt-4">
-                    <span className="text-4xl font-bold text-foreground">
-                      {formatPrice(plan)}
-                    </span>
-                    {plan.price_monthly > 0 && (
-                      <span className="text-muted-foreground">
-                        /{billingCycle === "monthly" ? "month" : "year"}
-                      </span>
+                    {plan.activeCampaign && plan.discountedPrice !== undefined ? (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl font-bold text-muted-foreground line-through">
+                            {formatOriginalPrice(plan)}
+                          </span>
+                          <Badge className="bg-red-500">
+                            {plan.activeCampaign.discount_type === "percentage" 
+                              ? `${plan.activeCampaign.discount_value}% OFF`
+                              : `$${plan.activeCampaign.discount_value} OFF`
+                            }
+                          </Badge>
+                        </div>
+                        <span className="text-4xl font-bold text-foreground">
+                          {formatPrice(plan)}
+                        </span>
+                        {plan.price_monthly > 0 && (
+                          <span className="text-muted-foreground">
+                            /{billingCycle === "monthly" ? "month" : "year"}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-4xl font-bold text-foreground">
+                          {formatPrice(plan)}
+                        </span>
+                        {plan.price_monthly > 0 && (
+                          <span className="text-muted-foreground">
+                            /{billingCycle === "monthly" ? "month" : "year"}
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
                 </CardDescription>
