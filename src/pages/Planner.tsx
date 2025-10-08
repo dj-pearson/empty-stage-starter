@@ -8,6 +8,7 @@ import { Calendar, RefreshCw, Sparkles, Shuffle } from "lucide-react";
 import { toast } from "sonner";
 import { MealSlot, PlanEntry } from "@/types";
 import { SwapMealDialog } from "@/components/SwapMealDialog";
+import { supabase } from "@/integrations/supabase/client";
 
 const MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
   { slot: "breakfast", label: "Breakfast" },
@@ -19,7 +20,7 @@ const MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
 ];
 
 export default function Planner() {
-  const { foods, kids, activeKidId, planEntries, setPlanEntries, updatePlanEntry } = useApp();
+  const { foods, kids, activeKidId, planEntries, setPlanEntries, updatePlanEntry, updateFood } = useApp();
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<PlanEntry | null>(null);
 
@@ -41,8 +42,40 @@ export default function Planner() {
     }
   };
 
-  const handleMarkResult = (entry: PlanEntry, result: "ate" | "tasted" | "refused") => {
+  const handleMarkResult = async (entry: PlanEntry, result: "ate" | "tasted" | "refused") => {
     updatePlanEntry(entry.id, { result });
+    
+    // If marked as "ate", deduct from inventory
+    if (result === "ate") {
+      const food = foods.find(f => f.id === entry.food_id);
+      if (food && (food.quantity ?? 0) > 0) {
+        try {
+          // Call the database function to deduct quantity
+          const { error } = await supabase.rpc('deduct_food_quantity', {
+            _food_id: entry.food_id,
+            _amount: 1
+          });
+
+          if (error) throw error;
+
+          // Update local state
+          updateFood(entry.food_id, {
+            ...food,
+            quantity: Math.max(0, (food.quantity || 0) - 1)
+          });
+
+          if ((food.quantity || 0) <= 1) {
+            toast.info(`${food.name} is now out of stock!`, {
+              description: "Add it to your grocery list"
+            });
+          }
+        } catch (error) {
+          console.error('Error deducting quantity:', error);
+          toast.error("Failed to update inventory");
+        }
+      }
+    }
+    
     toast.success(`Marked as ${result}`);
   };
 

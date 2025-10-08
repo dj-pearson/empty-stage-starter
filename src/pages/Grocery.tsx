@@ -20,7 +20,7 @@ const categoryLabels: Record<FoodCategory, string> = {
 };
 
 export default function Grocery() {
-  const { foods, kids, activeKidId, planEntries, groceryItems, setGroceryItems, toggleGroceryItem, clearCheckedGroceryItems } = useApp();
+  const { foods, kids, activeKidId, planEntries, groceryItems, setGroceryItems, toggleGroceryItem, clearCheckedGroceryItems, addFood, updateFood } = useApp();
   const [groupBy, setGroupBy] = useState<"category" | "aisle">("aisle");
 
   const activeKid = kids.find(k => k.id === activeKidId);
@@ -40,6 +40,40 @@ export default function Grocery() {
       .join("\n");
     navigator.clipboard.writeText(text);
     toast.success("List copied to clipboard!");
+  };
+
+  const handleToggleItem = (itemId: string) => {
+    const item = groceryItems.find(i => i.id === itemId);
+    if (!item) return;
+
+    toggleGroceryItem(itemId);
+
+    // If checking the item, add/update pantry inventory
+    if (!item.checked) {
+      const existingFood = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+      
+      if (existingFood) {
+        // Update existing food quantity
+        updateFood(existingFood.id, {
+          ...existingFood,
+          quantity: (existingFood.quantity || 0) + item.quantity,
+          unit: item.unit
+        });
+        toast.success(`Added ${item.quantity} ${item.unit} to ${item.name} in pantry`);
+      } else {
+        // Create new food item in pantry
+        addFood({
+          name: item.name,
+          category: item.category,
+          is_safe: true,
+          is_try_bite: false,
+          aisle: item.aisle,
+          quantity: item.quantity,
+          unit: item.unit
+        });
+        toast.success(`${item.name} added to pantry with ${item.quantity} ${item.unit}`);
+      }
+    }
   };
 
   const handleClearChecked = () => {
@@ -201,7 +235,7 @@ export default function Grocery() {
                         >
                           <Checkbox
                             checked={item.checked}
-                            onCheckedChange={() => toggleGroceryItem(item.id)}
+                            onCheckedChange={() => handleToggleItem(item.id)}
                           />
                           <div className="flex-1">
                             <p className={`font-medium ${item.checked ? "line-through text-muted-foreground" : ""}`}>

@@ -24,6 +24,8 @@ export type Database = {
           is_safe: boolean
           is_try_bite: boolean
           name: string
+          quantity: number | null
+          unit: string | null
           updated_at: string | null
           user_id: string
         }
@@ -36,6 +38,8 @@ export type Database = {
           is_safe?: boolean
           is_try_bite?: boolean
           name: string
+          quantity?: number | null
+          unit?: string | null
           updated_at?: string | null
           user_id: string
         }
@@ -48,6 +52,8 @@ export type Database = {
           is_safe?: boolean
           is_try_bite?: boolean
           name?: string
+          quantity?: number | null
+          unit?: string | null
           updated_at?: string | null
           user_id?: string
         }
@@ -291,6 +297,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      deduct_food_quantity: {
+        Args: { _amount?: number; _food_id: string }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

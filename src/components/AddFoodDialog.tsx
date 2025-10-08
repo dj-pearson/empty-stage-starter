@@ -46,6 +46,8 @@ export function AddFoodDialog({
   const [isSafe, setIsSafe] = useState(true);
   const [isTryBite, setIsTryBite] = useState(false);
   const [aisle, setAisle] = useState("");
+  const [quantity, setQuantity] = useState(0);
+  const [unit, setUnit] = useState("servings");
 
   useEffect(() => {
     if (editFood) {
@@ -54,12 +56,16 @@ export function AddFoodDialog({
       setIsSafe(editFood.is_safe);
       setIsTryBite(editFood.is_try_bite);
       setAisle(editFood.aisle || "");
+      setQuantity(editFood.quantity || 0);
+      setUnit(editFood.unit || "servings");
     } else {
       setName("");
       setCategory("protein");
       setIsSafe(true);
       setIsTryBite(false);
       setAisle("");
+      setQuantity(0);
+      setUnit("servings");
     }
   }, [editFood, open]);
 
@@ -72,6 +78,8 @@ export function AddFoodDialog({
       is_safe: isSafe,
       is_try_bite: isTryBite,
       aisle: aisle.trim() || undefined,
+      quantity,
+      unit,
     });
 
     onOpenChange(false);
@@ -118,6 +126,35 @@ export function AddFoodDialog({
               onChange={(e) => setAisle(e.target.value)}
               placeholder="e.g., Frozen, Produce, Dairy"
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="quantity">Quantity in Stock</Label>
+              <Input
+                id="quantity"
+                type="number"
+                min="0"
+                value={quantity}
+                onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="unit">Unit</Label>
+              <Select value={unit} onValueChange={setUnit}>
+                <SelectTrigger id="unit">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="servings">Servings</SelectItem>
+                  <SelectItem value="count">Count</SelectItem>
+                  <SelectItem value="oz">Ounces</SelectItem>
+                  <SelectItem value="lbs">Pounds</SelectItem>
+                  <SelectItem value="cups">Cups</SelectItem>
+                  <SelectItem value="tbsp">Tablespoons</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="flex items-center justify-between">

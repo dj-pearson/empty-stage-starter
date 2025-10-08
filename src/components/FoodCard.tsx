@@ -2,7 +2,7 @@ import { Food } from "@/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface FoodCardProps {
@@ -25,7 +25,21 @@ export function FoodCard({ food, onEdit, onDelete }: FoodCardProps) {
     <Card className="p-4 hover:shadow-lg transition-shadow">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-lg truncate">{food.name}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-lg truncate">{food.name}</h3>
+            {(food.quantity ?? 0) > 0 && (
+              <Badge variant="secondary" className="gap-1">
+                <Package className="h-3 w-3" />
+                {food.quantity} {food.unit || 'servings'}
+              </Badge>
+            )}
+            {(food.quantity ?? 0) === 0 && (
+              <Badge variant="destructive" className="gap-1">
+                <Package className="h-3 w-3" />
+                Out of stock
+              </Badge>
+            )}
+          </div>
           <div className="flex flex-wrap gap-2 mt-2">
             <Badge variant="outline" className={categoryColors[food.category]}>
               {food.category}

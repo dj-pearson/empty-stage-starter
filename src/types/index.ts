@@ -12,6 +12,8 @@ export interface Food {
   is_try_bite: boolean;
   allergens?: string[];
   aisle?: string;
+  quantity?: number;
+  unit?: string;
 }
 
 export interface Kid {

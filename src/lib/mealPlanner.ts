@@ -129,7 +129,7 @@ export function buildDayPlan(
 
 
 export function generateGroceryList(planEntries: PlanEntry[], foods: Food[]) {
-  const foodCount: Record<string, { food: Food; count: number }> = {};
+  const foodCount: Record<string, { food: Food; count: number; inStock: number }> = {};
 
   planEntries.forEach(entry => {
     const food = foods.find(f => f.id === entry.food_id);
@@ -137,18 +137,25 @@ export function generateGroceryList(planEntries: PlanEntry[], foods: Food[]) {
       if (foodCount[food.id]) {
         foodCount[food.id].count++;
       } else {
-        foodCount[food.id] = { food, count: 1 };
+        foodCount[food.id] = { 
+          food, 
+          count: 1, 
+          inStock: food.quantity || 0 
+        };
       }
     }
   });
 
-  return Object.values(foodCount).map(({ food, count }) => ({
-    id: generateId(),
-    name: food.name,
-    quantity: count,
-    unit: "servings",
-    checked: false,
-    category: food.category,
-    aisle: food.aisle,
-  }));
+  // Only include items that are needed (count > stock)
+  return Object.values(foodCount)
+    .filter(({ count, inStock }) => count > inStock)
+    .map(({ food, count, inStock }) => ({
+      id: generateId(),
+      name: food.name,
+      quantity: count - inStock, // Only need the difference
+      unit: food.unit || "servings",
+      checked: false,
+      category: food.category,
+      aisle: food.aisle,
+    }));
 }
