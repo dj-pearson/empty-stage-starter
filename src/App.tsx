@@ -17,6 +17,10 @@ import Grocery from "./pages/Grocery";
 import Kids from "./pages/Kids";
 import Analytics from "./pages/Analytics";
 import Admin from "./pages/Admin";
+import FoodTracker from "./pages/FoodTracker";
+import AICoach from "./pages/AICoach";
+import MealBuilder from "./pages/MealBuilder";
+import FoodChaining from "./pages/FoodChaining";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -41,6 +45,10 @@ const App = () => (
               <Route path="planner" element={<Planner />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="grocery" element={<Grocery />} />
+              <Route path="food-tracker" element={<FoodTracker />} />
+              <Route path="ai-coach" element={<AICoach />} />
+              <Route path="meal-builder" element={<MealBuilder />} />
+              <Route path="food-chaining" element={<FoodChaining />} />
             </Route>
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

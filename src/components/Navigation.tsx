@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Home, Utensils, Calendar, ShoppingCart, Moon, Sun, Users, BarChart3, ChefHat, LogOut, Shield, Menu, X } from "lucide-react";
+import { Home, Utensils, Calendar, ShoppingCart, Moon, Sun, Users, BarChart3, ChefHat, LogOut, Shield, Menu, X, Target, Bot, Sparkles, TrendingUp } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -17,6 +17,10 @@ const baseNavItems = [
   { to: "/dashboard/planner", icon: Calendar, label: "Planner" },
   { to: "/dashboard/analytics", icon: BarChart3, label: "Analytics" },
   { to: "/dashboard/grocery", icon: ShoppingCart, label: "Grocery" },
+  { to: "/dashboard/food-tracker", icon: Target, label: "Food Tracker" },
+  { to: "/dashboard/ai-coach", icon: Bot, label: "AI Coach" },
+  { to: "/dashboard/meal-builder", icon: Sparkles, label: "Meal Builder" },
+  { to: "/dashboard/food-chaining", icon: TrendingUp, label: "Food Chaining" },
 ];
 
 export function Navigation() {
