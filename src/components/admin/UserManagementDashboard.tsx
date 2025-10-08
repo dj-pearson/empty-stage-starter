@@ -126,8 +126,8 @@ export function UserManagementDashboard() {
 
       // Combine data
       const combinedUsers: UserProfile[] = profiles?.map((profile) => {
-        const authUser = authUsers?.find((u) => u.id === profile.id);
-        const userRole = roles?.find((r) => r.user_id === profile.id);
+        const authUser = authUsers?.find((u: any) => u.id === profile.id);
+        const userRole = roles?.find((r: any) => r.user_id === profile.id);
 
         return {
           id: profile.id,
@@ -137,7 +137,7 @@ export function UserManagementDashboard() {
           last_sign_in_at: authUser?.last_sign_in_at || null,
           onboarding_completed: profile.onboarding_completed || false,
           role: userRole?.role || "user",
-          is_banned: authUser?.banned_until ? new Date(authUser.banned_until) > new Date() : false,
+          is_banned: (authUser as any)?.banned_until ? new Date((authUser as any).banned_until) > new Date() : false,
         };
       }) || [];
 

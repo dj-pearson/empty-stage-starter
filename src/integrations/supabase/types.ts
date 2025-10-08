@@ -442,6 +442,196 @@ export type Database = {
         }
         Relationships: []
       }
+      email_campaigns: {
+        Row: {
+          click_rate: number | null
+          content: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          list_id: string | null
+          name: string
+          open_rate: number | null
+          scheduled_for: string | null
+          sent_at: string | null
+          status: string | null
+          subject: string
+          template_id: string | null
+          total_clicks: number | null
+          total_opens: number | null
+          total_recipients: number | null
+          total_sent: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          click_rate?: number | null
+          content: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          list_id?: string | null
+          name: string
+          open_rate?: number | null
+          scheduled_for?: string | null
+          sent_at?: string | null
+          status?: string | null
+          subject: string
+          template_id?: string | null
+          total_clicks?: number | null
+          total_opens?: number | null
+          total_recipients?: number | null
+          total_sent?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          click_rate?: number | null
+          content?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          list_id?: string | null
+          name?: string
+          open_rate?: number | null
+          scheduled_for?: string | null
+          sent_at?: string | null
+          status?: string | null
+          subject?: string
+          template_id?: string | null
+          total_clicks?: number | null
+          total_opens?: number | null
+          total_recipients?: number | null
+          total_sent?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_campaigns_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "email_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_lists: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          subscriber_count: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          subscriber_count?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          subscriber_count?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      email_subscribers: {
+        Row: {
+          confirmed: boolean | null
+          created_at: string | null
+          email: string
+          first_name: string | null
+          id: string
+          last_name: string | null
+          list_id: string | null
+          metadata: Json | null
+          source: string | null
+          status: string | null
+          subscribed_at: string | null
+          unsubscribed_at: string | null
+        }
+        Insert: {
+          confirmed?: boolean | null
+          created_at?: string | null
+          email: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          list_id?: string | null
+          metadata?: Json | null
+          source?: string | null
+          status?: string | null
+          subscribed_at?: string | null
+          unsubscribed_at?: string | null
+        }
+        Update: {
+          confirmed?: boolean | null
+          created_at?: string | null
+          email?: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          list_id?: string | null
+          metadata?: Json | null
+          source?: string | null
+          status?: string | null
+          subscribed_at?: string | null
+          unsubscribed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_subscribers_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "email_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_templates: {
+        Row: {
+          category: string | null
+          content_template: string
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          subject_template: string
+          updated_at: string | null
+          variables: Json | null
+        }
+        Insert: {
+          category?: string | null
+          content_template: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          subject_template: string
+          updated_at?: string | null
+          variables?: Json | null
+        }
+        Update: {
+          category?: string | null
+          content_template?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          subject_template?: string
+          updated_at?: string | null
+          variables?: Json | null
+        }
+        Relationships: []
+      }
       food_attempts: {
         Row: {
           amount_consumed: string | null
@@ -2001,6 +2191,17 @@ export type Database = {
           conversion_rate: number
           converted_leads: number
           total_leads: number
+        }[]
+      }
+      get_email_marketing_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          active_subscribers: number
+          avg_click_rate: number
+          avg_open_rate: number
+          sent_campaigns: number
+          total_campaigns: number
+          total_subscribers: number
         }[]
       }
       get_food_chain_suggestions: {

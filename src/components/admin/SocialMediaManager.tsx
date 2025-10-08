@@ -176,7 +176,7 @@ export function SocialMediaManager() {
         {
           title: postForm.title || null,
           content: postForm.content,
-          platforms: postForm.platforms,
+          platforms: postForm.platforms as any,
           status: postForm.schedule_now ? "draft" : "scheduled",
           scheduled_for: scheduledFor,
           link_url: postForm.link_url || null,
@@ -240,7 +240,7 @@ export function SocialMediaManager() {
           await supabase.from("webhook_logs").insert([
             {
               post_id: postId,
-              platform: account.platform,
+              platform: account.platform as any,
               webhook_url: account.webhook_url,
               request_payload: payload,
               response_status: response.status,
@@ -290,7 +290,7 @@ export function SocialMediaManager() {
     try {
       const { error } = await supabase.from("social_accounts").insert([
         {
-          platform: accountForm.platform,
+          platform: accountForm.platform as any,
           account_name: accountForm.account_name,
           webhook_url: accountForm.webhook_url || null,
           is_active: true,
@@ -340,7 +340,7 @@ export function SocialMediaManager() {
     };
     const style = styles[status as keyof typeof styles] || styles.draft;
     return (
-      <Badge variant={style.variant} className={style.className}>
+      <Badge variant={style.variant} className={'className' in style ? style.className : ''}>
         {style.label}
       </Badge>
     );

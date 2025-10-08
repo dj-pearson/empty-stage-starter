@@ -221,7 +221,7 @@ export function LeadCampaignManager() {
         {
           name: campaignForm.name,
           description: campaignForm.description,
-          source: campaignForm.source,
+          source: campaignForm.source as any,
           utm_campaign: campaignForm.utm_campaign || null,
           utm_source: campaignForm.utm_source || null,
           utm_medium: campaignForm.utm_medium || null,

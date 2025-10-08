@@ -172,16 +172,16 @@ export function SubscriptionManagement() {
       const { data: { users: authUsers } } = await supabase.auth.admin.listUsers();
 
       // Combine data
-      const combined: UserSubscription[] = subs?.map((sub) => {
+      const combined: UserSubscription[] = subs?.map((sub: any) => {
         const profile = profiles?.find((p) => p.id === sub.user_id);
-        const authUser = authUsers?.find((u) => u.id === sub.user_id);
+        const authUser = authUsers?.find((u: any) => u.id === sub.user_id);
 
         return {
           id: sub.id,
           user_id: sub.user_id,
           user_email: authUser?.email || "N/A",
           user_name: profile?.full_name || "Unknown",
-          plan_name: (sub.plan as any)?.name || "N/A",
+          plan_name: sub.plan?.name || "N/A",
           status: sub.status,
           current_period_start: sub.current_period_start,
           current_period_end: sub.current_period_end,
