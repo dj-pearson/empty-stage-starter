@@ -201,7 +201,7 @@ export function AddFoodDialog({
           {!editFood && !showConfirmation && (
             <div className="space-y-2">
               <Label>Search Nutrition Database</Label>
-              <Command className="border rounded-md">
+              <Command className="border rounded-md" shouldFilter={false}>
                 <CommandInput
                   placeholder="Type at least 2 characters..."
                   value={searchQuery}
@@ -226,6 +226,7 @@ export function AddFoodDialog({
                           key={item.id}
                           onSelect={() => handleSelectNutrition(item)}
                           className="cursor-pointer"
+                          value={item.name}
                         >
                           <div className="flex-1">
                             <div className="font-medium">{item.name}</div>
