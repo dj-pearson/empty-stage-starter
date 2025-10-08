@@ -248,8 +248,8 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
 
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
-        <DialogContent className="sm:max-w-[600px] p-0">
-          <DialogHeader className="px-6 pt-6">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
             <DialogTitle>{editingId ? "Edit Child" : "Add Child"}</DialogTitle>
             <DialogDescription>
               {editingId
@@ -258,8 +258,8 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="flex flex-col max-h-[85vh]">
-            <div ref={formRef} className="px-6 pb-6 space-y-4 overflow-y-auto">
+          <form onSubmit={handleSubmit} className="overflow-y-auto flex-1">
+            <div ref={formRef} className="space-y-4 px-1">
               <div className="space-y-3">
                 <Label>Profile Picture</Label>
                 <div className="flex items-center gap-4">
@@ -459,10 +459,8 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
                   </div>
                 )}
               </div>
-            </div>
 
-            <div className="sticky bottom-0 w-full px-6 py-4 border-t bg-popover/95 backdrop-blur supports-[backdrop-filter]:bg-popover/75">
-              <div className="flex gap-2">
+              <div className="flex gap-2 pb-32">
                 <Button type="submit" className="flex-1">
                   <Plus className="h-4 w-4 mr-2" />
                   {editingId ? "Update Child" : "Add Child"}
