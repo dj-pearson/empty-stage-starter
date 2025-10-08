@@ -234,9 +234,16 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
       if (!user) throw new Error("Not authenticated");
       
       if (targetTable === 'foods') {
+        // Get household_id first
+        const { data: householdId } = await supabase
+          .rpc('get_user_household_id', { _user_id: user.id });
+        
+        if (!householdId) throw new Error("No household found");
+
         // Add to user's personal foods
         const foodData = {
           user_id: user.id,
+          household_id: householdId,
           name: scannedFood.name,
           category: scannedFood.category,
           aisle: scannedFood.category,
