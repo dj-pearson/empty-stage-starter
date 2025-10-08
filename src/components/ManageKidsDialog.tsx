@@ -14,6 +14,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -81,6 +88,9 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
   });
   const [uploading, setUploading] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
+  
+  // For date picker navigation
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
 
   const calculateAge = (dob: Date) => {
     return differenceInYears(new Date(), dob);
@@ -316,15 +326,65 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
+                  <div className="p-3 border-b space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs mb-1">Month</Label>
+                        <Select
+                          value={calendarMonth.getMonth().toString()}
+                          onValueChange={(value) => {
+                            const newDate = new Date(calendarMonth);
+                            newDate.setMonth(parseInt(value));
+                            setCalendarMonth(newDate);
+                          }}
+                        >
+                          <SelectTrigger className="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 12 }, (_, i) => (
+                              <SelectItem key={i} value={i.toString()}>
+                                {format(new Date(2000, i, 1), "MMMM")}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs mb-1">Year</Label>
+                        <Select
+                          value={calendarMonth.getFullYear().toString()}
+                          onValueChange={(value) => {
+                            const newDate = new Date(calendarMonth);
+                            newDate.setFullYear(parseInt(value));
+                            setCalendarMonth(newDate);
+                          }}
+                        >
+                          <SelectTrigger className="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-[200px]">
+                            {Array.from({ length: new Date().getFullYear() - 1999 }, (_, i) => {
+                              const year = new Date().getFullYear() - i;
+                              return (
+                                <SelectItem key={year} value={year.toString()}>
+                                  {year}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
                   <Calendar
                     mode="single"
                     selected={formData.date_of_birth}
                     onSelect={(date) => setFormData({ ...formData, date_of_birth: date })}
                     disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
+                    month={calendarMonth}
+                    onMonthChange={setCalendarMonth}
                     initialFocus
-                    captionLayout="dropdown-buttons"
-                    fromYear={1900}
-                    toYear={new Date().getFullYear()}
                     className="pointer-events-auto"
                   />
                 </PopoverContent>
