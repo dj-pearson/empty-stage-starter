@@ -45,6 +45,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
   const [scannedFood, setScannedFood] = useState<ScannedFood | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isNative = Capacitor.isNativePlatform();
+  const isEmbedded = typeof window !== 'undefined' && window.self !== window.top;
   const webScannerRef = useRef<Html5Qrcode | null>(null);
 
   const checkPermissions = async () => {
@@ -71,6 +72,9 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
     setError(null);
     setScannedFood(null);
 
+    // Wait for the DOM to render the #web-scanner element
+    await new Promise((r) => setTimeout(r, 50));
+
     try {
       const scanner = new Html5Qrcode('web-scanner');
       webScannerRef.current = scanner;
@@ -87,8 +91,15 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
         ],
       };
 
+      // Prefer back camera when available (improves iOS reliability)
+      const cameras = await Html5Qrcode.getCameras();
+      if (!cameras || cameras.length === 0) {
+        throw new Error('No cameras found');
+      }
+      const back = cameras.find(c => /back|rear|environment/i.test(c.label)) || cameras[cameras.length - 1];
+
       await scanner.start(
-        { facingMode: 'environment' },
+        back.id,
         config,
         async (decodedText) => {
           try {
@@ -100,7 +111,10 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
           await lookupBarcode(decodedText);
           setIsScanning(false);
         },
-        () => {}
+        (errMsg) => {
+          // surface decode errors in console for debugging
+          if (typeof errMsg === 'string') console.debug('decode failure:', errMsg);
+        }
       );
 
       document.body.classList.add('scanner-active');
@@ -114,10 +128,11 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
         }
       } catch {}
       document.body.classList.remove('scanner-active');
-      setError(err instanceof Error ? err.message : 'Failed to start web scanner');
+      const embeddedMsg = isEmbedded ? ' (embedded preview blocks camera — open in new tab)' : '';
+      setError((err instanceof Error ? err.message : 'Failed to start web scanner') + embeddedMsg);
       toast({
         title: 'Scan failed',
-        description: 'Unable to access camera. Check permissions.',
+        description: 'Unable to access camera. Check permissions' + embeddedMsg + '.',
         variant: 'destructive',
       });
       setIsScanning(false);
@@ -274,17 +289,29 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
   };
 
   const handleClose = async () => {
-    // Stop scanner if it's running
+    // Stop native scanner if it's running
     if (isScanning) {
       try {
         await BarcodeScanner.stopScan();
-        document.body.classList.remove('scanner-active');
-        document.querySelector('.dialog-content')?.classList.remove('scanner-ui');
       } catch (err) {
-        console.error('Error stopping scanner on close:', err);
+        // ignore
       }
     }
-    
+
+    // Stop web scanner if running
+    try {
+      if (webScannerRef.current) {
+        await webScannerRef.current.stop();
+        await webScannerRef.current.clear();
+        webScannerRef.current = null;
+      }
+    } catch (err) {
+      console.error('Error stopping web scanner on close:', err);
+    }
+
+    document.body.classList.remove('scanner-active');
+    document.querySelector('.dialog-content')?.classList.remove('scanner-ui');
+
     onOpenChange(false);
     setScannedFood(null);
     setError(null);
@@ -327,7 +354,14 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
             {isScanning && (
               <>
                 {!isNative && (
-                  <div id="web-scanner" className="w-full aspect-[4/3] rounded-lg overflow-hidden bg-black/60" />
+                  <div className="space-y-3">
+                    <div id="web-scanner" className="w-full aspect-[4/3] rounded-lg overflow-hidden bg-black/60" />
+                    {isEmbedded && (
+                      <Button variant="secondary" onClick={() => window.open(window.location.href, '_blank')}>
+                        Open Full Page Scanner
+                      </Button>
+                    )}
+                  </div>
                 )}
                 <Alert>
                   <Loader2 className="h-4 w-4 animate-spin" />
