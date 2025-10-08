@@ -13,6 +13,8 @@ interface FoodNutrition {
   name: string;
   category: string;
   serving_size?: string;
+  package_quantity?: string;
+  servings_per_container?: number;
   ingredients?: string;
   calories?: number;
   protein_g?: number;
@@ -94,10 +96,21 @@ async function lookupOpenFoodFacts(barcode: string): Promise<FoodNutrition | nul
         allergens = [...new Set([...allergens, ...detectedFromAllergens])];
       }
       
+      // Extract servings per container from product data
+      let servingsPerContainer: number | undefined;
+      if (product.nutriments?.['nutrition-score-fr_serving']) {
+        servingsPerContainer = product.nutriments['nutrition-score-fr_serving'];
+      } else if (product.product_quantity && product.serving_quantity) {
+        // Calculate servings if we have both values
+        servingsPerContainer = Math.floor(product.product_quantity / product.serving_quantity);
+      }
+      
       return {
         name: product.product_name || "Unknown Product",
         category,
         serving_size: product.serving_size || product.quantity || undefined,
+        package_quantity: product.quantity || product.product_quantity_unit || undefined,
+        servings_per_container: servingsPerContainer,
         ingredients: product.ingredients_text || undefined,
         calories: nutriments.energy_value || nutriments['energy-kcal_100g'] || undefined,
         protein_g: nutriments.proteins_100g || nutriments.proteins || undefined,

@@ -14,6 +14,8 @@ export interface Food {
   aisle?: string;
   quantity?: number;
   unit?: string;
+  servings_per_container?: number;
+  package_quantity?: string;
 }
 
 export interface Kid {

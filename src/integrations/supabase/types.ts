@@ -72,7 +72,9 @@ export type Database = {
           is_safe: boolean
           is_try_bite: boolean
           name: string
+          package_quantity: string | null
           quantity: number | null
+          servings_per_container: number | null
           unit: string | null
           updated_at: string | null
           user_id: string
@@ -86,7 +88,9 @@ export type Database = {
           is_safe?: boolean
           is_try_bite?: boolean
           name: string
+          package_quantity?: string | null
           quantity?: number | null
+          servings_per_container?: number | null
           unit?: string | null
           updated_at?: string | null
           user_id: string
@@ -100,7 +104,9 @@ export type Database = {
           is_safe?: boolean
           is_try_bite?: boolean
           name?: string
+          package_quantity?: string | null
           quantity?: number | null
+          servings_per_container?: number | null
           unit?: string | null
           updated_at?: string | null
           user_id?: string
@@ -208,8 +214,10 @@ export type Database = {
           id: string
           ingredients: string | null
           name: string
+          package_quantity: string | null
           protein_g: number | null
           serving_size: string | null
+          servings_per_container: number | null
           updated_at: string | null
         }
         Insert: {
@@ -223,8 +231,10 @@ export type Database = {
           id?: string
           ingredients?: string | null
           name: string
+          package_quantity?: string | null
           protein_g?: number | null
           serving_size?: string | null
+          servings_per_container?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -238,8 +248,10 @@ export type Database = {
           id?: string
           ingredients?: string | null
           name?: string
+          package_quantity?: string | null
           protein_g?: number | null
           serving_size?: string | null
+          servings_per_container?: number | null
           updated_at?: string | null
         }
         Relationships: []

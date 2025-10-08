@@ -19,6 +19,8 @@ type ScannedFood = {
   name: string;
   category: string;
   serving_size?: string;
+  package_quantity?: string;
+  servings_per_container?: number;
   ingredients?: string;
   calories?: number;
   protein_g?: number;
@@ -169,6 +171,8 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
             name: scannedFood.name,
             category: scannedFood.category,
             serving_size: scannedFood.serving_size,
+            package_quantity: scannedFood.package_quantity,
+            servings_per_container: scannedFood.servings_per_container,
             ingredients: scannedFood.ingredients,
             calories: scannedFood.calories,
             protein_g: scannedFood.protein_g,
@@ -278,6 +282,16 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
                     <div className="text-sm">
                       <span className="text-muted-foreground">Serving: </span>
                       {scannedFood.serving_size}
+                    </div>
+                  )}
+
+                  {scannedFood.package_quantity && (
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">Package: </span>
+                      {scannedFood.package_quantity}
+                      {scannedFood.servings_per_container && (
+                        <span className="ml-2">({scannedFood.servings_per_container} servings)</span>
+                      )}
                     </div>
                   )}
 
