@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
-import { supabase } from "@/integrations/supabase/client";
+import { Capacitor } from '@capacitor/core';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +44,8 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [scannedFood, setScannedFood] = useState<ScannedFood | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isNative = Capacitor.isNativePlatform();
+  const webScannerRef = useRef<Html5Qrcode | null>(null);
 
   const checkPermissions = async () => {
     const status = await BarcodeScanner.checkPermission({ force: true });
@@ -62,7 +66,71 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
     return false;
   };
 
+  const startWebScan = async () => {
+    setIsScanning(true);
+    setError(null);
+    setScannedFood(null);
+
+    try {
+      const scanner = new Html5Qrcode('web-scanner');
+      webScannerRef.current = scanner;
+
+      const config: any = {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+        ],
+      };
+
+      await scanner.start(
+        { facingMode: 'environment' },
+        config,
+        async (decodedText) => {
+          try {
+            await scanner.stop();
+            await scanner.clear();
+          } catch {}
+          webScannerRef.current = null;
+          document.body.classList.remove('scanner-active');
+          await lookupBarcode(decodedText);
+          setIsScanning(false);
+        },
+        () => {}
+      );
+
+      document.body.classList.add('scanner-active');
+    } catch (err) {
+      console.error('Web scan error:', err);
+      try {
+        if (webScannerRef.current) {
+          await webScannerRef.current.stop();
+          await webScannerRef.current.clear();
+          webScannerRef.current = null;
+        }
+      } catch {}
+      document.body.classList.remove('scanner-active');
+      setError(err instanceof Error ? err.message : 'Failed to start web scanner');
+      toast({
+        title: 'Scan failed',
+        description: 'Unable to access camera. Check permissions.',
+        variant: 'destructive',
+      });
+      setIsScanning(false);
+    }
+  };
+
   const startScan = async () => {
+    // Use web fallback if not running natively (e.g., iOS Chrome)
+    if (!isNative) {
+      await startWebScan();
+      return;
+    }
+
     const hasPermission = await checkPermissions();
     if (!hasPermission) return;
 
@@ -71,42 +139,26 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
     setScannedFood(null);
 
     try {
-      // Prepare the scanner (important for mobile)
       await BarcodeScanner.prepare();
-      
-      // Hide background to show camera
       document.body.classList.add('scanner-active');
       document.querySelector('.dialog-content')?.classList.add('scanner-ui');
-      
       const result = await BarcodeScanner.startScan();
-      
-      // Stop scanner and remove styling
       await BarcodeScanner.stopScan();
       document.body.classList.remove('scanner-active');
       document.querySelector('.dialog-content')?.classList.remove('scanner-ui');
-      
       if (result.hasContent) {
-        console.log('Scanned barcode:', result.content);
         await lookupBarcode(result.content);
       }
     } catch (err) {
       console.error('Scan error:', err);
-      
-      // Cleanup on error
-      try {
-        await BarcodeScanner.stopScan();
-      } catch (stopErr) {
-        console.error('Error stopping scanner:', stopErr);
-      }
-      
+      try { await BarcodeScanner.stopScan(); } catch {}
       document.body.classList.remove('scanner-active');
       document.querySelector('.dialog-content')?.classList.remove('scanner-ui');
-      
-      setError(err instanceof Error ? err.message : "Failed to scan barcode");
+      setError(err instanceof Error ? err.message : 'Failed to scan barcode');
       toast({
-        title: "Scan failed",
-        description: "Unable to scan barcode. Please try again.",
-        variant: "destructive",
+        title: 'Scan failed',
+        description: 'Unable to scan barcode. Please try again.',
+        variant: 'destructive',
       });
     } finally {
       setIsScanning(false);
@@ -273,12 +325,17 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
             )}
 
             {isScanning && (
-              <Alert>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <AlertDescription>
-                  Point your camera at the barcode...
-                </AlertDescription>
-              </Alert>
+              <>
+                {!isNative && (
+                  <div id="web-scanner" className="w-full aspect-[4/3] rounded-lg overflow-hidden bg-black/60" />
+                )}
+                <Alert>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <AlertDescription>
+                    Point your camera at the barcode...
+                  </AlertDescription>
+                </Alert>
+              </>
             )}
 
             {isLookingUp && (
