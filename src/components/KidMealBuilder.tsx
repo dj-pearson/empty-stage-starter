@@ -105,7 +105,10 @@ export function KidMealBuilder() {
 
       if (error) throw error;
 
-      setCreations(data || []);
+      setCreations((data || []).map(creation => ({
+        ...creation,
+        foods: Array.isArray(creation.foods) ? creation.foods as any : []
+      })));
     } catch (error: any) {
       console.error("Error loading creations:", error);
     } finally {
@@ -174,7 +177,7 @@ export function KidMealBuilder() {
           kid_id: activeKidId,
           creation_name: creationName,
           creation_type: selectedTemplate,
-          foods: selectedFoods,
+          foods: selectedFoods as any,
           plate_template: selectedTemplate,
           kid_approved: true,
           stars_earned: Math.min(selectedFoods.length, 5), // Earn stars for foods added

@@ -206,12 +206,12 @@ export function AIMealCoach() {
         kid: activeKid
           ? {
               name: activeKid.name,
-              age: activeKid.dob
+              age: activeKid.date_of_birth
                 ? Math.floor(
-                    (new Date().getTime() - new Date(activeKid.dob).getTime()) /
+                    (new Date().getTime() - new Date(activeKid.date_of_birth).getTime()) /
                       (365.25 * 24 * 60 * 60 * 1000)
                   )
-                : null,
+                : activeKid.age || null,
               allergens: activeKid.allergens,
             }
           : null,
@@ -240,7 +240,7 @@ export function AIMealCoach() {
 
 Current child context:
 ${activeKid ? `- Child's name: ${activeKid.name}` : "- No child selected"}
-${activeKid?.dob ? `- Age: ${Math.floor((new Date().getTime() - new Date(activeKid.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} years old` : ""}
+${activeKid?.date_of_birth ? `- Age: ${Math.floor((new Date().getTime() - new Date(activeKid.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} years old` : activeKid?.age ? `- Age: ${activeKid.age} years old` : ""}
 ${activeKid?.allergens && activeKid.allergens.length > 0 ? `- Allergens: ${activeKid.allergens.join(", ")}` : "- No allergens listed"}
 - Safe foods (${context.safe_foods.length}): ${context.safe_foods.slice(0, 10).join(", ")}${context.safe_foods.length > 10 ? "..." : ""}
 - Foods to try (${context.try_bites.length}): ${context.try_bites.slice(0, 5).join(", ")}${context.try_bites.length > 5 ? "..." : ""}
@@ -254,7 +254,7 @@ Provide helpful, empathetic, and practical advice. Keep responses conversational
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": aiSettings.api_key,
+          "x-api-key": aiSettings.api_key_env_var,
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
@@ -319,11 +319,25 @@ Provide helpful, empathetic, and practical advice. Keep responses conversational
         );
       }
 
-      // Add AI response to UI
+      // Add AI response to UI with proper type casting
+      const typedUserMessage: Message = {
+        id: savedUserMessage.id,
+        role: savedUserMessage.role as "user" | "assistant" | "system",
+        content: savedUserMessage.content,
+        created_at: savedUserMessage.created_at
+      };
+      
+      const typedAIMessage: Message = {
+        id: savedAIMessage.id,
+        role: savedAIMessage.role as "user" | "assistant" | "system",
+        content: savedAIMessage.content,
+        created_at: savedAIMessage.created_at
+      };
+      
       setMessages([
         ...messages.filter((m) => m.id !== tempUserMessage.id),
-        savedUserMessage,
-        savedAIMessage,
+        typedUserMessage,
+        typedAIMessage,
       ]);
 
       toast.success("AI Coach responded!");

@@ -35,7 +35,7 @@ export function useFeatureLimit() {
 
       if (error) throw error;
 
-      const result = data as FeatureLimitResult;
+      const result = data as unknown as FeatureLimitResult;
 
       if (!result.allowed && result.message) {
         toast.error(result.message, {

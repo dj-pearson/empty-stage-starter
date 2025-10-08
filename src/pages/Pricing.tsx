@@ -46,7 +46,10 @@ export default function Pricing() {
         .order("sort_order");
 
       if (error) throw error;
-      setPlans(data || []);
+      setPlans((data || []).map(plan => ({
+        ...plan,
+        features: Array.isArray(plan.features) ? plan.features as string[] : []
+      })));
     } catch (error: any) {
       console.error("Error loading plans:", error);
       toast.error("Failed to load pricing plans");

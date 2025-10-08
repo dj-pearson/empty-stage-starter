@@ -129,7 +129,10 @@ export function SubscriptionManagement() {
         .order("sort_order", { ascending: true });
 
       if (error) throw error;
-      setPlans(data || []);
+      setPlans((data || []).map(plan => ({
+        ...plan,
+        features: Array.isArray(plan.features) ? plan.features as string[] : []
+      })));
     } catch (error) {
       console.error("Error loading plans:", error);
       toast.error("Failed to load subscription plans");
