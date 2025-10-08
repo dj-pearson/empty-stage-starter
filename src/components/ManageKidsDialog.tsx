@@ -21,11 +21,12 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Users, Plus, Trash2, AlertTriangle, UserCircle, CalendarIcon, Heart } from "lucide-react";
+import { Users, Plus, Trash2, AlertTriangle, UserCircle, CalendarIcon, Heart, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format, differenceInYears } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useRef } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -75,6 +76,7 @@ export function ManageKidsDialog() {
     favorite_foods: [] as string[]
   });
   const [uploading, setUploading] = useState(false);
+  const formRef = useRef<HTMLDivElement>(null);
 
   const calculateAge = (dob: Date) => {
     return differenceInYears(new Date(), dob);
@@ -135,6 +137,11 @@ export function ManageKidsDialog() {
       profile_picture_url: kid.profile_picture_url || "",
       favorite_foods: kid.favorite_foods || []
     });
+    
+    // Scroll to the form when editing
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -236,7 +243,8 @@ export function ManageKidsDialog() {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+          <div ref={formRef}>
+            <form onSubmit={handleSubmit} className="space-y-4 mt-4">
             <div className="space-y-3">
               <Label>Profile Picture</Label>
               <div className="flex items-center gap-4">
@@ -393,6 +401,7 @@ export function ManageKidsDialog() {
               )}
             </div>
           </form>
+          </div>
 
           <div className="mt-6 space-y-2">
             <Label>Current Children ({kids.length})</Label>
@@ -400,8 +409,7 @@ export function ManageKidsDialog() {
               {kids.map((kid) => (
                 <div
                   key={kid.id}
-                  className="flex items-center gap-3 p-3 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
-                  onClick={() => handleEdit(kid)}
+                  className="flex items-center gap-3 p-3 border rounded-lg hover:bg-accent/50 transition-colors"
                 >
                   <Avatar className="h-12 w-12">
                     <AvatarImage src={kid.profile_picture_url} />
@@ -427,17 +435,28 @@ export function ManageKidsDialog() {
                       </div>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteId(kid.id);
-                    }}
-                    disabled={kids.length === 1}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEdit(kid)}
+                      title="Edit child"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteId(kid.id);
+                      }}
+                      disabled={kids.length === 1}
+                      title="Delete child"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
