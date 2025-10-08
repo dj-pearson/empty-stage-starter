@@ -18,6 +18,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { ManageKidsDialog } from "@/components/ManageKidsDialog";
+import { ManageHouseholdDialog } from "@/components/ManageHouseholdDialog";
 
 export default function Home() {
   const { foods, planEntries, groceryItems, kids, recipes, activeKidId, exportData, importData, resetAllData } = useApp();
@@ -245,6 +246,7 @@ export default function Home() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-4 mb-4">
+              <ManageHouseholdDialog />
               <ManageKidsDialog />
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
