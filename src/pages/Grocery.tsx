@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { generateGroceryList } from "@/lib/mealPlanner";
-import { ShoppingCart, Copy, Trash2 } from "lucide-react";
+import { ShoppingCart, Copy, Trash2, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { FoodCategory } from "@/types";
 
@@ -44,6 +44,11 @@ export default function Grocery() {
     toast.success("Checked items cleared");
   };
 
+  const handlePrint = () => {
+    window.print();
+    toast.success("Print dialog opened");
+  };
+
   // Group by category
   const itemsByCategory: Record<FoodCategory, typeof groceryItems> = {
     protein: [],
@@ -78,6 +83,10 @@ export default function Grocery() {
             <Button onClick={handleCopyList} variant="outline" disabled={groceryItems.length === 0}>
               <Copy className="h-4 w-4 mr-2" />
               Copy
+            </Button>
+            <Button onClick={handlePrint} variant="outline" disabled={groceryItems.length === 0}>
+              <Printer className="h-4 w-4 mr-2" />
+              Print
             </Button>
             <Button onClick={handleClearChecked} variant="outline" disabled={checkedCount === 0}>
               <Trash2 className="h-4 w-4 mr-2" />
