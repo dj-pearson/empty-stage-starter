@@ -184,7 +184,7 @@ const Dashboard = () => {
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-[280px]">
+              <SheetContent side="right" className="w-[280px] flex flex-col">
                 <SheetHeader>
                   <SheetTitle className="flex items-center gap-2">
                     <Utensils className="h-5 w-5 text-primary" />
@@ -193,63 +193,65 @@ const Dashboard = () => {
                     </span>
                   </SheetTitle>
                 </SheetHeader>
-                <div className="flex flex-col gap-1 mt-6">
-                  <div className="mb-4 pb-4 border-b">
-                    <KidSelector />
-                  </div>
+                <div className="flex-1 overflow-y-auto">
+                  <div className="flex flex-col gap-1 mt-6 pb-4">
+                    <div className="mb-4 pb-4 border-b">
+                      <KidSelector />
+                    </div>
 
-                  {navItemsWithAdmin.map(({ to, icon: Icon, label }) => (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      end={to === "/dashboard"}
-                      onClick={closeMobileMenu}
-                      className={({ isActive }) =>
-                        cn(
-                          "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
-                          isActive
-                            ? "bg-primary/10 text-primary font-medium"
-                            : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                        )
-                      }
-                    >
-                      <Icon className="h-5 w-5" />
-                      <span>{label}</span>
-                    </NavLink>
-                  ))}
+                    {navItemsWithAdmin.map(({ to, icon: Icon, label }) => (
+                      <NavLink
+                        key={to}
+                        to={to}
+                        end={to === "/dashboard"}
+                        onClick={closeMobileMenu}
+                        className={({ isActive }) =>
+                          cn(
+                            "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                            isActive
+                              ? "bg-primary/10 text-primary font-medium"
+                              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                          )
+                        }
+                      >
+                        <Icon className="h-5 w-5" />
+                        <span>{label}</span>
+                      </NavLink>
+                    ))}
 
-                  <div className="mt-6 pt-6 border-t space-y-2">
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start gap-3"
-                      onClick={() => {
-                        setTheme(theme === "dark" ? "light" : "dark");
-                        closeMobileMenu();
-                      }}
-                    >
-                      {theme === "dark" ? (
-                        <>
-                          <Sun className="h-5 w-5" />
-                          <span>Light Mode</span>
-                        </>
-                      ) : (
-                        <>
-                          <Moon className="h-5 w-5" />
-                          <span>Dark Mode</span>
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start gap-3"
-                      onClick={() => {
-                        handleLogout();
-                        closeMobileMenu();
-                      }}
-                    >
-                      <LogOut className="h-5 w-5" />
-                      <span>Sign Out</span>
-                    </Button>
+                    <div className="mt-6 pt-6 border-t space-y-2">
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start gap-3"
+                        onClick={() => {
+                          setTheme(theme === "dark" ? "light" : "dark");
+                          closeMobileMenu();
+                        }}
+                      >
+                        {theme === "dark" ? (
+                          <>
+                            <Sun className="h-5 w-5" />
+                            <span>Light Mode</span>
+                          </>
+                        ) : (
+                          <>
+                            <Moon className="h-5 w-5" />
+                            <span>Dark Mode</span>
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start gap-3"
+                        onClick={() => {
+                          handleLogout();
+                          closeMobileMenu();
+                        }}
+                      >
+                        <LogOut className="h-5 w-5" />
+                        <span>Sign Out</span>
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </SheetContent>
