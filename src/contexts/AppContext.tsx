@@ -23,6 +23,7 @@ interface AppContextType {
   addPlanEntry: (entry: Omit<PlanEntry, "id">) => void;
   updatePlanEntry: (id: string, updates: Partial<PlanEntry>) => void;
   setGroceryItems: (items: GroceryItem[]) => void;
+  addGroceryItem: (item: Omit<GroceryItem, "id" | "checked">) => void;
   toggleGroceryItem: (id: string) => void;
   clearCheckedGroceryItems: () => void;
   exportData: () => string;
@@ -157,6 +158,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setGroceryItemsState(items);
   };
 
+  const addGroceryItem = (item: Omit<GroceryItem, "id" | "checked">) => {
+    const newItem = { ...item, id: generateId(), checked: false };
+    setGroceryItemsState([...groceryItems, newItem]);
+  };
+
   const toggleGroceryItem = (id: string) => {
     setGroceryItemsState(
       groceryItems.map(item =>
@@ -220,6 +226,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addPlanEntry,
         updatePlanEntry,
         setGroceryItems,
+        addGroceryItem,
         toggleGroceryItem,
         clearCheckedGroceryItems,
         exportData,
