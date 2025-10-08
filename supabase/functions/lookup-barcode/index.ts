@@ -105,8 +105,11 @@ async function lookupOpenFoodFacts(barcode: string): Promise<FoodNutrition | nul
         servingsPerContainer = Math.floor(product.product_quantity / product.serving_quantity);
       }
       
+      const brand = (product.brands || product.brand_owner || "").split(",")[0]?.trim();
+      const displayName = [brand, product.product_name || product.generic_name].filter(Boolean).join(" ");
+      
       return {
-        name: product.product_name || "Unknown Product",
+        name: displayName || "Unknown Product",
         category,
         serving_size: product.serving_size || product.quantity || undefined,
         package_quantity: product.quantity || product.product_quantity_unit || undefined,

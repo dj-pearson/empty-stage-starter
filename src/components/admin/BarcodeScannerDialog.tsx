@@ -343,7 +343,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
       `}</style>
       
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className="sm:max-w-[500px] dialog-content">
+        <DialogContent className="sm:max-w-[500px] dialog-content max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Scan Product Barcode</DialogTitle>
             <DialogDescription>
@@ -351,7 +351,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4 flex-1 overflow-y-auto pr-1">
             {!scannedFood && !error && !isScanning && !isLookingUp && (
               <Button onClick={startScan} className="w-full" size="lg">
                 <Scan className="h-5 w-5 mr-2" />
@@ -467,23 +467,28 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
                     </div>
                   )}
                 </div>
+
+                {/* Sticky actions for mobile */}
+                <div className="sticky bottom-0 -mx-4 bg-background/85 backdrop-blur-md border-t p-3 flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={handleClose}>Cancel</Button>
+                  <Button className="flex-1" onClick={addToDatabase}>
+                    {targetTable === 'foods' ? 'Add to Pantry' : 'Add to Nutrition Database'}
+                  </Button>
+                </div>
               </div>
             )}
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={handleClose}>
-              Cancel
-            </Button>
-            {scannedFood && (
-              <Button onClick={addToDatabase}>
-                {targetTable === 'foods' ? 'Add to Pantry' : 'Add to Nutrition Database'}
-              </Button>
-            )}
-            {!scannedFood && !isScanning && !isLookingUp && (
-              <Button onClick={startScan}>
-                Scan Again
-              </Button>
+            {!scannedFood && (
+              <>
+                <Button variant="outline" onClick={handleClose}>
+                  Cancel
+                </Button>
+                {!isScanning && !isLookingUp && (
+                  <Button onClick={startScan}>Scan Again</Button>
+                )}
+              </>
             )}
           </DialogFooter>
         </DialogContent>
