@@ -62,7 +62,10 @@ export default function Grocery() {
           quantity: (existingFood.quantity || 0) + item.quantity,
           unit: item.unit
         });
-        toast.success(`Added ${item.quantity} ${item.unit} to ${item.name} in pantry`);
+        toast.success(
+          `✓ ${item.name} added to pantry`,
+          { description: `${item.quantity} ${item.unit} added to inventory` }
+        );
       } else {
         // Create new food item in pantry
         addFood({
@@ -74,7 +77,20 @@ export default function Grocery() {
           quantity: item.quantity,
           unit: item.unit
         });
-        toast.success(`${item.name} added to pantry with ${item.quantity} ${item.unit}`);
+        toast.success(
+          `✓ ${item.name} added to pantry`,
+          { description: `New item created with ${item.quantity} ${item.unit}` }
+        );
+      }
+    } else {
+      // Unchecking - remove from pantry
+      const existingFood = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+      if (existingFood && existingFood.quantity) {
+        updateFood(existingFood.id, {
+          ...existingFood,
+          quantity: Math.max(0, existingFood.quantity - item.quantity),
+        });
+        toast.info(`${item.name} quantity reduced in pantry`);
       }
     }
   };
@@ -210,7 +226,7 @@ export default function Grocery() {
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-3xl font-bold mb-2">
               Grocery List
@@ -218,6 +234,9 @@ export default function Grocery() {
             </h1>
             <p className="text-muted-foreground">
               Auto-generated from your meal plan
+            </p>
+            <p className="text-sm text-accent mt-1 font-medium">
+              ✓ Check items when purchased - they'll be added to your pantry automatically
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -323,7 +342,11 @@ export default function Grocery() {
                       {items.map(item => (
                         <div
                           key={item.id}
-                          className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                          className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
+                            item.checked 
+                              ? "bg-safe-food/10 border border-safe-food/20" 
+                              : "hover:bg-muted/50"
+                          }`}
                         >
                           <Checkbox
                             checked={item.checked}
@@ -333,8 +356,13 @@ export default function Grocery() {
                             <p className={`font-medium ${item.checked ? "line-through text-muted-foreground" : ""}`}>
                               {item.name}
                             </p>
+                            {item.checked && (
+                              <p className="text-xs text-safe-food mt-0.5">
+                                ✓ Added to pantry
+                              </p>
+                            )}
                           </div>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-sm text-muted-foreground whitespace-nowrap">
                             {item.quantity} {item.unit}
                           </p>
                         </div>
