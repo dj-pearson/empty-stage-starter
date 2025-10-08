@@ -3,9 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, Sparkles } from "lucide-react";
+import { Check, X, Sparkles, Utensils, Menu } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
+import type { User } from "@supabase/supabase-js";
 
 interface SubscriptionPlan {
   id: string;
@@ -31,11 +33,34 @@ export default function Pricing() {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
+  const [user, setUser] = useState<User | null>(null);
+  const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
+    checkAuth();
     loadPlans();
   }, []);
+
+  const checkAuth = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    setUser(user);
+    
+    if (user) {
+      // Get user's current subscription
+      const { data: subscription } = await supabase
+        .from("user_subscriptions")
+        .select("plan_id")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .single();
+      
+      if (subscription) {
+        setCurrentPlanId(subscription.plan_id);
+      }
+    }
+  };
 
   const loadPlans = async () => {
     try {
@@ -59,8 +84,19 @@ export default function Pricing() {
   };
 
   const handleSelectPlan = async (plan: SubscriptionPlan) => {
+    if (!user) {
+      // Not logged in, redirect to auth
+      navigate("/auth");
+      return;
+    }
+
+    if (currentPlanId === plan.id) {
+      toast.info("This is your current plan!");
+      return;
+    }
+
     if (plan.price_monthly === 0) {
-      toast.info("You're already on the Free plan!");
+      toast.info("Cannot downgrade to Free plan from here");
       return;
     }
 
@@ -68,6 +104,20 @@ export default function Pricing() {
     navigate("/admin");
     toast.info("Please contact support to upgrade your plan");
   };
+
+  const getButtonText = (plan: SubscriptionPlan) => {
+    if (!user) {
+      return "Get Started Now";
+    }
+    
+    if (currentPlanId === plan.id) {
+      return "Current Plan";
+    }
+    
+    return "Upgrade Now";
+  };
+
+  const closeMobileMenu = () => setMobileMenuOpen(false);
 
   const formatPrice = (plan: SubscriptionPlan) => {
     if (plan.price_monthly === 0) return "Free";
@@ -100,7 +150,101 @@ export default function Pricing() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-16">
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <Link to="/" className="flex items-center gap-2">
+            <Utensils className="h-7 w-7 text-primary" />
+            <span className="text-2xl font-heading font-bold text-primary">EatPal</span>
+          </Link>
+          
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex gap-6 items-center">
+            <Link to="/#features" className="hover:text-primary transition-colors font-medium">Features</Link>
+            <Link to="/#how-it-works" className="hover:text-primary transition-colors font-medium">How It Works</Link>
+            <Link to="/pricing" className="text-primary font-medium">Pricing</Link>
+            {user ? (
+              <Link to="/dashboard">
+                <Button className="font-semibold shadow-md">Dashboard</Button>
+              </Link>
+            ) : (
+              <>
+                <Link to="/auth">
+                  <Button variant="ghost" className="font-medium">Sign In</Button>
+                </Link>
+                <Link to="/auth">
+                  <Button className="font-semibold shadow-md">Get Started Free</Button>
+                </Link>
+              </>
+            )}
+          </nav>
+
+          {/* Mobile Menu */}
+          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <SheetTrigger asChild className="md:hidden">
+              <Button variant="ghost" size="icon">
+                <Menu className="h-6 w-6" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-2">
+                  <Utensils className="h-6 w-6 text-primary" />
+                  <span className="font-heading font-bold text-primary">EatPal</span>
+                </SheetTitle>
+              </SheetHeader>
+              <nav className="flex flex-col gap-4 mt-8">
+                <Link 
+                  to="/#features" 
+                  className="text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted transition-colors"
+                  onClick={closeMobileMenu}
+                >
+                  Features
+                </Link>
+                <Link 
+                  to="/#how-it-works" 
+                  className="text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted transition-colors"
+                  onClick={closeMobileMenu}
+                >
+                  How It Works
+                </Link>
+                <Link 
+                  to="/pricing" 
+                  className="text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted transition-colors"
+                  onClick={closeMobileMenu}
+                >
+                  Pricing
+                </Link>
+                <div className="border-t pt-4 mt-4 space-y-3">
+                  {user ? (
+                    <Link to="/dashboard" onClick={closeMobileMenu}>
+                      <Button className="w-full text-lg py-6 shadow-md">
+                        Dashboard
+                      </Button>
+                    </Link>
+                  ) : (
+                    <>
+                      <Link to="/auth" onClick={closeMobileMenu}>
+                        <Button variant="outline" className="w-full text-lg py-6">
+                          Sign In
+                        </Button>
+                      </Link>
+                      <Link to="/auth" onClick={closeMobileMenu}>
+                        <Button className="w-full text-lg py-6 shadow-md">
+                          Get Started Free
+                        </Button>
+                      </Link>
+                    </>
+                  )}
+                </div>
+              </nav>
+            </SheetContent>
+          </Sheet>
+        </div>
+      </header>
+
+      <div className="container mx-auto px-4 py-16">
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
           Choose Your Plan
@@ -295,8 +439,9 @@ export default function Pricing() {
                   className="w-full"
                   variant={isPopular ? "default" : "outline"}
                   onClick={() => handleSelectPlan(plan)}
+                  disabled={user && currentPlanId === plan.id}
                 >
-                  {plan.price_monthly === 0 ? "Current Plan" : "Upgrade Now"}
+                  {getButtonText(plan)}
                 </Button>
               </CardFooter>
             </Card>
@@ -452,6 +597,52 @@ export default function Pricing() {
           </table>
         </div>
       </div>
+      </div>
+
+      {/* Footer */}
+      <footer className="border-t py-12 px-4 bg-secondary/5">
+        <div className="container mx-auto">
+          <div className="grid md:grid-cols-4 gap-8">
+            <div>
+              <Link to="/" className="flex items-center gap-2 mb-4">
+                <Utensils className="h-7 w-7 text-primary" />
+                <span className="text-2xl font-heading font-bold text-primary">EatPal</span>
+              </Link>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Making meal planning simple and stress-free for families with picky eaters.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-heading font-semibold mb-4 text-primary">Product</h3>
+              <ul className="space-y-3 text-sm text-muted-foreground">
+                <li><Link to="/#features" className="hover:text-primary transition-colors">Features</Link></li>
+                <li><Link to="/#how-it-works" className="hover:text-primary transition-colors">How It Works</Link></li>
+                <li><Link to="/pricing" className="hover:text-primary transition-colors">Pricing</Link></li>
+                <li><Link to="/auth" className="hover:text-primary transition-colors">Get Started</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-heading font-semibold mb-4 text-primary">Company</h3>
+              <ul className="space-y-3 text-sm text-muted-foreground">
+                <li><a href="#" className="hover:text-primary transition-colors">About Us</a></li>
+                <li><a href="#" className="hover:text-primary transition-colors">Contact</a></li>
+                <li><a href="#" className="hover:text-primary transition-colors">Privacy Policy</a></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-heading font-semibold mb-4 text-primary">Support</h3>
+              <ul className="space-y-3 text-sm text-muted-foreground">
+                <li><a href="#" className="hover:text-primary transition-colors">Help Center</a></li>
+                <li><a href="#" className="hover:text-primary transition-colors">Terms of Service</a></li>
+                <li><a href="#" className="hover:text-primary transition-colors">FAQ</a></li>
+              </ul>
+            </div>
+          </div>
+          <div className="mt-12 pt-8 border-t text-center text-sm text-muted-foreground">
+            <p>© 2025 EatPal. All rights reserved. Built with ❤️ for parents of picky eaters.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
