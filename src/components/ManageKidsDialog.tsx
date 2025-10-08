@@ -116,7 +116,7 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
     if (editingId) {
       updateKid(editingId, kidData);
       toast.success("Child updated!");
-      resetForm();
+      setOpen(false); // close dialog after editing
     } else {
       addKid(kidData);
       toast.success("Child added!");
@@ -251,7 +251,7 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
 
   return (
     <>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
         <DialogTrigger asChild>
           <Button variant="outline" className="gap-2">
             <Users className="h-4 w-4" />
