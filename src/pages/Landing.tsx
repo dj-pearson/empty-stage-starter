@@ -34,6 +34,7 @@ const Landing = () => {
           <nav className="hidden md:flex gap-6 items-center">
             <a href="#features" className="hover:text-primary transition-colors font-medium">Features</a>
             <a href="#how-it-works" className="hover:text-primary transition-colors font-medium">How It Works</a>
+            <Link to="/pricing" className="hover:text-primary transition-colors font-medium">Pricing</Link>
             <Link to="/auth">
               <Button variant="ghost" className="font-medium">Sign In</Button>
             </Link>
@@ -71,6 +72,13 @@ const Landing = () => {
                 >
                   How It Works
                 </a>
+                <Link 
+                  to="/pricing" 
+                  className="text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted transition-colors"
+                  onClick={closeMobileMenu}
+                >
+                  Pricing
+                </Link>
                 <div className="border-t pt-4 mt-4 space-y-3">
                   <Link to="/auth" onClick={closeMobileMenu}>
                     <Button variant="outline" className="w-full text-lg py-6">
@@ -227,6 +235,7 @@ const Landing = () => {
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li><a href="#features" className="hover:text-primary transition-colors">Features</a></li>
                 <li><a href="#how-it-works" className="hover:text-primary transition-colors">How It Works</a></li>
+                <li><Link to="/pricing" className="hover:text-primary transition-colors">Pricing</Link></li>
                 <li><Link to="/auth" className="hover:text-primary transition-colors">Get Started</Link></li>
               </ul>
             </div>
