@@ -3,6 +3,7 @@ import { useApp } from "@/contexts/AppContext";
 import { FoodCard } from "@/components/FoodCard";
 import { AddFoodDialog } from "@/components/AddFoodDialog";
 import { ImportCsvDialog } from "@/components/ImportCsvDialog";
+import { BarcodeScannerDialog } from "@/components/admin/BarcodeScannerDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,7 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Search, Sparkles, Download } from "lucide-react";
+import { Plus, Search, Sparkles, Download, ScanBarcode } from "lucide-react";
 import { Food, FoodCategory } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -42,6 +43,7 @@ export default function Pantry() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<FoodSuggestion[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const filteredFoods = foods.filter(food => {
     const matchesSearch = food.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -174,6 +176,14 @@ export default function Pantry() {
               >
                 <Sparkles className="h-5 w-5 mr-2" />
                 {isLoadingSuggestions ? "Getting Ideas..." : "AI Suggestions"}
+              </Button>
+              <Button 
+                variant="secondary" 
+                onClick={() => setScannerOpen(true)}
+                size="lg"
+              >
+                <ScanBarcode className="h-5 w-5 mr-2" />
+                Scan Barcode
               </Button>
               <ImportCsvDialog />
               <Button onClick={() => setDialogOpen(true)} size="lg" className="shadow-lg">
@@ -318,7 +328,17 @@ export default function Pantry() {
               </div>
             )}
           </DialogContent>
-        </Dialog>
+      </Dialog>
+
+      <BarcodeScannerDialog 
+        open={scannerOpen} 
+        onOpenChange={setScannerOpen}
+        onFoodAdded={(food) => {
+          addFood(food);
+          setScannerOpen(false);
+        }}
+        targetTable="foods"
+      />
       </div>
     </div>
   );

@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Scan } from "lucide-react";
 import { NutritionImportDialog } from "./NutritionImportDialog";
 import { BarcodeScannerDialog } from "./BarcodeScannerDialog";
 
@@ -32,6 +32,7 @@ export const NutritionManager = () => {
   const [items, setItems] = useState<NutritionItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<NutritionItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<NutritionItem | null>(null);
   const [formData, setFormData] = useState({
@@ -207,7 +208,10 @@ export const NutritionManager = () => {
           />
         </div>
         <div className="flex gap-2">
-          <BarcodeScannerDialog onFoodAdded={fetchNutritionItems} />
+          <Button variant="outline" onClick={() => setScannerOpen(true)} className="gap-2">
+            <Scan className="h-4 w-4" />
+            Scan Barcode
+          </Button>
           <NutritionImportDialog onImportComplete={fetchNutritionItems} />
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
@@ -399,7 +403,7 @@ export const NutritionManager = () => {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDelete(item.id)}
-                      >
+                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -410,6 +414,13 @@ export const NutritionManager = () => {
           </TableBody>
         </Table>
       </div>
+
+      <BarcodeScannerDialog 
+        open={scannerOpen} 
+        onOpenChange={setScannerOpen}
+        onFoodAdded={fetchNutritionItems}
+        targetTable="nutrition"
+      />
     </div>
   );
 };

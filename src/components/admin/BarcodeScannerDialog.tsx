@@ -8,7 +8,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -29,8 +28,14 @@ type ScannedFood = {
   source: string;
 };
 
-export function BarcodeScannerDialog({ onFoodAdded }: { onFoodAdded: () => void }) {
-  const [open, setOpen] = useState(false);
+interface BarcodeScannerDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onFoodAdded?: (food?: any) => void;
+  targetTable?: 'nutrition' | 'foods';
+}
+
+export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTable = 'nutrition' }: BarcodeScannerDialogProps) {
   const [isScanning, setIsScanning] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [scannedFood, setScannedFood] = useState<ScannedFood | null>(null);
@@ -128,38 +133,64 @@ export function BarcodeScannerDialog({ onFoodAdded }: { onFoodAdded: () => void 
     }
   };
 
-  const addToNutrition = async () => {
+  const addToDatabase = async () => {
     if (!scannedFood) return;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
       
-      const { error } = await supabase
-        .from("nutrition")
-        .insert({
+      if (targetTable === 'foods') {
+        // Add to user's personal foods
+        const foodData = {
+          user_id: user.id,
           name: scannedFood.name,
           category: scannedFood.category,
-          serving_size: scannedFood.serving_size,
-          ingredients: scannedFood.ingredients,
-          calories: scannedFood.calories,
-          protein_g: scannedFood.protein_g,
-          carbs_g: scannedFood.carbs_g,
-          fat_g: scannedFood.fat_g,
-          allergens: scannedFood.allergens,
-          created_by: user?.id,
+          aisle: scannedFood.category,
+          allergens: scannedFood.allergens || [],
+          is_safe: false,
+          is_try_bite: false,
+        };
+
+        const { error } = await supabase.from('foods').insert(foodData);
+        if (error) throw error;
+
+        toast({
+          title: "Food Added",
+          description: `${scannedFood.name} has been added to your pantry.`,
         });
 
-      if (error) throw error;
+        onFoodAdded?.(foodData);
+      } else {
+        // Add to admin nutrition table
+        const { error } = await supabase
+          .from("nutrition")
+          .insert({
+            name: scannedFood.name,
+            category: scannedFood.category,
+            serving_size: scannedFood.serving_size,
+            ingredients: scannedFood.ingredients,
+            calories: scannedFood.calories,
+            protein_g: scannedFood.protein_g,
+            carbs_g: scannedFood.carbs_g,
+            fat_g: scannedFood.fat_g,
+            allergens: scannedFood.allergens,
+            created_by: user?.id,
+          });
 
-      toast({
-        title: "Success",
-        description: `${scannedFood.name} added to nutrition database`,
-      });
+        if (error) throw error;
 
-      setOpen(false);
+        toast({
+          title: "Success",
+          description: `${scannedFood.name} added to nutrition database`,
+        });
+
+        onFoodAdded?.();
+      }
+
+      onOpenChange(false);
       setScannedFood(null);
       setError(null);
-      onFoodAdded();
     } catch (err) {
       console.error('Add error:', err);
       toast({
@@ -171,7 +202,7 @@ export function BarcodeScannerDialog({ onFoodAdded }: { onFoodAdded: () => void 
   };
 
   const handleClose = () => {
-    setOpen(false);
+    onOpenChange(false);
     setScannedFood(null);
     setError(null);
     setIsScanning(false);
@@ -187,12 +218,6 @@ export function BarcodeScannerDialog({ onFoodAdded }: { onFoodAdded: () => void 
       `}</style>
       
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogTrigger asChild>
-          <Button className="gap-2">
-            <Scan className="h-4 w-4" />
-            Scan Barcode
-          </Button>
-        </DialogTrigger>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Scan Product Barcode</DialogTitle>
@@ -304,8 +329,8 @@ export function BarcodeScannerDialog({ onFoodAdded }: { onFoodAdded: () => void 
               Cancel
             </Button>
             {scannedFood && (
-              <Button onClick={addToNutrition}>
-                Add to Nutrition Database
+              <Button onClick={addToDatabase}>
+                {targetTable === 'foods' ? 'Add to Pantry' : 'Add to Nutrition Database'}
               </Button>
             )}
             {!scannedFood && !isScanning && !isLookingUp && (
