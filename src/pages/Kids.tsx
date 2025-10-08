@@ -4,6 +4,7 @@ import { ManageKidsDialog } from "@/components/ManageKidsDialog";
 import { ProductSafetyChecker } from "@/components/ProductSafetyChecker";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UserCircle, Check, AlertTriangle } from "lucide-react";
 
 export default function Kids() {
@@ -44,9 +45,12 @@ export default function Kids() {
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                        <UserCircle className="h-6 w-6 text-primary" />
-                      </div>
+                      <Avatar className="w-12 h-12">
+                        <AvatarImage src={kid.profile_picture_url} />
+                        <AvatarFallback className="bg-primary/10">
+                          <UserCircle className="h-6 w-6 text-primary" />
+                        </AvatarFallback>
+                      </Avatar>
                       <div>
                         <CardTitle className="text-xl">{kid.name}</CardTitle>
                         {kid.age && (

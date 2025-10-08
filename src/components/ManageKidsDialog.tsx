@@ -14,8 +14,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Users, Plus, Pencil, Trash2, X, AlertTriangle } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Users, Plus, Pencil, Trash2, X, AlertTriangle, Upload, UserCircle } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,8 +51,10 @@ export function ManageKidsDialog() {
     name: "", 
     age: "", 
     notes: "",
-    allergens: [] as string[]
+    allergens: [] as string[],
+    profile_picture_url: ""
   });
+  const [uploading, setUploading] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +68,7 @@ export function ManageKidsDialog() {
       age: formData.age ? parseInt(formData.age) : undefined,
       notes: formData.notes || undefined,
       allergens: formData.allergens.length > 0 ? formData.allergens : undefined,
+      profile_picture_url: formData.profile_picture_url || undefined,
     };
 
     if (editingId) {
@@ -74,18 +79,61 @@ export function ManageKidsDialog() {
       toast.success("Child added!");
     }
 
-    setFormData({ name: "", age: "", notes: "", allergens: [] });
+    setFormData({ name: "", age: "", notes: "", allergens: [], profile_picture_url: "" });
     setEditingId(null);
   };
 
-  const handleEdit = (kid: { id: string; name: string; age?: number; notes?: string; allergens?: string[] }) => {
+  const handleEdit = (kid: { id: string; name: string; age?: number; notes?: string; allergens?: string[]; profile_picture_url?: string }) => {
     setEditingId(kid.id);
     setFormData({ 
       name: kid.name, 
       age: kid.age?.toString() || "",
       notes: kid.notes || "",
-      allergens: kid.allergens || []
+      allergens: kid.allergens || [],
+      profile_picture_url: kid.profile_picture_url || ""
     });
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error("Please upload an image file");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be less than 5MB");
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) throw new Error("Not authenticated");
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.data.user.id}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError, data } = await supabase.storage
+        .from('profile-pictures')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('profile-pictures')
+        .getPublicUrl(fileName);
+
+      setFormData({ ...formData, profile_picture_url: publicUrl });
+      toast.success("Image uploaded successfully!");
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      toast.error("Failed to upload image");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const toggleAllergen = (allergen: string) => {
@@ -108,7 +156,7 @@ export function ManageKidsDialog() {
   };
 
   const resetForm = () => {
-    setFormData({ name: "", age: "", notes: "", allergens: [] });
+    setFormData({ name: "", age: "", notes: "", allergens: [], profile_picture_url: "" });
     setEditingId(null);
   };
 
@@ -130,6 +178,29 @@ export function ManageKidsDialog() {
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+            <div className="space-y-3">
+              <Label>Profile Picture</Label>
+              <div className="flex items-center gap-4">
+                <Avatar className="h-20 w-20">
+                  <AvatarImage src={formData.profile_picture_url} />
+                  <AvatarFallback>
+                    <UserCircle className="h-12 w-12 text-muted-foreground" />
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    disabled={uploading}
+                    className="cursor-pointer"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Upload a profile picture (max 5MB)
+                  </p>
+                </div>
+              </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="name">Child's Name</Label>
               <Input
@@ -210,9 +281,16 @@ export function ManageKidsDialog() {
               {kids.map((kid) => (
                 <div
                   key={kid.id}
-                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-colors"
+                  className="flex items-center gap-3 p-3 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
+                  onClick={() => handleEdit(kid)}
                 >
-                  <div>
+                  <Avatar className="h-12 w-12">
+                    <AvatarImage src={kid.profile_picture_url} />
+                    <AvatarFallback>
+                      <UserCircle className="h-6 w-6 text-muted-foreground" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
                     <p className="font-medium">{kid.name}</p>
                     {kid.age && <p className="text-sm text-muted-foreground">Age {kid.age}</p>}
                     {kid.allergens && kid.allergens.length > 0 && (
@@ -226,23 +304,17 @@ export function ManageKidsDialog() {
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleEdit(kid)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setDeleteId(kid.id)}
-                      disabled={kids.length === 1}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteId(kid.id);
+                    }}
+                    disabled={kids.length === 1}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               ))}
             </div>

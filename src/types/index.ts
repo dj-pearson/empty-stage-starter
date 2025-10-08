@@ -22,6 +22,7 @@ export interface Kid {
   age?: number;
   notes?: string;
   allergens?: string[];
+  profile_picture_url?: string;
 }
 
 export interface PlanEntry {
