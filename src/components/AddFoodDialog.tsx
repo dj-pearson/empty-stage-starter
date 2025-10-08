@@ -6,6 +6,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +25,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, Search, CheckCircle2 } from "lucide-react";
 import { Food, FoodCategory } from "@/types";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface AddFoodDialogProps {
   open: boolean;
@@ -35,12 +48,32 @@ const categories: { value: FoodCategory; label: string }[] = [
   { value: "snack", label: "Snack" },
 ];
 
+type NutritionItem = {
+  id: string;
+  name: string;
+  category: string;
+  serving_size?: string;
+  package_quantity?: string;
+  servings_per_container?: number;
+  allergens?: string[];
+  calories?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+};
+
 export function AddFoodDialog({
   open,
   onOpenChange,
   onSave,
   editFood,
 }: AddFoodDialogProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<NutritionItem[]>([]);
+  const [selectedNutrition, setSelectedNutrition] = useState<NutritionItem | null>(null);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  
   const [name, setName] = useState("");
   const [category, setCategory] = useState<FoodCategory>("protein");
   const [isSafe, setIsSafe] = useState(true);
@@ -48,6 +81,37 @@ export function AddFoodDialog({
   const [aisle, setAisle] = useState("");
   const [quantity, setQuantity] = useState(0);
   const [unit, setUnit] = useState("servings");
+  const [servingsPerContainer, setServingsPerContainer] = useState<number | undefined>();
+  const [packageQuantity, setPackageQuantity] = useState("");
+
+  // Search nutrition database as user types
+  useEffect(() => {
+    const searchNutrition = async () => {
+      if (searchQuery.length < 2) {
+        setSearchResults([]);
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const { data, error } = await supabase
+          .from('nutrition')
+          .select('*')
+          .ilike('name', `%${searchQuery}%`)
+          .limit(10);
+
+        if (error) throw error;
+        setSearchResults(data || []);
+      } catch (error) {
+        console.error('Search error:', error);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+
+    const debounce = setTimeout(searchNutrition, 300);
+    return () => clearTimeout(debounce);
+  }, [searchQuery]);
 
   useEffect(() => {
     if (editFood) {
@@ -58,16 +122,52 @@ export function AddFoodDialog({
       setAisle(editFood.aisle || "");
       setQuantity(editFood.quantity || 0);
       setUnit(editFood.unit || "servings");
+      setServingsPerContainer(editFood.servings_per_container);
+      setPackageQuantity(editFood.package_quantity || "");
+      setShowConfirmation(false);
+      setSelectedNutrition(null);
+      setSearchQuery("");
     } else {
-      setName("");
-      setCategory("protein");
-      setIsSafe(true);
-      setIsTryBite(false);
-      setAisle("");
-      setQuantity(0);
-      setUnit("servings");
+      resetForm();
     }
   }, [editFood, open]);
+
+  const resetForm = () => {
+    setName("");
+    setCategory("protein");
+    setIsSafe(true);
+    setIsTryBite(false);
+    setAisle("");
+    setQuantity(0);
+    setUnit("servings");
+    setServingsPerContainer(undefined);
+    setPackageQuantity("");
+    setShowConfirmation(false);
+    setSelectedNutrition(null);
+    setSearchQuery("");
+    setSearchResults([]);
+  };
+
+  const handleSelectNutrition = (item: NutritionItem) => {
+    setSelectedNutrition(item);
+    setName(item.name);
+    setCategory(mapCategoryToFoodCategory(item.category));
+    setPackageQuantity(item.package_quantity || "");
+    setServingsPerContainer(item.servings_per_container);
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowConfirmation(true);
+  };
+
+  const mapCategoryToFoodCategory = (cat: string): FoodCategory => {
+    const lower = cat.toLowerCase();
+    if (lower.includes('protein') || lower.includes('meat')) return 'protein';
+    if (lower.includes('carb') || lower.includes('pasta') || lower.includes('bread')) return 'carb';
+    if (lower.includes('dairy') || lower.includes('cheese') || lower.includes('milk')) return 'dairy';
+    if (lower.includes('fruit')) return 'fruit';
+    if (lower.includes('veg')) return 'vegetable';
+    return 'snack';
+  };
 
   const handleSave = () => {
     if (!name.trim()) return;
@@ -80,18 +180,101 @@ export function AddFoodDialog({
       aisle: aisle.trim() || undefined,
       quantity,
       unit,
+      servings_per_container: servingsPerContainer,
+      package_quantity: packageQuantity || undefined,
     });
 
+    resetForm();
     onOpenChange(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={(isOpen) => {
+      if (!isOpen) resetForm();
+      onOpenChange(isOpen);
+    }}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editFood ? "Edit Food" : "Add New Food"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
+          {!editFood && !showConfirmation && (
+            <div className="space-y-2">
+              <Label>Search Nutrition Database</Label>
+              <Command className="border rounded-md">
+                <div className="flex items-center border-b px-3">
+                  <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                  <CommandInput
+                    placeholder="Search for a food..."
+                    value={searchQuery}
+                    onValueChange={setSearchQuery}
+                  />
+                </div>
+                {searchQuery.length >= 2 && (
+                  <CommandList>
+                    {isSearching && (
+                      <div className="flex items-center justify-center p-4">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      </div>
+                    )}
+                    {!isSearching && searchResults.length === 0 && (
+                      <CommandEmpty>No foods found.</CommandEmpty>
+                    )}
+                    {!isSearching && searchResults.length > 0 && (
+                      <CommandGroup>
+                        {searchResults.map((item) => (
+                          <CommandItem
+                            key={item.id}
+                            onSelect={() => handleSelectNutrition(item)}
+                            className="cursor-pointer"
+                          >
+                            <div className="flex-1">
+                              <div className="font-medium">{item.name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {item.category}
+                                {item.serving_size && ` • ${item.serving_size}`}
+                                {item.package_quantity && ` • ${item.package_quantity}`}
+                              </div>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                )}
+              </Command>
+              <p className="text-xs text-muted-foreground">
+                Search our nutrition database or manually enter food details below
+              </p>
+            </div>
+          )}
+
+          {showConfirmation && selectedNutrition && (
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-2">
+                  <p className="font-medium">Found in database: {selectedNutrition.name}</p>
+                  {selectedNutrition.package_quantity && (
+                    <p className="text-sm">Package: {selectedNutrition.package_quantity}</p>
+                  )}
+                  {selectedNutrition.servings_per_container && (
+                    <p className="text-sm">Servings per container: {selectedNutrition.servings_per_container}</p>
+                  )}
+                  {selectedNutrition.allergens && selectedNutrition.allergens.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {selectedNutrition.allergens.map(allergen => (
+                        <Badge key={allergen} variant="destructive" className="text-xs">
+                          {allergen}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="name">Food Name</Label>
             <Input
@@ -128,6 +311,31 @@ export function AddFoodDialog({
             />
           </div>
 
+          {packageQuantity && (
+            <div className="space-y-2">
+              <Label htmlFor="package">Package Details</Label>
+              <Input
+                id="package"
+                value={packageQuantity}
+                onChange={(e) => setPackageQuantity(e.target.value)}
+                placeholder="e.g., 20 nuggets, 16 oz"
+              />
+            </div>
+          )}
+
+          {servingsPerContainer !== undefined && (
+            <div className="space-y-2">
+              <Label htmlFor="servings">Servings Per Container</Label>
+              <Input
+                id="servings"
+                type="number"
+                min="1"
+                value={servingsPerContainer}
+                onChange={(e) => setServingsPerContainer(parseInt(e.target.value) || undefined)}
+              />
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="quantity">Quantity in Stock</Label>
@@ -147,6 +355,7 @@ export function AddFoodDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="servings">Servings</SelectItem>
+                  <SelectItem value="packages">Packages</SelectItem>
                   <SelectItem value="count">Count</SelectItem>
                   <SelectItem value="oz">Ounces</SelectItem>
                   <SelectItem value="lbs">Pounds</SelectItem>
