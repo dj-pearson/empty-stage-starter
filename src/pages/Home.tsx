@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { Utensils, Calendar, ShoppingCart, Sparkles, Download, Upload, Trash2, Users, BarChart3, ChefHat } from "lucide-react";
 import { toast } from "sonner";
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,6 +23,26 @@ export default function Home() {
   const { foods, planEntries, groceryItems, kids, recipes, activeKidId, exportData, importData, resetAllData } = useApp();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [parentName, setParentName] = useState<string>("Parent");
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .single();
+        
+        if (profile) {
+          setParentName(profile.full_name);
+        }
+      }
+    };
+    
+    fetchProfile();
+  }, []);
 
   const safeFoods = foods.filter(f => f.is_safe).length;
   const tryBites = foods.filter(f => f.is_try_bite).length;
@@ -72,7 +93,7 @@ export default function Home() {
             <span className="text-sm font-medium">Kid Meal Planner</span>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Welcome, {activeKid?.name || "Parent"}!
+            Welcome, {parentName}!
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             Plan delicious meals with safe foods and daily try bites for your picky eater
