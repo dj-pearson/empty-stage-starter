@@ -65,20 +65,26 @@ export function CalendarMealPlanner({
     const { active } = event;
     setActiveId(active.id as string);
     
+    console.log('Drag started:', active.id);
+    
     // Find the food being dragged
     const entry = planEntries.find(e => e.id === active.id);
     if (entry) {
       const food = foods.find(f => f.id === entry.food_id);
       setDraggedFood(food || null);
+      console.log('Dragging entry:', entry, 'Food:', food?.name);
     }
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     
+    console.log('Drag ended - Active:', active.id, 'Over:', over?.id);
+    
     if (!over) {
       setActiveId(null);
       setDraggedFood(null);
+      console.log('No drop target, canceling drag');
       return;
     }
 
@@ -86,20 +92,39 @@ export function CalendarMealPlanner({
     if (!activeEntry) {
       setActiveId(null);
       setDraggedFood(null);
+      console.log('Could not find active entry:', active.id);
       return;
     }
 
     // Parse the drop target: "date-slot" format
-    const [targetDate, targetSlot] = (over.id as string).split('-');
+    const dropIdParts = (over.id as string).split('-');
+    
+    // Handle case where date might contain dashes (YYYY-MM-DD-slot)
+    // So we need to reconstruct: everything except last part is date, last part is slot
+    const targetSlot = dropIdParts[dropIdParts.length - 1];
+    const targetDate = dropIdParts.slice(0, -1).join('-');
+    
+    console.log('Parsed drop target - Date:', targetDate, 'Slot:', targetSlot);
     
     if (targetDate && targetSlot) {
+      // Don't do anything if dropping in the same slot
+      if (activeEntry.date === targetDate && activeEntry.meal_slot === targetSlot) {
+        console.log('Dropped in same slot, no update needed');
+        setActiveId(null);
+        setDraggedFood(null);
+        return;
+      }
+      
       // Check if there's already an entry for this slot on this date
       const existingEntry = planEntries.find(
         e => e.date === targetDate && e.meal_slot === targetSlot && e.kid_id === kidId
       );
 
+      console.log('Existing entry at target:', existingEntry);
+
       if (existingEntry && existingEntry.id !== activeEntry.id) {
         // Swap the two entries
+        console.log('Swapping entries');
         onUpdateEntry(existingEntry.id, {
           date: activeEntry.date,
           meal_slot: activeEntry.meal_slot,
@@ -107,10 +132,13 @@ export function CalendarMealPlanner({
       }
 
       // Update the dragged entry
+      console.log('Updating dragged entry to new position');
       onUpdateEntry(activeEntry.id, {
         date: targetDate,
         meal_slot: targetSlot as MealSlot,
       });
+    } else {
+      console.log('Invalid drop target format');
     }
 
     setActiveId(null);

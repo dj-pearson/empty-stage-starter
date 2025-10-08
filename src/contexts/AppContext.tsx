@@ -141,13 +141,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addPlanEntry = (entry: Omit<PlanEntry, "id">) => {
-    setPlanEntriesState([...planEntries, { ...entry, id: generateId() }]);
+    const newEntry = { ...entry, id: generateId() };
+    console.log('Adding plan entry:', newEntry);
+    setPlanEntriesState([...planEntries, newEntry]);
   };
 
   const updatePlanEntry = (id: string, updates: Partial<PlanEntry>) => {
-    setPlanEntriesState(
-      planEntries.map(e => (e.id === id ? { ...e, ...updates } : e))
-    );
+    console.log('Updating plan entry:', id, 'Updates:', updates);
+    const updatedEntries = planEntries.map(e => (e.id === id ? { ...e, ...updates } : e));
+    console.log('Updated entries:', updatedEntries.filter(e => e.id === id));
+    setPlanEntriesState(updatedEntries);
   };
 
   const setGroceryItems = (items: GroceryItem[]) => {
