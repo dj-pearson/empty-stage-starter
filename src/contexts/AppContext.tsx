@@ -20,6 +20,7 @@ interface AppContextType {
   updateRecipe: (id: string, recipe: Partial<Recipe>) => void;
   deleteRecipe: (id: string) => void;
   setPlanEntries: (entries: PlanEntry[]) => void;
+  addPlanEntry: (entry: Omit<PlanEntry, "id">) => void;
   updatePlanEntry: (id: string, updates: Partial<PlanEntry>) => void;
   setGroceryItems: (items: GroceryItem[]) => void;
   toggleGroceryItem: (id: string) => void;
@@ -139,6 +140,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setPlanEntriesState(entries);
   };
 
+  const addPlanEntry = (entry: Omit<PlanEntry, "id">) => {
+    setPlanEntriesState([...planEntries, { ...entry, id: generateId() }]);
+  };
+
   const updatePlanEntry = (id: string, updates: Partial<PlanEntry>) => {
     setPlanEntriesState(
       planEntries.map(e => (e.id === id ? { ...e, ...updates } : e))
@@ -209,6 +214,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateRecipe,
         deleteRecipe,
         setPlanEntries,
+        addPlanEntry,
         updatePlanEntry,
         setGroceryItems,
         toggleGroceryItem,

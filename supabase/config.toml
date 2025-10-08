@@ -6,5 +6,8 @@ verify_jwt = false
 [functions.suggest-recipe]
 verify_jwt = true
 
+[functions.ai-meal-plan]
+verify_jwt = true
+
 [functions.test-ai-model]
 verify_jwt = true

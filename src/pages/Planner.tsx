@@ -4,12 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CalendarMealPlanner } from "@/components/CalendarMealPlanner";
 import { buildWeekPlan, buildDayPlan } from "@/lib/mealPlanner";
-import { Calendar, RefreshCw, Sparkles, Shuffle, AlertTriangle, Package } from "lucide-react";
+import { Calendar, RefreshCw, Sparkles, Shuffle, AlertTriangle, Package, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { MealSlot, PlanEntry } from "@/types";
 import { SwapMealDialog } from "@/components/SwapMealDialog";
 import { supabase } from "@/integrations/supabase/client";
+import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 
 const MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
   { slot: "breakfast", label: "Breakfast" },
@@ -21,9 +23,12 @@ const MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
 ];
 
 export default function Planner() {
-  const { foods, kids, activeKidId, planEntries, setPlanEntries, updatePlanEntry, updateFood } = useApp();
+  const { foods, kids, recipes, activeKidId, planEntries, setPlanEntries, updatePlanEntry, addPlanEntry, updateFood } = useApp();
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<PlanEntry | null>(null);
+  const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
 
   const activeKid = kids.find(k => k.id === activeKidId);
 
@@ -60,6 +65,108 @@ export default function Planner() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to build plan");
     }
+  };
+
+  const handleAIMealPlan = async (days: number = 7) => {
+    if (!activeKid) {
+      toast.error("Please select a child first");
+      return;
+    }
+
+    setIsGeneratingPlan(true);
+    try {
+      // Get active AI model
+      const { data: aiSettings, error: aiError } = await supabase
+        .from('ai_settings')
+        .select('*')
+        .eq('is_active', true)
+        .single();
+
+      if (aiError || !aiSettings) {
+        toast.error("No active AI model configured. Please set one up in Admin settings.");
+        setIsGeneratingPlan(false);
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('ai-meal-plan', {
+        body: {
+          kid: activeKid,
+          foods,
+          recipes,
+          planHistory: planEntries,
+          aiModel: aiSettings,
+          days,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      // Convert AI plan to plan entries
+      const newEntries: PlanEntry[] = [];
+      data.plan.forEach((day: any) => {
+        Object.entries(day.meals).forEach(([slot, foodId]) => {
+          if (foodId) {
+            newEntries.push({
+              id: `${activeKid.id}-${day.date}-${slot}`,
+              kid_id: activeKid.id,
+              date: day.date,
+              meal_slot: slot as MealSlot,
+              food_id: foodId as string,
+              result: null,
+            });
+          }
+        });
+      });
+
+      // Remove existing entries for this date range and kid
+      const dates = data.plan.map((d: any) => d.date);
+      const filteredEntries = planEntries.filter(
+        e => !dates.includes(e.date) || e.kid_id !== activeKidId
+      );
+
+      setPlanEntries([...filteredEntries, ...newEntries]);
+      toast.success(`AI generated ${days}-day meal plan!`, {
+        description: "Review and adjust as needed",
+      });
+    } catch (error) {
+      console.error('Error generating AI meal plan:', error);
+      toast.error("Failed to generate AI meal plan. Please try again.");
+    } finally {
+      setIsGeneratingPlan(false);
+    }
+  };
+
+  const handleUpdateEntry = (entryId: string, updates: Partial<PlanEntry>) => {
+    updatePlanEntry(entryId, updates);
+  };
+
+  const handleAddEntry = (date: string, slot: MealSlot, foodId: string) => {
+    if (!activeKid) return;
+    
+    addPlanEntry({
+      kid_id: activeKid.id,
+      date,
+      meal_slot: slot,
+      food_id: foodId,
+      result: null,
+    });
+  };
+
+  const handlePreviousWeek = () => {
+    setCurrentWeekStart(subWeeks(currentWeekStart, 1));
+  };
+
+  const handleNextWeek = () => {
+    setCurrentWeekStart(addWeeks(currentWeekStart, 1));
+  };
+
+  const handleThisWeek = () => {
+    setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 0 }));
   };
 
   const handleMarkResult = async (entry: PlanEntry, result: "ate" | "tasted" | "refused") => {
@@ -153,21 +260,97 @@ export default function Planner() {
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">
-              Weekly Meal Planner
-              {activeKid && <span className="text-primary"> - {activeKid.name}</span>}
-            </h1>
-            <p className="text-muted-foreground">
-              7-day meal rotation with daily try bites
-            </p>
+        <div className="flex flex-col gap-4 mb-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold mb-2">
+                Weekly Meal Planner
+                {activeKid && <span className="text-primary"> - {activeKid.name}</span>}
+              </h1>
+              <p className="text-muted-foreground">
+                Drag and drop meals to plan your week
+              </p>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <Button 
+                onClick={() => handleAIMealPlan(7)} 
+                size="lg" 
+                className="shadow-lg"
+                disabled={!activeKid || isGeneratingPlan}
+              >
+                {isGeneratingPlan ? (
+                  <>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-5 w-5 mr-2" />
+                    AI Generate Week
+                  </>
+                )}
+              </Button>
+              <Button 
+                onClick={handleBuildWeek} 
+                variant="outline"
+                size="lg"
+                disabled={!activeKid}
+              >
+                <RefreshCw className="h-5 w-5 mr-2" />
+                Quick Build
+              </Button>
+            </div>
           </div>
-          <Button onClick={handleBuildWeek} size="lg" className="shadow-lg" disabled={!activeKid}>
-            <RefreshCw className="h-5 w-5 mr-2" />
-            Build Week Plan
-          </Button>
+
+          {/* Week Navigation */}
+          <Card className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="icon" onClick={handlePreviousWeek}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <div className="text-center min-w-[200px]">
+                  <div className="font-semibold">
+                    Week of {format(currentWeekStart, 'MMM d, yyyy')}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {format(currentWeekStart, 'MMM d')} - {format(addWeeks(currentWeekStart, 1), 'MMM d')}
+                  </div>
+                </div>
+                <Button variant="outline" size="icon" onClick={handleNextWeek}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <Button variant="outline" onClick={handleThisWeek}>
+                <Calendar className="h-4 w-4 mr-2" />
+                This Week
+              </Button>
+            </div>
+          </Card>
         </div>
+
+        {!activeKid ? (
+          <Card className="p-12 text-center">
+            <div className="max-w-md mx-auto">
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <Calendar className="h-8 w-8 text-primary" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Select a Child</h3>
+              <p className="text-muted-foreground mb-6">
+                Please select a child to start planning meals
+              </p>
+            </div>
+          </Card>
+        ) : (
+          <CalendarMealPlanner
+            weekStart={currentWeekStart}
+            planEntries={planEntries}
+            foods={foods}
+            kidId={activeKidId!}
+            onUpdateEntry={handleUpdateEntry}
+            onAddEntry={handleAddEntry}
+          />
+        )}
 
         {planEntries.length === 0 ? (
           <Card className="p-12 text-center">
