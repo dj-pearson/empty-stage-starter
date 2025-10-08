@@ -71,13 +71,19 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
     setScannedFood(null);
 
     try {
+      // Prepare the scanner (important for mobile)
+      await BarcodeScanner.prepare();
+      
       // Hide background to show camera
       document.body.classList.add('scanner-active');
+      document.querySelector('.dialog-content')?.classList.add('scanner-ui');
       
       const result = await BarcodeScanner.startScan();
       
-      // Remove scanner styling
+      // Stop scanner and remove styling
+      await BarcodeScanner.stopScan();
       document.body.classList.remove('scanner-active');
+      document.querySelector('.dialog-content')?.classList.remove('scanner-ui');
       
       if (result.hasContent) {
         console.log('Scanned barcode:', result.content);
@@ -85,7 +91,17 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
       }
     } catch (err) {
       console.error('Scan error:', err);
+      
+      // Cleanup on error
+      try {
+        await BarcodeScanner.stopScan();
+      } catch (stopErr) {
+        console.error('Error stopping scanner:', stopErr);
+      }
+      
       document.body.classList.remove('scanner-active');
+      document.querySelector('.dialog-content')?.classList.remove('scanner-ui');
+      
       setError(err instanceof Error ? err.message : "Failed to scan barcode");
       toast({
         title: "Scan failed",
@@ -205,7 +221,18 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
     }
   };
 
-  const handleClose = () => {
+  const handleClose = async () => {
+    // Stop scanner if it's running
+    if (isScanning) {
+      try {
+        await BarcodeScanner.stopScan();
+        document.body.classList.remove('scanner-active');
+        document.querySelector('.dialog-content')?.classList.remove('scanner-ui');
+      } catch (err) {
+        console.error('Error stopping scanner on close:', err);
+      }
+    }
+    
     onOpenChange(false);
     setScannedFood(null);
     setError(null);
@@ -218,11 +245,18 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
       <style>{`
         .scanner-active {
           --background: transparent !important;
+          background: transparent !important;
+        }
+        .scanner-active body {
+          background: transparent !important;
+        }
+        .scanner-ui {
+          visibility: hidden;
         }
       `}</style>
       
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] dialog-content">
           <DialogHeader>
             <DialogTitle>Scan Product Barcode</DialogTitle>
             <DialogDescription>

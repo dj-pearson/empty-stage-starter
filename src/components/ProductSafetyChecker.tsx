@@ -63,10 +63,15 @@ export function ProductSafetyChecker({ kidName, kidAllergens }: ProductSafetyChe
     setResult(null);
 
     try {
+      // Prepare the scanner (important for mobile)
+      await BarcodeScanner.prepare();
+      
       document.body.classList.add('scanner-active');
       
       const scanResult = await BarcodeScanner.startScan();
       
+      // Stop scanner and cleanup
+      await BarcodeScanner.stopScan();
       document.body.classList.remove('scanner-active');
       
       if (scanResult.hasContent) {
@@ -74,6 +79,14 @@ export function ProductSafetyChecker({ kidName, kidAllergens }: ProductSafetyChe
       }
     } catch (err) {
       console.error('Scan error:', err);
+      
+      // Cleanup on error
+      try {
+        await BarcodeScanner.stopScan();
+      } catch (stopErr) {
+        console.error('Error stopping scanner:', stopErr);
+      }
+      
       document.body.classList.remove('scanner-active');
       toast({
         title: "Scan failed",
