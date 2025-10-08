@@ -1,105 +1,97 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Check, ArrowRight, Utensils, Brain, Calendar, TrendingUp, Heart, Sparkles } from "lucide-react";
+import { Check, ArrowRight, Utensils, Brain, Calendar, TrendingUp, Heart, Sparkles, Users, ShoppingCart } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const Landing = () => {
   const features = [
-    { icon: Utensils, title: "Smart Pantry", description: "Track safe foods and allergens for each child" },
-    { icon: Calendar, title: "Meal Planner", description: "Plan weekly meals with dietary preferences" },
-    { icon: Brain, title: "AI Suggestions", description: "Get personalized food recommendations" },
-    { icon: TrendingUp, title: "Analytics", description: "Track eating patterns and progress" },
-    { icon: Heart, title: "Safe Foods", description: "Manage allergens and dietary restrictions" },
-    { icon: Sparkles, title: "Try Bite", description: "Encourage trying new foods gradually" },
-  ];
-
-  const pricingPlans = [
-    {
-      name: "Starter",
-      price: "$9",
-      period: "/month",
-      description: "Perfect for one child",
-      features: ["1 child profile", "Unlimited foods", "Meal planning", "Basic analytics", "Email support"],
-      popular: false,
-    },
-    {
-      name: "Family",
-      price: "$19",
-      period: "/month",
-      description: "Best for families",
-      features: ["Up to 5 children", "Unlimited foods", "Advanced meal planning", "AI suggestions", "Priority support", "Export data"],
-      popular: true,
-    },
-    {
-      name: "Premium",
-      price: "$29",
-      period: "/month",
-      description: "For professionals",
-      features: ["Unlimited children", "Unlimited foods", "Advanced analytics", "Unlimited AI suggestions", "24/7 support", "Custom features"],
-      popular: false,
-    },
+    { icon: Utensils, title: "Smart Food Library", description: "Track safe foods, try bites, and allergens for each child" },
+    { icon: Calendar, title: "Weekly Meal Plans", description: "Auto-generate 7-day meal plans with daily try bites" },
+    { icon: Brain, title: "AI Suggestions", description: "Get personalized food recommendations based on eating patterns" },
+    { icon: ShoppingCart, title: "Auto Grocery Lists", description: "Generate shopping lists from your meal plans automatically" },
+    { icon: Users, title: "Multi-Child Support", description: "Manage meal plans for multiple children in one place" },
+    { icon: TrendingUp, title: "Progress Tracking", description: "Track which foods were eaten, tasted, or refused" },
   ];
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b sticky top-0 bg-background/95 backdrop-blur z-50">
+      <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <Utensils className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">FeedWise</span>
+            <Utensils className="h-7 w-7 text-primary" />
+            <span className="text-2xl font-heading font-bold text-primary">EatPal</span>
           </div>
           <nav className="hidden md:flex gap-6 items-center">
-            <a href="#features" className="hover:text-primary transition-colors">Features</a>
-            <a href="#pricing" className="hover:text-primary transition-colors">Pricing</a>
-            <a href="#blog" className="hover:text-primary transition-colors">Blog</a>
+            <a href="#features" className="hover:text-primary transition-colors font-medium">Features</a>
+            <a href="#how-it-works" className="hover:text-primary transition-colors font-medium">How It Works</a>
             <Link to="/auth">
-              <Button variant="ghost">Sign In</Button>
+              <Button variant="ghost" className="font-medium">Sign In</Button>
             </Link>
             <Link to="/auth">
-              <Button>Get Started</Button>
+              <Button className="font-semibold shadow-md">Get Started Free</Button>
             </Link>
           </nav>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="py-20 px-4">
-        <div className="container mx-auto text-center max-w-4xl">
-          <Badge className="mb-4">Powered by AI</Badge>
-          <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-            Feeding Kids Made Simple
+      <section className="py-20 px-4 bg-gradient-to-b from-background to-secondary/10">
+        <div className="container mx-auto text-center max-w-5xl">
+          <Badge className="mb-6 bg-accent/10 text-accent border-accent/20 px-4 py-1.5">Powered by AI</Badge>
+          <h1 className="text-5xl md:text-7xl font-heading font-bold mb-6 text-primary leading-tight">
+            Meal Planning for<br />Picky Eaters Made Easy
           </h1>
-          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Plan meals, track eating habits, and get AI-powered suggestions for picky eaters. 
-            The complete meal planning solution for parents.
+          <p className="text-xl md:text-2xl text-muted-foreground mb-10 max-w-3xl mx-auto leading-relaxed">
+            Plan weekly meals with safe foods, introduce new foods with daily try bites, and auto-generate your grocery list. 
+            Perfect for parents of selective eaters.
           </p>
           <div className="flex gap-4 justify-center flex-wrap">
             <Link to="/auth">
-              <Button size="lg" className="gap-2">
-                Start Free Trial <ArrowRight className="h-4 w-4" />
+              <Button size="lg" className="gap-2 text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-shadow">
+                Start Free Trial <ArrowRight className="h-5 w-5" />
               </Button>
             </Link>
-            <Button size="lg" variant="outline">Watch Demo</Button>
+            <Button size="lg" variant="outline" className="text-lg px-8 py-6 border-2">
+              See How It Works
+            </Button>
+          </div>
+          
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-8 max-w-2xl mx-auto mt-16">
+            <div>
+              <div className="text-4xl font-heading font-bold text-primary mb-2">7-Day</div>
+              <div className="text-sm text-muted-foreground">Meal Plans</div>
+            </div>
+            <div>
+              <div className="text-4xl font-heading font-bold text-primary mb-2">1</div>
+              <div className="text-sm text-muted-foreground">Try Bite Daily</div>
+            </div>
+            <div>
+              <div className="text-4xl font-heading font-bold text-primary mb-2">Auto</div>
+              <div className="text-sm text-muted-foreground">Grocery Lists</div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-20 px-4 bg-muted/30">
+      <section id="features" className="py-24 px-4">
         <div className="container mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold mb-4">Everything You Need</h2>
-            <p className="text-xl text-muted-foreground">Powerful features to make meal planning effortless</p>
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-primary">Everything You Need</h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">Powerful features designed to make meal planning effortless for families with picky eaters</p>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature) => (
-              <Card key={feature.title} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <feature.icon className="h-12 w-12 text-primary mb-4" />
-                  <CardTitle>{feature.title}</CardTitle>
-                  <CardDescription>{feature.description}</CardDescription>
+              <Card key={feature.title} className="hover:shadow-xl transition-all hover:-translate-y-1 border-2">
+                <CardHeader className="space-y-4">
+                  <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <feature.icon className="h-7 w-7 text-primary" />
+                  </div>
+                  <CardTitle className="font-heading text-xl">{feature.title}</CardTitle>
+                  <CardDescription className="text-base leading-relaxed">{feature.description}</CardDescription>
                 </CardHeader>
               </Card>
             ))}
@@ -107,129 +99,103 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Pricing Section */}
-      <section id="pricing" className="py-20 px-4">
-        <div className="container mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold mb-4">Simple, Transparent Pricing</h2>
-            <p className="text-xl text-muted-foreground">Choose the plan that's right for your family</p>
+      {/* How It Works Section */}
+      <section id="how-it-works" className="py-24 px-4 bg-secondary/10">
+        <div className="container mx-auto max-w-6xl">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-primary">How It Works</h2>
+            <p className="text-xl text-muted-foreground">Simple steps to stress-free meal planning</p>
           </div>
-          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {pricingPlans.map((plan) => (
-              <Card key={plan.name} className={plan.popular ? "border-primary shadow-lg scale-105" : ""}>
-                {plan.popular && (
-                  <div className="bg-primary text-primary-foreground text-center py-2 text-sm font-semibold">
-                    Most Popular
-                  </div>
-                )}
-                <CardHeader>
-                  <CardTitle>{plan.name}</CardTitle>
-                  <CardDescription>{plan.description}</CardDescription>
-                  <div className="mt-4">
-                    <span className="text-4xl font-bold">{plan.price}</span>
-                    <span className="text-muted-foreground">{plan.period}</span>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-3 mb-6">
-                    {plan.features.map((feature) => (
-                      <li key={feature} className="flex items-center gap-2">
-                        <Check className="h-5 w-5 text-primary flex-shrink-0" />
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <Link to="/auth">
-                    <Button className="w-full" variant={plan.popular ? "default" : "outline"}>
-                      Get Started
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Blog Section */}
-      <section id="blog" className="py-20 px-4 bg-muted/30">
-        <div className="container mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold mb-4">Latest from Our Blog</h2>
-            <p className="text-xl text-muted-foreground">Tips, tricks, and insights for feeding kids</p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {[1, 2, 3].map((i) => (
-              <Card key={i} className="hover:shadow-lg transition-shadow">
-                <div className="h-48 bg-gradient-to-br from-primary/20 to-primary/5" />
-                <CardHeader>
-                  <CardTitle>10 Tips for Picky Eaters</CardTitle>
-                  <CardDescription>Learn effective strategies to encourage healthy eating habits in children...</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button variant="link" className="p-0">Read More <ArrowRight className="h-4 w-4 ml-1" /></Button>
-                </CardContent>
-              </Card>
-            ))}
+          
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="text-center">
+              <div className="w-20 h-20 rounded-full bg-primary text-white flex items-center justify-center text-3xl font-bold mx-auto mb-6 shadow-lg">
+                1
+              </div>
+              <h3 className="text-2xl font-heading font-bold mb-3 text-primary">Build Your Pantry</h3>
+              <p className="text-muted-foreground leading-relaxed">
+                Add your child's safe foods and foods you'd like them to try. Mark allergens and dietary preferences.
+              </p>
+            </div>
+            
+            <div className="text-center">
+              <div className="w-20 h-20 rounded-full bg-secondary text-foreground flex items-center justify-center text-3xl font-bold mx-auto mb-6 shadow-lg">
+                2
+              </div>
+              <h3 className="text-2xl font-heading font-bold mb-3 text-primary">Generate Meal Plans</h3>
+              <p className="text-muted-foreground leading-relaxed">
+                Click one button to generate a complete 7-day meal plan with daily try bites. No repeats for 3 days!
+              </p>
+            </div>
+            
+            <div className="text-center">
+              <div className="w-20 h-20 rounded-full bg-accent text-white flex items-center justify-center text-3xl font-bold mx-auto mb-6 shadow-lg">
+                3
+              </div>
+              <h3 className="text-2xl font-heading font-bold mb-3 text-primary">Shop & Track</h3>
+              <p className="text-muted-foreground leading-relaxed">
+                Get auto-generated grocery lists and track which foods your child ate, tasted, or refused.
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-4">
+      <section className="py-24 px-4 bg-gradient-to-br from-primary to-secondary">
         <div className="container mx-auto text-center max-w-3xl">
-          <h2 className="text-4xl font-bold mb-4">Ready to Get Started?</h2>
-          <p className="text-xl text-muted-foreground mb-8">
-            Join thousands of parents making mealtime easier
+          <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-white">Ready to Make Mealtime Easier?</h2>
+          <p className="text-xl text-white/90 mb-10 leading-relaxed">
+            Join parents who are transforming how they plan meals for picky eaters. Start your free trial today!
           </p>
           <Link to="/auth">
-            <Button size="lg" className="gap-2">
-              Start Your Free Trial <ArrowRight className="h-4 w-4" />
+            <Button size="lg" className="gap-2 bg-white text-primary hover:bg-white/90 text-lg px-8 py-6 shadow-xl">
+              Start Free Trial <ArrowRight className="h-5 w-5" />
             </Button>
           </Link>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="border-t py-12 px-4">
+      <footer className="border-t py-12 px-4 bg-secondary/5">
         <div className="container mx-auto">
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <Utensils className="h-6 w-6 text-primary" />
-                <span className="text-xl font-bold">FeedWise</span>
+                <Utensils className="h-7 w-7 text-primary" />
+                <span className="text-2xl font-heading font-bold text-primary">EatPal</span>
               </div>
-              <p className="text-sm text-muted-foreground">
-                Making meal planning simple for families everywhere.
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Making meal planning simple and stress-free for families with picky eaters.
               </p>
             </div>
             <div>
-              <h3 className="font-semibold mb-4">Product</h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><a href="#features" className="hover:text-primary">Features</a></li>
-                <li><a href="#pricing" className="hover:text-primary">Pricing</a></li>
-                <li><a href="#blog" className="hover:text-primary">Blog</a></li>
+              <h3 className="font-heading font-semibold mb-4 text-primary">Product</h3>
+              <ul className="space-y-3 text-sm text-muted-foreground">
+                <li><a href="#features" className="hover:text-primary transition-colors">Features</a></li>
+                <li><a href="#how-it-works" className="hover:text-primary transition-colors">How It Works</a></li>
+                <li><Link to="/auth" className="hover:text-primary transition-colors">Get Started</Link></li>
               </ul>
             </div>
             <div>
-              <h3 className="font-semibold mb-4">Company</h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><a href="#" className="hover:text-primary">About</a></li>
-                <li><a href="#" className="hover:text-primary">Contact</a></li>
-                <li><a href="#" className="hover:text-primary">Privacy</a></li>
+              <h3 className="font-heading font-semibold mb-4 text-primary">Company</h3>
+              <ul className="space-y-3 text-sm text-muted-foreground">
+                <li><a href="#" className="hover:text-primary transition-colors">About Us</a></li>
+                <li><a href="#" className="hover:text-primary transition-colors">Contact</a></li>
+                <li><a href="#" className="hover:text-primary transition-colors">Privacy Policy</a></li>
               </ul>
             </div>
             <div>
-              <h3 className="font-semibold mb-4">Support</h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><a href="#" className="hover:text-primary">Help Center</a></li>
-                <li><a href="#" className="hover:text-primary">Terms</a></li>
-                <li><a href="#" className="hover:text-primary">FAQ</a></li>
+              <h3 className="font-heading font-semibold mb-4 text-primary">Support</h3>
+              <ul className="space-y-3 text-sm text-muted-foreground">
+                <li><a href="#" className="hover:text-primary transition-colors">Help Center</a></li>
+                <li><a href="#" className="hover:text-primary transition-colors">Terms of Service</a></li>
+                <li><a href="#" className="hover:text-primary transition-colors">FAQ</a></li>
               </ul>
             </div>
           </div>
           <div className="mt-12 pt-8 border-t text-center text-sm text-muted-foreground">
-            <p>© 2025 FeedWise. All rights reserved.</p>
+            <p>© 2025 EatPal. All rights reserved. Built with ❤️ for parents of picky eaters.</p>
           </div>
         </div>
       </footer>
