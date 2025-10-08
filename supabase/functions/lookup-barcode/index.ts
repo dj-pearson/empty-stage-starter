@@ -22,6 +22,37 @@ interface FoodNutrition {
   source: string;
 }
 
+// Common allergens to detect in ingredients
+const COMMON_ALLERGENS = [
+  { name: 'peanuts', keywords: ['peanut', 'groundnut', 'arachis'] },
+  { name: 'tree nuts', keywords: ['almond', 'cashew', 'walnut', 'pecan', 'pistachio', 'hazelnut', 'macadamia'] },
+  { name: 'milk', keywords: ['milk', 'dairy', 'lactose', 'whey', 'casein', 'butter', 'cream', 'cheese'] },
+  { name: 'eggs', keywords: ['egg', 'albumin', 'mayonnaise'] },
+  { name: 'fish', keywords: ['fish', 'anchovy', 'bass', 'catfish', 'cod', 'flounder', 'salmon', 'tuna'] },
+  { name: 'shellfish', keywords: ['crab', 'lobster', 'shrimp', 'prawn', 'crayfish', 'clam', 'oyster', 'scallop', 'mussel'] },
+  { name: 'soy', keywords: ['soy', 'soya', 'tofu', 'edamame', 'miso'] },
+  { name: 'wheat', keywords: ['wheat', 'gluten', 'flour', 'bread', 'pasta'] },
+  { name: 'sesame', keywords: ['sesame', 'tahini'] }
+];
+
+function detectAllergensFromText(text: string): string[] {
+  if (!text) return [];
+  
+  const lowerText = text.toLowerCase();
+  const foundAllergens = new Set<string>();
+  
+  for (const allergen of COMMON_ALLERGENS) {
+    for (const keyword of allergen.keywords) {
+      if (lowerText.includes(keyword)) {
+        foundAllergens.add(allergen.name);
+        break;
+      }
+    }
+  }
+  
+  return Array.from(foundAllergens);
+}
+
 async function lookupOpenFoodFacts(barcode: string): Promise<FoodNutrition | null> {
   console.log(`Looking up barcode ${barcode} in Open Food Facts...`);
   
@@ -44,6 +75,25 @@ async function lookupOpenFoodFacts(barcode: string): Promise<FoodNutrition | nul
         else if (tags.includes("vegetable")) category = "Veg";
       }
       
+      // Extract allergens from tags (primary source)
+      let allergens: string[] = [];
+      if (product.allergens_tags && product.allergens_tags.length > 0) {
+        allergens = product.allergens_tags.map((a: string) => 
+          a.replace('en:', '').replace(/-/g, ' ')
+        );
+      }
+      
+      // Fallback: detect allergens from ingredients text
+      if (allergens.length === 0 && product.ingredients_text) {
+        allergens = detectAllergensFromText(product.ingredients_text);
+      }
+      
+      // Also check allergens field
+      if (product.allergens) {
+        const detectedFromAllergens = detectAllergensFromText(product.allergens);
+        allergens = [...new Set([...allergens, ...detectedFromAllergens])];
+      }
+      
       return {
         name: product.product_name || "Unknown Product",
         category,
@@ -53,7 +103,7 @@ async function lookupOpenFoodFacts(barcode: string): Promise<FoodNutrition | nul
         protein_g: nutriments.proteins_100g || nutriments.proteins || undefined,
         carbs_g: nutriments.carbohydrates_100g || nutriments.carbohydrates || undefined,
         fat_g: nutriments.fat_100g || nutriments.fat || undefined,
-        allergens: product.allergens_tags?.map((a: string) => a.replace('en:', '')) || undefined,
+        allergens: allergens.length > 0 ? allergens : undefined,
         source: "Open Food Facts"
       };
     }

@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_settings: {
+        Row: {
+          additional_params: Json | null
+          api_key_env_var: string
+          auth_type: string
+          created_at: string
+          endpoint_url: string
+          id: string
+          is_active: boolean
+          max_tokens: number | null
+          model_name: string
+          name: string
+          provider: string
+          temperature: number | null
+          updated_at: string
+        }
+        Insert: {
+          additional_params?: Json | null
+          api_key_env_var: string
+          auth_type?: string
+          created_at?: string
+          endpoint_url: string
+          id?: string
+          is_active?: boolean
+          max_tokens?: number | null
+          model_name: string
+          name: string
+          provider: string
+          temperature?: number | null
+          updated_at?: string
+        }
+        Update: {
+          additional_params?: Json | null
+          api_key_env_var?: string
+          auth_type?: string
+          created_at?: string
+          endpoint_url?: string
+          id?: string
+          is_active?: boolean
+          max_tokens?: number | null
+          model_name?: string
+          name?: string
+          provider?: string
+          temperature?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       foods: {
         Row: {
           aisle: string | null
