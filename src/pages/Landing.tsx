@@ -1,10 +1,14 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Check, ArrowRight, Utensils, Brain, Calendar, TrendingUp, Heart, Sparkles, Users, ShoppingCart } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Check, ArrowRight, Utensils, Brain, Calendar, TrendingUp, Heart, Sparkles, Users, ShoppingCart, Menu, X } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const Landing = () => {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   const features = [
     { icon: Utensils, title: "Smart Food Library", description: "Track safe foods, try bites, and allergens for each child" },
     { icon: Calendar, title: "Weekly Meal Plans", description: "Auto-generate 7-day meal plans with daily try bites" },
@@ -13,6 +17,8 @@ const Landing = () => {
     { icon: Users, title: "Multi-Child Support", description: "Manage meal plans for multiple children in one place" },
     { icon: TrendingUp, title: "Progress Tracking", description: "Track which foods were eaten, tasted, or refused" },
   ];
+
+  const closeMobileMenu = () => setMobileMenuOpen(false);
 
   return (
     <div className="min-h-screen bg-background">
@@ -23,6 +29,8 @@ const Landing = () => {
             <Utensils className="h-7 w-7 text-primary" />
             <span className="text-2xl font-heading font-bold text-primary">EatPal</span>
           </div>
+          
+          {/* Desktop Navigation */}
           <nav className="hidden md:flex gap-6 items-center">
             <a href="#features" className="hover:text-primary transition-colors font-medium">Features</a>
             <a href="#how-it-works" className="hover:text-primary transition-colors font-medium">How It Works</a>
@@ -33,6 +41,51 @@ const Landing = () => {
               <Button className="font-semibold shadow-md">Get Started Free</Button>
             </Link>
           </nav>
+
+          {/* Mobile Menu */}
+          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <SheetTrigger asChild className="md:hidden">
+              <Button variant="ghost" size="icon">
+                <Menu className="h-6 w-6" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-2">
+                  <Utensils className="h-6 w-6 text-primary" />
+                  <span className="font-heading font-bold text-primary">EatPal</span>
+                </SheetTitle>
+              </SheetHeader>
+              <nav className="flex flex-col gap-4 mt-8">
+                <a 
+                  href="#features" 
+                  className="text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted transition-colors"
+                  onClick={closeMobileMenu}
+                >
+                  Features
+                </a>
+                <a 
+                  href="#how-it-works" 
+                  className="text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted transition-colors"
+                  onClick={closeMobileMenu}
+                >
+                  How It Works
+                </a>
+                <div className="border-t pt-4 mt-4 space-y-3">
+                  <Link to="/auth" onClick={closeMobileMenu}>
+                    <Button variant="outline" className="w-full text-lg py-6">
+                      Sign In
+                    </Button>
+                  </Link>
+                  <Link to="/auth" onClick={closeMobileMenu}>
+                    <Button className="w-full text-lg py-6 shadow-md">
+                      Get Started Free
+                    </Button>
+                  </Link>
+                </div>
+              </nav>
+            </SheetContent>
+          </Sheet>
         </div>
       </header>
 
