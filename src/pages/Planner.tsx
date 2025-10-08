@@ -1,11 +1,13 @@
+import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buildWeekPlan } from "@/lib/mealPlanner";
-import { Calendar, RefreshCw, Sparkles } from "lucide-react";
+import { Calendar, RefreshCw, Sparkles, Shuffle } from "lucide-react";
 import { toast } from "sonner";
 import { MealSlot, PlanEntry } from "@/types";
+import { SwapMealDialog } from "@/components/SwapMealDialog";
 
 const MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
   { slot: "breakfast", label: "Breakfast" },
@@ -18,6 +20,8 @@ const MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
 
 export default function Planner() {
   const { foods, kids, activeKidId, planEntries, setPlanEntries, updatePlanEntry } = useApp();
+  const [swapDialogOpen, setSwapDialogOpen] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState<PlanEntry | null>(null);
 
   const activeKid = kids.find(k => k.id === activeKidId);
 
@@ -40,6 +44,19 @@ export default function Planner() {
   const handleMarkResult = (entry: PlanEntry, result: "ate" | "tasted" | "refused") => {
     updatePlanEntry(entry.id, { result });
     toast.success(`Marked as ${result}`);
+  };
+
+  const handleSwapMeal = (entry: PlanEntry) => {
+    setSelectedEntry(entry);
+    setSwapDialogOpen(true);
+  };
+
+  const handleSwapConfirm = (newFoodId: string) => {
+    if (!selectedEntry) return;
+    
+    updatePlanEntry(selectedEntry.id, { food_id: newFoodId });
+    const newFood = foods.find(f => f.id === newFoodId);
+    toast.success(`Swapped to ${newFood?.name}`);
   };
 
   // Group entries by date (filter by active kid)
@@ -131,7 +148,25 @@ export default function Planner() {
                           
                           {food && (
                             <>
-                              <p className="font-semibold mb-3">{food.name}</p>
+                              <div className="flex items-start justify-between mb-3">
+                                <p className="font-semibold">{food.name}</p>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => entry && handleSwapMeal(entry)}
+                                  title="Swap this meal"
+                                >
+                                  <Shuffle className="h-4 w-4" />
+                                </Button>
+                              </div>
+
+                              {food.allergens && food.allergens.length > 0 && (
+                                <div className="mb-2">
+                                  <Badge variant="secondary" className="text-xs">
+                                    ⚠️ {food.allergens.join(", ")}
+                                  </Badge>
+                                </div>
+                              )}
                               
                               {entry && (
                                 <div className="flex flex-wrap gap-2">
@@ -172,6 +207,14 @@ export default function Planner() {
             })}
           </div>
         )}
+
+        <SwapMealDialog
+          open={swapDialogOpen}
+          onOpenChange={setSwapDialogOpen}
+          entry={selectedEntry}
+          foods={foods}
+          onSwap={handleSwapConfirm}
+        />
       </div>
     </div>
   );
