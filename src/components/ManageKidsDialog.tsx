@@ -9,15 +9,23 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar } from "@/components/ui/calendar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Users, Plus, Pencil, Trash2, X, AlertTriangle, Upload, UserCircle } from "lucide-react";
+import { Users, Plus, Trash2, AlertTriangle, UserCircle, CalendarIcon, Heart } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { format, differenceInYears } from "date-fns";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +50,17 @@ const PREDEFINED_ALLERGENS = [
   "sesame",
 ];
 
+// Common foods kids enjoy
+const COMMON_FOODS = [
+  "Apple", "Banana", "Grapes", "Strawberries", "Blueberries", "Watermelon",
+  "Carrots", "Broccoli", "Cucumber", "Sweet Potato", "Corn", "Peas",
+  "Chicken", "Turkey", "Fish", "Eggs", "Beef", "Pork",
+  "Pasta", "Rice", "Bread", "Oatmeal", "Pancakes", "Waffles",
+  "Cheese", "Yogurt", "Milk", "Ice Cream",
+  "Pizza", "Nuggets", "Mac & Cheese", "Sandwiches", "Burgers", "Hot Dogs",
+  "Crackers", "Pretzels", "Cookies", "Fruit Snacks"
+];
+
 export function ManageKidsDialog() {
   const { kids, addKid, updateKid, deleteKid } = useApp();
   const [open, setOpen] = useState(false);
@@ -49,12 +68,17 @@ export function ManageKidsDialog() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ 
     name: "", 
-    age: "", 
+    date_of_birth: undefined as Date | undefined,
     notes: "",
     allergens: [] as string[],
-    profile_picture_url: ""
+    profile_picture_url: "",
+    favorite_foods: [] as string[]
   });
   const [uploading, setUploading] = useState(false);
+
+  const calculateAge = (dob: Date) => {
+    return differenceInYears(new Date(), dob);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,10 +89,12 @@ export function ManageKidsDialog() {
 
     const kidData = {
       name: formData.name,
-      age: formData.age ? parseInt(formData.age) : undefined,
+      date_of_birth: formData.date_of_birth ? format(formData.date_of_birth, 'yyyy-MM-dd') : undefined,
+      age: formData.date_of_birth ? calculateAge(formData.date_of_birth) : undefined,
       notes: formData.notes || undefined,
       allergens: formData.allergens.length > 0 ? formData.allergens : undefined,
       profile_picture_url: formData.profile_picture_url || undefined,
+      favorite_foods: formData.favorite_foods.length > 0 ? formData.favorite_foods : undefined,
     };
 
     if (editingId) {
@@ -79,18 +105,35 @@ export function ManageKidsDialog() {
       toast.success("Child added!");
     }
 
-    setFormData({ name: "", age: "", notes: "", allergens: [], profile_picture_url: "" });
+    setFormData({ 
+      name: "", 
+      date_of_birth: undefined, 
+      notes: "", 
+      allergens: [], 
+      profile_picture_url: "",
+      favorite_foods: []
+    });
     setEditingId(null);
   };
 
-  const handleEdit = (kid: { id: string; name: string; age?: number; notes?: string; allergens?: string[]; profile_picture_url?: string }) => {
+  const handleEdit = (kid: { 
+    id: string; 
+    name: string; 
+    age?: number; 
+    date_of_birth?: string;
+    notes?: string; 
+    allergens?: string[]; 
+    profile_picture_url?: string;
+    favorite_foods?: string[];
+  }) => {
     setEditingId(kid.id);
     setFormData({ 
       name: kid.name, 
-      age: kid.age?.toString() || "",
+      date_of_birth: kid.date_of_birth ? new Date(kid.date_of_birth) : undefined,
       notes: kid.notes || "",
       allergens: kid.allergens || [],
-      profile_picture_url: kid.profile_picture_url || ""
+      profile_picture_url: kid.profile_picture_url || "",
+      favorite_foods: kid.favorite_foods || []
     });
   };
 
@@ -145,6 +188,15 @@ export function ManageKidsDialog() {
     });
   };
 
+  const toggleFavoriteFood = (food: string) => {
+    setFormData({
+      ...formData,
+      favorite_foods: formData.favorite_foods.includes(food)
+        ? formData.favorite_foods.filter((f) => f !== food)
+        : [...formData.favorite_foods, food],
+    });
+  };
+
   const handleDelete = (id: string) => {
     if (kids.length === 1) {
       toast.error("You must have at least one child");
@@ -156,7 +208,14 @@ export function ManageKidsDialog() {
   };
 
   const resetForm = () => {
-    setFormData({ name: "", age: "", notes: "", allergens: [], profile_picture_url: "" });
+    setFormData({ 
+      name: "", 
+      date_of_birth: undefined, 
+      notes: "", 
+      allergens: [], 
+      profile_picture_url: "",
+      favorite_foods: []
+    });
     setEditingId(null);
   };
 
@@ -169,7 +228,7 @@ export function ManageKidsDialog() {
             Manage Children
           </Button>
         </DialogTrigger>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Manage Children</DialogTitle>
             <DialogDescription>
@@ -211,16 +270,40 @@ export function ManageKidsDialog() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="age">Age (optional)</Label>
-              <Input
-                id="age"
-                type="number"
-                value={formData.age}
-                onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                placeholder="Enter age"
-                min="0"
-                max="18"
-              />
+              <Label>Date of Birth</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !formData.date_of_birth && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {formData.date_of_birth ? (
+                      <>
+                        {format(formData.date_of_birth, "PPP")}
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          (Age: {calculateAge(formData.date_of_birth)})
+                        </span>
+                      </>
+                    ) : (
+                      <span>Pick a date</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={formData.date_of_birth}
+                    onSelect={(date) => setFormData({ ...formData, date_of_birth: date })}
+                    disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
+                    initialFocus
+                    className="pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-2">
               <Label htmlFor="notes">Notes (optional)</Label>
@@ -262,6 +345,42 @@ export function ManageKidsDialog() {
                 </div>
               )}
             </div>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Heart className="h-4 w-4 text-primary" />
+                <Label>Favorite Foods</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Select foods your child enjoys to help personalize meal suggestions
+              </p>
+              <div className="grid grid-cols-3 gap-2 max-h-[200px] overflow-y-auto p-2 border rounded-md">
+                {COMMON_FOODS.map((food) => (
+                  <div key={food} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`food-${food}`}
+                      checked={formData.favorite_foods.includes(food)}
+                      onCheckedChange={() => toggleFavoriteFood(food)}
+                    />
+                    <Label
+                      htmlFor={`food-${food}`}
+                      className="text-xs font-normal cursor-pointer"
+                    >
+                      {food}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+              {formData.favorite_foods.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t">
+                  {formData.favorite_foods.map((food) => (
+                    <Badge key={food} variant="secondary" className="text-xs gap-1">
+                      <Heart className="h-2 w-2" />
+                      {food}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="flex gap-2">
               <Button type="submit" className="flex-1">
                 <Plus className="h-4 w-4 mr-2" />
@@ -292,7 +411,11 @@ export function ManageKidsDialog() {
                   </Avatar>
                   <div className="flex-1">
                     <p className="font-medium">{kid.name}</p>
-                    {kid.age && <p className="text-sm text-muted-foreground">Age {kid.age}</p>}
+                    {kid.date_of_birth && (
+                      <p className="text-sm text-muted-foreground">
+                        Age {calculateAge(new Date(kid.date_of_birth))}
+                      </p>
+                    )}
                     {kid.allergens && kid.allergens.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {kid.allergens.map((allergen) => (

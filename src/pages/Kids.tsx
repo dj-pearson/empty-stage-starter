@@ -5,10 +5,15 @@ import { ProductSafetyChecker } from "@/components/ProductSafetyChecker";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { UserCircle, Check, AlertTriangle } from "lucide-react";
+import { UserCircle, Check, AlertTriangle, Heart } from "lucide-react";
+import { differenceInYears } from "date-fns";
 
 export default function Kids() {
   const { kids, activeKidId, setActiveKid, planEntries } = useApp();
+
+  const calculateAge = (dob: string) => {
+    return differenceInYears(new Date(), new Date(dob));
+  };
 
   const getKidStats = (kidId: string) => {
     const kidPlans = planEntries.filter(p => p.kid_id === kidId);
@@ -53,10 +58,16 @@ export default function Kids() {
                       </Avatar>
                       <div>
                         <CardTitle className="text-xl">{kid.name}</CardTitle>
-                        {kid.age && (
+                        {kid.date_of_birth && (
                           <p className="text-sm text-muted-foreground">
-                            Age {kid.age}
+                            Age {calculateAge(kid.date_of_birth)}
                           </p>
+                        )}
+                        {kid.favorite_foods && kid.favorite_foods.length > 0 && (
+                          <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                            <Heart className="h-3 w-3" />
+                            <span>{kid.favorite_foods.length} favorite foods</span>
+                          </div>
                         )}
                         {kid.allergens && kid.allergens.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">

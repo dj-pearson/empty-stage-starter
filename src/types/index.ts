@@ -20,9 +20,11 @@ export interface Kid {
   id: string;
   name: string;
   age?: number;
+  date_of_birth?: string;
   notes?: string;
   allergens?: string[];
   profile_picture_url?: string;
+  favorite_foods?: string[];
 }
 
 export interface PlanEntry {

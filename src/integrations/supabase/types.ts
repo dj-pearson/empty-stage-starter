@@ -159,6 +159,8 @@ export type Database = {
           age: number | null
           allergens: string[] | null
           created_at: string | null
+          date_of_birth: string | null
+          favorite_foods: string[] | null
           id: string
           name: string
           notes: string | null
@@ -170,6 +172,8 @@ export type Database = {
           age?: number | null
           allergens?: string[] | null
           created_at?: string | null
+          date_of_birth?: string | null
+          favorite_foods?: string[] | null
           id?: string
           name: string
           notes?: string | null
@@ -181,6 +185,8 @@ export type Database = {
           age?: number | null
           allergens?: string[] | null
           created_at?: string | null
+          date_of_birth?: string | null
+          favorite_foods?: string[] | null
           id?: string
           name?: string
           notes?: string | null
