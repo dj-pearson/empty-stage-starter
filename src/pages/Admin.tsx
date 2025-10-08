@@ -1,13 +1,16 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Database } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, Database, ArrowLeft } from "lucide-react";
 import { NutritionManager } from "@/components/admin/NutritionManager";
 import { UserRolesManager } from "@/components/admin/UserRolesManager";
 
 const Admin = () => {
   const { isAdmin, isLoading } = useAdminCheck();
+  const navigate = useNavigate();
 
   if (isLoading) {
     return (
@@ -26,9 +29,15 @@ const Admin = () => {
 
   return (
     <div className="container mx-auto p-6">
-      <div className="mb-8">
-        <h1 className="text-4xl font-heading font-bold text-primary mb-2">Admin Dashboard</h1>
-        <p className="text-muted-foreground">Manage nutrition database and user roles</p>
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-heading font-bold text-primary mb-2">Admin Dashboard</h1>
+          <p className="text-muted-foreground">Manage nutrition database and user roles</p>
+        </div>
+        <Button variant="outline" onClick={() => navigate("/dashboard")}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Dashboard
+        </Button>
       </div>
 
       <Tabs defaultValue="nutrition" className="space-y-6">

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import { NutritionImportDialog } from "./NutritionImportDialog";
 
 type NutritionItem = {
   id: string;
@@ -204,133 +205,136 @@ export const NutritionManager = () => {
             className="pl-10"
           />
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setEditingItem(null)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Item
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingItem ? "Edit" : "Add"} Nutrition Item</DialogTitle>
-              <DialogDescription>
-                {editingItem ? "Update" : "Create"} nutrition information for the community database
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit}>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="name">Name *</Label>
-                    <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      required
-                    />
+        <div className="flex gap-2">
+          <NutritionImportDialog onImportComplete={fetchNutritionItems} />
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => setEditingItem(null)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Item
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{editingItem ? "Edit" : "Add"} Nutrition Item</DialogTitle>
+                <DialogDescription>
+                  {editingItem ? "Update" : "Create"} nutrition information for the community database
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit}>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="name">Name *</Label>
+                      <Input
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="category">Category *</Label>
+                      <Select
+                        value={formData.category}
+                        onValueChange={(value) => setFormData({ ...formData, category: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map((cat) => (
+                            <SelectItem key={cat} value={cat}>
+                              {cat}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="category">Category *</Label>
-                    <Select
-                      value={formData.category}
-                      onValueChange={(value) => setFormData({ ...formData, category: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((cat) => (
-                          <SelectItem key={cat} value={cat}>
-                            {cat}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
 
-                <div>
-                  <Label htmlFor="serving_size">Serving Size</Label>
-                  <Input
-                    id="serving_size"
-                    value={formData.serving_size}
-                    onChange={(e) => setFormData({ ...formData, serving_size: e.target.value })}
-                    placeholder="e.g., 1 cup, 2 slices"
-                  />
-                </div>
+                  <div>
+                    <Label htmlFor="serving_size">Serving Size</Label>
+                    <Input
+                      id="serving_size"
+                      value={formData.serving_size}
+                      onChange={(e) => setFormData({ ...formData, serving_size: e.target.value })}
+                      placeholder="e.g., 1 cup, 2 slices"
+                    />
+                  </div>
 
-                <div>
-                  <Label htmlFor="ingredients">Ingredients</Label>
-                  <Textarea
-                    id="ingredients"
-                    value={formData.ingredients}
-                    onChange={(e) => setFormData({ ...formData, ingredients: e.target.value })}
-                    placeholder="List ingredients"
-                  />
-                </div>
+                  <div>
+                    <Label htmlFor="ingredients">Ingredients</Label>
+                    <Textarea
+                      id="ingredients"
+                      value={formData.ingredients}
+                      onChange={(e) => setFormData({ ...formData, ingredients: e.target.value })}
+                      placeholder="List ingredients"
+                    />
+                  </div>
 
-                <div className="grid grid-cols-4 gap-4">
-                  <div>
-                    <Label htmlFor="calories">Calories</Label>
-                    <Input
-                      id="calories"
-                      type="number"
-                      value={formData.calories}
-                      onChange={(e) => setFormData({ ...formData, calories: e.target.value })}
-                    />
+                  <div className="grid grid-cols-4 gap-4">
+                    <div>
+                      <Label htmlFor="calories">Calories</Label>
+                      <Input
+                        id="calories"
+                        type="number"
+                        value={formData.calories}
+                        onChange={(e) => setFormData({ ...formData, calories: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="protein_g">Protein (g)</Label>
+                      <Input
+                        id="protein_g"
+                        type="number"
+                        step="0.1"
+                        value={formData.protein_g}
+                        onChange={(e) => setFormData({ ...formData, protein_g: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="carbs_g">Carbs (g)</Label>
+                      <Input
+                        id="carbs_g"
+                        type="number"
+                        step="0.1"
+                        value={formData.carbs_g}
+                        onChange={(e) => setFormData({ ...formData, carbs_g: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="fat_g">Fat (g)</Label>
+                      <Input
+                        id="fat_g"
+                        type="number"
+                        step="0.1"
+                        value={formData.fat_g}
+                        onChange={(e) => setFormData({ ...formData, fat_g: e.target.value })}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="protein_g">Protein (g)</Label>
-                    <Input
-                      id="protein_g"
-                      type="number"
-                      step="0.1"
-                      value={formData.protein_g}
-                      onChange={(e) => setFormData({ ...formData, protein_g: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="carbs_g">Carbs (g)</Label>
-                    <Input
-                      id="carbs_g"
-                      type="number"
-                      step="0.1"
-                      value={formData.carbs_g}
-                      onChange={(e) => setFormData({ ...formData, carbs_g: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="fat_g">Fat (g)</Label>
-                    <Input
-                      id="fat_g"
-                      type="number"
-                      step="0.1"
-                      value={formData.fat_g}
-                      onChange={(e) => setFormData({ ...formData, fat_g: e.target.value })}
-                    />
-                  </div>
-                </div>
 
-                <div>
-                  <Label htmlFor="allergens">Allergens (comma-separated)</Label>
-                  <Input
-                    id="allergens"
-                    value={formData.allergens}
-                    onChange={(e) => setFormData({ ...formData, allergens: e.target.value })}
-                    placeholder="e.g., wheat, dairy, peanut"
-                  />
+                  <div>
+                    <Label htmlFor="allergens">Allergens (comma-separated)</Label>
+                    <Input
+                      id="allergens"
+                      value={formData.allergens}
+                      onChange={(e) => setFormData({ ...formData, allergens: e.target.value })}
+                      placeholder="e.g., wheat, dairy, peanut"
+                    />
+                  </div>
                 </div>
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={handleCloseDialog}>
-                  Cancel
-                </Button>
-                <Button type="submit">{editingItem ? "Update" : "Create"}</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={handleCloseDialog}>
+                    Cancel
+                  </Button>
+                  <Button type="submit">{editingItem ? "Update" : "Create"}</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="border rounded-lg">
