@@ -1,11 +1,12 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Home, Utensils, Calendar, ShoppingCart, Moon, Sun, Users, BarChart3, ChefHat, LogOut } from "lucide-react";
+import { Home, Utensils, Calendar, ShoppingCart, Moon, Sun, Users, BarChart3, ChefHat, LogOut, Shield } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { KidSelector } from "@/components/KidSelector";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useState, useEffect } from "react";
 
 const navItems = [
   { to: "/dashboard", icon: Home, label: "Home" },
@@ -21,6 +22,25 @@ export function Navigation() {
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+
+      setIsAdmin(!!data);
+    };
+
+    checkAdminStatus();
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -59,6 +79,16 @@ export function Navigation() {
             ))}
           </div>
           <div className="hidden md:flex items-center gap-2">
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate("/admin")}
+                title="Admin Dashboard"
+              >
+                <Shield className="h-5 w-5" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"

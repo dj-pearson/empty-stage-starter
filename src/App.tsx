@@ -16,6 +16,7 @@ import Planner from "./pages/Planner";
 import Grocery from "./pages/Grocery";
 import Kids from "./pages/Kids";
 import Analytics from "./pages/Analytics";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,6 +32,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/admin" element={<Admin />} />
             <Route path="/dashboard" element={<Dashboard />}>
               <Route index element={<Home />} />
               <Route path="kids" element={<Kids />} />
