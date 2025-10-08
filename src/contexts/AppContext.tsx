@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Food, Kid, PlanEntry, GroceryItem, Recipe } from "@/types";
+import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
 
 interface AppContextType {
@@ -60,6 +61,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [activeKidId, setActiveKidId] = useState<string | null>(null);
   const [planEntries, setPlanEntriesState] = useState<PlanEntry[]>([]);
   const [groceryItems, setGroceryItemsState] = useState<GroceryItem[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [householdId, setHouseholdId] = useState<string | null>(null);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -90,6 +93,65 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
   }, [foods, kids, recipes, activeKidId, planEntries, groceryItems]);
 
+  // Sync with Supabase auth and fetch household/kids when logged in
+  useEffect(() => {
+    let mounted = true;
+
+    const loadAuthAndData = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id ?? null;
+      setUserId(uid);
+
+      if (uid) {
+        // Get household id
+        const { data: hh } = await supabase.rpc('get_user_household_id', { _user_id: uid });
+        if (mounted) setHouseholdId((hh as string) ?? null);
+
+        // Load kids from DB (RLS restricts to household)
+        const { data: kidRows } = await supabase
+          .from('kids')
+          .select('*')
+          .order('created_at', { ascending: true });
+
+        if (mounted && kidRows) {
+          setKids(kidRows as unknown as Kid[]);
+          setActiveKidId(kidRows[0]?.id ?? null);
+        }
+      }
+    };
+
+    loadAuthAndData();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const uid = session?.user?.id ?? null;
+      setUserId(uid);
+
+      if (uid) {
+        supabase.rpc('get_user_household_id', { _user_id: uid }).then(({ data }) => {
+          if (mounted) setHouseholdId((data as string) ?? null);
+        });
+
+        supabase
+          .from('kids')
+          .select('*')
+          .order('created_at', { ascending: true })
+          .then(({ data }) => {
+            if (mounted && data) {
+              setKids(data as unknown as Kid[]);
+              setActiveKidId(data[0]?.id ?? null);
+            }
+          });
+      } else {
+        if (mounted) setHouseholdId(null);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
   const addFood = (food: Omit<Food, "id">) => {
     setFoods([...foods, { ...food, id: generateId() }]);
   };
@@ -103,24 +165,69 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addKid = (kid: Omit<Kid, "id">) => {
-    setKids([...kids, { ...kid, id: generateId() }]);
-  };
-
-  const updateKid = (id: string, updates: Partial<Kid>) => {
-    setKids(kids.map(k => (k.id === id ? { ...k, ...updates } : k)));
-  };
-
-  const deleteKid = (id: string) => {
-    setKids(kids.filter(k => k.id !== id));
-    // Clean up plan entries and grocery items for this kid
-    setPlanEntriesState(planEntries.filter(p => p.kid_id !== id));
-    // If deleting active kid, switch to first remaining kid
-    if (activeKidId === id) {
-      const remaining = kids.filter(k => k.id !== id);
-      setActiveKidId(remaining[0]?.id ?? null);
+    // If authenticated, persist to Supabase and then update state
+    if (userId && householdId) {
+      supabase
+        .from('kids')
+        .insert([{ ...kid, user_id: userId, household_id: householdId }])
+        .select()
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error('Supabase addKid error:', error);
+            // Fallback to local so user isn't blocked
+            setKids([...kids, { ...kid, id: generateId() }]);
+          } else if (data) {
+            setKids([...kids, data as unknown as Kid]);
+            setActiveKidId((data as any).id);
+          }
+        });
+    } else {
+      // Local-only mode
+      setKids([...kids, { ...kid, id: generateId() }]);
     }
   };
+  const updateKid = (id: string, updates: Partial<Kid>) => {
+    if (userId) {
+      supabase
+        .from('kids')
+        .update(updates)
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) {
+            console.error('Supabase updateKid error:', error);
+          }
+          setKids(kids.map(k => (k.id === id ? { ...k, ...updates } : k)));
+        });
+    } else {
+      setKids(kids.map(k => (k.id === id ? { ...k, ...updates } : k)));
+    }
+  };
+  const deleteKid = (id: string) => {
+    const afterDelete = () => {
+      setKids(kids.filter(k => k.id !== id));
+      setPlanEntriesState(planEntries.filter(p => p.kid_id !== id));
+      if (activeKidId === id) {
+        const remaining = kids.filter(k => k.id !== id);
+        setActiveKidId(remaining[0]?.id ?? null);
+      }
+    };
 
+    if (userId) {
+      supabase
+        .from('kids')
+        .delete()
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) {
+            console.error('Supabase deleteKid error:', error);
+          }
+          afterDelete();
+        });
+    } else {
+      afterDelete();
+    }
+  };
   const setActiveKid = (id: string) => {
     setActiveKidId(id);
   };
