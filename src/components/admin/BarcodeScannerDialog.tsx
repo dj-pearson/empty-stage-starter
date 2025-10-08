@@ -79,9 +79,17 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
       const scanner = new Html5Qrcode('web-scanner');
       webScannerRef.current = scanner;
 
+      // Compute a larger scan region optimized for 1D barcodes
+      const container = document.getElementById('web-scanner');
+      const containerWidth = Math.min((container?.clientWidth || window.innerWidth) - 24, 640);
+      const qrboxWidth = Math.round(containerWidth * 0.9);
+      const qrboxHeight = Math.max(140, Math.round(qrboxWidth * 0.35)); // short stripe works better for 1D
+
       const config: any = {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
+        fps: 18,
+        aspectRatio: 1.777, // Widescreen helps autofocus
+        qrbox: { width: qrboxWidth, height: qrboxHeight },
+        disableFlip: true,
         formatsToSupport: [
           Html5QrcodeSupportedFormats.EAN_13,
           Html5QrcodeSupportedFormats.EAN_8,
@@ -89,6 +97,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
           Html5QrcodeSupportedFormats.UPC_E,
           Html5QrcodeSupportedFormats.CODE_128,
         ],
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
       };
 
       // Prefer back camera when available (improves iOS reliability)
@@ -112,7 +121,6 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
           setIsScanning(false);
         },
         (errMsg) => {
-          // surface decode errors in console for debugging
           if (typeof errMsg === 'string') console.debug('decode failure:', errMsg);
         }
       );
@@ -355,7 +363,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
               <>
                 {!isNative && (
                   <div className="space-y-3">
-                    <div id="web-scanner" className="w-full aspect-[4/3] rounded-lg overflow-hidden bg-black/60" />
+                    <div id="web-scanner" className="w-full h-[56vh] md:h-[60vh] rounded-lg overflow-hidden bg-black/60" />
                     {isEmbedded && (
                       <Button variant="secondary" onClick={() => window.open(window.location.href, '_blank')}>
                         Open Full Page Scanner
