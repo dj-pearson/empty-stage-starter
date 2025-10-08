@@ -4,10 +4,13 @@ import { useAdminCheck } from "@/hooks/useAdminCheck";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Users, Database, ArrowLeft, Brain } from "lucide-react";
+import { Users, Database, ArrowLeft, Brain, UserCog, CreditCard, Target } from "lucide-react";
 import { NutritionManager } from "@/components/admin/NutritionManager";
 import { UserRolesManager } from "@/components/admin/UserRolesManager";
 import { AISettingsManager } from "@/components/admin/AISettingsManager";
+import { UserManagementDashboard } from "@/components/admin/UserManagementDashboard";
+import { SubscriptionManagement } from "@/components/admin/SubscriptionManagement";
+import { LeadCampaignManager } from "@/components/admin/LeadCampaignManager";
 
 const Admin = () => {
   const { isAdmin, isLoading } = useAdminCheck();
@@ -41,21 +44,55 @@ const Admin = () => {
         </Button>
       </div>
 
-      <Tabs defaultValue="nutrition" className="space-y-6">
-        <TabsList className="grid w-full max-w-2xl grid-cols-3">
+      <Tabs defaultValue="users" className="space-y-6">
+        <TabsList className="grid w-full max-w-5xl grid-cols-6">
+          <TabsTrigger value="users" className="gap-2">
+            <UserCog className="h-4 w-4" />
+            Users
+          </TabsTrigger>
+          <TabsTrigger value="subscriptions" className="gap-2">
+            <CreditCard className="h-4 w-4" />
+            Subscriptions
+          </TabsTrigger>
+          <TabsTrigger value="leads" className="gap-2">
+            <Target className="h-4 w-4" />
+            Leads
+          </TabsTrigger>
           <TabsTrigger value="nutrition" className="gap-2">
             <Database className="h-4 w-4" />
-            Nutrition Database
+            Nutrition
           </TabsTrigger>
-          <TabsTrigger value="users" className="gap-2">
+          <TabsTrigger value="roles" className="gap-2">
             <Users className="h-4 w-4" />
-            User Roles
+            Roles
           </TabsTrigger>
           <TabsTrigger value="ai" className="gap-2">
             <Brain className="h-4 w-4" />
-            AI Settings
+            AI
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="users">
+          <Card>
+            <CardHeader>
+              <CardTitle>User Management</CardTitle>
+              <CardDescription>
+                View, manage, and moderate all platform users
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <UserManagementDashboard />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="subscriptions">
+          <SubscriptionManagement />
+        </TabsContent>
+
+        <TabsContent value="leads">
+          <LeadCampaignManager />
+        </TabsContent>
 
         <TabsContent value="nutrition">
           <Card>
@@ -71,7 +108,7 @@ const Admin = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="users">
+        <TabsContent value="roles">
           <Card>
             <CardHeader>
               <CardTitle>User Role Management</CardTitle>

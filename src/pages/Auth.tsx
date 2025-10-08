@@ -9,32 +9,63 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Utensils } from "lucide-react";
 import { Link } from "react-router-dom";
+import { OnboardingDialog } from "@/components/OnboardingDialog";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isNewUser, setIsNewUser] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
     // Check if user is already logged in
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
-        navigate("/dashboard");
+        // Check if onboarding is complete
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("onboarding_completed")
+          .eq("id", session.user.id)
+          .single();
+
+        if (profile?.onboarding_completed) {
+          navigate("/dashboard");
+        } else {
+          setShowOnboarding(true);
+        }
       }
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
-        navigate("/dashboard");
+        if (isNewUser) {
+          // New signup - show onboarding
+          setShowOnboarding(true);
+          setIsNewUser(false);
+        } else {
+          // Existing user login - check onboarding status
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("onboarding_completed")
+            .eq("id", session.user.id)
+            .single();
+
+          if (profile?.onboarding_completed) {
+            navigate("/dashboard");
+          } else {
+            setShowOnboarding(true);
+          }
+        }
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, isNewUser]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,9 +89,10 @@ const Auth = () => {
         variant: "destructive",
       });
     } else {
+      setIsNewUser(true);
       toast({
         title: "Success!",
-        description: "Please check your email to verify your account.",
+        description: "Account created! Let's set up your profile.",
       });
     }
   };
@@ -85,9 +117,27 @@ const Auth = () => {
     }
   };
 
+  const handleOnboardingComplete = async () => {
+    setShowOnboarding(false);
+
+    // Mark onboarding as complete
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from("profiles")
+        .update({ onboarding_completed: true })
+        .eq("id", user.id);
+    }
+
+    navigate("/dashboard");
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
-      <div className="w-full max-w-md">
+    <>
+      <OnboardingDialog open={showOnboarding} onComplete={handleOnboardingComplete} />
+
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
+        <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 mb-4">
             <Utensils className="h-8 w-8 text-primary" />
@@ -181,11 +231,12 @@ const Auth = () => {
           </CardContent>
         </Card>
 
-        <p className="text-center text-sm text-muted-foreground mt-4">
-          By continuing, you agree to our Terms of Service and Privacy Policy
-        </p>
+          <p className="text-center text-sm text-muted-foreground mt-4">
+            By continuing, you agree to our Terms of Service and Privacy Policy
+          </p>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

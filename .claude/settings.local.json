@@ -4,7 +4,8 @@
       "WebSearch",
       "Bash(claude mcp add playwright:*)",
       "Bash(claude mcp add:*)",
-      "Bash(npm install)"
+      "Bash(npm install)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []
