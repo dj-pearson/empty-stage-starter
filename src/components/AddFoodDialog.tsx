@@ -45,6 +45,7 @@ export function AddFoodDialog({
   const [category, setCategory] = useState<FoodCategory>("protein");
   const [isSafe, setIsSafe] = useState(true);
   const [isTryBite, setIsTryBite] = useState(false);
+  const [aisle, setAisle] = useState("");
 
   useEffect(() => {
     if (editFood) {
@@ -52,11 +53,13 @@ export function AddFoodDialog({
       setCategory(editFood.category);
       setIsSafe(editFood.is_safe);
       setIsTryBite(editFood.is_try_bite);
+      setAisle(editFood.aisle || "");
     } else {
       setName("");
       setCategory("protein");
       setIsSafe(true);
       setIsTryBite(false);
+      setAisle("");
     }
   }, [editFood, open]);
 
@@ -68,6 +71,7 @@ export function AddFoodDialog({
       category,
       is_safe: isSafe,
       is_try_bite: isTryBite,
+      aisle: aisle.trim() || undefined,
     });
 
     onOpenChange(false);
@@ -104,6 +108,16 @@ export function AddFoodDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="aisle">Grocery Aisle (Optional)</Label>
+            <Input
+              id="aisle"
+              value={aisle}
+              onChange={(e) => setAisle(e.target.value)}
+              placeholder="e.g., Frozen, Produce, Dairy"
+            />
           </div>
 
           <div className="flex items-center justify-between">

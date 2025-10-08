@@ -39,6 +39,7 @@ export interface GroceryItem {
   checked: boolean;
   source_plan_entry_id?: string;
   category: FoodCategory;
+  aisle?: string;
 }
 
 export interface Recipe {

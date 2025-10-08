@@ -149,5 +149,6 @@ export function generateGroceryList(planEntries: PlanEntry[], foods: Food[]) {
     unit: "servings",
     checked: false,
     category: food.category,
+    aisle: food.aisle,
   }));
 }

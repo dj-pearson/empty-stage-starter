@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { TrendingUp, Award, ThumbsDown, Sparkles } from "lucide-react";
 import { useMemo } from "react";
+import { ResultHistoryCard } from "@/components/ResultHistoryCard";
 
 const RESULT_COLORS = {
   ate: "hsl(var(--safe-food))",
@@ -314,6 +315,11 @@ export default function Analytics() {
               </div>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Result History */}
+        <div className="mt-6">
+          <ResultHistoryCard entries={kidEntries} foods={foods} />
         </div>
 
         {/* Insights Card */}
