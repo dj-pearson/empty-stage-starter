@@ -476,12 +476,12 @@ export default function Planner() {
                                       Out of Stock
                                     </Badge>
                                   ) : food.quantity <= 2 ? (
-                                    <Badge variant="secondary" className="gap-1 font-semibold bg-yellow-500/20 text-yellow-900 dark:text-yellow-100 border-yellow-500/50">
+                                    <Badge variant="secondary" className="gap-1 font-semibold bg-yellow-500/20 text-yellow-900 dark:bg-yellow-500/30 dark:text-yellow-300 border-yellow-500/50">
                                       <AlertTriangle className="h-3 w-3" />
                                       Low Stock ({food.quantity})
                                     </Badge>
                                   ) : (
-                                    <Badge variant="outline" className="gap-1 font-semibold border-green-500/50 bg-green-500/10 text-green-900 dark:text-green-100">
+                                    <Badge variant="outline" className="gap-1 font-semibold border-green-500/50 bg-green-500/10 text-green-900 dark:bg-green-500/20 dark:text-green-300">
                                       In Stock ({food.quantity})
                                     </Badge>
                                   )}
@@ -490,7 +490,7 @@ export default function Planner() {
 
                               {food.allergens && food.allergens.length > 0 && (
                                 <div className="mb-3">
-                                  <Badge variant="secondary" className="text-xs font-semibold bg-orange-500/20 text-orange-900 dark:text-orange-100 border-orange-500/50">
+                                  <Badge variant="secondary" className="text-xs font-semibold bg-orange-500/20 text-orange-900 dark:bg-orange-500/30 dark:text-orange-300 border-orange-500/50">
                                     ⚠️ {food.allergens.join(", ")}
                                   </Badge>
                                 </div>
