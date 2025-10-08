@@ -27,7 +27,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Search, CheckCircle2 } from "lucide-react";
+import { Loader2, CheckCircle2 } from "lucide-react";
 import { Food, FoodCategory } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -202,46 +202,44 @@ export function AddFoodDialog({
             <div className="space-y-2">
               <Label>Search Nutrition Database</Label>
               <Command className="border rounded-md">
-                <div className="flex items-center border-b px-3">
-                  <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                  <CommandInput
-                    placeholder="Search for a food..."
-                    value={searchQuery}
-                    onValueChange={setSearchQuery}
-                  />
-                </div>
-                {searchQuery.length >= 2 && (
-                  <CommandList>
-                    {isSearching && (
-                      <div className="flex items-center justify-center p-4">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      </div>
-                    )}
-                    {!isSearching && searchResults.length === 0 && (
-                      <CommandEmpty>No foods found.</CommandEmpty>
-                    )}
-                    {!isSearching && searchResults.length > 0 && (
-                      <CommandGroup>
-                        {searchResults.map((item) => (
-                          <CommandItem
-                            key={item.id}
-                            onSelect={() => handleSelectNutrition(item)}
-                            className="cursor-pointer"
-                          >
-                            <div className="flex-1">
-                              <div className="font-medium">{item.name}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {item.category}
-                                {item.serving_size && ` • ${item.serving_size}`}
-                                {item.package_quantity && ` • ${item.package_quantity}`}
-                              </div>
+                <CommandInput
+                  placeholder="Type at least 2 characters..."
+                  value={searchQuery}
+                  onValueChange={setSearchQuery}
+                />
+                <CommandList>
+                  {searchQuery.length < 2 && (
+                    <CommandEmpty>Start typing to search…</CommandEmpty>
+                  )}
+                  {searchQuery.length >= 2 && isSearching && (
+                    <div className="flex items-center justify-center p-4">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </div>
+                  )}
+                  {searchQuery.length >= 2 && !isSearching && searchResults.length === 0 && (
+                    <CommandEmpty>No foods found.</CommandEmpty>
+                  )}
+                  {searchQuery.length >= 2 && !isSearching && searchResults.length > 0 && (
+                    <CommandGroup>
+                      {searchResults.map((item) => (
+                        <CommandItem
+                          key={item.id}
+                          onSelect={() => handleSelectNutrition(item)}
+                          className="cursor-pointer"
+                        >
+                          <div className="flex-1">
+                            <div className="font-medium">{item.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {item.category}
+                              {item.serving_size && ` • ${item.serving_size}`}
+                              {item.package_quantity && ` • ${item.package_quantity}`}
                             </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    )}
-                  </CommandList>
-                )}
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  )}
+                </CommandList>
               </Command>
               <p className="text-xs text-muted-foreground">
                 Search our nutrition database or manually enter food details below
