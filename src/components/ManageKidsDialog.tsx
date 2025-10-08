@@ -241,30 +241,27 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
 
   useImperativeHandle(ref, () => ({
     openForEdit: (kidId: string) => {
-      const kid = kids.find(k => k.id === kidId);
-      if (kid) {
-        handleEdit(kid);
-        setOpen(true);
+      if (kidId) {
+        const kid = kids.find(k => k.id === kidId);
+        if (kid) {
+          handleEdit(kid);
+        }
+      } else {
+        resetForm();
       }
+      setOpen(true);
     }
   }));
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
-        <DialogTrigger asChild>
-          <Button variant="outline" className="gap-2">
-            <Users className="h-4 w-4" />
-            Manage Children
-          </Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Manage Children</DialogTitle>
-            <DialogDescription>
-              Add, edit, or remove children to create personalized meal plans for each.
-            </DialogDescription>
-          </DialogHeader>
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{editingId ? "Edit Child" : "Add Child"}</DialogTitle>
+          <DialogDescription>
+            {editingId ? "Update child information" : "Add a new child to create personalized meal plans"}
+          </DialogDescription>
+        </DialogHeader>
 
           <div ref={formRef}>
             <form onSubmit={handleSubmit} className="space-y-4 mt-4">
@@ -478,91 +475,11 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
             </div>
           </form>
           </div>
-
-          <div className="mt-6 space-y-2">
-            <Label>Current Children ({kids.length})</Label>
-            <div className="space-y-2 max-h-[300px] overflow-y-auto">
-              {kids.map((kid) => (
-                <div
-                  key={kid.id}
-                  className="flex items-center gap-3 p-3 border rounded-lg hover:bg-accent/50 transition-colors"
-                >
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={kid.profile_picture_url} />
-                    <AvatarFallback>
-                      <UserCircle className="h-6 w-6 text-muted-foreground" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    <p className="font-medium">{kid.name}</p>
-                    {kid.date_of_birth && (
-                      <p className="text-sm text-muted-foreground">
-                        Age {calculateAge(new Date(kid.date_of_birth))}
-                      </p>
-                    )}
-                    {kid.allergens && kid.allergens.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {kid.allergens.map((allergen) => (
-                          <Badge key={allergen} variant="destructive" className="text-xs gap-1">
-                            <AlertTriangle className="h-2 w-2" />
-                            {allergen}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleEdit(kid)}
-                      title="Edit child"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteId(kid.id);
-                      }}
-                      disabled={kids.length === 1}
-                      title="Delete child"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Child Profile?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete all meal plans and data for this child. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteId && handleDelete(deleteId)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  );
-});
-
-ManageKidsDialogComponent.displayName = 'ManageKidsDialog';
-
-export const ManageKidsDialog = ManageKidsDialogComponent;
+    );
+  });
+  
+  ManageKidsDialogComponent.displayName = 'ManageKidsDialog';
+  
+  export const ManageKidsDialog = ManageKidsDialogComponent;

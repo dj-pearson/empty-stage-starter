@@ -5,13 +5,25 @@ import { ProductSafetyChecker } from "@/components/ProductSafetyChecker";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { UserCircle, Check, AlertTriangle, Heart, Pencil } from "lucide-react";
+import { UserCircle, Check, AlertTriangle, Heart, Pencil, Trash2, UserPlus } from "lucide-react";
 import { differenceInYears } from "date-fns";
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 export default function Kids() {
-  const { kids, activeKidId, setActiveKid, planEntries } = useApp();
+  const { kids, activeKidId, setActiveKid, planEntries, deleteKid } = useApp();
   const manageDialogRef = useRef<ManageKidsDialogRef>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const calculateAge = (dob: string) => {
     return differenceInYears(new Date(), new Date(dob));
@@ -23,8 +35,18 @@ export default function Kids() {
     return { totalMeals: kidPlans.length, completedMeals };
   };
 
+  const handleDelete = (id: string) => {
+    if (kids.length === 1) {
+      toast.error("You must have at least one child");
+      return;
+    }
+    deleteKid(id);
+    setDeleteId(null);
+    toast.success("Child removed");
+  };
+
   return (
-    <div className="min-h-screen pb-20 md:pt-20 bg-background">
+    <div className="min-h-screen pt-4 pb-20 md:pt-24 bg-background">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
@@ -33,7 +55,10 @@ export default function Kids() {
               Select active child and manage profiles
             </p>
           </div>
-          <ManageKidsDialog ref={manageDialogRef} />
+          <Button onClick={() => manageDialogRef.current?.openForEdit('')} className="gap-2">
+            <UserPlus className="h-4 w-4" />
+            Add Child
+          </Button>
         </div>
 
         <div className="grid md:grid-cols-2 gap-4">
@@ -83,9 +108,9 @@ export default function Kids() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                       {isActive && (
-                        <div className="flex items-center gap-1 text-primary text-sm font-medium">
+                        <div className="flex items-center gap-1 text-primary text-sm font-medium mr-2">
                           <Check className="h-4 w-4" />
                           Active
                         </div>
@@ -100,6 +125,18 @@ export default function Kids() {
                         title="Edit profile"
                       >
                         <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteId(kid.id);
+                        }}
+                        disabled={kids.length === 1}
+                        title="Delete child"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
                   </div>
@@ -146,10 +183,35 @@ export default function Kids() {
               <p className="text-muted-foreground mb-6">
                 Add your first child to start planning meals
               </p>
-              <ManageKidsDialog />
+              <Button onClick={() => manageDialogRef.current?.openForEdit('')} className="gap-2">
+                <UserPlus className="h-4 w-4" />
+                Add Child
+              </Button>
             </div>
           </Card>
         )}
+
+        <ManageKidsDialog ref={manageDialogRef} />
+
+        <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Child Profile?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete all meal plans and data for this child. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => deleteId && handleDelete(deleteId)}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
