@@ -116,20 +116,19 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
     if (editingId) {
       updateKid(editingId, kidData);
       toast.success("Child updated!");
+      resetForm();
     } else {
       addKid(kidData);
       toast.success("Child added!");
+      setFormData({ 
+        name: "", 
+        date_of_birth: undefined, 
+        notes: "", 
+        allergens: [], 
+        profile_picture_url: "",
+        favorite_foods: []
+      });
     }
-
-    setFormData({ 
-      name: "", 
-      date_of_birth: undefined, 
-      notes: "", 
-      allergens: [], 
-      profile_picture_url: "",
-      favorite_foods: []
-    });
-    setEditingId(null);
   };
 
   const handleEdit = (kid: { 
