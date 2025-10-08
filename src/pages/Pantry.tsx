@@ -20,10 +20,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Search, Sparkles } from "lucide-react";
+import { Plus, Search, Sparkles, Download } from "lucide-react";
 import { Food, FoodCategory } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { starterFoods } from "@/lib/starterFoods";
 
 interface FoodSuggestion {
   name: string;
@@ -127,6 +128,23 @@ export default function Pantry() {
     }
   };
 
+  const handleLoadStarterList = () => {
+    let addedCount = 0;
+    starterFoods.forEach(starterFood => {
+      // Check if food already exists
+      const exists = foods.some(f => f.name.toLowerCase() === starterFood.name.toLowerCase());
+      if (!exists) {
+        addFood(starterFood);
+        addedCount++;
+      }
+    });
+    
+    toast({
+      title: "Starter List Loaded",
+      description: `${addedCount} foods added to your pantry!`,
+    });
+  };
+
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -139,7 +157,15 @@ export default function Pantry() {
                 Manage your child's safe foods and try bites
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <Button 
+                variant="outline" 
+                onClick={handleLoadStarterList}
+                size="lg"
+              >
+                <Download className="h-5 w-5 mr-2" />
+                Load Starter List
+              </Button>
               <Button 
                 variant="outline" 
                 onClick={handleGetSuggestions}

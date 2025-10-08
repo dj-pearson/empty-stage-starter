@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { generateGroceryList } from "@/lib/mealPlanner";
-import { ShoppingCart, Copy, Trash2, Printer } from "lucide-react";
+import { ShoppingCart, Copy, Trash2, Printer, Download } from "lucide-react";
 import { toast } from "sonner";
 import { FoodCategory } from "@/types";
 
@@ -49,6 +49,24 @@ export default function Grocery() {
     toast.success("Print dialog opened");
   };
 
+  const handleExport = () => {
+    const csv = [
+      "Category,Item,Quantity,Unit,Checked",
+      ...groceryItems.map(item => 
+        `${categoryLabels[item.category]},"${item.name}",${item.quantity},${item.unit},${item.checked ? "Yes" : "No"}`
+      )
+    ].join("\n");
+    
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `grocery-list-${activeKid?.name || "list"}-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Grocery list exported!");
+  };
+
   // Group by category
   const itemsByCategory: Record<FoodCategory, typeof groceryItems> = {
     protein: [],
@@ -79,10 +97,14 @@ export default function Grocery() {
               Auto-generated from your meal plan
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button onClick={handleCopyList} variant="outline" disabled={groceryItems.length === 0}>
               <Copy className="h-4 w-4 mr-2" />
               Copy
+            </Button>
+            <Button onClick={handleExport} variant="outline" disabled={groceryItems.length === 0}>
+              <Download className="h-4 w-4 mr-2" />
+              Export
             </Button>
             <Button onClick={handlePrint} variant="outline" disabled={groceryItems.length === 0}>
               <Printer className="h-4 w-4 mr-2" />
