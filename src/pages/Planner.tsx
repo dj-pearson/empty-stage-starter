@@ -3,7 +3,7 @@ import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { buildWeekPlan } from "@/lib/mealPlanner";
+import { buildWeekPlan, buildDayPlan } from "@/lib/mealPlanner";
 import { Calendar, RefreshCw, Sparkles, Shuffle } from "lucide-react";
 import { toast } from "sonner";
 import { MealSlot, PlanEntry } from "@/types";
@@ -57,6 +57,26 @@ export default function Planner() {
     updatePlanEntry(selectedEntry.id, { food_id: newFoodId });
     const newFood = foods.find(f => f.id === newFoodId);
     toast.success(`Swapped to ${newFood?.name}`);
+  };
+
+  const handleShuffleDay = (date: string) => {
+    if (!activeKid) return;
+
+    try {
+      // Remove existing entries for this date
+      const otherEntries = planEntries.filter(e => e.date !== date || e.kid_id !== activeKidId);
+      
+      // Generate new entries for this date
+      const newDayPlan = buildDayPlan(activeKid.id, date, foods, planEntries);
+      
+      // Combine
+      setPlanEntries([...otherEntries, ...newDayPlan]);
+      
+      const dayName = new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" });
+      toast.success(`${dayName} shuffled!`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to shuffle day");
+    }
   };
 
   // Group entries by date (filter by active kid)
@@ -122,11 +142,21 @@ export default function Planner() {
 
               return (
                 <Card key={date} className="p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="font-bold text-primary">{dayIndex + 1}</span>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <span className="font-bold text-primary">{dayIndex + 1}</span>
+                      </div>
+                      <h3 className="text-xl font-semibold">{dayName}</h3>
                     </div>
-                    <h3 className="text-xl font-semibold">{dayName}</h3>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleShuffleDay(date)}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Shuffle Day
+                    </Button>
                   </div>
 
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
