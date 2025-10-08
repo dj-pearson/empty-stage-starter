@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Users, Plus, Pencil, Trash2, X, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -26,6 +27,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+// Predefined allergens matching Open Food Facts standards
+const PREDEFINED_ALLERGENS = [
+  "peanuts",
+  "tree nuts",
+  "milk",
+  "eggs",
+  "fish",
+  "shellfish",
+  "soy",
+  "wheat",
+  "sesame",
+];
+
 export function ManageKidsDialog() {
   const { kids, addKid, updateKid, deleteKid } = useApp();
   const [open, setOpen] = useState(false);
@@ -37,7 +51,6 @@ export function ManageKidsDialog() {
     notes: "",
     allergens: [] as string[]
   });
-  const [allergenInput, setAllergenInput] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +75,6 @@ export function ManageKidsDialog() {
     }
 
     setFormData({ name: "", age: "", notes: "", allergens: [] });
-    setAllergenInput("");
     setEditingId(null);
   };
 
@@ -76,18 +88,12 @@ export function ManageKidsDialog() {
     });
   };
 
-  const handleAddAllergen = () => {
-    const allergen = allergenInput.trim();
-    if (allergen && !formData.allergens.includes(allergen)) {
-      setFormData({ ...formData, allergens: [...formData.allergens, allergen] });
-      setAllergenInput("");
-    }
-  };
-
-  const handleRemoveAllergen = (allergen: string) => {
-    setFormData({ 
-      ...formData, 
-      allergens: formData.allergens.filter(a => a !== allergen) 
+  const toggleAllergen = (allergen: string) => {
+    setFormData({
+      ...formData,
+      allergens: formData.allergens.includes(allergen)
+        ? formData.allergens.filter((a) => a !== allergen)
+        : [...formData.allergens, allergen],
     });
   };
 
@@ -103,7 +109,6 @@ export function ManageKidsDialog() {
 
   const resetForm = () => {
     setFormData({ name: "", age: "", notes: "", allergens: [] });
-    setAllergenInput("");
     setEditingId(null);
   };
 
@@ -156,29 +161,31 @@ export function ManageKidsDialog() {
                 rows={2}
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label>Allergens</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={allergenInput}
-                  onChange={(e) => setAllergenInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddAllergen())}
-                  placeholder="e.g., peanuts, dairy, gluten"
-                />
-                <Button type="button" onClick={handleAddAllergen} variant="outline">
-                  Add
-                </Button>
+              <div className="grid grid-cols-2 gap-3">
+                {PREDEFINED_ALLERGENS.map((allergen) => (
+                  <div key={allergen} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`allergen-${allergen}`}
+                      checked={formData.allergens.includes(allergen)}
+                      onCheckedChange={() => toggleAllergen(allergen)}
+                    />
+                    <Label
+                      htmlFor={`allergen-${allergen}`}
+                      className="text-sm font-normal cursor-pointer capitalize"
+                    >
+                      {allergen}
+                    </Label>
+                  </div>
+                ))}
               </div>
               {formData.allergens.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t">
                   {formData.allergens.map((allergen) => (
                     <Badge key={allergen} variant="destructive" className="gap-1">
                       <AlertTriangle className="h-3 w-3" />
                       {allergen}
-                      <X 
-                        className="h-3 w-3 cursor-pointer" 
-                        onClick={() => handleRemoveAllergen(allergen)}
-                      />
                     </Badge>
                   ))}
                 </div>
