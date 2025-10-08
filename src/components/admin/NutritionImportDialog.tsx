@@ -18,6 +18,8 @@ type NutritionCsvRow = {
   name: string;
   category: string;
   serving_size?: string;
+  package_quantity?: string;
+  servings_per_container?: string;
   ingredients?: string;
   calories?: string;
   protein_g?: string;
@@ -34,13 +36,13 @@ export function NutritionImportDialog({ onImportComplete }: { onImportComplete: 
   const [isImporting, setIsImporting] = useState(false);
 
   const downloadTemplate = () => {
-    const template = `name,category,serving_size,ingredients,calories,protein_g,carbs_g,fat_g,allergens
-Chicken Breast,Protein,4 oz,Chicken,165,31,0,3.6,
-Brown Rice,Carb,1 cup,Rice,216,5,45,1.8,
-Greek Yogurt,Dairy,1 cup,Milk cultures,100,17,6,0.4,dairy
-Banana,Fruit,1 medium,Banana,105,1.3,27,0.4,
-Broccoli,Veg,1 cup,Broccoli,55,3.7,11,0.6,
-Almonds,Snack,1 oz,Almonds,164,6,6,14,tree nuts`;
+    const template = `name,category,serving_size,package_quantity,servings_per_container,ingredients,calories,protein_g,carbs_g,fat_g,allergens
+Chicken Nuggets,Protein,5 pieces,20 nuggets,4,"chicken breast, breadcrumbs, oil",270,14,18,14,wheat;soy
+Pepperoni Pizza,Carb,1 slice,8 slices,8,"wheat crust, tomato sauce, cheese, pepperoni",285,12,32,12,wheat;dairy
+Greek Yogurt,Dairy,1 cup,32 oz,4,"milk, cultures",100,17,6,0.4,dairy
+Banana,Fruit,1 medium,,,banana,105,1.3,27,0.4,
+Broccoli,Veg,1 cup,,,broccoli,55,3.7,11,0.6,
+Almonds,Snack,1 oz,16 oz,16,almonds,164,6,6,14,tree nuts`;
 
     const blob = new Blob([template], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -161,6 +163,8 @@ Almonds,Snack,1 oz,Almonds,164,6,6,14,tree nuts`;
         name: row.name,
         category: row.category,
         serving_size: row.serving_size || null,
+        package_quantity: row.package_quantity || null,
+        servings_per_container: row.servings_per_container ? parseFloat(row.servings_per_container) : null,
         ingredients: row.ingredients || null,
         calories: row.calories ? parseInt(row.calories) : null,
         protein_g: row.protein_g ? parseFloat(row.protein_g) : null,
@@ -246,8 +250,9 @@ Almonds,Snack,1 oz,Almonds,164,6,6,14,tree nuts`;
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="text-xs">
               <strong>Required:</strong> name, category<br />
-              <strong>Optional:</strong> serving_size, ingredients, calories, protein_g, carbs_g, fat_g, allergens (semicolon-separated)<br />
+              <strong>Optional:</strong> serving_size, package_quantity, servings_per_container, ingredients, calories, protein_g, carbs_g, fat_g, allergens (semicolon-separated)<br />
               <strong>Categories:</strong> Protein, Carb, Dairy, Fruit, Veg, Snack<br />
+              <strong>Package Example:</strong> package_quantity="20 nuggets", servings_per_container=4<br />
               <strong>Note:</strong> id column is ignored - UUIDs are auto-generated
             </AlertDescription>
           </Alert>
