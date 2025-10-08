@@ -120,14 +120,7 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
     } else {
       addKid(kidData);
       toast.success("Child added!");
-      setFormData({ 
-        name: "", 
-        date_of_birth: undefined, 
-        notes: "", 
-        allergens: [], 
-        profile_picture_url: "",
-        favorite_foods: []
-      });
+      setOpen(false);
     }
   };
 
