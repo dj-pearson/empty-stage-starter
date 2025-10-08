@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 
-const navItems = [
+const baseNavItems = [
   { to: "/dashboard", icon: Home, label: "Home" },
   { to: "/dashboard/kids", icon: Users, label: "Kids" },
   { to: "/dashboard/pantry", icon: Utensils, label: "Pantry" },
@@ -51,6 +51,11 @@ export function Navigation() {
     navigate("/");
   };
 
+  // Add admin item if user is admin
+  const navItems = isAdmin 
+    ? [...baseNavItems, { to: "/admin", icon: Shield, label: "Admin" }]
+    : baseNavItems;
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 md:top-0 md:bottom-auto">
       <div className="container mx-auto">
@@ -79,16 +84,6 @@ export function Navigation() {
             ))}
           </div>
           <div className="hidden md:flex items-center gap-2">
-            {isAdmin && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate("/admin")}
-                title="Admin Dashboard"
-              >
-                <Shield className="h-5 w-5" />
-              </Button>
-            )}
             <Button
               variant="ghost"
               size="icon"
