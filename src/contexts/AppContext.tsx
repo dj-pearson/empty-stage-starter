@@ -105,17 +105,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (uid) {
         // Get household id
         const { data: hh } = await supabase.rpc('get_user_household_id', { _user_id: uid });
-        if (mounted) setHouseholdId((hh as string) ?? null);
+        const hhId = (hh as string) ?? null;
+        if (mounted) setHouseholdId(hhId);
 
-        // Load kids from DB (RLS restricts to household)
-        const { data: kidRows } = await supabase
-          .from('kids')
-          .select('*')
-          .order('created_at', { ascending: true });
+        // Load all data from DB
+        const [kidsRes, foodsRes, recipesRes, planRes, groceryRes] = await Promise.all([
+          supabase.from('kids').select('*').order('created_at', { ascending: true }),
+          supabase.from('foods').select('*').order('name', { ascending: true }),
+          supabase.from('recipes').select('*').order('created_at', { ascending: true }),
+          supabase.from('plan_entries').select('*').order('date', { ascending: true }),
+          supabase.from('grocery_items').select('*').order('created_at', { ascending: true })
+        ]);
 
-        if (mounted && kidRows) {
-          setKids(kidRows as unknown as Kid[]);
-          setActiveKidId(kidRows[0]?.id ?? null);
+        if (mounted) {
+          if (kidsRes.data) {
+            setKids(kidsRes.data as unknown as Kid[]);
+            setActiveKidId(kidsRes.data[0]?.id ?? null);
+          }
+          if (foodsRes.data) setFoods(foodsRes.data as unknown as Food[]);
+          if (recipesRes.data) setRecipes(recipesRes.data as unknown as Recipe[]);
+          if (planRes.data) setPlanEntriesState(planRes.data as unknown as PlanEntry[]);
+          if (groceryRes.data) setGroceryItemsState(groceryRes.data as unknown as GroceryItem[]);
         }
       }
     };
@@ -128,19 +138,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       if (uid) {
         supabase.rpc('get_user_household_id', { _user_id: uid }).then(({ data }) => {
-          if (mounted) setHouseholdId((data as string) ?? null);
-        });
+          const hhId = (data as string) ?? null;
+          if (mounted) setHouseholdId(hhId);
 
-        supabase
-          .from('kids')
-          .select('*')
-          .order('created_at', { ascending: true })
-          .then(({ data }) => {
-            if (mounted && data) {
-              setKids(data as unknown as Kid[]);
-              setActiveKidId(data[0]?.id ?? null);
+          // Reload all data
+          Promise.all([
+            supabase.from('kids').select('*').order('created_at', { ascending: true }),
+            supabase.from('foods').select('*').order('name', { ascending: true }),
+            supabase.from('recipes').select('*').order('created_at', { ascending: true }),
+            supabase.from('plan_entries').select('*').order('date', { ascending: true }),
+            supabase.from('grocery_items').select('*').order('created_at', { ascending: true })
+          ]).then(([kidsRes, foodsRes, recipesRes, planRes, groceryRes]) => {
+            if (mounted) {
+              if (kidsRes.data) {
+                setKids(kidsRes.data as unknown as Kid[]);
+                setActiveKidId(kidsRes.data[0]?.id ?? null);
+              }
+              if (foodsRes.data) setFoods(foodsRes.data as unknown as Food[]);
+              if (recipesRes.data) setRecipes(recipesRes.data as unknown as Recipe[]);
+              if (planRes.data) setPlanEntriesState(planRes.data as unknown as PlanEntry[]);
+              if (groceryRes.data) setGroceryItemsState(groceryRes.data as unknown as GroceryItem[]);
             }
           });
+        });
       } else {
         if (mounted) setHouseholdId(null);
       }
@@ -153,15 +173,53 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addFood = (food: Omit<Food, "id">) => {
-    setFoods([...foods, { ...food, id: generateId() }]);
+    if (userId && householdId) {
+      supabase
+        .from('foods')
+        .insert([{ ...food, user_id: userId, household_id: householdId }])
+        .select()
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error('Supabase addFood error:', error);
+            setFoods([...foods, { ...food, id: generateId() }]);
+          } else if (data) {
+            setFoods([...foods, data as unknown as Food]);
+          }
+        });
+    } else {
+      setFoods([...foods, { ...food, id: generateId() }]);
+    }
   };
 
   const updateFood = (id: string, updates: Partial<Food>) => {
-    setFoods(foods.map(f => (f.id === id ? { ...f, ...updates } : f)));
+    if (userId) {
+      supabase
+        .from('foods')
+        .update(updates)
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) console.error('Supabase updateFood error:', error);
+          setFoods(foods.map(f => (f.id === id ? { ...f, ...updates } : f)));
+        });
+    } else {
+      setFoods(foods.map(f => (f.id === id ? { ...f, ...updates } : f)));
+    }
   };
 
   const deleteFood = (id: string) => {
-    setFoods(foods.filter(f => f.id !== id));
+    if (userId) {
+      supabase
+        .from('foods')
+        .delete()
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) console.error('Supabase deleteFood error:', error);
+          setFoods(foods.filter(f => f.id !== id));
+        });
+    } else {
+      setFoods(foods.filter(f => f.id !== id));
+    }
   };
 
   const addKid = (kid: Omit<Kid, "id">) => {
@@ -233,15 +291,53 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addRecipe = (recipe: Omit<Recipe, "id">) => {
-    setRecipes([...recipes, { ...recipe, id: generateId() }]);
+    if (userId && householdId) {
+      supabase
+        .from('recipes')
+        .insert([{ ...recipe, user_id: userId, household_id: householdId }])
+        .select()
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error('Supabase addRecipe error:', error);
+            setRecipes([...recipes, { ...recipe, id: generateId() }]);
+          } else if (data) {
+            setRecipes([...recipes, data as unknown as Recipe]);
+          }
+        });
+    } else {
+      setRecipes([...recipes, { ...recipe, id: generateId() }]);
+    }
   };
 
   const updateRecipe = (id: string, updates: Partial<Recipe>) => {
-    setRecipes(recipes.map(r => (r.id === id ? { ...r, ...updates } : r)));
+    if (userId) {
+      supabase
+        .from('recipes')
+        .update(updates)
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) console.error('Supabase updateRecipe error:', error);
+          setRecipes(recipes.map(r => (r.id === id ? { ...r, ...updates } : r)));
+        });
+    } else {
+      setRecipes(recipes.map(r => (r.id === id ? { ...r, ...updates } : r)));
+    }
   };
 
   const deleteRecipe = (id: string) => {
-    setRecipes(recipes.filter(r => r.id !== id));
+    if (userId) {
+      supabase
+        .from('recipes')
+        .delete()
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) console.error('Supabase deleteRecipe error:', error);
+          setRecipes(recipes.filter(r => r.id !== id));
+        });
+    } else {
+      setRecipes(recipes.filter(r => r.id !== id));
+    }
   };
 
   const setPlanEntries = (entries: PlanEntry[]) => {
@@ -249,16 +345,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addPlanEntry = (entry: Omit<PlanEntry, "id">) => {
-    const newEntry = { ...entry, id: generateId() };
-    console.log('Adding plan entry:', newEntry);
-    setPlanEntriesState([...planEntries, newEntry]);
+    if (userId && householdId) {
+      supabase
+        .from('plan_entries')
+        .insert([{ ...entry, user_id: userId, household_id: householdId }])
+        .select()
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error('Supabase addPlanEntry error:', error);
+            setPlanEntriesState([...planEntries, { ...entry, id: generateId() }]);
+          } else if (data) {
+            setPlanEntriesState([...planEntries, data as unknown as PlanEntry]);
+          }
+        });
+    } else {
+      const newEntry = { ...entry, id: generateId() };
+      setPlanEntriesState([...planEntries, newEntry]);
+    }
   };
 
   const updatePlanEntry = (id: string, updates: Partial<PlanEntry>) => {
-    console.log('Updating plan entry:', id, 'Updates:', updates);
-    const updatedEntries = planEntries.map(e => (e.id === id ? { ...e, ...updates } : e));
-    console.log('Updated entries:', updatedEntries.filter(e => e.id === id));
-    setPlanEntriesState(updatedEntries);
+    if (userId) {
+      supabase
+        .from('plan_entries')
+        .update(updates)
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) console.error('Supabase updatePlanEntry error:', error);
+          setPlanEntriesState(planEntries.map(e => (e.id === id ? { ...e, ...updates } : e)));
+        });
+    } else {
+      setPlanEntriesState(planEntries.map(e => (e.id === id ? { ...e, ...updates } : e)));
+    }
   };
 
   const setGroceryItems = (items: GroceryItem[]) => {
@@ -266,20 +385,67 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addGroceryItem = (item: Omit<GroceryItem, "id" | "checked">) => {
-    const newItem = { ...item, id: generateId(), checked: false };
-    setGroceryItemsState([...groceryItems, newItem]);
+    if (userId && householdId) {
+      supabase
+        .from('grocery_items')
+        .insert([{ ...item, user_id: userId, household_id: householdId, checked: false }])
+        .select()
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error('Supabase addGroceryItem error:', error);
+            setGroceryItemsState([...groceryItems, { ...item, id: generateId(), checked: false }]);
+          } else if (data) {
+            setGroceryItemsState([...groceryItems, data as unknown as GroceryItem]);
+          }
+        });
+    } else {
+      const newItem = { ...item, id: generateId(), checked: false };
+      setGroceryItemsState([...groceryItems, newItem]);
+    }
   };
 
   const toggleGroceryItem = (id: string) => {
-    setGroceryItemsState(
-      groceryItems.map(item =>
-        item.id === id ? { ...item, checked: !item.checked } : item
-      )
-    );
+    const item = groceryItems.find(i => i.id === id);
+    if (!item) return;
+    
+    const newChecked = !item.checked;
+    if (userId) {
+      supabase
+        .from('grocery_items')
+        .update({ checked: newChecked })
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) console.error('Supabase toggleGroceryItem error:', error);
+          setGroceryItemsState(
+            groceryItems.map(item =>
+              item.id === id ? { ...item, checked: newChecked } : item
+            )
+          );
+        });
+    } else {
+      setGroceryItemsState(
+        groceryItems.map(item =>
+          item.id === id ? { ...item, checked: newChecked } : item
+        )
+      );
+    }
   };
 
   const clearCheckedGroceryItems = () => {
-    setGroceryItemsState(groceryItems.filter(item => !item.checked));
+    const checkedIds = groceryItems.filter(item => item.checked).map(item => item.id);
+    if (userId && checkedIds.length > 0) {
+      supabase
+        .from('grocery_items')
+        .delete()
+        .in('id', checkedIds)
+        .then(({ error }) => {
+          if (error) console.error('Supabase clearCheckedGroceryItems error:', error);
+          setGroceryItemsState(groceryItems.filter(item => !item.checked));
+        });
+    } else {
+      setGroceryItemsState(groceryItems.filter(item => !item.checked));
+    }
   };
 
   const exportData = () => {
