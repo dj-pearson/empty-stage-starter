@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useImperativeHandle, forwardRef } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,7 +62,11 @@ const COMMON_FOODS = [
   "Crackers", "Pretzels", "Cookies", "Fruit Snacks"
 ];
 
-export function ManageKidsDialog() {
+export interface ManageKidsDialogRef {
+  openForEdit: (kidId: string) => void;
+}
+
+export const ManageKidsDialog = forwardRef<ManageKidsDialogRef>((props, ref) => {
   const { kids, addKid, updateKid, deleteKid } = useApp();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -225,6 +229,16 @@ export function ManageKidsDialog() {
     });
     setEditingId(null);
   };
+
+  useImperativeHandle(ref, () => ({
+    openForEdit: (kidId: string) => {
+      const kid = kids.find(k => k.id === kidId);
+      if (kid) {
+        handleEdit(kid);
+        setOpen(true);
+      }
+    }
+  }));
 
   return (
     <>
@@ -485,4 +499,4 @@ export function ManageKidsDialog() {
       </AlertDialog>
     </>
   );
-}
+});

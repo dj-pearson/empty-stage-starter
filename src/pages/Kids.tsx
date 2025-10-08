@@ -1,15 +1,17 @@
 import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ManageKidsDialog } from "@/components/ManageKidsDialog";
+import { ManageKidsDialog, ManageKidsDialogRef } from "@/components/ManageKidsDialog";
 import { ProductSafetyChecker } from "@/components/ProductSafetyChecker";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { UserCircle, Check, AlertTriangle, Heart } from "lucide-react";
+import { UserCircle, Check, AlertTriangle, Heart, Pencil } from "lucide-react";
 import { differenceInYears } from "date-fns";
+import { useRef } from "react";
 
 export default function Kids() {
   const { kids, activeKidId, setActiveKid, planEntries } = useApp();
+  const manageDialogRef = useRef<ManageKidsDialogRef>(null);
 
   const calculateAge = (dob: string) => {
     return differenceInYears(new Date(), new Date(dob));
@@ -31,7 +33,7 @@ export default function Kids() {
               Select active child and manage profiles
             </p>
           </div>
-          <ManageKidsDialog />
+          <ManageKidsDialog ref={manageDialogRef} />
         </div>
 
         <div className="grid md:grid-cols-2 gap-4">
@@ -81,12 +83,25 @@ export default function Kids() {
                         )}
                       </div>
                     </div>
-                    {isActive && (
-                      <div className="flex items-center gap-1 text-primary text-sm font-medium">
-                        <Check className="h-4 w-4" />
-                        Active
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {isActive && (
+                        <div className="flex items-center gap-1 text-primary text-sm font-medium">
+                          <Check className="h-4 w-4" />
+                          Active
+                        </div>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          manageDialogRef.current?.openForEdit(kid.id);
+                        }}
+                        title="Edit profile"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
