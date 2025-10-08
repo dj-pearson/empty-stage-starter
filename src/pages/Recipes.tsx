@@ -3,7 +3,8 @@ import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, ChefHat, Clock, Users, Lightbulb } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Plus, Pencil, Trash2, ChefHat, Clock, Users, Lightbulb, AlertTriangle, Package } from "lucide-react";
 import { RecipeBuilder } from "@/components/RecipeBuilder";
 import {
   Dialog,
@@ -63,6 +64,18 @@ export default function Recipes() {
       .filter(Boolean);
   };
 
+  const getStockStatus = (recipe: Recipe) => {
+    const recipeFoods = getRecipeFoods(recipe);
+    const outOfStock = recipeFoods.filter(food => food && (food.quantity || 0) === 0);
+    const lowStock = recipeFoods.filter(food => food && (food.quantity || 0) > 0 && (food.quantity || 0) <= 2);
+    
+    return {
+      outOfStock,
+      lowStock,
+      hasIssues: outOfStock.length > 0 || lowStock.length > 0
+    };
+  };
+
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -99,6 +112,7 @@ export default function Recipes() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {recipes.map((recipe) => {
               const recipeFoods = getRecipeFoods(recipe);
+              const stockStatus = getStockStatus(recipe);
               
               return (
                 <Card key={recipe.id} className="hover:shadow-lg transition-all">
@@ -132,6 +146,27 @@ export default function Recipes() {
                    )}
                  </CardHeader>
                  <CardContent className="space-y-4">
+                   {/* Stock Warnings */}
+                   {stockStatus.hasIssues && (
+                     <Alert variant={stockStatus.outOfStock.length > 0 ? "destructive" : "default"}>
+                       <AlertTriangle className="h-4 w-4" />
+                       <AlertDescription>
+                         {stockStatus.outOfStock.length > 0 && (
+                           <div className="mb-2">
+                             <p className="font-medium">Out of stock:</p>
+                             <p className="text-sm">{stockStatus.outOfStock.map(f => f?.name).join(', ')}</p>
+                           </div>
+                         )}
+                         {stockStatus.lowStock.length > 0 && (
+                           <div>
+                             <p className="font-medium">Low stock:</p>
+                             <p className="text-sm">{stockStatus.lowStock.map(f => `${f?.name} (${f?.quantity})`).join(', ')}</p>
+                           </div>
+                         )}
+                       </AlertDescription>
+                     </Alert>
+                   )}
+
                    {/* Time and Servings */}
                    {(recipe.prepTime || recipe.cookTime || recipe.servings) && (
                      <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
@@ -162,11 +197,27 @@ export default function Recipes() {
                        Main Ingredients ({recipeFoods.length}):
                      </p>
                      <div className="flex flex-wrap gap-2">
-                       {recipeFoods.map((food) => food && (
-                         <Badge key={food.id} variant="outline">
-                           {food.name}
-                         </Badge>
-                       ))}
+                       {recipeFoods.map((food) => {
+                         if (!food) return null;
+                         const isOutOfStock = (food.quantity || 0) === 0;
+                         const isLowStock = (food.quantity || 0) > 0 && (food.quantity || 0) <= 2;
+                         
+                         return (
+                           <Badge 
+                             key={food.id} 
+                             variant={isOutOfStock ? "destructive" : isLowStock ? "secondary" : "outline"}
+                             className="gap-1"
+                           >
+                             {food.name}
+                             {(food.quantity !== undefined && food.quantity !== null) && (
+                               <span className="text-xs opacity-70">
+                                 ({food.quantity})
+                               </span>
+                             )}
+                             {isOutOfStock && <Package className="h-3 w-3" />}
+                           </Badge>
+                         );
+                       })}
                      </div>
                    </div>
 

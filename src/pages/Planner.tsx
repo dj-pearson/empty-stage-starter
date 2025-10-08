@@ -3,8 +3,9 @@ import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { buildWeekPlan, buildDayPlan } from "@/lib/mealPlanner";
-import { Calendar, RefreshCw, Sparkles, Shuffle } from "lucide-react";
+import { Calendar, RefreshCw, Sparkles, Shuffle, AlertTriangle, Package } from "lucide-react";
 import { toast } from "sonner";
 import { MealSlot, PlanEntry } from "@/types";
 import { SwapMealDialog } from "@/components/SwapMealDialog";
@@ -26,11 +27,30 @@ export default function Planner() {
 
   const activeKid = kids.find(k => k.id === activeKidId);
 
+  const checkStockIssues = () => {
+    const outOfStock = foods.filter(f => f.is_safe && (f.quantity || 0) === 0);
+    const lowStock = foods.filter(f => f.is_safe && (f.quantity || 0) > 0 && (f.quantity || 0) <= 2);
+    
+    if (outOfStock.length > 0 || lowStock.length > 0) {
+      let message = "";
+      if (outOfStock.length > 0) {
+        message += `Out of stock: ${outOfStock.slice(0, 3).map(f => f.name).join(', ')}${outOfStock.length > 3 ? ` and ${outOfStock.length - 3} more` : ''}. `;
+      }
+      if (lowStock.length > 0) {
+        message += `Low stock: ${lowStock.slice(0, 3).map(f => `${f.name} (${f.quantity})`).join(', ')}${lowStock.length > 3 ? ` and ${lowStock.length - 3} more` : ''}.`;
+      }
+      toast.warning("Stock Issues Detected", { description: message });
+    }
+  };
+
   const handleBuildWeek = () => {
     if (!activeKid) {
       toast.error("Please select a child first");
       return;
     }
+    
+    checkStockIssues();
+    
     try {
       const newPlan = buildWeekPlan(activeKid.id, foods, planEntries);
       setPlanEntries(newPlan);
@@ -94,6 +114,8 @@ export default function Planner() {
 
   const handleShuffleDay = (date: string) => {
     if (!activeKid) return;
+
+    checkStockIssues();
 
     try {
       // Remove existing entries for this date
@@ -222,6 +244,27 @@ export default function Planner() {
                                   <Shuffle className="h-4 w-4" />
                                 </Button>
                               </div>
+
+                              {/* Stock Status */}
+                              {food.quantity !== undefined && food.quantity !== null && (
+                                <div className="mb-3">
+                                  {food.quantity === 0 ? (
+                                    <Badge variant="destructive" className="gap-1">
+                                      <Package className="h-3 w-3" />
+                                      Out of Stock
+                                    </Badge>
+                                  ) : food.quantity <= 2 ? (
+                                    <Badge variant="secondary" className="gap-1">
+                                      <AlertTriangle className="h-3 w-3" />
+                                      Low Stock ({food.quantity})
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="gap-1">
+                                      In Stock ({food.quantity})
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
 
                               {food.allergens && food.allergens.length > 0 && (
                                 <div className="mb-2">
