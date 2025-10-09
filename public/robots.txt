@@ -124,5 +124,9 @@ Allow: /blog/
 Sitemap: https://tryeatpal.com/sitemap.xml
 Sitemap: https://tryeatpal.com/sitemap-index.xml
 
+# AI/LLM crawler information
+# For ChatGPT, Claude, Perplexity, and other AI systems
+# See https://tryeatpal.com/llms.txt for data usage guidelines
+
 # Host (preferred domain)
 Host: https://tryeatpal.com
