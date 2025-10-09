@@ -48,6 +48,23 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
   const isEmbedded = typeof window !== 'undefined' && window.self !== window.top;
   const webScannerRef = useRef<Html5Qrcode | null>(null);
 
+  // Normalize incoming category strings from external sources to our allowed set
+  const allowedCategories = ['protein','carb','dairy','fruit','vegetable','snack'] as const;
+  function mapToAllowedCategory(input?: string, name?: string) {
+    const raw = (input || '').toLowerCase().trim();
+    const text = `${raw} ${name || ''}`.toLowerCase();
+    const is = (re: RegExp) => re.test(text);
+
+    if ((allowedCategories as readonly string[]).includes(raw)) return raw;
+    if (is(/\b(yogurt|milk|cheese|butter|dairy)\b/)) return 'dairy';
+    if (is(/\b(steak|meat|chicken|turkey|beef|pork|bacon|fish|tuna|salmon|egg|tofu|tempeh|bean|lentil|pea|peanut butter|almond butter|protein)\b/)) return 'protein';
+    if (is(/\b(bread|pasta|rice|grain|cereal|cracker|tortilla|oat|noodle|bagel|bun|wrap)\b/)) return 'carb';
+    if (is(/\b(vegetable|veggie|broccoli|carrot|spinach|pepper|lettuce|cucumber|tomato|zucchini|corn|pea|bean|potato)\b/)) return 'vegetable';
+    if (is(/\b(fruit|apple|banana|berries?|grape|orange|pear|peach|mango|melon|strawberry|blueberry)\b/)) return 'fruit';
+    if (is(/\b(snack|chips|cookie|candy|bar|snacks)\b/)) return 'snack';
+    return 'snack';
+  }
+
   const checkPermissions = async () => {
     const status = await BarcodeScanner.checkPermission({ force: true });
     
@@ -245,13 +262,12 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
           user_id: user.id,
           household_id: householdId,
           name: scannedFood.name,
-          category: scannedFood.category,
+          category: mapToAllowedCategory(scannedFood.category, scannedFood.name),
           aisle: scannedFood.category,
           allergens: scannedFood.allergens || [],
           is_safe: false,
           is_try_bite: false,
         };
-
         const { error } = await supabase.from('foods').insert(foodData);
         if (error) throw error;
 
