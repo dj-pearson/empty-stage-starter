@@ -833,7 +833,7 @@ export function SocialMediaManager() {
 
       {/* AI Generation Dialog */}
       <Dialog open={showAIDialog} onOpenChange={setShowAIDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5" />
@@ -844,7 +844,7 @@ export function SocialMediaManager() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="flex-1 overflow-y-auto space-y-4 pr-2">
             <div className="space-y-2">
               <Label htmlFor="ai-topic">Topic or Focus</Label>
               <Input
@@ -878,7 +878,7 @@ export function SocialMediaManager() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setShowAIDialog(false)}>
               Cancel
             </Button>
