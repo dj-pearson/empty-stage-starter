@@ -30,6 +30,9 @@ type ScannedFood = {
   fat_g?: number;
   allergens?: string[];
   source: string;
+  in_pantry?: boolean;
+  existing_quantity?: number;
+  existing_unit?: string;
 };
 
 interface BarcodeScannerDialogProps {
@@ -43,6 +46,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
   const [isScanning, setIsScanning] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [scannedFood, setScannedFood] = useState<ScannedFood | null>(null);
+  const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isNative = Capacitor.isNativePlatform();
   const isEmbedded = typeof window !== 'undefined' && window.self !== window.top;
@@ -206,6 +210,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
   };
 
   const lookupBarcode = async (barcode: string) => {
+    setScannedBarcode(barcode); // Store barcode for later use
     setIsLookingUp(true);
     setError(null);
 
@@ -218,10 +223,18 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
 
       if (data.success && data.food) {
         setScannedFood(data.food);
-        toast({
-          title: "Product found!",
-          description: `Found ${data.food.name} in ${data.food.source}`,
-        });
+        
+        if (data.food.in_pantry) {
+          toast({
+            title: "Already in your pantry!",
+            description: `${data.food.name} - Current stock: ${data.food.existing_quantity} ${data.food.existing_unit}`,
+          });
+        } else {
+          toast({
+            title: "Product found!",
+            description: `Found ${data.food.name} in ${data.food.source}`,
+          });
+        }
       } else {
         setError(data.error || "Product not found in any database");
         toast({
@@ -267,10 +280,11 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
           allergens: scannedFood.allergens || [],
           is_safe: false,
           is_try_bite: false,
-          quantity: 1,
-          unit: 'packages',
+          quantity: scannedFood.in_pantry ? (scannedFood.existing_quantity || 0) + 1 : 1,
+          unit: scannedFood.in_pantry ? (scannedFood.existing_unit || 'packages') : 'packages',
           package_quantity: scannedFood.package_quantity,
           servings_per_container: scannedFood.servings_per_container,
+          barcode: scannedBarcode || undefined,
         };
         const { error } = await supabase.from('foods').insert(foodData);
         if (error) throw error;
@@ -297,6 +311,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
             carbs_g: scannedFood.carbs_g,
             fat_g: scannedFood.fat_g,
             allergens: scannedFood.allergens,
+            barcode: scannedBarcode || undefined,
             created_by: user?.id,
           });
 
@@ -349,6 +364,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
 
     onOpenChange(false);
     setScannedFood(null);
+    setScannedBarcode(null);
     setError(null);
     setIsScanning(false);
     setIsLookingUp(false);

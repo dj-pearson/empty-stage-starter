@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.10';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -204,7 +205,6 @@ async function lookupFoodRepo(barcode: string): Promise<FoodNutrition | null> {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -214,48 +214,146 @@ serve(async (req) => {
     
     if (!barcode) {
       return new Response(
-        JSON.stringify({ error: "Barcode is required" }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: 'No barcode provided' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
-    console.log(`Looking up barcode: ${barcode}`);
-    
-    // Try Open Food Facts first (primary source)
-    let result = await lookupOpenFoodFacts(barcode);
-    
-    // Fallback to USDA if OFF returns nothing
-    if (!result) {
-      result = await lookupUSDA(barcode);
-    }
-    
-    // Final fallback to FoodRepo
-    if (!result) {
-      result = await lookupFoodRepo(barcode);
-    }
-    
-    if (result) {
-      console.log(`Found food: ${result.name} from ${result.source}`);
+    console.log('Looking up barcode:', barcode);
+
+    // Create Supabase client for database lookups
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // STEP 1: Check user's pantry first (foods table) - fastest lookup
+    console.log('Checking user pantry for barcode...');
+    const { data: pantryFood, error: pantryError } = await supabaseClient
+      .from('foods')
+      .select('*')
+      .eq('barcode', barcode)
+      .limit(1)
+      .single();
+
+    if (pantryFood && !pantryError) {
+      console.log('Found in user pantry:', pantryFood.name);
       return new Response(
-        JSON.stringify({ success: true, food: result }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    } else {
-      console.log(`No food found for barcode: ${barcode}`);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: "Product not found in any database. Please add manually." 
+        JSON.stringify({
+          success: true,
+          food: {
+            name: pantryFood.name,
+            category: pantryFood.category,
+            package_quantity: pantryFood.package_quantity,
+            servings_per_container: pantryFood.servings_per_container,
+            allergens: pantryFood.allergens,
+            source: 'Your Pantry',
+            existing_quantity: pantryFood.quantity,
+            existing_unit: pantryFood.unit,
+            in_pantry: true,
+          }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-  } catch (error) {
-    console.error('Error in lookup-barcode function:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+
+    // STEP 2: Check community nutrition database - second fastest
+    console.log('Checking nutrition database for barcode...');
+    const { data: nutritionFood, error: nutritionError } = await supabaseClient
+      .from('nutrition')
+      .select('*')
+      .eq('barcode', barcode)
+      .limit(1)
+      .single();
+
+    if (nutritionFood && !nutritionError) {
+      console.log('Found in nutrition database:', nutritionFood.name);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          food: {
+            name: nutritionFood.name,
+            category: nutritionFood.category,
+            serving_size: nutritionFood.serving_size,
+            package_quantity: nutritionFood.package_quantity,
+            servings_per_container: nutritionFood.servings_per_container,
+            ingredients: nutritionFood.ingredients,
+            calories: nutritionFood.calories,
+            protein_g: nutritionFood.protein_g,
+            carbs_g: nutritionFood.carbs_g,
+            fat_g: nutritionFood.fat_g,
+            allergens: nutritionFood.allergens,
+            source: 'Nutrition Database',
+            in_pantry: false,
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // STEP 3: Search external APIs (Open Food Facts -> USDA -> FoodRepo)
+    console.log('Searching external APIs...');
+    let food = await lookupOpenFoodFacts(barcode);
+    
+    if (!food) {
+      food = await lookupUSDA(barcode);
+    }
+    
+    if (!food) {
+      food = await lookupFoodRepo(barcode);
+    }
+
+    if (food) {
+      console.log(`Found food: ${food.name} from ${food.source}`);
+      
+      // Store in nutrition database for future quick lookups
+      try {
+        await supabaseClient
+          .from('nutrition')
+          .insert({
+            name: food.name,
+            category: food.category,
+            barcode: barcode,
+            serving_size: food.serving_size,
+            package_quantity: food.package_quantity,
+            servings_per_container: food.servings_per_container,
+            ingredients: food.ingredients,
+            calories: food.calories,
+            protein_g: food.protein_g,
+            carbs_g: food.carbs_g,
+            fat_g: food.fat_g,
+            allergens: food.allergens,
+          });
+        console.log('Cached in nutrition database for future lookups');
+      } catch (cacheError) {
+        console.error('Failed to cache in nutrition database:', cacheError);
+        // Continue anyway - the lookup succeeded
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          food: { ...food, in_pantry: false }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        success: false, 
+        error: 'Product not found in any database' 
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+    );
+  } catch (error) {
+    console.error('Error looking up barcode:', error);
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });

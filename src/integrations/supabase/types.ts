@@ -933,6 +933,7 @@ export type Database = {
         Row: {
           aisle: string | null
           allergens: string[] | null
+          barcode: string | null
           category: string
           created_at: string | null
           household_id: string | null
@@ -950,6 +951,7 @@ export type Database = {
         Insert: {
           aisle?: string | null
           allergens?: string[] | null
+          barcode?: string | null
           category: string
           created_at?: string | null
           household_id?: string | null
@@ -967,6 +969,7 @@ export type Database = {
         Update: {
           aisle?: string | null
           allergens?: string[] | null
+          barcode?: string | null
           category?: string
           created_at?: string | null
           household_id?: string | null
@@ -1451,6 +1454,7 @@ export type Database = {
       nutrition: {
         Row: {
           allergens: string[] | null
+          barcode: string | null
           calories: number | null
           carbs_g: number | null
           category: string
@@ -1468,6 +1472,7 @@ export type Database = {
         }
         Insert: {
           allergens?: string[] | null
+          barcode?: string | null
           calories?: number | null
           carbs_g?: number | null
           category: string
@@ -1485,6 +1490,7 @@ export type Database = {
         }
         Update: {
           allergens?: string[] | null
+          barcode?: string | null
           calories?: number | null
           carbs_g?: number | null
           category?: string
