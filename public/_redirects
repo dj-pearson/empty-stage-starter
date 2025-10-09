@@ -28,8 +28,7 @@
 /grocery/ /grocery 301
 /dashboard/ /dashboard 301
 
-# SPA fallback for React Router
-# This catches all routes not matched above and serves index.html
-# Cloudflare serves static files (with extensions) first, then this applies
-/* /index.html 200
+# Note: CloudFlare Pages automatically handles SPA fallback
+# Static files are served first, then index.html for all other routes
+# No explicit /* /index.html 200 rule needed (causes infinite loop warning)
 
