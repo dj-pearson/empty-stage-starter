@@ -5,6 +5,13 @@ import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
@@ -15,7 +22,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Scan, AlertCircle, CheckCircle2, Loader2, Minus, Plus } from "lucide-react";
+import { Scan, AlertCircle, CheckCircle2, Loader2, Minus, Plus, Package2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 
@@ -51,6 +58,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [unit, setUnit] = useState<string>('packages');
   const [isProcessingScan, setIsProcessingScan] = useState(false);
   const isNative = Capacitor.isNativePlatform();
   const isEmbedded = typeof window !== 'undefined' && window.self !== window.top;
@@ -233,7 +241,8 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
     setScannedBarcode(barcode);
     setIsLookingUp(true);
     setError(null);
-    setQuantity(1); // Reset quantity for new scan
+    setQuantity(1);
+    setUnit('packages'); // Reset to default
 
     try {
       const { data, error } = await supabase.functions.invoke('lookup-barcode', {
@@ -245,8 +254,14 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
       if (data.success && data.food) {
         setScannedFood(data.food);
         
+        // Auto-select best unit based on product info
+        if (data.food.servings_per_container && data.food.servings_per_container > 1) {
+          setUnit('packages'); // Default to packages for multi-serving items
+        }
+        
         if (data.food.in_pantry) {
           setQuantity((data.food.existing_quantity || 0) + 1);
+          setUnit(data.food.existing_unit || 'packages');
           toast({
             title: "Already in your pantry!",
             description: `${data.food.name} - Current stock: ${data.food.existing_quantity} ${data.food.existing_unit}`,
@@ -306,7 +321,10 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
           
           const { error: updateError } = await supabase
             .from('foods')
-            .update({ quantity: quantity })
+            .update({ 
+              quantity: quantity,
+              unit: unit
+            })
             .eq('id', existingFood.id);
           
           if (updateError) throw updateError;
@@ -322,7 +340,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
             is_safe: false,
             is_try_bite: false,
             quantity: quantity,
-            unit: 'packages',
+            unit: unit,
             package_quantity: scannedFood.package_quantity,
             servings_per_container: scannedFood.servings_per_container,
             barcode: scannedBarcode || undefined,
@@ -411,6 +429,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
     setIsScanning(false);
     setIsLookingUp(false);
     setQuantity(1);
+    setUnit('packages');
     setIsProcessingScan(false);
   };
 
@@ -534,52 +553,122 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
                     </div>
                   </div>
 
-                  {/* Quantity Selector */}
-                  <div className="space-y-2 pt-2 border-t">
-                    <Label htmlFor="quantity" className="text-sm font-medium">
-                      Quantity {scannedFood.in_pantry && "(will update existing)"}
-                    </Label>
+                  {/* Unit & Quantity Selector */}
+                  <div className="space-y-3 pt-2 border-t">
                     <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                        className="h-10 w-10"
-                      >
-                        <Minus className="h-4 w-4" />
-                      </Button>
-                      <Input
-                        id="quantity"
-                        type="number"
-                        min="1"
-                        value={quantity}
-                        onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="text-center h-10"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setQuantity(quantity + 1)}
-                        className="h-10 w-10"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
+                      <Package2 className="h-4 w-4 text-muted-foreground" />
+                      <Label className="text-sm font-medium">
+                        How to track this item {scannedFood.in_pantry && "(will update existing)"}
+                      </Label>
                     </div>
-                    <div className="flex gap-2 flex-wrap">
-                      {[1, 2, 3, 5, 10].map((num) => (
+                    
+                    {/* Unit Selector */}
+                    <div className="space-y-2">
+                      <Label htmlFor="unit" className="text-xs text-muted-foreground">
+                        Track by
+                      </Label>
+                      <Select value={unit} onValueChange={(value) => {
+                        setUnit(value);
+                        // Auto-adjust quantity when switching units
+                        if (value === 'servings' && scannedFood.servings_per_container) {
+                          setQuantity(scannedFood.servings_per_container);
+                        } else if (value === 'packages') {
+                          setQuantity(1);
+                        }
+                      }}>
+                        <SelectTrigger id="unit" className="h-10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="packages">
+                            Packages/Boxes
+                            {scannedFood.servings_per_container && (
+                              <span className="text-xs text-muted-foreground ml-2">
+                                ({scannedFood.servings_per_container} servings each)
+                              </span>
+                            )}
+                          </SelectItem>
+                          <SelectItem value="servings">
+                            Individual Servings
+                            {scannedFood.serving_size && (
+                              <span className="text-xs text-muted-foreground ml-2">
+                                ({scannedFood.serving_size})
+                              </span>
+                            )}
+                          </SelectItem>
+                          <SelectItem value="items">Individual Items/Pieces</SelectItem>
+                          <SelectItem value="lbs">Pounds (lbs)</SelectItem>
+                          <SelectItem value="oz">Ounces (oz)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {scannedFood.servings_per_container && unit === 'packages' && (
+                        <p className="text-xs text-muted-foreground">
+                          1 package = {scannedFood.servings_per_container} servings
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Quantity Controls */}
+                    <div className="space-y-2">
+                      <Label htmlFor="quantity" className="text-xs text-muted-foreground">
+                        Quantity
+                      </Label>
+                      <div className="flex items-center gap-2">
                         <Button
-                          key={num}
                           type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setQuantity(num)}
-                          className="text-xs"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                          className="h-10 w-10"
                         >
-                          {num}
+                          <Minus className="h-4 w-4" />
                         </Button>
-                      ))}
+                        <Input
+                          id="quantity"
+                          type="number"
+                          min="1"
+                          value={quantity}
+                          onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                          className="text-center h-10"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setQuantity(quantity + 1)}
+                          className="h-10 w-10"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="flex gap-2 flex-wrap">
+                        {unit === 'servings' && scannedFood.servings_per_container 
+                          ? [scannedFood.servings_per_container, scannedFood.servings_per_container * 2, scannedFood.servings_per_container * 3].map((num) => (
+                              <Button
+                                key={num}
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setQuantity(num)}
+                                className="text-xs"
+                              >
+                                {num}
+                              </Button>
+                            ))
+                          : [1, 2, 3, 5, 10].map((num) => (
+                              <Button
+                                key={num}
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setQuantity(num)}
+                                className="text-xs"
+                              >
+                                {num}
+                              </Button>
+                            ))
+                        }
+                      </div>
                     </div>
                   </div>
 
