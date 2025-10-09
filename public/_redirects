@@ -1,11 +1,6 @@
 # Cloudflare Pages _redirects file for EatPal
 # https://developers.cloudflare.com/pages/platform/redirects/
 
-# Force HTTPS and consistent domain
-https://www.tryeatpal.com/* https://tryeatpal.com/:splat 301!
-http://tryeatpal.com/* https://tryeatpal.com/:splat 301!
-http://www.tryeatpal.com/* https://tryeatpal.com/:splat 301!
-
 # Common authentication redirects
 /signup /auth?tab=signup 302
 /signin /auth?tab=signin 302
