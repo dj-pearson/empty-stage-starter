@@ -57,23 +57,28 @@ ${targetAudience ? `Target audience: ${targetAudience}` : 'Target audience: Pare
 
 Generate a comprehensive blog post with the following structure:
 
-1. **Title**: An engaging, SEO-friendly title (60 characters max)
-2. **SEO Title**: Optimized meta title for search engines (60 characters max)
-3. **SEO Description**: Compelling meta description (150-160 characters)
-4. **Excerpt**: A brief summary (150-200 words) that hooks readers
-5. **Body Content**: 
+1. Title: An engaging, SEO-friendly title (60 characters max)
+2. SEO Title: Optimized meta title for search engines (60 characters max)
+3. SEO Description: Compelling meta description (150-160 characters)
+4. Excerpt: A brief summary (150-200 words) that hooks readers
+5. Body Content:
    - Introduction (hook the reader)
    - Main content sections with clear headings
    - Practical tips and actionable advice
    - Examples and real-world scenarios
    - Conclusion with call-to-action
    - Minimum 1500 words
-6. **FAQ Section**: 5-7 frequently asked questions with detailed answers
-7. **Social Media Versions**:
-   - **Twitter Version**: Engaging 280-character post that drives clicks to the article
-   - **Facebook Version**: 2-3 paragraph engaging post (150-200 words) that provides value while encouraging article visits
+6. FAQ Section: 5-7 frequently asked questions with detailed answers
+7. Social Media Versions:
+   - Twitter Version: Engaging 280-character post that drives clicks to the article
+   - Facebook Version: 2-3 paragraph engaging post (150-200 words) that provides value while encouraging article visits
 
-Format your response as JSON:
+STRICT OUTPUT REQUIREMENTS:
+- Return ONLY valid strict JSON (RFC 8259 compliant)
+- Absolutely NO Markdown, NO code fences, NO comments
+- No trailing commas anywhere
+- Escape all newlines inside string values as \\n
+Format your response as JSON with EXACT keys only:
 {
   "title": "...",
   "seo_title": "...",
