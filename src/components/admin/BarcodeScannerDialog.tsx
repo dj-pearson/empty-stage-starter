@@ -267,6 +267,10 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
           allergens: scannedFood.allergens || [],
           is_safe: false,
           is_try_bite: false,
+          quantity: 1,
+          unit: 'packages',
+          package_quantity: scannedFood.package_quantity,
+          servings_per_container: scannedFood.servings_per_container,
         };
         const { error } = await supabase.from('foods').insert(foodData);
         if (error) throw error;
