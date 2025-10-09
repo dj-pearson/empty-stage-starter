@@ -13,11 +13,13 @@ serve(async (req) => {
   }
 
   try {
-    const { topic, contentGoal, targetAudience } = await req.json();
+    const { topic, contentGoal, targetAudience, title, excerpt, url } = await req.json();
 
-    if (!topic) {
+    const topicToUse = topic || title || 'blog post';
+    
+    if (!topicToUse) {
       return new Response(
-        JSON.stringify({ error: 'Topic is required' }),
+        JSON.stringify({ error: 'Topic or title is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -50,7 +52,13 @@ serve(async (req) => {
 
     const systemPrompt = `You are a viral social media content creator specializing in parenting and child nutrition. Create engaging, shareable content that drives website visits and conversions. Focus on emotional hooks, practical value, and relatable scenarios that parents face with picky eaters.`;
 
-    const userPrompt = `Create a viral social media post about: ${topic}
+    let userPrompt = `Create viral social media posts about: ${topicToUse}`;
+    
+    if (excerpt) {
+      userPrompt += `\n\nBlog excerpt for context: ${excerpt}`;
+    }
+    
+    userPrompt += `
 
 ${contentGoal ? `Content goal: ${contentGoal}` : 'Content goal: Drive website visits and increase conversions'}
 ${targetAudience ? `Target audience: ${targetAudience}` : 'Target audience: Parents struggling with picky eaters and child meal planning'}
@@ -80,6 +88,12 @@ Make the content:
 - Shareable (worth passing along to other parents)
 - Conversational (like advice from a friend)
 - Optimized for engagement and virality
+
+STRICT OUTPUT REQUIREMENTS:
+- Return ONLY valid strict JSON (RFC 8259 compliant)
+- Absolutely NO Markdown, NO code fences, NO comments
+- No trailing commas anywhere
+- Escape all newlines inside string values as \\n
 
 Format your response as JSON:
 {
@@ -119,7 +133,7 @@ Format your response as JSON:
         messages: [
           { role: 'user', content: userPrompt }
         ],
-        max_tokens: aiModel.max_tokens ?? 1024,
+        max_tokens: (aiModel.max_tokens && aiModel.max_tokens > 0) ? aiModel.max_tokens : 2048,
       };
 
       if (aiModel.temperature !== null) {
@@ -196,6 +210,11 @@ Format your response as JSON:
       content = aiData.choices[0].message.content;
     }
 
+    const stopReason = aiData.stop_reason || aiData.choices?.[0]?.finish_reason;
+    if (stopReason) {
+      console.log('AI stop reason:', stopReason);
+    }
+
     if (!content) {
       return new Response(
         JSON.stringify({ error: 'No content received from AI' }),
@@ -203,19 +222,32 @@ Format your response as JSON:
       );
     }
 
+    // Sanitize common AI wrappers like Markdown code fences
+    let sanitized = content.trim();
+    if (sanitized.startsWith('```')) {
+      sanitized = sanitized.replace(/^```(?:json|JSON)?\n?/, '').replace(/```$/, '').trim();
+    }
+
     // Parse JSON from response
     let socialContent;
     try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      const jsonMatch = sanitized.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        socialContent = JSON.parse(jsonMatch[0]);
+        let jsonStr = jsonMatch[0];
+        
+        // Clean up common JSON issues from AI responses
+        // Remove trailing commas before closing brackets/braces
+        jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+        
+        socialContent = JSON.parse(jsonStr);
       } else {
-        socialContent = JSON.parse(content);
+        socialContent = JSON.parse(sanitized);
       }
     } catch (e) {
       console.error('Failed to parse AI response as JSON:', e);
+      console.error('Raw content:', sanitized.substring(0, 500));
       return new Response(
-        JSON.stringify({ error: 'Failed to parse AI response' }),
+        JSON.stringify({ error: 'Failed to parse AI response. The AI may have returned invalid JSON format.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
