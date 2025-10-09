@@ -125,7 +125,7 @@ Format your response as JSON with EXACT keys only:
         messages: [
           { role: 'user', content: userPrompt }
         ],
-        max_tokens: aiModel.max_tokens ?? 2048,
+        max_tokens: (aiModel.max_tokens && aiModel.max_tokens > 0) ? aiModel.max_tokens : 6000,
       };
 
       if (aiModel.temperature !== null) {
@@ -201,6 +201,11 @@ Format your response as JSON with EXACT keys only:
       content = aiData.choices[0].message.content;
     }
 
+    const stopReason = aiData.stop_reason || aiData.choices?.[0]?.finish_reason;
+    if (stopReason) {
+      console.log('AI stop reason:', stopReason);
+    }
+
     if (!content) {
       return new Response(
         JSON.stringify({ error: 'No content received from AI' }),
@@ -208,11 +213,17 @@ Format your response as JSON with EXACT keys only:
       );
     }
 
+    // Sanitize common AI wrappers like Markdown code fences
+    let sanitized = content.trim();
+    if (sanitized.startsWith('```')) {
+      sanitized = sanitized.replace(/^```(?:json|JSON)?\n?/, '').replace(/```$/, '').trim();
+    }
+
     // Parse JSON from response
     let blogContent;
     try {
       // Try to find JSON object in the response
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      const jsonMatch = sanitized.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         let jsonStr = jsonMatch[0];
         
@@ -222,11 +233,11 @@ Format your response as JSON with EXACT keys only:
         
         blogContent = JSON.parse(jsonStr);
       } else {
-        blogContent = JSON.parse(content);
+        blogContent = JSON.parse(sanitized);
       }
     } catch (e) {
       console.error('Failed to parse AI response as JSON:', e);
-      console.error('Raw content:', content.substring(0, 1000));
+      console.error('Raw content:', sanitized.substring(0, 1000));
       return new Response(
         JSON.stringify({ error: 'Failed to parse AI response. The AI may have returned invalid JSON format.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
