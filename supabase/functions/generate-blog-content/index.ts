@@ -206,16 +206,24 @@ Format your response as JSON:
     // Parse JSON from response
     let blogContent;
     try {
+      // Try to find JSON object in the response
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        blogContent = JSON.parse(jsonMatch[0]);
+        let jsonStr = jsonMatch[0];
+        
+        // Clean up common JSON issues from AI responses
+        // Remove trailing commas before closing brackets/braces
+        jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+        
+        blogContent = JSON.parse(jsonStr);
       } else {
         blogContent = JSON.parse(content);
       }
     } catch (e) {
       console.error('Failed to parse AI response as JSON:', e);
+      console.error('Raw content:', content.substring(0, 1000));
       return new Response(
-        JSON.stringify({ error: 'Failed to parse AI response' }),
+        JSON.stringify({ error: 'Failed to parse AI response. The AI may have returned invalid JSON format.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
