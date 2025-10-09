@@ -51,6 +51,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [isProcessingScan, setIsProcessingScan] = useState(false);
   const isNative = Capacitor.isNativePlatform();
   const isEmbedded = typeof window !== 'undefined' && window.self !== window.top;
   const webScannerRef = useRef<Html5Qrcode | null>(null);
@@ -143,6 +144,13 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
         back.id,
         config,
         async (decodedText) => {
+          // Prevent processing the same scan multiple times
+          if (isProcessingScan) {
+            console.log('Already processing a scan, ignoring duplicate');
+            return;
+          }
+          
+          setIsProcessingScan(true);
           try {
             await scanner.stop();
             await scanner.clear();
@@ -151,6 +159,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
           document.body.classList.remove('scanner-active');
           await lookupBarcode(decodedText);
           setIsScanning(false);
+          setIsProcessingScan(false);
         },
         (errMsg) => {
           if (typeof errMsg === 'string') console.debug('decode failure:', errMsg);
@@ -402,6 +411,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
     setIsScanning(false);
     setIsLookingUp(false);
     setQuantity(1);
+    setIsProcessingScan(false);
   };
 
   return (
