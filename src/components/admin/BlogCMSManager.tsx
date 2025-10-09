@@ -190,7 +190,7 @@ export function BlogCMSManager() {
         return;
       }
 
-      setSocialContent(data);
+      setSocialContent(data.content ?? data);
       setShowSocialDialog(true);
       toast.success("Social media posts generated!");
     } catch (error: any) {
@@ -298,7 +298,7 @@ export function BlogCMSManager() {
                           </>
                         )}
                       </Button>
-                      {post.status === 'draft' && (
+                      {post.status !== 'published' && (
                         <Button
                           size="sm"
                           onClick={() => handlePublish(post.id)}
@@ -467,6 +467,7 @@ export function BlogCMSManager() {
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Generated Social Media Posts</DialogTitle>
+            <DialogDescription>Copy the versions for each platform below.</DialogDescription>
           </DialogHeader>
           {socialContent && (
             <div className="space-y-6">
