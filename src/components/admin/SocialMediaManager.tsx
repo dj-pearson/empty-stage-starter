@@ -136,7 +136,7 @@ export function SocialMediaManager() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setPosts(data || []);
+      setPosts((data || []) as any);
     } catch (error) {
       console.error("Error loading posts:", error);
       toast.error("Failed to load posts");
@@ -153,7 +153,7 @@ export function SocialMediaManager() {
         .order("platform");
 
       if (error) throw error;
-      setAccounts(data || []);
+      setAccounts((data || []) as any);
     } catch (error) {
       console.error("Error loading accounts:", error);
     }
