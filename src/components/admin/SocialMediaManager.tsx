@@ -58,6 +58,8 @@ interface SocialPost {
   id: string;
   title: string | null;
   content: string;
+  short_form_content: string | null;
+  long_form_content: string | null;
   platforms: string[];
   status: string;
   scheduled_for: string | null;
@@ -65,6 +67,7 @@ interface SocialPost {
   image_urls: string[] | null;
   link_url: string | null;
   hashtags: string[] | null;
+  webhook_url: string | null;
   created_at: string;
 }
 
@@ -74,6 +77,7 @@ interface SocialAccount {
   account_name: string;
   webhook_url: string | null;
   is_active: boolean;
+  is_global: boolean | null;
 }
 
 export function SocialMediaManager() {
@@ -94,6 +98,8 @@ export function SocialMediaManager() {
   const [postForm, setPostForm] = useState({
     title: "",
     content: "",
+    short_form_content: "",
+    long_form_content: "",
     platforms: [] as string[],
     link_url: "",
     hashtags: "",
@@ -102,9 +108,10 @@ export function SocialMediaManager() {
   });
 
   const [accountForm, setAccountForm] = useState({
-    platform: "facebook",
+    platform: "webhook",
     account_name: "",
     webhook_url: "",
+    is_global: true,
   });
 
   const [showAIDialog, setShowAIDialog] = useState(false);
@@ -184,6 +191,8 @@ export function SocialMediaManager() {
         {
           title: postForm.title || null,
           content: postForm.content,
+          short_form_content: postForm.short_form_content || null,
+          long_form_content: postForm.long_form_content || null,
           platforms: postForm.platforms as any,
           status: postForm.schedule_now ? "draft" : "scheduled",
           scheduled_for: scheduledFor,
@@ -216,49 +225,56 @@ export function SocialMediaManager() {
       const post = posts.find((p) => p.id === postId);
       if (!post) return;
 
-      // Check if platforms have webhook URLs configured
-      const postPlatforms = post.platforms;
-      const configuredAccounts = accounts.filter(
-        (a) => postPlatforms.includes(a.platform) && a.is_active && a.webhook_url
-      );
-
-      if (configuredAccounts.length === 0) {
-        toast.error("No active webhook URLs configured for selected platforms");
+      // Get global webhook URL from accounts
+      const globalAccount = accounts.find((a) => a.is_global && a.is_active && a.webhook_url);
+      
+      if (!globalAccount?.webhook_url) {
+        toast.error("No global webhook URL configured. Please set up a webhook in Connected Accounts.");
         return;
       }
 
-      // Send to webhooks
-      for (const account of configuredAccounts) {
-        try {
-          const payload = {
-            platform: account.platform,
-            content: post.content,
-            link: post.link_url,
-            hashtags: post.hashtags,
-            images: post.image_urls,
-          };
+      // Send bundled data to webhook for Make.com
+      try {
+        const webhookPayload = {
+          type: 'social_post_published',
+          post_id: post.id,
+          title: post.title || '',
+          short_form: post.short_form_content || post.content,
+          long_form: post.long_form_content || post.content,
+          url: post.link_url || 'https://tryeatpal.com',
+          hashtags: post.hashtags || [],
+          images: post.image_urls || [],
+          platforms: post.platforms,
+          published_at: new Date().toISOString()
+        };
 
-          const response = await fetch(account.webhook_url!, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
+        const response = await fetch(globalAccount.webhook_url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(webhookPayload),
+        });
 
-          // Log webhook call
-          await supabase.from("webhook_logs").insert([
-            {
-              post_id: postId,
-              platform: account.platform as any,
-              webhook_url: account.webhook_url,
-              request_payload: payload,
-              response_status: response.status,
-              response_body: await response.text(),
-              success: response.ok,
-            },
-          ]);
-        } catch (webhookError) {
-          console.error(`Webhook error for ${account.platform}:`, webhookError);
+        // Log webhook call
+        await supabase.from("webhook_logs").insert([
+          {
+            post_id: postId,
+            platform: 'facebook' as any, // Use a default platform for logging
+            webhook_url: globalAccount.webhook_url,
+            request_payload: webhookPayload,
+            response_status: response.status,
+            response_body: await response.text(),
+            success: response.ok,
+          },
+        ]);
+
+        if (!response.ok) {
+          toast.error(`Webhook returned status ${response.status}`);
+          return;
         }
+      } catch (webhookError) {
+        console.error("Webhook error:", webhookError);
+        toast.error("Failed to send to webhook. Check webhook logs for details.");
+        return;
       }
 
       // Update post status
@@ -272,7 +288,7 @@ export function SocialMediaManager() {
 
       if (error) throw error;
 
-      toast.success("Post published to selected platforms");
+      toast.success("Post published and sent to webhook!");
       loadPosts();
       loadStats();
     } catch (error) {
@@ -296,20 +312,26 @@ export function SocialMediaManager() {
 
   const handleSaveAccount = async () => {
     try {
+      if (!accountForm.webhook_url.trim()) {
+        toast.error("Webhook URL is required");
+        return;
+      }
+
       const { error } = await supabase.from("social_accounts").insert([
         {
           platform: accountForm.platform as any,
-          account_name: accountForm.account_name,
+          account_name: accountForm.account_name || "Global Webhook",
           webhook_url: accountForm.webhook_url || null,
           is_active: true,
+          is_global: accountForm.is_global,
         },
       ]);
 
       if (error) throw error;
 
-      toast.success("Account configured");
+      toast.success("Webhook configured successfully");
       setShowAccountDialog(false);
-      setAccountForm({ platform: "facebook", account_name: "", webhook_url: "" });
+      setAccountForm({ platform: "webhook", account_name: "", webhook_url: "", is_global: true });
       loadAccounts();
     } catch (error) {
       console.error("Error saving account:", error);
@@ -321,6 +343,8 @@ export function SocialMediaManager() {
     setPostForm({
       title: "",
       content: "",
+      short_form_content: "",
+      long_form_content: "",
       platforms: [],
       link_url: "",
       hashtags: "",
@@ -359,35 +383,14 @@ export function SocialMediaManager() {
       setPostForm({
         ...postForm,
         title: content.title || "",
-        content: content.facebook || "",
+        content: content.facebook || content.long_form || "",
+        short_form_content: content.twitter || "",
+        long_form_content: content.facebook || "",
       });
 
       toast.success("AI content generated! Review and customize before posting.");
       setShowAIDialog(false);
       setShowPostDialog(true);
-
-      // Send bundled data to webhook for Make.com
-      const webhookUrl = localStorage.getItem('social_webhook_url');
-      if (webhookUrl) {
-        try {
-          await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            mode: 'no-cors',
-            body: JSON.stringify({
-              type: 'social_content_generated',
-              title: content.title,
-              facebook_version: content.facebook,
-              twitter_version: content.twitter,
-              topic: aiForm.topic,
-              timestamp: new Date().toISOString()
-            })
-          });
-          console.log('Social content bundle sent to webhook');
-        } catch (webhookError) {
-          console.error('Webhook error:', webhookError);
-        }
-      }
     } catch (error: any) {
       console.error("Error generating AI content:", error);
       toast.error(error.message || "Failed to generate content");
@@ -598,12 +601,12 @@ export function SocialMediaManager() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Connected Accounts</CardTitle>
-                  <CardDescription>Manage social media account integrations</CardDescription>
+                  <CardTitle>Webhook Configuration</CardTitle>
+                  <CardDescription>Connect to Make.com or Zapier to publish posts</CardDescription>
                 </div>
                 <Button onClick={() => setShowAccountDialog(true)}>
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Account
+                  Add Webhook
                 </Button>
               </div>
             </CardHeader>
@@ -612,27 +615,38 @@ export function SocialMediaManager() {
                 {accounts.map((account) => (
                   <div key={account.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div className="flex items-center gap-3">
-                      {getPlatformIcon(account.platform)}
+                      <LinkIcon className="h-5 w-5 text-primary" />
                       <div>
                         <p className="font-medium">{account.account_name}</p>
-                        <p className="text-sm text-muted-foreground capitalize">{account.platform}</p>
+                        <p className="text-sm text-muted-foreground">{account.webhook_url}</p>
+                        {account.is_global && (
+                          <Badge variant="default" className="mt-1">Global Webhook</Badge>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {account.is_active && account.webhook_url ? (
                         <Badge variant="default" className="bg-safe-food">
                           <CheckCircle className="h-3 w-3 mr-1" />
-                          Connected
+                          Active
                         </Badge>
                       ) : (
                         <Badge variant="secondary">
                           <XCircle className="h-3 w-3 mr-1" />
-                          Not Configured
+                          Inactive
                         </Badge>
                       )}
                     </div>
                   </div>
                 ))}
+                
+                {accounts.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <LinkIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No webhook configured yet</p>
+                    <p className="text-sm">Add a webhook to start publishing posts</p>
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 p-4 border rounded-lg bg-muted/50">
@@ -641,11 +655,19 @@ export function SocialMediaManager() {
                   Webhook Setup Instructions
                 </h4>
                 <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
-                  <li>Create a Zapier or Make.com account</li>
-                  <li>Create a new "Catch Hook" trigger</li>
-                  <li>Connect to your social media accounts (Facebook, Instagram, etc.)</li>
-                  <li>Copy the webhook URL and paste it above</li>
-                  <li>Test the connection by publishing a post</li>
+                  <li>Create a Make.com scenario or Zapier zap</li>
+                  <li>Add a "Webhook" trigger and get the webhook URL</li>
+                  <li>Paste the webhook URL above</li>
+                  <li>When you publish a post, it will send:
+                    <ul className="ml-6 mt-1 space-y-1 list-disc">
+                      <li><strong>short_form</strong>: Content for Twitter/X (under 280 chars)</li>
+                      <li><strong>long_form</strong>: Content for Facebook/LinkedIn</li>
+                      <li><strong>url</strong>: Link to include (defaults to https://tryeatpal.com)</li>
+                      <li><strong>hashtags</strong>: Array of hashtags</li>
+                      <li><strong>images</strong>: Array of image URLs</li>
+                    </ul>
+                  </li>
+                  <li>In Make.com, parse the data and route to your social platforms</li>
                 </ol>
               </div>
             </CardContent>
@@ -777,47 +799,37 @@ export function SocialMediaManager() {
       <Dialog open={showAccountDialog} onOpenChange={setShowAccountDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Connect Social Account</DialogTitle>
-            <DialogDescription>Configure webhook integration for posting</DialogDescription>
+            <DialogTitle>Configure Webhook</DialogTitle>
+            <DialogDescription>Add a webhook URL to send published posts to Make.com or Zapier</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="account-platform">Platform</Label>
-              <select
-                id="account-platform"
-                value={accountForm.platform}
-                onChange={(e) => setAccountForm({ ...accountForm, platform: e.target.value })}
-                className="w-full p-2 border rounded-md"
-              >
-                {PLATFORMS.map((platform) => (
-                  <option key={platform.value} value={platform.value}>
-                    {platform.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="account-name">Account Name</Label>
+              <Label htmlFor="account-name">Name (Optional)</Label>
               <Input
                 id="account-name"
                 value={accountForm.account_name}
                 onChange={(e) => setAccountForm({ ...accountForm, account_name: e.target.value })}
-                placeholder="@yourhandle or Page Name"
+                placeholder="Make.com Webhook"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="webhook-url">Webhook URL</Label>
+              <Label htmlFor="webhook-url">Webhook URL *</Label>
               <Input
                 id="webhook-url"
                 value={accountForm.webhook_url}
                 onChange={(e) => setAccountForm({ ...accountForm, webhook_url: e.target.value })}
-                placeholder="https://hooks.zapier.com/hooks/catch/..."
+                placeholder="https://hook.us1.make.com/..."
               />
               <p className="text-xs text-muted-foreground">
-                Get this from Zapier, Make.com, or your automation platform
+                Get this from Make.com or Zapier webhook trigger
+              </p>
+            </div>
+
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-900">
+                <strong>Tip:</strong> This webhook will receive all published posts with both short-form and long-form content versions for different platforms.
               </p>
             </div>
           </div>
@@ -826,7 +838,7 @@ export function SocialMediaManager() {
             <Button variant="outline" onClick={() => setShowAccountDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveAccount}>Save Account</Button>
+            <Button onClick={handleSaveAccount}>Save Webhook</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { topic, contentGoal, targetAudience, title, excerpt, url } = await req.json();
+    const { topic, contentGoal, targetAudience, title, excerpt, url, autoPublish = false, webhookUrl } = await req.json();
 
     const topicToUse = topic || title || 'blog post';
     
@@ -252,10 +252,69 @@ Format your response as JSON:
       );
     }
 
+    // If autoPublish is true, create and publish the post
+    if (autoPublish) {
+      try {
+        // Extract hashtags from content
+        const hashtagMatches = (socialContent.facebook || socialContent.twitter || '').match(/#\w+/g) || [];
+        const hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
+
+        // Create the post
+        const { data: postData, error: postError } = await supabase
+          .from('social_posts')
+          .insert([
+            {
+              title: socialContent.title || topicToUse,
+              content: socialContent.facebook || socialContent.twitter || '',
+              short_form_content: socialContent.twitter || '',
+              long_form_content: socialContent.facebook || '',
+              platforms: ['facebook', 'twitter', 'linkedin'],
+              status: 'published',
+              published_at: new Date().toISOString(),
+              link_url: url || 'https://tryeatpal.com',
+              hashtags: hashtags,
+            },
+          ])
+          .select()
+          .single();
+
+        if (postError) {
+          console.error('Error creating post:', postError);
+        } else if (postData && webhookUrl) {
+          // Send to webhook
+          try {
+            const webhookPayload = {
+              type: 'social_post_published',
+              post_id: postData.id,
+              title: socialContent.title || '',
+              short_form: socialContent.twitter || '',
+              long_form: socialContent.facebook || '',
+              url: url || 'https://tryeatpal.com',
+              hashtags: hashtags,
+              published_at: new Date().toISOString()
+            };
+
+            const webhookResponse = await fetch(webhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(webhookPayload),
+            });
+
+            console.log('Webhook response status:', webhookResponse.status);
+          } catch (webhookError) {
+            console.error('Webhook error:', webhookError);
+          }
+        }
+      } catch (autoPublishError) {
+        console.error('Auto-publish error:', autoPublishError);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         content: socialContent,
+        autoPublished: autoPublish,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

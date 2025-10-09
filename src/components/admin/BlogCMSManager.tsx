@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Sparkles, Plus, Edit, Share2 } from "lucide-react";
+import { Sparkles, Plus, Edit, Share2, Settings, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 
 interface BlogPost {
@@ -42,10 +42,24 @@ export function BlogCMSManager() {
   const [generatingSocial, setGeneratingSocial] = useState<string | null>(null);
   const [socialContent, setSocialContent] = useState<any>(null);
   const [showSocialDialog, setShowSocialDialog] = useState(false);
+  const [showWebhookDialog, setShowWebhookDialog] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState("");
 
   useEffect(() => {
     loadPosts();
+    loadWebhookUrl();
   }, []);
+
+  const loadWebhookUrl = () => {
+    const saved = localStorage.getItem('blog_webhook_url');
+    if (saved) setWebhookUrl(saved);
+  };
+
+  const saveWebhookUrl = () => {
+    localStorage.setItem('blog_webhook_url', webhookUrl);
+    toast.success("Webhook URL saved");
+    setShowWebhookDialog(false);
+  };
 
   const loadPosts = async () => {
     try {
@@ -203,7 +217,11 @@ export function BlogCMSManager() {
 
   const handlePublish = async (postId: string) => {
     try {
-      const { error } = await supabase
+      const post = posts.find(p => p.id === postId);
+      if (!post) return;
+
+      // Update post to published
+      const { error: publishError } = await supabase
         .from('blog_posts')
         .update({ 
           status: 'published',
@@ -211,9 +229,71 @@ export function BlogCMSManager() {
         })
         .eq('id', postId);
 
-      if (error) throw error;
+      if (publishError) throw publishError;
 
-      toast.success("Post published successfully!");
+      // Generate social media posts about this blog
+      const blogUrl = `https://tryeatpal.com/blog/${post.slug}`;
+      
+      const { data: socialData, error: socialError } = await supabase.functions.invoke('generate-social-content', {
+        body: {
+          topic: `New blog post: ${post.title}`,
+          excerpt: post.excerpt,
+          url: blogUrl,
+          contentGoal: `Promote this blog post and drive traffic to ${blogUrl}`,
+          targetAudience: "Parents struggling with picky eaters and child meal planning"
+        }
+      });
+
+      if (socialError) {
+        console.error("Error generating social content:", socialError);
+        toast.warning("Post published, but failed to generate social posts");
+      } else if (socialData?.content) {
+        const content = socialData.content;
+        
+        // Extract hashtags from the content
+        const hashtagMatches = (content.facebook || content.twitter || '').match(/#\w+/g) || [];
+        const hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
+
+        // Send to webhook if configured
+        const webhookUrl = localStorage.getItem('blog_webhook_url');
+        if (webhookUrl) {
+          try {
+            const webhookPayload = {
+              type: 'blog_published',
+              blog_id: postId,
+              blog_title: post.title,
+              blog_url: blogUrl,
+              blog_excerpt: post.excerpt,
+              short_form: content.twitter || '',
+              long_form: content.facebook || '',
+              hashtags: hashtags,
+              published_at: new Date().toISOString()
+            };
+
+            const response = await fetch(webhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(webhookPayload)
+            });
+
+            if (response.ok) {
+              toast.success("Post published and social content sent to webhook!");
+            } else {
+              toast.warning(`Post published, but webhook returned status ${response.status}`);
+            }
+          } catch (webhookError) {
+            console.error('Webhook error:', webhookError);
+            toast.warning("Post published, but failed to send to webhook");
+          }
+        } else {
+          toast.success("Post published! Set up a webhook to auto-post to social media.");
+        }
+
+        // Show social content to user
+        setSocialContent(content);
+        setShowSocialDialog(true);
+      }
+
       loadPosts();
     } catch (error: any) {
       console.error("Error publishing post:", error);
@@ -230,10 +310,17 @@ export function BlogCMSManager() {
             Create, manage, and publish blog content with AI assistance
           </p>
         </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowWebhookDialog(true)}>
+            <Settings className="h-4 w-4 mr-2" />
+            {webhookUrl ? <CheckCircle className="h-4 w-4 mr-1 text-safe-food" /> : null}
+            Webhook
+          </Button>
         <Button onClick={() => setShowAIDialog(true)}>
           <Sparkles className="h-4 w-4 mr-2" />
           AI Generate Article
         </Button>
+        </div>
       </div>
 
       {/* Posts List */}
@@ -503,6 +590,57 @@ export function BlogCMSManager() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Webhook Configuration Dialog */}
+      <Dialog open={showWebhookDialog} onOpenChange={setShowWebhookDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Configure Blog Webhook</DialogTitle>
+            <DialogDescription>
+              When a blog is published, social media posts will be automatically generated and sent to this webhook
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="blog-webhook-url">Webhook URL</Label>
+              <Input
+                id="blog-webhook-url"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://hook.us1.make.com/..."
+              />
+              <p className="text-xs text-muted-foreground">
+                Get this from Make.com or Zapier webhook trigger
+              </p>
+            </div>
+
+            <div className="p-4 bg-muted rounded-lg">
+              <h4 className="font-medium mb-2">Webhook Payload</h4>
+              <p className="text-sm text-muted-foreground mb-2">
+                When a blog post is published, the webhook will receive:
+              </p>
+              <ul className="text-sm space-y-1 text-muted-foreground ml-4 list-disc">
+                <li><strong>blog_title</strong>: Title of the blog post</li>
+                <li><strong>blog_url</strong>: Full URL to the blog post</li>
+                <li><strong>blog_excerpt</strong>: Brief summary</li>
+                <li><strong>short_form</strong>: Twitter/X version (under 280 chars)</li>
+                <li><strong>long_form</strong>: Facebook/LinkedIn version</li>
+                <li><strong>hashtags</strong>: Array of relevant hashtags</li>
+              </ul>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowWebhookDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveWebhookUrl}>
+              Save Webhook
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

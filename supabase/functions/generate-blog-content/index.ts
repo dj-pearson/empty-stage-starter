@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { topic, keywords, targetAudience } = await req.json();
+    const { topic, keywords, targetAudience, autoPublish = false, webhookUrl } = await req.json();
 
     if (!topic) {
       return new Response(
@@ -237,10 +237,82 @@ Format your response as JSON with EXACT keys only:
       );
     }
 
+    // If autoPublish is true, create the blog post and publish it
+    if (autoPublish) {
+      try {
+        // Generate slug from title
+        const slug = (blogContent.title || topic).toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-');
+
+        // Create the blog post
+        const { data: postData, error: postError } = await supabase
+          .from('blog_posts')
+          .insert([
+            {
+              title: blogContent.title || topic,
+              slug: slug,
+              content: blogContent.body || '',
+              excerpt: blogContent.excerpt || '',
+              meta_title: blogContent.seo_title || '',
+              meta_description: blogContent.seo_description || '',
+              ai_generated: true,
+              ai_prompt: topic,
+              status: 'published',
+              published_at: new Date().toISOString(),
+            },
+          ])
+          .select()
+          .single();
+
+        if (postError) {
+          console.error('Error creating blog post:', postError);
+        } else if (postData) {
+          const blogUrl = `https://tryeatpal.com/blog/${slug}`;
+
+          // Generate social media content about this blog
+          try {
+            // Use a simple method to generate social content
+            const socialTitle = `New blog post: ${blogContent.title}`;
+            const twitterPost = `${socialTitle}\n\nRead more: ${blogUrl} #EatPal #PickyEaters #ParentingTips`;
+            const facebookPost = `📝 ${socialTitle}\n\n${blogContent.excerpt}\n\nRead the full article: ${blogUrl}\n\n#EatPal #ParentingTips #PickyEaters #HealthyKids`;
+
+            // Send to webhook if provided
+            if (webhookUrl) {
+              const webhookPayload = {
+                type: 'blog_published',
+                blog_id: postData.id,
+                blog_title: blogContent.title || topic,
+                blog_url: blogUrl,
+                blog_excerpt: blogContent.excerpt || '',
+                short_form: twitterPost,
+                long_form: facebookPost,
+                hashtags: ['EatPal', 'PickyEaters', 'ParentingTips', 'HealthyKids'],
+                published_at: new Date().toISOString()
+              };
+
+              const webhookResponse = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(webhookPayload),
+              });
+
+              console.log('Webhook response status:', webhookResponse.status);
+            }
+          } catch (socialError) {
+            console.error('Error generating social content:', socialError);
+          }
+        }
+      } catch (autoPublishError) {
+        console.error('Auto-publish error:', autoPublishError);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         content: blogContent,
+        autoPublished: autoPublish,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
