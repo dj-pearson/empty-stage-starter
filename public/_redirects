@@ -28,7 +28,3 @@
 /grocery/ /grocery 301
 /dashboard/ /dashboard 301
 
-# SPA fallback - MUST BE LAST
-# This ensures all unmatched routes go to index.html for client-side routing
-/* /index.html 200
-
