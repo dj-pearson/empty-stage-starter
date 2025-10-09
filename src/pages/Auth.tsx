@@ -22,45 +22,46 @@ const Auth = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if user is already logged in
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) {
-        // Check if onboarding is complete
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("onboarding_completed")
-          .eq("id", session.user.id)
-          .single();
-
-        if (profile?.onboarding_completed) {
-          navigate("/dashboard");
-        } else {
-          setShowOnboarding(true);
-        }
-      }
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session) {
-        if (isNewUser) {
-          // New signup - show onboarding
-          setShowOnboarding(true);
-          setIsNewUser(false);
-        } else {
-          // Existing user login - check onboarding status
-          const { data: profile } = await supabase
+    // Set up listener first
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session && isNewUser) {
+        // New signup - show onboarding
+        setShowOnboarding(true);
+        setIsNewUser(false);
+      } else if (session) {
+        // Defer profile check to avoid deadlock
+        setTimeout(() => {
+          supabase
             .from("profiles")
             .select("onboarding_completed")
             .eq("id", session.user.id)
-            .single();
+            .single()
+            .then(({ data: profile }) => {
+              if (profile?.onboarding_completed) {
+                navigate("/dashboard");
+              } else {
+                setShowOnboarding(true);
+              }
+            });
+        }, 0);
+      }
+    });
 
-          if (profile?.onboarding_completed) {
-            navigate("/dashboard");
-          } else {
-            setShowOnboarding(true);
-          }
-        }
+    // Then check existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        supabase
+          .from("profiles")
+          .select("onboarding_completed")
+          .eq("id", session.user.id)
+          .single()
+          .then(({ data: profile }) => {
+            if (profile?.onboarding_completed) {
+              navigate("/dashboard");
+            } else {
+              setShowOnboarding(true);
+            }
+          });
       }
     });
 

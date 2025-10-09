@@ -79,7 +79,7 @@ export function AddFoodDialog({
   const [isSafe, setIsSafe] = useState(true);
   const [isTryBite, setIsTryBite] = useState(false);
   const [aisle, setAisle] = useState("");
-  const [quantity, setQuantity] = useState(0);
+  const [quantity, setQuantity] = useState(1);
   const [unit, setUnit] = useState("servings");
   const [servingsPerContainer, setServingsPerContainer] = useState<number | undefined>();
   const [packageQuantity, setPackageQuantity] = useState("");
@@ -138,7 +138,7 @@ export function AddFoodDialog({
     setIsSafe(true);
     setIsTryBite(false);
     setAisle("");
-    setQuantity(0);
+    setQuantity(1);
     setUnit("servings");
     setServingsPerContainer(undefined);
     setPackageQuantity("");
@@ -338,13 +338,51 @@ export function AddFoodDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="quantity">Quantity in Stock</Label>
-              <Input
-                id="quantity"
-                type="number"
-                min="0"
-                value={quantity}
-                onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
-              />
+              <div className="flex gap-2 items-center">
+                <Input
+                  id="quantity"
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="flex-1"
+                />
+                <div className="flex gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                    className="h-10 w-10 p-0"
+                  >
+                    −
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setQuantity(q => q + 1)}
+                    className="h-10 w-10 p-0"
+                  >
+                    +
+                  </Button>
+                </div>
+              </div>
+              <div className="flex gap-1 flex-wrap">
+                {[1, 2, 3, 5, 10].map(num => (
+                  <Button
+                    key={num}
+                    type="button"
+                    variant={quantity === num ? "default" : "secondary"}
+                    size="sm"
+                    onClick={() => setQuantity(num)}
+                    className="h-7 px-2 text-xs"
+                  >
+                    {num}
+                  </Button>
+                ))}
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="unit">Unit</Label>
