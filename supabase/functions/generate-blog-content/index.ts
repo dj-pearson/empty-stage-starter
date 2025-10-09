@@ -107,22 +107,58 @@ Format your response as JSON:
       authHeaders['api-key'] = apiKey;
     }
 
-    const requestBody: any = {
-      model: aiModel.model_name,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-    };
+    // Build provider-specific request body
+    let requestBody: any;
+    const isAnthropic = aiModel.endpoint_url.includes('anthropic.com');
+    const isOpenAI = aiModel.endpoint_url.includes('openai.com');
 
-    if (aiModel.temperature !== null) {
-      requestBody.temperature = aiModel.temperature;
-    }
-    if (aiModel.max_tokens !== null) {
-      requestBody.max_tokens = aiModel.max_tokens;
-    }
-    if (aiModel.additional_params) {
-      Object.assign(requestBody, aiModel.additional_params);
+    if (isAnthropic) {
+      // Anthropic Messages API: system is top-level and max_tokens is required
+      requestBody = {
+        model: aiModel.model_name,
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: userPrompt }
+        ],
+        max_tokens: aiModel.max_tokens ?? 2048,
+      };
+
+      if (aiModel.temperature !== null) {
+        requestBody.temperature = aiModel.temperature;
+      }
+      if (aiModel.additional_params) {
+        Object.assign(requestBody, aiModel.additional_params);
+      }
+    } else {
+      // OpenAI-style schema by default
+      requestBody = {
+        model: aiModel.model_name,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+      };
+
+      if (aiModel.temperature !== null) {
+        requestBody.temperature = aiModel.temperature;
+      }
+      if (aiModel.max_tokens !== null) {
+        requestBody.max_tokens = aiModel.max_tokens;
+      }
+      if (aiModel.additional_params) {
+        Object.assign(requestBody, aiModel.additional_params);
+      }
+
+      // Handle GPT-5 and newer OpenAI params per requirements
+      if (isOpenAI && /^(gpt-5|o3|o4)/.test(aiModel.model_name)) {
+        if (requestBody.max_tokens !== undefined) {
+          requestBody.max_completion_tokens = requestBody.max_tokens;
+          delete requestBody.max_tokens;
+        }
+        if ('temperature' in requestBody) {
+          delete requestBody.temperature;
+        }
+      }
     }
 
     console.log('Calling AI API:', aiModel.endpoint_url);
