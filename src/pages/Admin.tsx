@@ -4,7 +4,7 @@ import { useAdminCheck } from "@/hooks/useAdminCheck";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Users, Database, ArrowLeft, Brain, UserCog, CreditCard, Target, Share2, BookOpen, Mail, Search, Percent, Gift } from "lucide-react";
+import { Users, Database, ArrowLeft, Brain, UserCog, CreditCard, Target, Share2, BookOpen, Mail, Search, Percent, Gift, Barcode } from "lucide-react";
 import { NutritionManager } from "@/components/admin/NutritionManager";
 import { UserRolesManager } from "@/components/admin/UserRolesManager";
 import { AISettingsManager } from "@/components/admin/AISettingsManager";
@@ -17,6 +17,7 @@ import { EmailMarketingManager } from "@/components/admin/EmailMarketingManager"
 import { SEOManager } from "@/components/admin/SEOManager";
 import { PromotionalCampaignManager } from "@/components/admin/PromotionalCampaignManager";
 import { ComplementarySubscriptionManager } from "@/components/admin/ComplementarySubscriptionManager";
+import { BarcodeEnrichmentTool } from "@/components/admin/BarcodeEnrichmentTool";
 
 const Admin = () => {
   const { isAdmin, isLoading } = useAdminCheck();
@@ -208,7 +209,9 @@ const Admin = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="nutrition">
+        <TabsContent value="nutrition" className="space-y-4">
+          <BarcodeEnrichmentTool />
+          
           <Card>
             <CardHeader>
               <CardTitle>Community Nutrition Database</CardTitle>
