@@ -50,7 +50,7 @@ export function AdminSidebar({ activeTab, onTabChange }: AdminSidebarProps) {
                     tooltip={item.title}
                   >
                     <item.icon className="h-4 w-4" />
-                    {!isCollapsed && <span>{item.title}</span>}
+                    <span>{item.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
