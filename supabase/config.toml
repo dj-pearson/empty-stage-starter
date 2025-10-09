@@ -17,3 +17,9 @@ verify_jwt = true
 
 [functions.generate-social-content]
 verify_jwt = true
+
+[functions.test-blog-webhook]
+verify_jwt = false
+
+[functions.update-blog-image]
+verify_jwt = false
