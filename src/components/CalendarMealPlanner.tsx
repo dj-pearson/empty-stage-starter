@@ -4,13 +4,15 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
-  closestCenter,
+  closestCorners,
   PointerSensor,
   useSensor,
   useSensors,
   useDraggable,
   useDroppable,
+  DragOverEvent,
 } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -209,12 +211,16 @@ export function CalendarMealPlanner({
 
   // Draggable meal component
   const DraggableMeal = ({ entry, food }: { entry: PlanEntry; food: Food }) => {
-    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    const { attributes, listeners, setNodeRef, isDragging, transform } = useDraggable({
       id: entry.id,
     });
 
+    const style = transform ? {
+      transform: CSS.Translate.toString(transform),
+    } : undefined;
+
     return (
-      <div ref={setNodeRef} {...listeners} {...attributes}>
+      <div ref={setNodeRef} {...listeners} {...attributes} style={style}>
         {renderFoodBadge(food, isDragging)}
       </div>
     );
@@ -266,7 +272,7 @@ export function CalendarMealPlanner({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={closestCorners}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
@@ -379,9 +385,9 @@ export function CalendarMealPlanner({
         </div>
       </div>
 
-      <DragOverlay>
+      <DragOverlay dropAnimation={null}>
         {activeId && draggedFood ? (
-          <div className="rotate-3">
+          <div className="rotate-3 cursor-grabbing opacity-90">
             {renderFoodBadge(draggedFood)}
           </div>
         ) : null}
