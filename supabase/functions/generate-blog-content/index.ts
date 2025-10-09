@@ -94,6 +94,11 @@ Format your response as JSON:
       'Content-Type': 'application/json',
     };
 
+    // Add Anthropic version header if using Anthropic API
+    if (aiModel.endpoint_url.includes('anthropic.com')) {
+      authHeaders['anthropic-version'] = '2023-06-01';
+    }
+
     if (aiModel.auth_type === 'x-api-key') {
       authHeaders['x-api-key'] = apiKey;
     } else if (aiModel.auth_type === 'bearer') {
