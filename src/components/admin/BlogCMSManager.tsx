@@ -292,15 +292,50 @@ export function BlogCMSManager() {
   };
 
   const handleGenerateAIContent = async () => {
+    if (!postForm.ai_prompt) {
+      toast.error("Please enter a topic or prompt for AI generation");
+      return;
+    }
+
     setIsGenerating(true);
     try {
-      // Implement AI content generation logic here
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      setPostForm({ ...postForm, content: "AI Generated Content" });
-      toast.success("AI content generated successfully!");
+      const { data, error } = await supabase.functions.invoke('generate-blog-content', {
+        body: {
+          topic: postForm.ai_prompt,
+          keywords: "",
+          targetAudience: "Parents of picky eaters and young children"
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      const content = data.content;
+      
+      setPostForm({
+        ...postForm,
+        title: content.title || "",
+        content: content.body || "",
+        excerpt: content.excerpt || "",
+        meta_title: content.seo_title || "",
+        meta_description: content.seo_description || "",
+        ai_generated: true,
+      });
+
+      toast.success("AI content generated successfully! Review and edit as needed.");
+      
+      // Send to webhook for Make.com automation if needed
+      if (content.social) {
+        console.log("Social media versions generated:", content.social);
+        // You can trigger webhook here if configured
+      }
     } catch (error: any) {
       console.error("Error generating AI content:", error);
-      toast.error(error.message);
+      toast.error(error.message || "Failed to generate content");
     } finally {
       setIsGenerating(false);
     }
@@ -324,9 +359,40 @@ export function BlogCMSManager() {
           ai_generated: postForm.ai_generated,
           ai_prompt: postForm.ai_prompt,
         },
-      ]);
+      ]).select();
 
       if (error) throw error;
+      
+      // If AI generated and has webhook configured, send bundle to Make.com
+      const webhookUrl = localStorage.getItem('blog_webhook_url');
+      if (postForm.ai_generated && webhookUrl && data && data.length > 0) {
+        try {
+          await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            mode: 'no-cors',
+            body: JSON.stringify({
+              type: 'blog_post_created',
+              post_id: data[0].id,
+              title: postForm.title,
+              slug: postForm.slug,
+              excerpt: postForm.excerpt,
+              content: postForm.content,
+              meta_title: postForm.meta_title,
+              meta_description: postForm.meta_description,
+              social_versions: postForm.ai_generated ? {
+                twitter: postForm.excerpt,
+                facebook: postForm.excerpt
+              } : null,
+              timestamp: new Date().toISOString()
+            })
+          });
+          console.log('Blog post data sent to webhook');
+        } catch (webhookError) {
+          console.error('Webhook error:', webhookError);
+        }
+      }
+      
       loadPosts();
       handleClose();
       toast.success("Post saved successfully!");

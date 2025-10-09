@@ -11,3 +11,9 @@ verify_jwt = true
 
 [functions.test-ai-model]
 verify_jwt = true
+
+[functions.generate-blog-content]
+verify_jwt = true
+
+[functions.generate-social-content]
+verify_jwt = true

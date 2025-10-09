@@ -41,6 +41,7 @@ import {
   CheckCircle,
   XCircle,
   Settings,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays } from "date-fns";
@@ -104,6 +105,13 @@ export function SocialMediaManager() {
     platform: "facebook",
     account_name: "",
     webhook_url: "",
+  });
+
+  const [showAIDialog, setShowAIDialog] = useState(false);
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiForm, setAiForm] = useState({
+    topic: "",
+    contentGoal: "Drive website visits and increase conversions",
   });
 
   useEffect(() => {
@@ -322,6 +330,72 @@ export function SocialMediaManager() {
     setSelectedDate(undefined);
   };
 
+  const handleGenerateAIContent = async () => {
+    if (!aiForm.topic) {
+      toast.error("Please enter a topic");
+      return;
+    }
+
+    setAiGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-social-content', {
+        body: {
+          topic: aiForm.topic,
+          contentGoal: aiForm.contentGoal,
+          targetAudience: "Parents struggling with picky eaters and child meal planning"
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      const content = data.content;
+      
+      // Populate form with generated content
+      setPostForm({
+        ...postForm,
+        title: content.title || "",
+        content: content.facebook || "",
+      });
+
+      toast.success("AI content generated! Review and customize before posting.");
+      setShowAIDialog(false);
+      setShowPostDialog(true);
+
+      // Send bundled data to webhook for Make.com
+      const webhookUrl = localStorage.getItem('social_webhook_url');
+      if (webhookUrl) {
+        try {
+          await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            mode: 'no-cors',
+            body: JSON.stringify({
+              type: 'social_content_generated',
+              title: content.title,
+              facebook_version: content.facebook,
+              twitter_version: content.twitter,
+              topic: aiForm.topic,
+              timestamp: new Date().toISOString()
+            })
+          });
+          console.log('Social content bundle sent to webhook');
+        } catch (webhookError) {
+          console.error('Webhook error:', webhookError);
+        }
+      }
+    } catch (error: any) {
+      console.error("Error generating AI content:", error);
+      toast.error(error.message || "Failed to generate content");
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
   const togglePlatform = (platform: string) => {
     setPostForm({
       ...postForm,
@@ -424,10 +498,16 @@ export function SocialMediaManager() {
                   <CardTitle>Social Media Posts</CardTitle>
                   <CardDescription>Create and schedule posts across platforms</CardDescription>
                 </div>
-                <Button onClick={() => setShowPostDialog(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Post
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={() => setShowAIDialog(true)} variant="outline">
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    AI Generate
+                  </Button>
+                  <Button onClick={() => setShowPostDialog(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Post
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -747,6 +827,74 @@ export function SocialMediaManager() {
               Cancel
             </Button>
             <Button onClick={handleSaveAccount}>Save Account</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Generation Dialog */}
+      <Dialog open={showAIDialog} onOpenChange={setShowAIDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5" />
+              Generate Viral Social Content with AI
+            </DialogTitle>
+            <DialogDescription>
+              Create engaging social media posts optimized for parent audiences and conversions
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="ai-topic">Topic or Focus</Label>
+              <Input
+                id="ai-topic"
+                value={aiForm.topic}
+                onChange={(e) => setAiForm({ ...aiForm, topic: e.target.value })}
+                placeholder="e.g., Creative ways to present vegetables to toddlers"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ai-goal">Content Goal</Label>
+              <Textarea
+                id="ai-goal"
+                value={aiForm.contentGoal}
+                onChange={(e) => setAiForm({ ...aiForm, contentGoal: e.target.value })}
+                placeholder="What action do you want parents to take?"
+                rows={3}
+              />
+            </div>
+
+            <div className="p-4 bg-muted rounded-lg">
+              <h4 className="font-medium mb-2">AI will generate:</h4>
+              <ul className="text-sm space-y-1 text-muted-foreground">
+                <li>• Attention-grabbing title</li>
+                <li>• Facebook version (150-250 words, engaging and conversational)</li>
+                <li>• Twitter version (under 280 characters, punchy and viral)</li>
+                <li>• Optimized hashtags for each platform</li>
+                <li>• Bundled data sent to Make.com webhook</li>
+              </ul>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAIDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleGenerateAIContent} disabled={aiGenerating}>
+              {aiGenerating ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Generate Content
+                </>
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
