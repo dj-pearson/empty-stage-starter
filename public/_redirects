@@ -28,3 +28,11 @@
 /grocery/ /grocery 301
 /dashboard/ /dashboard 301
 
+# SPA fallback for React Router - matches all non-file requests
+# CloudFlare serves static files first, then applies this rule
+/:path1/:path2/:path3/:path4/:path5 /index.html 200
+/:path1/:path2/:path3/:path4 /index.html 200
+/:path1/:path2/:path3 /index.html 200
+/:path1/:path2 /index.html 200
+/:path1 /index.html 200
+
