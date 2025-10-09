@@ -12,11 +12,16 @@ serve(async (req) => {
   }
 
   try {
-    const { blogId, imageUrl, imageType = 'featured' } = await req.json();
+    const body = await req.json();
+    
+    // Accept both camelCase and snake_case
+    const blogId = body.blogId || body.blog_id;
+    const imageUrl = body.imageUrl || body.image_url;
+    const imageType = body.imageType || body.image_type || 'featured';
 
     if (!blogId || !imageUrl) {
       return new Response(
-        JSON.stringify({ error: 'Missing blogId or imageUrl' }),
+        JSON.stringify({ error: 'Missing blogId/blog_id or imageUrl/image_url' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
