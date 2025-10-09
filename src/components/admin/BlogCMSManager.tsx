@@ -40,6 +40,8 @@ export function BlogCMSManager() {
   const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [generatingSocial, setGeneratingSocial] = useState<string | null>(null);
+  const [socialContent, setSocialContent] = useState<any>(null);
+  const [showSocialDialog, setShowSocialDialog] = useState(false);
 
   useEffect(() => {
     loadPosts();
@@ -188,12 +190,34 @@ export function BlogCMSManager() {
         return;
       }
 
-      toast.success("Social media posts generated! Check Social Media Manager.");
+      setSocialContent(data);
+      setShowSocialDialog(true);
+      toast.success("Social media posts generated!");
     } catch (error: any) {
       console.error("Error generating social content:", error);
       toast.error(error.message || "Failed to generate social posts");
     } finally {
       setGeneratingSocial(null);
+    }
+  };
+
+  const handlePublish = async (postId: string) => {
+    try {
+      const { error } = await supabase
+        .from('blog_posts')
+        .update({ 
+          status: 'published',
+          published_at: new Date().toISOString()
+        })
+        .eq('id', postId);
+
+      if (error) throw error;
+
+      toast.success("Post published successfully!");
+      loadPosts();
+    } catch (error: any) {
+      console.error("Error publishing post:", error);
+      toast.error(error.message || "Failed to publish post");
     }
   };
 
@@ -274,6 +298,14 @@ export function BlogCMSManager() {
                           </>
                         )}
                       </Button>
+                      {post.status === 'draft' && (
+                        <Button
+                          size="sm"
+                          onClick={() => handlePublish(post.id)}
+                        >
+                          Publish
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </Card>
@@ -427,6 +459,49 @@ export function BlogCMSManager() {
               Save Changes
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Social Content Dialog */}
+      <Dialog open={showSocialDialog} onOpenChange={setShowSocialDialog}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Generated Social Media Posts</DialogTitle>
+          </DialogHeader>
+          {socialContent && (
+            <div className="space-y-6">
+              {socialContent.twitter && (
+                <div className="space-y-2">
+                  <h3 className="font-semibold">Twitter/X Post</h3>
+                  <p className="whitespace-pre-wrap bg-muted p-4 rounded-md">{socialContent.twitter}</p>
+                </div>
+              )}
+              {socialContent.facebook && (
+                <div className="space-y-2">
+                  <h3 className="font-semibold">Facebook Post</h3>
+                  <p className="whitespace-pre-wrap bg-muted p-4 rounded-md">{socialContent.facebook}</p>
+                </div>
+              )}
+              {socialContent.instagram && (
+                <div className="space-y-2">
+                  <h3 className="font-semibold">Instagram Caption</h3>
+                  <p className="whitespace-pre-wrap bg-muted p-4 rounded-md">{socialContent.instagram}</p>
+                </div>
+              )}
+              {socialContent.linkedin && (
+                <div className="space-y-2">
+                  <h3 className="font-semibold">LinkedIn Post</h3>
+                  <p className="whitespace-pre-wrap bg-muted p-4 rounded-md">{socialContent.linkedin}</p>
+                </div>
+              )}
+              {socialContent.pinterest && (
+                <div className="space-y-2">
+                  <h3 className="font-semibold">Pinterest Description</h3>
+                  <p className="whitespace-pre-wrap bg-muted p-4 rounded-md">{socialContent.pinterest}</p>
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
