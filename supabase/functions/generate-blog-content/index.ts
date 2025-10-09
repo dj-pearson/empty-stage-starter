@@ -67,11 +67,8 @@ Generate a comprehensive blog post with the following structure:
    - Practical tips and actionable advice
    - Examples and real-world scenarios
    - Conclusion with call-to-action
-   - Minimum 1500 words
+   - Target length: ~1000-1400 words
 6. FAQ Section: 5-7 frequently asked questions with detailed answers
-7. Social Media Versions:
-   - Twitter Version: Engaging 280-character post that drives clicks to the article
-   - Facebook Version: 2-3 paragraph engaging post (150-200 words) that provides value while encouraging article visits
 
 STRICT OUTPUT REQUIREMENTS:
 - Return ONLY valid strict JSON (RFC 8259 compliant)
@@ -88,10 +85,6 @@ Format your response as JSON with EXACT keys only:
   "faq": [
     {"question": "...", "answer": "..."}
   ],
-  "social": {
-    "twitter": "...",
-    "facebook": "..."
-  }
 }`;
 
     // Build API request

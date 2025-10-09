@@ -230,11 +230,8 @@ export function BlogCMSManager() {
                 <li>✓ SEO-optimized title (60 characters)</li>
                 <li>✓ Meta description for search engines (150-160 chars)</li>
                 <li>✓ Engaging excerpt to hook readers</li>
-                <li>✓ Comprehensive body content (1500+ words)</li>
+                <li>✓ Comprehensive body content (~1000-1400 words)</li>
                 <li>✓ FAQ section with 5-7 questions</li>
-                <li>✓ Twitter version (280 characters)</li>
-                <li>✓ Facebook version (150-200 words)</li>
-                <li>✓ Bundled data sent to Make.com webhook</li>
               </ul>
             </div>
 
