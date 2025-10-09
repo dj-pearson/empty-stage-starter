@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.update-blog-image]
 verify_jwt = false
+
+[functions.parse-recipe]
+verify_jwt = false

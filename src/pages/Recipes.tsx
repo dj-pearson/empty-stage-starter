@@ -4,8 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, Pencil, Trash2, ChefHat, Clock, Users, Lightbulb, AlertTriangle, Package } from "lucide-react";
+import { Plus, Pencil, Trash2, ChefHat, Clock, Users, Lightbulb, AlertTriangle, Package, Upload } from "lucide-react";
 import { RecipeBuilder } from "@/components/RecipeBuilder";
+import { ImportRecipeDialog } from "@/components/ImportRecipeDialog";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,7 @@ import {
 export default function Recipes() {
   const { recipes, foods, addRecipe, updateRecipe, deleteRecipe } = useApp();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [editRecipe, setEditRecipe] = useState<Recipe | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
@@ -45,6 +47,11 @@ export default function Recipes() {
       toast.success("Recipe created!");
     }
     handleClose();
+  };
+
+  const handleImport = (recipeData: any) => {
+    addRecipe(recipeData);
+    toast.success("Recipe imported successfully!");
   };
 
   const handleClose = () => {
@@ -86,10 +93,16 @@ export default function Recipes() {
               Create complete meals like "Taco Night" or "Pizza Party"
             </p>
           </div>
-          <Button onClick={() => setDialogOpen(true)} size="lg" className="shadow-lg">
-            <Plus className="h-5 w-5 mr-2" />
-            Create Recipe
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => setImportDialogOpen(true)} variant="outline" size="lg">
+              <Upload className="h-5 w-5 mr-2" />
+              Import
+            </Button>
+            <Button onClick={() => setDialogOpen(true)} size="lg" className="shadow-lg">
+              <Plus className="h-5 w-5 mr-2" />
+              Create Recipe
+            </Button>
+          </div>
         </div>
 
         {recipes.length === 0 ? (
@@ -295,6 +308,14 @@ export default function Recipes() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Import Dialog */}
+        <ImportRecipeDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          onImport={handleImport}
+          foods={foods}
+        />
       </div>
     </div>
   );
