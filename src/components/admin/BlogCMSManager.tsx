@@ -44,6 +44,8 @@ export function BlogCMSManager() {
   const [showSocialDialog, setShowSocialDialog] = useState(false);
   const [showWebhookDialog, setShowWebhookDialog] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState("");
+  const [testingWebhook, setTestingWebhook] = useState(false);
+  const [resendingWebhook, setResendingWebhook] = useState<string | null>(null);
 
   useEffect(() => {
     loadPosts();
@@ -59,6 +61,95 @@ export function BlogCMSManager() {
     localStorage.setItem('blog_webhook_url', webhookUrl);
     toast.success("Webhook URL saved");
     setShowWebhookDialog(false);
+  };
+
+  const handleTestWebhook = async () => {
+    if (!webhookUrl) {
+      toast.error("Please enter a webhook URL first");
+      return;
+    }
+
+    setTestingWebhook(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('test-blog-webhook', {
+        body: { webhookUrl }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast.success(`Test webhook sent! Status: ${data.webhookStatus}`);
+      } else {
+        toast.error("Webhook test failed");
+      }
+    } catch (error: any) {
+      console.error("Error testing webhook:", error);
+      toast.error(error.message || "Failed to send test webhook");
+    } finally {
+      setTestingWebhook(false);
+    }
+  };
+
+  const handleResendWebhook = async (postId: string) => {
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    const webhookUrl = localStorage.getItem('blog_webhook_url');
+    if (!webhookUrl) {
+      toast.error("No webhook URL configured. Set it up first!");
+      return;
+    }
+
+    setResendingWebhook(postId);
+    try {
+      // Generate social content
+      const blogUrl = `https://tryeatpal.com/blog/${post.slug}`;
+      
+      const { data: socialData, error: socialError } = await supabase.functions.invoke('generate-social-content', {
+        body: {
+          topic: `New blog post: ${post.title}`,
+          excerpt: post.excerpt,
+          url: blogUrl,
+          contentGoal: `Promote this blog post and drive traffic to ${blogUrl}`,
+          targetAudience: "Parents struggling with picky eaters and child meal planning"
+        }
+      });
+
+      if (socialError) throw socialError;
+
+      const content = socialData.content;
+      const hashtagMatches = (content.facebook || content.twitter || '').match(/#\w+/g) || [];
+      const hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
+
+      const webhookPayload = {
+        type: 'blog_published',
+        blog_id: postId,
+        blog_title: post.title,
+        blog_url: blogUrl,
+        blog_excerpt: post.excerpt,
+        short_form: content.twitter || '',
+        long_form: content.facebook || '',
+        hashtags: hashtags,
+        published_at: new Date().toISOString()
+      };
+
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(webhookPayload)
+      });
+
+      if (response.ok) {
+        toast.success("Webhook resent successfully!");
+      } else {
+        toast.error(`Webhook returned status ${response.status}`);
+      }
+    } catch (error: any) {
+      console.error("Error resending webhook:", error);
+      toast.error(error.message || "Failed to resend webhook");
+    } finally {
+      setResendingWebhook(null);
+    }
   };
 
   const loadPosts = async () => {
@@ -385,12 +476,31 @@ export function BlogCMSManager() {
                           </>
                         )}
                       </Button>
-                      {(post.status || '').toLowerCase() !== 'published' && (
+                      {(post.status || '').toLowerCase() !== 'published' ? (
                         <Button
                           size="sm"
                           onClick={() => handlePublish(post.id)}
                         >
                           Publish
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleResendWebhook(post.id)}
+                          disabled={resendingWebhook === post.id}
+                        >
+                          {resendingWebhook === post.id ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-1" />
+                              Resending...
+                            </>
+                          ) : (
+                            <>
+                              <Share2 className="h-4 w-4 mr-1" />
+                              Resend Webhook
+                            </>
+                          )}
                         </Button>
                       )}
                     </div>
@@ -633,9 +743,23 @@ export function BlogCMSManager() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex gap-2">
             <Button variant="outline" onClick={() => setShowWebhookDialog(false)}>
               Cancel
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleTestWebhook}
+              disabled={testingWebhook || !webhookUrl}
+            >
+              {testingWebhook ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2" />
+                  Testing...
+                </>
+              ) : (
+                'Test Webhook'
+              )}
             </Button>
             <Button onClick={saveWebhookUrl}>
               Save Webhook
