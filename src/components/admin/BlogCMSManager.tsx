@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Sparkles, Plus } from "lucide-react";
+import { Sparkles, Plus, Edit, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface BlogPost {
@@ -37,6 +37,9 @@ export function BlogCMSManager() {
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [keywords, setKeywords] = useState("");
+  const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [generatingSocial, setGeneratingSocial] = useState<string | null>(null);
 
   useEffect(() => {
     loadPosts();
@@ -132,6 +135,68 @@ export function BlogCMSManager() {
     }
   };
 
+  const handleEditPost = (post: BlogPost) => {
+    setEditingPost(post);
+    setShowEditDialog(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingPost) return;
+
+    try {
+      const { error } = await supabase
+        .from("blog_posts")
+        .update({
+          title: editingPost.title,
+          content: editingPost.content,
+          excerpt: editingPost.excerpt,
+          meta_title: editingPost.meta_title,
+          meta_description: editingPost.meta_description,
+        })
+        .eq("id", editingPost.id);
+
+      if (error) throw error;
+
+      toast.success("Post updated successfully");
+      setShowEditDialog(false);
+      setEditingPost(null);
+      loadPosts();
+    } catch (error: any) {
+      console.error("Error updating post:", error);
+      toast.error(error.message || "Failed to update post");
+    }
+  };
+
+  const handleGenerateSocial = async (postId: string) => {
+    setGeneratingSocial(postId);
+    
+    try {
+      const post = posts.find(p => p.id === postId);
+      if (!post) return;
+
+      const { data, error } = await supabase.functions.invoke('generate-social-content', {
+        body: {
+          title: post.title,
+          excerpt: post.excerpt,
+          url: `https://yoursite.com/blog/${post.slug}`
+        }
+      });
+
+      if (error) throw error;
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      toast.success("Social media posts generated! Check Social Media Manager.");
+    } catch (error: any) {
+      console.error("Error generating social content:", error);
+      toast.error(error.message || "Failed to generate social posts");
+    } finally {
+      setGeneratingSocial(null);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -153,7 +218,7 @@ export function BlogCMSManager() {
           <CardTitle>Blog Posts</CardTitle>
           <CardDescription>AI-generated and manual blog posts</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="max-h-[600px] overflow-y-auto">
           {posts.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <p>No posts yet. Generate your first AI-powered blog post!</p>
@@ -162,8 +227,8 @@ export function BlogCMSManager() {
             <div className="space-y-4">
               {posts.map((post) => (
                 <Card key={post.id} className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-lg">{post.title}</h3>
                       {post.excerpt && (
                         <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
@@ -181,6 +246,34 @@ export function BlogCMSManager() {
                           {post.status}
                         </Badge>
                       </div>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditPost(post)}
+                      >
+                        <Edit className="h-4 w-4 mr-1" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleGenerateSocial(post.id)}
+                        disabled={generatingSocial === post.id}
+                      >
+                        {generatingSocial === post.id ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-1" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <Share2 className="h-4 w-4 mr-1" />
+                            Social Posts
+                          </>
+                        )}
+                      </Button>
                     </div>
                   </div>
                 </Card>
@@ -258,6 +351,80 @@ export function BlogCMSManager() {
                   Generate Article
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Post Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Edit Blog Post</DialogTitle>
+            <DialogDescription>
+              Update the blog post content and metadata
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingPost && (
+            <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+              <div className="space-y-2">
+                <Label htmlFor="edit-title">Title</Label>
+                <Input
+                  id="edit-title"
+                  value={editingPost.title}
+                  onChange={(e) => setEditingPost({ ...editingPost, title: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-excerpt">Excerpt</Label>
+                <Textarea
+                  id="edit-excerpt"
+                  value={editingPost.excerpt}
+                  onChange={(e) => setEditingPost({ ...editingPost, excerpt: e.target.value })}
+                  rows={3}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-meta-title">SEO Title</Label>
+                <Input
+                  id="edit-meta-title"
+                  value={editingPost.meta_title || ""}
+                  onChange={(e) => setEditingPost({ ...editingPost, meta_title: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-meta-description">SEO Description</Label>
+                <Textarea
+                  id="edit-meta-description"
+                  value={editingPost.meta_description || ""}
+                  onChange={(e) => setEditingPost({ ...editingPost, meta_description: e.target.value })}
+                  rows={2}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-content">Content</Label>
+                <Textarea
+                  id="edit-content"
+                  value={editingPost.content}
+                  onChange={(e) => setEditingPost({ ...editingPost, content: e.target.value })}
+                  rows={15}
+                  className="font-mono text-sm"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEdit}>
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>
