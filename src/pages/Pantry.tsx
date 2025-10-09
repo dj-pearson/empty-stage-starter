@@ -247,7 +247,7 @@ export default function Pantry() {
           {/* Food Grid */}
           {filteredFoods.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-muted-foreground mb-4">
+              <p className="text-muted-foreground mb-4 px-4">
                 {searchQuery || categoryFilter !== "all"
                   ? "No foods match your filters"
                   : "No foods yet. Start by adding some!"}
@@ -258,7 +258,7 @@ export default function Pantry() {
               </Button>
             </div>
           ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredFoods.map(food => {
                 const activeKid = kids.find(k => k.id === activeKidId);
                 return (

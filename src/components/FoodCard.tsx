@@ -36,17 +36,17 @@ export function FoodCard({ food, onEdit, onDelete, kidAllergens }: FoodCardProps
       hasAllergen && "border-2 border-destructive"
     )}>
       <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-lg truncate">{food.name}</h3>
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <div className="flex items-start gap-2 flex-wrap">
+            <h3 className="font-semibold text-lg break-words">{food.name}</h3>
             {(food.quantity ?? 0) > 0 && (
-              <Badge variant="secondary" className="gap-1">
+              <Badge variant="secondary" className="gap-1 shrink-0">
                 <Package className="h-3 w-3" />
                 {food.quantity} {food.unit || 'servings'}
               </Badge>
             )}
             {(food.quantity ?? 0) === 0 && (
-              <Badge variant="destructive" className="gap-1">
+              <Badge variant="destructive" className="gap-1 shrink-0">
                 <Package className="h-3 w-3" />
                 Out of stock
               </Badge>
@@ -83,7 +83,7 @@ export function FoodCard({ food, onEdit, onDelete, kidAllergens }: FoodCardProps
             )}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 shrink-0">
           <Button
             size="icon"
             variant="ghost"

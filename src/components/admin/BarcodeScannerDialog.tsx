@@ -3,6 +3,8 @@ import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
 import { Capacitor } from '@capacitor/core';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
@@ -13,7 +15,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Scan, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { Scan, AlertCircle, CheckCircle2, Loader2, Minus, Plus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 
@@ -48,6 +50,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
   const [scannedFood, setScannedFood] = useState<ScannedFood | null>(null);
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState(1);
   const isNative = Capacitor.isNativePlatform();
   const isEmbedded = typeof window !== 'undefined' && window.self !== window.top;
   const webScannerRef = useRef<Html5Qrcode | null>(null);
@@ -103,22 +106,30 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
       // Compute a larger scan region optimized for 1D barcodes
       const container = document.getElementById('web-scanner');
       const containerWidth = Math.min((container?.clientWidth || window.innerWidth) - 24, 640);
-      const qrboxWidth = Math.round(containerWidth * 0.9);
-      const qrboxHeight = Math.max(140, Math.round(qrboxWidth * 0.35)); // short stripe works better for 1D
+      const qrboxWidth = Math.round(containerWidth * 0.95);
+      const qrboxHeight = Math.max(160, Math.round(qrboxWidth * 0.4));
 
       const config: any = {
-        fps: 18,
-        aspectRatio: 1.777, // Widescreen helps autofocus
+        fps: 10,
+        aspectRatio: 1.777,
         qrbox: { width: qrboxWidth, height: qrboxHeight },
-        disableFlip: true,
+        disableFlip: false,
         formatsToSupport: [
           Html5QrcodeSupportedFormats.EAN_13,
           Html5QrcodeSupportedFormats.EAN_8,
           Html5QrcodeSupportedFormats.UPC_A,
           Html5QrcodeSupportedFormats.UPC_E,
           Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
         ],
-        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        experimentalFeatures: { 
+          useBarCodeDetectorIfSupported: true 
+        },
+        videoConstraints: {
+          facingMode: "environment",
+          focusMode: "continuous",
+          advanced: [{ zoom: 2.0 }]
+        }
       };
 
       // Prefer back camera when available (improves iOS reliability)
@@ -210,9 +221,10 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
   };
 
   const lookupBarcode = async (barcode: string) => {
-    setScannedBarcode(barcode); // Store barcode for later use
+    setScannedBarcode(barcode);
     setIsLookingUp(true);
     setError(null);
+    setQuantity(1); // Reset quantity for new scan
 
     try {
       const { data, error } = await supabase.functions.invoke('lookup-barcode', {
@@ -225,6 +237,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
         setScannedFood(data.food);
         
         if (data.food.in_pantry) {
+          setQuantity((data.food.existing_quantity || 0) + 1);
           toast({
             title: "Already in your pantry!",
             description: `${data.food.name} - Current stock: ${data.food.existing_quantity} ${data.food.existing_unit}`,
@@ -270,31 +283,51 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
         
         if (!householdId) throw new Error("No household found");
 
-        // Add to user's personal foods
-        const foodData = {
-          user_id: user.id,
-          household_id: householdId,
-          name: scannedFood.name,
-          category: mapToAllowedCategory(scannedFood.category, scannedFood.name),
-          aisle: scannedFood.category,
-          allergens: scannedFood.allergens || [],
-          is_safe: false,
-          is_try_bite: false,
-          quantity: scannedFood.in_pantry ? (scannedFood.existing_quantity || 0) + 1 : 1,
-          unit: scannedFood.in_pantry ? (scannedFood.existing_unit || 'packages') : 'packages',
-          package_quantity: scannedFood.package_quantity,
-          servings_per_container: scannedFood.servings_per_container,
-          barcode: scannedBarcode || undefined,
-        };
-        const { error } = await supabase.from('foods').insert(foodData);
-        if (error) throw error;
+        // Add to user's personal foods or update existing quantity
+        if (scannedFood.in_pantry) {
+          // Update existing food quantity
+          const { data: existingFood, error: fetchError } = await supabase
+            .from('foods')
+            .select('id, quantity')
+            .eq('household_id', householdId)
+            .eq('barcode', scannedBarcode)
+            .single();
+          
+          if (fetchError) throw fetchError;
+          
+          const { error: updateError } = await supabase
+            .from('foods')
+            .update({ quantity: quantity })
+            .eq('id', existingFood.id);
+          
+          if (updateError) throw updateError;
+        } else {
+          // Insert new food
+          const foodData = {
+            user_id: user.id,
+            household_id: householdId,
+            name: scannedFood.name,
+            category: mapToAllowedCategory(scannedFood.category, scannedFood.name),
+            aisle: scannedFood.category,
+            allergens: scannedFood.allergens || [],
+            is_safe: false,
+            is_try_bite: false,
+            quantity: quantity,
+            unit: 'packages',
+            package_quantity: scannedFood.package_quantity,
+            servings_per_container: scannedFood.servings_per_container,
+            barcode: scannedBarcode || undefined,
+          };
+          const { error } = await supabase.from('foods').insert(foodData);
+          if (error) throw error;
+        }
 
         toast({
           title: "Food Added",
           description: `${scannedFood.name} has been added to your pantry.`,
         });
 
-        onFoodAdded?.(foodData);
+        onFoodAdded?.();
       } else {
         // Add to admin nutrition table
         const { error } = await supabase
@@ -368,6 +401,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
     setError(null);
     setIsScanning(false);
     setIsLookingUp(false);
+    setQuantity(1);
   };
 
   return (
@@ -450,21 +484,21 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
 
                 <div className="border rounded-lg p-4 space-y-3">
                   <div>
-                    <h3 className="font-semibold text-lg">{scannedFood.name}</h3>
+                    <h3 className="font-semibold text-lg break-words">{scannedFood.name}</h3>
                     <Badge variant="outline" className="mt-1">{scannedFood.category}</Badge>
                   </div>
 
                   {scannedFood.serving_size && (
                     <div className="text-sm">
                       <span className="text-muted-foreground">Serving: </span>
-                      {scannedFood.serving_size}
+                      <span className="break-words">{scannedFood.serving_size}</span>
                     </div>
                   )}
 
                   {scannedFood.package_quantity && (
                     <div className="text-sm">
                       <span className="text-muted-foreground">Package: </span>
-                      {scannedFood.package_quantity}
+                      <span className="break-words">{scannedFood.package_quantity}</span>
                       {scannedFood.servings_per_container && (
                         <span className="ml-2">({scannedFood.servings_per_container} servings)</span>
                       )}
@@ -473,20 +507,69 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
 
                   <div className="grid grid-cols-4 gap-2 text-sm">
                     <div>
-                      <div className="text-muted-foreground">Calories</div>
+                      <div className="text-muted-foreground text-xs">Calories</div>
                       <div className="font-medium">{scannedFood.calories || "-"}</div>
                     </div>
                     <div>
-                      <div className="text-muted-foreground">Protein</div>
+                      <div className="text-muted-foreground text-xs">Protein</div>
                       <div className="font-medium">{scannedFood.protein_g || 0}g</div>
                     </div>
                     <div>
-                      <div className="text-muted-foreground">Carbs</div>
+                      <div className="text-muted-foreground text-xs">Carbs</div>
                       <div className="font-medium">{scannedFood.carbs_g || 0}g</div>
                     </div>
                     <div>
-                      <div className="text-muted-foreground">Fat</div>
+                      <div className="text-muted-foreground text-xs">Fat</div>
                       <div className="font-medium">{scannedFood.fat_g || 0}g</div>
+                    </div>
+                  </div>
+
+                  {/* Quantity Selector */}
+                  <div className="space-y-2 pt-2 border-t">
+                    <Label htmlFor="quantity" className="text-sm font-medium">
+                      Quantity {scannedFood.in_pantry && "(will update existing)"}
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                        className="h-10 w-10"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </Button>
+                      <Input
+                        id="quantity"
+                        type="number"
+                        min="1"
+                        value={quantity}
+                        onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="text-center h-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setQuantity(quantity + 1)}
+                        className="h-10 w-10"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      {[1, 2, 3, 5, 10].map((num) => (
+                        <Button
+                          key={num}
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setQuantity(num)}
+                          className="text-xs"
+                        >
+                          {num}
+                        </Button>
+                      ))}
                     </div>
                   </div>
 
