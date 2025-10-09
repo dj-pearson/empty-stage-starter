@@ -24,11 +24,11 @@ export function SEOManager() {
   const [sitemapXml, setSitemapXml] = useState("");
   const [llmsTxt, setLlmsTxt] = useState("");
   const [metaTags, setMetaTags] = useState({
-    title: "Kid Meal Planner - Picky Eater Meal Planning Made Easy",
+    title: "EatPal - Picky Eater Meal Planning Made Easy",
     description:
       "Plan weekly meals for picky eaters with safe foods and daily try bites. Auto-generate grocery lists and track meal results.",
     keywords: "meal planning, picky eaters, kid meals, grocery list, meal tracker",
-    og_title: "Kid Meal Planner - Picky Eater Solutions",
+    og_title: "EatPal - Picky Eater Solutions",
     og_description:
       "Simple meal planning app for parents of picky eaters with weekly rotation and grocery list generation",
     og_image: "https://lovable.dev/opengraph-image-p98pqg.png",

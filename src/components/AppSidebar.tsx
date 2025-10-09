@@ -85,12 +85,16 @@ export function AppSidebar() {
       <SidebarHeader className="border-b border-border px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Utensils className="h-6 w-6 text-primary shrink-0" />
-            {!isCollapsed && (
-              <span className="text-xl font-heading font-bold text-primary">
-                EatPal
-              </span>
-            )}
+            <img 
+              src="/Logo-Green.png" 
+              alt="EatPal" 
+              className="h-8 block dark:hidden"
+            />
+            <img 
+              src="/Logo-White.png" 
+              alt="EatPal" 
+              className="h-8 hidden dark:block"
+            />
           </div>
         </div>
       </SidebarHeader>

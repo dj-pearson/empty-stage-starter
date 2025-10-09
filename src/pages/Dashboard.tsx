@@ -172,10 +172,16 @@ const Dashboard = () => {
         <nav className="fixed top-0 left-0 right-0 bg-card border-b border-border z-50">
           <div className="flex justify-between items-center h-14 px-4">
             <div className="flex items-center gap-2">
-              <Utensils className="h-5 w-5 text-primary" />
-              <span className="text-lg font-heading font-bold text-primary">
-                EatPal
-              </span>
+              <img 
+                src="/Logo-Green.png" 
+                alt="EatPal" 
+                className="h-7 block dark:hidden"
+              />
+              <img 
+                src="/Logo-White.png" 
+                alt="EatPal" 
+                className="h-7 hidden dark:block"
+              />
             </div>
 
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>

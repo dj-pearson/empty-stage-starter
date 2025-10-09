@@ -140,8 +140,16 @@ const Auth = () => {
         <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 mb-4">
-            <Utensils className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold">FeedWise</span>
+            <img 
+              src="/Logo-Green.png" 
+              alt="EatPal" 
+              className="h-10 block dark:hidden"
+            />
+            <img 
+              src="/Logo-White.png" 
+              alt="EatPal" 
+              className="h-10 hidden dark:block"
+            />
           </Link>
           <p className="text-muted-foreground">Start your journey to easier meal planning</p>
         </div>

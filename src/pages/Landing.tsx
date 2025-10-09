@@ -26,8 +26,16 @@ const Landing = () => {
       <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <Utensils className="h-7 w-7 text-primary" />
-            <span className="text-2xl font-heading font-bold text-primary">EatPal</span>
+            <img 
+              src="/Logo-Green.png" 
+              alt="EatPal" 
+              className="h-8 block dark:hidden"
+            />
+            <img 
+              src="/Logo-White.png" 
+              alt="EatPal" 
+              className="h-8 hidden dark:block"
+            />
           </div>
           
           {/* Desktop Navigation */}
@@ -53,8 +61,16 @@ const Landing = () => {
             <SheetContent side="right" className="w-[300px] sm:w-[400px]">
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2">
-                  <Utensils className="h-6 w-6 text-primary" />
-                  <span className="font-heading font-bold text-primary">EatPal</span>
+                  <img 
+                    src="/Logo-Green.png" 
+                    alt="EatPal" 
+                    className="h-7 block dark:hidden"
+                  />
+                  <img 
+                    src="/Logo-White.png" 
+                    alt="EatPal" 
+                    className="h-7 hidden dark:block"
+                  />
                 </SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-4 mt-8">
@@ -223,8 +239,16 @@ const Landing = () => {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <Utensils className="h-7 w-7 text-primary" />
-                <span className="text-2xl font-heading font-bold text-primary">EatPal</span>
+                <img 
+                  src="/Logo-Green.png" 
+                  alt="EatPal" 
+                  className="h-8 block dark:hidden"
+                />
+                <img 
+                  src="/Logo-White.png" 
+                  alt="EatPal" 
+                  className="h-8 hidden dark:block"
+                />
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 Making meal planning simple and stress-free for families with picky eaters.

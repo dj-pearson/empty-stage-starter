@@ -72,8 +72,16 @@ export function Navigation() {
           <div className="flex justify-between items-center h-16 px-4">
             {/* Logo */}
             <div className="flex items-center gap-2">
-              <Utensils className="h-6 w-6 text-primary" />
-              <span className="text-xl font-heading font-bold text-primary">EatPal</span>
+              <img 
+                src="/Logo-Green.png" 
+                alt="EatPal" 
+                className="h-8 block dark:hidden"
+              />
+              <img 
+                src="/Logo-White.png" 
+                alt="EatPal" 
+                className="h-8 hidden dark:block"
+              />
             </div>
 
             {/* Center Navigation */}
@@ -123,8 +131,16 @@ export function Navigation() {
         <div className="flex justify-between items-center h-14 px-4">
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <Utensils className="h-5 w-5 text-primary" />
-            <span className="text-lg font-heading font-bold text-primary">EatPal</span>
+            <img 
+              src="/Logo-Green.png" 
+              alt="EatPal" 
+              className="h-7 block dark:hidden"
+            />
+            <img 
+              src="/Logo-White.png" 
+              alt="EatPal" 
+              className="h-7 hidden dark:block"
+            />
           </div>
 
           {/* Mobile Menu Button */}
@@ -137,8 +153,16 @@ export function Navigation() {
             <SheetContent side="right" className="w-[280px]">
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2">
-                  <Utensils className="h-5 w-5 text-primary" />
-                  <span className="font-heading font-bold text-primary">Menu</span>
+                  <img 
+                    src="/Logo-Green.png" 
+                    alt="EatPal" 
+                    className="h-6 block dark:hidden"
+                  />
+                  <img 
+                    src="/Logo-White.png" 
+                    alt="EatPal" 
+                    className="h-6 hidden dark:block"
+                  />
                 </SheetTitle>
               </SheetHeader>
               <div className="flex flex-col gap-1 mt-6">

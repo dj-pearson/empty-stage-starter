@@ -91,7 +91,7 @@ export default function Home() {
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-full mb-4">
             <Sparkles className="h-4 w-4" />
-            <span className="text-sm font-medium">Kid Meal Planner</span>
+            <span className="text-sm font-medium">EatPal Meal Planner</span>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             Welcome, {parentName}!
