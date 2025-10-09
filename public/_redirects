@@ -6,28 +6,6 @@ https://www.tryeatpal.com/* https://tryeatpal.com/:splat 301!
 http://tryeatpal.com/* https://tryeatpal.com/:splat 301!
 http://www.tryeatpal.com/* https://tryeatpal.com/:splat 301!
 
-# Explicitly serve static files (prevent React Router from catching them)
-/sitemap.xml /sitemap.xml 200
-/robots.txt /robots.txt 200
-/llms.txt /llms.txt 200
-/manifest.json /manifest.json 200
-/favicon.ico /favicon.ico 200
-/apple-touch-icon.png /apple-touch-icon.png 200
-/site.webmanifest /site.webmanifest 200
-/*.png /:splat.png 200
-/*.jpg /:splat.jpg 200
-/*.jpeg /:splat.jpeg 200
-/*.svg /:splat.svg 200
-/*.webp /:splat.webp 200
-/*.gif /:splat.gif 200
-/*.ico /:splat.ico 200
-/*.woff2 /:splat.woff2 200
-/*.woff /:splat.woff 200
-/*.ttf /:splat.ttf 200
-/*.xml /:splat.xml 200
-/*.txt /:splat.txt 200
-/.well-known/* /.well-known/:splat 200
-
 # Common authentication redirects
 /signup /auth?tab=signup 302
 /signin /auth?tab=signin 302
@@ -43,9 +21,6 @@ http://www.tryeatpal.com/* https://tryeatpal.com/:splat 301!
 /facebook https://facebook.com/eatpal 302
 /twitter https://twitter.com/eatpal 302
 
-# Legacy URL patterns (if any)
-/dashboard /  302
-
 # Admin panel redirect if not authenticated
 /admin /auth?redirect=/admin 302
 
@@ -56,6 +31,7 @@ http://www.tryeatpal.com/* https://tryeatpal.com/:splat 301!
 /recipes/ /recipes 301
 /pantry/ /pantry 301
 /grocery/ /grocery 301
+/dashboard/ /dashboard 301
 
 # SPA fallback - MUST BE LAST
 # This ensures all unmatched routes go to index.html for client-side routing
