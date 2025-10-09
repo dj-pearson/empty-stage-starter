@@ -57,20 +57,24 @@ const Dashboard = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check authentication
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Set up listener first
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (!session) {
         navigate("/auth");
       } else {
         setUser(session.user);
         setLoading(false);
-        checkAdminStatus(session.user.id);
+        // Defer admin check to avoid deadlock
+        setTimeout(() => {
+          checkAdminStatus(session.user.id);
+        }, 0);
       }
     });
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    // Then check existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
         navigate("/auth");
       } else {
