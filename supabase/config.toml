@@ -1,7 +1,7 @@
 project_id = "tbuszxkevkpjcjapbrir"
 
 [functions.suggest-foods]
-verify_jwt = false
+verify_jwt = true
 
 [functions.suggest-recipe]
 verify_jwt = true

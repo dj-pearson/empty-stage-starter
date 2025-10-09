@@ -9,13 +9,20 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
 
 serve(async (req) => {
+  // Validate webhook secret is configured
+  const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+  if (!webhookSecret) {
+    console.error("CRITICAL: STRIPE_WEBHOOK_SECRET not configured");
+    return new Response("Service configuration error", { status: 500 });
+  }
+
   const signature = req.headers.get("stripe-signature");
 
   if (!signature) {
-    return new Response("No signature", { status: 400 });
+    console.warn("Webhook attempt without signature from IP:", req.headers.get("x-forwarded-for"));
+    return new Response("Forbidden", { status: 403 });
   }
 
   try {
