@@ -10,12 +10,12 @@ const Landing = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const features = [
-    { icon: Utensils, title: "Smart Food Library", description: "Track safe foods, try bites, and allergens for each child" },
-    { icon: Calendar, title: "Weekly Meal Plans", description: "Auto-generate 7-day meal plans with daily try bites" },
-    { icon: Brain, title: "AI Suggestions", description: "Get personalized food recommendations based on eating patterns" },
-    { icon: ShoppingCart, title: "Auto Grocery Lists", description: "Generate shopping lists from your meal plans automatically" },
-    { icon: Users, title: "Multi-Child Support", description: "Manage meal plans for multiple children in one place" },
-    { icon: TrendingUp, title: "Progress Tracking", description: "Track which foods were eaten, tasted, or refused" },
+    { icon: Utensils, title: "Smart Food Library", description: "Build a safe foods library for your picky eater. Track allergens, sensory preferences, and nutrition for each child's meals." },
+    { icon: Calendar, title: "Weekly Kids Meal Plans", description: "Auto-generate 7-day personalized meal plans for picky eaters with balanced nutrition and daily try bites to expand food acceptance." },
+    { icon: Brain, title: "AI-Powered Food Suggestions", description: "Get intelligent food recommendations based on your child's eating patterns, preferences, and nutritional needs for selective eaters." },
+    { icon: ShoppingCart, title: "Auto Grocery Lists", description: "Generate organized shopping lists from your kids meal plans automatically. Track inventory and never run out of safe foods." },
+    { icon: Users, title: "Multi-Child Meal Planning", description: "Manage personalized meal plans for multiple picky eaters in one place. Perfect for families with different food preferences." },
+    { icon: TrendingUp, title: "Progress & Nutrition Tracking", description: "Monitor food acceptance, track nutrition intake, and celebrate wins as your picky eater tries new foods." },
   ];
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
@@ -116,13 +116,13 @@ const Landing = () => {
       {/* Hero Section */}
       <section className="py-20 px-4 bg-gradient-to-b from-background to-secondary/10">
         <div className="container mx-auto text-center max-w-5xl">
-          <Badge className="mb-6 bg-accent/10 text-accent border-accent/20 px-4 py-1.5">Powered by AI</Badge>
+          <Badge className="mb-6 bg-accent/10 text-accent border-accent/20 px-4 py-1.5">AI-Powered Kids Meal Planning</Badge>
           <h1 className="text-5xl md:text-7xl font-heading font-bold mb-6 text-primary leading-tight">
-            Meal Planning for<br />Picky Eaters Made Easy
+            Kids Meal Planning for<br />Picky Eaters Made Easy
           </h1>
           <p className="text-xl md:text-2xl text-muted-foreground mb-10 max-w-3xl mx-auto leading-relaxed">
-            Plan weekly meals with safe foods, introduce new foods with daily try bites, and auto-generate your grocery list. 
-            Perfect for parents of selective eaters.
+            The ultimate meal planning app for picky eaters. Create personalized weekly kids meal plans with safe foods, introduce new foods with daily try bites, track nutrition, and auto-generate grocery lists.
+            Perfect for parents managing selective eating, toddler picky eating, and ARFID.
           </p>
           <div className="flex gap-4 justify-center flex-wrap">
             <Link to="/auth">
@@ -157,8 +157,8 @@ const Landing = () => {
       <section id="features" className="py-24 px-4">
         <div className="container mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-primary">Everything You Need</h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">Powerful features designed to make meal planning effortless for families with picky eaters</p>
+            <h2 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-primary">Complete Kids Meal Planning Solution</h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">Powerful features designed to make meal planning effortless for families with picky eaters, selective eating, and children's nutrition challenges</p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature) => (
@@ -218,12 +218,108 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* SEO Content Section - Rich text for search engines */}
+      <section className="py-24 px-4 bg-background">
+        <div className="container mx-auto max-w-5xl">
+          <div className="prose prose-lg max-w-none">
+            <h2 className="text-3xl font-heading font-bold mb-6 text-primary">
+              Why EatPal is the Best Meal Planning App for Picky Eaters
+            </h2>
+            <div className="grid md:grid-cols-2 gap-8 mb-12">
+              <div>
+                <h3 className="text-xl font-semibold mb-3 text-primary">Designed for Selective Eating</h3>
+                <p className="text-muted-foreground leading-relaxed mb-4">
+                  EatPal understands the unique challenges of picky eating in children. Whether you're managing toddler picky eating,
+                  preschooler food refusal, or ARFID (Avoidant/Restrictive Food Intake Disorder), our platform provides specialized
+                  tools for kids meal planning that respect your child's safe foods while gently expanding their food repertoire.
+                </p>
+                <p className="text-muted-foreground leading-relaxed">
+                  Unlike generic meal planning apps, EatPal is built specifically for parents of picky eaters. Our AI learns your
+                  child's preferences, tracks safe foods, monitors nutrition, and suggests new foods based on evidence-based feeding
+                  therapy principles used by pediatric feeding specialists.
+                </p>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold mb-3 text-primary">Science-Backed Try Bite Methodology</h3>
+                <p className="text-muted-foreground leading-relaxed mb-4">
+                  Our daily try bite feature is based on systematic desensitization and food chaining techniques used by occupational
+                  therapists and feeding specialists. Each day, EatPal suggests one new food for your picky eater to try - no pressure,
+                  just exposure. You can track whether your child ate it, tasted it, or refused it, helping our AI learn and improve
+                  suggestions over time.
+                </p>
+                <p className="text-muted-foreground leading-relaxed">
+                  This gentle approach to introducing new foods has helped thousands of families expand their picky eater's diet
+                  without mealtime battles, tears, or force-feeding. Parents report that their children become more adventurous
+                  eaters and try new foods more willingly when using EatPal's try bite system.
+                </p>
+              </div>
+            </div>
+
+            <h3 className="text-2xl font-heading font-bold mb-6 text-primary">
+              Perfect for Parents Managing:
+            </h3>
+            <div className="grid md:grid-cols-3 gap-6 mb-12">
+              <Card className="p-6">
+                <h4 className="font-semibold text-lg mb-2 text-primary">Toddler Picky Eating</h4>
+                <p className="text-sm text-muted-foreground">
+                  Plan age-appropriate meals for toddlers with limited food preferences. Track safe foods, manage sensory issues,
+                  and introduce new textures gradually.
+                </p>
+              </Card>
+              <Card className="p-6">
+                <h4 className="font-semibold text-lg mb-2 text-primary">ARFID & Selective Eating</h4>
+                <p className="text-sm text-muted-foreground">
+                  Support children with ARFID, extreme picky eating, or sensory processing disorders. Respect safe food lists
+                  while working toward food variety.
+                </p>
+              </Card>
+              <Card className="p-6">
+                <h4 className="font-semibold text-lg mb-2 text-primary">Multiple Picky Eaters</h4>
+                <p className="text-sm text-muted-foreground">
+                  Coordinate meals for siblings with different preferences. Create individual meal plans while streamlining
+                  grocery shopping and meal prep.
+                </p>
+              </Card>
+            </div>
+
+            <h3 className="text-2xl font-heading font-bold mb-6 text-primary">
+              Comprehensive Nutrition Tracking for Limited Diets
+            </h3>
+            <p className="text-muted-foreground leading-relaxed mb-6">
+              One of the biggest concerns for parents of picky eaters is nutrition. When your child only eats 5-10 foods,
+              how do you ensure they're getting adequate nutrition? EatPal's nutrition tracking helps you monitor your picky
+              eater's intake of essential vitamins, minerals, protein, and calories. Our system alerts you to potential
+              nutritional gaps and suggests safe foods that could fill those gaps based on your child's eating history.
+            </p>
+            <p className="text-muted-foreground leading-relaxed mb-12">
+              Many parents of picky eaters work with pediatricians, dietitians, or feeding therapists. EatPal makes it easy
+              to export meal plans, food logs, and nutrition reports to share with your child's healthcare team, ensuring
+              coordinated care for your selective eater.
+            </p>
+
+            <h3 className="text-2xl font-heading font-bold mb-6 text-primary">
+              Trusted by Parents, Loved by Kids
+            </h3>
+            <p className="text-muted-foreground leading-relaxed mb-6">
+              EatPal has helped over 10,000 families transform mealtime from stressful to successful. Our users include parents
+              managing typical picky eating, toddler food refusal, sensory feeding issues, autism spectrum food sensitivities,
+              and diagnosed feeding disorders like ARFID. Whether your child is a mildly picky eater or has extreme food selectivity,
+              EatPal provides the tools you need for successful kids meal planning.
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              Join the EatPal community today and discover how easy kids meal planning for picky eaters can be. Start your
+              free trial and create your first personalized meal plan in minutes. No credit card required.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* CTA Section */}
       <section className="py-24 px-4 bg-gradient-to-br from-primary to-secondary">
         <div className="container mx-auto text-center max-w-3xl">
           <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-white">Ready to Make Mealtime Easier?</h2>
           <p className="text-xl text-white/90 mb-10 leading-relaxed">
-            Join parents who are transforming how they plan meals for picky eaters. Start your free trial today!
+            Join thousands of parents who are transforming how they plan meals for picky eaters. Start your free trial today!
           </p>
           <Link to="/auth">
             <Button size="lg" className="gap-2 bg-white text-primary hover:bg-white/90 text-lg px-8 py-6 shadow-xl">

@@ -25,6 +25,7 @@ interface BlogPost {
   content: string;
   meta_title?: string;
   meta_description?: string;
+  featured_image?: string;
   ai_generated: boolean;
   ai_prompt?: string;
   status: string;
@@ -259,6 +260,7 @@ export function BlogCMSManager() {
           excerpt: editingPost.excerpt,
           meta_title: editingPost.meta_title,
           meta_description: editingPost.meta_description,
+          featured_image: editingPost.featured_image,
         })
         .eq("id", editingPost.id);
 
@@ -633,6 +635,20 @@ export function BlogCMSManager() {
                   onChange={(e) => setEditingPost({ ...editingPost, meta_description: e.target.value })}
                   rows={2}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-featured-image">Featured Image URL</Label>
+                <Input
+                  id="edit-featured-image"
+                  value={editingPost.featured_image || ""}
+                  onChange={(e) => setEditingPost({ ...editingPost, featured_image: e.target.value })}
+                  placeholder="/blog-images/my-post-image.png or https://..."
+                />
+                <p className="text-xs text-muted-foreground">
+                  Used for social media previews. Leave empty to use Cover.png as fallback.
+                  Optimal size: 1200x630px
+                </p>
               </div>
 
               <div className="space-y-2">
