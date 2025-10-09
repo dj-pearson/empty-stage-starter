@@ -82,10 +82,20 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
   }
 
   const checkPermissions = async () => {
-    const status = await BarcodeScanner.checkPermission({ force: true });
+    // First check existing permission status without forcing
+    let status = await BarcodeScanner.checkPermission({ force: false });
     
     if (status.granted) {
       return true;
+    }
+    
+    // If permission is not granted and not denied, request it
+    if (!status.denied && !status.granted) {
+      status = await BarcodeScanner.checkPermission({ force: true });
+      
+      if (status.granted) {
+        return true;
+      }
     }
     
     if (status.denied) {
