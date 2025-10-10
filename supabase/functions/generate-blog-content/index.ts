@@ -240,10 +240,14 @@ Format your response as JSON with EXACT keys only:
     // If autoPublish is true, create the blog post and publish it
     if (autoPublish) {
       try {
+        console.log('Auto-publishing blog post...');
+        
         // Generate slug from title
         const slug = (blogContent.title || topic).toLowerCase()
           .replace(/[^a-z0-9\s-]/g, '')
           .replace(/\s+/g, '-');
+
+        console.log('Generated slug:', slug);
 
         // Create the blog post
         const { data: postData, error: postError } = await supabase
@@ -267,7 +271,17 @@ Format your response as JSON with EXACT keys only:
 
         if (postError) {
           console.error('Error creating blog post:', postError);
-        } else if (postData) {
+          throw postError;
+        }
+        
+        if (!postData) {
+          console.error('No post data returned');
+          throw new Error('Failed to create blog post');
+        }
+        
+        console.log('Blog post created successfully:', postData.id);
+        
+        if (postData) {
           const blogUrl = `https://tryeatpal.com/blog/${slug}`;
 
           // Generate social media content about this blog using AI
