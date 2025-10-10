@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { Camera, Upload, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import {
   Dialog,
   DialogContent,
@@ -38,54 +39,82 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [showCamera, setShowCamera] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const isEmbedded = typeof window !== 'undefined' && window.self !== window.top;
 
   const startCamera = async () => {
     try {
-      console.log('Requesting camera access...');
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: 'environment',
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        }
-      });
-      
-      console.log('Camera stream obtained:', mediaStream.active);
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        console.log('Stream assigned to video element');
-        
-        // Wait for video metadata to load
-        videoRef.current.onloadedmetadata = async () => {
-          console.log('Video metadata loaded, attempting to play...');
-          try {
-            await videoRef.current?.play();
-            console.log('Video playing successfully');
-          } catch (playError) {
-            console.error('Error playing video:', playError);
-            toast({
-              title: "Video Play Error",
-              description: "Unable to start video playback",
-              variant: "destructive",
-            });
-          }
-        };
-      }
-      
-      setStream(mediaStream);
+      console.log('Starting Html5Qrcode camera...');
+      setCapturedImage(null);
+      setIdentifiedFood(null);
       setShowCamera(true);
+
+      // Allow DOM to render the container
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Clean up any previous instance
+      if (scannerRef.current) {
+        try { await scannerRef.current.stop(); await scannerRef.current.clear(); } catch {}
+        scannerRef.current = null;
+      }
+
+      const containerId = 'food-camera';
+      const scanner = new Html5Qrcode(containerId);
+      scannerRef.current = scanner;
+
+      const cameras = await Html5Qrcode.getCameras();
+      if (!cameras || cameras.length === 0) {
+        throw new Error('No cameras found');
+      }
+      const back = cameras.find(c => /back|rear|environment/i.test(c.label)) || cameras[cameras.length - 1];
+
+      const config: any = {
+        fps: 10,
+        aspectRatio: 1.777,
+        qrbox: undefined,
+        disableFlip: false,
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        videoConstraints: {
+          deviceId: back.id,
+          facingMode: 'environment',
+          focusMode: 'continuous',
+          advanced: [{ zoom: 1.5 }],
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+      };
+
+      await scanner.start(
+        back.id,
+        config,
+        () => { /* no-op decode callback */ },
+        () => { /* ignore decode errors */ }
+      );
+
+      console.log('Html5Qrcode camera started on device:', back.label || back.id);
     } catch (error) {
-      console.error('Error accessing camera:', error);
+      console.error('Error starting camera with Html5Qrcode:', error);
       toast({
         title: "Camera Error",
-        description: "Unable to access camera. Please check permissions.",
+        description: (error instanceof Error ? error.message : 'Unable to access camera') + (isEmbedded ? ' (embedded preview may restrict camera; open in a new tab if issues persist)' : ''),
         variant: "destructive",
       });
+      setShowCamera(false);
     }
   };
 
-  const stopCamera = () => {
+  const stopCamera = async () => {
+    try {
+      if (scannerRef.current) {
+        await scannerRef.current.stop();
+        await scannerRef.current.clear();
+        scannerRef.current = null;
+      }
+    } catch (e) {
+      console.error('Error stopping camera:', e);
+    }
+
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
       setStream(null);
@@ -93,15 +122,21 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
     setShowCamera(false);
   };
 
-  const capturePhoto = () => {
-    if (!videoRef.current) {
-      console.error('Video ref not available');
+  const capturePhoto = async () => {
+    const videoEl = document.querySelector('#food-camera video') as HTMLVideoElement | null;
+    if (!videoEl) {
+      console.error('No video element found in scanner container');
+      toast({
+        title: "Camera Not Ready",
+        description: "Please wait for the camera to fully load",
+        variant: "destructive",
+      });
       return;
     }
 
-    console.log('Video dimensions:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight);
+    console.log('Video dimensions:', videoEl.videoWidth, 'x', videoEl.videoHeight);
 
-    if (videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
+    if (videoEl.videoWidth === 0 || videoEl.videoHeight === 0) {
       toast({
         title: "Camera Not Ready",
         description: "Please wait for the camera to fully load",
@@ -111,15 +146,15 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
     }
 
     const canvas = document.createElement('canvas');
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
+    canvas.width = videoEl.videoWidth;
+    canvas.height = videoEl.videoHeight;
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0);
-      const imageData = canvas.toDataURL('image/jpeg', 0.8);
+      ctx.drawImage(videoEl, 0, 0);
+      const imageData = canvas.toDataURL('image/jpeg', 0.85);
       console.log('Image captured, data URL length:', imageData.length);
       setCapturedImage(imageData);
-      stopCamera();
+      await stopCamera();
       analyzeImage(imageData);
     }
   };
@@ -234,15 +269,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
           {showCamera && (
             <div className="space-y-4">
               <div className="relative rounded-lg overflow-hidden bg-black">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  // @ts-ignore - iOS requires this attribute
-                  webkit-playsinline="true"
-                  className="w-full"
-                />
+                <div id="food-camera" className="w-full aspect-video" />
               </div>
               <div className="flex gap-2">
                 <Button onClick={capturePhoto} className="flex-1" size="lg">
