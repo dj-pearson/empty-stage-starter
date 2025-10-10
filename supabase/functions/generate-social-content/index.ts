@@ -50,9 +50,26 @@ serve(async (req) => {
       );
     }
 
-    const systemPrompt = `You are a viral social media content creator specializing in parenting and child nutrition. Create engaging, shareable content that drives website visits and conversions. Focus on emotional hooks, practical value, and relatable scenarios that parents face with picky eaters.`;
+    // Add randomization seed to encourage variety
+    const randomSeed = Date.now() + Math.random();
+    const perspectives = ['personal story', 'shocking statistic', 'myth-busting', 'expert tip', 'relatable humor', 'emotional confession', 'unexpected twist'];
+    const tones = ['empathetic and warm', 'bold and confident', 'humorous and light', 'honest and raw', 'inspiring and hopeful'];
+    const selectedPerspective = perspectives[Math.floor(randomSeed % perspectives.length)];
+    const selectedTone = tones[Math.floor((randomSeed * 3) % tones.length)];
 
-    let userPrompt = `Create viral social media posts about: ${topicToUse}`;
+    const systemPrompt = `You are a viral social media content creator specializing in parenting and child nutrition. Create HIGHLY UNIQUE and DIVERSE content that stands out from typical parenting advice. Each post should feel fresh, original, and distinctly different from previous content. 
+
+CRITICAL: Avoid clichés, overused phrases, and generic parenting tropes. Think outside the box and approach topics from unexpected angles. Vary your hook styles dramatically - use questions, bold statements, surprising statistics, personal confessions, or controversial takes.`;
+
+    let userPrompt = `Create a completely unique and original social media post about: ${topicToUse}
+
+UNIQUENESS REQUIREMENTS (CRITICAL):
+- Approach: Use a ${selectedPerspective} angle
+- Tone: Write in a ${selectedTone} voice
+- Opening Hook: Create a UNIQUE hook that hasn't been used before - vary between questions, bold statements, contradictions, or surprising revelations
+- Avoid: Generic phrases like "Raise your hand if...", "I was THAT mom", "Real talk", "Let's be honest", "You know what" - be more creative
+- Variety: If this is about food, focus on a SPECIFIC food item, scenario, or unique angle - not generic "picky eater" struggles
+- Randomization seed: ${randomSeed} (use this to generate different variations)`;
     
     if (excerpt) {
       userPrompt += `\n\nBlog excerpt for context: ${excerpt}`;
@@ -65,29 +82,32 @@ ${targetAudience ? `Target audience: ${targetAudience}` : 'Target audience: Pare
 
 Generate engaging social media content with:
 
-1. **Title**: A compelling, attention-grabbing title for the post
+1. **Title**: A compelling, attention-grabbing title that's DIFFERENT from typical parenting content patterns
 2. **Facebook Version**: 
    - 150-250 words of engaging content
-   - Hook with a relatable parent struggle or question
+   - Start with a UNIQUE hook (avoid overused patterns)
+   - Tell a specific story or share a specific scenario (not generic advice)
+   - Include concrete details and specific examples
    - Provide actionable value and tips
    - End with a clear call-to-action to visit the website
-   - Include 3-5 relevant hashtags
-   - Should feel conversational and authentic
+   - Include 3-5 relevant hashtags (mix popular and niche ones)
+   - Should feel authentic and fresh
 
 3. **Twitter Version**: 
    - Maximum 280 characters
-   - Punchy, attention-grabbing opening
-   - Single powerful tip or insight
+   - Punchy, attention-grabbing opening that's DIFFERENT each time
+   - Single powerful tip or insight with specific details
    - Clear call-to-action with link placeholder
    - 2-3 hashtags
    - Must create curiosity to drive clicks
 
 Make the content:
-- Emotionally resonant (empathy with parent struggles)
-- Actionable (practical tips they can use immediately)
-- Shareable (worth passing along to other parents)
-- Conversational (like advice from a friend)
-- Optimized for engagement and virality
+- Emotionally resonant but avoid clichés
+- Actionable with specific, concrete tips (not vague advice)
+- Shareable with a unique perspective worth passing along
+- Conversational but with a distinctive voice
+- Optimized for engagement through originality and surprise
+- VARIED in structure, hook style, and narrative approach
 
 STRICT OUTPUT REQUIREMENTS:
 - Return ONLY valid strict JSON (RFC 8259 compliant)
