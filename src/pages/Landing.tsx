@@ -356,17 +356,21 @@ const Landing = () => {
             <div>
               <h3 className="font-heading font-semibold mb-4 text-primary">Company</h3>
               <ul className="space-y-3 text-sm text-muted-foreground">
-                <li><a href="#" className="hover:text-primary transition-colors">About Us</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Contact</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Privacy Policy</a></li>
+                <li><Link to="/contact" className="hover:text-primary transition-colors">Contact</Link></li>
+                <li><Link to="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link></li>
+                <li><Link to="/terms" className="hover:text-primary transition-colors">Terms of Service</Link></li>
               </ul>
             </div>
             <div>
               <h3 className="font-heading font-semibold mb-4 text-primary">Support</h3>
               <ul className="space-y-3 text-sm text-muted-foreground">
-                <li><a href="#" className="hover:text-primary transition-colors">Help Center</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Terms of Service</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">FAQ</a></li>
+                <li><Link to="/faq" className="hover:text-primary transition-colors">FAQ</Link></li>
+                <li><Link to="/contact" className="hover:text-primary transition-colors">Help Center</Link></li>
+                <li>
+                  <a href="mailto:Support@TryEatPal.com" className="hover:text-primary transition-colors">
+                    Support@TryEatPal.com
+                  </a>
+                </li>
               </ul>
             </div>
           </div>
