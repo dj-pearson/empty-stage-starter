@@ -17,6 +17,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Search,
   FileText,
   Code,
@@ -50,6 +57,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface AuditResult {
   category: string;
@@ -123,6 +131,8 @@ export function SEOManager() {
   const [isAutoHealing, setIsAutoHealing] = useState(false);
   const [competitorResults, setCompetitorResults] = useState<any[]>([]);
   const [isAnalyzingCompetitor, setIsAnalyzingCompetitor] = useState(false);
+  const [activeTab, setActiveTab] = useState("audit");
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     loadSEOSettings();
@@ -1336,30 +1346,100 @@ RESTful API available for integrations. Contact for API access.
       )}
 
       {/* Main Content Tabs */}
-      <Tabs defaultValue="audit" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="audit">
-            <Search className="h-4 w-4 mr-2" />
-            Audit
-          </TabsTrigger>
-          <TabsTrigger value="keywords">
-            <Target className="h-4 w-4 mr-2" />
-            Keywords
-          </TabsTrigger>
-          <TabsTrigger value="competitors">
-            <Trophy className="h-4 w-4 mr-2" />
-            Competitors
-          </TabsTrigger>
-          <TabsTrigger value="pages">
-            <Eye className="h-4 w-4 mr-2" />
-            Pages
-          </TabsTrigger>
-          <TabsTrigger value="meta">Meta Tags</TabsTrigger>
-          <TabsTrigger value="robots">robots.txt</TabsTrigger>
-          <TabsTrigger value="sitemap">sitemap.xml</TabsTrigger>
-          <TabsTrigger value="llms">llms.txt</TabsTrigger>
-          <TabsTrigger value="structured">Structured Data</TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        {/* Desktop Tabs */}
+        {!isMobile && (
+          <TabsList>
+            <TabsTrigger value="audit">
+              <Search className="h-4 w-4 mr-2" />
+              Audit
+            </TabsTrigger>
+            <TabsTrigger value="keywords">
+              <Target className="h-4 w-4 mr-2" />
+              Keywords
+            </TabsTrigger>
+            <TabsTrigger value="competitors">
+              <Trophy className="h-4 w-4 mr-2" />
+              Competitors
+            </TabsTrigger>
+            <TabsTrigger value="pages">
+              <Eye className="h-4 w-4 mr-2" />
+              Pages
+            </TabsTrigger>
+            <TabsTrigger value="meta">Meta Tags</TabsTrigger>
+            <TabsTrigger value="robots">robots.txt</TabsTrigger>
+            <TabsTrigger value="sitemap">sitemap.xml</TabsTrigger>
+            <TabsTrigger value="llms">llms.txt</TabsTrigger>
+            <TabsTrigger value="structured">Structured Data</TabsTrigger>
+          </TabsList>
+        )}
+
+        {/* Mobile Dropdown Selector */}
+        {isMobile && (
+          <div className="w-full">
+            <Select value={activeTab} onValueChange={setActiveTab}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select section" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="audit">
+                  <div className="flex items-center gap-2">
+                    <Search className="h-4 w-4" />
+                    <span>SEO Audit</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="keywords">
+                  <div className="flex items-center gap-2">
+                    <Target className="h-4 w-4" />
+                    <span>Keyword Tracking</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="competitors">
+                  <div className="flex items-center gap-2">
+                    <Trophy className="h-4 w-4" />
+                    <span>Competitor Analysis</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="pages">
+                  <div className="flex items-center gap-2">
+                    <Eye className="h-4 w-4" />
+                    <span>Page Analysis</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="meta">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    <span>Meta Tags</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="robots">
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4" />
+                    <span>robots.txt</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="sitemap">
+                  <div className="flex items-center gap-2">
+                    <Code className="h-4 w-4" />
+                    <span>sitemap.xml</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="llms">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    <span>llms.txt</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="structured">
+                  <div className="flex items-center gap-2">
+                    <LinkIcon className="h-4 w-4" />
+                    <span>Structured Data</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Audit Results Tab */}
         <TabsContent value="audit" className="space-y-4">
