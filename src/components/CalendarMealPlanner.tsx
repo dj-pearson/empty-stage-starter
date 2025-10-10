@@ -4,7 +4,7 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
-  closestCorners,
+  closestCenter,
   PointerSensor,
   useSensor,
   useSensors,
@@ -274,7 +274,7 @@ export function CalendarMealPlanner({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={closestCenter}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
