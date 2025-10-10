@@ -46,9 +46,6 @@ const Landing = () => {
             <Link to="/auth">
               <Button variant="ghost" className="font-medium">Sign In</Button>
             </Link>
-            <Link to="/auth">
-              <Button className="font-semibold shadow-md">Get Started Free</Button>
-            </Link>
           </nav>
 
           {/* Mobile Menu */}
@@ -101,11 +98,6 @@ const Landing = () => {
                       Sign In
                     </Button>
                   </Link>
-                  <Link to="/auth" onClick={closeMobileMenu}>
-                    <Button className="w-full text-lg py-6 shadow-md">
-                      Get Started Free
-                    </Button>
-                  </Link>
                 </div>
               </nav>
             </SheetContent>
@@ -116,7 +108,7 @@ const Landing = () => {
       {/* Hero Section */}
       <section className="py-20 px-4 bg-gradient-to-b from-background to-secondary/10">
         <div className="container mx-auto text-center max-w-5xl">
-          <Badge className="mb-6 bg-accent/10 text-accent border-accent/20 px-4 py-1.5">AI-Powered Kids Meal Planning</Badge>
+          <Badge className="mb-6 bg-accent/10 text-accent border-accent/20 px-4 py-1.5 text-base">🎉 Launching November 1st, 2025</Badge>
           <h1 className="text-5xl md:text-7xl font-heading font-bold mb-6 text-primary leading-tight">
             Kids Meal Planning for<br />Picky Eaters Made Easy
           </h1>
@@ -127,13 +119,14 @@ const Landing = () => {
           <div className="flex gap-4 justify-center flex-wrap">
             <Link to="/auth">
               <Button size="lg" className="gap-2 text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-shadow">
-                Start Free Trial <ArrowRight className="h-5 w-5" />
+                Sign In (Existing Users) <ArrowRight className="h-5 w-5" />
               </Button>
             </Link>
             <Button size="lg" variant="outline" className="text-lg px-8 py-6 border-2">
               See How It Works
             </Button>
           </div>
+          <p className="text-sm text-muted-foreground mt-4">New sign-ups opening November 1st, 2025</p>
           
           {/* Stats */}
           <div className="grid grid-cols-3 gap-8 max-w-2xl mx-auto mt-16">
@@ -317,15 +310,16 @@ const Landing = () => {
       {/* CTA Section */}
       <section className="py-24 px-4 bg-gradient-to-br from-primary to-secondary">
         <div className="container mx-auto text-center max-w-3xl">
-          <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-white">Ready to Make Mealtime Easier?</h2>
+          <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-white">Launching November 1st, 2025</h2>
           <p className="text-xl text-white/90 mb-10 leading-relaxed">
-            Join thousands of parents who are transforming how they plan meals for picky eaters. Start your free trial today!
+            Join the waitlist to be the first to know when we launch. Transform how you plan meals for your picky eater!
           </p>
           <Link to="/auth">
             <Button size="lg" className="gap-2 bg-white text-primary hover:bg-white/90 text-lg px-8 py-6 shadow-xl">
-              Start Free Trial <ArrowRight className="h-5 w-5" />
+              Sign In (Existing Users) <ArrowRight className="h-5 w-5" />
             </Button>
           </Link>
+          <p className="text-sm text-white/70 mt-4">New registrations opening soon</p>
         </div>
       </section>
 
