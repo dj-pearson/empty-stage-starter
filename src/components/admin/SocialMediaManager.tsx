@@ -119,6 +119,7 @@ export function SocialMediaManager() {
   const [aiForm, setAiForm] = useState({
     topic: "",
     contentGoal: "Drive website visits and increase conversions",
+    autoPublish: false,
   });
 
   useEffect(() => {
@@ -310,6 +311,51 @@ export function SocialMediaManager() {
     }
   };
 
+  const handleResendToWebhook = async (postId: string) => {
+    try {
+      const post = posts.find(p => p.id === postId);
+      if (!post) return;
+
+      // Get global webhook URL
+      const globalAccount = accounts.find((a) => a.is_global && a.is_active && a.webhook_url);
+      if (!globalAccount?.webhook_url) {
+        toast.error("No global webhook configured. Please add one in Connected Accounts.");
+        return;
+      }
+
+      // Send to webhook
+      console.log("Resending to webhook:", globalAccount.webhook_url);
+      const webhookResponse = await fetch(globalAccount.webhook_url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "social_post_published",
+          post: {
+            id: post.id,
+            title: post.title,
+            short_form_content: post.short_form_content,
+            long_form_content: post.long_form_content,
+            content: post.content,
+            platforms: post.platforms,
+            scheduled_for: post.scheduled_for,
+            image_urls: post.image_urls,
+          },
+          timestamp: new Date().toISOString(),
+          resent: true,
+        }),
+      });
+
+      if (!webhookResponse.ok) {
+        throw new Error("Failed to send to webhook");
+      }
+
+      toast.success("Post resent to webhook!");
+    } catch (error: any) {
+      console.error("Error resending to webhook:", error);
+      toast.error(error.message || "Failed to resend to webhook");
+    }
+  };
+
   const handleSaveAccount = async () => {
     try {
       if (!accountForm.webhook_url.trim()) {
@@ -317,7 +363,14 @@ export function SocialMediaManager() {
         return;
       }
 
-      const { error } = await supabase.from("social_accounts").insert([
+      console.log("Saving webhook account:", {
+        platform: accountForm.platform,
+        account_name: accountForm.account_name || "Global Webhook",
+        webhook_url: accountForm.webhook_url,
+        is_global: accountForm.is_global,
+      });
+
+      const { data, error } = await supabase.from("social_accounts").insert([
         {
           platform: accountForm.platform as any,
           account_name: accountForm.account_name || "Global Webhook",
@@ -325,17 +378,21 @@ export function SocialMediaManager() {
           is_active: true,
           is_global: accountForm.is_global,
         },
-      ]);
+      ]).select();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Database error saving webhook:", error);
+        throw error;
+      }
 
+      console.log("Webhook saved successfully:", data);
       toast.success("Webhook configured successfully");
       setShowAccountDialog(false);
       setAccountForm({ platform: "webhook", account_name: "", webhook_url: "", is_global: true });
       loadAccounts();
-    } catch (error) {
-      console.error("Error saving account:", error);
-      toast.error("Failed to save account");
+    } catch (error: any) {
+      console.error("Error saving webhook account:", error);
+      toast.error(error.message || "Failed to save webhook");
     }
   };
 
@@ -362,11 +419,26 @@ export function SocialMediaManager() {
 
     setAiGenerating(true);
     try {
+      // Get global webhook URL if auto-publish is enabled
+      let webhookUrl = null;
+      if (aiForm.autoPublish) {
+        const globalAccount = accounts.find((a) => a.is_global && a.is_active && a.webhook_url);
+        if (!globalAccount?.webhook_url) {
+          toast.error("Auto-publish requires a global webhook URL. Please configure in Connected Accounts.");
+          setAiGenerating(false);
+          return;
+        }
+        webhookUrl = globalAccount.webhook_url;
+      }
+
       const { data, error } = await supabase.functions.invoke('generate-social-content', {
         body: {
           topic: aiForm.topic,
           contentGoal: aiForm.contentGoal,
-          targetAudience: "Parents struggling with picky eaters and child meal planning"
+          targetAudience: "Parents struggling with picky eaters and child meal planning",
+          autoPublish: aiForm.autoPublish,
+          webhookUrl: webhookUrl,
+          url: "https://tryeatpal.com"
         }
       });
 
@@ -377,20 +449,27 @@ export function SocialMediaManager() {
         return;
       }
 
-      const content = data.content;
-      
-      // Populate form with generated content
-      setPostForm({
-        ...postForm,
-        title: content.title || "",
-        content: content.facebook || content.long_form || "",
-        short_form_content: content.twitter || "",
-        long_form_content: content.facebook || "",
-      });
+      if (aiForm.autoPublish) {
+        toast.success("Social content generated and published to webhook!");
+        loadPosts();
+        loadStats();
+        setShowAIDialog(false);
+      } else {
+        const content = data.content;
+        
+        // Populate form with generated content
+        setPostForm({
+          ...postForm,
+          title: content.title || "",
+          content: content.facebook || content.long_form || "",
+          short_form_content: content.twitter || "",
+          long_form_content: content.facebook || "",
+        });
 
-      toast.success("AI content generated! Review and customize before posting.");
-      setShowAIDialog(false);
-      setShowPostDialog(true);
+        toast.success("AI content generated! Review and customize before posting.");
+        setShowAIDialog(false);
+        setShowPostDialog(true);
+      }
     } catch (error: any) {
       console.error("Error generating AI content:", error);
       toast.error(error.message || "Failed to generate content");
@@ -559,6 +638,12 @@ export function SocialMediaManager() {
                             <Button size="sm" onClick={() => handlePublishPost(post.id)}>
                               <Send className="h-3 w-3 mr-1" />
                               Publish
+                            </Button>
+                          )}
+                          {post.status === "published" && (
+                            <Button size="sm" variant="outline" onClick={() => handleResendToWebhook(post.id)}>
+                              <Send className="h-3 w-3 mr-1" />
+                              Resend
                             </Button>
                           )}
                           <Button
@@ -878,14 +963,32 @@ export function SocialMediaManager() {
               />
             </div>
 
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="auto-publish"
+                  checked={aiForm.autoPublish}
+                  onCheckedChange={(checked) =>
+                    setAiForm({ ...aiForm, autoPublish: checked as boolean })
+                  }
+                />
+                <Label htmlFor="auto-publish" className="cursor-pointer">
+                  Auto-publish to webhook immediately
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground ml-6">
+                When enabled, content will be generated and sent directly to your configured webhook
+              </p>
+            </div>
+
             <div className="p-4 bg-muted rounded-lg">
               <h4 className="font-medium mb-2">AI will generate:</h4>
               <ul className="text-sm space-y-1 text-muted-foreground">
                 <li>• Attention-grabbing title</li>
-                <li>• Facebook version (150-250 words, engaging and conversational)</li>
-                <li>• Twitter version (under 280 characters, punchy and viral)</li>
-                <li>• Optimized hashtags for each platform</li>
-                <li>• Bundled data sent to Make.com webhook</li>
+                <li>• Short-form version (Twitter/X - under 280 characters)</li>
+                <li>• Long-form version (Facebook/LinkedIn - 150-250 words)</li>
+                <li>• Optimized hashtags for engagement</li>
+                <li>• {aiForm.autoPublish ? "Auto-published to webhook" : "Ready to review and customize"}</li>
               </ul>
             </div>
           </div>

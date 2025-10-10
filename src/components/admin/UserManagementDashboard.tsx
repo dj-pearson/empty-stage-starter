@@ -99,48 +99,12 @@ export function UserManagementDashboard() {
     try {
       setLoading(true);
 
-      // Get all profiles with user roles
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select(`
-          id,
-          full_name,
-          onboarding_completed,
-          created_at
-        `)
-        .order("created_at", { ascending: false });
+      // Call edge function to get users with admin privileges
+      const { data, error } = await supabase.functions.invoke('list-users');
 
-      if (profilesError) throw profilesError;
+      if (error) throw error;
 
-      // Get auth users (admin only)
-      const { data: { users: authUsers }, error: authError } = await supabase.auth.admin.listUsers();
-
-      if (authError) throw authError;
-
-      // Get user roles
-      const { data: roles, error: rolesError } = await supabase
-        .from("user_roles")
-        .select("user_id, role");
-
-      if (rolesError) throw rolesError;
-
-      // Combine data
-      const combinedUsers: UserProfile[] = profiles?.map((profile) => {
-        const authUser = authUsers?.find((u: any) => u.id === profile.id);
-        const userRole = roles?.find((r: any) => r.user_id === profile.id);
-
-        return {
-          id: profile.id,
-          email: authUser?.email || "N/A",
-          full_name: profile.full_name || "Unknown",
-          created_at: profile.created_at,
-          last_sign_in_at: authUser?.last_sign_in_at || null,
-          onboarding_completed: profile.onboarding_completed || false,
-          role: userRole?.role || "user",
-          is_banned: (authUser as any)?.banned_until ? new Date((authUser as any).banned_until) > new Date() : false,
-        };
-      }) || [];
-
+      const combinedUsers: UserProfile[] = data.users || [];
       setUsers(combinedUsers);
 
       // Calculate stats
@@ -189,27 +153,13 @@ export function UserManagementDashboard() {
 
   const handleBanUser = async (userId: string, ban: boolean) => {
     try {
-      if (ban) {
-        // Ban for 100 years (effectively permanent)
-        const banUntil = new Date();
-        banUntil.setFullYear(banUntil.getFullYear() + 100);
+      const { data, error } = await supabase.functions.invoke('update-user', {
+        body: { userId, action: ban ? 'ban' : 'unban' }
+      });
 
-        const { error } = await supabase.auth.admin.updateUserById(userId, {
-          ban_duration: "876000h", // 100 years in hours
-        });
+      if (error) throw error;
 
-        if (error) throw error;
-        toast.success("User banned successfully");
-      } else {
-        // Unban user
-        const { error } = await supabase.auth.admin.updateUserById(userId, {
-          ban_duration: "none",
-        });
-
-        if (error) throw error;
-        toast.success("User unbanned successfully");
-      }
-
+      toast.success(ban ? "User banned successfully" : "User unbanned successfully");
       setBanUserId(null);
       loadUsers();
     } catch (error) {
@@ -220,9 +170,9 @@ export function UserManagementDashboard() {
 
   const handleMakeAdmin = async (userId: string) => {
     try {
-      const { error } = await supabase
-        .from("user_roles")
-        .upsert({ user_id: userId, role: "admin" });
+      const { data, error } = await supabase.functions.invoke('update-user', {
+        body: { userId, action: 'make_admin' }
+      });
 
       if (error) throw error;
 
@@ -236,11 +186,9 @@ export function UserManagementDashboard() {
 
   const handleRemoveAdmin = async (userId: string) => {
     try {
-      const { error } = await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", userId)
-        .eq("role", "admin");
+      const { data, error } = await supabase.functions.invoke('update-user', {
+        body: { userId, action: 'remove_admin' }
+      });
 
       if (error) throw error;
 
