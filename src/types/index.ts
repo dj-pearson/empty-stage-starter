@@ -29,6 +29,7 @@ export interface Kid {
   favorite_foods?: string[];
   pickiness_level?: string;
   profile_completed?: boolean;
+  profile_last_reviewed?: string;
   texture_preferences?: string[];
   texture_dislikes?: string[];
   flavor_preferences?: string[];

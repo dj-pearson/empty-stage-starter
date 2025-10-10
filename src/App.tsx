@@ -16,6 +16,7 @@ import Planner from "./pages/Planner";
 import AIPlanner from "./pages/AIPlanner";
 import Grocery from "./pages/Grocery";
 import Kids from "./pages/Kids";
+import InsightsDashboard from "./pages/InsightsDashboard";
 import Analytics from "./pages/Analytics";
 import Admin from "./pages/Admin";
 import FoodTracker from "./pages/FoodTracker";
@@ -59,6 +60,7 @@ const App = () => (
               <Route path="recipes" element={<Recipes />} />
               <Route path="planner" element={<Planner />} />
               <Route path="ai-planner" element={<AIPlanner />} />
+              <Route path="insights" element={<InsightsDashboard />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="grocery" element={<Grocery />} />
               <Route path="food-tracker" element={<FoodTracker />} />
