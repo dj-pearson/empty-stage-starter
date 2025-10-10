@@ -198,52 +198,58 @@ export default function Pantry() {
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="flex flex-col gap-6">
           {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex flex-col gap-4">
             <div>
               <h1 className="text-3xl font-bold mb-2">Food Pantry</h1>
               <p className="text-muted-foreground">
                 Manage your child's safe foods and try bites
               </p>
             </div>
-            <div className="flex gap-2 flex-wrap">
+            
+            {/* Primary Actions */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button onClick={() => setDialogOpen(true)} size="lg" className="flex-1 sm:flex-initial">
+                <Plus className="h-5 w-5 mr-2" />
+                Add Food
+              </Button>
+              <Button 
+                variant="secondary" 
+                onClick={() => setImageCaptureOpen(true)}
+                size="lg"
+                className="flex-1 sm:flex-initial"
+              >
+                <Camera className="h-5 w-5 mr-2" />
+                Photo ID
+              </Button>
+              <Button 
+                variant="secondary" 
+                onClick={() => setScannerOpen(true)}
+                size="lg"
+                className="flex-1 sm:flex-initial"
+              >
+                <ScanBarcode className="h-5 w-5 mr-2" />
+                Barcode
+              </Button>
+            </div>
+
+            {/* Secondary Actions */}
+            <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
               <Button 
                 variant="outline" 
                 onClick={handleLoadStarterList}
-                size="lg"
               >
-                <Download className="h-5 w-5 mr-2" />
+                <Download className="h-4 w-4 mr-2" />
                 Load Starter List
               </Button>
               <Button 
                 variant="outline" 
                 onClick={handleGetSuggestions}
                 disabled={isLoadingSuggestions}
-                size="lg"
               >
-                <Sparkles className="h-5 w-5 mr-2" />
+                <Sparkles className="h-4 w-4 mr-2" />
                 {isLoadingSuggestions ? "Getting Ideas..." : "AI Suggestions"}
               </Button>
-              <Button 
-                variant="secondary" 
-                onClick={() => setImageCaptureOpen(true)}
-                size="lg"
-              >
-                <Camera className="h-5 w-5 mr-2" />
-                Photo ID
-              </Button>
-              <Button 
-                variant="outline" 
-                onClick={() => setScannerOpen(true)}
-                size="lg"
-              >
-                <ScanBarcode className="h-5 w-5 mr-2" />
-                Barcode
-              </Button>
               <ImportCsvDialog />
-              <Button onClick={() => setDialogOpen(true)} size="lg" className="shadow-lg">
-                <Plus className="h-5 w-5 mr-2" />
-                Add Food
-              </Button>
             </div>
           </div>
 
