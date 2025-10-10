@@ -42,11 +42,23 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
   const startCamera = async () => {
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
       });
+      
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        // Explicitly play the video for iOS/Safari
+        try {
+          await videoRef.current.play();
+        } catch (playError) {
+          console.error('Error playing video:', playError);
+        }
       }
+      
       setStream(mediaStream);
       setShowCamera(true);
     } catch (error) {
