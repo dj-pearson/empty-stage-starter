@@ -270,6 +270,15 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
             <div className="space-y-4">
               <div className="relative rounded-lg overflow-hidden bg-black">
                 <div id="food-camera" className="w-full aspect-video" />
+                <button
+                  type="button"
+                  onClick={capturePhoto}
+                  aria-label="Tap to capture"
+                  className="absolute inset-0 z-10 bg-transparent focus:outline-none"
+                />
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded-full bg-background/60 text-foreground/80 text-xs">
+                  Tap video or press Capture
+                </div>
               </div>
               <div className="flex gap-2">
                 <Button onClick={capturePhoto} className="flex-1" size="lg">
