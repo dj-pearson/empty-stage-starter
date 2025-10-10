@@ -24,16 +24,24 @@ serve(async (req) => {
     const contentType = response.headers.get("content-type") || "";
 
     // Parse HTML (basic parsing)
+    interface AuditItem {
+      item: string;
+      status: string;
+      message: string;
+      impact: string;
+      fix?: string;
+    }
+
     const seoAnalysis = {
       url,
       status: response.status,
       contentType,
       analysis: {
-        technical: [],
-        onPage: [],
-        performance: [],
-        mobile: [],
-        content: [],
+        technical: [] as AuditItem[],
+        onPage: [] as AuditItem[],
+        performance: [] as AuditItem[],
+        mobile: [] as AuditItem[],
+        content: [] as AuditItem[],
       },
       score: 0,
     };
@@ -309,7 +317,7 @@ serve(async (req) => {
     console.error("Error in seo-audit function:", error);
     return new Response(
       JSON.stringify({
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error',
       }),
       {
         status: 400,

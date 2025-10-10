@@ -628,7 +628,8 @@ export function SEOManager() {
     }
 
     // Image Optimization
-    const largeImages = Array.from(images).filter((img) => {
+    const pageImages = document.querySelectorAll('img');
+    const largeImages = Array.from(pageImages).filter((img) => {
       return img.naturalWidth > 2000 || img.naturalHeight > 2000;
     });
     

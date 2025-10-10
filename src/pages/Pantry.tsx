@@ -4,6 +4,7 @@ import { FoodCard } from "@/components/FoodCard";
 import { AddFoodDialog } from "@/components/AddFoodDialog";
 import { ImportCsvDialog } from "@/components/ImportCsvDialog";
 import { BarcodeScannerDialog } from "@/components/admin/BarcodeScannerDialog";
+import { ImageFoodCapture } from "@/components/ImageFoodCapture";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,7 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Search, Sparkles, Download, ScanBarcode } from "lucide-react";
+import { Plus, Search, Sparkles, Download, ScanBarcode, Camera } from "lucide-react";
 import { Food, FoodCategory } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -44,6 +45,7 @@ export default function Pantry() {
   const [suggestions, setSuggestions] = useState<FoodSuggestion[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [imageCaptureOpen, setImageCaptureOpen] = useState(false);
 
   const filteredFoods = foods.filter(food => {
     if (!food || !food.name) return false;
@@ -148,6 +150,20 @@ export default function Pantry() {
     });
   };
 
+  const handleFoodIdentified = (foodData: any) => {
+    addFood({
+      name: foodData.name,
+      category: foodData.category,
+      is_safe: false,
+      is_try_bite: true,
+    });
+    
+    toast({
+      title: "Food Added from Photo",
+      description: `${foodData.name} has been added to your pantry!`,
+    });
+  };
+
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -180,11 +196,19 @@ export default function Pantry() {
               </Button>
               <Button 
                 variant="secondary" 
+                onClick={() => setImageCaptureOpen(true)}
+                size="lg"
+              >
+                <Camera className="h-5 w-5 mr-2" />
+                Photo ID
+              </Button>
+              <Button 
+                variant="outline" 
                 onClick={() => setScannerOpen(true)}
                 size="lg"
               >
                 <ScanBarcode className="h-5 w-5 mr-2" />
-                Scan Barcode
+                Barcode
               </Button>
               <ImportCsvDialog />
               <Button onClick={() => setDialogOpen(true)} size="lg" className="shadow-lg">
@@ -343,6 +367,12 @@ export default function Pantry() {
           setScannerOpen(false);
         }}
         targetTable="foods"
+      />
+
+      <ImageFoodCapture
+        open={imageCaptureOpen}
+        onOpenChange={setImageCaptureOpen}
+        onFoodIdentified={handleFoodIdentified}
       />
       </div>
     </div>
