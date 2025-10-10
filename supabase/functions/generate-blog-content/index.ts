@@ -270,13 +270,29 @@ Format your response as JSON with EXACT keys only:
         } else if (postData) {
           const blogUrl = `https://tryeatpal.com/blog/${slug}`;
 
-          // Generate social media content about this blog
+          // Generate social media content about this blog using AI
           try {
-            // Use a simple method to generate social content
-            const socialTitle = `New blog post: ${blogContent.title}`;
-            const twitterPost = `${socialTitle}\n\nRead more: ${blogUrl} #EatPal #PickyEaters #ParentingTips`;
-            const facebookPost = `📝 ${socialTitle}\n\n${blogContent.excerpt}\n\nRead the full article: ${blogUrl}\n\n#EatPal #ParentingTips #PickyEaters #HealthyKids`;
+            console.log('Invoking generate-social-content function...');
+            
+            const { data: socialData, error: socialError } = await supabase.functions.invoke('generate-social-content', {
+              body: {
+                topic: blogContent.title || topic,
+                excerpt: blogContent.excerpt || '',
+                url: blogUrl,
+                contentGoal: 'Promote this blog post to drive website visits',
+                targetAudience: targetAudience || 'Parents of picky eaters',
+                autoPublish: false, // We'll handle the webhook here, not in the social function
+              }
+            });
 
+            if (socialError) {
+              console.error('Error generating social content:', socialError);
+              throw socialError;
+            }
+
+            console.log('Social content generated successfully');
+            const socialContent = socialData?.content || {};
+            
             // Send to webhook if provided
             if (webhookUrl) {
               const webhookPayload = {
@@ -284,23 +300,32 @@ Format your response as JSON with EXACT keys only:
                 blog_id: postData.id,
                 blog_title: blogContent.title || topic,
                 blog_url: blogUrl,
+                blog_slug: slug,
                 blog_excerpt: blogContent.excerpt || '',
-                short_form: twitterPost,
-                long_form: facebookPost,
+                short_form: socialContent.twitter || `New blog: ${blogContent.title}\n\nRead more: ${blogUrl} #EatPal #PickyEaters #ParentingTips`,
+                long_form: socialContent.facebook || `📝 New blog post: ${blogContent.title}\n\n${blogContent.excerpt}\n\nRead the full article: ${blogUrl}\n\n#EatPal #ParentingTips #PickyEaters`,
+                social_title: socialContent.title || blogContent.title,
                 hashtags: ['EatPal', 'PickyEaters', 'ParentingTips', 'HealthyKids'],
                 published_at: new Date().toISOString()
               };
 
+              console.log('Sending to webhook:', webhookUrl);
               const webhookResponse = await fetch(webhookUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(webhookPayload),
               });
 
-              console.log('Webhook response status:', webhookResponse.status);
+              const webhookStatus = webhookResponse.status;
+              console.log('Webhook response status:', webhookStatus);
+              
+              if (!webhookResponse.ok) {
+                const webhookText = await webhookResponse.text();
+                console.error('Webhook error response:', webhookText);
+              }
             }
           } catch (socialError) {
-            console.error('Error generating social content:', socialError);
+            console.error('Error in social content generation/webhook:', socialError);
           }
         }
       } catch (autoPublishError) {

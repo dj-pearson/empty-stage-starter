@@ -13,10 +13,10 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.generate-blog-content]
-verify_jwt = true
+verify_jwt = false
 
 [functions.generate-social-content]
-verify_jwt = true
+verify_jwt = false
 
 [functions.test-blog-webhook]
 verify_jwt = false

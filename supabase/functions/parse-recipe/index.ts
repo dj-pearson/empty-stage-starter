@@ -169,7 +169,7 @@ Extract all available information. If something is missing, use an empty string 
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in parse-recipe function:', error);
     return new Response(
       JSON.stringify({ error: error.message || 'Internal server error' }),
