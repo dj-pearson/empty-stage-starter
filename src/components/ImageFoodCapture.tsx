@@ -366,7 +366,18 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
                           type="number"
                           min="1"
                           value={editedQuantity}
-                          onChange={(e) => setEditedQuantity(parseInt(e.target.value) || 1)}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            if (!isNaN(val) && val >= 1) {
+                              setEditedQuantity(val);
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const val = parseInt(e.target.value);
+                            if (isNaN(val) || val < 1) {
+                              setEditedQuantity(1);
+                            }
+                          }}
                         />
                       </div>
                     </div>
