@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export default function Recipes() {
-  const { recipes, foods, addRecipe, updateRecipe, deleteRecipe } = useApp();
+  const { recipes, foods, addRecipe, updateRecipe, deleteRecipe, kids, activeKidId } = useApp();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [editRecipe, setEditRecipe] = useState<Recipe | null>(null);
@@ -284,6 +284,8 @@ export default function Recipes() {
               editRecipe={editRecipe}
               onSave={handleSave}
               onCancel={handleClose}
+              kids={kids}
+              activeKidId={activeKidId}
             />
           </DialogContent>
         </Dialog>

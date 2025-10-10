@@ -29,7 +29,7 @@ type AIRecipe = {
   tips: string;
 };
 
-export function RecipeBuilder({ foods, editRecipe, onSave, onCancel }: RecipeBuilderProps) {
+export function RecipeBuilder({ foods, editRecipe, onSave, onCancel, kids, activeKidId }: RecipeBuilderProps & { kids?: any[], activeKidId?: string }) {
   const [formData, setFormData] = useState({
     name: editRecipe?.name || "",
     description: editRecipe?.description || "",
@@ -79,10 +79,14 @@ export function RecipeBuilder({ foods, editRecipe, onSave, onCancel }: RecipeBui
         .map(id => foods.find(f => f.id === id)?.name)
         .filter(Boolean);
 
+      // Get active child's profile for personalized recipe
+      const activeKid = activeKidId && kids ? kids.find(k => k.id === activeKidId) : null;
+
       const { data, error } = await supabase.functions.invoke('suggest-recipe', {
         body: {
           selectedFoodNames,
           aiModel: aiSettings,
+          childProfile: activeKid || undefined
         },
       });
 

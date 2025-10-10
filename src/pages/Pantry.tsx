@@ -59,8 +59,15 @@ export default function Pantry() {
     setShowSuggestions(true);
     
     try {
+      // Get active child's profile for personalized suggestions
+      const activeKid = activeKidId ? kids.find(k => k.id === activeKidId) : null;
+      
       const { data, error } = await supabase.functions.invoke('suggest-foods', {
-        body: { foods, planEntries }
+        body: { 
+          foods, 
+          planEntries,
+          childProfile: activeKid || undefined
+        }
       });
 
       if (error) throw error;
