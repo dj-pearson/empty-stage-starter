@@ -350,6 +350,7 @@ const Landing = () => {
                 <li><a href="#features" className="hover:text-primary transition-colors">Features</a></li>
                 <li><a href="#how-it-works" className="hover:text-primary transition-colors">How It Works</a></li>
                 <li><Link to="/pricing" className="hover:text-primary transition-colors">Pricing</Link></li>
+                <li><Link to="/blog" className="hover:text-primary transition-colors">Blog</Link></li>
                 <li><Link to="/auth" className="hover:text-primary transition-colors">Get Started</Link></li>
               </ul>
             </div>
