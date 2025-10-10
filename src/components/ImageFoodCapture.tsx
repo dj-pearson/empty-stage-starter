@@ -226,15 +226,15 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Identify Food by Photo</DialogTitle>
           <DialogDescription>
             Take a photo or upload an image to automatically identify and add food items
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto space-y-4 py-2">
           {!capturedImage && !showCamera && (
             <div className="flex flex-col gap-3">
               <Button
