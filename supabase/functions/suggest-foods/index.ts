@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { foods, planEntries } = await req.json();
+    const { foods, planEntries, childProfile } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
     if (!LOVABLE_API_KEY) {
@@ -31,22 +31,51 @@ serve(async (req) => {
       })
       .filter(Boolean);
 
-    const prompt = `Based on a child's current safe foods and eating history, suggest 5 new foods they might try.
+    // Build comprehensive child profile context
+    const profileContext = childProfile ? `
+Child Profile:
+- Age: ${childProfile.age || 'not specified'} years old
+- Allergens: ${childProfile.allergens?.join(', ') || 'none'}
+- Dietary Restrictions: ${childProfile.dietary_restrictions?.join(', ') || 'none'}
+- Eating Behavior: ${childProfile.eating_behavior || 'not specified'}
+- Pickiness Level: ${childProfile.pickiness_level || 'not specified'}
+- New Food Willingness: ${childProfile.new_food_willingness || 'not specified'}
+- Texture Sensitivity: ${childProfile.texture_sensitivity_level || 'not specified'}
+- Preferred Textures: ${childProfile.texture_preferences?.join(', ') || 'not specified'}
+- Disliked Textures: ${childProfile.texture_dislikes?.join(', ') || 'not specified'}
+- Flavor Preferences: ${childProfile.flavor_preferences?.join(', ') || 'not specified'}
+- Preferred Preparations: ${childProfile.preferred_preparations?.join(', ') || 'not specified'}
+- Always Eats: ${childProfile.always_eats_foods?.join(', ') || 'not specified'}
+- Favorite Foods: ${childProfile.favorite_foods?.join(', ') || 'not specified'}
+- Foods to Avoid: ${childProfile.disliked_foods?.join(', ') || 'not specified'}
+- Health Goals: ${childProfile.health_goals?.join(', ') || 'none'}
+- Nutrition Concerns: ${childProfile.nutrition_concerns?.join(', ') || 'none'}
+` : '';
 
-Safe foods they already enjoy: ${safeFoods.join(', ')}
-Current try bite foods: ${tryBiteFoods.join(', ')}
-Foods they've eaten successfully: ${successfulFoods.join(', ')}
+    const prompt = `Based on a child's detailed profile, current safe foods, and eating history, suggest 5 new foods they might try.
+
+${profileContext}
+
+Current Food Status:
+- Safe foods they already enjoy: ${safeFoods.join(', ')}
+- Current try bite foods: ${tryBiteFoods.join(', ')}
+- Foods they've eaten successfully: ${successfulFoods.join(', ')}
 
 Please suggest 5 new foods that:
-1. Are similar in texture or flavor to their safe foods
-2. Are nutritious and appropriate for children
-3. Gradually expand their palate
-4. Include a variety of food categories (protein, carb, fruit, vegetable, dairy, snack)
+1. Respect all allergens and dietary restrictions (CRITICAL - never suggest foods containing their allergens)
+2. Match their texture preferences and avoid disliked textures
+3. Align with their flavor preferences
+4. Are appropriate for their eating behavior and pickiness level
+5. Use their preferred preparation methods when possible
+6. Consider their new food willingness level
+7. Support their health goals and address nutrition concerns
+8. Are similar to foods they already enjoy
+9. Include a variety of food categories (protein, carb, fruit, vegetable, dairy, snack)
 
 For each suggestion, provide:
 - name: the food name
 - category: one of [protein, carb, fruit, vegetable, dairy, snack]
-- reason: a brief explanation of why this food is a good choice
+- reason: a brief explanation of why this food is a good choice based on their specific profile
 
 Respond in JSON format with an array called "suggestions".`;
 

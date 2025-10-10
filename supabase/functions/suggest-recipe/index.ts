@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { selectedFoodNames, aiModel } = await req.json();
+    const { selectedFoodNames, aiModel, childProfile } = await req.json();
     
     if (!selectedFoodNames || selectedFoodNames.length === 0) {
       return new Response(
@@ -29,14 +29,42 @@ serve(async (req) => {
       );
     }
 
+    // Build child profile context
+    const profileContext = childProfile ? `
+Important Child Profile Information:
+- Age: ${childProfile.age || 'not specified'} years old
+- ALLERGENS (NEVER include these): ${childProfile.allergens?.join(', ') || 'none'}
+- Dietary Restrictions: ${childProfile.dietary_restrictions?.join(', ') || 'none'}
+- Eating Behavior: ${childProfile.eating_behavior || 'not specified'}
+- Pickiness Level: ${childProfile.pickiness_level || 'not specified'}
+- Texture Sensitivity: ${childProfile.texture_sensitivity_level || 'not specified'}
+- Preferred Textures: ${childProfile.texture_preferences?.join(', ') || 'not specified'}
+- Disliked Textures: ${childProfile.texture_dislikes?.join(', ') || 'not specified'}
+- Flavor Preferences: ${childProfile.flavor_preferences?.join(', ') || 'not specified'}
+- Preferred Preparations: ${childProfile.preferred_preparations?.join(', ') || 'not specified'}
+- Foods to Avoid: ${childProfile.disliked_foods?.join(', ') || 'not specified'}
+- Health Goals: ${childProfile.health_goals?.join(', ') || 'none'}
+` : '';
+
     const systemPrompt = `You are a creative chef assistant helping parents create recipes for picky eaters. 
-Create a complete, detailed recipe using the provided ingredients. Include:
+${profileContext}
+
+Create a complete, detailed recipe using the provided ingredients. CRITICAL REQUIREMENTS:
+- NEVER include any allergens listed in the child's profile
+- Respect all dietary restrictions
+- Use preferred textures and avoid disliked textures
+- Use preferred preparation methods when possible
+- Consider their eating behavior and pickiness level
+- Support their health goals
+- Make the recipe appealing to their flavor preferences
+
+Include:
 - A creative, kid-friendly recipe name
 - A brief description (2-3 sentences)
 - Detailed cooking instructions (numbered steps)
 - Prep time and cook time estimates
-- Any additional common ingredients needed (keep it simple!)
-- Tips for making it appealing to picky eaters
+- Any additional common ingredients needed (keep it simple and allergen-free!)
+- Tips for making it appealing to this specific child
 
 Format your response as JSON with these exact fields:
 {
@@ -47,7 +75,7 @@ Format your response as JSON with these exact fields:
   "cookTime": "X minutes", 
   "servings": "X servings",
   "additionalIngredients": ["ingredient1", "ingredient2"],
-  "tips": "Tips for picky eaters"
+  "tips": "Tips tailored to this child's profile"
 }`;
 
     const userPrompt = `Create a recipe using these ingredients: ${selectedFoodNames.join(', ')}`;
