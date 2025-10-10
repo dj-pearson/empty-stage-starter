@@ -151,6 +151,9 @@ export default function Pantry() {
   };
 
   const handleFoodIdentified = (foodData: any) => {
+    console.log('handleFoodIdentified received:', foodData);
+    console.log('Quantity:', foodData.quantity, 'ServingSize:', foodData.servingSize);
+    
     // Check for existing food with same name, category, and serving size
     const existingFood = foods.find(f => 
       f.name.toLowerCase() === foodData.name.toLowerCase() && 
@@ -172,14 +175,16 @@ export default function Pantry() {
       });
     } else {
       // Add new food
-      addFood({
+      const foodToAdd = {
         name: foodData.name,
         category: foodData.category,
         is_safe: false,
         is_try_bite: true,
         quantity: foodData.quantity || 1,
         package_quantity: foodData.servingSize || undefined,
-      });
+      };
+      console.log('Adding food to pantry:', foodToAdd);
+      addFood(foodToAdd);
       
       toast({
         title: "Food Added from Photo",
