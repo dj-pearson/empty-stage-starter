@@ -363,7 +363,14 @@ export function SocialMediaManager() {
         return;
       }
 
-      const { error } = await supabase.from("social_accounts").insert([
+      console.log("Saving webhook account:", {
+        platform: accountForm.platform,
+        account_name: accountForm.account_name || "Global Webhook",
+        webhook_url: accountForm.webhook_url,
+        is_global: accountForm.is_global,
+      });
+
+      const { data, error } = await supabase.from("social_accounts").insert([
         {
           platform: accountForm.platform as any,
           account_name: accountForm.account_name || "Global Webhook",
@@ -371,17 +378,21 @@ export function SocialMediaManager() {
           is_active: true,
           is_global: accountForm.is_global,
         },
-      ]);
+      ]).select();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Database error saving webhook:", error);
+        throw error;
+      }
 
+      console.log("Webhook saved successfully:", data);
       toast.success("Webhook configured successfully");
       setShowAccountDialog(false);
       setAccountForm({ platform: "webhook", account_name: "", webhook_url: "", is_global: true });
       loadAccounts();
-    } catch (error) {
-      console.error("Error saving account:", error);
-      toast.error("Failed to save account");
+    } catch (error: any) {
+      console.error("Error saving webhook account:", error);
+      toast.error(error.message || "Failed to save webhook");
     }
   };
 
