@@ -22,6 +22,8 @@ interface FoodIdentification {
   confidence: number;
   description: string;
   servingSize: string;
+  quantity: number;
+  servingSizeOptions?: string[];
 }
 
 interface ImageFoodCaptureProps {
@@ -35,6 +37,8 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [identifiedFood, setIdentifiedFood] = useState<FoodIdentification | null>(null);
+  const [editedServingSize, setEditedServingSize] = useState<string>("");
+  const [editedQuantity, setEditedQuantity] = useState<number>(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -187,6 +191,8 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
 
       if (data?.success && data?.foodData) {
         setIdentifiedFood(data.foodData);
+        setEditedServingSize(data.foodData.servingSize);
+        setEditedQuantity(data.foodData.quantity || 1);
         toast({
           title: "Food Identified!",
           description: `Found: ${data.foodData.name} (${data.foodData.confidence}% confident)`,
@@ -206,7 +212,11 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
 
   const handleAddFood = () => {
     if (identifiedFood) {
-      onFoodIdentified(identifiedFood);
+      onFoodIdentified({
+        ...identifiedFood,
+        servingSize: editedServingSize,
+        quantity: editedQuantity,
+      });
       handleClose();
     }
   };
@@ -221,6 +231,8 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
   const retakePhoto = () => {
     setCapturedImage(null);
     setIdentifiedFood(null);
+    setEditedServingSize("");
+    setEditedQuantity(1);
     startCamera();
   };
 
@@ -328,9 +340,35 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label>Serving Size</Label>
-                      <Input value={identifiedFood.servingSize} readOnly />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Serving Size</Label>
+                        {identifiedFood.servingSizeOptions && identifiedFood.servingSizeOptions.length > 0 ? (
+                          <select
+                            value={editedServingSize}
+                            onChange={(e) => setEditedServingSize(e.target.value)}
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            {identifiedFood.servingSizeOptions.map((option) => (
+                              <option key={option} value={option}>{option}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <Input
+                            value={editedServingSize}
+                            onChange={(e) => setEditedServingSize(e.target.value)}
+                          />
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Quantity</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={editedQuantity}
+                          onChange={(e) => setEditedQuantity(parseInt(e.target.value) || 1)}
+                        />
+                      </div>
                     </div>
 
                     <div className="space-y-2">
