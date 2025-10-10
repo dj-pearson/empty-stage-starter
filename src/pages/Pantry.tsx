@@ -151,17 +151,41 @@ export default function Pantry() {
   };
 
   const handleFoodIdentified = (foodData: any) => {
-    addFood({
-      name: foodData.name,
-      category: foodData.category,
-      is_safe: false,
-      is_try_bite: true,
-    });
-    
-    toast({
-      title: "Food Added from Photo",
-      description: `${foodData.name} has been added to your pantry!`,
-    });
+    // Check for existing food with same name, category, and serving size
+    const existingFood = foods.find(f => 
+      f.name.toLowerCase() === foodData.name.toLowerCase() && 
+      f.category === foodData.category &&
+      (f.package_quantity || '') === (foodData.servingSize || '')
+    );
+
+    if (existingFood) {
+      // Update existing food's quantity
+      const newQuantity = (existingFood.quantity || 0) + (foodData.quantity || 1);
+      updateFood(existingFood.id, {
+        ...existingFood,
+        quantity: newQuantity,
+      });
+      
+      toast({
+        title: "Quantity Updated",
+        description: `Added ${foodData.quantity || 1} to existing ${foodData.name}. Total: ${newQuantity}`,
+      });
+    } else {
+      // Add new food
+      addFood({
+        name: foodData.name,
+        category: foodData.category,
+        is_safe: false,
+        is_try_bite: true,
+        quantity: foodData.quantity || 1,
+        package_quantity: foodData.servingSize || undefined,
+      });
+      
+      toast({
+        title: "Food Added from Photo",
+        description: `${foodData.name} has been added to your pantry!`,
+      });
+    }
   };
 
   return (
