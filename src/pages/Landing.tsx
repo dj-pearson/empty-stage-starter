@@ -291,17 +291,17 @@ const Landing = () => {
             </p>
 
             <h3 className="text-2xl font-heading font-bold mb-6 text-primary">
-              Trusted by Parents, Loved by Kids
+              Built for Parents, Designed for Success
             </h3>
             <p className="text-muted-foreground leading-relaxed mb-6">
-              EatPal has helped over 10,000 families transform mealtime from stressful to successful. Our users include parents
-              managing typical picky eating, toddler food refusal, sensory feeding issues, autism spectrum food sensitivities,
-              and diagnosed feeding disorders like ARFID. Whether your child is a mildly picky eater or has extreme food selectivity,
-              EatPal provides the tools you need for successful kids meal planning.
+              EatPal is designed to support parents managing typical picky eating, toddler food refusal, sensory feeding issues, 
+              autism spectrum food sensitivities, and diagnosed feeding disorders like ARFID. Whether your child is a mildly picky 
+              eater or has extreme food selectivity, EatPal provides the tools you need for successful kids meal planning.
             </p>
             <p className="text-muted-foreground leading-relaxed">
-              Join the EatPal community today and discover how easy kids meal planning for picky eaters can be. Start your
-              free trial and create your first personalized meal plan in minutes. No credit card required.
+              Be among the first to join the EatPal community when we launch November 1st, 2025. Discover how easy kids meal 
+              planning for picky eaters can be with our comprehensive platform built specifically for families dealing with 
+              selective eating challenges.
             </p>
           </div>
         </div>
