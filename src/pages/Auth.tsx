@@ -152,7 +152,12 @@ const Auth = () => {
               className="h-10 hidden dark:block"
             />
           </Link>
-          <p className="text-muted-foreground">Start your journey to easier meal planning</p>
+          <p className="text-muted-foreground mb-3">Start your journey to easier meal planning</p>
+          <Link to="/">
+            <Button variant="ghost" size="sm">
+              Back to Home
+            </Button>
+          </Link>
         </div>
 
         <Card>
@@ -204,7 +209,14 @@ const Auth = () => {
         </Card>
 
           <p className="text-center text-sm text-muted-foreground mt-4">
-            By continuing, you agree to our Terms of Service and Privacy Policy
+            By continuing, you agree to our{" "}
+            <Link to="/terms" className="text-primary hover:underline">
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link to="/privacy" className="text-primary hover:underline">
+              Privacy Policy
+            </Link>
           </p>
         </div>
       </div>
