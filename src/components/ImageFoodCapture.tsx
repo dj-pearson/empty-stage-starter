@@ -38,14 +38,14 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [identifiedFood, setIdentifiedFood] = useState<FoodIdentification | null>(null);
   const [editedServingSize, setEditedServingSize] = useState<string>("");
-  const [editedQuantity, setEditedQuantity] = useState<number>(1);
+  const [editedQuantity, setEditedQuantity] = useState<string>("1");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isEmbedded = typeof window !== 'undefined' && window.self !== window.top;
-
+  const quantityValid = editedQuantity.trim().length > 0 && /^\d+$/.test(editedQuantity) && parseInt(editedQuantity) >= 1;
   const startCamera = async () => {
     try {
       console.log('Starting Html5Qrcode camera...');
@@ -192,7 +192,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
       if (data?.success && data?.foodData) {
         setIdentifiedFood(data.foodData);
         setEditedServingSize(data.foodData.servingSize);
-        setEditedQuantity(data.foodData.quantity || 1);
+        setEditedQuantity(String(data.foodData.quantity || 1));
         toast({
           title: "Food Identified!",
           description: `Found: ${data.foodData.name} (${data.foodData.confidence}% confident)`,
@@ -211,14 +211,22 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
   };
 
   const handleAddFood = () => {
-    if (identifiedFood) {
-      onFoodIdentified({
-        ...identifiedFood,
-        servingSize: editedServingSize,
-        quantity: editedQuantity,
+    if (!identifiedFood) return;
+    const qtyNum = parseInt(editedQuantity);
+    if (!editedQuantity || isNaN(qtyNum) || qtyNum < 1) {
+      toast({
+        title: "Quantity required",
+        description: "Please enter a valid quantity (1 or more).",
+        variant: "destructive",
       });
-      handleClose();
+      return;
     }
+    onFoodIdentified({
+      ...identifiedFood,
+      servingSize: editedServingSize,
+      quantity: qtyNum,
+    });
+    handleClose();
   };
 
   const handleClose = () => {
@@ -232,7 +240,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
     setCapturedImage(null);
     setIdentifiedFood(null);
     setEditedServingSize("");
-    setEditedQuantity(1);
+    setEditedQuantity("1");
     startCamera();
   };
 
@@ -363,24 +371,23 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
                       <div className="space-y-2">
                         <Label>Quantity</Label>
                         <Input
-                          type="number"
-                          min="1"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          placeholder="e.g., 6"
                           value={editedQuantity}
                           onChange={(e) => {
-                            const val = parseInt(e.target.value);
-                            if (!isNaN(val) && val >= 1) {
-                              setEditedQuantity(val);
-                            }
+                            const next = e.target.value.replace(/[^0-9]/g, '');
+                            setEditedQuantity(next);
                           }}
-                          onBlur={(e) => {
-                            const val = parseInt(e.target.value);
-                            if (isNaN(val) || val < 1) {
-                              setEditedQuantity(1);
-                            }
-                          }}
+                          aria-invalid={!quantityValid}
+                          className={!quantityValid ? "border-destructive focus-visible:ring-destructive" : undefined}
                         />
+                        {!quantityValid && (
+                          <p className="text-xs text-destructive">Quantity is required</p>
+                        )}
                       </div>
-                    </div>
+                      </div>
 
                     <div className="space-y-2">
                       <Label>Description</Label>
@@ -388,7 +395,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
                     </div>
 
                     <div className="flex gap-2 pt-4">
-                      <Button onClick={handleAddFood} className="flex-1" size="lg">
+                      <Button onClick={handleAddFood} className="flex-1" size="lg" disabled={!quantityValid}>
                         Add to Pantry
                       </Button>
                       <Button onClick={retakePhoto} variant="outline" size="lg">
