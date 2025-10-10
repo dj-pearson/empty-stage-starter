@@ -61,9 +61,7 @@ export function CalendarMealPlanner({
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 5, // Reduced for better mobile touch response
-        tolerance: 5,
-        delay: 100, // Small delay to distinguish from scrolling
+        distance: 8,
       },
     })
   );
@@ -252,9 +250,9 @@ export function CalendarMealPlanner({
       <div
         ref={setNodeRef}
         className={cn(
-          "min-h-[70px] md:min-h-[80px] rounded-lg border-2 border-dashed p-1.5 md:p-2",
+          "min-h-[70px] md:min-h-[80px] rounded-lg border-2 border-dashed p-1.5 md:p-2 w-full",
           food ? color : 'bg-muted/30 border-muted',
-          isOver && 'ring-2 ring-primary',
+          isOver && 'ring-2 ring-primary bg-primary/10',
           "transition-all cursor-pointer"
         )}
         onClick={() => !food && onOpenFoodSelector(date, slot)}
@@ -284,9 +282,9 @@ export function CalendarMealPlanner({
           <div className="min-w-[1000px]">
             {/* Header with days */}
             <div className="grid grid-cols-8 gap-2 mb-2">
-              <div className="font-medium text-sm text-foreground">Meals</div>
+              <div className="font-medium text-sm text-foreground w-[120px]">Meals</div>
               {days.map(day => (
-                <div key={day.date} className="text-center">
+                <div key={day.date} className="text-center flex-1">
                   <div className="text-sm font-semibold text-foreground">{day.label}</div>
                   <div className="text-xs text-muted-foreground">
                     {day.month} {day.dayNum}
@@ -298,7 +296,7 @@ export function CalendarMealPlanner({
             {/* Meal rows */}
             {MEAL_SLOTS.map(({ slot, label, color }) => (
               <div key={slot} className="grid grid-cols-8 gap-2 mb-2">
-                <div className={cn("flex items-center justify-center rounded-lg p-2", color)}>
+                <div className={cn("flex items-center justify-center rounded-lg p-2 w-[120px]", color)}>
                   <span className="text-sm font-medium text-foreground">{label}</span>
                 </div>
                 
@@ -308,15 +306,16 @@ export function CalendarMealPlanner({
                   const dropId = `${day.date}-${slot}`;
 
                   return (
-                    <DroppableSlot
-                      key={dropId}
-                      dropId={dropId}
-                      entry={entry}
-                      food={food}
-                      color={color}
-                      date={day.date}
-                      slot={slot}
-                    />
+                    <div key={dropId} className="flex-1">
+                      <DroppableSlot
+                        dropId={dropId}
+                        entry={entry}
+                        food={food}
+                        color={color}
+                        date={day.date}
+                        slot={slot}
+                      />
+                    </div>
                   );
                 })}
               </div>
