@@ -18,6 +18,11 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
+    // Normalize image to a data URL if needed
+    const imageDataUrl = typeof imageBase64 === 'string' && imageBase64.startsWith('data:')
+      ? imageBase64
+      : `data:image/jpeg;base64,${imageBase64}`;
+
     console.log('Analyzing food image with AI...');
 
     // Use Gemini Flash for vision + reasoning
@@ -34,21 +39,13 @@ serve(async (req) => {
             role: 'user',
             content: [
               {
-                type: 'text',
-                text: `Identify the food item(s) in this image. Return a JSON response with:
-- name: The specific food name (e.g., "Orange", "Apple", "Chicken Breast")
-- category: one of: protein, carb, dairy, fruit, vegetable, snack
-- confidence: a number 0-100 indicating identification confidence
-- description: brief description of what you see
-- servingSize: estimated typical serving size (e.g., "1 medium", "1 cup")
-
-If multiple food items are visible, identify the most prominent one.
-Only respond with valid JSON, no other text.`
+                type: 'input_text',
+                text: `Identify the food item(s) in this image. Return a JSON response with:\n- name: The specific food name (e.g., "Orange", "Apple", "Chicken Breast")\n- category: one of: protein, carb, dairy, fruit, vegetable, snack\n- confidence: a number 0-100 indicating identification confidence\n- description: brief description of what you see\n- servingSize: estimated typical serving size (e.g., "1 medium", "1 cup")\n\nIf multiple food items are visible, identify the most prominent one.\nOnly respond with valid JSON, no other text.`
               },
               {
-                type: 'image_url',
+                type: 'input_image',
                 image_url: {
-                  url: imageBase64
+                  url: imageDataUrl
                 }
               }
             ]

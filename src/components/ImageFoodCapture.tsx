@@ -208,7 +208,10 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
                 <video
                   ref={videoRef}
                   autoPlay
+                  muted
                   playsInline
+                  // @ts-ignore - iOS requires this attribute
+                  webkit-playsinline="true"
                   className="w-full"
                 />
               </div>
