@@ -3,14 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ChevronLeft, ChevronRight, Check, UserCircle, AlertTriangle, Heart, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, Sparkles, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -31,41 +29,9 @@ const DIETARY_RESTRICTIONS = [
   "vegetarian", "vegan", "halal", "kosher", "gluten-free", "dairy-free"
 ];
 
-const HEALTH_GOALS = [
-  { value: "maintain_balance", label: "Maintain healthy balance" },
-  { value: "gain_weight", label: "Gain weight" },
-  { value: "try_new_foods", label: "Try new foods" },
-  { value: "reduce_sugar", label: "Reduce sugar intake" },
-  { value: "improve_variety", label: "Improve food variety" },
-  { value: "increase_protein", label: "Increase protein" },
-];
-
-const NUTRITION_CONCERNS = [
-  "underweight", "overweight", "low_appetite", "sugar_intake", 
-  "protein_intake", "constipation", "iron_deficiency", "picky_eating"
-];
-
 const TEXTURE_OPTIONS = [
-  "crunchy", "soft", "smooth", "mixed", "slippery", "chewy", "crispy", "mushy"
+  "Soft/mushy", "Slimy", "Crunchy", "Chewy", "Lumpy", "Wet", "Foods touching each other"
 ];
-
-const FLAVOR_OPTIONS = [
-  "sweet", "salty", "mild", "savory", "tangy", "spicy", "bitter", "sour"
-];
-
-const HELPFUL_STRATEGIES = [
-  "same_plate_as_others", "small_portions", "dipping_sauces", "familiar_shapes",
-  "fun_presentation", "involve_in_cooking", "no_pressure", "positive_reinforcement"
-];
-
-const FOOD_CATEGORIES = {
-  fruits: ["Apple", "Banana", "Grapes", "Strawberries", "Blueberries", "Watermelon", "Orange", "Pear"],
-  vegetables: ["Carrots", "Broccoli", "Cucumber", "Sweet Potato", "Corn", "Peas", "Green Beans", "Tomato"],
-  proteins: ["Chicken", "Turkey", "Fish", "Eggs", "Beef", "Pork", "Tofu", "Beans"],
-  grains: ["Pasta", "Rice", "Bread", "Oatmeal", "Pancakes", "Waffles", "Cereal", "Crackers"],
-  dairy: ["Cheese", "Yogurt", "Milk", "Ice Cream"],
-  snacks: ["Pretzels", "Cookies", "Fruit Snacks", "Chips", "Popcorn"]
-};
 
 export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, onComplete }: ChildIntakeQuestionnaireProps) {
   const [currentStep, setCurrentStep] = useState(0);
@@ -73,8 +39,8 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
   
   const [formData, setFormData] = useState({
     gender: "",
-    height_cm: "",
-    weight_kg: "",
+    height_cm: null as number | null,
+    weight_kg: null as number | null,
     allergens: [] as string[],
     allergen_severity: {} as Record<string, string>,
     cross_contamination_sensitive: false,
@@ -83,28 +49,39 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
     nutrition_concerns: [] as string[],
     eating_behavior: "",
     new_food_willingness: "",
-    helpful_strategies: [] as string[],
-    texture_preferences: [] as string[],
+    behavioral_notes: "",
+    texture_sensitivity_level: "",
     texture_dislikes: [] as string[],
-    flavor_preferences: [] as string[],
+    texture_preferences: [] as string[],
+    preferred_preparations: [] as string[],
     favorite_foods: [] as string[],
     always_eats_foods: [] as string[],
     disliked_foods: [] as string[],
-    behavioral_notes: "",
+    pickiness_level: "",
   });
 
   const steps = [
-    { title: "Basic Info", description: "Physical measurements" },
-    { title: "Allergies & Safety", description: "Health restrictions" },
-    { title: "Preferences", description: "Likes & dislikes" },
-    { title: "Eating Behavior", description: "Habits & goals" },
-    { title: "Review", description: "Confirm details" },
+    { title: "Basic Information", description: "Health & growth (30s)" },
+    { title: "Allergies & Restrictions", description: "Safety first (45s)" },
+    { title: "Eating Behavior", description: "Current habits (90s)" },
+    { title: "Texture & Sensory", description: "Sensitivities (60s)" },
+    { title: "Food Preferences", description: "What they eat (90s)" },
+    { title: "Foods to Avoid", description: "Dislikes (optional)" },
+    { title: "Review", description: "Confirm details" }
   ];
 
   const progress = ((currentStep + 1) / steps.length) * 100;
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
+      // Auto-calculate pickiness level when leaving step 2
+      if (currentStep === 2) {
+        calculatePickinessLevel();
+      }
+      // Auto-calculate texture sensitivity when leaving step 3
+      if (currentStep === 3) {
+        calculateTextureSensitivity();
+      }
       setCurrentStep(currentStep + 1);
     }
   };
@@ -115,12 +92,45 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
     }
   };
 
-  const toggleArrayItem = (array: string[], item: string, setter: (val: string[]) => void) => {
-    if (array.includes(item)) {
-      setter(array.filter(i => i !== item));
-    } else {
-      setter([...array, item]);
+  const calculatePickinessLevel = () => {
+    const behavior = formData.eating_behavior;
+    const willingness = formData.new_food_willingness;
+    
+    let level = 'somewhat_picky';
+    if (behavior === 'wide_variety' && willingness === 'willing') {
+      level = 'adventurous';
+    } else if (behavior === 'limited' || willingness === 'refuses') {
+      level = 'extreme';
+    } else if (behavior === 'very_limited' || willingness === 'very_hesitant') {
+      level = 'very_picky';
     }
+    
+    setFormData({ ...formData, pickiness_level: level });
+  };
+
+  const calculateTextureSensitivity = () => {
+    const dislikesCount = formData.texture_dislikes?.length || 0;
+    
+    let level = 'none';
+    if (dislikesCount === 0) {
+      level = 'none';
+    } else if (dislikesCount <= 2) {
+      level = 'mild';
+    } else if (dislikesCount <= 4) {
+      level = 'strong';
+    } else {
+      level = 'severe';
+    }
+    
+    setFormData({ ...formData, texture_sensitivity_level: level });
+  };
+
+  const toggleArrayItem = (field: keyof typeof formData, item: string) => {
+    const currentArray = formData[field] as string[];
+    const newArray = currentArray.includes(item)
+      ? currentArray.filter(i => i !== item)
+      : [...currentArray, item];
+    setFormData({ ...formData, [field]: newArray });
   };
 
   const handleSubmit = async () => {
@@ -129,9 +139,26 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
       const { error } = await supabase
         .from('kids')
         .update({
-          ...formData,
-          height_cm: formData.height_cm ? parseFloat(formData.height_cm) : null,
-          weight_kg: formData.weight_kg ? parseFloat(formData.weight_kg) : null,
+          gender: formData.gender || null,
+          height_cm: formData.height_cm,
+          weight_kg: formData.weight_kg,
+          allergens: formData.allergens,
+          allergen_severity: formData.allergen_severity,
+          cross_contamination_sensitive: formData.cross_contamination_sensitive,
+          dietary_restrictions: formData.dietary_restrictions,
+          health_goals: formData.health_goals,
+          nutrition_concerns: formData.nutrition_concerns,
+          eating_behavior: formData.eating_behavior || null,
+          new_food_willingness: formData.new_food_willingness || null,
+          behavioral_notes: formData.behavioral_notes || null,
+          texture_sensitivity_level: formData.texture_sensitivity_level || null,
+          texture_dislikes: formData.texture_dislikes,
+          texture_preferences: formData.texture_preferences,
+          preferred_preparations: formData.preferred_preparations,
+          favorite_foods: formData.favorite_foods,
+          always_eats_foods: formData.always_eats_foods,
+          disliked_foods: formData.disliked_foods,
+          pickiness_level: formData.pickiness_level || null,
           profile_completed: true,
           profile_last_reviewed: new Date().toISOString(),
         })
@@ -159,7 +186,7 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
             {kidName}'s Profile Questionnaire
           </DialogTitle>
           <DialogDescription>
-            Help us create personalized meal plans tailored to {kidName}'s needs
+            5-minute evidence-based questionnaire for personalized meal planning
           </DialogDescription>
         </DialogHeader>
 
@@ -174,83 +201,103 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-4">
+        <div className="flex-1 overflow-y-auto py-4 space-y-6">
+          {/* Section 1: Basic Information - Health & Growth */}
           {currentStep === 0 && (
             <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Physical Information</CardTitle>
-                  <CardDescription>Optional but helps with nutrition planning</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label>Gender (optional)</Label>
-                      <RadioGroup value={formData.gender} onValueChange={(v) => setFormData({ ...formData, gender: v })}>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="male" id="male" />
-                          <Label htmlFor="male" className="font-normal cursor-pointer">Male</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="female" id="female" />
-                          <Label htmlFor="female" className="font-normal cursor-pointer">Female</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="other" id="other" />
-                          <Label htmlFor="other" className="font-normal cursor-pointer">Other</Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Height (cm)</Label>
-                      <Input
-                        type="number"
-                        placeholder="e.g., 120"
-                        value={formData.height_cm}
-                        onChange={(e) => setFormData({ ...formData, height_cm: e.target.value })}
+              <div>
+                <Label>Gender (Optional)</Label>
+                <Select value={formData.gender} onValueChange={(value) => setFormData({ ...formData, gender: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                    <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Height (cm)</Label>
+                  <Input 
+                    type="number" 
+                    placeholder="e.g., 120"
+                    value={formData.height_cm || ''}
+                    onChange={(e) => setFormData({ ...formData, height_cm: e.target.value ? parseFloat(e.target.value) : null })}
+                  />
+                </div>
+                <div>
+                  <Label>Weight (kg)</Label>
+                  <Input 
+                    type="number" 
+                    placeholder="e.g., 25"
+                    value={formData.weight_kg || ''}
+                    onChange={(e) => setFormData({ ...formData, weight_kg: e.target.value ? parseFloat(e.target.value) : null })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="mb-3 block">Health Conditions or Growth Concerns</Label>
+                <p className="text-sm text-muted-foreground mb-3">Select any that apply:</p>
+                <div className="space-y-2">
+                  {['Underweight', 'Overweight', 'Iron deficiency', 'Constipation', 'Diabetes', 'ADHD'].map((concern) => (
+                    <div key={concern} className="flex items-center space-x-2">
+                      <Checkbox 
+                        id={concern}
+                        checked={formData.nutrition_concerns.includes(concern)}
+                        onCheckedChange={() => toggleArrayItem('nutrition_concerns', concern)}
                       />
+                      <Label htmlFor={concern} className="font-normal cursor-pointer">{concern}</Label>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Weight (kg)</Label>
-                      <Input
-                        type="number"
-                        placeholder="e.g., 25"
-                        value={formData.weight_kg}
-                        onChange={(e) => setFormData({ ...formData, weight_kg: e.target.value })}
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <Label className="mb-3 block">Health Goals (Optional)</Label>
+                <div className="space-y-2">
+                  {['Increase vegetable intake', 'More protein', 'Gain weight', 'Better nutrition', 'Reduce sugar'].map((goal) => (
+                    <div key={goal} className="flex items-center space-x-2">
+                      <Checkbox 
+                        id={goal}
+                        checked={formData.health_goals.includes(goal)}
+                        onCheckedChange={() => toggleArrayItem('health_goals', goal)}
                       />
+                      <Label htmlFor={goal} className="font-normal cursor-pointer">{goal}</Label>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
+          {/* Section 2: Food Allergies & Dietary Restrictions */}
           {currentStep === 1 && (
             <div className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-destructive" />
-                    Allergies & Restrictions
+                    Critical Safety Information
                   </CardTitle>
-                  <CardDescription>Critical safety information</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div>
-                    <Label className="mb-3 block">Known Allergens</Label>
+                    <Label className="mb-3 block">Known Food Allergies</Label>
                     <div className="grid grid-cols-3 gap-3">
                       {ALLERGENS.map((allergen) => (
                         <div key={allergen} className="flex items-center space-x-2">
                           <Checkbox
-                            id={`allergen-${allergen}`}
+                            id={allergen}
                             checked={formData.allergens.includes(allergen)}
-                            onCheckedChange={() => 
-                              toggleArrayItem(formData.allergens, allergen, (arr) => 
-                                setFormData({ ...formData, allergens: arr })
-                              )
-                            }
+                            onCheckedChange={() => toggleArrayItem('allergens', allergen)}
                           />
-                          <Label htmlFor={`allergen-${allergen}`} className="text-sm font-normal cursor-pointer capitalize">
+                          <Label htmlFor={allergen} className="text-sm font-normal cursor-pointer capitalize">
                             {allergen}
                           </Label>
                         </div>
@@ -264,7 +311,7 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
                       {formData.allergens.map((allergen) => (
                         <div key={allergen} className="flex items-center justify-between">
                           <span className="text-sm capitalize">{allergen}</span>
-                          <RadioGroup
+                          <Select
                             value={formData.allergen_severity[allergen] || ""}
                             onValueChange={(v) => 
                               setFormData({ 
@@ -272,21 +319,16 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
                                 allergen_severity: { ...formData.allergen_severity, [allergen]: v }
                               })
                             }
-                            className="flex gap-4"
                           >
-                            <div className="flex items-center space-x-1">
-                              <RadioGroupItem value="mild" id={`${allergen}-mild`} />
-                              <Label htmlFor={`${allergen}-mild`} className="text-xs font-normal cursor-pointer">Mild</Label>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              <RadioGroupItem value="moderate" id={`${allergen}-moderate`} />
-                              <Label htmlFor={`${allergen}-moderate`} className="text-xs font-normal cursor-pointer">Moderate</Label>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              <RadioGroupItem value="severe" id={`${allergen}-severe`} />
-                              <Label htmlFor={`${allergen}-severe`} className="text-xs font-normal cursor-pointer">Severe</Label>
-                            </div>
-                          </RadioGroup>
+                            <SelectTrigger className="w-32">
+                              <SelectValue placeholder="Select" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="mild">Mild</SelectItem>
+                              <SelectItem value="moderate">Moderate</SelectItem>
+                              <SelectItem value="severe">Severe</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                       ))}
                       
@@ -311,15 +353,11 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
                       {DIETARY_RESTRICTIONS.map((restriction) => (
                         <div key={restriction} className="flex items-center space-x-2">
                           <Checkbox
-                            id={`restriction-${restriction}`}
+                            id={restriction}
                             checked={formData.dietary_restrictions.includes(restriction)}
-                            onCheckedChange={() => 
-                              toggleArrayItem(formData.dietary_restrictions, restriction, (arr) => 
-                                setFormData({ ...formData, dietary_restrictions: arr })
-                              )
-                            }
+                            onCheckedChange={() => toggleArrayItem('dietary_restrictions', restriction)}
                           />
-                          <Label htmlFor={`restriction-${restriction}`} className="text-sm font-normal cursor-pointer capitalize">
+                          <Label htmlFor={restriction} className="text-sm font-normal cursor-pointer capitalize">
                             {restriction}
                           </Label>
                         </div>
@@ -331,302 +369,267 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
             </div>
           )}
 
+          {/* Section 3: Eating Behavior & Pickiness Assessment */}
           {currentStep === 2 && (
             <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Food Preferences</CardTitle>
-                  <CardDescription>What does {kidName} like and dislike?</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div>
-                    <Label className="mb-3 block">Texture Preferences</Label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {TEXTURE_OPTIONS.map((texture) => (
-                        <div key={texture} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`texture-pref-${texture}`}
-                            checked={formData.texture_preferences.includes(texture)}
-                            onCheckedChange={() => 
-                              toggleArrayItem(formData.texture_preferences, texture, (arr) => 
-                                setFormData({ ...formData, texture_preferences: arr })
-                              )
-                            }
-                          />
-                          <Label htmlFor={`texture-pref-${texture}`} className="text-xs font-normal cursor-pointer capitalize">
-                            {texture}
-                          </Label>
-                        </div>
-                      ))}
+              <div>
+                <Label className="mb-3 block">How would you describe {kidName}'s current eating habits?</Label>
+                <p className="text-sm text-muted-foreground mb-3">Select the option that best describes their variety:</p>
+                <div className="space-y-2">
+                  {[
+                    { value: 'wide_variety', label: 'Eats a wide variety (30+ different foods regularly)' },
+                    { value: 'moderate', label: 'Eats moderately (15-30 foods)' },
+                    { value: 'limited', label: 'Limited variety (10-15 foods)' },
+                    { value: 'very_limited', label: 'Very limited (fewer than 10 foods)' }
+                  ].map((option) => (
+                    <div key={option.value} className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id={option.value}
+                        name="eating_behavior"
+                        value={option.value}
+                        checked={formData.eating_behavior === option.value}
+                        onChange={(e) => setFormData({ ...formData, eating_behavior: e.target.value })}
+                        className="cursor-pointer"
+                      />
+                      <Label htmlFor={option.value} className="font-normal cursor-pointer">{option.label}</Label>
                     </div>
-                  </div>
+                  ))}
+                </div>
+              </div>
 
-                  <div>
-                    <Label className="mb-3 block">Texture Dislikes</Label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {TEXTURE_OPTIONS.map((texture) => (
-                        <div key={texture} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`texture-dis-${texture}`}
-                            checked={formData.texture_dislikes.includes(texture)}
-                            onCheckedChange={() => 
-                              toggleArrayItem(formData.texture_dislikes, texture, (arr) => 
-                                setFormData({ ...formData, texture_dislikes: arr })
-                              )
-                            }
-                          />
-                          <Label htmlFor={`texture-dis-${texture}`} className="text-xs font-normal cursor-pointer capitalize">
-                            {texture}
-                          </Label>
-                        </div>
-                      ))}
+              <div>
+                <Label className="mb-3 block">Eating Habits (Select all that apply)</Label>
+                <div className="space-y-2">
+                  {[
+                    'Eats the same foods every day',
+                    'Refuses to try new foods',
+                    'Gets upset when new foods are presented',
+                    'Only eats specific brands',
+                    'Food must be prepared a certain way',
+                    'Refuses mixed foods (foods touching)'
+                  ].map((habit) => (
+                    <div key={habit} className="flex items-center space-x-2">
+                      <Checkbox 
+                        id={habit}
+                        checked={formData.behavioral_notes.includes(habit)}
+                        onCheckedChange={(checked) => {
+                          const current = formData.behavioral_notes;
+                          const habits = current.split(',').map(h => h.trim()).filter(Boolean);
+                          const newNotes = checked 
+                            ? [...habits, habit].join(', ')
+                            : habits.filter(h => h !== habit).join(', ');
+                          setFormData({ ...formData, behavioral_notes: newNotes });
+                        }}
+                      />
+                      <Label htmlFor={habit} className="font-normal cursor-pointer">{habit}</Label>
                     </div>
-                  </div>
+                  ))}
+                </div>
+              </div>
 
-                  <div>
-                    <Label className="mb-3 block">Flavor Preferences</Label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {FLAVOR_OPTIONS.map((flavor) => (
-                        <div key={flavor} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`flavor-${flavor}`}
-                            checked={formData.flavor_preferences.includes(flavor)}
-                            onCheckedChange={() => 
-                              toggleArrayItem(formData.flavor_preferences, flavor, (arr) => 
-                                setFormData({ ...formData, flavor_preferences: arr })
-                              )
-                            }
-                          />
-                          <Label htmlFor={`flavor-${flavor}`} className="text-xs font-normal cursor-pointer capitalize">
-                            {flavor}
-                          </Label>
-                        </div>
-                      ))}
+              <div>
+                <Label className="mb-3 block">Willingness to try new foods</Label>
+                <div className="space-y-2">
+                  {[
+                    { value: 'willing', label: 'Willing and curious about new foods' },
+                    { value: 'hesitant', label: 'Hesitant but will sometimes try' },
+                    { value: 'very_hesitant', label: 'Very hesitant, rarely tries new foods' },
+                    { value: 'refuses', label: 'Refuses to try new foods entirely' }
+                  ].map((option) => (
+                    <div key={option.value} className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id={option.value}
+                        name="new_food_willingness"
+                        value={option.value}
+                        checked={formData.new_food_willingness === option.value}
+                        onChange={(e) => setFormData({ ...formData, new_food_willingness: e.target.value })}
+                        className="cursor-pointer"
+                      />
+                      <Label htmlFor={option.value} className="font-normal cursor-pointer">{option.label}</Label>
                     </div>
-                  </div>
-
-                  <div>
-                    <Label className="mb-3 block">Foods {kidName} Always Eats</Label>
-                    <Textarea
-                      placeholder="List foods your child will eat regardless of the situation..."
-                      value={formData.always_eats_foods.join(", ")}
-                      onChange={(e) => setFormData({ 
-                        ...formData, 
-                        always_eats_foods: e.target.value.split(",").map(f => f.trim()).filter(Boolean)
-                      })}
-                      rows={2}
-                    />
-                  </div>
-
-                  <div>
-                    <Label className="mb-3 block">Disliked Foods</Label>
-                    <Textarea
-                      placeholder="List foods your child refuses or strongly dislikes..."
-                      value={formData.disliked_foods.join(", ")}
-                      onChange={(e) => setFormData({ 
-                        ...formData, 
-                        disliked_foods: e.target.value.split(",").map(f => f.trim()).filter(Boolean)
-                      })}
-                      rows={2}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
+          {/* Section 4: Texture & Sensory Preferences */}
           {currentStep === 3 && (
             <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Eating Behavior & Goals</CardTitle>
-                  <CardDescription>Understanding {kidName}'s eating habits</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div>
-                    <Label className="mb-3 block">How would you describe their eating habits?</Label>
-                    <RadioGroup value={formData.eating_behavior} onValueChange={(v) => setFormData({ ...formData, eating_behavior: v })}>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="very_picky" id="very_picky" />
-                        <Label htmlFor="very_picky" className="font-normal cursor-pointer">Very picky (under 10 foods)</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="somewhat_selective" id="somewhat_selective" />
-                        <Label htmlFor="somewhat_selective" className="font-normal cursor-pointer">Somewhat selective</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="eats_most_foods" id="eats_most_foods" />
-                        <Label htmlFor="eats_most_foods" className="font-normal cursor-pointer">Eats most foods</Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-
-                  <div>
-                    <Label className="mb-3 block">How often do they try new foods?</Label>
-                    <RadioGroup value={formData.new_food_willingness} onValueChange={(v) => setFormData({ ...formData, new_food_willingness: v })}>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="rarely" id="rarely" />
-                        <Label htmlFor="rarely" className="font-normal cursor-pointer">Rarely</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="only_when_forced" id="only_when_forced" />
-                        <Label htmlFor="only_when_forced" className="font-normal cursor-pointer">Only when encouraged</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="sometimes" id="sometimes" />
-                        <Label htmlFor="sometimes" className="font-normal cursor-pointer">Sometimes</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="willing_to_explore" id="willing_to_explore" />
-                        <Label htmlFor="willing_to_explore" className="font-normal cursor-pointer">Willing to explore</Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-
-                  <div>
-                    <Label className="mb-3 block">Nutrition Concerns</Label>
-                    <div className="grid grid-cols-2 gap-3">
-                      {NUTRITION_CONCERNS.map((concern) => (
-                        <div key={concern} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`concern-${concern}`}
-                            checked={formData.nutrition_concerns.includes(concern)}
-                            onCheckedChange={() => 
-                              toggleArrayItem(formData.nutrition_concerns, concern, (arr) => 
-                                setFormData({ ...formData, nutrition_concerns: arr })
-                              )
-                            }
-                          />
-                          <Label htmlFor={`concern-${concern}`} className="text-sm font-normal cursor-pointer capitalize">
-                            {concern.replace(/_/g, " ")}
-                          </Label>
-                        </div>
-                      ))}
+              <div>
+                <Label className="mb-3 block">Does {kidName} have texture sensitivities?</Label>
+                <p className="text-sm text-muted-foreground mb-3">How sensitive are they to food textures?</p>
+                <div className="space-y-2">
+                  {[
+                    { value: 'none', label: 'No texture issues - eats all textures' },
+                    { value: 'mild', label: 'Mild - dislikes 1-2 specific textures' },
+                    { value: 'strong', label: 'Strong - avoids several textures' },
+                    { value: 'severe', label: 'Severe - texture aversions significantly limit diet' }
+                  ].map((option) => (
+                    <div key={option.value} className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id={`texture_sens_${option.value}`}
+                        name="texture_sensitivity_level"
+                        value={option.value}
+                        checked={formData.texture_sensitivity_level === option.value}
+                        onChange={(e) => setFormData({ ...formData, texture_sensitivity_level: e.target.value })}
+                        className="cursor-pointer"
+                      />
+                      <Label htmlFor={`texture_sens_${option.value}`} className="font-normal cursor-pointer">{option.label}</Label>
                     </div>
-                  </div>
+                  ))}
+                </div>
+              </div>
 
-                  <div>
-                    <Label className="mb-3 block">Health & Nutrition Goals</Label>
-                    <div className="space-y-2">
-                      {HEALTH_GOALS.map((goal) => (
-                        <div key={goal.value} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`goal-${goal.value}`}
-                            checked={formData.health_goals.includes(goal.value)}
-                            onCheckedChange={() => 
-                              toggleArrayItem(formData.health_goals, goal.value, (arr) => 
-                                setFormData({ ...formData, health_goals: arr })
-                              )
-                            }
-                          />
-                          <Label htmlFor={`goal-${goal.value}`} className="text-sm font-normal cursor-pointer">
-                            {goal.label}
-                          </Label>
-                        </div>
-                      ))}
+              {/* CONDITIONAL: Only show if texture sensitivity is strong or severe */}
+              {(formData.texture_sensitivity_level === 'strong' || formData.texture_sensitivity_level === 'severe') && (
+                <div className="bg-muted/50 p-4 rounded-lg border">
+                  <Label className="mb-3 block">Which textures does {kidName} avoid?</Label>
+                  <div className="space-y-2">
+                    {TEXTURE_OPTIONS.map((texture) => (
+                      <div key={texture} className="flex items-center space-x-2">
+                        <Checkbox 
+                          id={`avoid_${texture}`}
+                          checked={formData.texture_dislikes.includes(texture)}
+                          onCheckedChange={() => toggleArrayItem('texture_dislikes', texture)}
+                        />
+                        <Label htmlFor={`avoid_${texture}`} className="font-normal cursor-pointer">{texture}</Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <Label className="mb-3 block">Preferred Food Preparations (Optional)</Label>
+                <p className="text-sm text-muted-foreground mb-3">How does {kidName} prefer their food served?</p>
+                <div className="space-y-2">
+                  {['Foods must be separate (not touching)', 'Only cold foods', 'Only hot/warm foods', 'With dipping sauces', 'Cut into specific shapes', 'Pureed or blended'].map((prep) => (
+                    <div key={prep} className="flex items-center space-x-2">
+                      <Checkbox 
+                        id={prep}
+                        checked={formData.preferred_preparations.includes(prep)}
+                        onCheckedChange={() => toggleArrayItem('preferred_preparations', prep)}
+                      />
+                      <Label htmlFor={prep} className="font-normal cursor-pointer">{prep}</Label>
                     </div>
-                  </div>
+                  ))}
+                </div>
+              </div>
 
-                  <div>
-                    <Label className="mb-3 block">What helps them try new foods?</Label>
-                    <div className="grid grid-cols-2 gap-3">
-                      {HELPFUL_STRATEGIES.map((strategy) => (
-                        <div key={strategy} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`strategy-${strategy}`}
-                            checked={formData.helpful_strategies.includes(strategy)}
-                            onCheckedChange={() => 
-                              toggleArrayItem(formData.helpful_strategies, strategy, (arr) => 
-                                setFormData({ ...formData, helpful_strategies: arr })
-                              )
-                            }
-                          />
-                          <Label htmlFor={`strategy-${strategy}`} className="text-xs font-normal cursor-pointer">
-                            {strategy.replace(/_/g, " ")}
-                          </Label>
-                        </div>
-                      ))}
+              <div>
+                <Label className="mb-3 block">Texture Preferences (Foods they DO like)</Label>
+                <div className="space-y-2">
+                  {['Crunchy', 'Soft', 'Smooth', 'Chewy', 'Crispy'].map((texture) => (
+                    <div key={texture} className="flex items-center space-x-2">
+                      <Checkbox 
+                        id={`prefer_${texture}`}
+                        checked={formData.texture_preferences.includes(texture)}
+                        onCheckedChange={() => toggleArrayItem('texture_preferences', texture)}
+                      />
+                      <Label htmlFor={`prefer_${texture}`} className="font-normal cursor-pointer">{texture}</Label>
                     </div>
-                  </div>
-
-                  <div>
-                    <Label className="mb-3 block">Additional Behavioral Notes</Label>
-                    <Textarea
-                      placeholder="Any other information about feeding habits, therapy notes, cultural preferences..."
-                      value={formData.behavioral_notes}
-                      onChange={(e) => setFormData({ ...formData, behavioral_notes: e.target.value })}
-                      rows={3}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
+          {/* Section 5: Food Preferences by Category */}
           {currentStep === 4 && (
-            <div className="space-y-4">
+            <div className="space-y-6">
+              <p className="text-sm text-muted-foreground">Tell us what {kidName} regularly eats. This helps us suggest similar foods.</p>
+              
+              <div>
+                <Label className="mb-2 block">Favorite Foods (all categories)</Label>
+                <Input 
+                  placeholder="e.g., apples, chicken, pasta, yogurt"
+                  value={formData.favorite_foods.join(', ')}
+                  onChange={(e) => setFormData({ ...formData, favorite_foods: e.target.value.split(',').map(f => f.trim()).filter(Boolean) })}
+                />
+              </div>
+
+              <div>
+                <Label className="mb-2 block">Foods they eat EVERY day (if any)</Label>
+                <Input 
+                  placeholder="e.g., chicken nuggets, mac and cheese"
+                  value={formData.always_eats_foods.join(', ')}
+                  onChange={(e) => setFormData({ ...formData, always_eats_foods: e.target.value.split(',').map(f => f.trim()).filter(Boolean) })}
+                />
+                <p className="text-sm text-muted-foreground mt-1">These are "safe foods" we'll build from</p>
+              </div>
+            </div>
+          )}
+
+          {/* Section 6: Foods to Avoid & Dislikes (Optional) */}
+          {currentStep === 5 && (
+            <div className="space-y-6">
+              <div className="bg-muted/30 p-4 rounded-lg border">
+                <p className="text-sm font-medium mb-2">✨ This section is optional</p>
+                <p className="text-sm text-muted-foreground">You can skip this or add specific foods to avoid. This helps our AI make better suggestions.</p>
+              </div>
+
+              <div>
+                <Label className="mb-2 block">Foods {kidName} strongly dislikes or refuses</Label>
+                <Input 
+                  placeholder="e.g., mushrooms, onions, tomatoes"
+                  value={formData.disliked_foods.join(', ')}
+                  onChange={(e) => setFormData({ ...formData, disliked_foods: e.target.value.split(',').map(f => f.trim()).filter(Boolean) })}
+                />
+                <p className="text-sm text-muted-foreground mt-1">Separate with commas</p>
+              </div>
+            </div>
+          )}
+
+          {/* Section 7: Review */}
+          {currentStep === 6 && (
+            <div className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Check className="h-5 w-5 text-primary" />
-                    Review Profile
+                    Profile Summary
                   </CardTitle>
-                  <CardDescription>Confirm {kidName}'s information before submitting</CardDescription>
+                  <CardDescription>Review {kidName}'s information before completing</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {formData.allergens.length > 0 && (
                     <div>
-                      <Label className="text-sm text-muted-foreground">Allergens</Label>
-                      <div className="flex flex-wrap gap-2 mt-1">
-                        {formData.allergens.map(allergen => (
-                          <Badge key={allergen} variant="destructive" className="gap-1">
-                            <AlertTriangle className="h-3 w-3" />
-                            {allergen}
-                            {formData.allergen_severity[allergen] && ` (${formData.allergen_severity[allergen]})`}
+                      <h4 className="font-semibold text-sm mb-2 text-destructive">⚠️ Allergens</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {formData.allergens.map((allergen) => (
+                          <Badge key={allergen} variant="destructive" className="capitalize">
+                            {allergen} ({formData.allergen_severity[allergen] || 'unknown'})
                           </Badge>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {formData.dietary_restrictions.length > 0 && (
+                  {formData.eating_behavior && (
                     <div>
-                      <Label className="text-sm text-muted-foreground">Dietary Restrictions</Label>
-                      <div className="flex flex-wrap gap-2 mt-1">
-                        {formData.dietary_restrictions.map(restriction => (
-                          <Badge key={restriction} variant="secondary">{restriction}</Badge>
-                        ))}
-                      </div>
+                      <h4 className="font-semibold text-sm mb-2">Eating Habits</h4>
+                      <p className="text-sm">{formData.eating_behavior.replace('_', ' ')}</p>
+                      {formData.pickiness_level && (
+                        <Badge variant="outline" className="mt-1">{formData.pickiness_level.replace('_', ' ')}</Badge>
+                      )}
                     </div>
                   )}
 
-                  {formData.health_goals.length > 0 && (
+                  {formData.favorite_foods.length > 0 && (
                     <div>
-                      <Label className="text-sm text-muted-foreground">Health Goals</Label>
-                      <div className="flex flex-wrap gap-2 mt-1">
-                        {formData.health_goals.map(goal => (
-                          <Badge key={goal} variant="outline">{goal.replace(/_/g, " ")}</Badge>
-                        ))}
-                      </div>
+                      <h4 className="font-semibold text-sm mb-2">Favorite Foods</h4>
+                      <p className="text-sm">{formData.favorite_foods.join(', ')}</p>
                     </div>
                   )}
 
-                  <div>
-                    <Label className="text-sm text-muted-foreground">Eating Behavior</Label>
-                    <p className="text-sm mt-1 capitalize">{formData.eating_behavior?.replace(/_/g, " ") || "Not specified"}</p>
-                  </div>
-
-                  {formData.texture_preferences.length > 0 && (
+                  {formData.texture_sensitivity_level && (
                     <div>
-                      <Label className="text-sm text-muted-foreground">Texture Preferences</Label>
-                      <p className="text-sm mt-1 capitalize">{formData.texture_preferences.join(", ")}</p>
-                    </div>
-                  )}
-
-                  {formData.flavor_preferences.length > 0 && (
-                    <div>
-                      <Label className="text-sm text-muted-foreground">Flavor Preferences</Label>
-                      <p className="text-sm mt-1 capitalize">{formData.flavor_preferences.join(", ")}</p>
+                      <h4 className="font-semibold text-sm mb-2">Texture Sensitivity</h4>
+                      <Badge variant="outline">{formData.texture_sensitivity_level}</Badge>
                     </div>
                   )}
                 </CardContent>
@@ -635,25 +638,29 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
           )}
         </div>
 
-        <div className="flex justify-between pt-4 border-t">
+        <div className="flex items-center justify-between gap-2 pt-4 border-t">
           <Button
             variant="outline"
             onClick={handleBack}
             disabled={currentStep === 0}
           >
-            <ChevronLeft className="h-4 w-4 mr-2" />
+            <ChevronLeft className="h-4 w-4 mr-1" />
             Back
           </Button>
-          
+
+          <div className="text-sm text-muted-foreground">
+            Step {currentStep + 1} of {steps.length}
+          </div>
+
           {currentStep < steps.length - 1 ? (
             <Button onClick={handleNext}>
               Next
-              <ChevronRight className="h-4 w-4 ml-2" />
+              <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           ) : (
             <Button onClick={handleSubmit} disabled={saving}>
-              <Check className="h-4 w-4 mr-2" />
               {saving ? "Saving..." : "Complete Profile"}
+              <Check className="h-4 w-4 ml-1" />
             </Button>
           )}
         </div>
