@@ -1860,9 +1860,10 @@ export type Database = {
           created_at: string | null
           id: string
           is_active: boolean | null
+          is_global: boolean | null
           last_posted_at: string | null
           metadata: Json | null
-          platform: Database["public"]["Enums"]["social_platform"]
+          platform: Database["public"]["Enums"]["social_platform"] | null
           updated_at: string | null
           webhook_url: string | null
         }
@@ -1873,9 +1874,10 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          is_global?: boolean | null
           last_posted_at?: string | null
           metadata?: Json | null
-          platform: Database["public"]["Enums"]["social_platform"]
+          platform?: Database["public"]["Enums"]["social_platform"] | null
           updated_at?: string | null
           webhook_url?: string | null
         }
@@ -1886,9 +1888,10 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          is_global?: boolean | null
           last_posted_at?: string | null
           metadata?: Json | null
-          platform?: Database["public"]["Enums"]["social_platform"]
+          platform?: Database["public"]["Enums"]["social_platform"] | null
           updated_at?: string | null
           webhook_url?: string | null
         }
@@ -1903,14 +1906,17 @@ export type Database = {
           id: string
           image_urls: string[] | null
           link_url: string | null
+          long_form_content: string | null
           metadata: Json | null
           platforms: Database["public"]["Enums"]["social_platform"][]
           published_at: string | null
           scheduled_for: string | null
+          short_form_content: string | null
           status: Database["public"]["Enums"]["post_status"]
           title: string | null
           updated_at: string | null
           video_url: string | null
+          webhook_url: string | null
         }
         Insert: {
           content: string
@@ -1920,14 +1926,17 @@ export type Database = {
           id?: string
           image_urls?: string[] | null
           link_url?: string | null
+          long_form_content?: string | null
           metadata?: Json | null
           platforms: Database["public"]["Enums"]["social_platform"][]
           published_at?: string | null
           scheduled_for?: string | null
+          short_form_content?: string | null
           status?: Database["public"]["Enums"]["post_status"]
           title?: string | null
           updated_at?: string | null
           video_url?: string | null
+          webhook_url?: string | null
         }
         Update: {
           content?: string
@@ -1937,14 +1946,17 @@ export type Database = {
           id?: string
           image_urls?: string[] | null
           link_url?: string | null
+          long_form_content?: string | null
           metadata?: Json | null
           platforms?: Database["public"]["Enums"]["social_platform"][]
           published_at?: string | null
           scheduled_for?: string | null
+          short_form_content?: string | null
           status?: Database["public"]["Enums"]["post_status"]
           title?: string | null
           updated_at?: string | null
           video_url?: string | null
+          webhook_url?: string | null
         }
         Relationships: []
       }
@@ -2427,6 +2439,7 @@ export type Database = {
         | "linkedin"
         | "tiktok"
         | "pinterest"
+        | "webhook"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2583,6 +2596,7 @@ export const Constants = {
         "linkedin",
         "tiktok",
         "pinterest",
+        "webhook",
       ],
     },
   },
