@@ -41,6 +41,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
 
   const startCamera = async () => {
     try {
+      console.log('Requesting camera access...');
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: 'environment',
@@ -49,14 +50,27 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
         }
       });
       
+      console.log('Camera stream obtained:', mediaStream.active);
+      
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        // Explicitly play the video for iOS/Safari
-        try {
-          await videoRef.current.play();
-        } catch (playError) {
-          console.error('Error playing video:', playError);
-        }
+        console.log('Stream assigned to video element');
+        
+        // Wait for video metadata to load
+        videoRef.current.onloadedmetadata = async () => {
+          console.log('Video metadata loaded, attempting to play...');
+          try {
+            await videoRef.current?.play();
+            console.log('Video playing successfully');
+          } catch (playError) {
+            console.error('Error playing video:', playError);
+            toast({
+              title: "Video Play Error",
+              description: "Unable to start video playback",
+              variant: "destructive",
+            });
+          }
+        };
       }
       
       setStream(mediaStream);
@@ -80,7 +94,21 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
   };
 
   const capturePhoto = () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current) {
+      console.error('Video ref not available');
+      return;
+    }
+
+    console.log('Video dimensions:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight);
+
+    if (videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
+      toast({
+        title: "Camera Not Ready",
+        description: "Please wait for the camera to fully load",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const canvas = document.createElement('canvas');
     canvas.width = videoRef.current.videoWidth;
@@ -89,6 +117,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
     if (ctx) {
       ctx.drawImage(videoRef.current, 0, 0);
       const imageData = canvas.toDataURL('image/jpeg', 0.8);
+      console.log('Image captured, data URL length:', imageData.length);
       setCapturedImage(imageData);
       stopCamera();
       analyzeImage(imageData);
