@@ -34,12 +34,12 @@ interface CalendarMealPlannerProps {
 }
 
 const MEAL_SLOTS: { slot: MealSlot; label: string; color: string }[] = [
-  { slot: "breakfast", label: "Breakfast", color: "bg-orange-100 border-orange-300" },
-  { slot: "lunch", label: "Lunch", color: "bg-green-100 border-green-300" },
-  { slot: "dinner", label: "Dinner", color: "bg-blue-100 border-blue-300" },
-  { slot: "snack1", label: "Snack 1", color: "bg-purple-100 border-purple-300" },
-  { slot: "snack2", label: "Snack 2", color: "bg-pink-100 border-pink-300" },
-  { slot: "try_bite", label: "Try Bite", color: "bg-yellow-100 border-yellow-300" },
+  { slot: "breakfast", label: "Breakfast", color: "bg-orange-100 dark:bg-orange-900/30 border-orange-300 dark:border-orange-700" },
+  { slot: "lunch", label: "Lunch", color: "bg-green-100 dark:bg-green-900/30 border-green-300 dark:border-green-700" },
+  { slot: "dinner", label: "Dinner", color: "bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700" },
+  { slot: "snack1", label: "Snack 1", color: "bg-purple-100 dark:bg-purple-900/30 border-purple-300 dark:border-purple-700" },
+  { slot: "snack2", label: "Snack 2", color: "bg-pink-100 dark:bg-pink-900/30 border-pink-300 dark:border-pink-700" },
+  { slot: "try_bite", label: "Try Bite", color: "bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700" },
 ];
 
 const DAYS_IN_WEEK = 7;
@@ -61,7 +61,9 @@ export function CalendarMealPlanner({
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8,
+        distance: 5, // Reduced for better mobile touch response
+        tolerance: 5,
+        delay: 100, // Small delay to distinguish from scrolling
       },
     })
   );
@@ -168,15 +170,15 @@ export function CalendarMealPlanner({
           <TooltipTrigger asChild>
             <div
               className={cn(
-                "p-2 rounded border cursor-move hover:shadow-md transition-all",
+                "p-2 rounded border cursor-move hover:shadow-md transition-all touch-none",
                 isDragging && "opacity-50",
                 isOutOfStock && "bg-destructive/10 border-destructive",
-                isLowStock && "bg-yellow-50 border-yellow-300",
+                isLowStock && "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700",
                 !isOutOfStock && !isLowStock && "bg-card border-border"
               )}
             >
               <div className="flex items-center justify-between gap-1">
-                <span className="text-xs md:text-sm font-medium truncate flex-1">
+                <span className="text-xs md:text-sm font-medium truncate flex-1 text-foreground">
                   {food.name}
                 </span>
                 {isOutOfStock ? (
@@ -282,10 +284,10 @@ export function CalendarMealPlanner({
           <div className="min-w-[1000px]">
             {/* Header with days */}
             <div className="grid grid-cols-8 gap-2 mb-2">
-              <div className="font-medium text-sm text-muted-foreground">Meals</div>
+              <div className="font-medium text-sm text-foreground">Meals</div>
               {days.map(day => (
                 <div key={day.date} className="text-center">
-                  <div className="text-sm font-semibold">{day.label}</div>
+                  <div className="text-sm font-semibold text-foreground">{day.label}</div>
                   <div className="text-xs text-muted-foreground">
                     {day.month} {day.dayNum}
                   </div>
@@ -297,7 +299,7 @@ export function CalendarMealPlanner({
             {MEAL_SLOTS.map(({ slot, label, color }) => (
               <div key={slot} className="grid grid-cols-8 gap-2 mb-2">
                 <div className={cn("flex items-center justify-center rounded-lg p-2", color)}>
-                  <span className="text-sm font-medium">{label}</span>
+                  <span className="text-sm font-medium text-foreground">{label}</span>
                 </div>
                 
                 {days.map(day => {
@@ -336,7 +338,7 @@ export function CalendarMealPlanner({
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <div className="text-center">
-            <div className="font-semibold">
+            <div className="font-semibold text-foreground">
               {days[mobileViewDay].label}
             </div>
             <div className="text-xs text-muted-foreground">
@@ -365,7 +367,7 @@ export function CalendarMealPlanner({
               <Card key={slot} className={color}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm">{label}</span>
+                    <span className="font-semibold text-sm text-foreground">{label}</span>
                     {slot === "try_bite" && <Sparkles className="h-4 w-4 text-try-bite" />}
                   </div>
                 </CardHeader>
