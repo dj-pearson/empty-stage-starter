@@ -1295,45 +1295,102 @@ export type Database = {
       kids: {
         Row: {
           age: number | null
+          allergen_severity: Json | null
           allergens: string[] | null
+          always_eats_foods: string[] | null
+          behavioral_notes: string | null
           created_at: string | null
+          cross_contamination_sensitive: boolean | null
           date_of_birth: string | null
+          dietary_restrictions: string[] | null
+          disliked_foods: string[] | null
+          eating_behavior: string | null
           favorite_foods: string[] | null
+          flavor_preferences: string[] | null
+          gender: string | null
+          health_goals: string[] | null
+          height_cm: number | null
+          helpful_strategies: string[] | null
           household_id: string | null
           id: string
           name: string
+          new_food_willingness: string | null
           notes: string | null
+          nutrition_concerns: string[] | null
+          profile_completed: boolean | null
+          profile_last_reviewed: string | null
           profile_picture_url: string | null
+          texture_dislikes: string[] | null
+          texture_preferences: string[] | null
           updated_at: string | null
           user_id: string
+          weight_kg: number | null
         }
         Insert: {
           age?: number | null
+          allergen_severity?: Json | null
           allergens?: string[] | null
+          always_eats_foods?: string[] | null
+          behavioral_notes?: string | null
           created_at?: string | null
+          cross_contamination_sensitive?: boolean | null
           date_of_birth?: string | null
+          dietary_restrictions?: string[] | null
+          disliked_foods?: string[] | null
+          eating_behavior?: string | null
           favorite_foods?: string[] | null
+          flavor_preferences?: string[] | null
+          gender?: string | null
+          health_goals?: string[] | null
+          height_cm?: number | null
+          helpful_strategies?: string[] | null
           household_id?: string | null
           id?: string
           name: string
+          new_food_willingness?: string | null
           notes?: string | null
+          nutrition_concerns?: string[] | null
+          profile_completed?: boolean | null
+          profile_last_reviewed?: string | null
           profile_picture_url?: string | null
+          texture_dislikes?: string[] | null
+          texture_preferences?: string[] | null
           updated_at?: string | null
           user_id: string
+          weight_kg?: number | null
         }
         Update: {
           age?: number | null
+          allergen_severity?: Json | null
           allergens?: string[] | null
+          always_eats_foods?: string[] | null
+          behavioral_notes?: string | null
           created_at?: string | null
+          cross_contamination_sensitive?: boolean | null
           date_of_birth?: string | null
+          dietary_restrictions?: string[] | null
+          disliked_foods?: string[] | null
+          eating_behavior?: string | null
           favorite_foods?: string[] | null
+          flavor_preferences?: string[] | null
+          gender?: string | null
+          health_goals?: string[] | null
+          height_cm?: number | null
+          helpful_strategies?: string[] | null
           household_id?: string | null
           id?: string
           name?: string
+          new_food_willingness?: string | null
           notes?: string | null
+          nutrition_concerns?: string[] | null
+          profile_completed?: boolean | null
+          profile_last_reviewed?: string | null
           profile_picture_url?: string | null
+          texture_dislikes?: string[] | null
+          texture_preferences?: string[] | null
           updated_at?: string | null
           user_id?: string
+          weight_kg?: number | null
         }
         Relationships: [
           {
