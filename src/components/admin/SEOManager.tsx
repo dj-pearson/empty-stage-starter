@@ -16,8 +16,10 @@ import {
   Download,
   Copy,
   RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export function SEOManager() {
   const [robotsTxt, setRobotsTxt] = useState("");
@@ -38,6 +40,8 @@ export function SEOManager() {
 
   const [structuredData, setStructuredData] = useState({});
   const [seoAudit, setSeoAudit] = useState<any>(null);
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [auditUrl, setAuditUrl] = useState(window.location.origin);
 
   useEffect(() => {
     loadSEOSettings();
@@ -165,102 +169,94 @@ RESTful API available for integrations. Contact for API access.
     runSEOAudit();
   };
 
-  const runSEOAudit = () => {
-    const audit = {
-      passed: [] as string[],
-      warnings: [] as string[],
-      failed: [] as string[],
-    };
+  const runSEOAudit = async () => {
+    setIsAuditing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('seo-audit', {
+        body: { url: auditUrl }
+      });
 
-    // Check meta tags
-    const titleTag = document.querySelector("title");
-    if (titleTag && titleTag.textContent && titleTag.textContent.length > 0) {
-      if (titleTag.textContent.length >= 30 && titleTag.textContent.length <= 60) {
-        audit.passed.push("✓ Title tag length is optimal (30-60 characters)");
+      if (error) throw error;
+
+      const audit = {
+        passed: [] as string[],
+        warnings: [] as string[],
+        failed: [] as string[],
+        technical: data.audit.technical,
+        content: data.audit.content,
+        performance: data.audit.performance,
+      };
+
+      // Process technical issues
+      if (data.audit.technical.https) {
+        audit.passed.push("✓ Site uses HTTPS");
       } else {
-        audit.warnings.push("⚠ Title tag should be 30-60 characters");
+        audit.failed.push("✗ Site not using HTTPS");
       }
-    } else {
-      audit.failed.push("✗ Missing title tag");
-    }
 
-    const metaDescription = document.querySelector('meta[name="description"]');
-    if (metaDescription) {
-      const content = metaDescription.getAttribute("content") || "";
-      if (content.length >= 120 && content.length <= 160) {
-        audit.passed.push("✓ Meta description length is optimal (120-160 characters)");
+      if (data.audit.technical.hasViewport) {
+        audit.passed.push("✓ Viewport meta tag present (mobile-friendly)");
       } else {
-        audit.warnings.push("⚠ Meta description should be 120-160 characters");
+        audit.failed.push("✗ Missing viewport meta tag");
       }
-    } else {
-      audit.failed.push("✗ Missing meta description");
+
+      if (data.audit.technical.structuredDataCount > 0) {
+        audit.passed.push(`✓ ${data.audit.technical.structuredDataCount} structured data schema(s) found`);
+      } else {
+        audit.warnings.push("⚠ No structured data found");
+      }
+
+      if (data.audit.technical.hasCompression) {
+        audit.passed.push("✓ Content compression enabled");
+      } else {
+        audit.warnings.push("⚠ Content compression not enabled");
+      }
+
+      // Process content issues
+      if (data.audit.content.wordCount >= 300) {
+        audit.passed.push(`✓ Good word count (${data.audit.content.wordCount} words)`);
+      } else {
+        audit.warnings.push(`⚠ Low word count (${data.audit.content.wordCount} words)`);
+      }
+
+      if (data.audit.content.linksCount >= 3) {
+        audit.passed.push(`✓ ${data.audit.content.linksCount} internal links found`);
+      } else {
+        audit.warnings.push("⚠ Few internal links detected");
+      }
+
+      if (data.audit.content.imagesMissingAlt === 0) {
+        audit.passed.push("✓ All images have alt attributes");
+      } else {
+        audit.warnings.push(`⚠ ${data.audit.content.imagesMissingAlt} images missing alt attributes`);
+      }
+
+      audit.passed.push(`✓ Text-to-HTML ratio: ${data.audit.content.textToHtmlRatio}%`);
+
+      // Process performance issues
+      if (data.audit.performance.hasCaching) {
+        audit.passed.push("✓ Cache-Control header present");
+      } else {
+        audit.warnings.push("⚠ No Cache-Control header");
+      }
+
+      // Add any additional issues
+      [...data.audit.technical.issues, ...data.audit.content.issues, ...data.audit.performance.issues].forEach(issue => {
+        if (issue.type === 'error') {
+          audit.failed.push(`✗ ${issue.message}`);
+        } else {
+          audit.warnings.push(`⚠ ${issue.message}`);
+        }
+      });
+
+      setSeoAudit(audit);
+      toast.success("SEO audit completed successfully");
+    } catch (error: any) {
+      console.error("SEO audit error:", error);
+      toast.error("Failed to run SEO audit: " + error.message);
+    } finally {
+      setIsAuditing(false);
     }
-
-    // Check Open Graph tags
-    const ogTitle = document.querySelector('meta[property="og:title"]');
-    const ogDescription = document.querySelector('meta[property="og:description"]');
-    const ogImage = document.querySelector('meta[property="og:image"]');
-
-    if (ogTitle) {
-      audit.passed.push("✓ Open Graph title present");
-    } else {
-      audit.warnings.push("⚠ Missing Open Graph title");
-    }
-
-    if (ogDescription) {
-      audit.passed.push("✓ Open Graph description present");
-    } else {
-      audit.warnings.push("⚠ Missing Open Graph description");
-    }
-
-    if (ogImage) {
-      audit.passed.push("✓ Open Graph image present");
-    } else {
-      audit.warnings.push("⚠ Missing Open Graph image");
-    }
-
-    // Check Twitter tags
-    const twitterCard = document.querySelector('meta[name="twitter:card"]');
-    if (twitterCard) {
-      audit.passed.push("✓ Twitter Card meta present");
-    } else {
-      audit.warnings.push("⚠ Missing Twitter Card meta");
-    }
-
-    // Check canonical URL
-    const canonical = document.querySelector('link[rel="canonical"]');
-    if (canonical) {
-      audit.passed.push("✓ Canonical URL present");
-    } else {
-      audit.warnings.push("⚠ Missing canonical URL");
-    }
-
-    // Check viewport
-    const viewport = document.querySelector('meta[name="viewport"]');
-    if (viewport) {
-      audit.passed.push("✓ Viewport meta tag present (mobile-friendly)");
-    } else {
-      audit.failed.push("✗ Missing viewport meta tag");
-    }
-
-    // Check HTTPS
-    if (window.location.protocol === "https:") {
-      audit.passed.push("✓ Site uses HTTPS");
-    } else {
-      audit.warnings.push("⚠ Site should use HTTPS");
-    }
-
-    // Check headings
-    const h1s = document.querySelectorAll("h1");
-    if (h1s.length === 1) {
-      audit.passed.push("✓ Single H1 tag (best practice)");
-    } else if (h1s.length === 0) {
-      audit.failed.push("✗ Missing H1 tag");
-    } else {
-      audit.warnings.push(`⚠ Multiple H1 tags found (${h1s.length})`);
-    }
-
-    setSeoAudit(audit);
   };
 
   const handleCopyToClipboard = (content: string, label: string) => {
@@ -286,17 +282,46 @@ RESTful API available for integrations. Contact for API access.
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">SEO Management</h2>
-          <p className="text-sm text-muted-foreground">
-            Configure SEO settings, meta tags, and generate required files
-          </p>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">SEO Management</h2>
+            <p className="text-sm text-muted-foreground">
+              Configure SEO settings, meta tags, and generate required files
+            </p>
+          </div>
         </div>
-        <Button onClick={runSEOAudit} variant="outline">
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Run SEO Audit
-        </Button>
+
+        {/* SEO Audit URL Input */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Run SEO Audit</CardTitle>
+            <CardDescription>Analyze any URL for SEO best practices</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                value={auditUrl}
+                onChange={(e) => setAuditUrl(e.target.value)}
+                placeholder="https://example.com"
+                className="flex-1"
+              />
+              <Button onClick={runSEOAudit} disabled={isAuditing}>
+                {isAuditing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Auditing...
+                  </>
+                ) : (
+                  <>
+                    <Search className="h-4 w-4 mr-2" />
+                    Audit URL
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* SEO Audit Results */}
