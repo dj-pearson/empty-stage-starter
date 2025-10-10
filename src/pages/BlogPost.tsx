@@ -1,11 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Calendar, Clock, User, Share2 } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, Share2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 
 interface BlogPostData {
   id: string;
@@ -119,6 +122,86 @@ const BlogPost = () => {
       toast.success("Link copied to clipboard!");
     }
   };
+
+  // Detect content format and render accordingly
+  const renderContent = useMemo(() => {
+    if (!post) return null;
+
+    const content = post.content;
+    
+    // Check if content is HTML (contains HTML tags)
+    const hasHTMLTags = /<\/?[a-z][\s\S]*>/i.test(content);
+    
+    // Check if content is Markdown (contains markdown syntax)
+    const hasMarkdownSyntax = /^#{1,6}\s|^\*{1,2}[^*]|\[.*\]\(.*\)|^\d+\.|^[-*+]\s/m.test(content);
+    
+    // If it has HTML tags, render as HTML
+    if (hasHTMLTags && !hasMarkdownSyntax) {
+      return (
+        <div 
+          className="prose prose-lg max-w-none dark:prose-invert
+            prose-headings:font-heading prose-headings:text-primary
+            prose-h1:text-4xl prose-h1:mt-12 prose-h1:mb-6
+            prose-h2:text-3xl prose-h2:mt-12 prose-h2:mb-6
+            prose-h3:text-2xl prose-h3:mt-8 prose-h3:mb-4
+            prose-h4:text-xl prose-h4:mt-6 prose-h4:mb-3
+            prose-p:leading-relaxed prose-p:mb-6
+            prose-ul:my-6 prose-ol:my-6
+            prose-li:my-2
+            prose-a:text-primary prose-a:no-underline hover:prose-a:underline
+            prose-img:rounded-lg prose-img:shadow-lg prose-img:my-8
+            prose-blockquote:border-l-4 prose-blockquote:border-primary
+            prose-blockquote:pl-6 prose-blockquote:italic prose-blockquote:my-8
+            prose-strong:text-foreground prose-strong:font-semibold
+            prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:rounded
+            prose-pre:bg-secondary prose-pre:p-4 prose-pre:rounded-lg prose-pre:my-6"
+          dangerouslySetInnerHTML={{ __html: content }}
+        />
+      );
+    }
+    
+    // If it has markdown syntax, render as Markdown
+    if (hasMarkdownSyntax) {
+      return (
+        <div className="prose prose-lg max-w-none dark:prose-invert
+          prose-headings:font-heading prose-headings:text-primary
+          prose-h1:text-4xl prose-h1:mt-12 prose-h1:mb-6
+          prose-h2:text-3xl prose-h2:mt-12 prose-h2:mb-6
+          prose-h3:text-2xl prose-h3:mt-8 prose-h3:mb-4
+          prose-h4:text-xl prose-h4:mt-6 prose-h4:mb-3
+          prose-p:leading-relaxed prose-p:mb-6
+          prose-ul:my-6 prose-ol:my-6
+          prose-li:my-2
+          prose-a:text-primary prose-a:no-underline hover:prose-a:underline
+          prose-img:rounded-lg prose-img:shadow-lg prose-img:my-8
+          prose-blockquote:border-l-4 prose-blockquote:border-primary
+          prose-blockquote:pl-6 prose-blockquote:italic prose-blockquote:my-8
+          prose-strong:text-foreground prose-strong:font-semibold
+          prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:rounded
+          prose-pre:bg-secondary prose-pre:p-4 prose-pre:rounded-lg prose-pre:my-6
+          prose-table:my-6 prose-table:border-collapse
+          prose-th:border prose-th:border-border prose-th:p-2 prose-th:bg-secondary
+          prose-td:border prose-td:border-border prose-td:p-2"
+        >
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeRaw]}
+          >
+            {content}
+          </ReactMarkdown>
+        </div>
+      );
+    }
+    
+    // Default: treat as plain text with paragraph breaks
+    return (
+      <div className="prose prose-lg max-w-none dark:prose-invert prose-p:leading-relaxed prose-p:mb-6">
+        {content.split('\n\n').map((paragraph, index) => (
+          <p key={index}>{paragraph}</p>
+        ))}
+      </div>
+    );
+  }, [post]);
 
   if (isLoading) {
     return (
@@ -243,21 +326,7 @@ const BlogPost = () => {
         )}
 
         {/* Main Content */}
-        <div 
-          className="prose prose-lg max-w-none dark:prose-invert
-            prose-headings:font-heading prose-headings:text-primary
-            prose-h2:text-3xl prose-h2:mt-12 prose-h2:mb-6
-            prose-h3:text-2xl prose-h3:mt-8 prose-h3:mb-4
-            prose-p:leading-relaxed prose-p:mb-6
-            prose-ul:my-6 prose-ol:my-6
-            prose-li:my-2
-            prose-a:text-primary prose-a:no-underline hover:prose-a:underline
-            prose-img:rounded-lg prose-img:shadow-lg
-            prose-blockquote:border-l-4 prose-blockquote:border-primary
-            prose-blockquote:pl-6 prose-blockquote:italic
-            prose-strong:text-foreground"
-          dangerouslySetInnerHTML={{ __html: post.content }}
-        />
+        {renderContent}
       </article>
 
       {/* Related Posts */}
