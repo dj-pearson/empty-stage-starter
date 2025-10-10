@@ -13,6 +13,7 @@ import Home from "./pages/Home";
 import Pantry from "./pages/Pantry";
 import Recipes from "./pages/Recipes";
 import Planner from "./pages/Planner";
+import AIPlanner from "./pages/AIPlanner";
 import Grocery from "./pages/Grocery";
 import Kids from "./pages/Kids";
 import Analytics from "./pages/Analytics";
@@ -57,6 +58,7 @@ const App = () => (
               <Route path="pantry" element={<Pantry />} />
               <Route path="recipes" element={<Recipes />} />
               <Route path="planner" element={<Planner />} />
+              <Route path="ai-planner" element={<AIPlanner />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="grocery" element={<Grocery />} />
               <Route path="food-tracker" element={<FoodTracker />} />

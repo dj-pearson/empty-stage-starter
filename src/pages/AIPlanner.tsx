@@ -95,11 +95,7 @@ export default function AIPlanner() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <KidSelector 
-                kids={kids}
-                activeKidId={activeKidId}
-                onKidChange={setActiveKidId}
-              />
+              <KidSelector />
 
               {activeKid && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">

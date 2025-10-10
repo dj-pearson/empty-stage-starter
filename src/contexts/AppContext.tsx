@@ -17,11 +17,13 @@ interface AppContextType {
   updateKid: (id: string, kid: Partial<Kid>) => void;
   deleteKid: (id: string) => void;
   setActiveKid: (id: string) => void;
+  setActiveKidId: (id: string) => void;
   addRecipe: (recipe: Omit<Recipe, "id">) => void;
   updateRecipe: (id: string, recipe: Partial<Recipe>) => void;
   deleteRecipe: (id: string) => void;
   setPlanEntries: (entries: PlanEntry[]) => void;
   addPlanEntry: (entry: Omit<PlanEntry, "id">) => void;
+  addPlanEntries: (entries: Omit<PlanEntry, "id">[]) => void;
   updatePlanEntry: (id: string, updates: Partial<PlanEntry>) => void;
   setGroceryItems: (items: GroceryItem[]) => void;
   addGroceryItem: (item: Omit<GroceryItem, "id" | "checked">) => void;
@@ -365,6 +367,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const addPlanEntries = async (entries: Omit<PlanEntry, "id">[]) => {
+    if (userId && householdId) {
+      const entriesWithIds = entries.map(e => ({ ...e, user_id: userId, household_id: householdId }));
+      const { data, error } = await supabase
+        .from('plan_entries')
+        .insert(entriesWithIds)
+        .select();
+      
+      if (error) {
+        console.error('Supabase addPlanEntries error:', error);
+        const localEntries = entries.map(e => ({ ...e, id: generateId() }));
+        setPlanEntriesState([...planEntries, ...localEntries]);
+      } else if (data) {
+        setPlanEntriesState([...planEntries, ...(data as unknown as PlanEntry[])]);
+      }
+    } else {
+      const newEntries = entries.map(e => ({ ...e, id: generateId() }));
+      setPlanEntriesState([...planEntries, ...newEntries]);
+    }
+  };
+
   const updatePlanEntry = (id: string, updates: Partial<PlanEntry>) => {
     if (userId) {
       supabase
@@ -492,11 +515,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateKid,
         deleteKid,
         setActiveKid,
+        setActiveKidId: setActiveKidId,
         addRecipe,
         updateRecipe,
         deleteRecipe,
         setPlanEntries,
         addPlanEntry,
+        addPlanEntries,
         updatePlanEntry,
         setGroceryItems,
         addGroceryItem,

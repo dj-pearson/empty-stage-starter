@@ -15,6 +15,7 @@ const baseNavItems = [
   { to: "/dashboard/pantry", icon: Utensils, label: "Pantry" },
   { to: "/dashboard/recipes", icon: ChefHat, label: "Recipes" },
   { to: "/dashboard/planner", icon: Calendar, label: "Planner" },
+  { to: "/dashboard/ai-planner", icon: Sparkles, label: "AI Planner" },
   { to: "/dashboard/analytics", icon: BarChart3, label: "Analytics" },
   { to: "/dashboard/grocery", icon: ShoppingCart, label: "Grocery" },
   { to: "/dashboard/food-tracker", icon: Target, label: "Food Tracker" },

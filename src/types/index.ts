@@ -27,6 +27,18 @@ export interface Kid {
   allergens?: string[];
   profile_picture_url?: string;
   favorite_foods?: string[];
+  pickiness_level?: string;
+  profile_completed?: boolean;
+  texture_preferences?: string[];
+  texture_dislikes?: string[];
+  flavor_preferences?: string[];
+  dietary_restrictions?: string[];
+  health_goals?: string[];
+  new_food_willingness?: string;
+  eating_behavior?: string;
+  helpful_strategies?: string[];
+  disliked_foods?: string[];
+  always_eats_foods?: string[];
 }
 
 export interface PlanEntry {
