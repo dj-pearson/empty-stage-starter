@@ -311,6 +311,51 @@ export function SocialMediaManager() {
     }
   };
 
+  const handleResendToWebhook = async (postId: string) => {
+    try {
+      const post = posts.find(p => p.id === postId);
+      if (!post) return;
+
+      // Get global webhook URL
+      const globalAccount = accounts.find((a) => a.is_global && a.is_active && a.webhook_url);
+      if (!globalAccount?.webhook_url) {
+        toast.error("No global webhook configured. Please add one in Connected Accounts.");
+        return;
+      }
+
+      // Send to webhook
+      console.log("Resending to webhook:", globalAccount.webhook_url);
+      const webhookResponse = await fetch(globalAccount.webhook_url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "social_post_published",
+          post: {
+            id: post.id,
+            title: post.title,
+            short_form_content: post.short_form_content,
+            long_form_content: post.long_form_content,
+            content: post.content,
+            platforms: post.platforms,
+            scheduled_for: post.scheduled_for,
+            image_urls: post.image_urls,
+          },
+          timestamp: new Date().toISOString(),
+          resent: true,
+        }),
+      });
+
+      if (!webhookResponse.ok) {
+        throw new Error("Failed to send to webhook");
+      }
+
+      toast.success("Post resent to webhook!");
+    } catch (error: any) {
+      console.error("Error resending to webhook:", error);
+      toast.error(error.message || "Failed to resend to webhook");
+    }
+  };
+
   const handleSaveAccount = async () => {
     try {
       if (!accountForm.webhook_url.trim()) {
@@ -582,6 +627,12 @@ export function SocialMediaManager() {
                             <Button size="sm" onClick={() => handlePublishPost(post.id)}>
                               <Send className="h-3 w-3 mr-1" />
                               Publish
+                            </Button>
+                          )}
+                          {post.status === "published" && (
+                            <Button size="sm" variant="outline" onClick={() => handleResendToWebhook(post.id)}>
+                              <Send className="h-3 w-3 mr-1" />
+                              Resend
                             </Button>
                           )}
                           <Button
