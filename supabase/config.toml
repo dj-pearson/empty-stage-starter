@@ -1,5 +1,8 @@
 project_id = "tbuszxkevkpjcjapbrir"
 
+[functions.calculate-food-similarity]
+verify_jwt = true
+
 [functions.suggest-foods]
 verify_jwt = true
 
