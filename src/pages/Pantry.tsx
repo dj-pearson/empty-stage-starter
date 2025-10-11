@@ -124,6 +124,16 @@ export default function Pantry() {
     setDialogOpen(true);
   };
 
+  const handleQuantityChange = (foodId: string, newQuantity: number) => {
+    const food = foods.find(f => f.id === foodId);
+    if (food) {
+      updateFood(foodId, {
+        ...food,
+        quantity: newQuantity,
+      });
+    }
+  };
+
   const handleSave = (foodData: Omit<Food, "id">) => {
     if (editFood) {
       updateFood(editFood.id, foodData);
@@ -334,6 +344,7 @@ export default function Pantry() {
                     food={food}
                     onEdit={handleEdit}
                     onDelete={deleteFood}
+                    onQuantityChange={handleQuantityChange}
                     kidAllergens={activeKid?.allergens}
                   />
                 );

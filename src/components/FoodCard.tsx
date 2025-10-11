@@ -2,13 +2,14 @@ import { Food } from "@/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2, Package, AlertTriangle } from "lucide-react";
+import { Pencil, Trash2, Package, AlertTriangle, Plus, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface FoodCardProps {
   food: Food;
   onEdit: (food: Food) => void;
   onDelete: (id: string) => void;
+  onQuantityChange?: (id: string, newQuantity: number) => void;
   kidAllergens?: string[];
 }
 
@@ -21,7 +22,7 @@ const categoryColors: Record<string, string> = {
   snack: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
 };
 
-export function FoodCard({ food, onEdit, onDelete, kidAllergens }: FoodCardProps) {
+export function FoodCard({ food, onEdit, onDelete, onQuantityChange, kidAllergens }: FoodCardProps) {
   // Check if food contains any allergens for the kid
   const hasAllergen = kidAllergens && food.allergens && 
     food.allergens.some(allergen => kidAllergens.includes(allergen));
@@ -29,6 +30,19 @@ export function FoodCard({ food, onEdit, onDelete, kidAllergens }: FoodCardProps
   const matchingAllergens = hasAllergen && food.allergens 
     ? food.allergens.filter(allergen => kidAllergens?.includes(allergen))
     : [];
+
+  const handleIncrement = () => {
+    if (onQuantityChange) {
+      onQuantityChange(food.id, (food.quantity || 0) + 1);
+    }
+  };
+
+  const handleDecrement = () => {
+    if (onQuantityChange) {
+      const newQuantity = Math.max(0, (food.quantity || 0) - 1);
+      onQuantityChange(food.id, newQuantity);
+    }
+  };
 
   return (
     <Card className={cn(
@@ -39,19 +53,40 @@ export function FoodCard({ food, onEdit, onDelete, kidAllergens }: FoodCardProps
         <div className="flex-1 min-w-0 overflow-hidden">
           <div className="flex items-start gap-2 flex-wrap">
             <h3 className="font-semibold text-lg break-words">{food.name}</h3>
-            {(food.quantity ?? 0) > 0 && (
-              <Badge variant="secondary" className="gap-1 shrink-0">
-                <Package className="h-3 w-3" />
-                {food.quantity} {food.unit || 'servings'}
-              </Badge>
-            )}
-            {(food.quantity ?? 0) === 0 && (
-              <Badge variant="destructive" className="gap-1 shrink-0">
-                <Package className="h-3 w-3" />
-                Out of stock
-              </Badge>
-            )}
           </div>
+          
+          {/* Quick Quantity Adjuster */}
+          {onQuantityChange && (
+            <div className="flex items-center gap-2 mt-3">
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={handleDecrement}
+                className="h-8 w-8"
+                disabled={(food.quantity || 0) === 0}
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              <div className="flex items-center gap-2 min-w-[100px] justify-center">
+                <Package className="h-4 w-4 text-muted-foreground" />
+                <span className="font-semibold text-lg">
+                  {food.quantity || 0}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  {food.unit || 'qty'}
+                </span>
+              </div>
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={handleIncrement}
+                className="h-8 w-8"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          
           <div className="flex flex-wrap gap-2 mt-2">
             <Badge variant="outline" className={categoryColors[food.category]}>
               {food.category}
