@@ -153,7 +153,7 @@ Return your response as a JSON array with this structure:
 
     if (aiSettings.auth_type === 'bearer') {
       authHeaders['Authorization'] = `Bearer ${apiKey}`;
-    } else if (aiSettings.auth_type === 'api_key') {
+    } else if (aiSettings.auth_type === 'api_key' || aiSettings.auth_type === 'x-api-key') {
       authHeaders['x-api-key'] = apiKey;
     }
 
