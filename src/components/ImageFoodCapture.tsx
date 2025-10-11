@@ -18,6 +18,8 @@ import { FoodCategory } from "@/types";
 
 interface FoodIdentification {
   name: string;
+  variety?: string;
+  varietyOptions?: string[];
   category: FoodCategory;
   confidence: number;
   description: string;
@@ -39,6 +41,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
   const [identifiedFood, setIdentifiedFood] = useState<FoodIdentification | null>(null);
   const [editedServingSize, setEditedServingSize] = useState<string>("");
   const [editedQuantity, setEditedQuantity] = useState<string>("1");
+  const [editedVariety, setEditedVariety] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -193,9 +196,10 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
         setIdentifiedFood(data.foodData);
         setEditedServingSize(data.foodData.servingSize);
         setEditedQuantity(String(data.foodData.quantity || 1));
+        setEditedVariety(data.foodData.variety || "");
         toast({
           title: "Food Identified!",
-          description: `Found: ${data.foodData.name} (${data.foodData.confidence}% confident)`,
+          description: `Found: ${data.foodData.name}${data.foodData.variety ? ` (${data.foodData.variety})` : ''} (${data.foodData.confidence}% confident)`,
         });
       }
     } catch (error) {
@@ -221,8 +225,15 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
       });
       return;
     }
+    
+    // Construct the final food name with variety if selected
+    const finalName = editedVariety && editedVariety !== "Generic" 
+      ? `${editedVariety} ${identifiedFood.name}`
+      : identifiedFood.name;
+    
     onFoodIdentified({
       ...identifiedFood,
+      name: finalName,
       servingSize: editedServingSize,
       quantity: qtyNum,
     });
@@ -241,6 +252,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
     setIdentifiedFood(null);
     setEditedServingSize("");
     setEditedQuantity("1");
+    setEditedVariety("");
     startCamera();
   };
 
@@ -336,6 +348,25 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
                       <Label>Identified Food</Label>
                       <Input value={identifiedFood.name} readOnly />
                     </div>
+
+                    {identifiedFood.varietyOptions && identifiedFood.varietyOptions.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>Variety (Optional)</Label>
+                        <select
+                          value={editedVariety}
+                          onChange={(e) => setEditedVariety(e.target.value)}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                          <option value="">Generic {identifiedFood.name}</option>
+                          {identifiedFood.varietyOptions.map((option) => (
+                            <option key={option} value={option}>{option}</option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground">
+                          {editedVariety ? `Will be saved as: ${editedVariety} ${identifiedFood.name}` : `Will be saved as: ${identifiedFood.name}`}
+                        </p>
+                      </div>
+                    )}
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
