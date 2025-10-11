@@ -31,11 +31,11 @@ export async function getEmailSubscriptions(): Promise<EmailSubscriptions | null
 
     if (!user) return null;
 
-    const { data, error } = await supabase
-      .from("email_subscriptions")
+    const { data, error } = await (supabase as any)
+      .from("automation_email_subscriptions")
       .select("welcome_emails, milestone_emails, weekly_summary, tips_and_advice, marketing_emails")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error("Failed to fetch email subscriptions:", error);
@@ -65,8 +65,8 @@ export async function updateEmailSubscriptions(
       return false;
     }
 
-    const { error } = await supabase
-      .from("email_subscriptions")
+    const { error } = await (supabase as any)
+      .from("automation_email_subscriptions")
       .upsert({
         user_id: user.id,
         ...subscriptions,
@@ -95,8 +95,8 @@ export async function updateEmailSubscriptions(
  */
 export async function unsubscribeAll(token: string): Promise<boolean> {
   try {
-    const { data, error } = await supabase
-      .from("email_subscriptions")
+    const { data, error } = await (supabase as any)
+      .from("automation_email_subscriptions")
       .update({
         welcome_emails: false,
         milestone_emails: false,
@@ -107,7 +107,7 @@ export async function unsubscribeAll(token: string): Promise<boolean> {
       })
       .eq("unsubscribe_token", token)
       .select("user_id")
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error("Failed to unsubscribe:", error);
@@ -132,8 +132,8 @@ export async function getEmailHistory(limit: number = 20): Promise<EmailLog[]> {
 
     if (!user) return [];
 
-    const { data, error } = await supabase
-      .from("email_queue")
+    const { data, error } = await (supabase as any)
+      .from("automation_email_queue")
       .select("id, template_key, to_email, subject, status, created_at, sent_at, error_message")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
@@ -167,7 +167,7 @@ export async function sendTestEmail(): Promise<boolean> {
 
     toast.info("Sending test email...");
 
-    const { error } = await supabase.rpc("queue_email", {
+    const { error } = await (supabase as any).rpc("queue_email", {
       p_user_id: user.id,
       p_template_key: "welcome",
       p_to_email: user.email,

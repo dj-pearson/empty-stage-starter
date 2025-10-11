@@ -23,7 +23,7 @@ export async function checkRateLimit(endpoint: string): Promise<RateLimitResult 
       return null;
     }
 
-    const { data, error } = await supabase.rpc('check_rate_limit_with_tier', {
+    const { data, error } = await (supabase as any).rpc('check_rate_limit_with_tier', {
       p_user_id: user.id,
       p_endpoint: endpoint
     });
@@ -138,7 +138,7 @@ export async function getRateLimitStatus(endpoint: string): Promise<{
 
     if (!user) return null;
 
-    const { data, error } = await supabase.rpc('check_rate_limit_with_tier', {
+    const { data, error } = await (supabase as any).rpc('check_rate_limit_with_tier', {
       p_user_id: user.id,
       p_endpoint: endpoint
     });

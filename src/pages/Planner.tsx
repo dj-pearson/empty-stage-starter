@@ -200,7 +200,7 @@ export default function Planner() {
 
     try {
       // Use the database function to schedule the full recipe
-      const { error } = await supabase.rpc('schedule_recipe_to_plan', {
+      const { error } = await (supabase as any).rpc('schedule_recipe_to_plan', {
         p_kid_id: activeKid.id,
         p_recipe_id: recipe.id,
         p_date: selectedSlot.date,

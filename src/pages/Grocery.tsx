@@ -112,7 +112,7 @@ export default function Grocery() {
       }
 
       // Call the database function to detect and add restock items
-      const { data, error } = await supabase.rpc('auto_add_restock_items', {
+      const { data, error } = await (supabase as any).rpc('auto_add_restock_items', {
         p_user_id: user.id,
         p_kid_id: activeKidId
       });
@@ -129,7 +129,7 @@ export default function Grocery() {
         setGroceryItems(groceryData as any);
       }
 
-      const itemsAdded = data || 0;
+      const itemsAdded = Number(data) || 0;
       if (itemsAdded > 0) {
         toast.success(`Added ${itemsAdded} item${itemsAdded === 1 ? '' : 's'} to restock`, {
           description: "Based on low stock and consumption patterns"
