@@ -150,14 +150,63 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             supabase.from('recipes').select('*').order('created_at', { ascending: true }),
             supabase.from('plan_entries').select('*').order('date', { ascending: true }),
             supabase.from('grocery_items').select('*').order('created_at', { ascending: true })
-          ]).then(([kidsRes, foodsRes, recipesRes, planRes, groceryRes]) => {
+          ]).then(async ([kidsRes, foodsRes, recipesRes, planRes, groceryRes]) => {
             if (mounted) {
               if (kidsRes.data) {
                 setKids(kidsRes.data as unknown as Kid[]);
                 setActiveKidId(kidsRes.data[0]?.id ?? null);
               }
               if (foodsRes.data) setFoods(foodsRes.data as unknown as Food[]);
-              if (recipesRes.data) setRecipes(recipesRes.data as unknown as Recipe[]);
+              
+              // Check for local recipes and migrate them
+              if (recipesRes.data) {
+                const dbRecipes = recipesRes.data as unknown as Recipe[];
+                const localData = localStorage.getItem(STORAGE_KEY);
+                
+                if (localData) {
+                  try {
+                    const parsed = JSON.parse(localData);
+                    const localRecipes = parsed.recipes || [];
+                    
+                    // Find recipes that exist locally but not in DB (local IDs are not UUIDs)
+                    const localOnlyRecipes = localRecipes.filter((lr: Recipe) => 
+                      !dbRecipes.some(dr => dr.id === lr.id) && 
+                      !lr.id.includes('-') // Local IDs don't have dashes
+                    );
+                    
+                    // Migrate local recipes to database
+                    if (localOnlyRecipes.length > 0) {
+                      console.log(`Migrating ${localOnlyRecipes.length} local recipes to database...`);
+                      for (const localRecipe of localOnlyRecipes) {
+                        const { id, ...recipeData } = localRecipe;
+                        await supabase.from('recipes').insert([{
+                          ...recipeData,
+                          user_id: uid,
+                          household_id: hhId
+                        }]);
+                      }
+                      
+                      // Reload recipes after migration
+                      const { data: updatedRecipes } = await supabase
+                        .from('recipes')
+                        .select('*')
+                        .order('created_at', { ascending: true });
+                      
+                      if (updatedRecipes) {
+                        setRecipes(updatedRecipes as unknown as Recipe[]);
+                      }
+                    } else {
+                      setRecipes(dbRecipes);
+                    }
+                  } catch (e) {
+                    console.error('Error migrating recipes:', e);
+                    setRecipes(dbRecipes);
+                  }
+                } else {
+                  setRecipes(dbRecipes);
+                }
+              }
+              
               if (planRes.data) setPlanEntriesState(planRes.data as unknown as PlanEntry[]);
               if (groceryRes.data) setGroceryItemsState(groceryRes.data as unknown as GroceryItem[]);
             }
