@@ -8,9 +8,10 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { AddGroceryItemDialog } from "@/components/AddGroceryItemDialog";
 import { generateGroceryList } from "@/lib/mealPlanner";
-import { ShoppingCart, Copy, Trash2, Printer, Download, Plus, Share2, FileText } from "lucide-react";
+import { ShoppingCart, Copy, Trash2, Printer, Download, Plus, Share2, FileText, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { FoodCategory } from "@/types";
+import { supabase } from "@/integrations/supabase/client";
 
 const categoryLabels: Record<FoodCategory, string> = {
   protein: "Protein",
@@ -25,6 +26,7 @@ export default function Grocery() {
   const { foods, kids, activeKidId, planEntries, groceryItems, setGroceryItems, addGroceryItem, toggleGroceryItem, clearCheckedGroceryItems, addFood, updateFood } = useApp();
   const [groupBy, setGroupBy] = useState<"category" | "aisle">("aisle");
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [isGeneratingRestock, setIsGeneratingRestock] = useState(false);
 
   const activeKid = kids.find(k => k.id === activeKidId);
 
@@ -98,6 +100,51 @@ export default function Grocery() {
   const handleClearChecked = () => {
     clearCheckedGroceryItems();
     toast.success("Checked items cleared");
+  };
+
+  const handleSmartRestock = async () => {
+    setIsGeneratingRestock(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("You must be logged in");
+        return;
+      }
+
+      // Call the database function to detect and add restock items
+      const { data, error } = await supabase.rpc('auto_add_restock_items', {
+        p_user_id: user.id,
+        p_kid_id: activeKidId
+      });
+
+      if (error) throw error;
+
+      // Reload grocery items from database
+      const { data: groceryData } = await supabase
+        .from('grocery_items')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (groceryData) {
+        setGroceryItems(groceryData as any);
+      }
+
+      const itemsAdded = data || 0;
+      if (itemsAdded > 0) {
+        toast.success(`Added ${itemsAdded} item${itemsAdded === 1 ? '' : 's'} to restock`, {
+          description: "Based on low stock and consumption patterns"
+        });
+      } else {
+        toast.info("No restock items needed right now", {
+          description: "Your pantry looks well-stocked!"
+        });
+      }
+    } catch (error) {
+      console.error('Error generating restock:', error);
+      toast.error("Failed to generate restock suggestions");
+    } finally {
+      setIsGeneratingRestock(false);
+    }
   };
 
   const handlePrint = () => {
@@ -244,7 +291,25 @@ export default function Grocery() {
               <Plus className="h-4 w-4 mr-2" />
               Add Item
             </Button>
-            
+
+            <Button
+              onClick={handleSmartRestock}
+              variant="secondary"
+              disabled={isGeneratingRestock}
+            >
+              {isGeneratingRestock ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Smart Restock
+                </>
+              )}
+            </Button>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" disabled={groceryItems.length === 0}>

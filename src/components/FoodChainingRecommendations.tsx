@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sparkles, TrendingUp, CheckCircle, ChevronRight, Info } from "lucide-react";
+import { Sparkles, TrendingUp, CheckCircle, ChevronRight, Info, Plus, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
 import {
@@ -30,7 +30,7 @@ interface FoodWithSuccess {
 }
 
 export function FoodChainingRecommendations() {
-  const { activeKidId, foods } = useApp();
+  const { activeKidId, foods, addFood } = useApp();
   const [successfulFoods, setSuccessfulFoods] = useState<FoodWithSuccess[]>([]);
   const [selectedFood, setSelectedFood] = useState<FoodWithSuccess | null>(null);
   const [chainSuggestions, setChainSuggestions] = useState<FoodChainSuggestion[]>([]);
@@ -225,34 +225,27 @@ export function FoodChainingRecommendations() {
     }
   };
 
-  const handleAddToTryList = async (foodName: string) => {
+  const handleAddToPantry = (suggestion: FoodChainSuggestion) => {
     // Check if food already exists
-    const existingFood = foods.find((f) => f.name.toLowerCase() === foodName.toLowerCase());
+    const existingFood = foods.find((f) => f.id === suggestion.food_id);
 
     if (existingFood) {
-      toast.info(`${foodName} is already in your pantry!`);
+      toast.info(`${suggestion.food_name} is already in your pantry!`);
       return;
     }
 
-    // Add as a try bite
-    try {
-      const { error } = await supabase.from("foods").insert([
-        {
-          name: foodName,
-          category: "try_bites",
-          is_safe: false,
-          is_try_bite: true,
-          user_id: (await supabase.auth.getUser()).data.user?.id,
-        },
-      ]);
+    // Add as a try bite to pantry
+    addFood({
+      name: suggestion.food_name,
+      category: "snack", // Default category
+      is_safe: false,
+      is_try_bite: true,
+      quantity: 0,
+    });
 
-      if (error) throw error;
-
-      toast.success(`${foodName} added to Try Bites!`);
-    } catch (error: any) {
-      console.error("Error adding food:", error);
-      toast.error("Failed to add food");
-    }
+    toast.success(`${suggestion.food_name} added to pantry as Try Bite!`, {
+      description: "Add it to your grocery list to purchase"
+    });
   };
 
   const getReasonBadge = (reason: string) => {
@@ -420,13 +413,17 @@ export function FoodChainingRecommendations() {
                             <p className="text-xs text-muted-foreground">Match</p>
                           </div>
                         </div>
-                        <Button
-                          onClick={() => handleAddToTryList(suggestion.food_name)}
-                          size="sm"
-                          className="w-full"
-                        >
-                          Add to Try Bites
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => handleAddToPantry(suggestion)}
+                            size="sm"
+                            variant="default"
+                            className="flex-1"
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add to Pantry
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   ))}

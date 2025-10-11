@@ -6,13 +6,20 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CalendarMealPlanner } from "@/components/CalendarMealPlanner";
 import { FoodSelectorDialog } from "@/components/FoodSelectorDialog";
+import { DetailedTrackingDialog } from "@/components/DetailedTrackingDialog";
 import { buildWeekPlan, buildDayPlan } from "@/lib/mealPlanner";
-import { Calendar, RefreshCw, Sparkles, Shuffle, AlertTriangle, Package, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Calendar, RefreshCw, Sparkles, Shuffle, AlertTriangle, Package, ChevronLeft, ChevronRight, Loader2, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
 import { MealSlot, PlanEntry } from "@/types";
 import { SwapMealDialog } from "@/components/SwapMealDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
   { slot: "breakfast", label: "Breakfast" },
@@ -32,6 +39,8 @@ export default function Planner() {
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
   const [foodSelectorOpen, setFoodSelectorOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{ date: string; slot: MealSlot } | null>(null);
+  const [detailedTrackingOpen, setDetailedTrackingOpen] = useState(false);
+  const [trackingEntry, setTrackingEntry] = useState<PlanEntry | null>(null);
 
   const activeKid = kids.find(k => k.id === activeKidId);
 
@@ -183,20 +192,53 @@ export default function Planner() {
     toast.success("Meal added to calendar");
   };
 
-  const handleSelectRecipe = (recipeId: string) => {
+  const handleSelectRecipe = async (recipeId: string) => {
     if (!selectedSlot || !activeKid) return;
-    
+
     const recipe = recipes.find(r => r.id === recipeId);
     if (!recipe || recipe.food_ids.length === 0) return;
-    
-    // Use the first food from the recipe
-    handleAddEntry(selectedSlot.date, selectedSlot.slot, recipe.food_ids[0]);
-    toast.success(`${recipe.name} added to calendar`);
+
+    try {
+      // Use the database function to schedule the full recipe
+      const { error } = await supabase.rpc('schedule_recipe_to_plan', {
+        p_kid_id: activeKid.id,
+        p_recipe_id: recipe.id,
+        p_date: selectedSlot.date,
+        p_meal_slot: selectedSlot.slot
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      // Refresh plan entries from database
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: planData } = await supabase
+          .from('plan_entries')
+          .select('*')
+          .order('date', { ascending: true });
+
+        if (planData) {
+          setPlanEntries(planData as any);
+        }
+      }
+
+      toast.success(`${recipe.name} (${recipe.food_ids.length} items) added to calendar`);
+    } catch (error) {
+      console.error('Error scheduling recipe:', error);
+      toast.error("Failed to schedule recipe");
+    }
   };
 
-  const handleMarkResult = async (entry: PlanEntry, result: "ate" | "tasted" | "refused") => {
-    updatePlanEntry(entry.id, { result });
-    
+  const handleMarkResult = async (entry: PlanEntry, result: "ate" | "tasted" | "refused", attemptId?: string) => {
+    const updates: Partial<PlanEntry> = { result };
+    if (attemptId) {
+      updates.food_attempt_id = attemptId;
+    }
+
+    updatePlanEntry(entry.id, updates);
+
     // If marked as "ate", deduct from inventory
     if (result === "ate") {
       const food = foods.find(f => f.id === entry.food_id);
@@ -227,8 +269,21 @@ export default function Planner() {
         }
       }
     }
-    
-    toast.success(`Marked as ${result}`);
+
+    if (!attemptId) {
+      toast.success(`Marked as ${result}`);
+    }
+  };
+
+  const handleOpenDetailedTracking = (entry: PlanEntry) => {
+    setTrackingEntry(entry);
+    setDetailedTrackingOpen(true);
+  };
+
+  const handleDetailedTrackingComplete = (result: "ate" | "tasted" | "refused", attemptId?: string) => {
+    if (trackingEntry) {
+      handleMarkResult(trackingEntry, result, attemptId);
+    }
   };
 
   const handleSwapMeal = (entry: PlanEntry) => {
@@ -497,31 +552,53 @@ export default function Planner() {
                               )}
                               
                               {entry && (
-                                <div className="flex flex-wrap gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant={entry.result === "ate" ? "default" : "outline"}
-                                    onClick={() => handleMarkResult(entry, "ate")}
-                                    className={entry.result === "ate" ? "bg-safe-food hover:bg-safe-food/90 text-white font-semibold" : "font-semibold hover:bg-safe-food/10"}
-                                  >
-                                    Ate
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant={entry.result === "tasted" ? "default" : "outline"}
-                                    onClick={() => handleMarkResult(entry, "tasted")}
-                                    className={entry.result === "tasted" ? "bg-secondary hover:bg-secondary/90 text-white font-semibold" : "font-semibold hover:bg-secondary/10"}
-                                  >
-                                    Tasted
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant={entry.result === "refused" ? "default" : "outline"}
-                                    onClick={() => handleMarkResult(entry, "refused")}
-                                    className={entry.result === "refused" ? "bg-destructive hover:bg-destructive/90 text-white font-semibold" : "font-semibold hover:bg-destructive/10"}
-                                  >
-                                    Refused
-                                  </Button>
+                                <div className="space-y-2">
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant={entry.result === "ate" ? "default" : "outline"}
+                                      onClick={() => handleMarkResult(entry, "ate")}
+                                      className={entry.result === "ate" ? "bg-safe-food hover:bg-safe-food/90 text-white font-semibold" : "font-semibold hover:bg-safe-food/10"}
+                                    >
+                                      Ate
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant={entry.result === "tasted" ? "default" : "outline"}
+                                      onClick={() => handleMarkResult(entry, "tasted")}
+                                      className={entry.result === "tasted" ? "bg-secondary hover:bg-secondary/90 text-white font-semibold" : "font-semibold hover:bg-secondary/10"}
+                                    >
+                                      Tasted
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant={entry.result === "refused" ? "default" : "outline"}
+                                      onClick={() => handleMarkResult(entry, "refused")}
+                                      className={entry.result === "refused" ? "bg-destructive hover:bg-destructive/90 text-white font-semibold" : "font-semibold hover:bg-destructive/10"}
+                                    >
+                                      Refused
+                                    </Button>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button size="sm" variant="ghost">
+                                          <MoreVertical className="h-4 w-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent>
+                                        <DropdownMenuItem onClick={() => handleOpenDetailedTracking(entry)}>
+                                          📊 Track in Detail
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleSwapMeal(entry)}>
+                                          🔄 Swap Food
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                  {entry.food_attempt_id && (
+                                    <Badge variant="outline" className="text-xs">
+                                      ✓ Detailed tracking
+                                    </Badge>
+                                  )}
                                 </div>
                               )}
                             </>
@@ -547,6 +624,17 @@ export default function Planner() {
           foods={foods}
           onSwap={handleSwapConfirm}
         />
+
+        {trackingEntry && (
+          <DetailedTrackingDialog
+            open={detailedTrackingOpen}
+            onOpenChange={setDetailedTrackingOpen}
+            entry={trackingEntry}
+            food={foods.find(f => f.id === trackingEntry.food_id)!}
+            kidId={activeKidId!}
+            onComplete={handleDetailedTrackingComplete}
+          />
+        )}
       </div>
     </div>
   );

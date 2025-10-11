@@ -50,6 +50,9 @@ export interface PlanEntry {
   food_id: string;
   result: MealResult;
   notes?: string;
+  food_attempt_id?: string;
+  recipe_id?: string;
+  is_primary_dish?: boolean;
 }
 
 export interface GroceryItem {

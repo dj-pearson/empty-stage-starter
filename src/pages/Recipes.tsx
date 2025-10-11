@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, Pencil, Trash2, ChefHat, Clock, Users, Lightbulb, AlertTriangle, Package, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, ChefHat, Clock, Users, Lightbulb, AlertTriangle, Package, Upload, Sparkles, Loader2 } from "lucide-react";
 import { RecipeBuilder } from "@/components/RecipeBuilder";
 import { ImportRecipeDialog } from "@/components/ImportRecipeDialog";
 import {
@@ -12,9 +12,12 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Recipe } from "@/types";
+import { supabase } from "@/integrations/supabase/client";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,12 +29,26 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+interface RecipeSuggestion {
+  name: string;
+  description: string;
+  food_ids: string[];
+  food_names: string[];
+  reason: string;
+  difficulty: string;
+  prepTime: string;
+  cookTime: string;
+}
+
 export default function Recipes() {
   const { recipes, foods, addRecipe, updateRecipe, deleteRecipe, kids, activeKidId } = useApp();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [editRecipe, setEditRecipe] = useState<Recipe | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [aiSuggestionsOpen, setAiSuggestionsOpen] = useState(false);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [suggestions, setSuggestions] = useState<RecipeSuggestion[]>([]);
 
   const handleEdit = (recipe: Recipe) => {
     setEditRecipe(recipe);
@@ -65,6 +82,67 @@ export default function Recipes() {
     toast.success("Recipe deleted");
   };
 
+  const handleAISuggestions = async () => {
+    setIsLoadingSuggestions(true);
+    setAiSuggestionsOpen(true);
+    setSuggestions([]);
+
+    try {
+      const activeKid = kids.find(k => k.id === activeKidId);
+
+      // Only use safe foods from pantry
+      const pantryFoods = foods.filter(f => f.is_safe && (f.quantity ?? 0) > 0);
+
+      if (pantryFoods.length === 0) {
+        toast.error("No foods in pantry", {
+          description: "Add some foods to your pantry first"
+        });
+        setIsLoadingSuggestions(false);
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('suggest-recipes-from-pantry', {
+        body: {
+          pantryFoods,
+          childProfile: activeKid,
+          count: 5
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.error) {
+        toast.error("AI Error", {
+          description: data.error
+        });
+        setSuggestions([]);
+      } else {
+        setSuggestions(data.suggestions || []);
+      }
+    } catch (error) {
+      console.error('Error getting AI suggestions:', error);
+      toast.error("Failed to get suggestions", {
+        description: "Please try again"
+      });
+      setSuggestions([]);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
+  const handleAddSuggestion = (suggestion: RecipeSuggestion) => {
+    addRecipe({
+      name: suggestion.name,
+      description: suggestion.description,
+      food_ids: suggestion.food_ids,
+      prepTime: suggestion.prepTime,
+      cookTime: suggestion.cookTime,
+      tips: suggestion.reason,
+    });
+
+    toast.success(`Added "${suggestion.name}" to recipes!`);
+  };
+
   const getRecipeFoods = (recipe: Recipe) => {
     return recipe.food_ids
       .map(id => foods.find(f => f.id === id))
@@ -93,7 +171,16 @@ export default function Recipes() {
               Create complete meals like "Taco Night" or "Pizza Party"
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              onClick={handleAISuggestions}
+              variant="secondary"
+              size="lg"
+              disabled={isLoadingSuggestions}
+            >
+              <Sparkles className="h-5 w-5 mr-2" />
+              AI Suggest from Pantry
+            </Button>
             <Button onClick={() => setImportDialogOpen(true)} variant="outline" size="lg">
               <Upload className="h-5 w-5 mr-2" />
               Import
@@ -318,6 +405,91 @@ export default function Recipes() {
           onImport={handleImport}
           foods={foods}
         />
+
+        {/* AI Suggestions Dialog */}
+        <Dialog open={aiSuggestionsOpen} onOpenChange={setAiSuggestionsOpen}>
+          <DialogContent className="max-w-3xl max-h-[90vh]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                AI Recipe Suggestions from Your Pantry
+              </DialogTitle>
+              <DialogDescription>
+                Recipes created using foods you already have
+              </DialogDescription>
+            </DialogHeader>
+
+            {isLoadingSuggestions ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+                <p className="text-muted-foreground">Analyzing your pantry...</p>
+              </div>
+            ) : suggestions.length > 0 ? (
+              <ScrollArea className="max-h-[60vh]">
+                <div className="space-y-4 pr-4">
+                  {suggestions.map((suggestion, index) => (
+                    <Card key={index} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h3 className="font-semibold text-lg">{suggestion.name}</h3>
+                              <Badge variant="outline">{suggestion.difficulty}</Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground mb-3">
+                              {suggestion.description}
+                            </p>
+
+                            <div className="flex flex-wrap gap-2 mb-3">
+                              {suggestion.food_names.map((foodName, i) => (
+                                <Badge key={i} variant="secondary">
+                                  {foodName}
+                                </Badge>
+                              ))}
+                            </div>
+
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
+                              <div className="flex items-center gap-1">
+                                <Clock className="h-4 w-4" />
+                                <span>Prep: {suggestion.prepTime}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Clock className="h-4 w-4" />
+                                <span>Cook: {suggestion.cookTime}</span>
+                              </div>
+                            </div>
+
+                            <div className="bg-primary/5 p-3 rounded-lg">
+                              <div className="flex items-start gap-2">
+                                <Lightbulb className="h-4 w-4 text-primary mt-0.5" />
+                                <p className="text-sm">
+                                  <span className="font-medium">Why this works:</span> {suggestion.reason}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <Button
+                            size="sm"
+                            onClick={() => handleAddSuggestion(suggestion)}
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">
+                <p>No suggestions available.</p>
+                <p className="text-sm mt-2">Make sure you have foods in your pantry with quantity &gt; 0</p>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
