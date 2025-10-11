@@ -100,7 +100,7 @@ export async function isAdmin(): Promise<boolean> {
  */
 export async function getPlatformHealth(): Promise<PlatformHealth | null> {
   try {
-    const { data, error } = await supabase
+const { data, error } = await (supabase as any)
       .from("admin_platform_health")
       .select("*")
       .single();
@@ -124,7 +124,7 @@ export async function getUserEngagement(
   limit: number = 50
 ): Promise<UserEngagement[]> {
   try {
-    const { data, error } = await supabase
+const { data, error } = await (supabase as any)
       .from("admin_user_engagement")
       .select("*")
       .order("engagement_score", { ascending: false })
@@ -147,7 +147,7 @@ export async function getUserEngagement(
  */
 export async function getDailyActivity(days: number = 30): Promise<DailyActivity[]> {
   try {
-    const { data, error } = await supabase
+const { data, error } = await (supabase as any)
       .from("admin_daily_activity")
       .select("*")
       .order("date", { ascending: false })
@@ -170,7 +170,7 @@ export async function getDailyActivity(days: number = 30): Promise<DailyActivity
  */
 export async function getAIUsage(): Promise<AIUsage[]> {
   try {
-    const { data, error } = await supabase
+const { data, error } = await (supabase as any)
       .from("admin_ai_usage")
       .select("*")
       .order("total_requests", { ascending: false });
@@ -200,7 +200,7 @@ export async function getFeatureAdoption(): Promise<
   }>
 > {
   try {
-    const { data, error } = await supabase
+const { data, error } = await (supabase as any)
       .from("admin_feature_adoption")
       .select("*")
       .order("adoption_rate_pct", { ascending: false });
@@ -224,7 +224,7 @@ export async function getAdminNotifications(
   unreadOnly: boolean = false
 ): Promise<AdminNotification[]> {
   try {
-    let query = supabase
+let query = (supabase as any)
       .from("admin_notifications")
       .select("*")
       .order("created_at", { ascending: false })
@@ -253,7 +253,7 @@ export async function getAdminNotifications(
  */
 export async function markNotificationRead(notificationId: string): Promise<boolean> {
   try {
-    const { error } = await supabase
+const { error } = await (supabase as any)
       .from("admin_notifications")
       .update({ is_read: true })
       .eq("id", notificationId);
@@ -275,7 +275,7 @@ export async function markNotificationRead(notificationId: string): Promise<bool
  */
 export async function markAllNotificationsRead(): Promise<boolean> {
   try {
-    const { error } = await supabase
+const { error } = await (supabase as any)
       .from("admin_notifications")
       .update({ is_read: true })
       .eq("is_read", false);
@@ -300,7 +300,7 @@ export async function markAllNotificationsRead(): Promise<boolean> {
  */
 export async function getUserRetention(): Promise<any[]> {
   try {
-    const { data, error } = await supabase
+const { data, error } = await (supabase as any)
       .from("admin_user_retention")
       .select("*")
       .order("cohort_month", { ascending: false });
@@ -322,7 +322,7 @@ export async function getUserRetention(): Promise<any[]> {
  */
 export async function getErrorTracking(): Promise<any[]> {
   try {
-    const { data, error } = await supabase
+const { data, error } = await (supabase as any)
       .from("admin_error_tracking")
       .select("*")
       .order("error_count", { ascending: false });

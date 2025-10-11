@@ -8,7 +8,7 @@ import { initializeSentry, ErrorFallback } from "./lib/sentry";
 initializeSentry();
 
 createRoot(document.getElementById("root")!).render(
-  <Sentry.ErrorBoundary fallback={ErrorFallback} showDialog>
+  <Sentry.ErrorBoundary fallback={<ErrorFallback />} showDialog>
     <App />
   </Sentry.ErrorBoundary>
 );
