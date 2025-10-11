@@ -55,20 +55,30 @@ export default function Recipes() {
     setDialogOpen(true);
   };
 
-  const handleSave = (recipeData: any) => {
-    if (editRecipe) {
-      updateRecipe(editRecipe.id, recipeData);
-      toast.success("Recipe updated!");
-    } else {
-      addRecipe(recipeData);
-      toast.success("Recipe created!");
+  const handleSave = async (recipeData: any) => {
+    try {
+      if (editRecipe) {
+        await updateRecipe(editRecipe.id, recipeData);
+        toast.success("Recipe updated!");
+      } else {
+        await addRecipe(recipeData);
+        toast.success("Recipe created!");
+      }
+      handleClose();
+    } catch (error) {
+      console.error('Error saving recipe:', error);
+      toast.error('Failed to save recipe');
     }
-    handleClose();
   };
 
-  const handleImport = (recipeData: any) => {
-    addRecipe(recipeData);
-    toast.success("Recipe imported successfully!");
+  const handleImport = async (recipeData: any) => {
+    try {
+      await addRecipe(recipeData);
+      toast.success("Recipe imported successfully!");
+    } catch (error) {
+      console.error('Error importing recipe:', error);
+      toast.error('Failed to import recipe');
+    }
   };
 
   const handleClose = () => {
@@ -132,7 +142,7 @@ export default function Recipes() {
 
   const handleAddSuggestion = async (suggestion: RecipeSuggestion) => {
     try {
-      await addRecipe({
+      const createdRecipe = await addRecipe({
         name: suggestion.name,
         description: suggestion.description,
         food_ids: suggestion.food_ids,
@@ -141,10 +151,14 @@ export default function Recipes() {
         tips: suggestion.reason,
       });
 
+      if (!createdRecipe.id) {
+        throw new Error('Recipe was not saved to database');
+      }
+
       toast.success(`Added "${suggestion.name}" to recipes!`);
     } catch (error) {
       console.error('Error adding recipe:', error);
-      toast.error('Failed to add recipe');
+      toast.error('Failed to add recipe - please try again');
     }
   };
 

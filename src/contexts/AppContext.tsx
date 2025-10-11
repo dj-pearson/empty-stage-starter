@@ -18,7 +18,7 @@ interface AppContextType {
   deleteKid: (id: string) => void;
   setActiveKid: (id: string) => void;
   setActiveKidId: (id: string) => void;
-  addRecipe: (recipe: Omit<Recipe, "id">) => void;
+  addRecipe: (recipe: Omit<Recipe, "id">) => Promise<Recipe>;
   updateRecipe: (id: string, recipe: Partial<Recipe>) => void;
   deleteRecipe: (id: string) => void;
   setPlanEntries: (entries: PlanEntry[]) => void;
