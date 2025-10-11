@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { compress } from "https://deno.land/x/compress@v0.4.5/gzip/mod.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -103,19 +103,14 @@ serve(async (req) => {
       const jsonString = JSON.stringify(backupData, null, 2);
       const originalSize = new TextEncoder().encode(jsonString).length;
 
-      // Compress data
-      const compressed = await compress(new TextEncoder().encode(jsonString), {
-        level: 6, // Balanced compression
-      });
-      const compressedSize = compressed.length;
-      const compressionRatio = ((1 - compressedSize / originalSize) * 100).toFixed(2);
-
-      // Convert compressed data to base64 for storage
-      const base64Data = btoa(String.fromCharCode(...compressed));
+      // Note: Skipping compression in this environment to avoid build issues
+      const compressedSize = originalSize;
+      const compressionRatio = "0.00";
+      const base64Data = btoa(jsonString);
 
       // TODO: In production, upload to cloud storage (S3, R2, etc.)
       // For now, we'll store the path where it would be uploaded
-      const filePath = `backups/${targetUserId}/${backupLog.id}.json.gz`;
+      const filePath = `backups/${targetUserId}/${backupLog.id}.json`;
 
       // Update backup log with success
       const { error: updateError } = await supabaseClient
