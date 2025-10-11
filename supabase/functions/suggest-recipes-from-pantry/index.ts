@@ -32,11 +32,39 @@ serve(async (req) => {
       );
     }
 
-    // Use Lovable AI Gateway
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
+    // Get AI settings from database
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'LOVABLE_API_KEY not configured' }),
+        JSON.stringify({ error: 'No authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    // Get active AI model
+    const { data: aiSettings, error: aiError } = await supabase
+      .from('ai_settings')
+      .select('*')
+      .eq('is_active', true)
+      .single();
+
+    if (aiError || !aiSettings) {
+      return new Response(
+        JSON.stringify({ error: 'No active AI model configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const apiKey = Deno.env.get(aiSettings.api_key_env_var);
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: `API key ${aiSettings.api_key_env_var} not configured` }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -106,23 +134,34 @@ Return your response as a JSON array with this structure:
 
     const userPrompt = `Suggest ${count} recipe ideas using available pantry items.`;
 
-    // Prepare AI request for Lovable AI Gateway
-    const requestBody = {
-      model: 'google/gemini-2.5-flash',
+    // Prepare AI request
+    const requestBody: any = {
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ]
     };
 
-    console.log('Calling Lovable AI for recipe suggestions...');
+    if (aiSettings.model_name) requestBody.model = aiSettings.model_name;
+    if (aiSettings.temperature != null) requestBody.temperature = aiSettings.temperature;
+    if (aiSettings.max_tokens) requestBody.max_tokens = aiSettings.max_tokens;
+    if (aiSettings.additional_params) Object.assign(requestBody, aiSettings.additional_params);
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const authHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (aiSettings.auth_type === 'bearer') {
+      authHeaders['Authorization'] = `Bearer ${apiKey}`;
+    } else if (aiSettings.auth_type === 'api_key') {
+      authHeaders['x-api-key'] = apiKey;
+    }
+
+    console.log('Calling AI for recipe suggestions...');
+
+    const response = await fetch(aiSettings.endpoint_url, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers: authHeaders,
       body: JSON.stringify(requestBody),
     });
 
