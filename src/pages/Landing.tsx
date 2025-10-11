@@ -122,7 +122,12 @@ const Landing = () => {
                 Sign In (Existing Users) <ArrowRight className="h-5 w-5" />
               </Button>
             </Link>
-            <Button size="lg" variant="outline" className="text-lg px-8 py-6 border-2">
+            <Button 
+              size="lg" 
+              variant="outline" 
+              className="text-lg px-8 py-6 border-2"
+              onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
+            >
               See How It Works
             </Button>
           </div>
