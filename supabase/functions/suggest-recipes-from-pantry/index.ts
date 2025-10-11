@@ -134,19 +134,27 @@ Return your response as a JSON array with this structure:
 
     const userPrompt = `Suggest ${count} recipe ideas using available pantry items.`;
 
-    // Prepare AI request
-    const requestBody: any = {
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ]
-    };
+    // Prepare AI request (handle Anthropic vs OpenAI-compatible)
+    const isAnthropic = aiSettings.endpoint_url?.includes('anthropic.com');
 
-    if (aiSettings.model_name) requestBody.model = aiSettings.model_name;
+    const requestBody: any = isAnthropic
+      ? {
+          model: aiSettings.model_name,
+          max_tokens: aiSettings.max_tokens || 1024,
+          system: systemPrompt,
+          messages: [
+            { role: 'user', content: userPrompt }
+          ]
+        }
+      : {
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ]
+        };
+
     if (aiSettings.temperature != null) requestBody.temperature = aiSettings.temperature;
-    if (aiSettings.max_tokens) requestBody.max_tokens = aiSettings.max_tokens;
     if (aiSettings.additional_params) Object.assign(requestBody, aiSettings.additional_params);
-
     const authHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -155,6 +163,10 @@ Return your response as a JSON array with this structure:
       authHeaders['Authorization'] = `Bearer ${apiKey}`;
     } else if (aiSettings.auth_type === 'api_key' || aiSettings.auth_type === 'x-api-key') {
       authHeaders['x-api-key'] = apiKey;
+    }
+
+    if (isAnthropic) {
+      authHeaders['anthropic-version'] = '2023-06-01';
     }
 
     console.log('Calling AI for recipe suggestions...');
@@ -185,7 +197,14 @@ Return your response as a JSON array with this structure:
     const data = await response.json();
     let responseText = '';
 
-    if (data.choices && data.choices[0]?.message?.content) {
+    if (isAnthropic) {
+      const parts = data?.content;
+      if (Array.isArray(parts)) {
+        responseText = parts.map((p: any) => p?.text || '').join('').trim();
+      } else if (typeof data?.content === 'string') {
+        responseText = data.content;
+      }
+    } else if (data.choices && data.choices[0]?.message?.content) {
       responseText = data.choices[0].message.content;
     } else if (data.content) {
       responseText = data.content;

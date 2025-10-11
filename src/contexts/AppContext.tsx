@@ -293,10 +293,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addRecipe = async (recipe: Omit<Recipe, "id">): Promise<Recipe> => {
-    if (userId && householdId) {
+    if (userId) {
+      const payload: any = { ...recipe, user_id: userId };
+      if (householdId) payload.household_id = householdId;
       const { data, error } = await supabase
         .from('recipes')
-        .insert([{ ...recipe, user_id: userId, household_id: householdId }])
+        .insert([payload])
         .select()
         .single();
 
