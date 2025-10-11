@@ -130,17 +130,22 @@ export default function Recipes() {
     }
   };
 
-  const handleAddSuggestion = (suggestion: RecipeSuggestion) => {
-    addRecipe({
-      name: suggestion.name,
-      description: suggestion.description,
-      food_ids: suggestion.food_ids,
-      prepTime: suggestion.prepTime,
-      cookTime: suggestion.cookTime,
-      tips: suggestion.reason,
-    });
+  const handleAddSuggestion = async (suggestion: RecipeSuggestion) => {
+    try {
+      await addRecipe({
+        name: suggestion.name,
+        description: suggestion.description,
+        food_ids: suggestion.food_ids,
+        prepTime: suggestion.prepTime,
+        cookTime: suggestion.cookTime,
+        tips: suggestion.reason,
+      });
 
-    toast.success(`Added "${suggestion.name}" to recipes!`);
+      toast.success(`Added "${suggestion.name}" to recipes!`);
+    } catch (error) {
+      console.error('Error adding recipe:', error);
+      toast.error('Failed to add recipe');
+    }
   };
 
   const getRecipeFoods = (recipe: Recipe) => {

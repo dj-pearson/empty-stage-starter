@@ -292,23 +292,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setActiveKidId(id);
   };
 
-  const addRecipe = (recipe: Omit<Recipe, "id">) => {
+  const addRecipe = async (recipe: Omit<Recipe, "id">): Promise<Recipe> => {
     if (userId && householdId) {
-      supabase
+      const { data, error } = await supabase
         .from('recipes')
         .insert([{ ...recipe, user_id: userId, household_id: householdId }])
         .select()
-        .single()
-        .then(({ data, error }) => {
-          if (error) {
-            console.error('Supabase addRecipe error:', error);
-            setRecipes([...recipes, { ...recipe, id: generateId() }]);
-          } else if (data) {
-            setRecipes([...recipes, data as unknown as Recipe]);
-          }
-        });
+        .single();
+
+      if (error) {
+        console.error('Supabase addRecipe error:', error);
+        const localRecipe = { ...recipe, id: generateId() };
+        setRecipes([...recipes, localRecipe]);
+        return localRecipe;
+      } else if (data) {
+        const newRecipe = data as unknown as Recipe;
+        setRecipes([...recipes, newRecipe]);
+        return newRecipe;
+      }
+      throw new Error('Failed to add recipe');
     } else {
-      setRecipes([...recipes, { ...recipe, id: generateId() }]);
+      const localRecipe = { ...recipe, id: generateId() };
+      setRecipes([...recipes, localRecipe]);
+      return localRecipe;
     }
   };
 
