@@ -13,13 +13,16 @@ const RESULT_COLORS = {
 };
 
 export default function Analytics() {
-  const { foods, activeKidId, planEntries, kids } = useApp();
+  const { foods, activeKidId, planEntries, kids, setActiveKidId } = useApp();
   const activeKid = kids.find(k => k.id === activeKidId);
+  const isFamilyMode = !activeKidId;
 
-  // Filter entries for active kid with results
+  // Filter entries - all kids if family mode, or specific kid
   const kidEntries = useMemo(() => 
-    planEntries.filter(e => e.kid_id === activeKidId && e.result !== null),
-    [planEntries, activeKidId]
+    isFamilyMode 
+      ? planEntries.filter(e => e.result !== null)
+      : planEntries.filter(e => e.kid_id === activeKidId && e.result !== null),
+    [planEntries, activeKidId, isFamilyMode]
   );
 
   // Overall stats

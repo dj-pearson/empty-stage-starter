@@ -28,16 +28,19 @@ export default function Grocery() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [isGeneratingRestock, setIsGeneratingRestock] = useState(false);
 
+  const isFamilyMode = !activeKidId;
   const activeKid = kids.find(k => k.id === activeKidId);
 
   useEffect(() => {
-    if (planEntries.length > 0 && activeKidId) {
-      // Filter plan entries for active kid only
-      const kidPlanEntries = planEntries.filter(e => e.kid_id === activeKidId);
-      const newList = generateGroceryList(kidPlanEntries, foods);
+    if (planEntries.length > 0) {
+      // In family mode, generate list from all kids' plans. Otherwise, just active kid.
+      const filteredEntries = isFamilyMode 
+        ? planEntries 
+        : planEntries.filter(e => e.kid_id === activeKidId);
+      const newList = generateGroceryList(filteredEntries, foods);
       setGroceryItems(newList);
     }
-  }, [planEntries, foods, activeKidId]);
+  }, [planEntries, foods, activeKidId, isFamilyMode]);
 
   const handleCopyList = () => {
     const text = groceryItems
@@ -277,10 +280,12 @@ export default function Grocery() {
           <div>
             <h1 className="text-3xl font-bold mb-2">
               Grocery List
-              {activeKid && <span className="text-primary"> - {activeKid.name}</span>}
             </h1>
             <p className="text-muted-foreground">
-              Auto-generated from your meal plan
+              {isFamilyMode 
+                ? "Household shopping list for all family members - auto-generated from meal plans"
+                : `Shopping list for ${activeKid?.name || 'your child'} - auto-generated from meal plan`
+              }
             </p>
             <p className="text-sm text-accent mt-1 font-medium">
               ✓ Check items when purchased - they'll be added to your pantry automatically

@@ -22,15 +22,18 @@ import {
 import { format, subDays } from "date-fns";
 
 export default function InsightsDashboard() {
-  const { kids, foods, planEntries, activeKidId } = useApp();
+  const { kids, foods, planEntries, activeKidId, setActiveKidId } = useApp();
   const activeKid = kids.find(k => k.id === activeKidId);
+  const isFamilyMode = !activeKidId;
   const [insights, setInsights] = useState<any>({});
 
   useEffect(() => {
-    if (activeKid) {
+    if (isFamilyMode && kids.length > 0) {
+      calculateFamilyInsights();
+    } else if (activeKid) {
       calculateInsights();
     }
-  }, [activeKid, foods, planEntries]);
+  }, [activeKid, isFamilyMode, kids, foods, planEntries]);
 
   const calculateInsights = () => {
     if (!activeKid) return;
@@ -84,13 +87,41 @@ export default function InsightsDashboard() {
     });
   };
 
-  if (!activeKid) {
+  const calculateFamilyInsights = () => {
+    // Aggregate insights across all kids
+    const allSafeFoods = foods.filter(f => f.is_safe);
+    const allTryBites = foods.filter(f => f.is_try_bite);
+
+    const thirtyDaysAgo = format(subDays(new Date(), 30), 'yyyy-MM-dd');
+    const recentEntries = planEntries.filter(e => e.date >= thirtyDaysAgo);
+
+    const completedMeals = recentEntries.filter(e => e.result === 'ate').length;
+    const tastedMeals = recentEntries.filter(e => e.result === 'tasted').length;
+    const refusedMeals = recentEntries.filter(e => e.result === 'refused').length;
+    const totalTracked = completedMeals + tastedMeals + refusedMeals;
+
+    const uniqueFoodsTried = new Set(recentEntries.map(e => e.food_id)).size;
+
+    setInsights({
+      safeFoodsCount: allSafeFoods.length,
+      tryBitesCount: allTryBites.length,
+      completedMeals,
+      tastedMeals,
+      refusedMeals,
+      totalTracked,
+      successRate: totalTracked > 0 ? ((completedMeals + tastedMeals) / totalTracked) * 100 : 0,
+      uniqueFoodsTried,
+      familyMode: true
+    });
+  };
+
+  if (kids.length === 0) {
     return (
       <div className="container mx-auto p-6">
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Please select a child to view their nutrition insights
+            Add a child profile first to view nutrition insights
           </AlertDescription>
         </Alert>
       </div>

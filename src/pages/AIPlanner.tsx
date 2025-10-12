@@ -16,19 +16,23 @@ export default function AIPlanner() {
   const [mealPlan, setMealPlan] = useState<any[]>([]);
   const [insights, setInsights] = useState<any>(null);
   const [strategy, setStrategy] = useState<any>(null);
+  const [selectedKidForPlan, setSelectedKidForPlan] = useState<string | null>(null);
 
   const activeKid = kids.find(k => k.id === activeKidId);
+  const isFamilyMode = !activeKidId;
 
-  const handleGeneratePlan = async () => {
-    if (!activeKidId) {
+  const handleGeneratePlan = async (kidId?: string) => {
+    const targetKidId = kidId || selectedKidForPlan;
+    if (!targetKidId) {
       toast.error("Please select a child first");
       return;
     }
 
     setIsGenerating(true);
+    setSelectedKidForPlan(targetKidId);
     try {
       const { data, error } = await supabase.functions.invoke('ai-meal-plan', {
-        body: { kidId: activeKidId, days: 7 }
+        body: { kidId: targetKidId, days: 7 }
       });
 
       if (error) throw error;
@@ -37,7 +41,8 @@ export default function AIPlanner() {
       setInsights(data.nutritional_insights || {});
       setStrategy(data.try_bite_strategy || {});
       
-      toast.success("AI meal plan generated successfully!");
+      const kidName = kids.find(k => k.id === targetKidId)?.name;
+      toast.success(`AI meal plan generated for ${kidName}!`);
     } catch (error: any) {
       console.error('Error generating meal plan:', error);
       toast.error(error.message || "Failed to generate meal plan");
@@ -85,20 +90,65 @@ export default function AIPlanner() {
             Add a child profile first to generate personalized meal plans.
           </AlertDescription>
         </Alert>
+      ) : isFamilyMode ? (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Select Child for AI Meal Plan</CardTitle>
+              <CardDescription>
+                Choose which child to generate a personalized 7-day meal plan for
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3">
+                {kids.map(kid => (
+                  <Card key={kid.id} className="hover:border-primary transition-colors">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <p className="font-semibold">{kid.name}</p>
+                          <div className="flex gap-3 text-sm text-muted-foreground">
+                            <span>Age: {kid.age || 'N/A'}</span>
+                            <span>Allergens: {kid.allergens?.length || 0}</span>
+                            <span className="capitalize">Pickiness: {kid.pickiness_level || 'Moderate'}</span>
+                          </div>
+                        </div>
+                        <Button 
+                          onClick={() => handleGeneratePlan(kid.id)}
+                          disabled={isGenerating}
+                        >
+                          {isGenerating && selectedKidForPlan === kid.id ? (
+                            <>
+                              <Sparkles className="mr-2 h-4 w-4 animate-spin" />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="mr-2 h-4 w-4" />
+                              Generate Plan
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </>
       ) : (
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Select Child</CardTitle>
+              <CardTitle>Generate AI Meal Plan</CardTitle>
               <CardDescription>
-                Choose which child to generate a meal plan for
+                Creating a personalized plan for {activeKid?.name}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <KidSelector />
-
               {activeKid && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="text-center">
                     <p className="text-sm text-muted-foreground">Age</p>
                     <p className="text-2xl font-bold">{activeKid.age || 'N/A'}</p>
@@ -123,8 +173,8 @@ export default function AIPlanner() {
               )}
 
               <Button 
-                onClick={handleGeneratePlan}
-                disabled={isGenerating || !activeKidId}
+                onClick={() => handleGeneratePlan()}
+                disabled={isGenerating}
                 className="w-full"
                 size="lg"
               >
@@ -142,8 +192,10 @@ export default function AIPlanner() {
               </Button>
             </CardContent>
           </Card>
+        </>
+      )}
 
-          {insights && (
+      {insights && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -274,8 +326,6 @@ export default function AIPlanner() {
               </CardContent>
             </Card>
           )}
-        </>
-      )}
     </div>
   );
 }
