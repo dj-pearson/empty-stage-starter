@@ -72,12 +72,18 @@ export function CalendarMealPlanner({
     
     console.log('Drag started:', active.id);
     
-    // Find the food being dragged
+    // Find the entry being dragged
     const entry = planEntries.find(e => e.id === active.id);
     if (entry) {
-      const food = foods.find(f => f.id === entry.food_id);
-      setDraggedFood(food || null);
-      console.log('Dragging entry:', entry, 'Food:', food?.name);
+      // For display in drag overlay
+      if (entry.recipe_id) {
+        const recipe = recipes.find(r => r.id === entry.recipe_id);
+        console.log('Dragging recipe:', recipe?.name);
+      } else {
+        const food = foods.find(f => f.id === entry.food_id);
+        setDraggedFood(food || null);
+        console.log('Dragging food:', food?.name);
+      }
     }
   };
 
@@ -103,9 +109,6 @@ export function CalendarMealPlanner({
 
     // Parse the drop target: "date-slot" format
     const dropIdParts = (over.id as string).split('-');
-    
-    // Handle case where date might contain dashes (YYYY-MM-DD-slot)
-    // So we need to reconstruct: everything except last part is date, last part is slot
     const targetSlot = dropIdParts[dropIdParts.length - 1];
     const targetDate = dropIdParts.slice(0, -1).join('-');
     
@@ -120,28 +123,29 @@ export function CalendarMealPlanner({
         return;
       }
       
-      // Check if there's already an entry for this slot on this date
-      const existingEntry = planEntries.find(
-        e => e.date === targetDate && e.meal_slot === targetSlot && e.kid_id === kidId
-      );
-
-      console.log('Existing entry at target:', existingEntry);
-
-      if (existingEntry && existingEntry.id !== activeEntry.id) {
-        // Swap the two entries
-        console.log('Swapping entries');
-        onUpdateEntry(existingEntry.id, {
-          date: activeEntry.date,
-          meal_slot: activeEntry.meal_slot,
+      // If this is a recipe entry, move ALL entries with same recipe_id
+      if (activeEntry.recipe_id) {
+        const allRecipeEntries = planEntries.filter(
+          e => e.recipe_id === activeEntry.recipe_id && 
+               e.date === activeEntry.date && 
+               e.meal_slot === activeEntry.meal_slot
+        );
+        
+        console.log('Moving recipe with', allRecipeEntries.length, 'entries');
+        
+        allRecipeEntries.forEach(entry => {
+          onUpdateEntry(entry.id, {
+            date: targetDate,
+            meal_slot: targetSlot as MealSlot,
+          });
+        });
+      } else {
+        // Regular food entry - just move this one
+        onUpdateEntry(activeEntry.id, {
+          date: targetDate,
+          meal_slot: targetSlot as MealSlot,
         });
       }
-
-      // Update the dragged entry
-      console.log('Updating dragged entry to new position');
-      onUpdateEntry(activeEntry.id, {
-        date: targetDate,
-        meal_slot: targetSlot as MealSlot,
-      });
     } else {
       console.log('Invalid drop target format');
     }
@@ -151,14 +155,78 @@ export function CalendarMealPlanner({
   };
 
   const getFood = (foodId: string) => foods.find(f => f.id === foodId);
+  const getRecipe = (recipeId: string) => recipes.find(r => r.id === recipeId);
 
   const getEntriesForSlot = (date: string, slot: MealSlot) => {
-    return planEntries.filter(
+    const allEntries = planEntries.filter(
       e => e.date === date && e.meal_slot === slot && e.kid_id === kidId
     );
+    
+    // Group by recipe_id - show recipes as single items
+    const grouped: PlanEntry[] = [];
+    const recipeIds = new Set<string>();
+    
+    allEntries.forEach(entry => {
+      if (entry.recipe_id) {
+        // Only add first entry of each recipe
+        if (!recipeIds.has(entry.recipe_id)) {
+          recipeIds.add(entry.recipe_id);
+          grouped.push(entry);
+        }
+      } else {
+        // Regular food entries
+        grouped.push(entry);
+      }
+    });
+    
+    return grouped;
   };
 
-  const renderFoodBadge = (food: Food, isDragging = false) => {
+  const renderFoodBadge = (entry: PlanEntry, isDragging = false) => {
+    // If it's a recipe entry, show recipe name
+    if (entry.recipe_id) {
+      const recipe = getRecipe(entry.recipe_id);
+      if (recipe) {
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  className={cn(
+                    "p-2 rounded border cursor-move hover:shadow-md transition-all touch-none",
+                    isDragging && "opacity-50",
+                    "bg-card border-border"
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs md:text-sm font-medium truncate flex-1 text-foreground">
+                      {recipe.name}
+                    </span>
+                    <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                      Recipe
+                    </Badge>
+                  </div>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="space-y-1">
+                  <p className="font-medium">{recipe.name}</p>
+                  <p className="text-xs">{recipe.description}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {recipe.food_ids?.length || 0} ingredients
+                  </p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      }
+    }
+    
+    // Regular food entry
+    const food = getFood(entry.food_id);
+    if (!food) return null;
+    
     const isOutOfStock = (food.quantity || 0) === 0;
     const isLowStock = (food.quantity || 0) > 0 && (food.quantity || 0) <= 2;
 
@@ -210,7 +278,7 @@ export function CalendarMealPlanner({
   });
 
   // Draggable meal component
-  const DraggableMeal = ({ entry, food }: { entry: PlanEntry; food: Food }) => {
+  const DraggableMeal = ({ entry }: { entry: PlanEntry }) => {
     const { attributes, listeners, setNodeRef, isDragging, transform } = useDraggable({
       id: entry.id,
     });
@@ -221,7 +289,7 @@ export function CalendarMealPlanner({
 
     return (
       <div ref={setNodeRef} {...listeners} {...attributes} style={style}>
-        {renderFoodBadge(food, isDragging)}
+        {renderFoodBadge(entry, isDragging)}
       </div>
     );
   };
@@ -259,12 +327,9 @@ export function CalendarMealPlanner({
       >
         {hasEntries ? (
           <div className="space-y-1">
-            {entries.map((entry) => {
-              const food = getFood(entry.food_id);
-              return food ? (
-                <DraggableMeal key={entry.id} entry={entry} food={food} />
-              ) : null;
-            })}
+            {entries.map((entry) => (
+              <DraggableMeal key={entry.id} entry={entry} />
+            ))}
           </div>
         ) : (
           <div className="flex items-center justify-center h-full text-[10px] md:text-xs text-muted-foreground hover:text-primary transition-colors">
@@ -390,10 +455,15 @@ export function CalendarMealPlanner({
       </div>
 
       <DragOverlay dropAnimation={null}>
-        {activeId && draggedFood ? (
-          <div className="rotate-3 cursor-grabbing opacity-90">
-            {renderFoodBadge(draggedFood)}
-          </div>
+        {activeId ? (
+          (() => {
+            const entry = planEntries.find(e => e.id === activeId);
+            return entry ? (
+              <div className="rotate-3 cursor-grabbing opacity-90">
+                {renderFoodBadge(entry)}
+              </div>
+            ) : null;
+          })()
         ) : null}
       </DragOverlay>
     </DndContext>
