@@ -135,7 +135,7 @@ export function AddFoodDialog({
   const resetForm = () => {
     setName("");
     setCategory("protein");
-    setIsSafe(true);
+    setIsSafe(true); // Default to Safe Foods
     setIsTryBite(false);
     setAisle("");
     setQuantity(1);

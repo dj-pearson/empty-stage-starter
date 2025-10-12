@@ -195,8 +195,8 @@ export default function Pantry() {
       const foodToAdd = {
         name: foodData.name,
         category: foodData.category,
-        is_safe: false,
-        is_try_bite: true,
+        is_safe: foodData.is_safe ?? true, // Default to Safe Foods
+        is_try_bite: false,
         quantity: foodData.quantity || 1,
         package_quantity: foodData.servingSize || undefined,
       };

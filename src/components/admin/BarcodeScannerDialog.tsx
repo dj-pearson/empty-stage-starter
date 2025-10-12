@@ -347,7 +347,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
             category: mapToAllowedCategory(scannedFood.category, scannedFood.name),
             aisle: scannedFood.category,
             allergens: scannedFood.allergens || [],
-            is_safe: false,
+            is_safe: true, // Default to Safe Foods
             is_try_bite: false,
             quantity: quantity,
             unit: unit,

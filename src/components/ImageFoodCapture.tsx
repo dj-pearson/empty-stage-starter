@@ -26,6 +26,7 @@ interface FoodIdentification {
   servingSize: string;
   quantity: number;
   servingSizeOptions?: string[];
+  is_safe?: boolean;
 }
 
 interface ImageFoodCaptureProps {
@@ -236,6 +237,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
       name: finalName,
       servingSize: editedServingSize,
       quantity: qtyNum,
+      is_safe: true, // Default to Safe Foods
     });
     handleClose();
   };
