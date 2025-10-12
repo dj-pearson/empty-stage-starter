@@ -152,8 +152,8 @@ export function CalendarMealPlanner({
 
   const getFood = (foodId: string) => foods.find(f => f.id === foodId);
 
-  const getEntryForSlot = (date: string, slot: MealSlot) => {
-    return planEntries.find(
+  const getEntriesForSlot = (date: string, slot: MealSlot) => {
+    return planEntries.filter(
       e => e.date === date && e.meal_slot === slot && e.kid_id === kidId
     );
   };
@@ -229,15 +229,13 @@ export function CalendarMealPlanner({
   // Droppable slot component
   const DroppableSlot = ({ 
     dropId, 
-    entry, 
-    food, 
+    entries, 
     color,
     date,
     slot,
   }: { 
     dropId: string; 
-    entry: PlanEntry | undefined; 
-    food: Food | null; 
+    entries: PlanEntry[]; 
     color: string;
     date: string;
     slot: MealSlot;
@@ -246,19 +244,28 @@ export function CalendarMealPlanner({
       id: dropId,
     });
 
+    const hasEntries = entries.length > 0;
+
     return (
       <div
         ref={setNodeRef}
         className={cn(
           "min-h-[70px] md:min-h-[80px] rounded-lg border-2 border-dashed p-1.5 md:p-2 w-full",
-          food ? color : 'bg-muted/30 border-muted',
+          hasEntries ? color : 'bg-muted/30 border-muted',
           isOver && 'ring-2 ring-primary bg-primary/10',
           "transition-all cursor-pointer"
         )}
-        onClick={() => !food && onOpenFoodSelector(date, slot)}
+        onClick={() => !hasEntries && onOpenFoodSelector(date, slot)}
       >
-        {entry && food ? (
-          <DraggableMeal entry={entry} food={food} />
+        {hasEntries ? (
+          <div className="space-y-1">
+            {entries.map((entry) => {
+              const food = getFood(entry.food_id);
+              return food ? (
+                <DraggableMeal key={entry.id} entry={entry} food={food} />
+              ) : null;
+            })}
+          </div>
         ) : (
           <div className="flex items-center justify-center h-full text-[10px] md:text-xs text-muted-foreground hover:text-primary transition-colors">
             <span className="hidden md:inline">Click to add</span>
@@ -301,16 +308,14 @@ export function CalendarMealPlanner({
                 </div>
                 
                 {days.map(day => {
-                  const entry = getEntryForSlot(day.date, slot);
-                  const food = entry ? getFood(entry.food_id) : null;
+                  const entries = getEntriesForSlot(day.date, slot);
                   const dropId = `${day.date}-${slot}`;
 
                   return (
                     <div key={dropId} className="flex-1">
                       <DroppableSlot
                         dropId={dropId}
-                        entry={entry}
-                        food={food}
+                        entries={entries}
                         color={color}
                         date={day.date}
                         slot={slot}
@@ -358,8 +363,7 @@ export function CalendarMealPlanner({
         <div className="space-y-3">
           {MEAL_SLOTS.map(({ slot, label, color }) => {
             const day = days[mobileViewDay];
-            const entry = getEntryForSlot(day.date, slot);
-            const food = entry ? getFood(entry.food_id) : null;
+            const entries = getEntriesForSlot(day.date, slot);
             const dropId = `${day.date}-${slot}`;
 
             return (
@@ -373,8 +377,7 @@ export function CalendarMealPlanner({
                 <CardContent className="pt-2">
                   <DroppableSlot
                     dropId={dropId}
-                    entry={entry}
-                    food={food}
+                    entries={entries}
                     color={color}
                     date={day.date}
                     slot={slot}
