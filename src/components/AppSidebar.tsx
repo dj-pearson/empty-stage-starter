@@ -31,6 +31,7 @@ import {
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { KidSelector } from "@/components/KidSelector";
 
 const mainNavItems = [
   { to: "/dashboard", icon: Home, label: "Home" },
@@ -82,7 +83,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       {/* Header with Logo */}
-      <SidebarHeader className="border-b border-border px-4 py-3">
+      <SidebarHeader className="border-b border-border px-4 py-3 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img 
@@ -97,6 +98,11 @@ export function AppSidebar() {
             />
           </div>
         </div>
+        {!isCollapsed && (
+          <div className="w-full">
+            <KidSelector />
+          </div>
+        )}
       </SidebarHeader>
 
       <SidebarContent>

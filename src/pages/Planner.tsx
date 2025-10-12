@@ -31,7 +31,7 @@ const MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
 ];
 
 export default function Planner() {
-  const { foods, kids, recipes, activeKidId, planEntries, setPlanEntries, updatePlanEntry, addPlanEntry, updateFood } = useApp();
+  const { foods, kids, recipes, activeKidId, setActiveKid, planEntries, setPlanEntries, updatePlanEntry, addPlanEntry, updateFood } = useApp();
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<PlanEntry | null>(null);
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
@@ -449,29 +449,59 @@ export default function Planner() {
           </Card>
         </div>
 
-        {!activeKid ? (
+        {kids.length === 0 ? (
           <Card className="p-12 text-center">
             <div className="max-w-md mx-auto">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
                 <Calendar className="h-8 w-8 text-primary" />
               </div>
-              <h3 className="text-xl font-semibold mb-2">Select a Child</h3>
+              <h3 className="text-xl font-semibold mb-2">No Children Added</h3>
               <p className="text-muted-foreground mb-6">
-                Please select a child to start planning meals
+                Please add a child to start planning meals
               </p>
             </div>
           </Card>
+        ) : activeKidId === null ? (
+          // Family Mode - Show all children
+          <div className="space-y-6">
+            {kids.map(kid => (
+              <div key={kid.id} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold">{kid.name}'s Plan</h2>
+                  <Button variant="outline" size="sm" onClick={() => setActiveKid(kid.id)}>
+                    View Details
+                  </Button>
+                </div>
+                <CalendarMealPlanner
+                  weekStart={currentWeekStart}
+                  planEntries={planEntries}
+                  foods={foods}
+                  recipes={recipes}
+                  kids={kids}
+                  kidId={kid.id}
+                  kidName={kid.name}
+                  kidAge={kid.age}
+                  kidWeight={kid.weight_kg ? Number(kid.weight_kg) : undefined}
+                  onUpdateEntry={handleUpdateEntry}
+                  onAddEntry={handleAddEntry}
+                  onOpenFoodSelector={handleOpenFoodSelector}
+                  onCopyToChild={handleCopyToChild}
+                />
+              </div>
+            ))}
+          </div>
         ) : (
+          // Single child mode
           <CalendarMealPlanner
             weekStart={currentWeekStart}
             planEntries={planEntries}
             foods={foods}
             recipes={recipes}
             kids={kids}
-            kidId={activeKidId!}
-            kidName={activeKid.name}
-            kidAge={activeKid.age}
-            kidWeight={activeKid.weight_kg ? Number(activeKid.weight_kg) : undefined}
+            kidId={activeKidId}
+            kidName={activeKid!.name}
+            kidAge={activeKid!.age}
+            kidWeight={activeKid!.weight_kg ? Number(activeKid!.weight_kg) : undefined}
             onUpdateEntry={handleUpdateEntry}
             onAddEntry={handleAddEntry}
             onOpenFoodSelector={handleOpenFoodSelector}

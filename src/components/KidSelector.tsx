@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { UserCircle, ChevronDown } from "lucide-react";
+import { UserCircle, ChevronDown, Users } from "lucide-react";
 
 export function KidSelector() {
   const { kids, activeKidId, setActiveKid } = useApp();
@@ -16,17 +16,35 @@ export function KidSelector() {
 
   if (kids.length === 0) return null;
 
+  const displayName = activeKidId === null ? "Family" : activeKid?.name || "Select Child";
+  const isFamilyMode = activeKidId === null;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="gap-2">
-          <UserCircle className="h-4 w-4" />
-          <span className="hidden sm:inline">{activeKid?.name || "Select Child"}</span>
+        <Button variant="outline" className="gap-2 w-full justify-between">
+          {isFamilyMode ? (
+            <Users className="h-4 w-4" />
+          ) : (
+            <UserCircle className="h-4 w-4" />
+          )}
+          <span className="flex-1 text-left">{displayName}</span>
           <ChevronDown className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuLabel>Select Child</DropdownMenuLabel>
+      <DropdownMenuContent align="end" className="w-48 z-50 bg-popover">
+        <DropdownMenuLabel>Select View</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => setActiveKid(null)}
+          className={isFamilyMode ? "bg-accent" : ""}
+        >
+          <Users className="h-4 w-4 mr-2" />
+          Family
+          {kids.length > 1 && (
+            <span className="ml-auto text-xs text-muted-foreground">{kids.length} kids</span>
+          )}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         {kids.map(kid => (
           <DropdownMenuItem

@@ -41,7 +41,7 @@ interface RecipeSuggestion {
 }
 
 export default function Recipes() {
-  const { recipes, foods, addRecipe, updateRecipe, deleteRecipe, kids, activeKidId } = useApp();
+  const { recipes, foods, addRecipe, updateRecipe, deleteRecipe, kids, activeKidId, setActiveKid } = useApp();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [editRecipe, setEditRecipe] = useState<Recipe | null>(null);
@@ -186,15 +186,35 @@ export default function Recipes() {
     };
   };
 
+  const isFamilyMode = activeKidId === null;
+
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
-          <div>
+          <div className="flex-1">
             <h1 className="text-3xl font-bold mb-2">Recipes & Meal Templates</h1>
             <p className="text-muted-foreground">
-              Create complete meals like "Taco Night" or "Pizza Party"
+              {isFamilyMode 
+                ? "Family recipes for all children"
+                : `Recipes for ${kids.find(k => k.id === activeKidId)?.name}`
+              }
             </p>
+            {isFamilyMode && kids.length > 1 && (
+              <div className="flex gap-2 mt-3 flex-wrap">
+                <span className="text-sm text-muted-foreground">Quick filter:</span>
+                {kids.map(kid => (
+                  <Button
+                    key={kid.id}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setActiveKid(kid.id)}
+                  >
+                    {kid.name}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex gap-2 flex-wrap">
             <Button
