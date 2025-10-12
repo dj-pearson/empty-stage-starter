@@ -36,6 +36,7 @@ const TEXTURE_OPTIONS = [
 export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, onComplete }: ChildIntakeQuestionnaireProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [unitSystem, setUnitSystem] = useState<'imperial' | 'metric'>('imperial');
   
   const [formData, setFormData] = useState({
     gender: "",
@@ -59,6 +60,26 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
     disliked_foods: [] as string[],
     pickiness_level: "",
   });
+
+  // Helper functions for unit conversion
+  const convertHeightToMetric = (feet: number, inches: number): number => {
+    return ((feet * 12 + inches) * 2.54);
+  };
+
+  const convertWeightToMetric = (pounds: number): number => {
+    return pounds * 0.453592;
+  };
+
+  const convertHeightToImperial = (cm: number): { feet: number; inches: number } => {
+    const totalInches = cm / 2.54;
+    const feet = Math.floor(totalInches / 12);
+    const inches = Math.round(totalInches % 12);
+    return { feet, inches };
+  };
+
+  const convertWeightToImperial = (kg: number): number => {
+    return Math.round(kg / 0.453592);
+  };
 
   const steps = [
     { title: "Basic Information", description: "Health & growth (30s)" },
@@ -179,7 +200,7 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-3xl max-h-[85vh] md:max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
@@ -201,7 +222,7 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-4 space-y-6">
+        <div className="flex-1 overflow-y-auto py-4 space-y-6 px-1">
           {/* Section 1: Basic Information - Health & Growth */}
           {currentStep === 0 && (
             <div className="space-y-6">
@@ -220,25 +241,102 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
                 </Select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Height (cm)</Label>
-                  <Input 
-                    type="number" 
-                    placeholder="e.g., 120"
-                    value={formData.height_cm || ''}
-                    onChange={(e) => setFormData({ ...formData, height_cm: e.target.value ? parseFloat(e.target.value) : null })}
-                  />
+              <div>
+                <div className="flex justify-between items-center mb-3">
+                  <Label>Measurement Units</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={unitSystem === 'imperial' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setUnitSystem('imperial')}
+                    >
+                      Imperial (ft/lbs)
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={unitSystem === 'metric' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setUnitSystem('metric')}
+                    >
+                      Metric (cm/kg)
+                    </Button>
+                  </div>
                 </div>
-                <div>
-                  <Label>Weight (kg)</Label>
-                  <Input 
-                    type="number" 
-                    placeholder="e.g., 25"
-                    value={formData.weight_kg || ''}
-                    onChange={(e) => setFormData({ ...formData, weight_kg: e.target.value ? parseFloat(e.target.value) : null })}
-                  />
-                </div>
+
+                {unitSystem === 'imperial' ? (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <Label>Height (feet)</Label>
+                      <Input 
+                        type="number" 
+                        placeholder="e.g., 4"
+                        min="0"
+                        onChange={(e) => {
+                          const feet = parseFloat(e.target.value) || 0;
+                          const inches = formData.height_cm 
+                            ? convertHeightToImperial(formData.height_cm).inches 
+                            : 0;
+                          const cm = convertHeightToMetric(feet, inches);
+                          setFormData({ ...formData, height_cm: cm });
+                        }}
+                        value={formData.height_cm ? convertHeightToImperial(formData.height_cm).feet : ''}
+                      />
+                    </div>
+                    <div>
+                      <Label>Height (inches)</Label>
+                      <Input 
+                        type="number" 
+                        placeholder="e.g., 5"
+                        min="0"
+                        max="11"
+                        onChange={(e) => {
+                          const inches = parseFloat(e.target.value) || 0;
+                          const feet = formData.height_cm 
+                            ? convertHeightToImperial(formData.height_cm).feet 
+                            : 0;
+                          const cm = convertHeightToMetric(feet, inches);
+                          setFormData({ ...formData, height_cm: cm });
+                        }}
+                        value={formData.height_cm ? convertHeightToImperial(formData.height_cm).inches : ''}
+                      />
+                    </div>
+                    <div>
+                      <Label>Weight (lbs)</Label>
+                      <Input 
+                        type="number" 
+                        placeholder="e.g., 55"
+                        onChange={(e) => {
+                          const lbs = parseFloat(e.target.value) || 0;
+                          const kg = convertWeightToMetric(lbs);
+                          setFormData({ ...formData, weight_kg: kg });
+                        }}
+                        value={formData.weight_kg ? convertWeightToImperial(formData.weight_kg) : ''}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Height (cm)</Label>
+                      <Input 
+                        type="number" 
+                        placeholder="e.g., 120"
+                        value={formData.height_cm || ''}
+                        onChange={(e) => setFormData({ ...formData, height_cm: e.target.value ? parseFloat(e.target.value) : null })}
+                      />
+                    </div>
+                    <div>
+                      <Label>Weight (kg)</Label>
+                      <Input 
+                        type="number" 
+                        placeholder="e.g., 25"
+                        value={formData.weight_kg || ''}
+                        onChange={(e) => setFormData({ ...formData, weight_kg: e.target.value ? parseFloat(e.target.value) : null })}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
