@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_notifications: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          message: string
+          metadata: Json | null
+          notification_type: string
+          severity: string
+          title: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message: string
+          metadata?: Json | null
+          notification_type: string
+          severity: string
+          title: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message?: string
+          metadata?: Json | null
+          notification_type?: string
+          severity?: string
+          title?: string
+        }
+        Relationships: []
+      }
       ai_coach_conversations: {
         Row: {
           conversation_title: string | null
@@ -103,6 +136,81 @@ export type Database = {
           },
         ]
       }
+      ai_cost_budgets: {
+        Row: {
+          budget_name: string
+          budget_type: string
+          created_at: string | null
+          critical_threshold_pct: number | null
+          enterprise_tier_limit_cents: number
+          free_tier_limit_cents: number
+          id: string
+          is_active: boolean | null
+          premium_tier_limit_cents: number
+          updated_at: string | null
+          warning_threshold_pct: number | null
+        }
+        Insert: {
+          budget_name: string
+          budget_type: string
+          created_at?: string | null
+          critical_threshold_pct?: number | null
+          enterprise_tier_limit_cents?: number
+          free_tier_limit_cents?: number
+          id?: string
+          is_active?: boolean | null
+          premium_tier_limit_cents?: number
+          updated_at?: string | null
+          warning_threshold_pct?: number | null
+        }
+        Update: {
+          budget_name?: string
+          budget_type?: string
+          created_at?: string | null
+          critical_threshold_pct?: number | null
+          enterprise_tier_limit_cents?: number
+          free_tier_limit_cents?: number
+          id?: string
+          is_active?: boolean | null
+          premium_tier_limit_cents?: number
+          updated_at?: string | null
+          warning_threshold_pct?: number | null
+        }
+        Relationships: []
+      }
+      ai_model_pricing: {
+        Row: {
+          completion_price_per_1m_tokens: number
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          model_name: string
+          prompt_price_per_1m_tokens: number
+          provider: string
+          updated_at: string | null
+        }
+        Insert: {
+          completion_price_per_1m_tokens: number
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          model_name: string
+          prompt_price_per_1m_tokens: number
+          provider: string
+          updated_at?: string | null
+        }
+        Update: {
+          completion_price_per_1m_tokens?: number
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          model_name?: string
+          prompt_price_per_1m_tokens?: number
+          provider?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       ai_settings: {
         Row: {
           additional_params: Json | null
@@ -148,6 +256,352 @@ export type Database = {
           provider?: string
           temperature?: number | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      ai_usage_logs: {
+        Row: {
+          completion_cost_cents: number | null
+          completion_tokens: number | null
+          created_at: string | null
+          endpoint: string
+          error_message: string | null
+          id: string
+          model: string | null
+          prompt_cost_cents: number | null
+          prompt_tokens: number | null
+          request_duration_ms: number | null
+          request_metadata: Json | null
+          response_metadata: Json | null
+          status: string | null
+          total_cost_cents: number | null
+          total_tokens: number | null
+          user_id: string | null
+        }
+        Insert: {
+          completion_cost_cents?: number | null
+          completion_tokens?: number | null
+          created_at?: string | null
+          endpoint: string
+          error_message?: string | null
+          id?: string
+          model?: string | null
+          prompt_cost_cents?: number | null
+          prompt_tokens?: number | null
+          request_duration_ms?: number | null
+          request_metadata?: Json | null
+          response_metadata?: Json | null
+          status?: string | null
+          total_cost_cents?: number | null
+          total_tokens?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          completion_cost_cents?: number | null
+          completion_tokens?: number | null
+          created_at?: string | null
+          endpoint?: string
+          error_message?: string | null
+          id?: string
+          model?: string | null
+          prompt_cost_cents?: number | null
+          prompt_tokens?: number | null
+          request_duration_ms?: number | null
+          request_metadata?: Json | null
+          response_metadata?: Json | null
+          status?: string | null
+          total_cost_cents?: number | null
+          total_tokens?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      automation_email_events: {
+        Row: {
+          created_at: string | null
+          email_id: string | null
+          event_data: Json | null
+          event_type: string
+          id: string
+        }
+        Insert: {
+          created_at?: string | null
+          email_id?: string | null
+          event_data?: Json | null
+          event_type: string
+          id?: string
+        }
+        Update: {
+          created_at?: string | null
+          email_id?: string | null
+          event_data?: Json | null
+          event_type?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_email_events_email_id_fkey"
+            columns: ["email_id"]
+            isOneToOne: false
+            referencedRelation: "automation_email_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_email_queue: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          html_body: string
+          id: string
+          max_retries: number | null
+          priority: number | null
+          retry_count: number | null
+          scheduled_for: string | null
+          sent_at: string | null
+          status: string | null
+          subject: string
+          template_key: string
+          template_variables: Json | null
+          text_body: string | null
+          to_email: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          html_body: string
+          id?: string
+          max_retries?: number | null
+          priority?: number | null
+          retry_count?: number | null
+          scheduled_for?: string | null
+          sent_at?: string | null
+          status?: string | null
+          subject: string
+          template_key: string
+          template_variables?: Json | null
+          text_body?: string | null
+          to_email: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          html_body?: string
+          id?: string
+          max_retries?: number | null
+          priority?: number | null
+          retry_count?: number | null
+          scheduled_for?: string | null
+          sent_at?: string | null
+          status?: string | null
+          subject?: string
+          template_key?: string
+          template_variables?: Json | null
+          text_body?: string | null
+          to_email?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_email_queue_template_key_fkey"
+            columns: ["template_key"]
+            isOneToOne: false
+            referencedRelation: "automation_email_templates"
+            referencedColumns: ["template_key"]
+          },
+        ]
+      }
+      automation_email_subscriptions: {
+        Row: {
+          created_at: string | null
+          id: string
+          marketing_emails: boolean | null
+          milestone_emails: boolean | null
+          tips_and_advice: boolean | null
+          unsubscribe_token: string | null
+          unsubscribed_at: string | null
+          updated_at: string | null
+          user_id: string | null
+          weekly_summary: boolean | null
+          welcome_emails: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          marketing_emails?: boolean | null
+          milestone_emails?: boolean | null
+          tips_and_advice?: boolean | null
+          unsubscribe_token?: string | null
+          unsubscribed_at?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          weekly_summary?: boolean | null
+          welcome_emails?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          marketing_emails?: boolean | null
+          milestone_emails?: boolean | null
+          tips_and_advice?: boolean | null
+          unsubscribe_token?: string | null
+          unsubscribed_at?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          weekly_summary?: boolean | null
+          welcome_emails?: boolean | null
+        }
+        Relationships: []
+      }
+      automation_email_templates: {
+        Row: {
+          category: string
+          created_at: string | null
+          html_body: string
+          id: string
+          is_active: boolean | null
+          send_delay_minutes: number | null
+          subject: string
+          template_key: string
+          template_name: string
+          text_body: string | null
+          updated_at: string | null
+          variables: Json | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          html_body: string
+          id?: string
+          is_active?: boolean | null
+          send_delay_minutes?: number | null
+          subject: string
+          template_key: string
+          template_name: string
+          text_body?: string | null
+          updated_at?: string | null
+          variables?: Json | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          html_body?: string
+          id?: string
+          is_active?: boolean | null
+          send_delay_minutes?: number | null
+          subject?: string
+          template_key?: string
+          template_name?: string
+          text_body?: string | null
+          updated_at?: string | null
+          variables?: Json | null
+        }
+        Relationships: []
+      }
+      backup_config: {
+        Row: {
+          auto_cleanup: boolean | null
+          created_at: string | null
+          email_notifications: boolean | null
+          enabled: boolean | null
+          frequency: string | null
+          id: string
+          include_images: boolean | null
+          last_backup_at: string | null
+          next_backup_at: string | null
+          retention_days: number | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          auto_cleanup?: boolean | null
+          created_at?: string | null
+          email_notifications?: boolean | null
+          enabled?: boolean | null
+          frequency?: string | null
+          id?: string
+          include_images?: boolean | null
+          last_backup_at?: string | null
+          next_backup_at?: string | null
+          retention_days?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          auto_cleanup?: boolean | null
+          created_at?: string | null
+          email_notifications?: boolean | null
+          enabled?: boolean | null
+          frequency?: string | null
+          id?: string
+          include_images?: boolean | null
+          last_backup_at?: string | null
+          next_backup_at?: string | null
+          retention_days?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      backup_logs: {
+        Row: {
+          backup_type: string
+          completed_at: string | null
+          compressed_size_bytes: number | null
+          compression_ratio: number | null
+          created_at: string | null
+          error_message: string | null
+          expires_at: string | null
+          file_path: string | null
+          file_size_bytes: number | null
+          id: string
+          records_count: Json | null
+          retention_days: number | null
+          started_at: string | null
+          status: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          backup_type: string
+          completed_at?: string | null
+          compressed_size_bytes?: number | null
+          compression_ratio?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          expires_at?: string | null
+          file_path?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          records_count?: Json | null
+          retention_days?: number | null
+          started_at?: string | null
+          status: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          backup_type?: string
+          completed_at?: string | null
+          compressed_size_bytes?: number | null
+          compression_ratio?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          expires_at?: string | null
+          file_path?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          records_count?: Json | null
+          retention_days?: number | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -699,6 +1153,7 @@ export type Database = {
           outcome: string
           parent_notes: string | null
           photo_urls: string[] | null
+          plan_entry_id: string | null
           preparation_method: string | null
           presentation_notes: string | null
           reaction_notes: string | null
@@ -721,6 +1176,7 @@ export type Database = {
           outcome: string
           parent_notes?: string | null
           photo_urls?: string[] | null
+          plan_entry_id?: string | null
           preparation_method?: string | null
           presentation_notes?: string | null
           reaction_notes?: string | null
@@ -743,6 +1199,7 @@ export type Database = {
           outcome?: string
           parent_notes?: string | null
           photo_urls?: string[] | null
+          plan_entry_id?: string | null
           preparation_method?: string | null
           presentation_notes?: string | null
           reaction_notes?: string | null
@@ -777,6 +1234,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "kids"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "food_attempts_plan_entry_id_fkey"
+            columns: ["plan_entry_id"]
+            isOneToOne: false
+            referencedRelation: "plan_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "food_attempts_plan_entry_id_fkey"
+            columns: ["plan_entry_id"]
+            isOneToOne: false
+            referencedRelation: "unified_meal_tracking"
+            referencedColumns: ["plan_entry_id"]
           },
         ]
       }
@@ -996,39 +1467,51 @@ export type Database = {
       }
       grocery_items: {
         Row: {
+          aisle: string | null
+          auto_generated: boolean | null
           category: string
           checked: boolean
           created_at: string | null
           household_id: string | null
           id: string
           name: string
+          priority: string | null
           quantity: number
+          restock_reason: string | null
           source_plan_entry_id: string | null
           unit: string
           updated_at: string | null
           user_id: string
         }
         Insert: {
+          aisle?: string | null
+          auto_generated?: boolean | null
           category: string
           checked?: boolean
           created_at?: string | null
           household_id?: string | null
           id?: string
           name: string
+          priority?: string | null
           quantity?: number
+          restock_reason?: string | null
           source_plan_entry_id?: string | null
           unit?: string
           updated_at?: string | null
           user_id: string
         }
         Update: {
+          aisle?: string | null
+          auto_generated?: boolean | null
           category?: string
           checked?: boolean
           created_at?: string | null
           household_id?: string | null
           id?: string
           name?: string
+          priority?: string | null
           quantity?: number
+          restock_reason?: string | null
           source_plan_entry_id?: string | null
           unit?: string
           updated_at?: string | null
@@ -1048,6 +1531,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "plan_entries"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grocery_items_source_plan_entry_id_fkey"
+            columns: ["source_plan_entry_id"]
+            isOneToOne: false
+            referencedRelation: "unified_meal_tracking"
+            referencedColumns: ["plan_entry_id"]
           },
         ]
       }
@@ -1303,6 +1793,7 @@ export type Database = {
           cross_contamination_sensitive: boolean | null
           date_of_birth: string | null
           dietary_restrictions: string[] | null
+          dietary_variety_score: number | null
           disliked_foods: string[] | null
           eating_behavior: string | null
           favorite_foods: string[] | null
@@ -1317,11 +1808,14 @@ export type Database = {
           new_food_willingness: string | null
           notes: string | null
           nutrition_concerns: string[] | null
+          pickiness_level: string | null
+          preferred_preparations: string[] | null
           profile_completed: boolean | null
           profile_last_reviewed: string | null
           profile_picture_url: string | null
           texture_dislikes: string[] | null
           texture_preferences: string[] | null
+          texture_sensitivity_level: string | null
           updated_at: string | null
           user_id: string
           weight_kg: number | null
@@ -1336,6 +1830,7 @@ export type Database = {
           cross_contamination_sensitive?: boolean | null
           date_of_birth?: string | null
           dietary_restrictions?: string[] | null
+          dietary_variety_score?: number | null
           disliked_foods?: string[] | null
           eating_behavior?: string | null
           favorite_foods?: string[] | null
@@ -1350,11 +1845,14 @@ export type Database = {
           new_food_willingness?: string | null
           notes?: string | null
           nutrition_concerns?: string[] | null
+          pickiness_level?: string | null
+          preferred_preparations?: string[] | null
           profile_completed?: boolean | null
           profile_last_reviewed?: string | null
           profile_picture_url?: string | null
           texture_dislikes?: string[] | null
           texture_preferences?: string[] | null
+          texture_sensitivity_level?: string | null
           updated_at?: string | null
           user_id: string
           weight_kg?: number | null
@@ -1369,6 +1867,7 @@ export type Database = {
           cross_contamination_sensitive?: boolean | null
           date_of_birth?: string | null
           dietary_restrictions?: string[] | null
+          dietary_variety_score?: number | null
           disliked_foods?: string[] | null
           eating_behavior?: string | null
           favorite_foods?: string[] | null
@@ -1383,11 +1882,14 @@ export type Database = {
           new_food_willingness?: string | null
           notes?: string | null
           nutrition_concerns?: string[] | null
+          pickiness_level?: string | null
+          preferred_preparations?: string[] | null
           profile_completed?: boolean | null
           profile_last_reviewed?: string | null
           profile_picture_url?: string | null
           texture_dislikes?: string[] | null
           texture_preferences?: string[] | null
+          texture_sensitivity_level?: string | null
           updated_at?: string | null
           user_id?: string
           weight_kg?: number | null
@@ -1616,12 +2118,15 @@ export type Database = {
         Row: {
           created_at: string | null
           date: string
+          food_attempt_id: string | null
           food_id: string
           household_id: string | null
           id: string
+          is_primary_dish: boolean | null
           kid_id: string
           meal_slot: string
           notes: string | null
+          recipe_id: string | null
           result: string | null
           updated_at: string | null
           user_id: string
@@ -1629,12 +2134,15 @@ export type Database = {
         Insert: {
           created_at?: string | null
           date: string
+          food_attempt_id?: string | null
           food_id: string
           household_id?: string | null
           id?: string
+          is_primary_dish?: boolean | null
           kid_id: string
           meal_slot: string
           notes?: string | null
+          recipe_id?: string | null
           result?: string | null
           updated_at?: string | null
           user_id: string
@@ -1642,17 +2150,34 @@ export type Database = {
         Update: {
           created_at?: string | null
           date?: string
+          food_attempt_id?: string | null
           food_id?: string
           household_id?: string | null
           id?: string
+          is_primary_dish?: boolean | null
           kid_id?: string
           meal_slot?: string
           notes?: string | null
+          recipe_id?: string | null
           result?: string | null
           updated_at?: string | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "plan_entries_food_attempt_id_fkey"
+            columns: ["food_attempt_id"]
+            isOneToOne: false
+            referencedRelation: "food_attempts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_entries_food_attempt_id_fkey"
+            columns: ["food_attempt_id"]
+            isOneToOne: false
+            referencedRelation: "unified_meal_tracking"
+            referencedColumns: ["food_attempt_id"]
+          },
           {
             foreignKeyName: "plan_entries_food_id_fkey"
             columns: ["food_id"]
@@ -1686,6 +2211,20 @@ export type Database = {
             columns: ["kid_id"]
             isOneToOne: false
             referencedRelation: "kids"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_entries_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_success_stats"
+            referencedColumns: ["recipe_id"]
+          },
+          {
+            foreignKeyName: "plan_entries_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
             referencedColumns: ["id"]
           },
         ]
@@ -1865,37 +2404,124 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limit_config: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          endpoint: string
+          enterprise_tier_limit: number
+          free_tier_limit: number
+          id: string
+          is_active: boolean | null
+          premium_tier_limit: number
+          updated_at: string | null
+          window_minutes: number
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          endpoint: string
+          enterprise_tier_limit?: number
+          free_tier_limit?: number
+          id?: string
+          is_active?: boolean | null
+          premium_tier_limit?: number
+          updated_at?: string | null
+          window_minutes?: number
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          endpoint?: string
+          enterprise_tier_limit?: number
+          free_tier_limit?: number
+          id?: string
+          is_active?: boolean | null
+          premium_tier_limit?: number
+          updated_at?: string | null
+          window_minutes?: number
+        }
+        Relationships: []
+      }
+      rate_limits: {
+        Row: {
+          created_at: string | null
+          endpoint: string
+          id: string
+          request_count: number | null
+          updated_at: string | null
+          user_id: string | null
+          window_start: string
+        }
+        Insert: {
+          created_at?: string | null
+          endpoint: string
+          id?: string
+          request_count?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+          window_start: string
+        }
+        Update: {
+          created_at?: string | null
+          endpoint?: string
+          id?: string
+          request_count?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+          window_start?: string
+        }
+        Relationships: []
+      }
       recipes: {
         Row: {
+          additional_ingredients: string | null
           category: string | null
+          cook_time: string | null
           created_at: string | null
           description: string | null
           food_ids: string[]
           household_id: string | null
           id: string
+          instructions: string | null
           name: string
+          prep_time: string | null
+          servings: string | null
+          tips: string | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
+          additional_ingredients?: string | null
           category?: string | null
+          cook_time?: string | null
           created_at?: string | null
           description?: string | null
           food_ids?: string[]
           household_id?: string | null
           id?: string
+          instructions?: string | null
           name: string
+          prep_time?: string | null
+          servings?: string | null
+          tips?: string | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
+          additional_ingredients?: string | null
           category?: string | null
+          cook_time?: string | null
           created_at?: string | null
           description?: string | null
           food_ids?: string[]
           household_id?: string | null
           id?: string
+          instructions?: string | null
           name?: string
+          prep_time?: string | null
+          servings?: string | null
+          tips?: string | null
           updated_at?: string | null
           user_id?: string
         }
@@ -2323,6 +2949,283 @@ export type Database = {
       }
     }
     Views: {
+      admin_ai_usage: {
+        Row: {
+          avg_requests_per_user: number | null
+          description: string | null
+          endpoint: string | null
+          last_request_at: string | null
+          peak_requests_per_minute: number | null
+          requests_24h: number | null
+          requests_7d: number | null
+          total_requests: number | null
+          unique_users: number | null
+        }
+        Relationships: []
+      }
+      admin_content_quality: {
+        Row: {
+          added_30d: number | null
+          added_7d: number | null
+          avg_name_length: number | null
+          content_type: string | null
+          items_with_allergens: number | null
+          items_with_quantity: number | null
+          total_items: number | null
+        }
+        Relationships: []
+      }
+      admin_daily_activity: {
+        Row: {
+          achievements_earned: number | null
+          active_users: number | null
+          date: string | null
+          food_attempts_created: number | null
+          foods_added: number | null
+          meals_logged: number | null
+          plan_entries_created: number | null
+          recipes_created: number | null
+          successful_attempts: number | null
+        }
+        Relationships: []
+      }
+      admin_error_tracking: {
+        Row: {
+          error_count: number | null
+          error_type: string | null
+          last_occurrence: string | null
+          recent_errors: Json | null
+        }
+        Relationships: []
+      }
+      admin_feature_adoption: {
+        Row: {
+          adoption_rate_pct: number | null
+          feature: string | null
+          last_used: string | null
+          total_usage_count: number | null
+          users_using: number | null
+        }
+        Relationships: []
+      }
+      admin_platform_health: {
+        Row: {
+          achievements_7d: number | null
+          active_users_30d: number | null
+          active_users_7d: number | null
+          failed_backups_24h: number | null
+          failed_emails_24h: number | null
+          new_users_30d: number | null
+          new_users_7d: number | null
+          rate_limit_hits_1h: number | null
+          snapshot_at: string | null
+          successful_attempts_7d: number | null
+          total_food_attempts: number | null
+          total_foods: number | null
+          total_kids: number | null
+          total_plan_entries: number | null
+          total_recipes: number | null
+          total_users: number | null
+        }
+        Relationships: []
+      }
+      admin_user_engagement: {
+        Row: {
+          engagement_score: number | null
+          foods_count: number | null
+          full_name: string | null
+          joined_at: string | null
+          kids_count: number | null
+          last_attempt_date: string | null
+          last_plan_date: string | null
+          recipes_count: number | null
+          total_food_attempts: number | null
+          total_plan_entries: number | null
+          user_id: string | null
+          user_tier: string | null
+        }
+        Insert: {
+          engagement_score?: never
+          foods_count?: never
+          full_name?: string | null
+          joined_at?: string | null
+          kids_count?: never
+          last_attempt_date?: never
+          last_plan_date?: never
+          recipes_count?: never
+          total_food_attempts?: never
+          total_plan_entries?: never
+          user_id?: string | null
+          user_tier?: never
+        }
+        Update: {
+          engagement_score?: never
+          foods_count?: never
+          full_name?: string | null
+          joined_at?: string | null
+          kids_count?: never
+          last_attempt_date?: never
+          last_plan_date?: never
+          recipes_count?: never
+          total_food_attempts?: never
+          total_plan_entries?: never
+          user_id?: string | null
+          user_tier?: never
+        }
+        Relationships: []
+      }
+      admin_user_retention: {
+        Row: {
+          cohort_month: string | null
+          cohort_size: number | null
+          month_0: number | null
+          month_1: number | null
+          month_2: number | null
+          month_3: number | null
+          retention_month_1_pct: number | null
+          retention_month_2_pct: number | null
+          retention_month_3_pct: number | null
+        }
+        Relationships: []
+      }
+      ai_cost_by_endpoint: {
+        Row: {
+          avg_cost_per_request_cents: number | null
+          avg_duration_ms: number | null
+          avg_tokens_per_request: number | null
+          endpoint: string | null
+          total_cost_cents: number | null
+          total_cost_dollars: number | null
+          total_requests: number | null
+          total_tokens: number | null
+          unique_users: number | null
+        }
+        Relationships: []
+      }
+      ai_cost_by_model: {
+        Row: {
+          avg_cost_per_request_cents: number | null
+          avg_duration_ms: number | null
+          model: string | null
+          total_completion_tokens: number | null
+          total_cost_cents: number | null
+          total_cost_dollars: number | null
+          total_prompt_tokens: number | null
+          total_requests: number | null
+          total_tokens: number | null
+          unique_users: number | null
+        }
+        Relationships: []
+      }
+      ai_cost_by_user: {
+        Row: {
+          current_month_cost_cents: number | null
+          full_name: string | null
+          last_request_at: string | null
+          monthly_budget_cents: number | null
+          total_cost_cents: number | null
+          total_cost_dollars: number | null
+          total_requests: number | null
+          total_tokens: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
+      ai_cost_daily_summary: {
+        Row: {
+          avg_cost_per_request_cents: number | null
+          avg_duration_ms: number | null
+          date: string | null
+          error_count: number | null
+          total_cost_cents: number | null
+          total_cost_dollars: number | null
+          total_requests: number | null
+          total_tokens: number | null
+          unique_users: number | null
+        }
+        Relationships: []
+      }
+      automation_email_statistics: {
+        Row: {
+          category: string | null
+          click_rate: number | null
+          clicked_count: number | null
+          failed: number | null
+          open_rate: number | null
+          opened_count: number | null
+          pending: number | null
+          successful: number | null
+          template_key: string | null
+          template_name: string | null
+          total_sent: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_email_queue_template_key_fkey"
+            columns: ["template_key"]
+            isOneToOne: false
+            referencedRelation: "automation_email_templates"
+            referencedColumns: ["template_key"]
+          },
+        ]
+      }
+      backup_statistics: {
+        Row: {
+          avg_compression_ratio: number | null
+          avg_duration_seconds: number | null
+          failed_backups: number | null
+          last_successful_backup: string | null
+          successful_backups: number | null
+          total_backups: number | null
+          total_size_bytes: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
+      grocery_list_with_context: {
+        Row: {
+          aisle: string | null
+          auto_generated: boolean | null
+          category: string | null
+          checked: boolean | null
+          created_at: string | null
+          current_pantry_quantity: number | null
+          household_id: string | null
+          id: string | null
+          name: string | null
+          priority: string | null
+          quantity: number | null
+          restock_reason: string | null
+          sort_priority: number | null
+          source_plan_entry_id: string | null
+          unit: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grocery_items_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grocery_items_source_plan_entry_id_fkey"
+            columns: ["source_plan_entry_id"]
+            isOneToOne: false
+            referencedRelation: "plan_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grocery_items_source_plan_entry_id_fkey"
+            columns: ["source_plan_entry_id"]
+            isOneToOne: false
+            referencedRelation: "unified_meal_tracking"
+            referencedColumns: ["plan_entry_id"]
+          },
+        ]
+      }
       kid_food_success_stats: {
         Row: {
           food_id: string | null
@@ -2338,8 +3241,113 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limit_analytics: {
+        Row: {
+          avg_requests_per_user: number | null
+          endpoint: string | null
+          hour: string | null
+          max_requests_by_user: number | null
+          total_requests: number | null
+          unique_users: number | null
+          users_hitting_limit: number | null
+        }
+        Relationships: []
+      }
+      recipe_success_stats: {
+        Row: {
+          acceptance_rate: number | null
+          foods_accepted: number | null
+          foods_eaten: number | null
+          last_scheduled: string | null
+          recipe_id: string | null
+          recipe_name: string | null
+          times_scheduled: number | null
+          total_food_entries: number | null
+        }
+        Relationships: []
+      }
+      unified_meal_tracking: {
+        Row: {
+          amount_consumed: string | null
+          attempted_at: string | null
+          bites_taken: number | null
+          combined_result: string | null
+          created_at: string | null
+          date: string | null
+          detailed_notes: string | null
+          food_attempt_id: string | null
+          food_category: string | null
+          food_id: string | null
+          food_name: string | null
+          has_detailed_tracking: boolean | null
+          is_milestone: boolean | null
+          is_primary_dish: boolean | null
+          kid_id: string | null
+          meal_slot: string | null
+          mood_after: string | null
+          mood_before: string | null
+          outcome: string | null
+          plan_entry_id: string | null
+          quick_notes: string | null
+          quick_result: string | null
+          reaction_notes: string | null
+          recipe_id: string | null
+          recipe_name: string | null
+          stage: string | null
+          strategies_used: string[] | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_entries_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_entries_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "kid_food_success_stats"
+            referencedColumns: ["food_id"]
+          },
+          {
+            foreignKeyName: "plan_entries_kid_id_fkey"
+            columns: ["kid_id"]
+            isOneToOne: false
+            referencedRelation: "kid_food_success_stats"
+            referencedColumns: ["kid_id"]
+          },
+          {
+            foreignKeyName: "plan_entries_kid_id_fkey"
+            columns: ["kid_id"]
+            isOneToOne: false
+            referencedRelation: "kids"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_entries_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_success_stats"
+            referencedColumns: ["recipe_id"]
+          },
+          {
+            foreignKeyName: "plan_entries_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      auto_add_restock_items: {
+        Args: { p_kid_id?: string; p_user_id: string }
+        Returns: number
+      }
       calculate_food_similarity: {
         Args: { food1_id: string; food2_id: string }
         Returns: number
@@ -2352,6 +3360,16 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: boolean
       }
+      check_ai_budget: {
+        Args: { p_budget_type?: string; p_user_id: string }
+        Returns: {
+          alert_level: string
+          budget_limit_cents: number
+          current_spend_cents: number
+          percentage_used: number
+          within_budget: boolean
+        }[]
+      }
       check_and_unlock_achievements: {
         Args: {
           p_attempt_outcome?: string
@@ -2359,6 +3377,10 @@ export type Database = {
           p_kid_id: string
         }
         Returns: undefined
+      }
+      check_email_subscription: {
+        Args: { p_email_type: string; p_user_id: string }
+        Returns: boolean
       }
       check_feature_limit: {
         Args: {
@@ -2368,9 +3390,71 @@ export type Database = {
         }
         Returns: Json
       }
+      check_rate_limit: {
+        Args: {
+          p_endpoint: string
+          p_max_requests: number
+          p_user_id: string
+          p_window_minutes?: number
+        }
+        Returns: {
+          allowed: boolean
+          current_count: number
+          limit_exceeded: boolean
+          reset_at: string
+        }[]
+      }
+      check_rate_limit_with_tier: {
+        Args: { p_endpoint: string; p_user_id: string }
+        Returns: {
+          allowed: boolean
+          current_count: number
+          max_requests: number
+          reset_at: string
+          tier: string
+        }[]
+      }
+      cleanup_expired_backups: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          deleted_count: number
+          freed_bytes: number
+        }[]
+      }
+      cleanup_rate_limits: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      create_admin_notification: {
+        Args: {
+          p_message: string
+          p_metadata?: Json
+          p_severity: string
+          p_title: string
+          p_type: string
+        }
+        Returns: string
+      }
       deduct_food_quantity: {
         Args: { _amount?: number; _food_id: string }
         Returns: undefined
+      }
+      detect_restock_needs: {
+        Args: { p_kid_id?: string; p_user_id: string }
+        Returns: {
+          aisle: string
+          category: string
+          current_quantity: number
+          food_id: string
+          food_name: string
+          priority: string
+          reason: string
+          recommended_quantity: number
+        }[]
+      }
+      extract_user_backup_data: {
+        Args: { p_user_id: string }
+        Returns: Json
       }
       get_active_campaign_for_plan: {
         Args: { p_plan_id: string }
@@ -2445,6 +3529,26 @@ export type Database = {
           status: string
         }[]
       }
+      gtrgm_compress: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_decompress: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_in: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_options: {
+        Args: { "": unknown }
+        Returns: undefined
+      }
+      gtrgm_out: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2460,12 +3564,74 @@ export type Database = {
         Args: { _food_allergens: string[]; _kid_allergens: string[] }
         Returns: boolean
       }
+      log_ai_usage: {
+        Args: {
+          p_completion_tokens: number
+          p_endpoint: string
+          p_error_message?: string
+          p_model: string
+          p_prompt_tokens: number
+          p_request_duration_ms?: number
+          p_request_metadata?: Json
+          p_response_metadata?: Json
+          p_status?: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      queue_email: {
+        Args: {
+          p_delay_minutes?: number
+          p_priority?: number
+          p_template_key: string
+          p_template_variables?: Json
+          p_to_email: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      schedule_next_backup: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       schedule_post_to_queue: {
         Args: {
           _platforms: Database["public"]["Enums"]["social_platform"][]
           _post_id: string
         }
         Returns: undefined
+      }
+      schedule_recipe_to_plan: {
+        Args: {
+          p_date: string
+          p_kid_id: string
+          p_meal_slot: string
+          p_recipe_id: string
+        }
+        Returns: number
+      }
+      schedule_weekly_summaries: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      scheduled_auto_restock: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          items_added: number
+          user_id: string
+        }[]
+      }
+      set_limit: {
+        Args: { "": number }
+        Returns: number
+      }
+      show_limit: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      show_trgm: {
+        Args: { "": string }
+        Returns: string[]
       }
     }
     Enums: {
