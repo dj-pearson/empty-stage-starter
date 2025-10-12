@@ -179,11 +179,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                       console.log(`Migrating ${localOnlyRecipes.length} local recipes to database...`);
                       for (const localRecipe of localOnlyRecipes) {
                         const { id, ...recipeData } = localRecipe;
-                        await supabase.from('recipes').insert([{
-                          ...recipeData,
+                        const dbPayload: any = {
+                          name: recipeData.name,
+                          description: recipeData.description,
+                          food_ids: recipeData.food_ids,
+                          category: (recipeData as any).category,
+                          instructions: (recipeData as any).instructions ?? (recipeData as any).tips,
+                          prep_time: (recipeData as any).prepTime,
+                          cook_time: (recipeData as any).cookTime,
+                          servings: (recipeData as any).servings,
                           user_id: uid,
-                          household_id: hhId
-                        }]);
+                          household_id: hhId || undefined,
+                        };
+                        Object.keys(dbPayload).forEach((k) => {
+                          if (dbPayload[k] === undefined) delete dbPayload[k];
+                        });
+                        await supabase.from('recipes').insert([dbPayload]);
                       }
                       
                       // Reload recipes after migration
@@ -343,27 +354,55 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addRecipe = async (recipe: Omit<Recipe, "id">): Promise<Recipe> => {
     if (userId) {
-      const payload: any = { ...recipe, user_id: userId };
-      if (householdId) payload.household_id = householdId;
+      // Map camelCase fields to DB snake_case columns and include only known columns
+      const dbPayload: any = {
+        name: recipe.name,
+        description: recipe.description,
+        food_ids: recipe.food_ids,
+        category: recipe.category,
+        instructions: recipe.instructions ?? recipe.tips, // prefer explicit instructions, fallback to tips
+        prep_time: recipe.prepTime,
+        cook_time: recipe.cookTime,
+        servings: recipe.servings,
+        user_id: userId,
+        household_id: householdId || undefined,
+      };
+      // Remove undefined keys so PostgREST doesn't reject unknown/undefined
+      Object.keys(dbPayload).forEach((k) => {
+        if (dbPayload[k] === undefined) delete dbPayload[k];
+      });
+
       const { data, error } = await supabase
         .from('recipes')
-        .insert([payload])
+        .insert([dbPayload])
         .select()
         .single();
 
       if (error) {
         console.error('Supabase addRecipe error:', error);
-        const localRecipe = { ...recipe, id: generateId() };
+        const localRecipe: Recipe = { ...recipe, id: generateId() } as Recipe;
         setRecipes([...recipes, localRecipe]);
         return localRecipe;
       } else if (data) {
-        const newRecipe = data as unknown as Recipe;
+        // Normalize DB response to our Recipe type (camelCase for UI)
+        const r: any = data;
+        const newRecipe: Recipe = {
+          id: r.id,
+          name: r.name,
+          description: r.description ?? undefined,
+          food_ids: r.food_ids ?? [],
+          category: r.category ?? undefined,
+          instructions: r.instructions ?? undefined,
+          prepTime: r.prep_time ?? undefined,
+          cookTime: r.cook_time ?? undefined,
+          servings: r.servings ?? undefined,
+        };
         setRecipes([...recipes, newRecipe]);
         return newRecipe;
       }
       throw new Error('Failed to add recipe');
     } else {
-      const localRecipe = { ...recipe, id: generateId() };
+      const localRecipe: Recipe = { ...recipe, id: generateId() } as Recipe;
       setRecipes([...recipes, localRecipe]);
       return localRecipe;
     }
@@ -371,12 +410,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateRecipe = (id: string, updates: Partial<Recipe>) => {
     if (userId) {
+      // Map camelCase to DB snake_case for updates
+      const dbUpdates: any = {
+        ...(updates.name !== undefined ? { name: updates.name } : {}),
+        ...(updates.description !== undefined ? { description: updates.description } : {}),
+        ...(updates.food_ids !== undefined ? { food_ids: updates.food_ids } : {}),
+        ...(updates.category !== undefined ? { category: updates.category } : {}),
+        ...(updates.instructions !== undefined || updates.tips !== undefined
+          ? { instructions: updates.instructions ?? updates.tips }
+          : {}),
+        ...(updates.prepTime !== undefined ? { prep_time: updates.prepTime } : {}),
+        ...(updates.cookTime !== undefined ? { cook_time: updates.cookTime } : {}),
+        ...(updates.servings !== undefined ? { servings: updates.servings } : {}),
+      };
+
       supabase
         .from('recipes')
-        .update(updates)
+        .update(dbUpdates)
         .eq('id', id)
         .then(({ error }) => {
           if (error) console.error('Supabase updateRecipe error:', error);
+          // Keep UI state in camelCase
           setRecipes(recipes.map(r => (r.id === id ? { ...r, ...updates } : r)));
         });
     } else {

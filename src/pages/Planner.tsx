@@ -227,7 +227,10 @@ export default function Planner() {
       toast.success(`${recipe.name} (${recipe.food_ids.length} items) added to calendar`);
     } catch (error) {
       console.error('Error scheduling recipe:', error);
-      toast.error("Failed to schedule recipe");
+      const message = (error as any)?.message || (typeof error === 'string' ? error : 'Failed to schedule recipe');
+      toast.error('Failed to schedule recipe', {
+        description: message,
+      });
     }
   };
 
