@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Food, PlanEntry, MealSlot } from "@/types";
-import { Sparkles, Calendar as CalendarIcon, AlertTriangle, Package, ChevronLeft, ChevronRight } from "lucide-react";
+import { Sparkles, Calendar as CalendarIcon, AlertTriangle, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from "lucide-react";
 import { format, addDays, startOfWeek } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -57,6 +57,7 @@ export function CalendarMealPlanner({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draggedFood, setDraggedFood] = useState<Food | null>(null);
   const [mobileViewDay, setMobileViewDay] = useState(0); // For mobile day-by-day view
+  const [expandedRecipes, setExpandedRecipes] = useState<Set<string>>(new Set());
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -182,43 +183,103 @@ export function CalendarMealPlanner({
     return grouped;
   };
 
+  const toggleRecipeExpand = (recipeId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedRecipes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(recipeId)) {
+        newSet.delete(recipeId);
+      } else {
+        newSet.add(recipeId);
+      }
+      return newSet;
+    });
+  };
+
   const renderFoodBadge = (entry: PlanEntry, isDragging = false) => {
     // If it's a recipe entry, show recipe name
     if (entry.recipe_id) {
       const recipe = getRecipe(entry.recipe_id);
       if (recipe) {
+        const isExpanded = expandedRecipes.has(entry.recipe_id);
+        const ingredientFoods = (recipe.food_ids || [])
+          .map(foodId => getFood(foodId))
+          .filter(Boolean) as Food[];
+
         return (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  className={cn(
-                    "p-2 rounded border cursor-move hover:shadow-md transition-all touch-none",
-                    isDragging && "opacity-50",
-                    "bg-card border-border"
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs md:text-sm font-medium truncate flex-1 text-foreground">
-                      {recipe.name}
-                    </span>
-                    <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                      Recipe
-                    </Badge>
+          <div className="space-y-1">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className={cn(
+                      "p-2 rounded border hover:shadow-md transition-all",
+                      isDragging && "opacity-50",
+                      "bg-card border-border"
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs md:text-sm font-medium truncate flex-1 text-foreground cursor-move touch-none">
+                        {recipe.name}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                          Recipe
+                        </Badge>
+                        <button
+                          onClick={(e) => toggleRecipeExpand(entry.recipe_id!, e)}
+                          className="p-0.5 hover:bg-accent rounded"
+                        >
+                          {isExpanded ? (
+                            <ChevronUp className="h-3 w-3" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <div className="space-y-1">
-                  <p className="font-medium">{recipe.name}</p>
-                  <p className="text-xs">{recipe.description}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {recipe.food_ids?.length || 0} ingredients
-                  </p>
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="space-y-1">
+                    <p className="font-medium">{recipe.name}</p>
+                    <p className="text-xs">{recipe.description}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {recipe.food_ids?.length || 0} ingredients
+                    </p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
+            {isExpanded && ingredientFoods.length > 0 && (
+              <div className="pl-2 space-y-0.5">
+                {ingredientFoods.map(food => {
+                  const isOutOfStock = (food.quantity || 0) === 0;
+                  const isLowStock = (food.quantity || 0) > 0 && (food.quantity || 0) <= 2;
+                  
+                  return (
+                    <div
+                      key={food.id}
+                      className={cn(
+                        "px-2 py-1 rounded text-[10px] md:text-xs flex items-center justify-between",
+                        isOutOfStock && "bg-destructive/10 text-destructive",
+                        isLowStock && "bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300",
+                        !isOutOfStock && !isLowStock && "bg-muted/50 text-muted-foreground"
+                      )}
+                    >
+                      <span>• {food.name}</span>
+                      {isOutOfStock ? (
+                        <Package className="h-2.5 w-2.5" />
+                      ) : isLowStock ? (
+                        <AlertTriangle className="h-2.5 w-2.5" />
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         );
       }
     }
