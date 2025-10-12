@@ -34,6 +34,7 @@ export function RecipeBuilder({ foods, editRecipe, onSave, onCancel, kids, activ
     name: editRecipe?.name || "",
     description: editRecipe?.description || "",
     food_ids: editRecipe?.food_ids || [] as string[],
+    assigned_kid_ids: editRecipe?.assigned_kid_ids || [] as string[],
     instructions: "",
     prepTime: "",
     cookTime: "",
@@ -50,6 +51,15 @@ export function RecipeBuilder({ foods, editRecipe, onSave, onCancel, kids, activ
       food_ids: prev.food_ids.includes(foodId)
         ? prev.food_ids.filter(id => id !== foodId)
         : [...prev.food_ids, foodId],
+    }));
+  };
+
+  const toggleKid = (kidId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      assigned_kid_ids: prev.assigned_kid_ids.includes(kidId)
+        ? prev.assigned_kid_ids.filter(id => id !== kidId)
+        : [...prev.assigned_kid_ids, kidId],
     }));
   };
 
@@ -145,6 +155,32 @@ export function RecipeBuilder({ foods, editRecipe, onSave, onCancel, kids, activ
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Child Assignment */}
+      {kids && kids.length > 0 && (
+        <div className="space-y-3">
+          <Label>Assign to Children (optional - leave empty for family-wide)</Label>
+          <Card>
+            <CardContent className="p-4 space-y-2">
+              {kids.map((kid: any) => (
+                <div key={kid.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`kid-${kid.id}`}
+                    checked={formData.assigned_kid_ids.includes(kid.id)}
+                    onCheckedChange={() => toggleKid(kid.id)}
+                  />
+                  <label
+                    htmlFor={`kid-${kid.id}`}
+                    className="text-sm font-medium leading-none cursor-pointer"
+                  >
+                    {kid.name}
+                  </label>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Food Selection */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">

@@ -80,4 +80,5 @@ export interface Recipe {
   servings?: string;
   additionalIngredients?: string;
   tips?: string;
+  assigned_kid_ids?: string[]; // Multi-child assignment
 }

@@ -30,18 +30,19 @@ interface FoodWithSuccess {
 }
 
 export function FoodChainingRecommendations() {
-  const { activeKidId, foods, addFood } = useApp();
+  const { activeKidId, kids, foods, addFood, setActiveKidId } = useApp();
   const [successfulFoods, setSuccessfulFoods] = useState<FoodWithSuccess[]>([]);
   const [selectedFood, setSelectedFood] = useState<FoodWithSuccess | null>(null);
   const [chainSuggestions, setChainSuggestions] = useState<FoodChainSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const activeKid = kids.find(k => k.id === activeKidId);
 
   useEffect(() => {
-    if (activeKidId) {
+    if (activeKidId || kids.length > 0) {
       loadSuccessfulFoods();
     }
-  }, [activeKidId]);
+  }, [activeKidId, kids]);
 
   const loadSuccessfulFoods = async () => {
     try {

@@ -92,12 +92,13 @@ const MOODS = [
 ];
 
 export function FoodSuccessTracker() {
-  const { activeKidId, foods } = useApp();
+  const { activeKidId, kids, foods } = useApp();
   const [attempts, setAttempts] = useState<FoodAttempt[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedFood, setSelectedFood] = useState("");
+  const activeKid = kids.find(k => k.id === activeKidId);
   const [filterOutcome, setFilterOutcome] = useState<string>("all");
 
   // Form state

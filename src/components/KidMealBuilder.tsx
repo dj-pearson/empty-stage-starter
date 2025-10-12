@@ -74,7 +74,7 @@ const PLATE_SECTIONS = {
 };
 
 export function KidMealBuilder() {
-  const { activeKidId, kids, foods } = useApp();
+  const { activeKidId, kids, foods, setActiveKidId } = useApp();
   const [creations, setCreations] = useState<MealCreation[]>([]);
   const [recentAchievements, setRecentAchievements] = useState<Achievement[]>([]);
   const [showBuilder, setShowBuilder] = useState(false);
@@ -87,11 +87,11 @@ export function KidMealBuilder() {
   const totalStars = creations.reduce((sum, c) => sum + c.stars_earned, 0);
 
   useEffect(() => {
-    if (activeKidId) {
+    if (activeKidId || kids.length > 0) {
       loadCreations();
       loadRecentAchievements();
     }
-  }, [activeKidId]);
+  }, [activeKidId, kids]);
 
   const loadCreations = async () => {
     try {
