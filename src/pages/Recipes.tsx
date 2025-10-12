@@ -142,6 +142,7 @@ export default function Recipes() {
 
   const handleAddSuggestion = async (suggestion: RecipeSuggestion) => {
     try {
+      console.log('Adding AI suggestion:', suggestion);
       const createdRecipe = await addRecipe({
         name: suggestion.name,
         description: suggestion.description,
@@ -151,14 +152,19 @@ export default function Recipes() {
         tips: suggestion.reason,
       });
 
-      if (!createdRecipe.id) {
+      console.log('Created recipe:', createdRecipe);
+      
+      if (!createdRecipe?.id) {
         throw new Error('Recipe was not saved to database');
       }
 
       toast.success(`Added "${suggestion.name}" to recipes!`);
     } catch (error) {
       console.error('Error adding recipe:', error);
-      toast.error('Failed to add recipe - please try again');
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast.error('Failed to add recipe', {
+        description: message
+      });
     }
   };
 

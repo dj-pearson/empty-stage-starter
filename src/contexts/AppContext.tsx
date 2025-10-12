@@ -380,9 +380,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error('Supabase addRecipe error:', error);
-        const localRecipe: Recipe = { ...recipe, id: generateId() } as Recipe;
-        setRecipes([...recipes, localRecipe]);
-        return localRecipe;
+        console.error('Failed payload:', dbPayload);
+        throw new Error(`Database error: ${error.message}`);
       } else if (data) {
         // Normalize DB response to our Recipe type (camelCase for UI)
         const r: any = data;
