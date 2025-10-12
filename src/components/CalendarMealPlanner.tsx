@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -21,6 +21,8 @@ import { Food, PlanEntry, MealSlot } from "@/types";
 import { Sparkles, Calendar as CalendarIcon, AlertTriangle, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from "lucide-react";
 import { format, addDays, startOfWeek } from "date-fns";
 import { cn } from "@/lib/utils";
+import { DailyMacrosSummary } from "@/components/DailyMacrosSummary";
+import { supabase } from "@/integrations/supabase/client";
 
 interface CalendarMealPlannerProps {
   weekStart: Date;
@@ -28,6 +30,9 @@ interface CalendarMealPlannerProps {
   foods: Food[];
   recipes: any[];
   kidId: string;
+  kidName: string;
+  kidAge?: number;
+  kidWeight?: number;
   onUpdateEntry: (entryId: string, updates: Partial<PlanEntry>) => void;
   onAddEntry: (date: string, slot: MealSlot, foodId: string) => void;
   onOpenFoodSelector: (date: string, slot: MealSlot) => void;
@@ -50,6 +55,9 @@ export function CalendarMealPlanner({
   foods,
   recipes,
   kidId,
+  kidName,
+  kidAge,
+  kidWeight,
   onUpdateEntry,
   onAddEntry,
   onOpenFoodSelector,
@@ -58,6 +66,22 @@ export function CalendarMealPlanner({
   const [draggedFood, setDraggedFood] = useState<Food | null>(null);
   const [mobileViewDay, setMobileViewDay] = useState(0); // For mobile day-by-day view
   const [expandedRecipes, setExpandedRecipes] = useState<Set<string>>(new Set());
+  const [nutritionData, setNutritionData] = useState<any[]>([]);
+
+  // Load nutrition data
+  useEffect(() => {
+    const loadNutritionData = async () => {
+      const { data, error } = await supabase
+        .from('nutrition')
+        .select('*');
+      
+      if (!error && data) {
+        setNutritionData(data);
+      }
+    };
+    
+    loadNutritionData();
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -410,7 +434,24 @@ export function CalendarMealPlanner({
       onDragEnd={handleDragEnd}
     >
       {/* Desktop View */}
-      <div className="hidden lg:block">
+      <div className="hidden lg:block space-y-4">
+        {/* Daily Macros Summary */}
+        <div className="grid grid-cols-7 gap-2">
+          {days.map(day => (
+            <DailyMacrosSummary
+              key={day.date}
+              date={day.date}
+              kidId={kidId}
+              kidName={kidName}
+              kidAge={kidAge}
+              kidWeight={kidWeight}
+              planEntries={planEntries}
+              foods={foods}
+              nutritionData={nutritionData}
+            />
+          ))}
+        </div>
+
         <div className="overflow-x-auto">
           <div className="min-w-[1000px]">
             {/* Header with days */}
@@ -457,6 +498,18 @@ export function CalendarMealPlanner({
 
       {/* Mobile View - Day by Day */}
       <div className="lg:hidden space-y-4">
+        {/* Daily Macros Summary for current day */}
+        <DailyMacrosSummary
+          date={days[mobileViewDay].date}
+          kidId={kidId}
+          kidName={kidName}
+          kidAge={kidAge}
+          kidWeight={kidWeight}
+          planEntries={planEntries}
+          foods={foods}
+          nutritionData={nutritionData}
+        />
+
         {/* Mobile Day Navigation */}
         <div className="flex items-center justify-between bg-card p-4 rounded-lg border">
           <Button

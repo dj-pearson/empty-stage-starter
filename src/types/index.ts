@@ -40,6 +40,8 @@ export interface Kid {
   helpful_strategies?: string[];
   disliked_foods?: string[];
   always_eats_foods?: string[];
+  weight_kg?: number;
+  height_cm?: number;
 }
 
 export interface PlanEntry {

@@ -431,6 +431,9 @@ export default function Planner() {
             foods={foods}
             recipes={recipes}
             kidId={activeKidId!}
+            kidName={activeKid.name}
+            kidAge={activeKid.age}
+            kidWeight={activeKid.weight_kg ? Number(activeKid.weight_kg) : undefined}
             onUpdateEntry={handleUpdateEntry}
             onAddEntry={handleAddEntry}
             onOpenFoodSelector={handleOpenFoodSelector}
