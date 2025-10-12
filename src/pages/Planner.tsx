@@ -324,6 +324,43 @@ export default function Planner() {
     }
   };
 
+  const handleCopyToChild = async (entry: PlanEntry, targetKidId: string) => {
+    if (entry.recipe_id) {
+      // Copy all recipe entries
+      const recipeEntries = planEntries.filter(
+        e => e.recipe_id === entry.recipe_id && 
+             e.date === entry.date && 
+             e.meal_slot === entry.meal_slot &&
+             e.kid_id === entry.kid_id
+      );
+      
+      for (const recipeEntry of recipeEntries) {
+        await addPlanEntry({
+          kid_id: targetKidId,
+          date: recipeEntry.date,
+          meal_slot: recipeEntry.meal_slot,
+          food_id: recipeEntry.food_id,
+          recipe_id: recipeEntry.recipe_id,
+          is_primary_dish: recipeEntry.is_primary_dish,
+        } as any);
+      }
+      
+      const targetKid = kids.find(k => k.id === targetKidId);
+      toast.success(`Recipe copied to ${targetKid?.name}'s plan`);
+    } else {
+      // Copy single food entry
+      await addPlanEntry({
+        kid_id: targetKidId,
+        date: entry.date,
+        meal_slot: entry.meal_slot,
+        food_id: entry.food_id,
+      } as any);
+      
+      const targetKid = kids.find(k => k.id === targetKidId);
+      toast.success(`Meal copied to ${targetKid?.name}'s plan`);
+    }
+  };
+
   // Group entries by date (filter by active kid)
   const planByDate: Record<string, PlanEntry[]> = {};
   planEntries
@@ -430,6 +467,7 @@ export default function Planner() {
             planEntries={planEntries}
             foods={foods}
             recipes={recipes}
+            kids={kids}
             kidId={activeKidId!}
             kidName={activeKid.name}
             kidAge={activeKid.age}
@@ -437,6 +475,7 @@ export default function Planner() {
             onUpdateEntry={handleUpdateEntry}
             onAddEntry={handleAddEntry}
             onOpenFoodSelector={handleOpenFoodSelector}
+            onCopyToChild={handleCopyToChild}
           />
         )}
 

@@ -17,8 +17,16 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Food, PlanEntry, MealSlot } from "@/types";
-import { Sparkles, Calendar as CalendarIcon, AlertTriangle, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from "lucide-react";
+import { Sparkles, Calendar as CalendarIcon, AlertTriangle, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Users, Copy, MoreVertical } from "lucide-react";
 import { format, addDays, startOfWeek } from "date-fns";
 import { cn } from "@/lib/utils";
 import { DailyMacrosSummary } from "@/components/DailyMacrosSummary";
@@ -29,6 +37,7 @@ interface CalendarMealPlannerProps {
   planEntries: PlanEntry[];
   foods: Food[];
   recipes: any[];
+  kids: any[];
   kidId: string;
   kidName: string;
   kidAge?: number;
@@ -36,6 +45,7 @@ interface CalendarMealPlannerProps {
   onUpdateEntry: (entryId: string, updates: Partial<PlanEntry>) => void;
   onAddEntry: (date: string, slot: MealSlot, foodId: string) => void;
   onOpenFoodSelector: (date: string, slot: MealSlot) => void;
+  onCopyToChild: (entry: PlanEntry, targetKidId: string) => void;
 }
 
 const MEAL_SLOTS: { slot: MealSlot; label: string; color: string }[] = [
@@ -54,6 +64,7 @@ export function CalendarMealPlanner({
   planEntries,
   foods,
   recipes,
+  kids,
   kidId,
   kidName,
   kidAge,
@@ -61,12 +72,14 @@ export function CalendarMealPlanner({
   onUpdateEntry,
   onAddEntry,
   onOpenFoodSelector,
+  onCopyToChild,
 }: CalendarMealPlannerProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draggedFood, setDraggedFood] = useState<Food | null>(null);
   const [mobileViewDay, setMobileViewDay] = useState(0); // For mobile day-by-day view
   const [expandedRecipes, setExpandedRecipes] = useState<Set<string>>(new Set());
   const [nutritionData, setNutritionData] = useState<any[]>([]);
+  const [showAllKids, setShowAllKids] = useState(false);
 
   // Load nutrition data
   useEffect(() => {
@@ -183,8 +196,10 @@ export function CalendarMealPlanner({
   const getRecipe = (recipeId: string) => recipes.find(r => r.id === recipeId);
 
   const getEntriesForSlot = (date: string, slot: MealSlot) => {
+    const kidFilter = showAllKids ? kids.map(k => k.id) : [kidId];
+    
     const allEntries = planEntries.filter(
-      e => e.date === date && e.meal_slot === slot && e.kid_id === kidId
+      e => e.date === date && e.meal_slot === slot && kidFilter.includes(e.kid_id)
     );
     
     // Group by recipe_id - show recipes as single items
@@ -193,9 +208,10 @@ export function CalendarMealPlanner({
     
     allEntries.forEach(entry => {
       if (entry.recipe_id) {
-        // Only add first entry of each recipe
-        if (!recipeIds.has(entry.recipe_id)) {
-          recipeIds.add(entry.recipe_id);
+        // Only add first entry of each recipe per kid
+        const recipeKey = `${entry.recipe_id}-${entry.kid_id}`;
+        if (!recipeIds.has(recipeKey)) {
+          recipeIds.add(recipeKey);
           grouped.push(entry);
         }
       } else {
@@ -221,6 +237,9 @@ export function CalendarMealPlanner({
   };
 
   const renderFoodBadge = (entry: PlanEntry, isDragging = false) => {
+    const entryKid = kids.find(k => k.id === entry.kid_id);
+    const otherKids = kids.filter(k => k.id !== entry.kid_id);
+    
     // If it's a recipe entry, show recipe name
     if (entry.recipe_id) {
       const recipe = getRecipe(entry.recipe_id);
@@ -243,13 +262,42 @@ export function CalendarMealPlanner({
                     )}
                   >
                     <div className="flex items-center justify-between gap-1">
-                      <span className="text-xs md:text-sm font-medium truncate flex-1 text-foreground cursor-move touch-none">
-                        {recipe.name}
-                      </span>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 flex-1 min-w-0">
+                        <span className="text-xs md:text-sm font-medium truncate flex-1 text-foreground cursor-move touch-none">
+                          {recipe.name}
+                        </span>
+                        {showAllKids && entryKid && (
+                          <Badge variant="outline" className="text-[10px] px-1 py-0 shrink-0">
+                            {entryKid.name}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
                         <Badge variant="secondary" className="text-[10px] px-1 py-0">
                           Recipe
                         </Badge>
+                        {otherKids.length > 0 && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-5 w-5 p-0" onClick={(e) => e.stopPropagation()}>
+                                <MoreVertical className="h-3 w-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Copy to...</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              {otherKids.map(kid => (
+                                <DropdownMenuItem 
+                                  key={kid.id}
+                                  onClick={() => onCopyToChild(entry, kid.id)}
+                                >
+                                  <Copy className="h-3 w-3 mr-2" />
+                                  {kid.name}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                         <button
                           onClick={(e) => toggleRecipeExpand(entry.recipe_id!, e)}
                           className="p-0.5 hover:bg-accent rounded"
@@ -329,14 +377,45 @@ export function CalendarMealPlanner({
               )}
             >
               <div className="flex items-center justify-between gap-1">
-                <span className="text-xs md:text-sm font-medium truncate flex-1 text-foreground">
-                  {food.name}
-                </span>
-                {isOutOfStock ? (
-                  <Package className="h-3 w-3 text-destructive flex-shrink-0" />
-                ) : isLowStock ? (
-                  <AlertTriangle className="h-3 w-3 text-yellow-600 flex-shrink-0" />
-                ) : null}
+                <div className="flex items-center gap-1 flex-1 min-w-0">
+                  <span className="text-xs md:text-sm font-medium truncate flex-1 text-foreground">
+                    {food.name}
+                  </span>
+                  {showAllKids && entryKid && (
+                    <Badge variant="outline" className="text-[10px] px-1 py-0 shrink-0">
+                      {entryKid.name}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {isOutOfStock ? (
+                    <Package className="h-3 w-3 text-destructive" />
+                  ) : isLowStock ? (
+                    <AlertTriangle className="h-3 w-3 text-yellow-600" />
+                  ) : null}
+                  {otherKids.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-5 w-5 p-0" onClick={(e) => e.stopPropagation()}>
+                          <MoreVertical className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Copy to...</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {otherKids.map(kid => (
+                          <DropdownMenuItem 
+                            key={kid.id}
+                            onClick={() => onCopyToChild(entry, kid.id)}
+                          >
+                            <Copy className="h-3 w-3 mr-2" />
+                            {kid.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
               </div>
             </div>
           </TooltipTrigger>
@@ -435,6 +514,20 @@ export function CalendarMealPlanner({
     >
       {/* Desktop View */}
       <div className="hidden lg:block space-y-4">
+        {/* View mode toggle */}
+        {kids.length > 1 && (
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAllKids(!showAllKids)}
+            >
+              <Users className="h-4 w-4 mr-2" />
+              {showAllKids ? 'Show Active Child Only' : 'Show All Children'}
+            </Button>
+          </div>
+        )}
+
         {/* Daily Macros Summary */}
         <div className="grid grid-cols-7 gap-2">
           {days.map(day => (
