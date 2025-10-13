@@ -1,6 +1,12 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,8 +20,20 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Sparkles, Plus, Edit, Share2, Settings, CheckCircle } from "lucide-react";
+import {
+  Sparkles,
+  Plus,
+  Edit,
+  Share2,
+  Settings,
+  CheckCircle,
+  Upload,
+  AlertTriangle,
+  RefreshCw,
+} from "lucide-react";
 import { toast } from "sonner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import blogTitlesData from "../../../Blog_Titles.md?raw";
 
 interface BlogPost {
   id: string;
@@ -48,18 +66,98 @@ export function BlogCMSManager() {
   const [testingWebhook, setTestingWebhook] = useState(false);
   const [resendingWebhook, setResendingWebhook] = useState<string | null>(null);
 
+  // Title bank management
+  const [titleBankInsights, setTitleBankInsights] = useState<any>(null);
+  const [titleSuggestions, setTitleSuggestions] = useState<any[]>([]);
+  const [loadingTitleBank, setLoadingTitleBank] = useState(false);
+  const [showTitleBankDialog, setShowTitleBankDialog] = useState(false);
+  const [useTitleBank, setUseTitleBank] = useState(true);
+
   useEffect(() => {
     loadPosts();
     loadWebhookUrl();
+    loadTitleBankInsights();
   }, []);
 
+  const loadTitleBankInsights = async () => {
+    try {
+      const { data, error } = await supabase.rpc(
+        "get_blog_generation_insights"
+      );
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setTitleBankInsights(data[0]);
+      }
+    } catch (error: any) {
+      console.error("Error loading title bank insights:", error);
+    }
+  };
+
+  const loadTitleSuggestions = async () => {
+    try {
+      const { data, error } = await supabase.rpc(
+        "get_diverse_title_suggestions",
+        { count: 10 }
+      );
+      if (error) throw error;
+      setTitleSuggestions(data || []);
+    } catch (error: any) {
+      console.error("Error loading title suggestions:", error);
+      toast.error("Failed to load title suggestions");
+    }
+  };
+
+  const handlePopulateTitleBank = async () => {
+    setLoadingTitleBank(true);
+    try {
+      // Parse Blog_Titles.md
+      const jsonMatch = blogTitlesData.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error("Could not parse Blog_Titles.md file");
+      }
+
+      const titlesData = JSON.parse(jsonMatch[0]);
+      const titles = titlesData.blog_titles;
+
+      if (!Array.isArray(titles)) {
+        throw new Error("Invalid titles format in Blog_Titles.md");
+      }
+
+      const { data, error } = await supabase.functions.invoke(
+        "manage-blog-titles",
+        {
+          body: {
+            action: "populate",
+            titles: titles,
+          },
+        }
+      );
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast.success(
+          `Successfully added ${data.inserted} new titles to the title bank!`
+        );
+        loadTitleBankInsights();
+      } else {
+        toast.error(data.error || "Failed to populate title bank");
+      }
+    } catch (error: any) {
+      console.error("Error populating title bank:", error);
+      toast.error(error.message || "Failed to populate title bank");
+    } finally {
+      setLoadingTitleBank(false);
+    }
+  };
+
   const loadWebhookUrl = () => {
-    const saved = localStorage.getItem('blog_webhook_url');
+    const saved = localStorage.getItem("blog_webhook_url");
     if (saved) setWebhookUrl(saved);
   };
 
   const saveWebhookUrl = () => {
-    localStorage.setItem('blog_webhook_url', webhookUrl);
+    localStorage.setItem("blog_webhook_url", webhookUrl);
     toast.success("Webhook URL saved");
     setShowWebhookDialog(false);
   };
@@ -72,9 +170,12 @@ export function BlogCMSManager() {
 
     setTestingWebhook(true);
     try {
-      const { data, error } = await supabase.functions.invoke('test-blog-webhook', {
-        body: { webhookUrl }
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "test-blog-webhook",
+        {
+          body: { webhookUrl },
+        }
+      );
 
       if (error) throw error;
 
@@ -92,10 +193,10 @@ export function BlogCMSManager() {
   };
 
   const handleResendWebhook = async (postId: string) => {
-    const post = posts.find(p => p.id === postId);
+    const post = posts.find((p) => p.id === postId);
     if (!post) return;
 
-    const webhookUrl = localStorage.getItem('blog_webhook_url');
+    const webhookUrl = localStorage.getItem("blog_webhook_url");
     if (!webhookUrl) {
       toast.error("No webhook URL configured. Set it up first!");
       return;
@@ -105,39 +206,42 @@ export function BlogCMSManager() {
     try {
       // Generate social content
       const blogUrl = `https://tryeatpal.com/blog/${post.slug}`;
-      
-      const { data: socialData, error: socialError } = await supabase.functions.invoke('generate-social-content', {
-        body: {
-          topic: `New blog post: ${post.title}`,
-          excerpt: post.excerpt,
-          url: blogUrl,
-          contentGoal: `Promote this blog post and drive traffic to ${blogUrl}`,
-          targetAudience: "Parents struggling with picky eaters and child meal planning"
-        }
-      });
+
+      const { data: socialData, error: socialError } =
+        await supabase.functions.invoke("generate-social-content", {
+          body: {
+            topic: `New blog post: ${post.title}`,
+            excerpt: post.excerpt,
+            url: blogUrl,
+            contentGoal: `Promote this blog post and drive traffic to ${blogUrl}`,
+            targetAudience:
+              "Parents struggling with picky eaters and child meal planning",
+          },
+        });
 
       if (socialError) throw socialError;
 
       const content = socialData.content;
-      const hashtagMatches = (content.facebook || content.twitter || '').match(/#\w+/g) || [];
+      const hashtagMatches =
+        (content.facebook || content.twitter || "").match(/#\w+/g) || [];
       const hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
 
       const webhookPayload = {
-        type: 'blog_published',
+        type: "blog_published",
         blog_id: postId,
         blog_title: post.title,
         blog_url: blogUrl,
         blog_excerpt: post.excerpt,
-        short_form: content.twitter || '',
-        long_form: content.facebook || '',
+        short_form: content.twitter || "",
+        long_form: content.facebook || "",
         hashtags: hashtags,
-        published_at: new Date().toISOString()
+        published_at: new Date().toISOString(),
       };
 
       const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(webhookPayload)
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(webhookPayload),
       });
 
       if (response.ok) {
@@ -168,44 +272,73 @@ export function BlogCMSManager() {
   };
 
   const handleGenerateAIContent = async () => {
-    if (!aiPrompt.trim()) {
+    // If using title bank and no prompt, it will auto-select from bank
+    if (useTitleBank && !aiPrompt.trim()) {
+      // Allow empty prompt to use title bank
+    } else if (!useTitleBank && !aiPrompt.trim()) {
       toast.error("Please enter a topic or prompt");
       return;
     }
 
     setAiGenerating(true);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-blog-content', {
-        body: {
-          topic: aiPrompt,
-          keywords: keywords,
-          targetAudience: "Parents of picky eaters and young children"
+      const { data, error } = await supabase.functions.invoke(
+        "generate-blog-content",
+        {
+          body: {
+            topic: aiPrompt.trim() || null,
+            keywords: keywords,
+            targetAudience: "Parents of picky eaters and young children",
+            useTitleBank: useTitleBank,
+          },
         }
-      });
+      );
 
       if (error) throw error;
 
       if (data.error) {
-        toast.error(data.error);
+        // Handle duplicate detection errors
+        if (data.similar_posts || data.similar_post) {
+          toast.error(
+            <div>
+              <p className="font-semibold">{data.error}</p>
+              {data.similar_posts && data.similar_posts.length > 0 && (
+                <p className="text-sm mt-1">
+                  Similar to: {data.similar_posts[0].similar_title}
+                </p>
+              )}
+            </div>,
+            { duration: 5000 }
+          );
+        } else {
+          toast.error(data.error);
+        }
         return;
       }
 
       const content = data.content;
 
       // Save the generated post
-      const { error: insertError } = await supabase.from("blog_posts").insert([
-        {
-          title: content.title || "",
-          slug: content.title?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || "",
-          content: content.body || "",
-          excerpt: content.excerpt || "",
-          meta_title: content.seo_title || "",
-          meta_description: content.seo_description || "",
-          ai_generated: true,
-          ai_prompt: aiPrompt,
-          status: "draft"
-        },
-      ]).select();
+      const { error: insertError } = await supabase
+        .from("blog_posts")
+        .insert([
+          {
+            title: content.title || "",
+            slug:
+              content.title
+                ?.toLowerCase()
+                .replace(/\s+/g, "-")
+                .replace(/[^a-z0-9-]/g, "") || "",
+            content: content.body || "",
+            excerpt: content.excerpt || "",
+            meta_title: content.seo_title || "",
+            meta_description: content.seo_description || "",
+            ai_generated: true,
+            ai_prompt: aiPrompt || "Auto-generated from title bank",
+            status: "draft",
+          },
+        ])
+        .select();
 
       if (insertError) throw insertError;
 
@@ -214,25 +347,26 @@ export function BlogCMSManager() {
       setAiPrompt("");
       setKeywords("");
       loadPosts();
+      loadTitleBankInsights(); // Refresh insights after generation
 
       // Send to webhook if configured
-      const webhookUrl = localStorage.getItem('blog_webhook_url');
+      const webhookUrl = localStorage.getItem("blog_webhook_url");
       if (webhookUrl && content.social) {
         try {
           await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            mode: 'no-cors',
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            mode: "no-cors",
             body: JSON.stringify({
-              type: 'blog_post_generated',
+              type: "blog_post_generated",
               title: content.title,
               excerpt: content.excerpt,
               social_versions: content.social,
-              timestamp: new Date().toISOString()
-            })
+              timestamp: new Date().toISOString(),
+            }),
           });
         } catch (e) {
-          console.error('Webhook error:', e);
+          console.error("Webhook error:", e);
         }
       }
     } catch (error: any) {
@@ -278,18 +412,21 @@ export function BlogCMSManager() {
 
   const handleGenerateSocial = async (postId: string) => {
     setGeneratingSocial(postId);
-    
+
     try {
-      const post = posts.find(p => p.id === postId);
+      const post = posts.find((p) => p.id === postId);
       if (!post) return;
 
-      const { data, error } = await supabase.functions.invoke('generate-social-content', {
-        body: {
-          title: post.title,
-          excerpt: post.excerpt,
-          url: `https://yoursite.com/blog/${post.slug}`
+      const { data, error } = await supabase.functions.invoke(
+        "generate-social-content",
+        {
+          body: {
+            title: post.title,
+            excerpt: post.excerpt,
+            url: `https://yoursite.com/blog/${post.slug}`,
+          },
         }
-      });
+      );
 
       if (error) throw error;
       if (data.error) {
@@ -310,76 +447,85 @@ export function BlogCMSManager() {
 
   const handlePublish = async (postId: string) => {
     try {
-      const post = posts.find(p => p.id === postId);
+      const post = posts.find((p) => p.id === postId);
       if (!post) return;
 
       // Update post to published
       const { error: publishError } = await supabase
-        .from('blog_posts')
-        .update({ 
-          status: 'published',
-          published_at: new Date().toISOString()
+        .from("blog_posts")
+        .update({
+          status: "published",
+          published_at: new Date().toISOString(),
         })
-        .eq('id', postId);
+        .eq("id", postId);
 
       if (publishError) throw publishError;
 
       // Generate social media posts about this blog
       const blogUrl = `https://tryeatpal.com/blog/${post.slug}`;
-      
-      const { data: socialData, error: socialError } = await supabase.functions.invoke('generate-social-content', {
-        body: {
-          topic: `New blog post: ${post.title}`,
-          excerpt: post.excerpt,
-          url: blogUrl,
-          contentGoal: `Promote this blog post and drive traffic to ${blogUrl}`,
-          targetAudience: "Parents struggling with picky eaters and child meal planning"
-        }
-      });
+
+      const { data: socialData, error: socialError } =
+        await supabase.functions.invoke("generate-social-content", {
+          body: {
+            topic: `New blog post: ${post.title}`,
+            excerpt: post.excerpt,
+            url: blogUrl,
+            contentGoal: `Promote this blog post and drive traffic to ${blogUrl}`,
+            targetAudience:
+              "Parents struggling with picky eaters and child meal planning",
+          },
+        });
 
       if (socialError) {
         console.error("Error generating social content:", socialError);
         toast.warning("Post published, but failed to generate social posts");
       } else if (socialData?.content) {
         const content = socialData.content;
-        
+
         // Extract hashtags from the content
-        const hashtagMatches = (content.facebook || content.twitter || '').match(/#\w+/g) || [];
+        const hashtagMatches =
+          (content.facebook || content.twitter || "").match(/#\w+/g) || [];
         const hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
 
         // Send to webhook if configured
-        const webhookUrl = localStorage.getItem('blog_webhook_url');
+        const webhookUrl = localStorage.getItem("blog_webhook_url");
         if (webhookUrl) {
           try {
             const webhookPayload = {
-              type: 'blog_published',
+              type: "blog_published",
               blog_id: postId,
               blog_title: post.title,
               blog_url: blogUrl,
               blog_excerpt: post.excerpt,
-              short_form: content.twitter || '',
-              long_form: content.facebook || '',
+              short_form: content.twitter || "",
+              long_form: content.facebook || "",
               hashtags: hashtags,
-              published_at: new Date().toISOString()
+              published_at: new Date().toISOString(),
             };
 
             const response = await fetch(webhookUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(webhookPayload)
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(webhookPayload),
             });
 
             if (response.ok) {
-              toast.success("Post published and social content sent to webhook!");
+              toast.success(
+                "Post published and social content sent to webhook!"
+              );
             } else {
-              toast.warning(`Post published, but webhook returned status ${response.status}`);
+              toast.warning(
+                `Post published, but webhook returned status ${response.status}`
+              );
             }
           } catch (webhookError) {
-            console.error('Webhook error:', webhookError);
+            console.error("Webhook error:", webhookError);
             toast.warning("Post published, but failed to send to webhook");
           }
         } else {
-          toast.success("Post published! Set up a webhook to auto-post to social media.");
+          toast.success(
+            "Post published! Set up a webhook to auto-post to social media."
+          );
         }
 
         // Show social content to user
@@ -404,15 +550,29 @@ export function BlogCMSManager() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowTitleBankDialog(true)}
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Title Bank
+            {titleBankInsights && (
+              <Badge variant="secondary" className="ml-2">
+                {titleBankInsights.unused_titles} unused
+              </Badge>
+            )}
+          </Button>
           <Button variant="outline" onClick={() => setShowWebhookDialog(true)}>
             <Settings className="h-4 w-4 mr-2" />
-            {webhookUrl ? <CheckCircle className="h-4 w-4 mr-1 text-safe-food" /> : null}
+            {webhookUrl ? (
+              <CheckCircle className="h-4 w-4 mr-1 text-safe-food" />
+            ) : null}
             Webhook
           </Button>
-        <Button onClick={() => setShowAIDialog(true)}>
-          <Sparkles className="h-4 w-4 mr-2" />
-          AI Generate Article
-        </Button>
+          <Button onClick={() => setShowAIDialog(true)}>
+            <Sparkles className="h-4 w-4 mr-2" />
+            AI Generate Article
+          </Button>
         </div>
       </div>
 
@@ -446,7 +606,11 @@ export function BlogCMSManager() {
                             AI Generated
                           </Badge>
                         )}
-                        <Badge variant={post.status === 'published' ? 'default' : 'outline'}>
+                        <Badge
+                          variant={
+                            post.status === "published" ? "default" : "outline"
+                          }
+                        >
                           {post.status}
                         </Badge>
                       </div>
@@ -478,7 +642,7 @@ export function BlogCMSManager() {
                           </>
                         )}
                       </Button>
-                      {(post.status || '').toLowerCase() !== 'published' ? (
+                      {(post.status || "").toLowerCase() !== "published" ? (
                         <Button
                           size="sm"
                           onClick={() => handlePublish(post.id)}
@@ -523,18 +687,63 @@ export function BlogCMSManager() {
               Generate SEO-Optimized Blog Article with AI
             </DialogTitle>
             <DialogDescription>
-              Create comprehensive blog content optimized for parents and search engines
+              Create comprehensive blog content optimized for parents and search
+              engines
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <Label
+                  htmlFor="use-title-bank"
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <Upload className="h-4 w-4" />
+                  Use Title Bank (Auto-Select Unique Titles)
+                </Label>
+                <input
+                  id="use-title-bank"
+                  type="checkbox"
+                  checked={useTitleBank}
+                  onChange={(e) => setUseTitleBank(e.target.checked)}
+                  className="w-4 h-4"
+                />
+              </div>
+              {useTitleBank && titleBankInsights && (
+                <p className="text-sm text-blue-900 mt-2">
+                  <strong>{titleBankInsights.unused_titles}</strong> unused
+                  titles available. Leave topic blank to auto-select from bank.
+                </p>
+              )}
+              {useTitleBank &&
+                (!titleBankInsights ||
+                  titleBankInsights.unused_titles === 0) && (
+                  <div className="flex items-center gap-2 text-amber-700 text-sm mt-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    No titles in bank. Click "Title Bank" button to populate.
+                  </div>
+                )}
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="ai-topic">Topic or Title *</Label>
+              <Label htmlFor="ai-topic">
+                Topic or Title {!useTitleBank && "*"}
+                {useTitleBank && (
+                  <span className="text-sm text-muted-foreground ml-1">
+                    (Optional - auto-selects if blank)
+                  </span>
+                )}
+              </Label>
               <Input
                 id="ai-topic"
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder="e.g., 10 Creative Ways to Get Toddlers to Eat Vegetables"
+                placeholder={
+                  useTitleBank
+                    ? "Leave blank to use title bank"
+                    : "e.g., 10 Creative Ways to Get Toddlers to Eat Vegetables"
+                }
               />
             </div>
 
@@ -561,7 +770,10 @@ export function BlogCMSManager() {
 
             <div className="p-4 border border-blue-200 bg-blue-50 rounded-lg">
               <p className="text-sm text-blue-900">
-                <strong>Pro tip:</strong> Be specific about your topic and include target keywords for better SEO results. The AI will create parent-focused content that drives engagement and conversions.
+                <strong>Pro tip:</strong> Be specific about your topic and
+                include target keywords for better SEO results. The AI will
+                create parent-focused content that drives engagement and
+                conversions.
               </p>
             </div>
           </div>
@@ -570,7 +782,10 @@ export function BlogCMSManager() {
             <Button variant="outline" onClick={() => setShowAIDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleGenerateAIContent} disabled={aiGenerating || !aiPrompt.trim()}>
+            <Button
+              onClick={handleGenerateAIContent}
+              disabled={aiGenerating || (!useTitleBank && !aiPrompt.trim())}
+            >
               {aiGenerating ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
@@ -604,7 +819,9 @@ export function BlogCMSManager() {
                 <Input
                   id="edit-title"
                   value={editingPost.title}
-                  onChange={(e) => setEditingPost({ ...editingPost, title: e.target.value })}
+                  onChange={(e) =>
+                    setEditingPost({ ...editingPost, title: e.target.value })
+                  }
                 />
               </div>
 
@@ -613,7 +830,9 @@ export function BlogCMSManager() {
                 <Textarea
                   id="edit-excerpt"
                   value={editingPost.excerpt}
-                  onChange={(e) => setEditingPost({ ...editingPost, excerpt: e.target.value })}
+                  onChange={(e) =>
+                    setEditingPost({ ...editingPost, excerpt: e.target.value })
+                  }
                   rows={3}
                 />
               </div>
@@ -623,7 +842,12 @@ export function BlogCMSManager() {
                 <Input
                   id="edit-meta-title"
                   value={editingPost.meta_title || ""}
-                  onChange={(e) => setEditingPost({ ...editingPost, meta_title: e.target.value })}
+                  onChange={(e) =>
+                    setEditingPost({
+                      ...editingPost,
+                      meta_title: e.target.value,
+                    })
+                  }
                 />
               </div>
 
@@ -632,7 +856,12 @@ export function BlogCMSManager() {
                 <Textarea
                   id="edit-meta-description"
                   value={editingPost.meta_description || ""}
-                  onChange={(e) => setEditingPost({ ...editingPost, meta_description: e.target.value })}
+                  onChange={(e) =>
+                    setEditingPost({
+                      ...editingPost,
+                      meta_description: e.target.value,
+                    })
+                  }
                   rows={2}
                 />
               </div>
@@ -642,12 +871,17 @@ export function BlogCMSManager() {
                 <Input
                   id="edit-featured-image"
                   value={editingPost.featured_image || ""}
-                  onChange={(e) => setEditingPost({ ...editingPost, featured_image: e.target.value })}
+                  onChange={(e) =>
+                    setEditingPost({
+                      ...editingPost,
+                      featured_image: e.target.value,
+                    })
+                  }
                   placeholder="/blog-images/my-post-image.png or https://..."
                 />
                 <p className="text-xs text-muted-foreground">
-                  Used for social media previews. Leave empty to use Cover.png as fallback.
-                  Optimal size: 1200x630px
+                  Used for social media previews. Leave empty to use Cover.png
+                  as fallback. Optimal size: 1200x630px
                 </p>
               </div>
 
@@ -656,7 +890,9 @@ export function BlogCMSManager() {
                 <Textarea
                   id="edit-content"
                   value={editingPost.content}
-                  onChange={(e) => setEditingPost({ ...editingPost, content: e.target.value })}
+                  onChange={(e) =>
+                    setEditingPost({ ...editingPost, content: e.target.value })
+                  }
                   rows={15}
                   className="font-mono text-sm"
                 />
@@ -668,9 +904,7 @@ export function BlogCMSManager() {
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveEdit}>
-              Save Changes
-            </Button>
+            <Button onClick={handleSaveEdit}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -680,38 +914,50 @@ export function BlogCMSManager() {
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Generated Social Media Posts</DialogTitle>
-            <DialogDescription>Copy the versions for each platform below.</DialogDescription>
+            <DialogDescription>
+              Copy the versions for each platform below.
+            </DialogDescription>
           </DialogHeader>
           {socialContent && (
             <div className="space-y-6">
               {socialContent.twitter && (
                 <div className="space-y-2">
                   <h3 className="font-semibold">Twitter/X Post</h3>
-                  <p className="whitespace-pre-wrap bg-muted p-4 rounded-md">{socialContent.twitter}</p>
+                  <p className="whitespace-pre-wrap bg-muted p-4 rounded-md">
+                    {socialContent.twitter}
+                  </p>
                 </div>
               )}
               {socialContent.facebook && (
                 <div className="space-y-2">
                   <h3 className="font-semibold">Facebook Post</h3>
-                  <p className="whitespace-pre-wrap bg-muted p-4 rounded-md">{socialContent.facebook}</p>
+                  <p className="whitespace-pre-wrap bg-muted p-4 rounded-md">
+                    {socialContent.facebook}
+                  </p>
                 </div>
               )}
               {socialContent.instagram && (
                 <div className="space-y-2">
                   <h3 className="font-semibold">Instagram Caption</h3>
-                  <p className="whitespace-pre-wrap bg-muted p-4 rounded-md">{socialContent.instagram}</p>
+                  <p className="whitespace-pre-wrap bg-muted p-4 rounded-md">
+                    {socialContent.instagram}
+                  </p>
                 </div>
               )}
               {socialContent.linkedin && (
                 <div className="space-y-2">
                   <h3 className="font-semibold">LinkedIn Post</h3>
-                  <p className="whitespace-pre-wrap bg-muted p-4 rounded-md">{socialContent.linkedin}</p>
+                  <p className="whitespace-pre-wrap bg-muted p-4 rounded-md">
+                    {socialContent.linkedin}
+                  </p>
                 </div>
               )}
               {socialContent.pinterest && (
                 <div className="space-y-2">
                   <h3 className="font-semibold">Pinterest Description</h3>
-                  <p className="whitespace-pre-wrap bg-muted p-4 rounded-md">{socialContent.pinterest}</p>
+                  <p className="whitespace-pre-wrap bg-muted p-4 rounded-md">
+                    {socialContent.pinterest}
+                  </p>
                 </div>
               )}
             </div>
@@ -725,7 +971,8 @@ export function BlogCMSManager() {
           <DialogHeader>
             <DialogTitle>Configure Blog Webhook</DialogTitle>
             <DialogDescription>
-              When a blog is published, social media posts will be automatically generated and sent to this webhook
+              When a blog is published, social media posts will be automatically
+              generated and sent to this webhook
             </DialogDescription>
           </DialogHeader>
 
@@ -749,22 +996,38 @@ export function BlogCMSManager() {
                 When a blog post is published, the webhook will receive:
               </p>
               <ul className="text-sm space-y-1 text-muted-foreground ml-4 list-disc">
-                <li><strong>blog_title</strong>: Title of the blog post</li>
-                <li><strong>blog_url</strong>: Full URL to the blog post</li>
-                <li><strong>blog_excerpt</strong>: Brief summary</li>
-                <li><strong>short_form</strong>: Twitter/X version (under 280 chars)</li>
-                <li><strong>long_form</strong>: Facebook/LinkedIn version</li>
-                <li><strong>hashtags</strong>: Array of relevant hashtags</li>
+                <li>
+                  <strong>blog_title</strong>: Title of the blog post
+                </li>
+                <li>
+                  <strong>blog_url</strong>: Full URL to the blog post
+                </li>
+                <li>
+                  <strong>blog_excerpt</strong>: Brief summary
+                </li>
+                <li>
+                  <strong>short_form</strong>: Twitter/X version (under 280
+                  chars)
+                </li>
+                <li>
+                  <strong>long_form</strong>: Facebook/LinkedIn version
+                </li>
+                <li>
+                  <strong>hashtags</strong>: Array of relevant hashtags
+                </li>
               </ul>
             </div>
           </div>
 
           <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={() => setShowWebhookDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowWebhookDialog(false)}
+            >
               Cancel
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={handleTestWebhook}
               disabled={testingWebhook || !webhookUrl}
             >
@@ -774,11 +1037,288 @@ export function BlogCMSManager() {
                   Testing...
                 </>
               ) : (
-                'Test Webhook'
+                "Test Webhook"
               )}
             </Button>
-            <Button onClick={saveWebhookUrl}>
-              Save Webhook
+            <Button onClick={saveWebhookUrl}>Save Webhook</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Title Bank Management Dialog */}
+      <Dialog open={showTitleBankDialog} onOpenChange={setShowTitleBankDialog}>
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              Blog Title Bank & Uniqueness System
+            </DialogTitle>
+            <DialogDescription>
+              Manage your blog title inventory and ensure unique content
+              generation
+            </DialogDescription>
+          </DialogHeader>
+
+          <Tabs defaultValue="overview" className="flex-1 flex flex-col">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="suggestions">Suggestions</TabsTrigger>
+              <TabsTrigger value="import">Import</TabsTrigger>
+            </TabsList>
+
+            <TabsContent
+              value="overview"
+              className="flex-1 overflow-y-auto space-y-4"
+            >
+              {titleBankInsights ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-medium">
+                        Total Titles
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">
+                        {titleBankInsights.total_titles}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        In title bank
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-medium">
+                        Unused Titles
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-safe-food">
+                        {titleBankInsights.unused_titles}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Ready to use
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {titleBankInsights.most_used_title && (
+                    <Card className="md:col-span-2">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm font-medium">
+                          Most Used Title
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm">
+                          {titleBankInsights.most_used_title}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Used {titleBankInsights.most_used_count} times
+                        </p>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {titleBankInsights.recent_topics &&
+                    titleBankInsights.recent_topics.length > 0 && (
+                      <Card className="md:col-span-2">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm font-medium">
+                            Recent Topics (Last 30 Days)
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex flex-wrap gap-2">
+                            {titleBankInsights.recent_topics
+                              .slice(0, 10)
+                              .map((topic: string, idx: number) => (
+                                <Badge key={idx} variant="secondary">
+                                  {topic}
+                                </Badge>
+                              ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  <p>
+                    No title bank data available. Import titles to get started!
+                  </p>
+                </div>
+              )}
+
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h4 className="font-medium text-blue-900 mb-2">
+                  How Title Bank Works
+                </h4>
+                <ul className="text-sm space-y-1 text-blue-800">
+                  <li>✓ Automatically selects unused or least-used titles</li>
+                  <li>
+                    ✓ Prevents duplicate content with similarity detection
+                  </li>
+                  <li>✓ Tracks usage to ensure diverse SEO coverage</li>
+                  <li>
+                    ✓ Varies writing tone and perspective for each article
+                  </li>
+                </ul>
+              </div>
+            </TabsContent>
+
+            <TabsContent
+              value="suggestions"
+              className="flex-1 overflow-y-auto space-y-4"
+            >
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-muted-foreground">
+                  Next recommended titles based on usage and diversity
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadTitleSuggestions}
+                >
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                  Refresh
+                </Button>
+              </div>
+
+              {titleSuggestions.length > 0 ? (
+                <div className="space-y-2">
+                  {titleSuggestions.map((suggestion, idx) => (
+                    <Card key={idx} className="p-3">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <p className="font-medium">{suggestion.title}</p>
+                          <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
+                            <span>Used: {suggestion.times_used} times</span>
+                            {suggestion.last_used_days_ago !== null && (
+                              <span>
+                                Last used: {suggestion.last_used_days_ago} days
+                                ago
+                              </span>
+                            )}
+                            {suggestion.last_used_days_ago === null && (
+                              <Badge variant="secondary" className="text-xs">
+                                Never used
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setAiPrompt(suggestion.title);
+                            setShowTitleBankDialog(false);
+                            setShowAIDialog(true);
+                          }}
+                        >
+                          Use
+                        </Button>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  <p>Click "Refresh" to load title suggestions</p>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent
+              value="import"
+              className="flex-1 overflow-y-auto space-y-4"
+            >
+              <div className="space-y-4">
+                <div className="p-4 bg-muted rounded-lg">
+                  <h4 className="font-medium mb-2">
+                    Import from Blog_Titles.md
+                  </h4>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    This will load all titles from your Blog_Titles.md file into
+                    the title bank. Duplicate titles will be automatically
+                    skipped.
+                  </p>
+                  <Button
+                    onClick={handlePopulateTitleBank}
+                    disabled={loadingTitleBank}
+                    className="w-full"
+                  >
+                    {loadingTitleBank ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                        Importing...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Import Titles from Blog_Titles.md
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-medium text-amber-900 mb-1">
+                        Uniqueness Protection
+                      </h4>
+                      <p className="text-sm text-amber-800">
+                        The system automatically prevents duplicate content by:
+                      </p>
+                      <ul className="text-sm text-amber-800 mt-2 space-y-1 ml-4 list-disc">
+                        <li>Checking title similarity (85% threshold)</li>
+                        <li>Hashing content to detect duplicates</li>
+                        <li>Tracking keyword usage over time</li>
+                        <li>Varying writing tone and perspective</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                {titleBankInsights?.recommended_next_topics && (
+                  <div className="p-4 border rounded-lg">
+                    <h4 className="font-medium mb-3">
+                      Recommended Next Topics
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {titleBankInsights.recommended_next_topics.map(
+                        (topic: string, idx: number) => (
+                          <Badge
+                            key={idx}
+                            variant="outline"
+                            className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                            onClick={() => {
+                              setAiPrompt(topic);
+                              setShowTitleBankDialog(false);
+                              setShowAIDialog(true);
+                            }}
+                          >
+                            {topic}
+                          </Badge>
+                        )
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowTitleBankDialog(false)}
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
