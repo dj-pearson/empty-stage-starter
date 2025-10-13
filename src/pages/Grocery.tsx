@@ -15,7 +15,7 @@ import { CreateStoreLayoutDialog } from "@/components/CreateStoreLayoutDialog";
 import { ManageStoreLayoutsDialog } from "@/components/ManageStoreLayoutsDialog";
 import { ManageStoreAislesDialog } from "@/components/ManageStoreAislesDialog";
 import { generateGroceryList } from "@/lib/mealPlanner";
-import { ShoppingCart, Copy, Trash2, Printer, Download, Plus, Share2, FileText, Sparkles, Store } from "lucide-react";
+import { ShoppingCart, Copy, Trash2, Printer, Download, Plus, Share2, FileText, Sparkles, Store, Barcode } from "lucide-react";
 import { toast } from "sonner";
 import { FoodCategory } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
@@ -488,29 +488,62 @@ export default function Grocery() {
                       {items.map(item => (
                         <div
                           key={item.id}
-                          className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
+                          className={`flex items-start gap-3 p-3 rounded-lg transition-all ${
                             item.checked 
                               ? "bg-safe-food/10 border border-safe-food/20" 
                               : "hover:bg-muted/50"
                           }`}
                         >
+                          {/* Item Photo (if available) */}
+                          {item.photo_url && (
+                            <div className="shrink-0">
+                              <img
+                                src={item.photo_url}
+                                alt={item.name}
+                                className="w-16 h-16 object-cover rounded-md border"
+                              />
+                            </div>
+                          )}
+                          
                           <Checkbox
                             checked={item.checked}
                             onCheckedChange={() => handleToggleItem(item.id)}
+                            className="mt-1"
                           />
-                          <div className="flex-1">
-                            <p className={`font-medium ${item.checked ? "line-through text-muted-foreground" : ""}`}>
-                              {item.name}
-                            </p>
-                            {item.checked && (
-                              <p className="text-xs text-safe-food mt-0.5">
-                                ✓ Added to pantry
+                          
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <p className={`font-medium ${item.checked ? "line-through text-muted-foreground" : ""}`}>
+                                  {item.name}
+                                </p>
+                                {item.brand_preference && (
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Brand: {item.brand_preference}
+                                  </p>
+                                )}
+                                {item.barcode && (
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                                    <Barcode className="h-3 w-3" />
+                                    {item.barcode}
+                                  </div>
+                                )}
+                                {item.notes && !item.checked && (
+                                  <p className="text-xs text-muted-foreground mt-1 italic">
+                                    Note: {item.notes}
+                                  </p>
+                                )}
+                                {item.checked && (
+                                  <p className="text-xs text-safe-food mt-1">
+                                    ✓ Added to pantry
+                                  </p>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground whitespace-nowrap">
+                                {item.quantity} {item.unit}
                               </p>
-                            )}
+                            </div>
                           </div>
-                          <p className="text-sm text-muted-foreground whitespace-nowrap">
-                            {item.quantity} {item.unit}
-                          </p>
                         </div>
                       ))}
                     </div>
