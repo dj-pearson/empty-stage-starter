@@ -30,6 +30,8 @@ serve(async (req) => {
     // Get suggested title from title bank if enabled
     let suggestedTitle = topic;
     let titleFromBank = false;
+    let needsAITitleGeneration = false;
+    let existingTitlesForAI: string[] = [];
 
     if (useTitleBank && !topic) {
       const { data: titleData, error: titleError } = await supabase.rpc(
@@ -41,17 +43,16 @@ serve(async (req) => {
         titleFromBank = true;
         console.log("Using title from bank:", suggestedTitle);
       } else {
-        console.warn("No title available from bank, attempting suggestions fallback...");
-        const { data: suggestData, error: suggestError } = await supabase.rpc(
-          "get_diverse_title_suggestions",
-          { count: 1 }
-        );
-        if (!suggestError && suggestData && suggestData.length > 0) {
-          const candidate = suggestData[0] as any;
-          suggestedTitle = candidate.title || candidate;
-          titleFromBank = true;
-          console.log("Using fallback suggested title:", suggestedTitle);
-        }
+        console.log("No unused titles in bank, will generate new title with AI...");
+        needsAITitleGeneration = true;
+        
+        // Get all titles from bank to understand the style/pattern
+        const { data: allTitles } = await supabase
+          .from("blog_title_bank")
+          .select("title")
+          .limit(20);
+        
+        existingTitlesForAI = allTitles?.map((t: any) => t.title) || [];
       }
     }
 
@@ -133,6 +134,55 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+
+    // Generate AI title if needed (after modelConfig is defined)
+    if (needsAITitleGeneration) {
+      const titlePrompt = existingTitlesForAI.length > 0
+        ? `Generate ONE unique blog post title for parents of picky eaters. Base the style on these examples: ${existingTitlesForAI.slice(0, 5).join(", ")}. Return ONLY the title, no quotes or extra text.`
+        : `Generate ONE unique blog post title about helping parents with picky eaters. Focus on practical advice. Return ONLY the title, no quotes or extra text.`;
+      
+      try {
+        const authHeaders: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+
+        if (modelConfig.auth_type === "x-api-key") {
+          authHeaders["x-api-key"] = apiKey;
+        } else if (modelConfig.auth_type === "bearer") {
+          authHeaders["Authorization"] = `Bearer ${apiKey}`;
+        } else if (modelConfig.auth_type === "api-key") {
+          authHeaders["api-key"] = apiKey;
+        }
+
+        const titleResponse = await fetch(modelConfig.endpoint_url, {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({
+            model: modelConfig.model_name,
+            messages: [{ role: "user", content: titlePrompt }],
+            max_tokens: 100,
+            temperature: 0.9,
+          }),
+        });
+        
+        if (titleResponse.ok) {
+          const titleData = await titleResponse.json();
+          const generatedTitle = titleData.choices?.[0]?.message?.content?.trim() || 
+                                titleData.content?.[0]?.text?.trim();
+          
+          if (generatedTitle) {
+            suggestedTitle = generatedTitle.replace(/^["']|["']$/g, "");
+            console.log("AI-generated new title:", suggestedTitle);
+            
+            // Add the new title to the bank for future use
+            await supabase.from("blog_title_bank").insert({ title: suggestedTitle });
+            titleFromBank = true;
+          }
+        }
+      } catch (error) {
+        console.error("Error generating title with AI:", error);
+      }
     }
 
     // Vary the writing approach to create diverse content
