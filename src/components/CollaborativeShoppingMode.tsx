@@ -102,7 +102,7 @@ export function CollaborativeShoppingMode({
 
       if (error && error.code !== 'PGRST116') throw error; // Ignore not found error
 
-      setActiveSession(data as ShoppingSession | null);
+      setActiveSession(data as any);
     } catch (error) {
       console.error('Error loading shopping session:', error);
     }
@@ -131,7 +131,7 @@ export function CollaborativeShoppingMode({
 
       if (error) throw error;
 
-      setActiveSession(data as ShoppingSession);
+      setActiveSession(data as any);
       toast.success("Shopping session started!", {
         description: "Household members can now see your progress in real-time"
       });

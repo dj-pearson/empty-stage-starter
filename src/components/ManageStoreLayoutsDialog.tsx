@@ -29,8 +29,9 @@ interface StoreLayout {
   id: string;
   user_id: string;
   household_id: string | null;
-  name: string;
-  address: string | null;
+  store_name: string;
+  store_chain: string | null;
+  store_location: string | null;
   is_default: boolean;
   created_at: string;
   updated_at: string;
@@ -73,7 +74,7 @@ export function ManageStoreLayoutsDialog({
         .from('store_layouts')
         .select('*')
         .or(`user_id.eq.${userId}${householdId ? `,household_id.eq.${householdId}` : ''}`)
-        .order('name', { ascending: true });
+        .order('store_name', { ascending: true });
 
       if (error) throw error;
 
@@ -133,7 +134,7 @@ export function ManageStoreLayoutsDialog({
 
       if (error) throw error;
 
-      toast.success(`Store "${storeToDelete.name}" deleted`);
+      toast.success(`Store "${storeToDelete.store_name}" deleted`);
       setStores(prev => prev.filter(s => s.id !== storeToDelete.id));
       setDeleteDialogOpen(false);
       setStoreToDelete(null);
@@ -163,7 +164,19 @@ export function ManageStoreLayoutsDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-[700px] max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle>Manage Store Layouts</DialogTitle>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Manage Store Layouts</span>
+              <Button
+                onClick={() => {
+                  onOpenChange(false);
+                  onEditStore(null as any);
+                }}
+                size="sm"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create Store
+              </Button>
+            </DialogTitle>
             <DialogDescription>
               Create custom store layouts and organize aisles for optimized shopping.
             </DialogDescription>
@@ -194,16 +207,16 @@ export function ManageStoreLayoutsDialog({
                           
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-semibold">{store.name}</h4>
+                              <h4 className="font-semibold">{store.store_name}</h4>
                               {store.is_default && (
                                 <Badge variant="secondary" className="text-xs">Default</Badge>
                               )}
                             </div>
                             
-                            {store.address && (
+                            {store.store_location && (
                               <div className="flex items-start gap-1 text-sm text-muted-foreground mb-2">
                                 <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                                <span className="line-clamp-2">{store.address}</span>
+                                <span className="line-clamp-2">{store.store_location}</span>
                               </div>
                             )}
 
@@ -264,7 +277,7 @@ export function ManageStoreLayoutsDialog({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Store Layout</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{storeToDelete?.name}"?
+              Are you sure you want to delete "{storeToDelete?.store_name}"?
               {aisleCounts[storeToDelete?.id || ''] > 0 && (
                 <span className="block mt-2 font-medium">
                   This will also delete {aisleCounts[storeToDelete?.id || '']} aisle(s) and all food mappings.

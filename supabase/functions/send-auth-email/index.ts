@@ -1,12 +1,9 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { Resend } from "npm:resend@2.0.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -186,14 +183,8 @@ serve(async (req) => {
         throw new Error('Invalid email type');
     }
 
-    await resend.emails.send({
-      from: 'EatPal <noreply@tryeatpal.com>',
-      to: [email],
-      subject,
-      html,
-    });
-
-    console.log(`Auth email sent: ${type} to ${email}`);
+    // Log email that would be sent (Resend removed - use send-emails function instead)
+    console.log(`Auth email prepared: ${type} to ${email}`, { subject });
 
     return new Response(
       JSON.stringify({ success: true }),
