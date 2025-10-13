@@ -14,11 +14,11 @@ serve(async (req) => {
   }
 
   try {
-    const { titles, action = "populate" } = await req.json();
+    const { titles, action = "populate", count: requestedCount } = await req.json();
 
-    if (!titles || !Array.isArray(titles)) {
+    if (action !== "get_insights" && action !== "get_suggestions" && (!titles || !Array.isArray(titles))) {
       return new Response(
-        JSON.stringify({ error: "Titles array is required" }),
+        JSON.stringify({ error: "Titles array is required for populate action" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -59,7 +59,7 @@ serve(async (req) => {
       });
     } else if (action === "get_suggestions") {
       // Get diverse title suggestions
-      const count = req.json().count || 10;
+      const count = requestedCount || 10;
       const { data, error } = await supabase.rpc(
         "get_diverse_title_suggestions",
         { count }

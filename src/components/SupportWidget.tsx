@@ -57,6 +57,7 @@ export function SupportWidget() {
       };
 
       // Create ticket
+      // @ts-ignore - Table exists but types not yet regenerated
       const { error: ticketError } = await supabase.from("support_tickets").insert({
         user_id: user.id,
         subject: formData.subject,

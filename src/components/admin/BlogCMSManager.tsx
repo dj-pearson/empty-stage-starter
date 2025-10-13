@@ -82,10 +82,10 @@ export function BlogCMSManager() {
   const loadTitleBankInsights = async () => {
     try {
       const { data, error } = await supabase.rpc(
-        "get_blog_generation_insights"
+        "get_blog_generation_insights" as any
       );
       if (error) throw error;
-      if (data && data.length > 0) {
+      if (data && Array.isArray(data) && data.length > 0) {
         setTitleBankInsights(data[0]);
       }
     } catch (error: any) {
@@ -96,11 +96,11 @@ export function BlogCMSManager() {
   const loadTitleSuggestions = async () => {
     try {
       const { data, error } = await supabase.rpc(
-        "get_diverse_title_suggestions",
+        "get_diverse_title_suggestions" as any,
         { count: 10 }
       );
       if (error) throw error;
-      setTitleSuggestions(data || []);
+      setTitleSuggestions(Array.isArray(data) ? data : []);
     } catch (error: any) {
       console.error("Error loading title suggestions:", error);
       toast.error("Failed to load title suggestions");
