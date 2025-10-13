@@ -4,9 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { TrustBadges } from '@/components/TrustBadge';
 import { ArrowRight } from 'lucide-react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { LazyFoodOrbit } from '@/components/LazyFoodOrbit';
 
 /**
- * Enhanced Hero Section with Trust Signals
+ * Enhanced Hero Section with Trust Signals and 3D Elements
  * Research shows trust badges increase conversion by 28%
  */
 export function EnhancedHero() {
@@ -30,9 +31,14 @@ export function EnhancedHero() {
 
   return (
     <LazyMotion features={domAnimation} strict>
-      <section className="relative py-20 px-4 bg-gradient-to-b from-background via-trust-softPink/5 to-secondary/10 overflow-hidden">
+      <section className="relative py-20 px-4 bg-gradient-to-b from-background via-trust-softPink/5 to-secondary/10 overflow-hidden min-h-[80vh]">
+        {/* 3D Food Orbit Background (Desktop Only) - Lazy Loaded */}
+        <div className="absolute inset-0 z-0">
+          <LazyFoodOrbit className="w-full h-full" />
+        </div>
+
         {/* Decorative background elements */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
           <m.div
             animate={
               shouldReduceMotion

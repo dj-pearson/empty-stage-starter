@@ -175,4 +175,121 @@ All colors MUST be HSL.
   .touch-target {
     @apply min-h-[44px] min-w-[44px];
   }
+
+  /* 3D Animation Keyframes */
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-20px);
+    }
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  /* Ballpit-style drift animation - MUCH bigger movements */
+  @keyframes drift {
+    0% {
+      transform: translate(0, 0) rotate(0deg) scale(1);
+    }
+    25% {
+      transform: translate(40px, -60px) rotate(15deg) scale(1.1);
+    }
+    50% {
+      transform: translate(-30px, -80px) rotate(-12deg) scale(0.95);
+    }
+    75% {
+      transform: translate(-50px, -40px) rotate(20deg) scale(1.05);
+    }
+    100% {
+      transform: translate(0, 0) rotate(0deg) scale(1);
+    }
+  }
+
+  .animate-drift {
+    animation: drift 6s ease-in-out infinite;
+  }
+
+  /* Orbital movement - much bigger circle */
+  @keyframes orbit {
+    0% {
+      transform: rotate(0deg) translateX(60px) rotate(0deg) scale(1);
+    }
+    25% {
+      transform: rotate(90deg) translateX(60px) rotate(-90deg) scale(1.1);
+    }
+    50% {
+      transform: rotate(180deg) translateX(60px) rotate(-180deg) scale(0.9);
+    }
+    75% {
+      transform: rotate(270deg) translateX(60px) rotate(-270deg) scale(1.05);
+    }
+    100% {
+      transform: rotate(360deg) translateX(60px) rotate(-360deg) scale(1);
+    }
+  }
+
+  .animate-orbit {
+    animation: orbit 8s linear infinite;
+  }
+
+  /* Wiggle animation - much more dramatic */
+  @keyframes wiggle {
+    0%, 100% {
+      transform: translateX(0) translateY(0) rotate(0deg) scale(1);
+    }
+    15% {
+      transform: translateX(-35px) translateY(-25px) rotate(-15deg) scale(1.1);
+    }
+    30% {
+      transform: translateX(40px) translateY(-50px) rotate(18deg) scale(0.95);
+    }
+    45% {
+      transform: translateX(-25px) translateY(-70px) rotate(-10deg) scale(1.05);
+    }
+    60% {
+      transform: translateX(30px) translateY(-55px) rotate(12deg) scale(0.9);
+    }
+    75% {
+      transform: translateX(-15px) translateY(-35px) rotate(-8deg) scale(1.08);
+    }
+  }
+
+  .animate-wiggle {
+    animation: wiggle 5s ease-in-out infinite;
+  }
+
+  /* Bounce animation - vertical bounce with rotation */
+  @keyframes bounce-dynamic {
+    0%, 100% {
+      transform: translateY(0) rotate(0deg) scale(1);
+    }
+    25% {
+      transform: translateY(-80px) rotate(10deg) scale(1.15);
+    }
+    50% {
+      transform: translateY(-120px) rotate(-5deg) scale(0.9);
+    }
+    75% {
+      transform: translateY(-60px) rotate(15deg) scale(1.1);
+    }
+  }
+
+  .animate-bounce-dynamic {
+    animation: bounce-dynamic 4s ease-in-out infinite;
+  }
+
+  /* Preserve 3D transformations */
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+
+  .perspective-1000 {
+    perspective: 1000px;
+  }
 }
+
+
