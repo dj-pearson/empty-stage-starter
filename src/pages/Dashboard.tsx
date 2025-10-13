@@ -144,6 +144,7 @@ const Dashboard = () => {
                   variant="ghost"
                   size="icon"
                   onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                  className="touch-target"
                 >
                   <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
                   <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
@@ -156,6 +157,7 @@ const Dashboard = () => {
                   size="icon"
                   onClick={handleLogout}
                   title="Sign out"
+                  className="touch-target"
                 >
                   <LogOut className="h-5 w-5" />
                 </Button>
@@ -176,22 +178,23 @@ const Dashboard = () => {
         <nav className="fixed top-0 left-0 right-0 bg-card border-b border-border z-50">
           <div className="flex justify-between items-center h-14 px-4">
             <div className="flex items-center gap-2">
-              <img 
-                src="/Logo-Green.png" 
-                alt="EatPal" 
+              <img
+                src="/Logo-Green.png"
+                alt="EatPal"
                 className="h-7 block dark:hidden"
               />
-              <img 
-                src="/Logo-White.png" 
-                alt="EatPal" 
+              <img
+                src="/Logo-White.png"
+                alt="EatPal"
                 className="h-7 hidden dark:block"
               />
             </div>
 
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" className="touch-target">
                   <Menu className="h-5 w-5" />
+                  <span className="sr-only">Open menu</span>
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" className="w-[280px] flex flex-col">
@@ -275,8 +278,8 @@ const Dashboard = () => {
         </div>
 
         {/* Mobile Bottom Navigation */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
-          <div className="flex justify-around items-center h-16">
+        <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-bottom">
+          <div className="flex justify-around items-center h-16 pb-[env(safe-area-inset-bottom)]">
             {mobileNavItems.slice(0, 5).map(({ to, icon: Icon, label }) => (
               <NavLink
                 key={to}
@@ -284,13 +287,15 @@ const Dashboard = () => {
                 end={to === "/dashboard"}
                 className={({ isActive }) =>
                   cn(
-                    "flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors",
-                    isActive ? "text-primary font-medium" : "text-muted-foreground"
+                    "flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors active:scale-95",
+                    isActive
+                      ? "text-primary font-medium"
+                      : "text-muted-foreground"
                   )
                 }
               >
                 <Icon className="h-5 w-5" />
-                <span className="text-[10px]">{label}</span>
+                <span className="text-[11px] sm:text-xs">{label}</span>
               </NavLink>
             ))}
           </div>

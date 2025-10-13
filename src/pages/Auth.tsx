@@ -2,12 +2,19 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { LoadingButton } from "@/components/ui/loading-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Utensils } from "lucide-react";
+import { Utensils, Eye, EyeOff } from "lucide-react";
 import { Link } from "react-router-dom";
 import { OnboardingDialog } from "@/components/OnboardingDialog";
 
@@ -18,12 +25,15 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
     // Set up listener first
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (session && isNewUser) {
         // New signup - show onboarding
         setShowOnboarding(true);
@@ -122,7 +132,9 @@ const Auth = () => {
     setShowOnboarding(false);
 
     // Mark onboarding as complete
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user) {
       await supabase
         .from("profiles")
@@ -135,78 +147,113 @@ const Auth = () => {
 
   return (
     <>
-      <OnboardingDialog open={showOnboarding} onComplete={handleOnboardingComplete} />
+      <OnboardingDialog
+        open={showOnboarding}
+        onComplete={handleOnboardingComplete}
+      />
 
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
         <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 mb-4">
-            <img 
-              src="/Logo-Green.png" 
-              alt="EatPal" 
-              className="h-10 block dark:hidden"
-            />
-            <img 
-              src="/Logo-White.png" 
-              alt="EatPal" 
-              className="h-10 hidden dark:block"
-            />
-          </Link>
-          <p className="text-muted-foreground mb-3">Start your journey to easier meal planning</p>
-          <Link to="/">
-            <Button variant="ghost" size="sm">
-              Back to Home
-            </Button>
-          </Link>
-        </div>
+          <div className="text-center mb-8">
+            <Link to="/" className="inline-flex items-center gap-2 mb-4">
+              <img
+                src="/Logo-Green.png"
+                alt="EatPal"
+                className="h-10 block dark:hidden"
+              />
+              <img
+                src="/Logo-White.png"
+                alt="EatPal"
+                className="h-10 hidden dark:block"
+              />
+            </Link>
+            <p className="text-muted-foreground mb-3">
+              Start your journey to easier meal planning
+            </p>
+            <Link to="/">
+              <Button variant="ghost" size="sm">
+                Back to Home
+              </Button>
+            </Link>
+          </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Welcome</CardTitle>
-            <CardDescription>Sign in to your account or create a new one</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-6 p-4 bg-accent/10 border border-accent/20 rounded-lg text-center">
-              <p className="text-sm font-semibold text-accent mb-1">🎉 Launching November 1st, 2025</p>
-              <p className="text-xs text-muted-foreground">Sign in if you already have an account. New registrations opening soon!</p>
-            </div>
-            <Tabs defaultValue="signin" className="w-full">
-              <TabsList className="grid w-full grid-cols-1">
-                <TabsTrigger value="signin">Sign In</TabsTrigger>
-              </TabsList>
+          <Card>
+            <CardHeader>
+              <CardTitle>Welcome</CardTitle>
+              <CardDescription>
+                Sign in to your account or create a new one
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-6 p-4 bg-accent/10 border border-accent/20 rounded-lg text-center">
+                <p className="text-sm font-semibold text-accent mb-1">
+                  🎉 Launching November 1st, 2025
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Sign in if you already have an account. New registrations
+                  opening soon!
+                </p>
+              </div>
+              <Tabs defaultValue="signin" className="w-full">
+                <TabsList className="grid w-full grid-cols-1">
+                  <TabsTrigger value="signin">Sign In</TabsTrigger>
+                </TabsList>
 
-              <TabsContent value="signin">
-                <form onSubmit={handleSignIn} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-email">Email</Label>
-                    <Input
-                      id="signin-email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-password">Password</Label>
-                    <Input
-                      id="signin-password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? "Signing in..." : "Sign In"}
-                  </Button>
-                </form>
-              </TabsContent>
-
-            </Tabs>
-          </CardContent>
-        </Card>
+                <TabsContent value="signin">
+                  <form onSubmit={handleSignIn} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="signin-email">Email</Label>
+                      <Input
+                        id="signin-email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        className="h-11"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signin-password">Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="signin-password"
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                          className="h-11 pr-10"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-11 w-11 hover:bg-transparent"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <span className="sr-only">
+                            {showPassword ? "Hide password" : "Show password"}
+                          </span>
+                        </Button>
+                      </div>
+                    </div>
+                    <LoadingButton
+                      type="submit"
+                      className="w-full h-11"
+                      isLoading={loading}
+                    >
+                      Sign In
+                    </LoadingButton>
+                  </form>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
 
           <p className="text-center text-sm text-muted-foreground mt-4">
             By continuing, you agree to our{" "}

@@ -8,7 +8,18 @@ import { CalendarMealPlanner } from "@/components/CalendarMealPlanner";
 import { FoodSelectorDialog } from "@/components/FoodSelectorDialog";
 import { DetailedTrackingDialog } from "@/components/DetailedTrackingDialog";
 import { buildWeekPlan, buildDayPlan } from "@/lib/mealPlanner";
-import { Calendar, RefreshCw, Sparkles, Shuffle, AlertTriangle, Package, ChevronLeft, ChevronRight, Loader2, MoreVertical } from "lucide-react";
+import {
+  Calendar,
+  RefreshCw,
+  Sparkles,
+  Shuffle,
+  AlertTriangle,
+  Package,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  MoreVertical,
+} from "lucide-react";
 import { toast } from "sonner";
 import { MealSlot, PlanEntry } from "@/types";
 import { SwapMealDialog } from "@/components/SwapMealDialog";
@@ -31,30 +42,65 @@ const MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
 ];
 
 export default function Planner() {
-  const { foods, kids, recipes, activeKidId, setActiveKid, planEntries, setPlanEntries, updatePlanEntry, addPlanEntry, updateFood } = useApp();
+  const {
+    foods,
+    kids,
+    recipes,
+    activeKidId,
+    setActiveKid,
+    planEntries,
+    setPlanEntries,
+    updatePlanEntry,
+    addPlanEntry,
+    updateFood,
+  } = useApp();
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<PlanEntry | null>(null);
-  const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
+  const [currentWeekStart, setCurrentWeekStart] = useState(
+    startOfWeek(new Date(), { weekStartsOn: 0 })
+  );
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
-  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+  // Default to list view on mobile (< 768px), calendar on desktop
+  const [viewMode, setViewMode] = useState<"calendar" | "list">(
+    typeof window !== "undefined" && window.innerWidth < 768
+      ? "list"
+      : "calendar"
+  );
   const [foodSelectorOpen, setFoodSelectorOpen] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState<{ date: string; slot: MealSlot } | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<{
+    date: string;
+    slot: MealSlot;
+  } | null>(null);
   const [detailedTrackingOpen, setDetailedTrackingOpen] = useState(false);
   const [trackingEntry, setTrackingEntry] = useState<PlanEntry | null>(null);
 
-  const activeKid = kids.find(k => k.id === activeKidId);
+  const activeKid = kids.find((k) => k.id === activeKidId);
 
   const checkStockIssues = () => {
-    const outOfStock = foods.filter(f => f.is_safe && (f.quantity || 0) === 0);
-    const lowStock = foods.filter(f => f.is_safe && (f.quantity || 0) > 0 && (f.quantity || 0) <= 2);
-    
+    const outOfStock = foods.filter(
+      (f) => f.is_safe && (f.quantity || 0) === 0
+    );
+    const lowStock = foods.filter(
+      (f) => f.is_safe && (f.quantity || 0) > 0 && (f.quantity || 0) <= 2
+    );
+
     if (outOfStock.length > 0 || lowStock.length > 0) {
       let message = "";
       if (outOfStock.length > 0) {
-        message += `Out of stock: ${outOfStock.slice(0, 3).map(f => f.name).join(', ')}${outOfStock.length > 3 ? ` and ${outOfStock.length - 3} more` : ''}. `;
+        message += `Out of stock: ${outOfStock
+          .slice(0, 3)
+          .map((f) => f.name)
+          .join(", ")}${
+          outOfStock.length > 3 ? ` and ${outOfStock.length - 3} more` : ""
+        }. `;
       }
       if (lowStock.length > 0) {
-        message += `Low stock: ${lowStock.slice(0, 3).map(f => `${f.name} (${f.quantity})`).join(', ')}${lowStock.length > 3 ? ` and ${lowStock.length - 3} more` : ''}.`;
+        message += `Low stock: ${lowStock
+          .slice(0, 3)
+          .map((f) => `${f.name} (${f.quantity})`)
+          .join(", ")}${
+          lowStock.length > 3 ? ` and ${lowStock.length - 3} more` : ""
+        }.`;
       }
       toast.warning("Stock Issues Detected", { description: message });
     }
@@ -65,9 +111,9 @@ export default function Planner() {
       toast.error("Please select a child first");
       return;
     }
-    
+
     checkStockIssues();
-    
+
     try {
       const newPlan = buildWeekPlan(activeKid.id, foods, planEntries);
       setPlanEntries(newPlan);
@@ -75,7 +121,9 @@ export default function Planner() {
         description: "Meal plan ready with daily try bites",
       });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to build plan");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to build plan"
+      );
     }
   };
 
@@ -89,18 +137,20 @@ export default function Planner() {
     try {
       // Get active AI model
       const { data: aiSettings, error: aiError } = await supabase
-        .from('ai_settings')
-        .select('*')
-        .eq('is_active', true)
+        .from("ai_settings")
+        .select("*")
+        .eq("is_active", true)
         .single();
 
       if (aiError || !aiSettings) {
-        toast.error("No active AI model configured. Please set one up in Admin settings.");
+        toast.error(
+          "No active AI model configured. Please set one up in Admin settings."
+        );
         setIsGeneratingPlan(false);
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('ai-meal-plan', {
+      const { data, error } = await supabase.functions.invoke("ai-meal-plan", {
         body: {
           kid: activeKid,
           foods,
@@ -138,7 +188,7 @@ export default function Planner() {
       // Remove existing entries for this date range and kid
       const dates = data.plan.map((d: any) => d.date);
       const filteredEntries = planEntries.filter(
-        e => !dates.includes(e.date) || e.kid_id !== activeKidId
+        (e) => !dates.includes(e.date) || e.kid_id !== activeKidId
       );
 
       setPlanEntries([...filteredEntries, ...newEntries]);
@@ -146,7 +196,7 @@ export default function Planner() {
         description: "Review and adjust as needed",
       });
     } catch (error) {
-      console.error('Error generating AI meal plan:', error);
+      console.error("Error generating AI meal plan:", error);
       toast.error("Failed to generate AI meal plan. Please try again.");
     } finally {
       setIsGeneratingPlan(false);
@@ -159,7 +209,7 @@ export default function Planner() {
 
   const handleAddEntry = (date: string, slot: MealSlot, foodId: string) => {
     if (!activeKid) return;
-    
+
     addPlanEntry({
       kid_id: activeKid.id,
       date,
@@ -195,16 +245,16 @@ export default function Planner() {
   const handleSelectRecipe = async (recipeId: string) => {
     if (!selectedSlot || !activeKid) return;
 
-    const recipe = recipes.find(r => r.id === recipeId);
+    const recipe = recipes.find((r) => r.id === recipeId);
     if (!recipe || recipe.food_ids.length === 0) return;
 
     try {
       // Use the database function to schedule the full recipe
-      const { error } = await (supabase as any).rpc('schedule_recipe_to_plan', {
+      const { error } = await (supabase as any).rpc("schedule_recipe_to_plan", {
         p_kid_id: activeKid.id,
         p_recipe_id: recipe.id,
         p_date: selectedSlot.date,
-        p_meal_slot: selectedSlot.slot
+        p_meal_slot: selectedSlot.slot,
       });
 
       if (error) {
@@ -212,29 +262,39 @@ export default function Planner() {
       }
 
       // Refresh plan entries from database
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) {
         const { data: planData } = await supabase
-          .from('plan_entries')
-          .select('*')
-          .order('date', { ascending: true });
+          .from("plan_entries")
+          .select("*")
+          .order("date", { ascending: true });
 
         if (planData) {
           setPlanEntries(planData as any);
         }
       }
 
-      toast.success(`${recipe.name} (${recipe.food_ids.length} items) added to calendar`);
+      toast.success(
+        `${recipe.name} (${recipe.food_ids.length} items) added to calendar`
+      );
     } catch (error) {
-      console.error('Error scheduling recipe:', error);
-      const message = (error as any)?.message || (typeof error === 'string' ? error : 'Failed to schedule recipe');
-      toast.error('Failed to schedule recipe', {
+      console.error("Error scheduling recipe:", error);
+      const message =
+        (error as any)?.message ||
+        (typeof error === "string" ? error : "Failed to schedule recipe");
+      toast.error("Failed to schedule recipe", {
         description: message,
       });
     }
   };
 
-  const handleMarkResult = async (entry: PlanEntry, result: "ate" | "tasted" | "refused", attemptId?: string) => {
+  const handleMarkResult = async (
+    entry: PlanEntry,
+    result: "ate" | "tasted" | "refused",
+    attemptId?: string
+  ) => {
     const updates: Partial<PlanEntry> = { result };
     if (attemptId) {
       updates.food_attempt_id = attemptId;
@@ -244,13 +304,13 @@ export default function Planner() {
 
     // If marked as "ate", deduct from inventory
     if (result === "ate") {
-      const food = foods.find(f => f.id === entry.food_id);
+      const food = foods.find((f) => f.id === entry.food_id);
       if (food && (food.quantity ?? 0) > 0) {
         try {
           // Call the database function to deduct quantity
-          const { error } = await supabase.rpc('deduct_food_quantity', {
+          const { error } = await supabase.rpc("deduct_food_quantity", {
             _food_id: entry.food_id,
-            _amount: 1
+            _amount: 1,
           });
 
           if (error) throw error;
@@ -258,16 +318,16 @@ export default function Planner() {
           // Update local state
           updateFood(entry.food_id, {
             ...food,
-            quantity: Math.max(0, (food.quantity || 0) - 1)
+            quantity: Math.max(0, (food.quantity || 0) - 1),
           });
 
           if ((food.quantity || 0) <= 1) {
             toast.info(`${food.name} is now out of stock!`, {
-              description: "Add it to your grocery list"
+              description: "Add it to your grocery list",
             });
           }
         } catch (error) {
-          console.error('Error deducting quantity:', error);
+          console.error("Error deducting quantity:", error);
           toast.error("Failed to update inventory");
         }
       }
@@ -283,7 +343,10 @@ export default function Planner() {
     setDetailedTrackingOpen(true);
   };
 
-  const handleDetailedTrackingComplete = (result: "ate" | "tasted" | "refused", attemptId?: string) => {
+  const handleDetailedTrackingComplete = (
+    result: "ate" | "tasted" | "refused",
+    attemptId?: string
+  ) => {
     if (trackingEntry) {
       handleMarkResult(trackingEntry, result, attemptId);
     }
@@ -296,9 +359,9 @@ export default function Planner() {
 
   const handleSwapConfirm = (newFoodId: string) => {
     if (!selectedEntry) return;
-    
+
     updatePlanEntry(selectedEntry.id, { food_id: newFoodId });
-    const newFood = foods.find(f => f.id === newFoodId);
+    const newFood = foods.find((f) => f.id === newFoodId);
     toast.success(`Swapped to ${newFood?.name}`);
   };
 
@@ -309,18 +372,24 @@ export default function Planner() {
 
     try {
       // Remove existing entries for this date
-      const otherEntries = planEntries.filter(e => e.date !== date || e.kid_id !== activeKidId);
-      
+      const otherEntries = planEntries.filter(
+        (e) => e.date !== date || e.kid_id !== activeKidId
+      );
+
       // Generate new entries for this date
       const newDayPlan = buildDayPlan(activeKid.id, date, foods, planEntries);
-      
+
       // Combine
       setPlanEntries([...otherEntries, ...newDayPlan]);
-      
-      const dayName = new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" });
+
+      const dayName = new Date(date + "T00:00:00").toLocaleDateString("en-US", {
+        weekday: "long",
+      });
       toast.success(`${dayName} shuffled!`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to shuffle day");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to shuffle day"
+      );
     }
   };
 
@@ -328,12 +397,13 @@ export default function Planner() {
     if (entry.recipe_id) {
       // Copy all recipe entries
       const recipeEntries = planEntries.filter(
-        e => e.recipe_id === entry.recipe_id && 
-             e.date === entry.date && 
-             e.meal_slot === entry.meal_slot &&
-             e.kid_id === entry.kid_id
+        (e) =>
+          e.recipe_id === entry.recipe_id &&
+          e.date === entry.date &&
+          e.meal_slot === entry.meal_slot &&
+          e.kid_id === entry.kid_id
       );
-      
+
       for (const recipeEntry of recipeEntries) {
         await addPlanEntry({
           kid_id: targetKidId,
@@ -344,8 +414,8 @@ export default function Planner() {
           is_primary_dish: recipeEntry.is_primary_dish,
         } as any);
       }
-      
-      const targetKid = kids.find(k => k.id === targetKidId);
+
+      const targetKid = kids.find((k) => k.id === targetKidId);
       toast.success(`Recipe copied to ${targetKid?.name}'s plan`);
     } else {
       // Copy single food entry
@@ -355,8 +425,8 @@ export default function Planner() {
         meal_slot: entry.meal_slot,
         food_id: entry.food_id,
       } as any);
-      
-      const targetKid = kids.find(k => k.id === targetKidId);
+
+      const targetKid = kids.find((k) => k.id === targetKidId);
       toast.success(`Meal copied to ${targetKid?.name}'s plan`);
     }
   };
@@ -364,8 +434,8 @@ export default function Planner() {
   // Group entries by date (filter by active kid)
   const planByDate: Record<string, PlanEntry[]> = {};
   planEntries
-    .filter(entry => entry.kid_id === activeKidId)
-    .forEach(entry => {
+    .filter((entry) => entry.kid_id === activeKidId)
+    .forEach((entry) => {
       if (!planByDate[entry.date]) {
         planByDate[entry.date] = [];
       }
@@ -374,7 +444,7 @@ export default function Planner() {
 
   const dates = Object.keys(planByDate).sort();
 
-  const getFood = (foodId: string) => foods.find(f => f.id === foodId);
+  const getFood = (foodId: string) => foods.find((f) => f.id === foodId);
 
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
@@ -385,16 +455,18 @@ export default function Planner() {
             <div>
               <h1 className="text-3xl font-bold mb-2">
                 Weekly Meal Planner
-                {activeKid && <span className="text-primary"> - {activeKid.name}</span>}
+                {activeKid && (
+                  <span className="text-primary"> - {activeKid.name}</span>
+                )}
               </h1>
               <p className="text-muted-foreground">
                 Drag and drop meals to plan your week
               </p>
             </div>
             <div className="flex gap-2 flex-wrap">
-              <Button 
-                onClick={() => handleAIMealPlan(7)} 
-                size="lg" 
+              <Button
+                onClick={() => handleAIMealPlan(7)}
+                size="lg"
                 className="shadow-lg"
                 disabled={!activeKid || isGeneratingPlan}
               >
@@ -410,8 +482,8 @@ export default function Planner() {
                   </>
                 )}
               </Button>
-              <Button 
-                onClick={handleBuildWeek} 
+              <Button
+                onClick={handleBuildWeek}
                 variant="outline"
                 size="lg"
                 disabled={!activeKid}
@@ -426,22 +498,39 @@ export default function Planner() {
           <Card className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={handlePreviousWeek}>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handlePreviousWeek}
+                  className="touch-target"
+                  aria-label="Previous week"
+                >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <div className="text-center min-w-[200px]">
                   <div className="font-semibold">
-                    Week of {format(currentWeekStart, 'MMM d, yyyy')}
+                    Week of {format(currentWeekStart, "MMM d, yyyy")}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {format(currentWeekStart, 'MMM d')} - {format(addWeeks(currentWeekStart, 1), 'MMM d')}
+                    {format(currentWeekStart, "MMM d")} -{" "}
+                    {format(addWeeks(currentWeekStart, 1), "MMM d")}
                   </div>
                 </div>
-                <Button variant="outline" size="icon" onClick={handleNextWeek}>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleNextWeek}
+                  className="touch-target"
+                  aria-label="Next week"
+                >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
-              <Button variant="outline" onClick={handleThisWeek}>
+              <Button
+                variant="outline"
+                onClick={handleThisWeek}
+                className="min-h-[44px]"
+              >
                 <Calendar className="h-4 w-4 mr-2" />
                 This Week
               </Button>
@@ -464,11 +553,15 @@ export default function Planner() {
         ) : activeKidId === null ? (
           // Family Mode - Show all children
           <div className="space-y-6">
-            {kids.map(kid => (
+            {kids.map((kid) => (
               <div key={kid.id} className="space-y-2">
                 <div className="flex items-center justify-between">
                   <h2 className="text-xl font-semibold">{kid.name}'s Plan</h2>
-                  <Button variant="outline" size="sm" onClick={() => setActiveKid(kid.id)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveKid(kid.id)}
+                  >
                     View Details
                   </Button>
                 </div>
@@ -501,7 +594,9 @@ export default function Planner() {
             kidId={activeKidId}
             kidName={activeKid!.name}
             kidAge={activeKid!.age}
-            kidWeight={activeKid!.weight_kg ? Number(activeKid!.weight_kg) : undefined}
+            kidWeight={
+              activeKid!.weight_kg ? Number(activeKid!.weight_kg) : undefined
+            }
             onUpdateEntry={handleUpdateEntry}
             onAddEntry={handleAddEntry}
             onOpenFoodSelector={handleOpenFoodSelector}
@@ -528,7 +623,8 @@ export default function Planner() {
               </div>
               <h3 className="text-xl font-semibold mb-2">No Meal Plan Yet</h3>
               <p className="text-muted-foreground mb-6">
-                Click "Build Week Plan" to generate a 7-day meal schedule with safe foods and daily try bites
+                Click "Build Week Plan" to generate a 7-day meal schedule with
+                safe foods and daily try bites
               </p>
               <Button onClick={handleBuildWeek} size="lg">
                 <Sparkles className="h-5 w-5 mr-2" />
@@ -540,18 +636,23 @@ export default function Planner() {
           <div className="space-y-6">
             {dates.map((date, dayIndex) => {
               const dayEntries = planByDate[date];
-              const dayName = new Date(date + "T00:00:00").toLocaleDateString("en-US", {
-                weekday: "long",
-                month: "short",
-                day: "numeric",
-              });
+              const dayName = new Date(date + "T00:00:00").toLocaleDateString(
+                "en-US",
+                {
+                  weekday: "long",
+                  month: "short",
+                  day: "numeric",
+                }
+              );
 
               return (
                 <Card key={date} className="p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="font-bold text-primary">{dayIndex + 1}</span>
+                        <span className="font-bold text-primary">
+                          {dayIndex + 1}
+                        </span>
                       </div>
                       <h3 className="text-xl font-semibold">{dayName}</h3>
                     </div>
@@ -567,7 +668,9 @@ export default function Planner() {
 
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {MEAL_SLOTS.map(({ slot, label }) => {
-                      const entry = dayEntries.find(e => e.meal_slot === slot);
+                      const entry = dayEntries.find(
+                        (e) => e.meal_slot === slot
+                      );
                       const food = entry ? getFood(entry.food_id) : null;
 
                       return (
@@ -576,16 +679,20 @@ export default function Planner() {
                           className="p-4 rounded-lg border-2 bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all hover:border-primary/50"
                         >
                           <div className="flex items-start justify-between mb-3">
-                            <p className="text-sm font-semibold text-foreground uppercase tracking-wide">{label}</p>
+                            <p className="text-sm font-semibold text-foreground uppercase tracking-wide">
+                              {label}
+                            </p>
                             {slot === "try_bite" && (
                               <Sparkles className="h-5 w-5 text-try-bite" />
                             )}
                           </div>
-                          
+
                           {food ? (
                             <>
                               <div className="flex items-start justify-between mb-3">
-                                <p className="font-bold text-lg text-foreground leading-tight">{food.name}</p>
+                                <p className="font-bold text-lg text-foreground leading-tight">
+                                  {food.name}
+                                </p>
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -598,58 +705,101 @@ export default function Planner() {
                               </div>
 
                               {/* Stock Status */}
-                              {food.quantity !== undefined && food.quantity !== null && (
-                                <div className="mb-3">
-                                  {food.quantity === 0 ? (
-                                    <Badge variant="destructive" className="gap-1 font-semibold">
-                                      <Package className="h-3 w-3" />
-                                      Out of Stock
-                                    </Badge>
-                                  ) : food.quantity <= 2 ? (
-                                    <Badge variant="secondary" className="gap-1 font-semibold bg-yellow-500/20 text-yellow-900 dark:bg-yellow-500/30 dark:text-yellow-300 border-yellow-500/50">
-                                      <AlertTriangle className="h-3 w-3" />
-                                      Low Stock ({food.quantity})
-                                    </Badge>
-                                  ) : (
-                                    <Badge variant="outline" className="gap-1 font-semibold border-green-500/50 bg-green-500/10 text-green-900 dark:bg-green-500/20 dark:text-green-300">
-                                      In Stock ({food.quantity})
-                                    </Badge>
-                                  )}
-                                </div>
-                              )}
+                              {food.quantity !== undefined &&
+                                food.quantity !== null && (
+                                  <div className="mb-3">
+                                    {food.quantity === 0 ? (
+                                      <Badge
+                                        variant="destructive"
+                                        className="gap-1 font-semibold"
+                                      >
+                                        <Package className="h-3 w-3" />
+                                        Out of Stock
+                                      </Badge>
+                                    ) : food.quantity <= 2 ? (
+                                      <Badge
+                                        variant="secondary"
+                                        className="gap-1 font-semibold bg-yellow-500/20 text-yellow-900 dark:bg-yellow-500/30 dark:text-yellow-300 border-yellow-500/50"
+                                      >
+                                        <AlertTriangle className="h-3 w-3" />
+                                        Low Stock ({food.quantity})
+                                      </Badge>
+                                    ) : (
+                                      <Badge
+                                        variant="outline"
+                                        className="gap-1 font-semibold border-green-500/50 bg-green-500/10 text-green-900 dark:bg-green-500/20 dark:text-green-300"
+                                      >
+                                        In Stock ({food.quantity})
+                                      </Badge>
+                                    )}
+                                  </div>
+                                )}
 
                               {food.allergens && food.allergens.length > 0 && (
                                 <div className="mb-3">
-                                  <Badge variant="secondary" className="text-xs font-semibold bg-orange-500/20 text-orange-900 dark:bg-orange-500/30 dark:text-orange-300 border-orange-500/50">
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs font-semibold bg-orange-500/20 text-orange-900 dark:bg-orange-500/30 dark:text-orange-300 border-orange-500/50"
+                                  >
                                     ⚠️ {food.allergens.join(", ")}
                                   </Badge>
                                 </div>
                               )}
-                              
+
                               {entry && (
                                 <div className="space-y-2">
                                   <div className="flex flex-wrap gap-2">
                                     <Button
                                       size="sm"
-                                      variant={entry.result === "ate" ? "default" : "outline"}
-                                      onClick={() => handleMarkResult(entry, "ate")}
-                                      className={entry.result === "ate" ? "bg-safe-food hover:bg-safe-food/90 text-white font-semibold" : "font-semibold hover:bg-safe-food/10"}
+                                      variant={
+                                        entry.result === "ate"
+                                          ? "default"
+                                          : "outline"
+                                      }
+                                      onClick={() =>
+                                        handleMarkResult(entry, "ate")
+                                      }
+                                      className={
+                                        entry.result === "ate"
+                                          ? "bg-safe-food hover:bg-safe-food/90 text-white font-semibold"
+                                          : "font-semibold hover:bg-safe-food/10"
+                                      }
                                     >
                                       Ate
                                     </Button>
                                     <Button
                                       size="sm"
-                                      variant={entry.result === "tasted" ? "default" : "outline"}
-                                      onClick={() => handleMarkResult(entry, "tasted")}
-                                      className={entry.result === "tasted" ? "bg-secondary hover:bg-secondary/90 text-white font-semibold" : "font-semibold hover:bg-secondary/10"}
+                                      variant={
+                                        entry.result === "tasted"
+                                          ? "default"
+                                          : "outline"
+                                      }
+                                      onClick={() =>
+                                        handleMarkResult(entry, "tasted")
+                                      }
+                                      className={
+                                        entry.result === "tasted"
+                                          ? "bg-secondary hover:bg-secondary/90 text-white font-semibold"
+                                          : "font-semibold hover:bg-secondary/10"
+                                      }
                                     >
                                       Tasted
                                     </Button>
                                     <Button
                                       size="sm"
-                                      variant={entry.result === "refused" ? "default" : "outline"}
-                                      onClick={() => handleMarkResult(entry, "refused")}
-                                      className={entry.result === "refused" ? "bg-destructive hover:bg-destructive/90 text-white font-semibold" : "font-semibold hover:bg-destructive/10"}
+                                      variant={
+                                        entry.result === "refused"
+                                          ? "default"
+                                          : "outline"
+                                      }
+                                      onClick={() =>
+                                        handleMarkResult(entry, "refused")
+                                      }
+                                      className={
+                                        entry.result === "refused"
+                                          ? "bg-destructive hover:bg-destructive/90 text-white font-semibold"
+                                          : "font-semibold hover:bg-destructive/10"
+                                      }
                                     >
                                       Refused
                                     </Button>
@@ -660,17 +810,26 @@ export default function Planner() {
                                         </Button>
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent>
-                                        <DropdownMenuItem onClick={() => handleOpenDetailedTracking(entry)}>
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            handleOpenDetailedTracking(entry)
+                                          }
+                                        >
                                           📊 Track in Detail
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleSwapMeal(entry)}>
+                                        <DropdownMenuItem
+                                          onClick={() => handleSwapMeal(entry)}
+                                        >
                                           🔄 Swap Food
                                         </DropdownMenuItem>
                                       </DropdownMenuContent>
                                     </DropdownMenu>
                                   </div>
                                   {entry.food_attempt_id && (
-                                    <Badge variant="outline" className="text-xs">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs"
+                                    >
                                       ✓ Detailed tracking
                                     </Badge>
                                   )}
@@ -679,7 +838,9 @@ export default function Planner() {
                             </>
                           ) : (
                             <div className="text-center py-4">
-                              <p className="text-muted-foreground font-medium">No meal planned</p>
+                              <p className="text-muted-foreground font-medium">
+                                No meal planned
+                              </p>
                             </div>
                           )}
                         </div>
@@ -705,7 +866,7 @@ export default function Planner() {
             open={detailedTrackingOpen}
             onOpenChange={setDetailedTrackingOpen}
             entry={trackingEntry}
-            food={foods.find(f => f.id === trackingEntry.food_id)!}
+            food={foods.find((f) => f.id === trackingEntry.food_id)!}
             kidId={activeKidId!}
             onComplete={handleDetailedTrackingComplete}
           />

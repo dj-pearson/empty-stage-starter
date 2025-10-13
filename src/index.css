@@ -38,13 +38,17 @@ All colors MUST be HSL.
     --ring: 142 45% 30%;
 
     --radius: 0.75rem;
-    
+
     /* Custom semantic colors */
     --safe-food: 142 45% 30%; /* Forest Green */
     --try-bite: 28 100% 68%; /* Soft Orange */
     --sky-blue: 199 84% 74%; /* Sky Blue RGB(129, 212, 250) */
-    
-    --gradient-hero: linear-gradient(135deg, hsl(142 45% 30%), hsl(143 41% 74%));
+
+    --gradient-hero: linear-gradient(
+      135deg,
+      hsl(142 45% 30%),
+      hsl(143 41% 74%)
+    );
     --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(60 100% 99%));
     --shadow-soft: 0 4px 20px -4px hsl(142 45% 30% / 0.15);
     --shadow-medium: 0 8px 30px -6px hsl(142 45% 30% / 0.25);
@@ -89,15 +93,23 @@ All colors MUST be HSL.
     --border: 142 20% 22%;
     --input: 142 20% 22%;
     --ring: 143 41% 74%;
-    
+
     --safe-food: 143 41% 74%;
     --try-bite: 28 100% 68%;
     --sky-blue: 199 84% 74%;
-    --gradient-hero: linear-gradient(135deg, hsl(143 41% 74%), hsl(142 45% 35%));
-    --gradient-card: linear-gradient(180deg, hsl(142 20% 14%), hsl(142 25% 10%));
+    --gradient-hero: linear-gradient(
+      135deg,
+      hsl(143 41% 74%),
+      hsl(142 45% 35%)
+    );
+    --gradient-card: linear-gradient(
+      180deg,
+      hsl(142 20% 14%),
+      hsl(142 25% 10%)
+    );
     --shadow-soft: 0 4px 20px -4px hsl(143 41% 74% / 0.3);
     --shadow-medium: 0 8px 30px -6px hsl(143 41% 74% / 0.4);
-    
+
     --sidebar-background: 142 25% 10%;
     --sidebar-foreground: 60 100% 95%;
     --sidebar-primary: 143 41% 74%;
@@ -116,10 +128,51 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground font-sans;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    font-family: 'Nunito Sans', system-ui, -apple-system, sans-serif;
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: "Nunito Sans", system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer utilities {
+  /* Safe area insets for modern devices (iPhone X+) */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .scrollbar-hide {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+  /* Touch feedback */
+  .touch-feedback {
+    @apply active:scale-95 transition-transform;
+  }
+
+  /* Minimum touch target size (44x44px) */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
   }
 }
