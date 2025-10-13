@@ -17,6 +17,7 @@ import {
   Upload,
   Sparkles,
   Loader2,
+  ShoppingCart,
 } from "lucide-react";
 import { RecipeBuilder } from "@/components/RecipeBuilder";
 import { ImportRecipeDialog } from "@/components/ImportRecipeDialog";
@@ -63,6 +64,7 @@ export default function Recipes() {
     kids,
     activeKidId,
     setActiveKid,
+    addGroceryItem,
   } = useApp();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -112,6 +114,43 @@ export default function Recipes() {
     deleteRecipe(id);
     setDeleteId(null);
     toast.success("Recipe deleted");
+  };
+
+  const addRecipeToGroceryList = async (recipe: Recipe, servingsMultiplier = 1) => {
+    if (!recipe.food_ids || recipe.food_ids.length === 0) {
+      toast.error("This recipe has no ingredients");
+      return;
+    }
+
+    // Get recipe foods
+    const recipeIngredients = recipe.food_ids
+      .map(id => foods.find(f => f.id === id))
+      .filter(Boolean);
+
+    if (recipeIngredients.length === 0) {
+      toast.error("Recipe ingredients not found in pantry");
+      return;
+    }
+
+    // Add each ingredient to grocery list
+    let addedCount = 0;
+    for (const ingredient of recipeIngredients) {
+      if (ingredient) {
+        addGroceryItem({
+          name: ingredient.name,
+          quantity: servingsMultiplier,
+          unit: ingredient.unit || 'servings',
+          category: ingredient.category,
+          aisle: ingredient.aisle,
+        });
+        addedCount++;
+      }
+    }
+
+    toast.success(
+      `Added ${addedCount} ingredient${addedCount !== 1 ? 's' : ''} to grocery list!`,
+      { description: `For: ${recipe.name}` }
+    );
   };
 
   const handleAISuggestions = async () => {
@@ -530,6 +569,18 @@ export default function Recipes() {
                         <p className="text-sm">{recipe.tips}</p>
                       </div>
                     )}
+
+                    {/* Add to Grocery List Button */}
+                    <Button
+                      onClick={() => addRecipeToGroceryList(recipe)}
+                      variant="outline"
+                      size="sm"
+                      className="w-full mt-4"
+                      disabled={!recipe.food_ids || recipe.food_ids.length === 0}
+                    >
+                      <ShoppingCart className="h-4 w-4 mr-2" />
+                      Add to Grocery List
+                    </Button>
                   </CardContent>
                 </Card>
               );

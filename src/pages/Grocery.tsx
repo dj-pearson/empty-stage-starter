@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { AddGroceryItemDialog } from "@/components/AddGroceryItemDialog";
+import { SmartRestockSuggestions } from "@/components/SmartRestockSuggestions";
 import { generateGroceryList } from "@/lib/mealPlanner";
 import { ShoppingCart, Copy, Trash2, Printer, Download, Plus, Share2, FileText, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -27,6 +28,13 @@ export default function Grocery() {
   const [groupBy, setGroupBy] = useState<"category" | "aisle">("aisle");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [isGeneratingRestock, setIsGeneratingRestock] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUserId(user?.id || null);
+    });
+  }, []);
 
   const isFamilyMode = !activeKidId;
   const activeKid = kids.find(k => k.id === activeKidId);
@@ -370,6 +378,19 @@ export default function Grocery() {
             <p className="text-2xl font-bold text-accent">{groceryItems.length - checkedCount}</p>
           </Card>
         </div>
+
+        {/* Smart Restock Suggestions */}
+        {userId && (
+          <div className="mb-6">
+            <SmartRestockSuggestions
+              userId={userId}
+              kidId={activeKidId || undefined}
+              onAddItems={(items) => {
+                items.forEach(item => addGroceryItem(item));
+              }}
+            />
+          </div>
+        )}
 
         {/* Grocery List */}
         {groceryItems.length === 0 ? (

@@ -234,6 +234,50 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // Real-time subscription for grocery_items
+  useEffect(() => {
+    if (!userId || !householdId) return;
+
+    const channel = supabase
+      .channel('grocery_items_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'grocery_items',
+          filter: `household_id=eq.${householdId}`
+        },
+        (payload) => {
+          console.log('Grocery item changed:', payload);
+
+          if (payload.eventType === 'INSERT') {
+            setGroceryItemsState(prev => {
+              // Avoid duplicates
+              const exists = prev.some(item => item.id === payload.new.id);
+              if (exists) return prev;
+              return [...prev, payload.new as GroceryItem];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            setGroceryItemsState(prev =>
+              prev.map(item =>
+                item.id === (payload.new as GroceryItem).id ? (payload.new as GroceryItem) : item
+              )
+            );
+          } else if (payload.eventType === 'DELETE') {
+            setGroceryItemsState(prev =>
+              prev.filter(item => item.id !== (payload.old as GroceryItem).id)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, householdId]);
+
   const addFood = (food: Omit<Food, "id">) => {
     if (userId && householdId) {
       supabase
