@@ -119,7 +119,7 @@ export function FeatureCard3D({ icon, title, description, features }: FeatureCar
     <Card3DTilt className="h-full">
       <m.div
         whileHover={shouldReduceMotion ? {} : { scale: 1.02 }}
-        className="h-full bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-shadow border-2 border-gray-100"
+        className="h-full bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-shadow border-2 border-gray-100 flex flex-col"
       >
         {/* Icon */}
         <div className="text-6xl mb-4">{icon}</div>
@@ -128,7 +128,7 @@ export function FeatureCard3D({ icon, title, description, features }: FeatureCar
         <h3 className="text-2xl font-bold mb-3 text-gray-900">{title}</h3>
         
         {/* Description */}
-        <p className="text-gray-600 mb-4 leading-relaxed">{description}</p>
+        <p className="text-gray-600 leading-relaxed flex-grow">{description}</p>
         
         {/* Features list if provided */}
         {features && features.length > 0 && (
