@@ -443,16 +443,92 @@ Format your response as JSON with EXACT keys only:
     } catch (e) {
       console.error("Failed to parse AI response as JSON:", e);
       console.error("Raw content:", sanitized.substring(0, 1000));
-      return new Response(
-        JSON.stringify({
-          error:
-            "Failed to parse AI response. The AI may have returned invalid JSON format.",
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+
+      // Retry once with a shorter target length to avoid truncation
+      try {
+        console.log("Retrying generation with condensed length due to parse failure...");
+
+        const isAnthropicRetry = modelConfig.endpoint_url.includes("anthropic.com");
+        const isOpenAIRetry = modelConfig.endpoint_url.includes("openai.com");
+
+        const retryUserPrompt = userPrompt.replace(
+          /Target length:\s*~?\d+\s*-\s*\d+\s*words/i,
+          "Target length: ~700-900 words"
+        );
+
+        const retryHeaders: Record<string, string> = { "Content-Type": "application/json" };
+        if (modelConfig.auth_type === "x-api-key") retryHeaders["x-api-key"] = apiKey;
+        else if (modelConfig.auth_type === "bearer") retryHeaders["Authorization"] = `Bearer ${apiKey}`;
+        else if (modelConfig.auth_type === "api-key") retryHeaders["api-key"] = apiKey;
+
+        let retryBody: any;
+        if (isAnthropicRetry) {
+          retryBody = {
+            model: modelConfig.model_name,
+            system: systemPrompt,
+            messages: [{ role: "user", content: retryUserPrompt }],
+            max_tokens: modelConfig.max_tokens && modelConfig.max_tokens > 0 ? Math.min(modelConfig.max_tokens, 12000) : 8000,
+          };
+          if (modelConfig.temperature !== null) retryBody.temperature = modelConfig.temperature;
+          if (modelConfig.additional_params) Object.assign(retryBody, modelConfig.additional_params);
+        } else {
+          retryBody = {
+            model: modelConfig.model_name,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: retryUserPrompt },
+            ],
+            max_tokens: modelConfig.max_tokens ?? 4000,
+          };
+          if (modelConfig.temperature !== null) retryBody.temperature = modelConfig.temperature;
+          if (modelConfig.additional_params) Object.assign(retryBody, modelConfig.additional_params);
+          if (isOpenAIRetry && /^(gpt-5|o3|o4)/.test(modelConfig.model_name)) {
+            if (retryBody.max_tokens !== undefined) {
+              retryBody.max_completion_tokens = retryBody.max_tokens;
+              delete retryBody.max_tokens;
+            }
+            if ("temperature" in retryBody) delete retryBody.temperature;
+          }
         }
-      );
+
+        const retryResp = await fetch(modelConfig.endpoint_url, {
+          method: "POST",
+          headers: retryHeaders,
+          body: JSON.stringify(retryBody),
+        });
+
+        if (!retryResp.ok) {
+          const t = await retryResp.text();
+          console.error("Retry AI API error:", retryResp.status, t);
+          return new Response(
+            JSON.stringify({ error: "AI retry failed: " + t }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const retryData = await retryResp.json();
+        let retryContent = "";
+        if (retryData.content && Array.isArray(retryData.content)) {
+          retryContent = retryData.content.find((c: any) => c.type === "text")?.text || "";
+        } else if (retryData.choices && retryData.choices[0]?.message?.content) {
+          retryContent = retryData.choices[0].message.content;
+        }
+        let retrySanitized = retryContent.trim();
+        if (retrySanitized.startsWith("```") ) {
+          retrySanitized = retrySanitized.replace(/^```(?:json|JSON)?\n?/, "").replace(/```$/, "").trim();
+        }
+
+        const retryMatch = retrySanitized.match(/\{[\s\S]*\}/);
+        const retryJsonStr = (retryMatch ? retryMatch[0] : retrySanitized).replace(/,(\s*[}\]])/g, "$1");
+        blogContent = JSON.parse(retryJsonStr);
+        console.log("Retry succeeded with condensed content");
+      } catch (retryErr) {
+        console.error("Retry parse/generation failed:", retryErr);
+        return new Response(
+          JSON.stringify({ error: "Failed to parse AI response after retry. Please try again." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // Check content hash for duplicates before saving
