@@ -31,8 +31,9 @@ interface StoreLayout {
   id: string;
   user_id: string;
   household_id: string | null;
-  name: string;
-  address: string | null;
+  store_name: string;
+  store_chain: string | null;
+  store_location: string | null;
   is_default: boolean;
   created_at: string;
   updated_at: string;
@@ -166,7 +167,7 @@ export function ManageStoreAislesDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-[700px] max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle>Manage Aisles - {storeLayout.name}</DialogTitle>
+            <DialogTitle>Manage Aisles - {storeLayout.store_name}</DialogTitle>
             <DialogDescription>
               Create and organize aisles for this store. You can then map foods to aisles for optimized shopping.
             </DialogDescription>

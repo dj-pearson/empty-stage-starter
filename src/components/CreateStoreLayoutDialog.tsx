@@ -20,8 +20,9 @@ interface StoreLayout {
   id: string;
   user_id: string;
   household_id: string | null;
-  name: string;
-  address: string | null;
+  store_name: string;
+  store_chain: string | null;
+  store_location: string | null;
   is_default: boolean;
   created_at: string;
   updated_at: string;
@@ -54,8 +55,8 @@ export function CreateStoreLayoutDialog({
   useEffect(() => {
     if (editStore) {
       setFormData({
-        name: editStore.name,
-        address: editStore.address || "",
+        name: editStore.store_name,
+        address: editStore.store_location || "",
         is_default: editStore.is_default,
       });
     } else {
@@ -80,8 +81,8 @@ export function CreateStoreLayoutDialog({
         const { data, error } = await supabase
           .from('store_layouts')
           .update({
-            name: formData.name.trim(),
-            address: formData.address.trim() || null,
+            store_name: formData.name.trim(),
+            store_location: formData.address.trim() || null,
             is_default: formData.is_default,
             updated_at: new Date().toISOString(),
           })
@@ -103,8 +104,8 @@ export function CreateStoreLayoutDialog({
             {
               user_id: userId,
               household_id: householdId,
-              name: formData.name.trim(),
-              address: formData.address.trim() || null,
+              store_name: formData.name.trim(),
+              store_location: formData.address.trim() || null,
               is_default: formData.is_default,
             },
           ])

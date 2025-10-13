@@ -99,15 +99,15 @@ export default function Recipes() {
       if (user) {
         setUserId(user.id);
         
-        // Fetch household ID
-        const { data: profile } = await supabase
-          .from('profiles')
+        // Fetch household ID from first kid
+        const { data: kids } = await supabase
+          .from('kids')
           .select('household_id')
           .eq('user_id', user.id)
-          .single();
+          .limit(1);
         
-        if (profile?.household_id) {
-          setHouseholdId(profile.household_id);
+        if (kids && kids.length > 0 && kids[0].household_id) {
+          setHouseholdId(kids[0].household_id);
         }
       }
     };

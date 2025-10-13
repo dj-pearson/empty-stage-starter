@@ -58,7 +58,10 @@ export function SmartRestockSuggestions({
       if (error) {
         console.error('Error loading restock suggestions:', error);
       } else if (data) {
-        setSuggestions(data);
+        setSuggestions(data.map((item: any) => ({
+          ...item,
+          priority: item.priority as 'low' | 'medium' | 'high'
+        })));
       }
     } catch (err) {
       console.error('Failed to load suggestions:', err);
