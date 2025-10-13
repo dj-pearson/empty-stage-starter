@@ -40,19 +40,29 @@ serve(async (req) => {
         suggestedTitle = titleData[0].title;
         titleFromBank = true;
         console.log("Using title from bank:", suggestedTitle);
+      } else {
+        console.warn("No title available from bank, attempting suggestions fallback...");
+        const { data: suggestData, error: suggestError } = await supabase.rpc(
+          "get_diverse_title_suggestions",
+          { count: 1 }
+        );
+        if (!suggestError && suggestData && suggestData.length > 0) {
+          const candidate = suggestData[0] as any;
+          suggestedTitle = candidate.title || candidate;
+          titleFromBank = true;
+          console.log("Using fallback suggested title:", suggestedTitle);
+        }
       }
     }
 
     if (!suggestedTitle) {
-      return new Response(
-        JSON.stringify({
-          error: "Topic is required or no titles available in title bank",
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      const today = new Date().toISOString().slice(0, 10);
+      if (keywords && String(keywords).trim().length > 0) {
+        suggestedTitle = `Fresh strategies for ${String(keywords).trim()} (${today})`;
+      } else {
+        suggestedTitle = `Practical picky eater tips for families (${today})`;
+      }
+      console.warn("No title provided; using safe fallback:", suggestedTitle);
     }
 
     // Check for similar titles to avoid duplicates
