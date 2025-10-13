@@ -99,35 +99,39 @@ export default function Grocery() {
     toggleGroceryItem(itemId);
 
     // If checking the item, ask for aisle contribution (max 2-3 items per trip)
-    if (!item.checked && selectedStoreLayoutId) {
-      // Check if user has already contributed for this item at this store
-      const { data: existingContribution } = await supabase
-        .from('user_store_contributions')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('store_layout_id', selectedStoreLayoutId)
-        .eq('food_item_name', item.name)
-        .single();
+    if (!item.checked && selectedStoreLayoutId && userId) {
+      try {
+        // Check if user has already contributed for this item at this store
+        const { data: existingContribution } = await (supabase as any)
+          .from('user_store_contributions')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('store_layout_id', selectedStoreLayoutId)
+          .eq('food_item_name', item.name)
+          .maybeSingle();
 
-      // Check if there's already a mapping
-      const { data: existingMapping } = await supabase
-        .from('food_aisle_mappings')
-        .select('*')
-        .eq('store_layout_id', selectedStoreLayoutId)
-        .eq('food_item_name', item.name)
-        .single();
+        // Check if there's already a mapping
+        const { data: existingMapping } = await (supabase as any)
+          .from('food_aisle_mappings')
+          .select('*')
+          .eq('store_layout_id', selectedStoreLayoutId)
+          .eq('food_item_name', item.name)
+          .maybeSingle();
 
-      // Only ask for contribution if:
-      // 1. User hasn't contributed this item before, OR
-      // 2. There's no mapping yet, OR
-      // 3. Confidence is still low
-      const shouldAskContribution = !existingContribution || 
-        !existingMapping || 
-        existingMapping.confidence_level === 'low';
+        // Only ask for contribution if:
+        // 1. User hasn't contributed this item before, OR
+        // 2. There's no mapping yet, OR
+        // 3. Confidence is still low
+        const shouldAskContribution = !existingContribution || 
+          !existingMapping || 
+          existingMapping?.confidence_level === 'low';
 
-      if (shouldAskContribution && Math.random() < 0.3) { // Ask for ~30% of items
-        setContributionItem(item.name);
-        setShowAisleContribution(true);
+        if (shouldAskContribution && Math.random() < 0.3) { // Ask for ~30% of items
+          setContributionItem(item.name);
+          setShowAisleContribution(true);
+        }
+      } catch (error) {
+        console.error('Error checking contribution status:', error);
       }
     }
 

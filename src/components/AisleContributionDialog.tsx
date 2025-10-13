@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,21 +31,21 @@ export function AisleContributionDialog({
   const [userStats, setUserStats] = useState<any>(null);
 
   // Load user stats when dialog opens
-  useState(() => {
+  useEffect(() => {
     if (open && userId) {
       loadUserStats();
     }
-  });
+  }, [open, userId]);
 
   const loadUserStats = async () => {
     if (!userId) return;
 
     try {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from('user_contribution_stats')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       setUserStats(data);
     } catch (error) {
@@ -69,17 +69,17 @@ export function AisleContributionDialog({
     setIsSubmitting(true);
     try {
       // Check if contribution already exists
-      const { data: existing } = await supabase
+      const { data: existing } = await (supabase as any)
         .from('user_store_contributions')
         .select('*')
         .eq('user_id', userId)
         .eq('store_layout_id', storeLayoutId)
         .eq('food_item_name', itemName)
-        .single();
+        .maybeSingle();
 
       if (existing) {
         // Update existing contribution
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('user_store_contributions')
           .update({
             aisle_number: aisleNumber || existing.aisle_number,
@@ -92,7 +92,7 @@ export function AisleContributionDialog({
         if (error) throw error;
       } else {
         // Create new contribution
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('user_store_contributions')
           .insert([{
             user_id: userId,
@@ -106,7 +106,7 @@ export function AisleContributionDialog({
       }
 
       // Create food_aisle_mapping if doesn't exist
-      const { error: mappingError } = await supabase
+      const { error: mappingError } = await (supabase as any)
         .from('food_aisle_mappings')
         .insert([{
           store_layout_id: storeLayoutId,
@@ -117,7 +117,7 @@ export function AisleContributionDialog({
           validation_count: 1,
         }])
         .select()
-        .single();
+        .maybeSingle();
 
       // Ignore conflict error - mapping already exists
       if (mappingError && !mappingError.message.includes('duplicate')) {
