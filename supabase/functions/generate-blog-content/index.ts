@@ -501,13 +501,33 @@ Format your response as JSON with EXACT keys only:
     try {
       console.log("Creating blog post in database...");
 
-      // Generate slug from title
-      const slug = (blogContent.title || suggestedTitle)
+      // Generate unique slug from title
+      const baseSlug = (blogContent.title || suggestedTitle)
         .toLowerCase()
         .replace(/[^a-z0-9\s-]/g, "")
-        .replace(/\s+/g, "-");
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "");
+      let slug = baseSlug;
 
-      console.log("Generated slug:", slug);
+      // Ensure slug uniqueness by appending numeric suffix when needed
+      const { data: existingSlugRows, error: existingSlugError } = await supabase
+        .from("blog_posts")
+        .select("slug")
+        .ilike("slug", `${baseSlug}%`);
+
+      if (existingSlugError) {
+        console.warn("Slug uniqueness check failed, proceeding with base slug:", existingSlugError);
+      } else if (existingSlugRows && existingSlugRows.length > 0) {
+        const existingSet = new Set(existingSlugRows.map((r: any) => r.slug));
+        if (existingSet.has(baseSlug)) {
+          let i = 2;
+          while (existingSet.has(`${baseSlug}-${i}`)) i++;
+          slug = `${baseSlug}-${i}`;
+        }
+      }
+
+      console.log("Final unique slug:", slug);
 
       // Create the blog post
       const { data: postResult, error: postError } = await supabase
