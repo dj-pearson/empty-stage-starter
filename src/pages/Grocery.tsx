@@ -15,6 +15,7 @@ import { CreateStoreLayoutDialog } from "@/components/CreateStoreLayoutDialog";
 import { ManageStoreLayoutsDialog } from "@/components/ManageStoreLayoutsDialog";
 import { ManageStoreAislesDialog } from "@/components/ManageStoreAislesDialog";
 import { AisleContributionDialog } from "@/components/AisleContributionDialog";
+import { ImportRecipeToGroceryDialog } from "@/components/ImportRecipeToGroceryDialog";
 import { generateGroceryList } from "@/lib/mealPlanner";
 import { ShoppingCart, Copy, Trash2, Printer, Download, Plus, Share2, FileText, Sparkles, Store, Barcode } from "lucide-react";
 import { toast } from "sonner";
@@ -52,6 +53,9 @@ export default function Grocery() {
   // Aisle contribution state
   const [showAisleContribution, setShowAisleContribution] = useState(false);
   const [contributionItem, setContributionItem] = useState<string | null>(null);
+  
+  // Import recipe state
+  const [showImportRecipeDialog, setShowImportRecipeDialog] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -392,6 +396,11 @@ export default function Grocery() {
               Add Item
             </Button>
             
+            <Button onClick={() => setShowImportRecipeDialog(true)} variant="secondary">
+              <FileText className="h-4 w-4 mr-2" />
+              Import Recipe
+            </Button>
+            
             {/* Store Layout Manager Button */}
             {userId && (
               <Button
@@ -687,6 +696,25 @@ export default function Grocery() {
             onContribute={() => {
               // Reload mappings or update UI as needed
               toast.success("Thank you for helping the community! 🎉");
+            }}
+          />
+          
+          {/* Import Recipe Dialog */}
+          <ImportRecipeToGroceryDialog
+            open={showImportRecipeDialog}
+            onOpenChange={setShowImportRecipeDialog}
+            onImport={(ingredients) => {
+              ingredients.forEach(ingredient => {
+                addGroceryItem({
+                  name: ingredient.name,
+                  quantity: ingredient.quantity,
+                  unit: ingredient.unit,
+                  category: ingredient.category,
+                  notes: ingredient.notes,
+                  aisle: undefined,
+                  grocery_list_id: selectedListId || undefined
+                });
+              });
             }}
           />
         </>
