@@ -333,7 +333,18 @@ export function BlogCMSManager() {
 
       const content = data.content;
 
-      // Save the generated post
+      // If edge function already saved the post, avoid duplicating it
+      if (data.postId) {
+        toast.success("AI blog content generated and saved as draft.");
+        setShowAIDialog(false);
+        setAiPrompt("");
+        setKeywords("");
+        await loadPosts();
+        await loadTitleBankInsights();
+        return;
+      }
+
+      // Fallback for older function versions: save client-side
       const { error: insertError } = await supabase
         .from("blog_posts")
         .insert([
