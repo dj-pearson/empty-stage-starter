@@ -107,7 +107,7 @@ export default function Grocery() {
           .select('*')
           .eq('user_id', userId)
           .eq('store_layout_id', selectedStoreLayoutId)
-          .eq('food_item_name', item.name)
+          .eq('food_name', item.name)
           .maybeSingle();
 
         // Check if there's already a mapping
@@ -115,7 +115,7 @@ export default function Grocery() {
           .from('food_aisle_mappings')
           .select('*')
           .eq('store_layout_id', selectedStoreLayoutId)
-          .eq('food_item_name', item.name)
+          .eq('food_name', item.name)
           .maybeSingle();
 
         // Only ask for contribution if:
@@ -126,7 +126,7 @@ export default function Grocery() {
           !existingMapping || 
           existingMapping?.confidence_level === 'low';
 
-        if (shouldAskContribution && Math.random() < 0.3) { // Ask for ~30% of items
+        if (shouldAskContribution && Math.random() < 0.5) { // Ask for ~50% of items to get more data
           setContributionItem(item.name);
           setShowAisleContribution(true);
         }
