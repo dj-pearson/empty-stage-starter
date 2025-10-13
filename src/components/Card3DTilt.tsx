@@ -116,7 +116,7 @@ export function FeatureCard3D({ icon, title, description, features }: FeatureCar
   const shouldReduceMotion = useReducedMotion();
   
   return (
-    <Card3DTilt className="h-full min-h-[320px]">
+    <Card3DTilt className="h-full min-h-[380px]">
       <m.div
         whileHover={shouldReduceMotion ? {} : { scale: 1.02 }}
         className="h-full bg-card dark:bg-card rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-shadow border-2 border-border dark:border-border flex flex-col"
