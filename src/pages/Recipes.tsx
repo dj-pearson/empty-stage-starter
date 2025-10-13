@@ -19,6 +19,7 @@ import {
   Loader2,
   ShoppingCart,
   Folder,
+  FileText,
 } from "lucide-react";
 import { RecipeBuilder } from "@/components/RecipeBuilder";
 import { ImportRecipeDialog } from "@/components/ImportRecipeDialog";
@@ -606,6 +607,7 @@ export default function Recipes() {
           onOpenChange={setImportDialogOpen}
           onImport={handleImport}
           foods={foods}
+          kids={kids}
         />
 
         {/* AI Suggestions Dialog */}
