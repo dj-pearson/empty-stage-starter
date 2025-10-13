@@ -116,25 +116,25 @@ export function FeatureCard3D({ icon, title, description, features }: FeatureCar
   const shouldReduceMotion = useReducedMotion();
   
   return (
-    <Card3DTilt className="h-full">
+    <Card3DTilt className="h-full min-h-[320px]">
       <m.div
         whileHover={shouldReduceMotion ? {} : { scale: 1.02 }}
-        className="h-full bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-shadow border-2 border-gray-100 flex flex-col"
+        className="h-full bg-card dark:bg-card rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-shadow border-2 border-border dark:border-border flex flex-col"
       >
         {/* Icon */}
-        <div className="text-6xl mb-4">{icon}</div>
+        <div className="text-6xl mb-4 flex-shrink-0">{icon}</div>
         
         {/* Title */}
-        <h3 className="text-2xl font-bold mb-3 text-gray-900">{title}</h3>
+        <h3 className="text-2xl font-bold mb-3 text-card-foreground dark:text-card-foreground flex-shrink-0">{title}</h3>
         
         {/* Description */}
-        <p className="text-gray-600 leading-relaxed flex-grow">{description}</p>
+        <p className="text-muted-foreground dark:text-muted-foreground leading-relaxed flex-grow">{description}</p>
         
         {/* Features list if provided */}
         {features && features.length > 0 && (
-          <ul className="space-y-2 mt-4">
+          <ul className="space-y-2 mt-4 flex-shrink-0">
             {features.map((feature, index) => (
-              <li key={index} className="flex items-start gap-2 text-sm text-gray-700">
+              <li key={index} className="flex items-start gap-2 text-sm text-muted-foreground dark:text-muted-foreground">
                 <span className="text-trust-green mt-0.5">✓</span>
                 <span>{feature}</span>
               </li>
