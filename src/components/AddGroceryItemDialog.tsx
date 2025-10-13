@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,11 +7,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FoodCategory } from "@/types";
-import { Plus, Camera, Barcode, StickyNote, Search, Package, AlertTriangle, Sparkles, ShoppingCart } from "lucide-react";
+import { Plus, Camera, Barcode, StickyNote, Search, Package, Sparkles, ShoppingCart, Loader2, Scan, Edit3 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useApp } from "@/contexts/AppContext";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
 interface AddGroceryItemDialogProps {
   open: boolean;
@@ -49,6 +51,9 @@ const categoryLabels: Record<FoodCategory, string> = {
 
 export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryItemDialogProps) {
   const { foods } = useApp();
+  const [activeTab, setActiveTab] = useState<"manual" | "barcode" | "camera">("manual");
+  
+  // Form states
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [unit, setUnit] = useState("servings");
@@ -61,9 +66,14 @@ export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryIt
   const [isFamilyItem, setIsFamilyItem] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   
-  // Barcode lookup states
-  const [isLookingUpBarcode, setIsLookingUpBarcode] = useState(false);
+  // Barcode/API lookup states
+  const [isLookingUp, setIsLookingUp] = useState(false);
   const [lookupSource, setLookupSource] = useState<string | null>(null);
+  
+  // Camera/barcode scanning states
+  const [isScanning, setIsScanning] = useState(false);
+  const [isProcessingScan, setIsProcessingScan] = useState(false);
+  const webScannerRef = useRef<Html5Qrcode | null>(null);
   
   // Pantry inventory states
   const [pantryItem, setPantryItem] = useState<PantryItem | null>(null);
@@ -98,6 +108,13 @@ export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryIt
     }
   }, [name, foods]);
 
+  // Cleanup scanner on unmount or dialog close
+  useEffect(() => {
+    if (!open) {
+      stopScanner();
+    }
+  }, [open]);
+
   const handleBarcodeChange = (value: string) => {
     setBarcode(value);
     setLookupSource(null);
@@ -109,7 +126,7 @@ export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryIt
       return;
     }
 
-    setIsLookingUpBarcode(true);
+    setIsLookingUp(true);
     try {
       const { data, error } = await supabase.functions.invoke('lookup-barcode', {
         body: { barcode: barcode.trim() }
@@ -132,27 +149,94 @@ export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryIt
         
         setLookupSource(food.source);
         
-        // If item exists in pantry, show the inventory info
-        if (food.in_pantry && food.existing_quantity !== undefined) {
-          toast.success(`Found in pantry! Current stock: ${food.existing_quantity} ${food.existing_unit}`, {
-            description: `Add more to reach your desired quantity`
-          });
-        } else {
-          toast.success(`Product found: ${food.name}`, {
-            description: `Source: ${food.source}`
-          });
-        }
+        toast.success(`Product found: ${food.name}`, {
+          description: `Source: ${food.source}`
+        });
       } else {
         toast.error("Product not found", {
-          description: "Try entering details manually or use a different barcode"
+          description: "Try entering details manually"
         });
       }
     } catch (error) {
       console.error('Barcode lookup error:', error);
       toast.error("Failed to lookup barcode");
     } finally {
-      setIsLookingUpBarcode(false);
+      setIsLookingUp(false);
     }
+  };
+
+  const startBarcodeScanner = async () => {
+    setIsScanning(true);
+    setIsProcessingScan(false);
+
+    // Wait for DOM
+    await new Promise((r) => setTimeout(r, 100));
+
+    try {
+      const scanner = new Html5Qrcode('barcode-scanner');
+      webScannerRef.current = scanner;
+
+      const container = document.getElementById('barcode-scanner');
+      const containerWidth = Math.min((container?.clientWidth || window.innerWidth) - 24, 640);
+      const qrboxWidth = Math.round(containerWidth * 0.95);
+      const qrboxHeight = Math.max(160, Math.round(qrboxWidth * 0.4));
+
+      const cameras = await Html5Qrcode.getCameras();
+      if (!cameras || cameras.length === 0) throw new Error('No cameras found');
+      
+      const backCamera = cameras.find(c => /back|rear|environment/i.test(c.label)) || cameras[cameras.length - 1];
+
+      await scanner.start(
+        backCamera.id,
+        {
+          fps: 10,
+          qrbox: { width: qrboxWidth, height: qrboxHeight },
+        },
+        async (decodedText) => {
+          if (isProcessingScan) return;
+          
+          setIsProcessingScan(true);
+          try {
+            await scanner.stop();
+            await scanner.clear();
+          } catch {}
+          webScannerRef.current = null;
+          
+          setBarcode(decodedText);
+          setIsScanning(false);
+          
+          // Auto-lookup after scanning
+          setTimeout(() => {
+            handleLookupBarcode();
+          }, 100);
+        },
+        () => {} // Ignore scan errors
+      );
+    } catch (err) {
+      console.error('Scanner error:', err);
+      toast.error('Failed to start scanner', {
+        description: 'Please check camera permissions'
+      });
+      setIsScanning(false);
+      try {
+        if (webScannerRef.current) {
+          await webScannerRef.current.stop();
+          await webScannerRef.current.clear();
+        }
+      } catch {}
+    }
+  };
+
+  const stopScanner = async () => {
+    try {
+      if (webScannerRef.current) {
+        await webScannerRef.current.stop();
+        await webScannerRef.current.clear();
+        webScannerRef.current = null;
+      }
+    } catch {}
+    setIsScanning(false);
+    setIsProcessingScan(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -166,7 +250,6 @@ export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryIt
     let finalQuantity: number;
     
     if (pantryItem) {
-      // If item exists in pantry, use the additional quantity
       const additionalQty = parseInt(additionalQuantity);
       if (isNaN(additionalQty) || additionalQty <= 0) {
         toast.error("Please enter a valid quantity to purchase");
@@ -174,7 +257,6 @@ export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryIt
       }
       finalQuantity = additionalQty;
     } else {
-      // New item
       const qty = parseInt(quantity);
       if (isNaN(qty) || qty <= 0) {
         toast.error("Please enter a valid quantity");
@@ -197,6 +279,10 @@ export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryIt
     });
 
     // Reset form
+    resetForm();
+  };
+
+  const resetForm = () => {
     setName("");
     setQuantity("1");
     setAdditionalQuantity("1");
@@ -212,270 +298,335 @@ export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryIt
     setPantryItem(null);
     setPantryQuantity(0);
     setLookupSource(null);
+    setActiveTab("manual");
+    stopScanner();
     onOpenChange(false);
     toast.success("Item added to grocery list");
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={(isOpen) => {
+      if (!isOpen) {
+        stopScanner();
+        resetForm();
+      }
+      onOpenChange(isOpen);
+    }}>
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShoppingCart className="h-5 w-5" />
             Add Grocery Item
           </DialogTitle>
           <DialogDescription>
-            Scan barcode or enter manually. We'll check your pantry inventory automatically.
+            Add items manually, scan barcodes, or use your camera
           </DialogDescription>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Barcode Lookup Section */}
-          <Card className="p-4 bg-muted/50">
-            <div className="space-y-3">
-              <Label htmlFor="barcode-input" className="flex items-center gap-2 text-sm font-medium">
-                <Barcode className="h-4 w-4" />
-                Quick Barcode Lookup (Optional)
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  id="barcode-input"
-                  value={barcode}
-                  onChange={(e) => handleBarcodeChange(e.target.value)}
-                  placeholder="Enter or scan barcode"
-                  className="flex-1"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleLookupBarcode();
-                    }
-                  }}
-                />
-                <Button
-                  type="button"
-                  onClick={handleLookupBarcode}
-                  disabled={!barcode.trim() || isLookingUpBarcode}
-                  variant="secondary"
-                >
-                  {isLookingUpBarcode ? (
-                    <>
-                      <Search className="h-4 w-4 mr-2 animate-spin" />
-                      Looking up...
-                    </>
-                  ) : (
-                    <>
-                      <Search className="h-4 w-4 mr-2" />
-                      Lookup
-                    </>
-                  )}
-                </Button>
-              </div>
-              {lookupSource && (
-                <Badge variant="secondary" className="gap-1">
-                  <Sparkles className="h-3 w-3" />
-                  Found in {lookupSource}
-                </Badge>
-              )}
-            </div>
-          </Card>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col overflow-hidden">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="manual" className="gap-2">
+              <Edit3 className="h-4 w-4" />
+              <span className="hidden sm:inline">Manual</span>
+            </TabsTrigger>
+            <TabsTrigger value="barcode" className="gap-2">
+              <Barcode className="h-4 w-4" />
+              <span className="hidden sm:inline">Barcode</span>
+            </TabsTrigger>
+            <TabsTrigger value="camera" className="gap-2">
+              <Camera className="h-4 w-4" />
+              <span className="hidden sm:inline">Camera</span>
+            </TabsTrigger>
+          </TabsList>
 
-          <div className="space-y-2">
-            <Label htmlFor="item-name">Item Name *</Label>
-            <Input
-              id="item-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Milk, Bread, Eggs"
-              autoFocus={!barcode}
-            />
-          </div>
-          
-          {/* Pantry Inventory Alert */}
-          {pantryItem && (
-            <Card className="p-4 border-primary/50 bg-primary/5">
-              <div className="flex items-start gap-3">
-                <Package className="h-5 w-5 text-primary mt-0.5" />
-                <div className="flex-1 space-y-2">
-                  <div className="font-medium text-sm">Found in Pantry!</div>
-                  <div className="text-sm text-muted-foreground">
-                    Current stock: <strong>{pantryQuantity} {unit}</strong>
+          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto py-4 space-y-4">
+            <TabsContent value="manual" className="space-y-4 mt-0">
+              <div className="space-y-2">
+                <Label htmlFor="item-name">Item Name *</Label>
+                <Input
+                  id="item-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g., Milk, Bread, Eggs"
+                  autoFocus
+                />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="barcode" className="space-y-4 mt-0">
+              <Card className="p-4 bg-muted/50">
+                <div className="space-y-3">
+                  <Label htmlFor="barcode-input" className="flex items-center gap-2 text-sm font-medium">
+                    <Barcode className="h-4 w-4" />
+                    Enter or Scan Barcode
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="barcode-input"
+                      value={barcode}
+                      onChange={(e) => handleBarcodeChange(e.target.value)}
+                      placeholder="Enter barcode number"
+                      className="flex-1"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleLookupBarcode();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleLookupBarcode}
+                      disabled={!barcode.trim() || isLookingUp}
+                      variant="secondary"
+                    >
+                      {isLookingUp ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Looking up...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="h-4 w-4 mr-2" />
+                          Lookup
+                        </>
+                      )}
+                    </Button>
                   </div>
-                  <div className="space-y-2 pt-2">
-                    <Label htmlFor="pantry-adjust" className="text-xs">
-                      Adjust current quantity or purchase additional:
-                    </Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="pantry-quantity"
-                        type="number"
-                        min="0"
-                        value={pantryQuantity}
-                        onChange={(e) => setPantryQuantity(parseInt(e.target.value) || 0)}
-                        className="w-24"
-                      />
-                      <span className="flex items-center text-sm text-muted-foreground">
-                        +
-                      </span>
-                      <Input
-                        id="additional-quantity"
-                        type="number"
-                        min="0"
-                        value={additionalQuantity}
-                        onChange={(e) => setAdditionalQuantity(e.target.value)}
-                        className="w-24"
-                        placeholder="Buy"
-                      />
-                      <span className="flex items-center text-sm text-muted-foreground">
-                        = {pantryQuantity + parseInt(additionalQuantity || "0")} {unit} total
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      We'll add {additionalQuantity} {unit} to your grocery list
-                    </p>
+                  {lookupSource && (
+                    <Badge variant="secondary" className="gap-1">
+                      <Sparkles className="h-3 w-3" />
+                      Found in {lookupSource}
+                    </Badge>
+                  )}
+                </div>
+              </Card>
+
+              {name && (
+                <div className="space-y-2">
+                  <Label>Product Found</Label>
+                  <div className="p-3 border rounded-lg bg-background">
+                    <p className="font-medium">{name}</p>
+                    <p className="text-sm text-muted-foreground">{categoryLabels[category]}</p>
                   </div>
                 </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="camera" className="space-y-4 mt-0">
+              {!isScanning ? (
+                <Button
+                  type="button"
+                  onClick={startBarcodeScanner}
+                  className="w-full"
+                  size="lg"
+                  variant="secondary"
+                >
+                  <Scan className="h-5 w-5 mr-2" />
+                  Start Camera Scanner
+                </Button>
+              ) : (
+                <div className="space-y-3">
+                  <div id="barcode-scanner" className="w-full h-[300px] rounded-lg overflow-hidden bg-black" />
+                  <Button
+                    type="button"
+                    onClick={stopScanner}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    Stop Scanner
+                  </Button>
+                  <p className="text-sm text-center text-muted-foreground">
+                    Point camera at product barcode
+                  </p>
+                </div>
+              )}
+
+              {barcode && !isScanning && (
+                <div className="space-y-2">
+                  <Label>Scanned Barcode</Label>
+                  <div className="p-3 border rounded-lg bg-background">
+                    <p className="font-mono text-sm">{barcode}</p>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Pantry Inventory Alert */}
+            {pantryItem && name && (
+              <Card className="p-4 border-primary/50 bg-primary/5">
+                <div className="flex items-start gap-3">
+                  <Package className="h-5 w-5 text-primary mt-0.5" />
+                  <div className="flex-1 space-y-2">
+                    <div className="font-medium text-sm">Found in Pantry!</div>
+                    <div className="text-sm text-muted-foreground">
+                      Current stock: <strong>{pantryQuantity} {unit}</strong>
+                    </div>
+                    <div className="space-y-2 pt-2">
+                      <Label htmlFor="pantry-adjust" className="text-xs">
+                        Adjust current quantity or add additional purchase:
+                      </Label>
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          id="pantry-quantity"
+                          type="number"
+                          min="0"
+                          value={pantryQuantity}
+                          onChange={(e) => setPantryQuantity(parseInt(e.target.value) || 0)}
+                          className="w-24"
+                        />
+                        <span className="text-sm text-muted-foreground">+</span>
+                        <Input
+                          id="additional-quantity"
+                          type="number"
+                          min="0"
+                          value={additionalQuantity}
+                          onChange={(e) => setAdditionalQuantity(e.target.value)}
+                          className="w-24"
+                          placeholder="Buy"
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          = {pantryQuantity + parseInt(additionalQuantity || "0")} {unit}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Adding {additionalQuantity} {unit} to grocery list
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {!pantryItem && name && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="quantity">Quantity *</Label>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    min="1"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="unit">Unit</Label>
+                  <Input
+                    id="unit"
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
+                    placeholder="e.g., packages, lbs"
+                  />
+                </div>
               </div>
-            </Card>
-          )}
+            )}
 
-          {!pantryItem && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="quantity">Quantity *</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  min="1"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                />
-              </div>
+            {name && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Category</Label>
+                    <Select value={category} onValueChange={(v) => setCategory(v as FoodCategory)}>
+                      <SelectTrigger id="category">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(categoryLabels).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="unit">Unit</Label>
-                <Input
-                  id="unit"
-                  value={unit}
-                  onChange={(e) => setUnit(e.target.value)}
-                  placeholder="e.g., lbs, bottles"
-                />
-              </div>
-            </div>
-          )}
+                  <div className="space-y-2">
+                    <Label htmlFor="aisle">Aisle (Optional)</Label>
+                    <Input
+                      id="aisle"
+                      value={aisle}
+                      onChange={(e) => setAisle(e.target.value)}
+                      placeholder="e.g., Produce"
+                    />
+                  </div>
+                </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
-              <Select value={category} onValueChange={(v) => setCategory(v as FoodCategory)}>
-                <SelectTrigger id="category">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(categoryLabels).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                <Card className="p-3 bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm font-medium">Family Item</Label>
+                      <p className="text-xs text-muted-foreground">
+                        For household pantry (not child-specific)
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant={isFamilyItem ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setIsFamilyItem(!isFamilyItem)}
+                    >
+                      {isFamilyItem ? "Family" : "Kid-Specific"}
+                    </Button>
+                  </div>
+                </Card>
 
-            <div className="space-y-2">
-              <Label htmlFor="aisle">Aisle (Optional)</Label>
-              <Input
-                id="aisle"
-                value={aisle}
-                onChange={(e) => setAisle(e.target.value)}
-                placeholder="e.g., Produce, Dairy"
-              />
-            </div>
-          </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="w-full justify-start text-sm"
+                >
+                  {showAdvanced ? "Hide" : "Show"} Advanced Options
+                </Button>
 
-          {/* Family vs Kid Item Toggle */}
-          <Card className="p-3 bg-muted/30">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="family-toggle" className="text-sm font-medium cursor-pointer">
-                  Family Item
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  For household pantry (not tracked per child)
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant={isFamilyItem ? "default" : "outline"}
-                size="sm"
-                onClick={() => setIsFamilyItem(!isFamilyItem)}
-              >
-                {isFamilyItem ? "Family" : "Kid-Specific"}
-              </Button>
-            </div>
-          </Card>
+                {showAdvanced && (
+                  <div className="space-y-4 pt-2 border-t">
+                    <div className="space-y-2">
+                      <Label htmlFor="brand">Brand Preference</Label>
+                      <Input
+                        id="brand"
+                        value={brandPreference}
+                        onChange={(e) => setBrandPreference(e.target.value)}
+                        placeholder="e.g., Horizon Organic"
+                      />
+                    </div>
 
-          {/* Advanced Options Toggle */}
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="w-full justify-start text-sm text-muted-foreground hover:text-primary"
-          >
-            {showAdvanced ? "Hide" : "Show"} Advanced Options
-            <span className="ml-2 text-xs">(photos, notes, barcode)</span>
-          </Button>
+                    <div className="space-y-2">
+                      <Label htmlFor="notes">Notes</Label>
+                      <Textarea
+                        id="notes"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="Allergen info, preferences, etc."
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+                )}
 
-          {showAdvanced && (
-            <div className="space-y-4 pt-2 border-t">
-              <div className="space-y-2">
-                <Label htmlFor="photo-url" className="flex items-center gap-2">
-                  <Camera className="h-4 w-4" />
-                  Photo URL (Optional)
-                </Label>
-                <Input
-                  id="photo-url"
-                  value={photoUrl}
-                  onChange={(e) => setPhotoUrl(e.target.value)}
-                  placeholder="https://example.com/image.jpg"
-                  type="url"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="brand">Brand Preference (Optional)</Label>
-                <Input
-                  id="brand"
-                  value={brandPreference}
-                  onChange={(e) => setBrandPreference(e.target.value)}
-                  placeholder="e.g., Horizon Organic"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="notes" className="flex items-center gap-2">
-                  <StickyNote className="h-4 w-4" />
-                  Notes (Optional)
-                </Label>
-                <Textarea
-                  id="notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="e.g., Get the whole milk version, allergen info, etc."
-                  rows={3}
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
-              Cancel
-            </Button>
-            <Button type="submit" className="flex-1">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Item
-            </Button>
-          </div>
-        </form>
+                <div className="flex gap-2 pt-4 border-t">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      stopScanner();
+                      onOpenChange(false);
+                    }}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="flex-1">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Item
+                  </Button>
+                </div>
+              </>
+            )}
+          </form>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
