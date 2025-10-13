@@ -2717,6 +2717,7 @@ export type Database = {
           full_name: string
           id: string
           onboarding_completed: boolean | null
+          subscription_tier: string | null
           updated_at: string | null
         }
         Insert: {
@@ -2724,6 +2725,7 @@ export type Database = {
           full_name: string
           id: string
           onboarding_completed?: boolean | null
+          subscription_tier?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -2731,6 +2733,7 @@ export type Database = {
           full_name?: string
           id?: string
           onboarding_completed?: boolean | null
+          subscription_tier?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -2913,6 +2916,200 @@ export type Database = {
             columns: ["household_id"]
             isOneToOne: false
             referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referral_codes: {
+        Row: {
+          clicks: number | null
+          code: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          signups: number | null
+          successful_referrals: number | null
+          user_id: string
+        }
+        Insert: {
+          clicks?: number | null
+          code: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          signups?: number | null
+          successful_referrals?: number | null
+          user_id: string
+        }
+        Update: {
+          clicks?: number | null
+          code?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          signups?: number | null
+          successful_referrals?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      referral_program_config: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          max_rewards_per_user: number | null
+          min_referrals_for_reward: number | null
+          referred_reward_duration_months: number | null
+          referred_reward_type: string
+          referred_reward_value: number
+          referrer_reward_duration_months: number | null
+          referrer_reward_type: string
+          referrer_reward_value: number
+          tier: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_rewards_per_user?: number | null
+          min_referrals_for_reward?: number | null
+          referred_reward_duration_months?: number | null
+          referred_reward_type?: string
+          referred_reward_value?: number
+          referrer_reward_duration_months?: number | null
+          referrer_reward_type?: string
+          referrer_reward_value?: number
+          tier?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_rewards_per_user?: number | null
+          min_referrals_for_reward?: number | null
+          referred_reward_duration_months?: number | null
+          referred_reward_type?: string
+          referred_reward_value?: number
+          referrer_reward_duration_months?: number | null
+          referrer_reward_type?: string
+          referrer_reward_value?: number
+          tier?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      referral_rewards: {
+        Row: {
+          applied_at: string | null
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          notes: string | null
+          referral_id: string | null
+          reward_duration_months: number | null
+          reward_type: string
+          reward_value: number
+          status: string | null
+          updated_at: string | null
+          user_id: string
+          user_tier: string | null
+        }
+        Insert: {
+          applied_at?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          notes?: string | null
+          referral_id?: string | null
+          reward_duration_months?: number | null
+          reward_type: string
+          reward_value: number
+          status?: string | null
+          updated_at?: string | null
+          user_id: string
+          user_tier?: string | null
+        }
+        Update: {
+          applied_at?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          notes?: string | null
+          referral_id?: string | null
+          reward_duration_months?: number | null
+          reward_type?: string
+          reward_value?: number
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string
+          user_tier?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_rewards_referral_id_fkey"
+            columns: ["referral_id"]
+            isOneToOne: false
+            referencedRelation: "referrals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referrals: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          id: string
+          referral_code: string
+          referred_user_id: string
+          referrer_id: string | null
+          rewarded_at: string | null
+          status: string | null
+          utm_campaign: string | null
+          utm_medium: string | null
+          utm_source: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          referral_code: string
+          referred_user_id: string
+          referrer_id?: string | null
+          rewarded_at?: string | null
+          status?: string | null
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          referral_code?: string
+          referred_user_id?: string
+          referrer_id?: string | null
+          rewarded_at?: string | null
+          status?: string | null
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referrals_referred_user_id_fkey"
+            columns: ["referred_user_id"]
+            isOneToOne: true
+            referencedRelation: "admin_user_engagement"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "referrals_referred_user_id_fkey"
+            columns: ["referred_user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -4156,6 +4353,10 @@ export type Database = {
       }
       generate_content_hash: {
         Args: { content_text: string }
+        Returns: string
+      }
+      generate_referral_code: {
+        Args: Record<PropertyKey, never>
         Returns: string
       }
       get_active_campaign_for_plan: {

@@ -18,6 +18,7 @@ import { EmailMarketingManager } from "@/components/admin/EmailMarketingManager"
 import { SEOManager } from "@/components/admin/SEOManager";
 import { PromotionalCampaignManager } from "@/components/admin/PromotionalCampaignManager";
 import { ComplementarySubscriptionManager } from "@/components/admin/ComplementarySubscriptionManager";
+import { ReferralProgramManager } from "@/components/admin/ReferralProgramManager";
 import { BarcodeEnrichmentTool } from "@/components/admin/BarcodeEnrichmentTool";
 import { FeatureFlagDashboard } from "@/components/admin/FeatureFlagDashboard";
 import { TicketQueue } from "@/components/admin/TicketQueue";
@@ -95,6 +96,8 @@ const Admin = () => {
                 </CardContent>
               </Card>
             )}
+
+            {activeTab === "referrals" && <ReferralProgramManager />}
 
             {activeTab === "campaigns" && (
               <Card>
