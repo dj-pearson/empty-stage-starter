@@ -13,6 +13,7 @@ import {
   Zap,
   Calendar,
   RefreshCw,
+  Monitor,
 } from "lucide-react";
 import {
   getPlatformHealth,
@@ -37,6 +38,9 @@ import {
   type AdminNotification,
 } from "@/lib/admin-analytics";
 import { toast } from "sonner";
+import { LiveActivityFeed } from "@/components/admin/LiveActivityFeed";
+import { SystemHealthDashboard } from "@/components/admin/SystemHealthDashboard";
+import { AlertManager } from "@/components/admin/AlertManager";
 
 export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
@@ -232,6 +236,18 @@ export default function AdminDashboard() {
             <BarChart3 className="w-4 h-4 mr-2" />
             Overview
           </TabsTrigger>
+          <TabsTrigger value="activity">
+            <Activity className="w-4 h-4 mr-2" />
+            Live Activity
+          </TabsTrigger>
+          <TabsTrigger value="health">
+            <Monitor className="w-4 h-4 mr-2" />
+            System Health
+          </TabsTrigger>
+          <TabsTrigger value="alerts">
+            <Bell className="w-4 h-4 mr-2" />
+            Alerts {unreadCount > 0 && `(${unreadCount})`}
+          </TabsTrigger>
           <TabsTrigger value="users">
             <Users className="w-4 h-4 mr-2" />
             Users
@@ -242,12 +258,27 @@ export default function AdminDashboard() {
           </TabsTrigger>
           <TabsTrigger value="notifications">
             <Bell className="w-4 h-4 mr-2" />
-            Notifications {unreadCount > 0 && `(${unreadCount})`}
+            Old Notifications
           </TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
+
+        {/* Live Activity Tab */}
+        <TabsContent value="activity">
+          <LiveActivityFeed />
+        </TabsContent>
+
+        {/* System Health Tab */}
+        <TabsContent value="health">
+          <SystemHealthDashboard />
+        </TabsContent>
+
+        {/* Alerts Tab */}
+        <TabsContent value="alerts">
+          <AlertManager />
+        </TabsContent>
           {/* Daily Activity Chart */}
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">

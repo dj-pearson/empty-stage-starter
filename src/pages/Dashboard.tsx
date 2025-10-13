@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Outlet } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { SupportWidget } from "@/components/SupportWidget";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { KidSelector } from "@/components/KidSelector";
@@ -301,6 +302,9 @@ const Dashboard = () => {
           </div>
         </nav>
       </div>
+      
+      {/* Support Widget - Available on all pages */}
+      <SupportWidget />
     </>
   );
 };

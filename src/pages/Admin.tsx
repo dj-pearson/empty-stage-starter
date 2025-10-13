@@ -19,6 +19,8 @@ import { SEOManager } from "@/components/admin/SEOManager";
 import { PromotionalCampaignManager } from "@/components/admin/PromotionalCampaignManager";
 import { ComplementarySubscriptionManager } from "@/components/admin/ComplementarySubscriptionManager";
 import { BarcodeEnrichmentTool } from "@/components/admin/BarcodeEnrichmentTool";
+import { FeatureFlagDashboard } from "@/components/admin/FeatureFlagDashboard";
+import { TicketQueue } from "@/components/admin/TicketQueue";
 
 const Admin = () => {
   const { isAdmin, isLoading } = useAdminCheck();
@@ -199,6 +201,34 @@ const Admin = () => {
             )}
 
             {activeTab === "ai" && <AISettingsManager />}
+            
+            {activeTab === "flags" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Feature Flags</CardTitle>
+                  <CardDescription>
+                    Control feature rollout and conduct A/B tests
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <FeatureFlagDashboard />
+                </CardContent>
+              </Card>
+            )}
+            
+            {activeTab === "tickets" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Support Tickets</CardTitle>
+                  <CardDescription>
+                    Manage user support requests and tickets
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <TicketQueue />
+                </CardContent>
+              </Card>
+            )}
           </div>
         </main>
       </div>
