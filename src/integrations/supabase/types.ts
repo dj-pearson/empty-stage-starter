@@ -864,7 +864,7 @@ export type Database = {
           {
             foreignKeyName: "blog_content_tracking_post_id_fkey"
             columns: ["post_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "blog_posts"
             referencedColumns: ["id"]
           },
