@@ -14,6 +14,144 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_alert_preferences: {
+        Row: {
+          admin_id: string | null
+          alert_type: string
+          created_at: string | null
+          email_enabled: boolean | null
+          id: string
+          push_enabled: boolean | null
+          threshold_value: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          admin_id?: string | null
+          alert_type: string
+          created_at?: string | null
+          email_enabled?: boolean | null
+          id?: string
+          push_enabled?: boolean | null
+          threshold_value?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          admin_id?: string | null
+          alert_type?: string
+          created_at?: string | null
+          email_enabled?: boolean | null
+          id?: string
+          push_enabled?: boolean | null
+          threshold_value?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_alert_preferences_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "admin_user_engagement"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "admin_alert_preferences_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_alerts: {
+        Row: {
+          alert_data: Json | null
+          alert_type: string
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          is_resolved: boolean | null
+          message: string
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          alert_data?: Json | null
+          alert_type: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          is_resolved?: boolean | null
+          message: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          alert_data?: Json | null
+          alert_type?: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          is_resolved?: boolean | null
+          message?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_alerts_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "admin_user_engagement"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "admin_alerts_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_live_activity: {
+        Row: {
+          activity_data: Json
+          activity_type: string
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          severity: string | null
+          user_id: string | null
+        }
+        Insert: {
+          activity_data?: Json
+          activity_type: string
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          severity?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          activity_data?: Json
+          activity_type?: string
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          severity?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       admin_notifications: {
         Row: {
           created_at: string | null
@@ -44,6 +182,30 @@ export type Database = {
           notification_type?: string
           severity?: string
           title?: string
+        }
+        Relationships: []
+      }
+      admin_system_health: {
+        Row: {
+          id: string
+          metric_type: string
+          metric_unit: string | null
+          metric_value: number
+          recorded_at: string | null
+        }
+        Insert: {
+          id?: string
+          metric_type: string
+          metric_unit?: string | null
+          metric_value: number
+          recorded_at?: string | null
+        }
+        Update: {
+          id?: string
+          metric_type?: string
+          metric_unit?: string | null
+          metric_value?: number
+          recorded_at?: string | null
         }
         Relationships: []
       }
@@ -673,6 +835,71 @@ export type Database = {
           },
         ]
       }
+      blog_content_tracking: {
+        Row: {
+          content_hash: string
+          created_at: string | null
+          id: string
+          post_id: string | null
+          title_fingerprint: string
+          topic_keywords: string[] | null
+        }
+        Insert: {
+          content_hash: string
+          created_at?: string | null
+          id?: string
+          post_id?: string | null
+          title_fingerprint: string
+          topic_keywords?: string[] | null
+        }
+        Update: {
+          content_hash?: string
+          created_at?: string | null
+          id?: string
+          post_id?: string | null
+          title_fingerprint?: string
+          topic_keywords?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blog_content_tracking_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "blog_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blog_generation_history: {
+        Row: {
+          generated_at: string | null
+          id: string
+          keywords: string[] | null
+          perspective_used: string | null
+          prompt: string
+          title: string
+          tone_used: string | null
+        }
+        Insert: {
+          generated_at?: string | null
+          id?: string
+          keywords?: string[] | null
+          perspective_used?: string | null
+          prompt: string
+          title: string
+          tone_used?: string | null
+        }
+        Update: {
+          generated_at?: string | null
+          id?: string
+          keywords?: string[] | null
+          perspective_used?: string | null
+          prompt?: string
+          title?: string
+          tone_used?: string | null
+        }
+        Relationships: []
+      }
       blog_post_tags: {
         Row: {
           post_id: string
@@ -798,6 +1025,36 @@ export type Database = {
           id?: string
           name?: string
           slug?: string
+        }
+        Relationships: []
+      }
+      blog_title_bank: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_locked: boolean | null
+          last_used_at: string | null
+          times_used: number | null
+          title: string
+          variations_generated: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_locked?: boolean | null
+          last_used_at?: string | null
+          times_used?: number | null
+          title: string
+          variations_generated?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_locked?: boolean | null
+          last_used_at?: string | null
+          times_used?: number | null
+          title?: string
+          variations_generated?: number | null
         }
         Relationships: []
       }
@@ -1135,6 +1392,131 @@ export type Database = {
           variables?: Json | null
         }
         Relationships: []
+      }
+      feature_flag_analytics: {
+        Row: {
+          flag_key: string
+          id: string
+          metric_type: string
+          metric_value: number
+          recorded_at: string | null
+        }
+        Insert: {
+          flag_key: string
+          id?: string
+          metric_type: string
+          metric_value: number
+          recorded_at?: string | null
+        }
+        Update: {
+          flag_key?: string
+          id?: string
+          metric_type?: string
+          metric_value?: number
+          recorded_at?: string | null
+        }
+        Relationships: []
+      }
+      feature_flag_evaluations: {
+        Row: {
+          enabled: boolean
+          evaluated_at: string | null
+          evaluation_reason: string | null
+          flag_key: string
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          enabled: boolean
+          evaluated_at?: string | null
+          evaluation_reason?: string | null
+          flag_key: string
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          enabled?: boolean
+          evaluated_at?: string | null
+          evaluation_reason?: string | null
+          flag_key?: string
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      feature_flags: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          enabled: boolean
+          id: string
+          key: string
+          metadata: Json | null
+          name: string
+          rollout_percentage: number | null
+          targeting_rules: Json | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          enabled?: boolean
+          id?: string
+          key: string
+          metadata?: Json | null
+          name: string
+          rollout_percentage?: number | null
+          targeting_rules?: Json | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          enabled?: boolean
+          id?: string
+          key?: string
+          metadata?: Json | null
+          name?: string
+          rollout_percentage?: number | null
+          targeting_rules?: Json | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_flags_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "admin_user_engagement"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "feature_flags_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feature_flags_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "admin_user_engagement"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "feature_flags_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       food_attempts: {
         Row: {
@@ -2776,6 +3158,173 @@ export type Database = {
         }
         Relationships: []
       }
+      support_tickets: {
+        Row: {
+          assigned_to: string | null
+          category: string | null
+          context: Json | null
+          created_at: string | null
+          description: string
+          id: string
+          priority: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string | null
+          subject: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          category?: string | null
+          context?: Json | null
+          created_at?: string | null
+          description: string
+          id?: string
+          priority?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string | null
+          subject: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          category?: string | null
+          context?: Json | null
+          created_at?: string | null
+          description?: string
+          id?: string
+          priority?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string | null
+          subject?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_tickets_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "admin_user_engagement"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "support_tickets_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_tickets_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "admin_user_engagement"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "support_tickets_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_canned_responses: {
+        Row: {
+          category: string | null
+          content: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          category?: string | null
+          content: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string | null
+          content?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_canned_responses_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "admin_user_engagement"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "ticket_canned_responses_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_messages: {
+        Row: {
+          attachments: Json | null
+          author_id: string | null
+          created_at: string | null
+          id: string
+          is_internal: boolean | null
+          message: string
+          ticket_id: string
+        }
+        Insert: {
+          attachments?: Json | null
+          author_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_internal?: boolean | null
+          message: string
+          ticket_id: string
+        }
+        Update: {
+          attachments?: Json | null
+          author_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_internal?: boolean | null
+          message?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -2949,6 +3498,20 @@ export type Database = {
       }
     }
     Views: {
+      admin_activity_feed: {
+        Row: {
+          activity_data: Json | null
+          activity_type: string | null
+          created_at: string | null
+          email: string | null
+          full_name: string | null
+          id: string | null
+          metadata: Json | null
+          severity: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
       admin_ai_usage: {
         Row: {
           avg_requests_per_user: number | null
@@ -3026,6 +3589,46 @@ export type Database = {
           total_plan_entries: number | null
           total_recipes: number | null
           total_users: number | null
+        }
+        Relationships: []
+      }
+      admin_system_health_summary: {
+        Row: {
+          metric_type: string | null
+          metric_unit: string | null
+          metric_value: number | null
+          recorded_at: string | null
+          rn: number | null
+        }
+        Relationships: []
+      }
+      admin_unread_alerts: {
+        Row: {
+          alert_data: Json | null
+          alert_type: string | null
+          created_at: string | null
+          id: string | null
+          message: string | null
+          severity: string | null
+          title: string | null
+        }
+        Insert: {
+          alert_data?: Json | null
+          alert_type?: string | null
+          created_at?: string | null
+          id?: string | null
+          message?: string | null
+          severity?: string | null
+          title?: string | null
+        }
+        Update: {
+          alert_data?: Json | null
+          alert_type?: string | null
+          created_at?: string | null
+          id?: string | null
+          message?: string | null
+          severity?: string | null
+          title?: string | null
         }
         Relationships: []
       }
@@ -3182,6 +3785,22 @@ export type Database = {
         }
         Relationships: []
       }
+      feature_flag_summary: {
+        Row: {
+          adoption_rate_7d: number | null
+          created_at: string | null
+          description: string | null
+          enabled: boolean | null
+          enabled_count_7d: number | null
+          id: string | null
+          key: string | null
+          name: string | null
+          rollout_percentage: number | null
+          updated_at: string | null
+          users_last_7d: number | null
+        }
+        Relationships: []
+      }
       grocery_list_with_context: {
         Row: {
           aisle: string | null
@@ -3265,6 +3884,43 @@ export type Database = {
           total_food_entries: number | null
         }
         Relationships: []
+      }
+      ticket_queue: {
+        Row: {
+          assigned_to: string | null
+          assigned_to_name: string | null
+          category: string | null
+          context: Json | null
+          created_at: string | null
+          description: string | null
+          email: string | null
+          full_name: string | null
+          id: string | null
+          last_message_at: string | null
+          message_count: number | null
+          priority: string | null
+          resolved_at: string | null
+          status: string | null
+          subject: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_tickets_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "admin_user_engagement"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "support_tickets_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       unified_meal_tracking: {
         Row: {
@@ -3378,6 +4034,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      check_content_similarity: {
+        Args: { new_content_hash: string }
+        Returns: {
+          is_duplicate: boolean
+          post_id: string
+          post_title: string
+        }[]
+      }
       check_email_subscription: {
         Args: { p_email_type: string; p_user_id: string }
         Returns: boolean
@@ -3414,6 +4078,14 @@ export type Database = {
           tier: string
         }[]
       }
+      check_title_similarity: {
+        Args: { new_title: string; threshold?: number }
+        Returns: {
+          similar_post_id: string
+          similar_title: string
+          similarity_score: number
+        }[]
+      }
       cleanup_expired_backups: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3421,9 +4093,23 @@ export type Database = {
           freed_bytes: number
         }[]
       }
+      cleanup_old_activity_logs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       cleanup_rate_limits: {
         Args: Record<PropertyKey, never>
         Returns: number
+      }
+      create_admin_alert: {
+        Args: {
+          p_alert_data?: Json
+          p_alert_type: string
+          p_message: string
+          p_severity: string
+          p_title: string
+        }
+        Returns: string
       }
       create_admin_notification: {
         Args: {
@@ -3439,6 +4125,10 @@ export type Database = {
         Args: { _amount?: number; _food_id: string }
         Returns: undefined
       }
+      detect_error_spike: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       detect_restock_needs: {
         Args: { p_kid_id?: string; p_user_id: string }
         Returns: {
@@ -3452,9 +4142,21 @@ export type Database = {
           recommended_quantity: number
         }[]
       }
+      evaluate_feature_flag: {
+        Args: { p_flag_key: string; p_user_id: string }
+        Returns: boolean
+      }
+      extract_keywords: {
+        Args: { text_content: string }
+        Returns: string[]
+      }
       extract_user_backup_data: {
         Args: { p_user_id: string }
         Returns: Json
+      }
+      generate_content_hash: {
+        Args: { content_text: string }
+        Returns: string
       }
       get_active_campaign_for_plan: {
         Args: { p_plan_id: string }
@@ -3463,6 +4165,25 @@ export type Database = {
           discount_duration_type: string
           discount_type: string
           discount_value: number
+        }[]
+      }
+      get_activity_summary: {
+        Args: { p_time_window?: unknown }
+        Returns: {
+          activity_type: string
+          count: number
+          severity: string
+        }[]
+      }
+      get_blog_generation_insights: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          most_used_count: number
+          most_used_title: string
+          recent_topics: string[]
+          recommended_next_topics: string[]
+          total_titles: number
+          unused_titles: number
         }[]
       }
       get_blog_stats: {
@@ -3485,6 +4206,14 @@ export type Database = {
           total_leads: number
         }[]
       }
+      get_diverse_title_suggestions: {
+        Args: { count?: number }
+        Returns: {
+          last_used_days_ago: number
+          times_used: number
+          title: string
+        }[]
+      }
       get_email_marketing_stats: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -3496,6 +4225,15 @@ export type Database = {
           total_subscribers: number
         }[]
       }
+      get_flag_adoption_stats: {
+        Args: { p_days?: number; p_flag_key: string }
+        Returns: {
+          adoption_rate: number
+          enabled_count: number
+          total_evaluations: number
+          unique_users: number
+        }[]
+      }
       get_food_chain_suggestions: {
         Args: { limit_count?: number; source_food: string }
         Returns: {
@@ -3503,6 +4241,13 @@ export type Database = {
           food_name: string
           reasons: string[]
           similarity_score: number
+        }[]
+      }
+      get_next_blog_title: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          times_used: number
+          title: string
         }[]
       }
       get_post_engagement_summary: {
@@ -3514,6 +4259,13 @@ export type Database = {
           total_engagement: number
           total_impressions: number
           total_posts: number
+        }[]
+      }
+      get_user_feature_flags: {
+        Args: { p_user_id: string }
+        Returns: {
+          enabled: boolean
+          flag_key: string
         }[]
       }
       get_user_household_id: {
@@ -3564,6 +4316,16 @@ export type Database = {
         Args: { _food_allergens: string[]; _kid_allergens: string[] }
         Returns: boolean
       }
+      log_admin_activity: {
+        Args: {
+          p_activity_data?: Json
+          p_activity_type: string
+          p_metadata?: Json
+          p_severity?: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       log_ai_usage: {
         Args: {
           p_completion_tokens: number
@@ -3578,6 +4340,14 @@ export type Database = {
           p_user_id: string
         }
         Returns: string
+      }
+      normalize_title: {
+        Args: { title_text: string }
+        Returns: string
+      }
+      populate_title_bank: {
+        Args: { titles_json: Json }
+        Returns: number
       }
       queue_email: {
         Args: {
