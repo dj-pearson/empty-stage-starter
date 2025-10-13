@@ -84,15 +84,18 @@
 /.well-known/*
   Cache-Control: public, max-age=3600
 
-# Favicon files
+# Favicon files - UPDATED: force cache refresh for new favicon
 /favicon.ico
-  Cache-Control: public, max-age=86400
+  Cache-Control: public, max-age=86400, must-revalidate
   
 /favicon*.png
-  Cache-Control: public, max-age=86400
+  Cache-Control: public, max-age=86400, must-revalidate
   
 /apple-touch-icon*.png
-  Cache-Control: public, max-age=86400
+  Cache-Control: public, max-age=86400, must-revalidate
+
+/android-chrome*.png
+  Cache-Control: public, max-age=86400, must-revalidate
 
 # Service worker
 /sw.js
