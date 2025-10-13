@@ -548,6 +548,22 @@ export function BlogCMSManager() {
     }
   };
 
+  const handleUnpublish = async (postId: string) => {
+    try {
+      const { error } = await supabase
+        .from("blog_posts")
+        .update({ status: "draft", published_at: null })
+        .eq("id", postId);
+
+      if (error) throw error;
+      toast.success("Post unpublished");
+      loadPosts();
+    } catch (error: any) {
+      console.error("Error unpublishing post:", error);
+      toast.error(error.message || "Failed to unpublish post");
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -658,24 +674,33 @@ export function BlogCMSManager() {
                           Publish
                         </Button>
                       ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleResendWebhook(post.id)}
-                          disabled={resendingWebhook === post.id}
-                        >
-                          {resendingWebhook === post.id ? (
-                            <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-1" />
-                              Resending...
-                            </>
-                          ) : (
-                            <>
-                              <Share2 className="h-4 w-4 mr-1" />
-                              Resend Webhook
-                            </>
-                          )}
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleUnpublish(post.id)}
+                          >
+                            Unpublish
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleResendWebhook(post.id)}
+                            disabled={resendingWebhook === post.id}
+                          >
+                            {resendingWebhook === post.id ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-1" />
+                                Resending...
+                              </>
+                            ) : (
+                              <>
+                                <Share2 className="h-4 w-4 mr-1" />
+                                Resend Webhook
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </div>
