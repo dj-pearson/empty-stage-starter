@@ -1,4 +1,4 @@
-import { motion, LazyMotion, domAnimation } from 'framer-motion';
+import { motion, LazyMotion, domAnimation, m } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { ReactNode } from 'react';
 
@@ -28,14 +28,14 @@ export function AnimatedDashboard({ children, className = '' }: AnimatedDashboar
 
   return (
     <LazyMotion features={domAnimation} strict>
-      <motion.div
+      <m.div
         className={className}
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
         {children}
-      </motion.div>
+      </m.div>
     </LazyMotion>
   );
 }
@@ -71,9 +71,9 @@ export function AnimatedPanel({ children, className = '', delay = 0 }: AnimatedP
   };
 
   return (
-    <motion.div className={className} variants={itemVariants}>
+    <m.div className={className} variants={itemVariants}>
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -115,8 +115,8 @@ export function AnimatedStatCard({
   };
 
   return (
-    <motion.div variants={itemVariants}>
-      <motion.div
+    <m.div variants={itemVariants}>
+      <m.div
         whileHover={
           shouldReduceMotion
             ? {}
@@ -135,7 +135,7 @@ export function AnimatedStatCard({
             </div>
           )}
           <p className="text-sm text-muted-foreground mb-1">{label}</p>
-          <motion.p
+          <m.p
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{
@@ -148,10 +148,10 @@ export function AnimatedStatCard({
           >
             {value}
             {suffix}
-          </motion.p>
+          </m.p>
         </div>
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   );
 }
 
@@ -191,8 +191,8 @@ export function AnimatedActionCard({
   };
 
   return (
-    <motion.div variants={itemVariants}>
-      <motion.button
+    <m.div variants={itemVariants}>
+      <m.button
         onClick={onClick}
         whileHover={
           shouldReduceMotion
@@ -215,7 +215,7 @@ export function AnimatedActionCard({
       >
         <div className="relative overflow-hidden rounded-xl border-2 border-border bg-card p-6 hover:shadow-lg transition-shadow group">
           {/* Gradient overlay on hover */}
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             whileHover={{ opacity: shouldReduceMotion ? 0 : 0.05 }}
             transition={{ duration: 0.3 }}
@@ -223,7 +223,7 @@ export function AnimatedActionCard({
           />
 
           <div className="relative flex items-start gap-4">
-            <motion.div
+            <m.div
               whileHover={
                 shouldReduceMotion
                   ? {}
@@ -235,14 +235,14 @@ export function AnimatedActionCard({
               className={`flex-shrink-0 w-12 h-12 rounded-xl bg-${color}/10 flex items-center justify-center text-${color}`}
             >
               {icon}
-            </motion.div>
+            </m.div>
             <div className="flex-1 min-w-0">
               <h3 className="text-lg font-semibold mb-1 group-hover:text-primary transition-colors">
                 {title}
               </h3>
               <p className="text-sm text-muted-foreground">{description}</p>
             </div>
-            <motion.svg
+            <m.svg
               className="flex-shrink-0 w-5 h-5 text-muted-foreground"
               fill="none"
               viewBox="0 0 24 24"
@@ -258,11 +258,11 @@ export function AnimatedActionCard({
                 strokeWidth={2}
                 d="M9 5l7 7-7 7"
               />
-            </motion.svg>
+            </m.svg>
           </div>
         </div>
-      </motion.button>
-    </motion.div>
+      </m.button>
+    </m.div>
   );
 }
 
@@ -280,7 +280,7 @@ export function AnimatedWelcomeBanner({ name, subtitle }: AnimatedWelcomeBannerP
   return (
     <LazyMotion features={domAnimation} strict>
       <div className="text-center mb-12">
-        <motion.div
+        <m.div
           initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{
@@ -289,7 +289,7 @@ export function AnimatedWelcomeBanner({ name, subtitle }: AnimatedWelcomeBannerP
           }}
           className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-full mb-4"
         >
-          <motion.span
+          <m.span
             animate={
               shouldReduceMotion
                 ? {}
@@ -304,11 +304,11 @@ export function AnimatedWelcomeBanner({ name, subtitle }: AnimatedWelcomeBannerP
             }
           >
             ✨
-          </motion.span>
+          </m.span>
           <span className="text-sm font-medium">EatPal Meal Planner</span>
-        </motion.div>
+        </m.div>
 
-        <motion.h1
+        <m.h1
           initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{
@@ -318,9 +318,9 @@ export function AnimatedWelcomeBanner({ name, subtitle }: AnimatedWelcomeBannerP
           className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent"
         >
           Welcome, {name}!
-        </motion.h1>
+        </m.h1>
 
-        <motion.p
+        <m.p
           initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{
@@ -330,7 +330,7 @@ export function AnimatedWelcomeBanner({ name, subtitle }: AnimatedWelcomeBannerP
           className="text-lg text-muted-foreground max-w-2xl mx-auto"
         >
           {subtitle}
-        </motion.p>
+        </m.p>
       </div>
     </LazyMotion>
   );

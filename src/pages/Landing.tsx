@@ -31,6 +31,9 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { WaitlistForm } from "@/components/WaitlistForm";
+import { EnhancedHero } from "@/components/EnhancedHero";
+import { ProcessSteps } from "@/components/ProcessSteps";
+import { AnimatedSection, AnimatedItem } from "@/components/AnimatedSection";
 
 const Landing = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -179,83 +182,13 @@ const Landing = () => {
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="py-20 px-4 bg-gradient-to-b from-background to-secondary/10">
-        <div className="container mx-auto text-center max-w-5xl">
-          <Badge className="mb-6 bg-accent/10 text-accent border-accent/20 px-4 py-1.5 text-base">
-            🎉 Launching November 1st, 2025
-          </Badge>
-          <h1 className="text-5xl md:text-7xl font-heading font-bold mb-6 text-primary leading-tight">
-            Kids Meal Planning for
-            <br />
-            Picky Eaters Made Easy
-          </h1>
-          <p className="text-xl md:text-2xl text-muted-foreground mb-10 max-w-3xl mx-auto leading-relaxed">
-            The ultimate meal planning app for picky eaters. Create personalized
-            weekly kids meal plans with safe foods, introduce new foods with
-            daily try bites, track nutrition, and auto-generate grocery lists.
-            Perfect for parents managing selective eating, toddler picky eating,
-            and ARFID.
-          </p>
-          <div className="flex gap-4 justify-center flex-wrap">
-            <Button
-              size="lg"
-              className="gap-2 text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-shadow"
-              onClick={() =>
-                document
-                  .getElementById("waitlist")
-                  ?.scrollIntoView({ behavior: "smooth" })
-              }
-            >
-              Join the Waitlist <ArrowRight className="h-5 w-5" />
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="text-lg px-8 py-6 border-2"
-              onClick={() =>
-                document
-                  .getElementById("how-it-works")
-                  ?.scrollIntoView({ behavior: "smooth" })
-              }
-            >
-              See How It Works
-            </Button>
-          </div>
-          <p className="text-sm text-muted-foreground mt-4">
-            Be the first to try EatPal - Join our exclusive waitlist
-          </p>
+      {/* Enhanced Hero Section with Trust Signals */}
+      <EnhancedHero />
 
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-8 max-w-2xl mx-auto mt-16">
-            <div>
-              <div className="text-4xl font-heading font-bold text-primary mb-2">
-                7-Day
-              </div>
-              <div className="text-sm text-muted-foreground">Meal Plans</div>
-            </div>
-            <div>
-              <div className="text-4xl font-heading font-bold text-primary mb-2">
-                1
-              </div>
-              <div className="text-sm text-muted-foreground">
-                Try Bite Daily
-              </div>
-            </div>
-            <div>
-              <div className="text-4xl font-heading font-bold text-primary mb-2">
-                Auto
-              </div>
-              <div className="text-sm text-muted-foreground">Grocery Lists</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
+      {/* Features Section with Animations */}
       <section id="features" className="py-24 px-4">
         <div className="container mx-auto">
-          <div className="text-center mb-16">
+          <AnimatedSection className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-primary">
               Complete Kids Meal Planning Solution
             </h2>
@@ -264,84 +197,31 @@ const Landing = () => {
               families with picky eaters, selective eating, and children's
               nutrition challenges
             </p>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          </AnimatedSection>
+          <AnimatedSection staggerChildren className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature) => (
-              <Card
-                key={feature.title}
-                className="hover:shadow-xl transition-all hover:-translate-y-1 border-2"
-              >
-                <CardHeader className="space-y-4">
-                  <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <feature.icon className="h-7 w-7 text-primary" />
-                  </div>
-                  <CardTitle className="font-heading text-xl">
-                    {feature.title}
-                  </CardTitle>
-                  <CardDescription className="text-base leading-relaxed">
-                    {feature.description}
-                  </CardDescription>
-                </CardHeader>
-              </Card>
+              <AnimatedItem key={feature.title}>
+                <Card className="hover:shadow-xl transition-all hover:-translate-y-1 border-2 h-full">
+                  <CardHeader className="space-y-4">
+                    <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <feature.icon className="h-7 w-7 text-primary" />
+                    </div>
+                    <CardTitle className="font-heading text-xl">
+                      {feature.title}
+                    </CardTitle>
+                    <CardDescription className="text-base leading-relaxed">
+                      {feature.description}
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              </AnimatedItem>
             ))}
-          </div>
+          </AnimatedSection>
         </div>
       </section>
 
-      {/* How It Works Section */}
-      <section id="how-it-works" className="py-24 px-4 bg-secondary/10">
-        <div className="container mx-auto max-w-6xl">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-primary">
-              How It Works
-            </h2>
-            <p className="text-xl text-muted-foreground">
-              Simple steps to stress-free meal planning
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-20 h-20 rounded-full bg-primary text-white flex items-center justify-center text-3xl font-bold mx-auto mb-6 shadow-lg">
-                1
-              </div>
-              <h3 className="text-2xl font-heading font-bold mb-3 text-primary">
-                Build Your Pantry
-              </h3>
-              <p className="text-muted-foreground leading-relaxed">
-                Add your child's safe foods and foods you'd like them to try.
-                Mark allergens and dietary preferences.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-20 h-20 rounded-full bg-secondary text-foreground flex items-center justify-center text-3xl font-bold mx-auto mb-6 shadow-lg">
-                2
-              </div>
-              <h3 className="text-2xl font-heading font-bold mb-3 text-primary">
-                Generate Meal Plans
-              </h3>
-              <p className="text-muted-foreground leading-relaxed">
-                Click one button to generate a complete 7-day meal plan with
-                daily try bites. No repeats for 3 days!
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-20 h-20 rounded-full bg-accent text-white flex items-center justify-center text-3xl font-bold mx-auto mb-6 shadow-lg">
-                3
-              </div>
-              <h3 className="text-2xl font-heading font-bold mb-3 text-primary">
-                Shop & Track
-              </h3>
-              <p className="text-muted-foreground leading-relaxed">
-                Get auto-generated grocery lists and track which foods your
-                child ate, tasted, or refused.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Enhanced Process Steps Section */}
+      <ProcessSteps />
 
       {/* SEO Content Section - Rich text for search engines */}
       <section className="py-24 px-4 bg-background">

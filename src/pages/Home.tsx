@@ -2,7 +2,7 @@ import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { Utensils, Calendar, ShoppingCart, Sparkles, Download, Upload, Trash2, Users, BarChart3, ChefHat } from "lucide-react";
+import { Utensils, Calendar, ShoppingCart, Sparkles, Download, Upload, Trash2, Users, BarChart3, ChefHat, Target } from "lucide-react";
 import { toast } from "sonner";
 import { useRef, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +19,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ManageKidsDialog } from "@/components/ManageKidsDialog";
 import { ManageHouseholdDialog } from "@/components/ManageHouseholdDialog";
+import {
+  AnimatedDashboard,
+  AnimatedPanel,
+  AnimatedStatCard,
+  AnimatedActionCard,
+  AnimatedWelcomeBanner,
+} from "@/components/AnimatedDashboard";
 
 export default function Home() {
   const { foods, planEntries, groceryItems, kids, recipes, activeKidId, exportData, importData, resetAllData } = useApp();
@@ -86,139 +93,82 @@ export default function Home() {
 
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        {/* Hero Section */}
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-full mb-4">
-            <Sparkles className="h-4 w-4" />
-            <span className="text-sm font-medium">EatPal Meal Planner</span>
+      <AnimatedDashboard className="container mx-auto px-4 py-8 max-w-4xl">
+        {/* Welcome Banner with Animations */}
+        <AnimatedWelcomeBanner
+          name={parentName}
+          subtitle="Plan delicious meals with safe foods and daily try bites for your picky eater"
+        />
+
+        {/* Stats Cards with Animations */}
+        <AnimatedPanel>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+            <AnimatedStatCard
+              value={safeFoods}
+              label="Safe Foods"
+              color="text-safe-food"
+              icon={<Utensils className="w-6 h-6" />}
+            />
+            <AnimatedStatCard
+              value={tryBites}
+              label="Try Bites"
+              color="text-try-bite"
+              icon={<Target className="w-6 h-6" />}
+            />
+            <AnimatedStatCard
+              value={recipes.length}
+              label="Recipes"
+              color="text-secondary"
+              icon={<ChefHat className="w-6 h-6" />}
+            />
+            <AnimatedStatCard
+              value={kidPlanEntries.length}
+              label="Meals Planned"
+              color="text-primary"
+              icon={<Calendar className="w-6 h-6" />}
+            />
+            <AnimatedStatCard
+              value={groceryItems.length}
+              label="Grocery Items"
+              color="text-accent"
+              icon={<ShoppingCart className="w-6 h-6" />}
+            />
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Welcome, {parentName}!
-          </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Plan delicious meals with safe foods and daily try bites for your picky eater
-          </p>
-        </div>
+        </AnimatedPanel>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Safe Foods</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-safe-food">{safeFoods}</p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Try Bites</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-try-bite">{tryBites}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Recipes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-secondary">{recipes.length}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Meals Planned</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-primary">{kidPlanEntries.length}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Grocery Items</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-accent">{groceryItems.length}</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Action Cards */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="hover:shadow-lg transition-all cursor-pointer group" onClick={() => navigate("/dashboard/pantry")}>
-            <CardHeader>
-              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <Utensils className="h-6 w-6 text-primary" />
-              </div>
-              <CardTitle>Manage Pantry</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground mb-4">
-                Add and organize safe foods and try bites
-              </p>
-              <Button variant="outline" className="w-full">
-                Go to Pantry
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-all cursor-pointer group" onClick={() => navigate("/dashboard/recipes")}>
-            <CardHeader>
-              <div className="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <ChefHat className="h-6 w-6 text-secondary" />
-              </div>
-              <CardTitle>Recipes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground mb-4">
-                Create meal templates and grouped foods
-              </p>
-              <Button variant="outline" className="w-full">
-                Manage Recipes
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-all cursor-pointer group" onClick={() => navigate("/dashboard/planner")}>
-            <CardHeader>
-              <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <Calendar className="h-6 w-6 text-accent" />
-              </div>
-              <CardTitle>Meal Planner</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground mb-4">
-                Build your weekly meal schedule
-              </p>
-              <Button variant="outline" className="w-full">
-                Plan Meals
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-all cursor-pointer group" onClick={() => navigate("/dashboard/analytics")}>
-            <CardHeader>
-              <div className="w-12 h-12 rounded-full bg-try-bite/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <BarChart3 className="h-6 w-6 text-try-bite" />
-              </div>
-              <CardTitle>Analytics</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground mb-4">
-                Track food preferences and outcomes
-              </p>
-              <Button variant="outline" className="w-full">
-                View Insights
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Action Cards with Animations */}
+        <AnimatedPanel delay={0.1}>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <AnimatedActionCard
+              title="Manage Pantry"
+              description="Add and organize safe foods and try bites"
+              icon={<Utensils className="h-6 w-6" />}
+              onClick={() => navigate("/dashboard/pantry")}
+              color="primary"
+            />
+            <AnimatedActionCard
+              title="Recipes"
+              description="Create meal templates and grouped foods"
+              icon={<ChefHat className="h-6 w-6" />}
+              onClick={() => navigate("/dashboard/recipes")}
+              color="secondary"
+            />
+            <AnimatedActionCard
+              title="Meal Planner"
+              description="Build your weekly meal schedule"
+              icon={<Calendar className="h-6 w-6" />}
+              onClick={() => navigate("/dashboard/planner")}
+              color="accent"
+            />
+            <AnimatedActionCard
+              title="Analytics"
+              description="Track food preferences and outcomes"
+              icon={<BarChart3 className="h-6 w-6" />}
+              onClick={() => navigate("/dashboard/analytics")}
+              color="try-bite"
+            />
+          </div>
+        </AnimatedPanel>
 
         {/* Quick Tip */}
         <Card className="mt-8 bg-gradient-to-br from-primary/5 to-accent/5 border-primary/20">
@@ -300,7 +250,7 @@ export default function Home() {
             </p>
           </CardContent>
         </Card>
-      </div>
+      </AnimatedDashboard>
     </div>
   );
 }

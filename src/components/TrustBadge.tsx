@@ -1,4 +1,4 @@
-import { motion, LazyMotion, domAnimation } from 'framer-motion';
+import { motion, LazyMotion, domAnimation, m } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { Shield, Award, Users, CheckCircle2 } from 'lucide-react';
 
@@ -43,7 +43,7 @@ export function TrustBadge({ variant, value, label, delay = 0 }: TrustBadgeProps
 
   return (
     <LazyMotion features={domAnimation} strict>
-      <motion.div
+      <m.div
         initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{
@@ -70,7 +70,7 @@ export function TrustBadge({ variant, value, label, delay = 0 }: TrustBadgeProps
           )}
           <span className="text-xs text-gray-700 font-medium">{label}</span>
         </div>
-      </motion.div>
+      </m.div>
     </LazyMotion>
   );
 }

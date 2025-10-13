@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { motion, LazyMotion, domAnimation } from 'framer-motion';
+import { motion, LazyMotion, domAnimation, m } from 'framer-motion';
 import { useInView } from '@/hooks/useInView';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
@@ -68,7 +68,7 @@ export function AnimatedSection({
 
   return (
     <LazyMotion features={domAnimation} strict>
-      <motion.div
+      <m.div
         ref={ref as any}
         className={className}
         initial="hidden"
@@ -76,7 +76,7 @@ export function AnimatedSection({
         variants={staggerChildren ? containerVariants : itemVariants}
       >
         {children}
-      </motion.div>
+      </m.div>
     </LazyMotion>
   );
 }
@@ -107,9 +107,9 @@ export function AnimatedItem({
   };
 
   return (
-    <motion.div className={className} variants={itemVariants}>
+    <m.div className={className} variants={itemVariants}>
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 

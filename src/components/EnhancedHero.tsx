@@ -1,4 +1,4 @@
-import { motion, LazyMotion, domAnimation } from 'framer-motion';
+import { motion, LazyMotion, domAnimation, m } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TrustBadges } from '@/components/TrustBadge';
@@ -33,7 +33,7 @@ export function EnhancedHero() {
       <section className="relative py-20 px-4 bg-gradient-to-b from-background via-trust-softPink/5 to-secondary/10 overflow-hidden">
         {/* Decorative background elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <motion.div
+          <m.div
             animate={
               shouldReduceMotion
                 ? {}
@@ -49,7 +49,7 @@ export function EnhancedHero() {
             }}
             className="absolute -top-1/2 -left-1/4 w-96 h-96 bg-trust-softPink rounded-full blur-3xl"
           />
-          <motion.div
+          <m.div
             animate={
               shouldReduceMotion
                 ? {}
@@ -70,7 +70,7 @@ export function EnhancedHero() {
 
         <div className="container mx-auto text-center max-w-5xl relative z-10">
           {/* Launch Badge */}
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: shouldReduceMotion ? 0 : 0.6 }}
@@ -78,10 +78,10 @@ export function EnhancedHero() {
             <Badge className="mb-6 bg-accent/10 text-accent border-accent/20 px-4 py-1.5 text-base">
               🎉 Launching November 1st, 2025
             </Badge>
-          </motion.div>
+          </m.div>
 
           {/* Main Headline */}
-          <motion.h1
+          <m.h1
             initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: shouldReduceMotion ? 0 : 0.8, delay: 0.1 }}
@@ -93,10 +93,10 @@ export function EnhancedHero() {
             for
             <br />
             <span className="text-primary">Picky Eaters Made Easy</span>
-          </motion.h1>
+          </m.h1>
 
           {/* Subheadline */}
-          <motion.p
+          <m.p
             initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: shouldReduceMotion ? 0 : 0.8, delay: 0.2 }}
@@ -105,26 +105,26 @@ export function EnhancedHero() {
             The ultimate meal planning app for picky eaters. Create personalized
             weekly kids meal plans with safe foods, introduce new foods with daily
             try bites, track nutrition, and auto-generate grocery lists.
-          </motion.p>
+          </m.p>
 
           {/* Trust Badges */}
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: shouldReduceMotion ? 0 : 0.8, delay: 0.3 }}
             className="flex justify-center mb-10"
           >
             <TrustBadges badges={trustBadges} />
-          </motion.div>
+          </m.div>
 
           {/* CTA Buttons */}
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: shouldReduceMotion ? 0 : 0.8, delay: 0.4 }}
             className="flex gap-4 justify-center flex-wrap"
           >
-            <motion.div
+            <m.div
               whileHover={shouldReduceMotion ? {} : { scale: 1.05 }}
               whileTap={shouldReduceMotion ? {} : { scale: 0.95 }}
             >
@@ -139,8 +139,8 @@ export function EnhancedHero() {
               >
                 Join the Waitlist <ArrowRight className="h-5 w-5" />
               </Button>
-            </motion.div>
-            <motion.div
+            </m.div>
+            <m.div
               whileHover={shouldReduceMotion ? {} : { scale: 1.05 }}
               whileTap={shouldReduceMotion ? {} : { scale: 0.95 }}
             >
@@ -156,11 +156,11 @@ export function EnhancedHero() {
               >
                 See How It Works
               </Button>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
 
           {/* Anxiety Reducer */}
-          <motion.p
+          <m.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: shouldReduceMotion ? 0 : 0.8, delay: 0.5 }}
@@ -168,10 +168,10 @@ export function EnhancedHero() {
           >
             <span className="font-semibold">Free to join</span> • No credit card
             required • 14-day money-back guarantee
-          </motion.p>
+          </m.p>
 
           {/* Animated Stats */}
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: shouldReduceMotion ? 0 : 0.8, delay: 0.6 }}
@@ -182,7 +182,7 @@ export function EnhancedHero() {
               { value: '1', label: 'Try Bite Daily' },
               { value: 'Auto', label: 'Grocery Lists' },
             ].map((stat, index) => (
-              <motion.div
+              <m.div
                 key={stat.label}
                 initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -197,9 +197,9 @@ export function EnhancedHero() {
                   {stat.value}
                 </div>
                 <div className="text-sm text-muted-foreground">{stat.label}</div>
-              </motion.div>
+              </m.div>
             ))}
-          </motion.div>
+          </m.div>
         </div>
       </section>
     </LazyMotion>

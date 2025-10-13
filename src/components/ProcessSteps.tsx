@@ -1,4 +1,4 @@
-import { motion, LazyMotion, domAnimation } from 'framer-motion';
+import { motion, LazyMotion, domAnimation, m } from 'framer-motion';
 import { AnimatedSection, AnimatedItem } from './AnimatedSection';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { ClipboardList, Utensils, TrendingUp } from 'lucide-react';
@@ -56,7 +56,7 @@ export function ProcessSteps() {
               const Icon = step.icon;
               return (
                 <AnimatedItem key={step.number}>
-                  <motion.div
+                  <m.div
                     whileHover={
                       shouldReduceMotion
                         ? {}
@@ -86,7 +86,7 @@ export function ProcessSteps() {
                       >
                         {step.number}
                       </div>
-                      <motion.div
+                      <m.div
                         initial={{ rotate: 0 }}
                         animate={
                           shouldReduceMotion
@@ -103,7 +103,7 @@ export function ProcessSteps() {
                         className={`w-14 h-14 rounded-xl ${step.color} flex items-center justify-center`}
                       >
                         <Icon className="w-7 h-7" />
-                      </motion.div>
+                      </m.div>
                     </div>
 
                     {/* Content */}
@@ -131,7 +131,7 @@ export function ProcessSteps() {
                         Takes {index === 0 ? '2 minutes' : index === 1 ? '5 seconds' : 'ongoing'}
                       </div>
                     </div>
-                  </motion.div>
+                  </m.div>
                 </AnimatedItem>
               );
             })}

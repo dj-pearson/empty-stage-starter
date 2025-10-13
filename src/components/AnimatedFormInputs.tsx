@@ -1,5 +1,5 @@
 import { useState, forwardRef, InputHTMLAttributes } from 'react';
-import { motion, LazyMotion, domAnimation, AnimatePresence } from 'framer-motion';
+import { m, LazyMotion, domAnimation, AnimatePresence } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,7 +32,7 @@ export const AnimatedInput = forwardRef<HTMLInputElement, AnimatedInputProps>(
       <LazyMotion features={domAnimation} strict>
         <div className="relative">
           {/* Floating Label */}
-          <motion.label
+          <m.label
             animate={{
               y: isFocused || hasValue ? -24 : 0,
               scale: isFocused || hasValue ? 0.85 : 1,
@@ -52,7 +52,7 @@ export const AnimatedInput = forwardRef<HTMLInputElement, AnimatedInputProps>(
           >
             {label}
             {props.required && <span className="text-destructive ml-1">*</span>}
-          </motion.label>
+          </m.label>
 
           {/* Input Field */}
           <Input
@@ -77,7 +77,7 @@ export const AnimatedInput = forwardRef<HTMLInputElement, AnimatedInputProps>(
           {/* Validation Icons */}
           <AnimatePresence mode="wait">
             {isValidating ? (
-              <motion.div
+              <m.div
                 key="loading"
                 initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.5 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -86,9 +86,9 @@ export const AnimatedInput = forwardRef<HTMLInputElement, AnimatedInputProps>(
                 className="absolute right-3 top-1/2 -translate-y-1/2"
               >
                 <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
-              </motion.div>
+              </m.div>
             ) : isValid ? (
-              <motion.div
+              <m.div
                 key="valid"
                 initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.5 }}
                 animate={{
@@ -105,9 +105,9 @@ export const AnimatedInput = forwardRef<HTMLInputElement, AnimatedInputProps>(
                 className="absolute right-3 top-1/2 -translate-y-1/2"
               >
                 <Check className="w-5 h-5 text-green-500" />
-              </motion.div>
+              </m.div>
             ) : error ? (
-              <motion.div
+              <m.div
                 key="error"
                 initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.5 }}
                 animate={{
@@ -122,14 +122,14 @@ export const AnimatedInput = forwardRef<HTMLInputElement, AnimatedInputProps>(
                 className="absolute right-3 top-1/2 -translate-y-1/2"
               >
                 <AlertCircle className="w-5 h-5 text-red-500" />
-              </motion.div>
+              </m.div>
             ) : null}
           </AnimatePresence>
 
           {/* Helper Text / Error Message */}
           <AnimatePresence mode="wait">
             {(error || helperText) && (
-              <motion.p
+              <m.p
                 key={error || helperText}
                 initial={{ opacity: 0, y: shouldReduceMotion ? 0 : -5 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -141,7 +141,7 @@ export const AnimatedInput = forwardRef<HTMLInputElement, AnimatedInputProps>(
                 )}
               >
                 {error || helperText}
-              </motion.p>
+              </m.p>
             )}
           </AnimatePresence>
         </div>
@@ -176,7 +176,7 @@ export const AnimatedTextarea = forwardRef<
     <LazyMotion features={domAnimation} strict>
       <div className="relative">
         {/* Floating Label */}
-        <motion.label
+        <m.label
           animate={{
             y: isFocused || hasValue ? -24 : 8,
             scale: isFocused || hasValue ? 0.85 : 1,
@@ -196,7 +196,7 @@ export const AnimatedTextarea = forwardRef<
         >
           {label}
           {props.required && <span className="text-destructive ml-1">*</span>}
-        </motion.label>
+        </m.label>
 
         {/* Textarea Field */}
         <Textarea
@@ -222,7 +222,7 @@ export const AnimatedTextarea = forwardRef<
         {/* Validation Icon (top right) */}
         <AnimatePresence mode="wait">
           {isValid ? (
-            <motion.div
+            <m.div
               key="valid"
               initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.5 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -231,9 +231,9 @@ export const AnimatedTextarea = forwardRef<
               className="absolute right-3 top-3"
             >
               <Check className="w-5 h-5 text-green-500" />
-            </motion.div>
+            </m.div>
           ) : error ? (
-            <motion.div
+            <m.div
               key="error"
               initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.5 }}
               animate={{
@@ -246,14 +246,14 @@ export const AnimatedTextarea = forwardRef<
               className="absolute right-3 top-3"
             >
               <AlertCircle className="w-5 h-5 text-red-500" />
-            </motion.div>
+            </m.div>
           ) : null}
         </AnimatePresence>
 
         {/* Helper Text / Error Message */}
         <AnimatePresence mode="wait">
           {(error || helperText) && (
-            <motion.p
+            <m.p
               key={error || helperText}
               initial={{ opacity: 0, y: shouldReduceMotion ? 0 : -5 }}
               animate={{ opacity: 1, y: 0 }}
@@ -265,7 +265,7 @@ export const AnimatedTextarea = forwardRef<
               )}
             >
               {error || helperText}
-            </motion.p>
+            </m.p>
           )}
         </AnimatePresence>
       </div>
@@ -289,7 +289,7 @@ export function AnimatedLabel({ children, htmlFor, required }: AnimatedLabelProp
 
   return (
     <LazyMotion features={domAnimation} strict>
-      <motion.div
+      <m.div
         initial={{ opacity: 0, x: shouldReduceMotion ? 0 : -10 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: shouldReduceMotion ? 0 : 0.3 }}
@@ -298,7 +298,7 @@ export function AnimatedLabel({ children, htmlFor, required }: AnimatedLabelProp
           {children}
           {required && <span className="text-destructive ml-1">*</span>}
         </Label>
-      </motion.div>
+      </m.div>
     </LazyMotion>
   );
 }
