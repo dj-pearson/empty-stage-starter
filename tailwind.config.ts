@@ -51,9 +51,23 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // EatPal existing colors
         "safe-food": "hsl(var(--safe-food))",
         "try-bite": "hsl(var(--try-bite))",
         "sky-blue": "hsl(var(--sky-blue))",
+        // Research-backed trust colors for parents
+        trust: {
+          blue: '#4A90E2',        // Competence/trustworthiness
+          green: '#7ED321',       // Health/growth (aligns with safe-food)
+          warmOrange: '#FFD7A8',  // Approachability
+          softPink: '#FFE5EC',    // Nurturing
+          calmPurple: '#B4A7D6',  // Serenity
+          // Gradients for depth
+          gradient: {
+            start: '#7ED321',
+            end: '#4A90E2',
+          }
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
