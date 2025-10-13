@@ -201,7 +201,7 @@ const Landing = () => {
               nutrition challenges
             </p>
           </AnimatedSection>
-          <AnimatedSection staggerChildren className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <AnimatedSection staggerChildren className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
             {features.map((feature) => (
               <AnimatedItem key={feature.title}>
                 <FeatureCard3D
