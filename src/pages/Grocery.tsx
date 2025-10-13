@@ -8,6 +8,9 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { AddGroceryItemDialog } from "@/components/AddGroceryItemDialog";
 import { SmartRestockSuggestions } from "@/components/SmartRestockSuggestions";
+import { GroceryListSelector } from "@/components/GroceryListSelector";
+import { CreateGroceryListDialog } from "@/components/CreateGroceryListDialog";
+import { ManageGroceryListsDialog } from "@/components/ManageGroceryListsDialog";
 import { generateGroceryList } from "@/lib/mealPlanner";
 import { ShoppingCart, Copy, Trash2, Printer, Download, Plus, Share2, FileText, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -29,15 +32,30 @@ export default function Grocery() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [isGeneratingRestock, setIsGeneratingRestock] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [householdId, setHouseholdId] = useState<string | null>(null);
+  const [selectedListId, setSelectedListId] = useState<string | null>(null);
+  const [showCreateListDialog, setShowCreateListDialog] = useState(false);
+  const [showManageListsDialog, setShowManageListsDialog] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       setUserId(user?.id || null);
+      
+      if (user) {
+        // Get household ID
+        const { data: hh } = await supabase.rpc('get_user_household_id', { _user_id: user.id });
+        setHouseholdId((hh as string) ?? null);
+      }
     });
   }, []);
 
   const isFamilyMode = !activeKidId;
   const activeKid = kids.find(k => k.id === activeKidId);
+
+  // Filter grocery items by selected list
+  const filteredGroceryItems = selectedListId
+    ? groceryItems.filter(item => item.grocery_list_id === selectedListId)
+    : groceryItems;
 
   useEffect(() => {
     if (planEntries.length > 0) {
@@ -245,11 +263,11 @@ export default function Grocery() {
   };
 
   // Group by category or aisle
-  const itemsByGroup: Record<string, typeof groceryItems> = {};
+  const itemsByGroup: Record<string, typeof filteredGroceryItems> = {};
 
   if (groupBy === "category") {
     // Group by category
-    const categoryGroups: Record<FoodCategory, typeof groceryItems> = {
+    const categoryGroups: Record<FoodCategory, typeof filteredGroceryItems> = {
       protein: [],
       carb: [],
       dairy: [],
@@ -258,7 +276,7 @@ export default function Grocery() {
       snack: [],
     };
     
-    groceryItems.forEach(item => {
+    filteredGroceryItems.forEach(item => {
       categoryGroups[item.category].push(item);
     });
 
@@ -269,7 +287,7 @@ export default function Grocery() {
     });
   } else {
     // Group by aisle
-    groceryItems.forEach(item => {
+    filteredGroceryItems.forEach(item => {
       const aisle = item.aisle || "Uncategorized";
       if (!itemsByGroup[aisle]) {
         itemsByGroup[aisle] = [];
@@ -278,27 +296,43 @@ export default function Grocery() {
     });
   }
 
-  const checkedCount = groceryItems.filter(i => i.checked).length;
+  const checkedCount = filteredGroceryItems.filter(i => i.checked).length;
 
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">
-              Grocery List
-            </h1>
-            <p className="text-muted-foreground">
-              {isFamilyMode 
-                ? "Household shopping list for all family members - auto-generated from meal plans"
-                : `Shopping list for ${activeKid?.name || 'your child'} - auto-generated from meal plan`
-              }
-            </p>
-            <p className="text-sm text-accent mt-1 font-medium">
-              ✓ Check items when purchased - they'll be added to your pantry automatically
-            </p>
+        <div className="flex flex-col gap-4 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold mb-2">
+                Grocery List
+              </h1>
+              <p className="text-muted-foreground">
+                {isFamilyMode 
+                  ? "Household shopping list for all family members - auto-generated from meal plans"
+                  : `Shopping list for ${activeKid?.name || 'your child'} - auto-generated from meal plan`
+                }
+              </p>
+              <p className="text-sm text-accent mt-1 font-medium">
+                ✓ Check items when purchased - they'll be added to your pantry automatically
+              </p>
+            </div>
           </div>
+          
+          {/* List Selector */}
+          {userId && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <GroceryListSelector
+                userId={userId}
+                householdId={householdId || undefined}
+                selectedListId={selectedListId}
+                onListChange={setSelectedListId}
+                onCreateNew={() => setShowCreateListDialog(true)}
+                onManageLists={() => setShowManageListsDialog(true)}
+              />
+            </div>
+          )}
           <div className="flex gap-2 flex-wrap">
             <Button onClick={() => setShowAddDialog(true)} variant="default">
               <Plus className="h-4 w-4 mr-2" />
@@ -367,7 +401,7 @@ export default function Grocery() {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
           <Card className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Total Items</p>
-            <p className="text-2xl font-bold">{groceryItems.length}</p>
+            <p className="text-2xl font-bold">{filteredGroceryItems.length}</p>
           </Card>
           <Card className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Checked</p>
@@ -375,7 +409,7 @@ export default function Grocery() {
           </Card>
           <Card className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Remaining</p>
-            <p className="text-2xl font-bold text-accent">{groceryItems.length - checkedCount}</p>
+            <p className="text-2xl font-bold text-accent">{filteredGroceryItems.length - checkedCount}</p>
           </Card>
         </div>
 
@@ -393,7 +427,7 @@ export default function Grocery() {
         )}
 
         {/* Grocery List */}
-        {groceryItems.length === 0 ? (
+        {filteredGroceryItems.length === 0 ? (
           <Card className="p-12 text-center">
             <div className="max-w-md mx-auto">
               <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
@@ -472,6 +506,34 @@ export default function Grocery() {
         onOpenChange={setShowAddDialog}
         onAdd={addGroceryItem}
       />
+
+      {userId && (
+        <>
+          <CreateGroceryListDialog
+            open={showCreateListDialog}
+            onOpenChange={setShowCreateListDialog}
+            userId={userId}
+            householdId={householdId || undefined}
+            onListCreated={(listId) => {
+              setSelectedListId(listId);
+              setShowCreateListDialog(false);
+            }}
+          />
+
+          <ManageGroceryListsDialog
+            open={showManageListsDialog}
+            onOpenChange={setShowManageListsDialog}
+            userId={userId}
+            householdId={householdId || undefined}
+            currentListId={selectedListId}
+            onListDeleted={(deletedId) => {
+              if (deletedId === selectedListId) {
+                setSelectedListId(null);
+              }
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }

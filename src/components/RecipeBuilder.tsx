@@ -33,6 +33,7 @@ export function RecipeBuilder({ foods, editRecipe, onSave, onCancel, kids, activ
   const [formData, setFormData] = useState({
     name: editRecipe?.name || "",
     description: editRecipe?.description || "",
+    image_url: editRecipe?.image_url || "",
     food_ids: editRecipe?.food_ids || [] as string[],
     assigned_kid_ids: editRecipe?.assigned_kid_ids || [] as string[],
     instructions: "",
@@ -268,6 +269,20 @@ export function RecipeBuilder({ foods, editRecipe, onSave, onCancel, kids, activ
             placeholder="Brief description of the recipe..."
             rows={3}
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="image_url">Recipe Photo URL (optional)</Label>
+          <Input
+            id="image_url"
+            value={formData.image_url}
+            onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+            placeholder="https://example.com/recipe-photo.jpg"
+            type="url"
+          />
+          <p className="text-xs text-muted-foreground">
+            Add a link to a photo of the finished recipe
+          </p>
         </div>
 
         <div className="grid grid-cols-3 gap-4">

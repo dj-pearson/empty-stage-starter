@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { RecipeBuilder } from "@/components/RecipeBuilder";
 import { ImportRecipeDialog } from "@/components/ImportRecipeDialog";
+import { EnhancedRecipeCard } from "@/components/EnhancedRecipeCard";
 import {
   Dialog,
   DialogContent,
@@ -366,225 +367,17 @@ export default function Recipes() {
           </Card>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {recipes.map((recipe) => {
-              const recipeFoods = getRecipeFoods(recipe);
-              const stockStatus = getStockStatus(recipe);
-              const allergenStatus = getAllergenStatus(recipe);
-
-              return (
-                <Card
-                  key={recipe.id}
-                  className="hover:shadow-lg transition-all"
-                >
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2">
-                        <ChefHat className="h-5 w-5 text-primary" />
-                        <CardTitle className="text-lg">{recipe.name}</CardTitle>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEdit(recipe)}
-                          className="touch-target"
-                          aria-label="Edit recipe"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDeleteId(recipe.id)}
-                          className="touch-target"
-                          aria-label="Delete recipe"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    {recipe.description && (
-                      <p className="text-sm text-muted-foreground mt-2">
-                        {recipe.description}
-                      </p>
-                    )}
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Allergen Warning */}
-                    {allergenStatus.hasAllergens && (
-                      <Alert variant="destructive">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription>
-                          <div>
-                            <p className="font-medium">
-                              ⚠️ Contains family allergens:
-                            </p>
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {allergenStatus.allergens.map((allergen) => (
-                                <Badge
-                                  key={allergen}
-                                  variant="destructive"
-                                  className="text-xs"
-                                >
-                                  {allergen}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        </AlertDescription>
-                      </Alert>
-                    )}
-
-                    {/* Stock Warnings */}
-                    {stockStatus.hasIssues && (
-                      <Alert
-                        variant={
-                          stockStatus.outOfStock.length > 0
-                            ? "destructive"
-                            : "default"
-                        }
-                      >
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription>
-                          {stockStatus.outOfStock.length > 0 && (
-                            <div className="mb-2">
-                              <p className="font-medium">Out of stock:</p>
-                              <p className="text-sm">
-                                {stockStatus.outOfStock
-                                  .map((f) => f?.name)
-                                  .join(", ")}
-                              </p>
-                            </div>
-                          )}
-                          {stockStatus.lowStock.length > 0 && (
-                            <div>
-                              <p className="font-medium">Low stock:</p>
-                              <p className="text-sm">
-                                {stockStatus.lowStock
-                                  .map((f) => `${f?.name} (${f?.quantity})`)
-                                  .join(", ")}
-                              </p>
-                            </div>
-                          )}
-                        </AlertDescription>
-                      </Alert>
-                    )}
-
-                    {/* Time and Servings */}
-                    {(recipe.prepTime ||
-                      recipe.cookTime ||
-                      recipe.servings) && (
-                      <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-                        {recipe.prepTime && (
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-4 w-4" />
-                            <span>Prep: {recipe.prepTime}</span>
-                          </div>
-                        )}
-                        {recipe.cookTime && (
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-4 w-4" />
-                            <span>Cook: {recipe.cookTime}</span>
-                          </div>
-                        )}
-                        {recipe.servings && (
-                          <div className="flex items-center gap-1">
-                            <Users className="h-4 w-4" />
-                            <span>{recipe.servings} servings</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Ingredients */}
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-muted-foreground">
-                        Main Ingredients ({recipeFoods.length}):
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {recipeFoods.map((food) => {
-                          if (!food) return null;
-                          const isOutOfStock = (food.quantity || 0) === 0;
-                          const isLowStock =
-                            (food.quantity || 0) > 0 &&
-                            (food.quantity || 0) <= 2;
-
-                          return (
-                            <Badge
-                              key={food.id}
-                              variant={
-                                isOutOfStock
-                                  ? "destructive"
-                                  : isLowStock
-                                  ? "secondary"
-                                  : "outline"
-                              }
-                              className="gap-1"
-                            >
-                              {food.name}
-                              {food.quantity !== undefined &&
-                                food.quantity !== null && (
-                                  <span className="text-xs opacity-70">
-                                    ({food.quantity})
-                                  </span>
-                                )}
-                              {isOutOfStock && <Package className="h-3 w-3" />}
-                            </Badge>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Additional Ingredients */}
-                    {recipe.additionalIngredients && (
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-muted-foreground">
-                          Also needed:
-                        </p>
-                        <p className="text-sm">
-                          {recipe.additionalIngredients}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Instructions Preview */}
-                    {recipe.instructions && (
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-muted-foreground">
-                          Instructions:
-                        </p>
-                        <p className="text-sm line-clamp-3">
-                          {recipe.instructions}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Tips */}
-                    {recipe.tips && (
-                      <div className="space-y-1 bg-muted/50 p-3 rounded-lg">
-                        <div className="flex items-center gap-1 text-sm font-medium">
-                          <Lightbulb className="h-4 w-4" />
-                          <span>Picky Eater Tips:</span>
-                        </div>
-                        <p className="text-sm">{recipe.tips}</p>
-                      </div>
-                    )}
-
-                    {/* Add to Grocery List Button */}
-                    <Button
-                      onClick={() => addRecipeToGroceryList(recipe)}
-                      variant="outline"
-                      size="sm"
-                      className="w-full mt-4"
-                      disabled={!recipe.food_ids || recipe.food_ids.length === 0}
-                    >
-                      <ShoppingCart className="h-4 w-4 mr-2" />
-                      Add to Grocery List
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
+            {recipes.map((recipe) => (
+              <EnhancedRecipeCard
+                key={recipe.id}
+                recipe={recipe}
+                foods={foods}
+                kids={kids}
+                onEdit={handleEdit}
+                onDelete={setDeleteId}
+                onAddToGroceryList={addRecipeToGroceryList}
+              />
+            ))}
           </div>
         )}
 
