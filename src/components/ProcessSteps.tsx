@@ -68,10 +68,10 @@ export function ProcessSteps() {
                     }
                     className="relative bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow h-full"
                   >
-                    {/* Connection line to next step */}
-                    {index < steps.length - 1 && (
-                      <div className="hidden md:block absolute top-1/3 -right-4 w-8 h-0.5 bg-gradient-to-r from-trust-green/50 to-trust-blue/50 z-10" />
-                    )}
+              {/* Connection line to next step */}
+              {index < steps.length - 1 && (
+                <div className="hidden md:block absolute top-1/3 -right-4 w-8 h-0.5 bg-gradient-to-r from-trust-green/50 dark:from-trust-green/70 to-trust-blue/50 dark:to-trust-blue/70 z-10" />
+              )}
 
                     {/* Step Number Badge */}
                     <div className="flex items-center justify-between mb-6">

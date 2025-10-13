@@ -87,19 +87,19 @@ export function EnhancedHero() {
           </m.div>
 
           {/* Main Headline */}
-          <m.h1
-            initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: shouldReduceMotion ? 0 : 0.8, delay: 0.1 }}
-            className="text-5xl md:text-7xl font-heading font-bold mb-6 leading-tight"
-          >
-            <span className="bg-gradient-to-r from-trust-gradient-start to-trust-gradient-end bg-clip-text text-transparent">
-              Kids Meal Planning
-            </span>{' '}
-            for
-            <br />
-            <span className="text-primary">Picky Eaters Made Easy</span>
-          </m.h1>
+              <m.h1
+                initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: shouldReduceMotion ? 0 : 0.8, delay: 0.1 }}
+                className="text-5xl md:text-7xl font-heading font-bold mb-6 leading-tight"
+              >
+                <span className="bg-gradient-to-r from-trust-gradient-start to-trust-gradient-end dark:from-emerald-400 dark:to-green-400 bg-clip-text text-transparent">
+                  Kids Meal Planning
+                </span>{' '}
+                for
+                <br />
+                <span className="text-primary">Picky Eaters Made Easy</span>
+              </m.h1>
 
           {/* Subheadline */}
           <m.p

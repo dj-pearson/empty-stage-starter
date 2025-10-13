@@ -32,7 +32,7 @@ const sections: Section[] = [
       'Nutritional tracking and balance',
       'Kid-friendly recipe photos'
     ],
-    gradient: 'from-trust-green/20 to-trust-blue/10'
+    gradient: 'from-trust-green/20 dark:from-trust-green/30 to-trust-blue/10 dark:to-trust-blue/25'
   },
   {
     id: 'tips',
@@ -47,7 +47,7 @@ const sections: Section[] = [
       'Behavior management guides',
       '24/7 chat with certified nutritionists'
     ],
-    gradient: 'from-trust-warmOrange/20 to-trust-softPink/30'
+    gradient: 'from-trust-warmOrange/20 dark:from-trust-warmOrange/30 to-trust-softPink/30 dark:to-trust-softPink/40'
   },
   {
     id: 'progress',
@@ -62,7 +62,7 @@ const sections: Section[] = [
       'Weekly progress reports',
       'Celebration animations for wins'
     ],
-    gradient: 'from-trust-calmPurple/20 to-trust-blue/20'
+    gradient: 'from-trust-calmPurple/20 dark:from-trust-calmPurple/30 to-trust-blue/20 dark:to-trust-blue/30'
   }
 ];
 
@@ -111,7 +111,7 @@ export function CardNav() {
                   transition-all duration-300 shadow-md hover:shadow-lg
                   ${activeCard === section.id
                     ? 'bg-trust-green text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }
                 `}
               >

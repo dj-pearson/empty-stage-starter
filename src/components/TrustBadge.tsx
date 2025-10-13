@@ -13,22 +13,22 @@ const badgeConfig = {
   pediatrician: {
     icon: Shield,
     color: 'text-trust-blue',
-    bgColor: 'bg-trust-blue/10',
+    bgColor: 'bg-trust-blue/10 dark:bg-trust-blue/30',
   },
   nutritionist: {
     icon: Award,
     color: 'text-trust-green',
-    bgColor: 'bg-trust-green/10',
+    bgColor: 'bg-trust-green/10 dark:bg-trust-green/30',
   },
   families: {
     icon: Users,
     color: 'text-trust-warmOrange',
-    bgColor: 'bg-trust-warmOrange/20',
+    bgColor: 'bg-trust-warmOrange/20 dark:bg-trust-warmOrange/40',
   },
   certified: {
     icon: CheckCircle2,
     color: 'text-trust-green',
-    bgColor: 'bg-trust-green/10',
+    bgColor: 'bg-trust-green/10 dark:bg-trust-green/30',
   },
 };
 
