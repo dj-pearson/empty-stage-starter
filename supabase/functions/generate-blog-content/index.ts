@@ -316,7 +316,7 @@ Format your response as JSON with EXACT keys only:
         max_tokens:
           modelConfig.max_tokens && modelConfig.max_tokens > 0
             ? modelConfig.max_tokens
-            : 6000,
+            : 16000,
       };
 
       if (modelConfig.temperature !== null) {
