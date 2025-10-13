@@ -34,6 +34,9 @@ import { WaitlistForm } from "@/components/WaitlistForm";
 import { EnhancedHero } from "@/components/EnhancedHero";
 import { ProcessSteps } from "@/components/ProcessSteps";
 import { AnimatedSection, AnimatedItem } from "@/components/AnimatedSection";
+import { CardNav } from "@/components/CardNav";
+import { ProductShowcase3D } from "@/components/ProductShowcase3D";
+import { FeatureCard3D } from "@/components/Card3DTilt";
 
 const Landing = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -201,19 +204,15 @@ const Landing = () => {
           <AnimatedSection staggerChildren className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature) => (
               <AnimatedItem key={feature.title}>
-                <Card className="hover:shadow-xl transition-all hover:-translate-y-1 border-2 h-full">
-                  <CardHeader className="space-y-4">
-                    <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <feature.icon className="h-7 w-7 text-primary" />
-                    </div>
-                    <CardTitle className="font-heading text-xl">
-                      {feature.title}
-                    </CardTitle>
-                    <CardDescription className="text-base leading-relaxed">
-                      {feature.description}
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
+                <FeatureCard3D
+                  icon={feature.icon === Utensils ? '🍽️' : 
+                        feature.icon === Calendar ? '📅' :
+                        feature.icon === Brain ? '🧠' :
+                        feature.icon === ShoppingCart ? '🛒' :
+                        feature.icon === Users ? '👨‍👩‍👧‍👦' : '📈'}
+                  title={feature.title}
+                  description={feature.description}
+                />
               </AnimatedItem>
             ))}
           </AnimatedSection>
@@ -222,6 +221,12 @@ const Landing = () => {
 
       {/* Enhanced Process Steps Section */}
       <ProcessSteps />
+
+      {/* Interactive Card Navigation */}
+      <CardNav />
+
+      {/* 3D Product Showcase */}
+      <ProductShowcase3D />
 
       {/* SEO Content Section - Rich text for search engines */}
       <section className="py-24 px-4 bg-background">
