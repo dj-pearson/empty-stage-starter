@@ -98,7 +98,7 @@ export function CardNav() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: shouldReduceMotion ? 0 : 0.6, delay: 0.1 }}
-            className="flex flex-wrap justify-center gap-3 mb-12"
+            className="flex flex-wrap justify-center gap-2 md:gap-3 mb-8 md:mb-12 px-2"
           >
             {sections.map((section) => (
               <m.button
@@ -107,23 +107,23 @@ export function CardNav() {
                 whileHover={shouldReduceMotion ? {} : { scale: 1.05 }}
                 whileTap={shouldReduceMotion ? {} : { scale: 0.95 }}
                 className={`
-                  px-6 py-3 rounded-full font-semibold text-base md:text-lg
+                  px-4 md:px-6 py-2 md:py-3 rounded-full font-semibold text-sm md:text-lg
                   transition-all duration-300 shadow-md hover:shadow-lg
+                  flex items-center whitespace-nowrap
                   ${activeCard === section.id
                     ? 'bg-trust-green text-white'
                     : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }
                 `}
               >
-                <span className="mr-2 text-xl">{section.icon}</span>
-                <span className="hidden sm:inline">{section.title}</span>
-                <span className="sm:hidden">{section.title.split(' ')[0]}</span>
+                <span className="mr-1.5 md:mr-2 text-lg md:text-xl">{section.icon}</span>
+                <span>{section.title}</span>
               </m.button>
             ))}
           </m.div>
           
           {/* Card Content Area with Flip Animation */}
-          <div className="relative min-h-[500px] md:min-h-[400px]">
+          <div className="relative min-h-[700px] sm:min-h-[600px] md:min-h-[400px]">
             <AnimatePresence mode="wait">
               <m.div
                 key={activeCard}
@@ -149,11 +149,11 @@ export function CardNav() {
                 className={`
                   absolute inset-0 
                   bg-gradient-to-br ${activeSection.gradient} 
-                  rounded-3xl shadow-2xl overflow-hidden
+                  rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden
                   border-2 border-gray-100
                 `}
               >
-                <div className="grid md:grid-cols-2 gap-8 p-8 md:p-12 h-full">
+                <div className="grid md:grid-cols-2 gap-6 md:gap-8 p-6 md:p-12 h-full">
                   {/* Left Column - Content */}
                   <div className="flex flex-col justify-center">
                     {/* Icon */}
@@ -165,27 +165,27 @@ export function CardNav() {
                         type: 'spring', 
                         stiffness: 200 
                       }}
-                      className="text-7xl md:text-8xl mb-6"
+                      className="text-5xl sm:text-6xl md:text-8xl mb-4 md:mb-6"
                     >
                       {activeSection.icon}
                     </m.div>
                     
                     {/* Title */}
-                    <h3 className="text-3xl md:text-4xl font-heading font-bold mb-4">
+                    <h3 className="text-2xl sm:text-3xl md:text-4xl font-heading font-bold mb-3 md:mb-4">
                       {activeSection.title}
                     </h3>
                     
                     {/* Description */}
-                    <p className="text-lg md:text-xl text-gray-700 mb-6">
+                    <p className="text-base sm:text-lg md:text-xl text-gray-700 dark:text-gray-200 mb-4 md:mb-6">
                       {activeSection.description}
                     </p>
                     
                     {/* Trust Signal */}
-                    <div className="flex items-center gap-3 mb-8 p-4 bg-white/60 rounded-xl backdrop-blur-sm">
-                      <div className="flex-shrink-0 w-8 h-8 bg-trust-green rounded-full flex items-center justify-center">
-                        <Check className="w-5 h-5 text-white" />
+                    <div className="flex items-center gap-2 md:gap-3 mb-6 md:mb-8 p-3 md:p-4 bg-white/60 dark:bg-white/10 rounded-xl backdrop-blur-sm">
+                      <div className="flex-shrink-0 w-6 h-6 md:w-8 md:h-8 bg-trust-green rounded-full flex items-center justify-center">
+                        <Check className="w-4 h-4 md:w-5 md:h-5 text-white" />
                       </div>
-                      <span className="font-semibold text-gray-800">
+                      <span className="font-semibold text-sm sm:text-base text-gray-800 dark:text-gray-100">
                         {activeSection.trustSignal}
                       </span>
                     </div>
@@ -193,11 +193,11 @@ export function CardNav() {
                   
                   {/* Right Column - Features List */}
                   <div className="flex flex-col justify-center">
-                    <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 md:p-8 shadow-lg">
-                      <h4 className="text-xl font-bold mb-6 text-gray-900">
+                    <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl md:rounded-2xl p-5 md:p-8 shadow-lg">
+                      <h4 className="text-lg md:text-xl font-bold mb-4 md:mb-6 text-gray-900 dark:text-gray-100">
                         What's Included:
                       </h4>
-                      <ul className="space-y-4">
+                      <ul className="space-y-3 md:space-y-4">
                         {activeSection.features.map((feature, index) => (
                           <m.li
                             key={feature}
@@ -207,12 +207,12 @@ export function CardNav() {
                               delay: shouldReduceMotion ? 0 : 0.4 + (index * 0.1),
                               duration: shouldReduceMotion ? 0 : 0.4
                             }}
-                            className="flex items-start gap-3"
+                            className="flex items-start gap-2 md:gap-3"
                           >
-                            <div className="flex-shrink-0 w-6 h-6 bg-trust-green/20 rounded-full flex items-center justify-center mt-0.5">
-                              <Check className="w-4 h-4 text-trust-green" />
+                            <div className="flex-shrink-0 w-5 h-5 md:w-6 md:h-6 bg-trust-green/20 rounded-full flex items-center justify-center mt-0.5">
+                              <Check className="w-3 h-3 md:w-4 md:h-4 text-trust-green" />
                             </div>
-                            <span className="text-gray-700 leading-relaxed">
+                            <span className="text-sm sm:text-base text-gray-700 dark:text-gray-200 leading-relaxed">
                               {feature}
                             </span>
                           </m.li>
