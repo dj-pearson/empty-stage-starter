@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,10 +18,15 @@ import {
   Sparkles,
   Loader2,
   ShoppingCart,
+  Folder,
 } from "lucide-react";
 import { RecipeBuilder } from "@/components/RecipeBuilder";
 import { ImportRecipeDialog } from "@/components/ImportRecipeDialog";
 import { EnhancedRecipeCard } from "@/components/EnhancedRecipeCard";
+import { RecipeCollectionsSelector } from "@/components/RecipeCollectionsSelector";
+import { CreateCollectionDialog } from "@/components/CreateCollectionDialog";
+import { ManageCollectionsDialog } from "@/components/ManageCollectionsDialog";
+import { AddToCollectionsDialog } from "@/components/AddToCollectionsDialog";
 import {
   Dialog,
   DialogContent,
@@ -30,7 +35,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Recipe } from "@/types";
+import { Recipe, RecipeCollection } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -74,6 +79,93 @@ export default function Recipes() {
   const [aiSuggestionsOpen, setAiSuggestionsOpen] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<RecipeSuggestion[]>([]);
+  
+  // Collection states
+  const [userId, setUserId] = useState<string | null>(null);
+  const [householdId, setHouseholdId] = useState<string | null>(null);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
+  const [showCreateCollectionDialog, setShowCreateCollectionDialog] = useState(false);
+  const [showManageCollectionsDialog, setShowManageCollectionsDialog] = useState(false);
+  const [showAddToCollectionsDialog, setShowAddToCollectionsDialog] = useState(false);
+  const [recipeForCollections, setRecipeForCollections] = useState<Recipe | null>(null);
+  const [collections, setCollections] = useState<RecipeCollection[]>([]);
+  const [collectionItems, setCollectionItems] = useState<Record<string, string[]>>({});
+  const [editingCollection, setEditingCollection] = useState<RecipeCollection | null>(null);
+  
+  // Fetch user data
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+        
+        // Fetch household ID
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('household_id')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (profile?.household_id) {
+          setHouseholdId(profile.household_id);
+        }
+      }
+    };
+    
+    fetchUserData();
+  }, []);
+  
+  // Load collections and their items
+  useEffect(() => {
+    if (!userId) return;
+    
+    loadCollections();
+    loadCollectionItems();
+  }, [userId, householdId]);
+  
+  const loadCollections = async () => {
+    if (!userId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('recipe_collections')
+        .select('*')
+        .or(`user_id.eq.${userId}${householdId ? `,household_id.eq.${householdId}` : ''}`)
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true });
+      
+      if (error) throw error;
+      
+      setCollections(data as unknown as RecipeCollection[] || []);
+    } catch (error) {
+      console.error('Error loading collections:', error);
+    }
+  };
+  
+  const loadCollectionItems = async () => {
+    if (!userId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('recipe_collection_items')
+        .select('collection_id, recipe_id');
+      
+      if (error) throw error;
+      
+      // Group by collection_id
+      const itemsByCollection: Record<string, string[]> = {};
+      data?.forEach((item: any) => {
+        if (!itemsByCollection[item.collection_id]) {
+          itemsByCollection[item.collection_id] = [];
+        }
+        itemsByCollection[item.collection_id].push(item.recipe_id);
+      });
+      
+      setCollectionItems(itemsByCollection);
+    } catch (error) {
+      console.error('Error loading collection items:', error);
+    }
+  };
 
   const handleEdit = (recipe: Recipe) => {
     setEditRecipe(recipe);
@@ -287,6 +379,47 @@ export default function Recipes() {
   };
 
   const isFamilyMode = activeKidId === null;
+  
+  // Handle adding recipe to collections
+  const handleAddToCollections = (recipe: Recipe) => {
+    setRecipeForCollections(recipe);
+    setShowAddToCollectionsDialog(true);
+  };
+  
+  // Get current collection IDs for a recipe
+  const getRecipeCollectionIds = (recipeId: string): string[] => {
+    const collectionIds: string[] = [];
+    Object.entries(collectionItems).forEach(([collectionId, recipeIds]) => {
+      if (recipeIds.includes(recipeId)) {
+        collectionIds.push(collectionId);
+      }
+    });
+    return collectionIds;
+  };
+  
+  // Calculate recipe counts per collection
+  const recipeCountsByCollection = Object.entries(collectionItems).reduce((acc, [collectionId, recipeIds]) => {
+    acc[collectionId] = recipeIds.length;
+    return acc;
+  }, {} as Record<string, number>);
+  
+  // Filter recipes by selected collection
+  const filteredRecipes = selectedCollectionId
+    ? recipes.filter(recipe => collectionItems[selectedCollectionId]?.includes(recipe.id))
+    : recipes;
+  
+  // Handle collection created or updated
+  const handleCollectionSaved = (collection: RecipeCollection) => {
+    loadCollections();
+    setEditingCollection(null);
+  };
+  
+  // Handle edit collection
+  const handleEditCollection = (collection: RecipeCollection) => {
+    setEditingCollection(collection);
+    setShowManageCollectionsDialog(false);
+    setShowCreateCollectionDialog(true);
+  };
 
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
@@ -316,6 +449,24 @@ export default function Recipes() {
                     {kid.name}
                   </Button>
                 ))}
+              </div>
+            )}
+            
+            {/* Recipe Collections Selector */}
+            {userId && (
+              <div className="mt-4">
+                <RecipeCollectionsSelector
+                  userId={userId}
+                  householdId={householdId || undefined}
+                  selectedCollectionId={selectedCollectionId}
+                  onCollectionChange={setSelectedCollectionId}
+                  onCreateNew={() => {
+                    setEditingCollection(null);
+                    setShowCreateCollectionDialog(true);
+                  }}
+                  onManageCollections={() => setShowManageCollectionsDialog(true)}
+                  recipeCountsByCollection={recipeCountsByCollection}
+                />
               </div>
             )}
           </div>
@@ -366,19 +517,39 @@ export default function Recipes() {
             </div>
           </Card>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {recipes.map((recipe) => (
-              <EnhancedRecipeCard
-                key={recipe.id}
-                recipe={recipe}
-                foods={foods}
-                kids={kids}
-                onEdit={handleEdit}
-                onDelete={setDeleteId}
-                onAddToGroceryList={addRecipeToGroceryList}
-              />
-            ))}
-          </div>
+          <>
+            {selectedCollectionId && filteredRecipes.length === 0 ? (
+              <Card className="p-12 text-center">
+                <div className="max-w-md mx-auto">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                    <Folder className="h-8 w-8 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">No Recipes in This Collection</h3>
+                  <p className="text-muted-foreground mb-6">
+                    Add recipes to this collection to see them here
+                  </p>
+                  <Button onClick={() => setSelectedCollectionId(null)} variant="outline">
+                    View All Recipes
+                  </Button>
+                </div>
+              </Card>
+            ) : (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredRecipes.map((recipe) => (
+                  <EnhancedRecipeCard
+                    key={recipe.id}
+                    recipe={recipe}
+                    foods={foods}
+                    kids={kids}
+                    onEdit={handleEdit}
+                    onDelete={setDeleteId}
+                    onAddToGroceryList={addRecipeToGroceryList}
+                    onAddToCollections={handleAddToCollections}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {/* Create/Edit Dialog */}
@@ -535,6 +706,49 @@ export default function Recipes() {
             )}
           </DialogContent>
         </Dialog>
+        
+        {/* Create/Edit Collection Dialog */}
+        {userId && (
+          <CreateCollectionDialog
+            open={showCreateCollectionDialog}
+            onOpenChange={(open) => {
+              setShowCreateCollectionDialog(open);
+              if (!open) setEditingCollection(null);
+            }}
+            userId={userId}
+            householdId={householdId || undefined}
+            editCollection={editingCollection}
+            onCollectionCreated={handleCollectionSaved}
+          />
+        )}
+        
+        {/* Manage Collections Dialog */}
+        {userId && (
+          <ManageCollectionsDialog
+            open={showManageCollectionsDialog}
+            onOpenChange={setShowManageCollectionsDialog}
+            userId={userId}
+            householdId={householdId || undefined}
+            onEditCollection={handleEditCollection}
+            recipeCountsByCollection={recipeCountsByCollection}
+          />
+        )}
+        
+        {/* Add to Collections Dialog */}
+        {recipeForCollections && (
+          <AddToCollectionsDialog
+            open={showAddToCollectionsDialog}
+            onOpenChange={(open) => {
+              setShowAddToCollectionsDialog(open);
+              if (!open) setRecipeForCollections(null);
+            }}
+            recipeId={recipeForCollections.id}
+            recipeName={recipeForCollections.name}
+            collections={collections}
+            currentCollectionIds={getRecipeCollectionIds(recipeForCollections.id)}
+            onCollectionsUpdated={loadCollectionItems}
+          />
+        )}
       </div>
     </div>
   );

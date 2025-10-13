@@ -11,8 +11,11 @@ import { SmartRestockSuggestions } from "@/components/SmartRestockSuggestions";
 import { GroceryListSelector } from "@/components/GroceryListSelector";
 import { CreateGroceryListDialog } from "@/components/CreateGroceryListDialog";
 import { ManageGroceryListsDialog } from "@/components/ManageGroceryListsDialog";
+import { CreateStoreLayoutDialog } from "@/components/CreateStoreLayoutDialog";
+import { ManageStoreLayoutsDialog } from "@/components/ManageStoreLayoutsDialog";
+import { ManageStoreAislesDialog } from "@/components/ManageStoreAislesDialog";
 import { generateGroceryList } from "@/lib/mealPlanner";
-import { ShoppingCart, Copy, Trash2, Printer, Download, Plus, Share2, FileText, Sparkles } from "lucide-react";
+import { ShoppingCart, Copy, Trash2, Printer, Download, Plus, Share2, FileText, Sparkles, Store } from "lucide-react";
 import { toast } from "sonner";
 import { FoodCategory } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,6 +39,13 @@ export default function Grocery() {
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [showCreateListDialog, setShowCreateListDialog] = useState(false);
   const [showManageListsDialog, setShowManageListsDialog] = useState(false);
+  
+  // Store layout states
+  const [showCreateStoreDialog, setShowCreateStoreDialog] = useState(false);
+  const [showManageStoresDialog, setShowManageStoresDialog] = useState(false);
+  const [showManageAislesDialog, setShowManageAislesDialog] = useState(false);
+  const [editingStore, setEditingStore] = useState<any>(null);
+  const [managingAislesStore, setManagingAislesStore] = useState<any>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -338,6 +348,17 @@ export default function Grocery() {
               <Plus className="h-4 w-4 mr-2" />
               Add Item
             </Button>
+            
+            {/* Store Layout Manager Button */}
+            {userId && (
+              <Button
+                onClick={() => setShowManageStoresDialog(true)}
+                variant="outline"
+              >
+                <Store className="h-4 w-4 mr-2" />
+                Store Layouts
+              </Button>
+            )}
 
             <Button
               onClick={handleSmartRestock}
@@ -532,6 +553,53 @@ export default function Grocery() {
               }
             }}
           />
+          
+          {/* Store Layout Dialogs */}
+          <CreateStoreLayoutDialog
+            open={showCreateStoreDialog}
+            onOpenChange={(open) => {
+              setShowCreateStoreDialog(open);
+              if (!open) setEditingStore(null);
+            }}
+            userId={userId}
+            householdId={householdId || undefined}
+            editStore={editingStore}
+            onStoreCreated={() => {
+              setEditingStore(null);
+              setShowCreateStoreDialog(false);
+            }}
+          />
+          
+          <ManageStoreLayoutsDialog
+            open={showManageStoresDialog}
+            onOpenChange={setShowManageStoresDialog}
+            userId={userId}
+            householdId={householdId || undefined}
+            onEditStore={(store) => {
+              setEditingStore(store);
+              setShowManageStoresDialog(false);
+              setShowCreateStoreDialog(true);
+            }}
+            onManageAisles={(store) => {
+              setManagingAislesStore(store);
+              setShowManageStoresDialog(false);
+              setShowManageAislesDialog(true);
+            }}
+          />
+          
+          {managingAislesStore && (
+            <ManageStoreAislesDialog
+              open={showManageAislesDialog}
+              onOpenChange={(open) => {
+                setShowManageAislesDialog(open);
+                if (!open) {
+                  setManagingAislesStore(null);
+                  setShowManageStoresDialog(true);
+                }
+              }}
+              storeLayout={managingAislesStore}
+            />
+          )}
         </>
       )}
     </div>

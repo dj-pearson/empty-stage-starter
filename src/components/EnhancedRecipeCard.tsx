@@ -1,3 +1,4 @@
+import React from "react";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,7 @@ import {
   Star,
   Pencil,
   Trash2,
+  FolderPlus,
 } from "lucide-react";
 import { Recipe, Food, Kid } from "@/types";
 import { cn } from "@/lib/utils";
@@ -24,6 +26,7 @@ interface EnhancedRecipeCardProps {
   onEdit?: (recipe: Recipe) => void;
   onDelete?: (recipeId: string) => void;
   onAddToGroceryList?: (recipe: Recipe) => void;
+  onAddToCollections?: (recipe: Recipe) => void;
   className?: string;
 }
 
@@ -34,6 +37,7 @@ export function EnhancedRecipeCard({
   onEdit,
   onDelete,
   onAddToGroceryList,
+  onAddToCollections,
   className,
 }: EnhancedRecipeCardProps) {
   // Get recipe foods and check stock status
@@ -327,24 +331,33 @@ export function EnhancedRecipeCard({
       </CardContent>
 
       {/* Footer Actions */}
-      {onAddToGroceryList && (
-        <CardFooter className="pt-0">
-          <Button
-            onClick={() => onAddToGroceryList(recipe)}
-            variant="outline"
-            size="sm"
-            className="w-full"
-            disabled={!recipe.food_ids || recipe.food_ids.length === 0}
-          >
-            <ShoppingCart className="h-4 w-4 mr-2" />
-            Add to Grocery List
-          </Button>
+      {(onAddToGroceryList || onAddToCollections) && (
+        <CardFooter className="pt-0 gap-2 flex-col sm:flex-row">
+          {onAddToGroceryList && (
+            <Button
+              onClick={() => onAddToGroceryList(recipe)}
+              variant="outline"
+              size="sm"
+              className="w-full"
+              disabled={!recipe.food_ids || recipe.food_ids.length === 0}
+            >
+              <ShoppingCart className="h-4 w-4 mr-2" />
+              Add to Grocery List
+            </Button>
+          )}
+          {onAddToCollections && (
+            <Button
+              onClick={() => onAddToCollections(recipe)}
+              variant="outline"
+              size="sm"
+              className="w-full"
+            >
+              <FolderPlus className="h-4 w-4 mr-2" />
+              Add to Collection
+            </Button>
+          )}
         </CardFooter>
       )}
     </Card>
   );
 }
-
-// Add missing React import
-import React from "react";
-
