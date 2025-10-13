@@ -72,6 +72,7 @@ export function BlogCMSManager() {
   const [loadingTitleBank, setLoadingTitleBank] = useState(false);
   const [showTitleBankDialog, setShowTitleBankDialog] = useState(false);
   const [useTitleBank, setUseTitleBank] = useState(true);
+  const [autoPopulated, setAutoPopulated] = useState(false);
 
   useEffect(() => {
     loadPosts();
@@ -86,7 +87,21 @@ export function BlogCMSManager() {
       );
       if (error) throw error;
       if (data && Array.isArray(data) && data.length > 0) {
-        setTitleBankInsights(data[0]);
+        const insights = data[0];
+        setTitleBankInsights(insights);
+        // Auto-populate once if bank is empty
+        if (!autoPopulated && !loadingTitleBank && (insights.total_titles === 0)) {
+          setAutoPopulated(true);
+          toast.info("Title bank is empty — importing default titles...");
+          await handlePopulateTitleBank();
+          // Reload insights after import
+          const { data: data2 } = await supabase.rpc(
+            "get_blog_generation_insights" as any
+          );
+          if (Array.isArray(data2) && data2.length > 0) {
+            setTitleBankInsights(data2[0]);
+          }
+        }
       }
     } catch (error: any) {
       console.error("Error loading title bank insights:", error);
