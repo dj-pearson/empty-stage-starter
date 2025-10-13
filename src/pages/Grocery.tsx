@@ -14,6 +14,7 @@ import { ManageGroceryListsDialog } from "@/components/ManageGroceryListsDialog"
 import { CreateStoreLayoutDialog } from "@/components/CreateStoreLayoutDialog";
 import { ManageStoreLayoutsDialog } from "@/components/ManageStoreLayoutsDialog";
 import { ManageStoreAislesDialog } from "@/components/ManageStoreAislesDialog";
+import { AisleContributionDialog } from "@/components/AisleContributionDialog";
 import { generateGroceryList } from "@/lib/mealPlanner";
 import { ShoppingCart, Copy, Trash2, Printer, Download, Plus, Share2, FileText, Sparkles, Store, Barcode } from "lucide-react";
 import { toast } from "sonner";
@@ -46,6 +47,11 @@ export default function Grocery() {
   const [showManageAislesDialog, setShowManageAislesDialog] = useState(false);
   const [editingStore, setEditingStore] = useState<any>(null);
   const [managingAislesStore, setManagingAislesStore] = useState<any>(null);
+  const [selectedStoreLayoutId, setSelectedStoreLayoutId] = useState<string | null>(null);
+  
+  // Aisle contribution state
+  const [showAisleContribution, setShowAisleContribution] = useState(false);
+  const [contributionItem, setContributionItem] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -86,11 +92,44 @@ export default function Grocery() {
     toast.success("List copied to clipboard!");
   };
 
-  const handleToggleItem = (itemId: string) => {
+  const handleToggleItem = async (itemId: string) => {
     const item = groceryItems.find(i => i.id === itemId);
     if (!item) return;
 
     toggleGroceryItem(itemId);
+
+    // If checking the item, ask for aisle contribution (max 2-3 items per trip)
+    if (!item.checked && selectedStoreLayoutId) {
+      // Check if user has already contributed for this item at this store
+      const { data: existingContribution } = await supabase
+        .from('user_store_contributions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('store_layout_id', selectedStoreLayoutId)
+        .eq('food_item_name', item.name)
+        .single();
+
+      // Check if there's already a mapping
+      const { data: existingMapping } = await supabase
+        .from('food_aisle_mappings')
+        .select('*')
+        .eq('store_layout_id', selectedStoreLayoutId)
+        .eq('food_item_name', item.name)
+        .single();
+
+      // Only ask for contribution if:
+      // 1. User hasn't contributed this item before, OR
+      // 2. There's no mapping yet, OR
+      // 3. Confidence is still low
+      const shouldAskContribution = !existingContribution || 
+        !existingMapping || 
+        existingMapping.confidence_level === 'low';
+
+      if (shouldAskContribution && Math.random() < 0.3) { // Ask for ~30% of items
+        setContributionItem(item.name);
+        setShowAisleContribution(true);
+      }
+    }
 
     // If checking the item, add/update pantry inventory
     if (!item.checked) {
@@ -633,6 +672,19 @@ export default function Grocery() {
               storeLayout={managingAislesStore}
             />
           )}
+          
+          {/* Aisle Contribution Dialog */}
+          <AisleContributionDialog
+            open={showAisleContribution}
+            onOpenChange={setShowAisleContribution}
+            itemName={contributionItem || ""}
+            storeLayoutId={selectedStoreLayoutId}
+            userId={userId}
+            onContribute={() => {
+              // Reload mappings or update UI as needed
+              toast.success("Thank you for helping the community! 🎉");
+            }}
+          />
         </>
       )}
     </div>
