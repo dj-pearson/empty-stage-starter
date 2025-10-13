@@ -164,7 +164,19 @@ export function ManageStoreLayoutsDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-[700px] max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle>Manage Store Layouts</DialogTitle>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Manage Store Layouts</span>
+              <Button
+                onClick={() => {
+                  onOpenChange(false);
+                  onEditStore(null as any);
+                }}
+                size="sm"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create Store
+              </Button>
+            </DialogTitle>
             <DialogDescription>
               Create custom store layouts and organize aisles for optimized shopping.
             </DialogDescription>
