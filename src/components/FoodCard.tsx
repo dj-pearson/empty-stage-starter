@@ -23,13 +23,12 @@ const categoryColors: Record<string, string> = {
 };
 
 export function FoodCard({ food, onEdit, onDelete, onQuantityChange, kidAllergens }: FoodCardProps) {
-  // Check if food contains any allergens for the kid
-  const hasAllergen = kidAllergens && food.allergens && 
-    food.allergens.some(allergen => kidAllergens.includes(allergen));
+  // Filter allergens to only show those that match family member allergens
+  const relevantAllergens = food.allergens?.filter(allergen => 
+    kidAllergens?.includes(allergen)
+  ) || [];
   
-  const matchingAllergens = hasAllergen && food.allergens 
-    ? food.allergens.filter(allergen => kidAllergens?.includes(allergen))
-    : [];
+  const hasAllergen = relevantAllergens.length > 0;
 
   const handleIncrement = () => {
     if (onQuantityChange) {
@@ -103,12 +102,13 @@ export function FoodCard({ food, onEdit, onDelete, onQuantityChange, kidAllergen
                 ALLERGEN WARNING
               </Badge>
             )}
-            {food.allergens && food.allergens.length > 0 && (
+            {/* Only show allergens that match family members */}
+            {relevantAllergens.length > 0 && (
               <div className="flex flex-wrap gap-1 w-full mt-1">
-                {food.allergens.map((allergen) => (
+                {relevantAllergens.map((allergen) => (
                   <Badge 
                     key={allergen} 
-                    variant={matchingAllergens.includes(allergen) ? "destructive" : "secondary"}
+                    variant="destructive"
                     className="text-xs"
                   >
                     {allergen}

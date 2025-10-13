@@ -186,6 +186,35 @@ export default function Recipes() {
     };
   };
 
+  const getAllergenStatus = (recipe: Recipe) => {
+    const recipeFoods = getRecipeFoods(recipe);
+    
+    // Collect allergens from all kids in the family
+    const allKidAllergens = kids.reduce<string[]>((acc, kid) => {
+      if (kid.allergens) {
+        return [...acc, ...kid.allergens];
+      }
+      return acc;
+    }, []);
+    
+    // Find allergens in recipe foods that match family allergens
+    const matchingAllergens = new Set<string>();
+    recipeFoods.forEach(food => {
+      if (food?.allergens) {
+        food.allergens.forEach(allergen => {
+          if (allKidAllergens.includes(allergen)) {
+            matchingAllergens.add(allergen);
+          }
+        });
+      }
+    });
+    
+    return {
+      allergens: Array.from(matchingAllergens),
+      hasAllergens: matchingAllergens.size > 0
+    };
+  };
+
   const isFamilyMode = activeKidId === null;
 
   return (
@@ -258,6 +287,7 @@ export default function Recipes() {
             {recipes.map((recipe) => {
               const recipeFoods = getRecipeFoods(recipe);
               const stockStatus = getStockStatus(recipe);
+              const allergenStatus = getAllergenStatus(recipe);
               
               return (
                 <Card key={recipe.id} className="hover:shadow-lg transition-all">
@@ -291,6 +321,25 @@ export default function Recipes() {
                    )}
                  </CardHeader>
                  <CardContent className="space-y-4">
+                   {/* Allergen Warning */}
+                   {allergenStatus.hasAllergens && (
+                     <Alert variant="destructive">
+                       <AlertTriangle className="h-4 w-4" />
+                       <AlertDescription>
+                         <div>
+                           <p className="font-medium">⚠️ Contains family allergens:</p>
+                           <div className="flex flex-wrap gap-1 mt-2">
+                             {allergenStatus.allergens.map(allergen => (
+                               <Badge key={allergen} variant="destructive" className="text-xs">
+                                 {allergen}
+                               </Badge>
+                             ))}
+                           </div>
+                         </div>
+                       </AlertDescription>
+                     </Alert>
+                   )}
+
                    {/* Stock Warnings */}
                    {stockStatus.hasIssues && (
                      <Alert variant={stockStatus.outOfStock.length > 0 ? "destructive" : "default"}>

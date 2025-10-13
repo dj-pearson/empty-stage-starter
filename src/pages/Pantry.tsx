@@ -337,7 +337,16 @@ export default function Pantry() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredFoods.map(food => {
-                const activeKid = kids.find(k => k.id === activeKidId);
+                // Collect allergens from all kids in the family
+                const allKidAllergens = kids.reduce<string[]>((acc, kid) => {
+                  if (kid.allergens) {
+                    return [...acc, ...kid.allergens];
+                  }
+                  return acc;
+                }, []);
+                // Remove duplicates
+                const uniqueAllergens = [...new Set(allKidAllergens)];
+                
                 return (
                   <FoodCard
                     key={food.id}
@@ -345,7 +354,7 @@ export default function Pantry() {
                     onEdit={handleEdit}
                     onDelete={deleteFood}
                     onQuantityChange={handleQuantityChange}
-                    kidAllergens={activeKid?.allergens}
+                    kidAllergens={uniqueAllergens}
                   />
                 );
               })}
