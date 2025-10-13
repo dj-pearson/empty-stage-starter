@@ -491,16 +491,23 @@ export function BlogCMSManager() {
       const blogUrl = `https://tryeatpal.com/blog/${post.slug}`;
 
       console.log("Calling generate-social-content for published post:", postId);
+
+      // Read webhook URL if configured and let the edge function auto-publish
+      const webhookUrl = localStorage.getItem("blog_webhook_url");
       
       const { data: socialData, error: socialError } =
         await supabase.functions.invoke("generate-social-content", {
           body: {
+            // Provide both to be safe – function uses topic || title
             topic: `New blog post: ${post.title}`,
+            title: post.title,
             excerpt: post.excerpt,
             url: blogUrl,
             contentGoal: `Promote this blog post and drive traffic to ${blogUrl}`,
             targetAudience:
               "Parents struggling with picky eaters and child meal planning",
+            autoPublish: !!webhookUrl,
+            webhookUrl: webhookUrl || undefined,
           },
         });
 
@@ -518,41 +525,11 @@ export function BlogCMSManager() {
           (content.facebook || content.twitter || "").match(/#\w+/g) || [];
         const hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
 
-        // Send to webhook if configured
-        const webhookUrl = localStorage.getItem("blog_webhook_url");
+        // If server-side autoPublish was used (webhook configured), skip client webhook
         if (webhookUrl) {
-          try {
-            const webhookPayload = {
-              type: "blog_published",
-              blog_id: postId,
-              blog_title: post.title,
-              blog_url: blogUrl,
-              blog_excerpt: post.excerpt,
-              short_form: content.twitter || "",
-              long_form: content.facebook || "",
-              hashtags: hashtags,
-              published_at: new Date().toISOString(),
-            };
-
-            const response = await fetch(webhookUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(webhookPayload),
-            });
-
-            if (response.ok) {
-              toast.success(
-                "Post published and social content sent to webhook!"
-              );
-            } else {
-              toast.warning(
-                `Post published, but webhook returned status ${response.status}`
-              );
-            }
-          } catch (webhookError) {
-            console.error("Webhook error:", webhookError);
-            toast.warning("Post published, but failed to send to webhook");
-          }
+          toast.success(
+            "Post published and social content auto-published via webhook!"
+          );
         } else {
           toast.success(
             "Post published! Set up a webhook to auto-post to social media."
