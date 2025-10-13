@@ -94,28 +94,29 @@ serve(async (req) => {
     const recentPerspectives =
       recentHistory?.map((h) => h.perspective_used).filter(Boolean) || [];
 
-    // Get active AI model
-    const { data: aiModel, error: aiError } = await supabase
+    // Get active AI model or use default
+    const { data: aiModel } = await supabase
       .from("ai_settings")
       .select("*")
       .eq("is_active", true)
       .single();
 
-    if (aiError || !aiModel) {
-      return new Response(
-        JSON.stringify({ error: "No active AI model configured" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
+    // Use configured AI model or fall back to OpenAI default
+    const modelConfig = aiModel || {
+      model_name: "gpt-4o-mini",
+      endpoint_url: "https://api.openai.com/v1/chat/completions",
+      api_key_env_var: "OPENAI_API_KEY",
+      auth_type: "bearer",
+      temperature: 0.7,
+      max_tokens: 4000,
+      additional_params: null
+    };
 
-    const apiKey = Deno.env.get(aiModel.api_key_env_var);
+    const apiKey = Deno.env.get(modelConfig.api_key_env_var);
     if (!apiKey) {
       return new Response(
         JSON.stringify({
-          error: `API key not configured: ${aiModel.api_key_env_var}`,
+          error: `API key not configured. Please set ${modelConfig.api_key_env_var} in your edge function secrets.`,
         }),
         {
           status: 500,
@@ -229,63 +230,63 @@ Format your response as JSON with EXACT keys only:
     };
 
     // Add Anthropic version header if using Anthropic API
-    if (aiModel.endpoint_url.includes("anthropic.com")) {
+    if (modelConfig.endpoint_url.includes("anthropic.com")) {
       authHeaders["anthropic-version"] = "2023-06-01";
     }
 
-    if (aiModel.auth_type === "x-api-key") {
+    if (modelConfig.auth_type === "x-api-key") {
       authHeaders["x-api-key"] = apiKey;
-    } else if (aiModel.auth_type === "bearer") {
+    } else if (modelConfig.auth_type === "bearer") {
       authHeaders["Authorization"] = `Bearer ${apiKey}`;
-    } else if (aiModel.auth_type === "api-key") {
+    } else if (modelConfig.auth_type === "api-key") {
       authHeaders["api-key"] = apiKey;
     }
 
     // Build provider-specific request body
     let requestBody: any;
-    const isAnthropic = aiModel.endpoint_url.includes("anthropic.com");
-    const isOpenAI = aiModel.endpoint_url.includes("openai.com");
+    const isAnthropic = modelConfig.endpoint_url.includes("anthropic.com");
+    const isOpenAI = modelConfig.endpoint_url.includes("openai.com");
 
     if (isAnthropic) {
       // Anthropic Messages API: system is top-level and max_tokens is required
       requestBody = {
-        model: aiModel.model_name,
+        model: modelConfig.model_name,
         system: systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
         max_tokens:
-          aiModel.max_tokens && aiModel.max_tokens > 0
-            ? aiModel.max_tokens
+          modelConfig.max_tokens && modelConfig.max_tokens > 0
+            ? modelConfig.max_tokens
             : 6000,
       };
 
-      if (aiModel.temperature !== null) {
-        requestBody.temperature = aiModel.temperature;
+      if (modelConfig.temperature !== null) {
+        requestBody.temperature = modelConfig.temperature;
       }
-      if (aiModel.additional_params) {
-        Object.assign(requestBody, aiModel.additional_params);
+      if (modelConfig.additional_params) {
+        Object.assign(requestBody, modelConfig.additional_params);
       }
     } else {
       // OpenAI-style schema by default
       requestBody = {
-        model: aiModel.model_name,
+        model: modelConfig.model_name,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
       };
 
-      if (aiModel.temperature !== null) {
-        requestBody.temperature = aiModel.temperature;
+      if (modelConfig.temperature !== null) {
+        requestBody.temperature = modelConfig.temperature;
       }
-      if (aiModel.max_tokens !== null) {
-        requestBody.max_tokens = aiModel.max_tokens;
+      if (modelConfig.max_tokens !== null) {
+        requestBody.max_tokens = modelConfig.max_tokens;
       }
-      if (aiModel.additional_params) {
-        Object.assign(requestBody, aiModel.additional_params);
+      if (modelConfig.additional_params) {
+        Object.assign(requestBody, modelConfig.additional_params);
       }
 
       // Handle GPT-5 and newer OpenAI params per requirements
-      if (isOpenAI && /^(gpt-5|o3|o4)/.test(aiModel.model_name)) {
+      if (isOpenAI && /^(gpt-5|o3|o4)/.test(modelConfig.model_name)) {
         if (requestBody.max_tokens !== undefined) {
           requestBody.max_completion_tokens = requestBody.max_tokens;
           delete requestBody.max_tokens;
@@ -296,9 +297,9 @@ Format your response as JSON with EXACT keys only:
       }
     }
 
-    console.log("Calling AI API:", aiModel.endpoint_url);
+    console.log("Calling AI API:", modelConfig.endpoint_url);
 
-    const aiResponse = await fetch(aiModel.endpoint_url, {
+    const aiResponse = await fetch(modelConfig.endpoint_url, {
       method: "POST",
       headers: authHeaders,
       body: JSON.stringify(requestBody),
