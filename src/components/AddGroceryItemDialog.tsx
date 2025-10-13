@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,11 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FoodCategory } from "@/types";
-import { Plus, Camera, Barcode, StickyNote, Search, Package, Sparkles, ShoppingCart, Loader2, Scan, Edit3 } from "lucide-react";
+import { Plus, Camera, Barcode, Package, Sparkles, ShoppingCart, Edit3 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useApp } from "@/contexts/AppContext";
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { BarcodeScannerDialog } from "@/components/admin/BarcodeScannerDialog";
+import { ImageFoodCapture } from "@/components/ImageFoodCapture";
 
 interface AddGroceryItemDialogProps {
   open: boolean;
@@ -66,14 +67,9 @@ export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryIt
   const [isFamilyItem, setIsFamilyItem] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   
-  // Barcode/API lookup states
-  const [isLookingUp, setIsLookingUp] = useState(false);
-  const [lookupSource, setLookupSource] = useState<string | null>(null);
-  
-  // Camera/barcode scanning states
-  const [isScanning, setIsScanning] = useState(false);
-  const [isProcessingScan, setIsProcessingScan] = useState(false);
-  const webScannerRef = useRef<Html5Qrcode | null>(null);
+  // Scanner dialog states
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [imageCaptureOpen, setImageCaptureOpen] = useState(false);
   
   // Pantry inventory states
   const [pantryItem, setPantryItem] = useState<PantryItem | null>(null);
@@ -108,135 +104,34 @@ export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryIt
     }
   }, [name, foods]);
 
-  // Cleanup scanner on unmount or dialog close
-  useEffect(() => {
-    if (!open) {
-      stopScanner();
-    }
-  }, [open]);
-
-  const handleBarcodeChange = (value: string) => {
-    setBarcode(value);
-    setLookupSource(null);
-  };
-
-  const handleLookupBarcode = async () => {
-    if (!barcode.trim()) {
-      toast.error("Please enter a barcode");
-      return;
-    }
-
-    setIsLookingUp(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('lookup-barcode', {
-        body: { barcode: barcode.trim() }
-      });
-
-      if (error) throw error;
-
-      if (data.success && data.food) {
-        const food = data.food;
-        setName(food.name);
-        setCategory(food.category.toLowerCase() as FoodCategory);
-        
-        if (food.package_quantity) setUnit(food.package_quantity);
-        if (food.allergens?.length > 0) {
-          setNotes(prev => {
-            const allergenNote = `Allergens: ${food.allergens.join(', ')}`;
-            return prev ? `${prev}\n${allergenNote}` : allergenNote;
-          });
-        }
-        
-        setLookupSource(food.source);
-        
-        toast.success(`Product found: ${food.name}`, {
-          description: `Source: ${food.source}`
-        });
-      } else {
-        toast.error("Product not found", {
-          description: "Try entering details manually"
+  // Handle food identified from barcode scanner
+  const handleFoodFromBarcode = (food?: any) => {
+    if (food) {
+      setName(food.name);
+      setCategory(food.category || "snack");
+      if (food.package_quantity) setUnit(food.package_quantity);
+      if (food.allergens?.length > 0) {
+        setNotes(prev => {
+          const allergenNote = `Allergens: ${food.allergens.join(', ')}`;
+          return prev ? `${prev}\n${allergenNote}` : allergenNote;
         });
       }
-    } catch (error) {
-      console.error('Barcode lookup error:', error);
-      toast.error("Failed to lookup barcode");
-    } finally {
-      setIsLookingUp(false);
+      setBarcode(food.barcode || "");
+      toast.success(`Product found: ${food.name}`);
     }
+    setScannerOpen(false);
+    setActiveTab("manual");
   };
 
-  const startBarcodeScanner = async () => {
-    setIsScanning(true);
-    setIsProcessingScan(false);
-
-    // Wait for DOM
-    await new Promise((r) => setTimeout(r, 100));
-
-    try {
-      const scanner = new Html5Qrcode('barcode-scanner');
-      webScannerRef.current = scanner;
-
-      const container = document.getElementById('barcode-scanner');
-      const containerWidth = Math.min((container?.clientWidth || window.innerWidth) - 24, 640);
-      const qrboxWidth = Math.round(containerWidth * 0.95);
-      const qrboxHeight = Math.max(160, Math.round(qrboxWidth * 0.4));
-
-      const cameras = await Html5Qrcode.getCameras();
-      if (!cameras || cameras.length === 0) throw new Error('No cameras found');
-      
-      const backCamera = cameras.find(c => /back|rear|environment/i.test(c.label)) || cameras[cameras.length - 1];
-
-      await scanner.start(
-        backCamera.id,
-        {
-          fps: 10,
-          qrbox: { width: qrboxWidth, height: qrboxHeight },
-        },
-        async (decodedText) => {
-          if (isProcessingScan) return;
-          
-          setIsProcessingScan(true);
-          try {
-            await scanner.stop();
-            await scanner.clear();
-          } catch {}
-          webScannerRef.current = null;
-          
-          setBarcode(decodedText);
-          setIsScanning(false);
-          
-          // Auto-lookup after scanning
-          setTimeout(() => {
-            handleLookupBarcode();
-          }, 100);
-        },
-        () => {} // Ignore scan errors
-      );
-    } catch (err) {
-      console.error('Scanner error:', err);
-      toast.error('Failed to start scanner', {
-        description: 'Please check camera permissions'
-      });
-      setIsScanning(false);
-      try {
-        if (webScannerRef.current) {
-          await webScannerRef.current.stop();
-          await webScannerRef.current.clear();
-        }
-      } catch {}
-    }
-  };
-
-  const stopScanner = async () => {
-    try {
-      if (webScannerRef.current) {
-        await webScannerRef.current.stop();
-        await webScannerRef.current.clear();
-        webScannerRef.current = null;
-      }
-    } catch {}
-    setIsScanning(false);
-    setIsProcessingScan(false);
+  // Handle food identified from image
+  const handleFoodFromImage = (foodData: any) => {
+    setName(foodData.name);
+    setCategory(foodData.category);
+    setQuantity(String(foodData.quantity || 1));
+    setUnit(foodData.servingSize || "servings");
+    toast.success(`Food identified: ${foodData.name}`);
+    setImageCaptureOpen(false);
+    setActiveTab("manual");
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -297,160 +192,85 @@ export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryIt
     setShowAdvanced(false);
     setPantryItem(null);
     setPantryQuantity(0);
-    setLookupSource(null);
     setActiveTab("manual");
-    stopScanner();
+    setScannerOpen(false);
+    setImageCaptureOpen(false);
     onOpenChange(false);
     toast.success("Item added to grocery list");
   };
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => {
-      if (!isOpen) {
-        stopScanner();
-        resetForm();
-      }
-      onOpenChange(isOpen);
-    }}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5" />
-            Add Grocery Item
-          </DialogTitle>
-          <DialogDescription>
-            Add items manually, scan barcodes, or use your camera
-          </DialogDescription>
-        </DialogHeader>
-        
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="manual" className="gap-2">
-              <Edit3 className="h-4 w-4" />
-              <span className="hidden sm:inline">Manual</span>
-            </TabsTrigger>
-            <TabsTrigger value="barcode" className="gap-2">
-              <Barcode className="h-4 w-4" />
-              <span className="hidden sm:inline">Barcode</span>
-            </TabsTrigger>
-            <TabsTrigger value="camera" className="gap-2">
-              <Camera className="h-4 w-4" />
-              <span className="hidden sm:inline">Camera</span>
-            </TabsTrigger>
-          </TabsList>
+    <>
+      <Dialog open={open} onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          resetForm();
+        }
+        onOpenChange(isOpen);
+      }}>
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" />
+              Add Grocery Item
+            </DialogTitle>
+            <DialogDescription>
+              Add items manually, scan barcodes, or use your camera
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col overflow-hidden">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="manual" className="gap-2">
+                <Edit3 className="h-4 w-4" />
+                <span className="hidden sm:inline">Manual</span>
+              </TabsTrigger>
+              <TabsTrigger value="barcode" className="gap-2" onClick={() => setScannerOpen(true)}>
+                <Barcode className="h-4 w-4" />
+                <span className="hidden sm:inline">Barcode</span>
+              </TabsTrigger>
+              <TabsTrigger value="camera" className="gap-2" onClick={() => setImageCaptureOpen(true)}>
+                <Camera className="h-4 w-4" />
+                <span className="hidden sm:inline">Camera</span>
+              </TabsTrigger>
+            </TabsList>
 
-          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto py-4 space-y-4">
-            <TabsContent value="manual" className="space-y-4 mt-0">
-              <div className="space-y-2">
-                <Label htmlFor="item-name">Item Name *</Label>
-                <Input
-                  id="item-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g., Milk, Bread, Eggs"
-                  autoFocus
-                />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="barcode" className="space-y-4 mt-0">
-              <Card className="p-4 bg-muted/50">
-                <div className="space-y-3">
-                  <Label htmlFor="barcode-input" className="flex items-center gap-2 text-sm font-medium">
-                    <Barcode className="h-4 w-4" />
-                    Enter or Scan Barcode
-                  </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="barcode-input"
-                      value={barcode}
-                      onChange={(e) => handleBarcodeChange(e.target.value)}
-                      placeholder="Enter barcode number"
-                      className="flex-1"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleLookupBarcode();
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      onClick={handleLookupBarcode}
-                      disabled={!barcode.trim() || isLookingUp}
-                      variant="secondary"
-                    >
-                      {isLookingUp ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Looking up...
-                        </>
-                      ) : (
-                        <>
-                          <Search className="h-4 w-4 mr-2" />
-                          Lookup
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  {lookupSource && (
-                    <Badge variant="secondary" className="gap-1">
-                      <Sparkles className="h-3 w-3" />
-                      Found in {lookupSource}
-                    </Badge>
-                  )}
-                </div>
-              </Card>
-
-              {name && (
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto py-4 space-y-4">
+              <TabsContent value="manual" className="space-y-4 mt-0">
                 <div className="space-y-2">
-                  <Label>Product Found</Label>
-                  <div className="p-3 border rounded-lg bg-background">
-                    <p className="font-medium">{name}</p>
-                    <p className="text-sm text-muted-foreground">{categoryLabels[category]}</p>
-                  </div>
+                  <Label htmlFor="item-name">Item Name *</Label>
+                  <Input
+                    id="item-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g., Milk, Bread, Eggs"
+                    autoFocus
+                  />
                 </div>
-              )}
-            </TabsContent>
+              </TabsContent>
 
-            <TabsContent value="camera" className="space-y-4 mt-0">
-              {!isScanning ? (
-                <Button
-                  type="button"
-                  onClick={startBarcodeScanner}
-                  className="w-full"
-                  size="lg"
-                  variant="secondary"
-                >
-                  <Scan className="h-5 w-5 mr-2" />
-                  Start Camera Scanner
-                </Button>
-              ) : (
-                <div className="space-y-3">
-                  <div id="barcode-scanner" className="w-full h-[300px] rounded-lg overflow-hidden bg-black" />
-                  <Button
-                    type="button"
-                    onClick={stopScanner}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    Stop Scanner
-                  </Button>
-                  <p className="text-sm text-center text-muted-foreground">
-                    Point camera at product barcode
+              <TabsContent value="barcode" className="space-y-4 mt-0">
+                <Card className="p-4 bg-muted/50 text-center">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Click the Barcode tab to open the scanner
                   </p>
-                </div>
-              )}
+                  <Button type="button" onClick={() => setScannerOpen(true)} variant="secondary">
+                    <Barcode className="h-4 w-4 mr-2" />
+                    Open Barcode Scanner
+                  </Button>
+                </Card>
+              </TabsContent>
 
-              {barcode && !isScanning && (
-                <div className="space-y-2">
-                  <Label>Scanned Barcode</Label>
-                  <div className="p-3 border rounded-lg bg-background">
-                    <p className="font-mono text-sm">{barcode}</p>
-                  </div>
-                </div>
-              )}
-            </TabsContent>
+              <TabsContent value="camera" className="space-y-4 mt-0">
+                <Card className="p-4 bg-muted/50 text-center">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Click the Camera tab to take a photo
+                  </p>
+                  <Button type="button" onClick={() => setImageCaptureOpen(true)} variant="secondary">
+                    <Camera className="h-4 w-4 mr-2" />
+                    Open Camera
+                  </Button>
+                </Card>
+              </TabsContent>
 
             {/* Pantry Inventory Alert */}
             {pantryItem && name && (
@@ -606,28 +426,41 @@ export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryIt
                   </div>
                 )}
 
-                <div className="flex gap-2 pt-4 border-t">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      stopScanner();
-                      onOpenChange(false);
-                    }}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" className="flex-1">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Item
-                  </Button>
-                </div>
-              </>
-            )}
-          </form>
-        </Tabs>
-      </DialogContent>
-    </Dialog>
-  );
+              <div className="flex gap-2 pt-4 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" className="flex-1">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Item
+                </Button>
+              </div>
+            </>
+          )}
+        </form>
+      </Tabs>
+    </DialogContent>
+  </Dialog>
+
+  {/* Barcode Scanner Dialog */}
+  <BarcodeScannerDialog
+    open={scannerOpen}
+    onOpenChange={setScannerOpen}
+    onFoodAdded={handleFoodFromBarcode}
+    targetTable="foods"
+  />
+
+  {/* Image Food Capture Dialog */}
+  <ImageFoodCapture
+    open={imageCaptureOpen}
+    onOpenChange={setImageCaptureOpen}
+    onFoodIdentified={handleFoodFromImage}
+  />
+</>
+);
 }
