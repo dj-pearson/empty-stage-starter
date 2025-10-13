@@ -496,56 +496,57 @@ Format your response as JSON with EXACT keys only:
       perspective_used: selectedPerspective,
     });
 
-    // If autoPublish is true, create the blog post and publish it
-    if (autoPublish) {
-      try {
-        console.log("Auto-publishing blog post...");
+    // Always create the blog post in database
+    let postData: any = null;
+    try {
+      console.log("Creating blog post in database...");
 
-        // Generate slug from title
-        const slug = (blogContent.title || suggestedTitle)
-          .toLowerCase()
-          .replace(/[^a-z0-9\s-]/g, "")
-          .replace(/\s+/g, "-");
+      // Generate slug from title
+      const slug = (blogContent.title || suggestedTitle)
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .replace(/\s+/g, "-");
 
-        console.log("Generated slug:", slug);
+      console.log("Generated slug:", slug);
 
-        // Create the blog post
-        const { data: postData, error: postError } = await supabase
-          .from("blog_posts")
-          .insert([
-            {
-              title: blogContent.title || suggestedTitle,
-              slug: slug,
-              content: blogContent.body || "",
-              excerpt: blogContent.excerpt || "",
-              meta_title: blogContent.seo_title || "",
-              meta_description: blogContent.seo_description || "",
-              ai_generated: true,
-              ai_prompt: suggestedTitle,
-              status: "published",
-              published_at: new Date().toISOString(),
-            },
-          ])
-          .select()
-          .single();
+      // Create the blog post
+      const { data: postResult, error: postError } = await supabase
+        .from("blog_posts")
+        .insert([
+          {
+            title: blogContent.title || suggestedTitle,
+            slug: slug,
+            content: blogContent.body || "",
+            excerpt: blogContent.excerpt || "",
+            meta_title: blogContent.seo_title || "",
+            meta_description: blogContent.seo_description || "",
+            ai_generated: true,
+            ai_prompt: suggestedTitle,
+            status: autoPublish ? "published" : "draft",
+            published_at: autoPublish ? new Date().toISOString() : null,
+          },
+        ])
+        .select()
+        .single();
 
-        if (postError) {
-          console.error("Error creating blog post:", postError);
-          throw postError;
-        }
+      if (postError) {
+        console.error("Error creating blog post:", postError);
+        throw postError;
+      }
 
-        if (!postData) {
-          console.error("No post data returned");
-          throw new Error("Failed to create blog post");
-        }
+      if (!postResult) {
+        console.error("No post data returned");
+        throw new Error("Failed to create blog post");
+      }
 
-        console.log("Blog post created successfully:", postData.id);
+      postData = postResult;
+      console.log("Blog post created successfully:", postData.id);
 
-        if (postData) {
-          const blogUrl = `https://tryeatpal.com/blog/${slug}`;
+      if (postData && autoPublish) {
+        const blogUrl = `https://tryeatpal.com/blog/${slug}`;
 
-          // Generate social media content about this blog using AI
-          try {
+        // Generate social media content about this blog using AI
+        try {
             console.log("Invoking generate-social-content function...");
 
             const { data: socialData, error: socialError } =
@@ -613,11 +614,17 @@ Format your response as JSON with EXACT keys only:
               "Error in social content generation/webhook:",
               socialError
             );
-          }
         }
-      } catch (autoPublishError) {
-        console.error("Auto-publish error:", autoPublishError);
       }
+    } catch (saveError: any) {
+      console.error("Error saving blog post:", saveError);
+      return new Response(
+        JSON.stringify({ error: `Failed to save blog post: ${saveError?.message || 'Unknown error'}` }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     return new Response(
@@ -625,6 +632,7 @@ Format your response as JSON with EXACT keys only:
         success: true,
         content: blogContent,
         autoPublished: autoPublish,
+        postId: postData?.id,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
