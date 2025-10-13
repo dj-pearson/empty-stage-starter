@@ -3649,6 +3649,54 @@ export type Database = {
         }
         Relationships: []
       }
+      waitlist: {
+        Row: {
+          converted_to_user: boolean | null
+          email: string
+          full_name: string | null
+          id: string
+          joined_at: string
+          metadata: Json | null
+          notified_at: string | null
+          referral_source: string | null
+          status: string
+          user_id: string | null
+          utm_campaign: string | null
+          utm_medium: string | null
+          utm_source: string | null
+        }
+        Insert: {
+          converted_to_user?: boolean | null
+          email: string
+          full_name?: string | null
+          id?: string
+          joined_at?: string
+          metadata?: Json | null
+          notified_at?: string | null
+          referral_source?: string | null
+          status?: string
+          user_id?: string | null
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Update: {
+          converted_to_user?: boolean | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          joined_at?: string
+          metadata?: Json | null
+          notified_at?: string | null
+          referral_source?: string | null
+          status?: string
+          user_id?: string | null
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Relationships: []
+      }
       webhook_logs: {
         Row: {
           created_at: string | null

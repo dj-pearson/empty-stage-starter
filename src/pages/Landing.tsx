@@ -30,6 +30,7 @@ import {
   X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { WaitlistForm } from "@/components/WaitlistForm";
 
 const Landing = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -197,14 +198,17 @@ const Landing = () => {
             and ARFID.
           </p>
           <div className="flex gap-4 justify-center flex-wrap">
-            <Link to="/auth">
-              <Button
-                size="lg"
-                className="gap-2 text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-shadow"
-              >
-                Sign In (Existing Users) <ArrowRight className="h-5 w-5" />
-              </Button>
-            </Link>
+            <Button
+              size="lg"
+              className="gap-2 text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-shadow"
+              onClick={() =>
+                document
+                  .getElementById("waitlist")
+                  ?.scrollIntoView({ behavior: "smooth" })
+              }
+            >
+              Join the Waitlist <ArrowRight className="h-5 w-5" />
+            </Button>
             <Button
               size="lg"
               variant="outline"
@@ -219,7 +223,7 @@ const Landing = () => {
             </Button>
           </div>
           <p className="text-sm text-muted-foreground mt-4">
-            New sign-ups opening November 1st, 2025
+            Be the first to try EatPal - Join our exclusive waitlist
           </p>
 
           {/* Stats */}
@@ -488,6 +492,13 @@ const Landing = () => {
           <p className="text-sm text-white/70 mt-4">
             New registrations opening soon
           </p>
+        </div>
+      </section>
+
+      {/* Waitlist Section */}
+      <section id="waitlist" className="py-24 px-4 bg-gradient-to-b from-background to-secondary/10">
+        <div className="container mx-auto max-w-2xl">
+          <WaitlistForm />
         </div>
       </section>
 
