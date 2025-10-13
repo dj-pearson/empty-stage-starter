@@ -490,6 +490,8 @@ export function BlogCMSManager() {
       // Generate social media posts about this blog
       const blogUrl = `https://tryeatpal.com/blog/${post.slug}`;
 
+      console.log("Calling generate-social-content for published post:", postId);
+      
       const { data: socialData, error: socialError } =
         await supabase.functions.invoke("generate-social-content", {
           body: {
@@ -502,11 +504,14 @@ export function BlogCMSManager() {
           },
         });
 
+      console.log("Social generation response:", { socialData, socialError });
+
       if (socialError) {
         console.error("Error generating social content:", socialError);
         toast.warning("Post published, but failed to generate social posts");
-      } else if (socialData?.content) {
-        const content = socialData.content;
+      } else if (socialData?.content || socialData?.facebook || socialData?.twitter) {
+        // Handle both wrapped and unwrapped content formats
+        const content = socialData.content || socialData;
 
         // Extract hashtags from the content
         const hashtagMatches =
