@@ -65,7 +65,6 @@ export function AnimatedPanel({ children, className = '', delay = 0 }: AnimatedP
       transition: {
         duration: shouldReduceMotion ? 0 : 0.5,
         delay: shouldReduceMotion ? 0 : delay,
-        ease: [0.25, 0.46, 0.45, 0.94], // easeOutQuart
       },
     },
   };
@@ -109,7 +108,6 @@ export function AnimatedStatCard({
       scale: 1,
       transition: {
         duration: shouldReduceMotion ? 0 : 0.4,
-        ease: [0.25, 0.46, 0.45, 0.94],
       },
     },
   };
@@ -185,7 +183,6 @@ export function AnimatedActionCard({
       y: 0,
       transition: {
         duration: shouldReduceMotion ? 0 : 0.5,
-        ease: [0.25, 0.46, 0.45, 0.94],
       },
     },
   };
