@@ -167,18 +167,20 @@ small,
   color: #374151; /* Still high contrast */
 }
 
-/* Links */
+/* Links - follow design system tokens, no default underline */
 a {
-  color: #2563eb; /* High contrast blue */
-  text-decoration: underline;
+  color: hsl(var(--foreground));
+  text-decoration: none;
 }
 
 a:hover {
-  color: #1e40af; /* Even darker on hover */
+  color: hsl(var(--foreground));
+  text-decoration: none;
 }
 
 a:visited {
-  color: #7c3aed; /* Purple for visited, still high contrast */
+  color: hsl(var(--foreground));
+  text-decoration: none;
 }
 
 /* ==========================================================================
@@ -329,8 +331,7 @@ textarea:focus {
   }
 
   a {
-    text-decoration: underline;
-    text-decoration-thickness: 2px;
+    text-decoration: none;
   }
 
   button,
@@ -447,11 +448,13 @@ img {
   }
 
   a {
-    color: #60a5fa; /* Light blue with good contrast on dark */
+    color: hsl(var(--foreground));
+    text-decoration: none;
   }
 
   a:visited {
-    color: #a78bfa; /* Light purple */
+    color: hsl(var(--foreground));
+    text-decoration: none;
   }
 
   /* Form elements */
