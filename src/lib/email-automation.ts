@@ -42,7 +42,9 @@ export async function triggerEmailSequence(
   }
 ): Promise<{ success: boolean; enrollment_id?: string; error?: string }> {
   try {
-    const { data, error } = await supabase.rpc('enroll_in_email_sequence', {
+    // Note: enroll_in_email_sequence function exists but may not be in types yet
+    // This is a database function call
+    const { data, error } = await supabase.rpc('enroll_in_email_sequence' as any, {
       p_user_id: params.userId || null,
       p_lead_id: params.leadId || null,
       p_sequence_id: params.sequenceId || null,
@@ -55,7 +57,7 @@ export async function triggerEmailSequence(
       return { success: false, error: error.message };
     }
 
-    return { success: true, enrollment_id: data };
+    return { success: true, enrollment_id: data as string || undefined };
   } catch (error: any) {
     console.error('Error in triggerEmailSequence:', error);
     return { success: false, error: error.message };
@@ -69,18 +71,10 @@ export async function cancelEmailSequence(
   enrollmentId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabase
-      .from('user_email_sequences')
-      .update({ canceled_at: new Date().toISOString() })
-      .eq('id', enrollmentId)
-      .is('canceled_at', null);
-
-    if (error) {
-      console.error('Error canceling email sequence:', error);
-      return { success: false, error: error.message };
-    }
-
-    return { success: true };
+    // Note: user_email_sequences table doesn't exist in current schema
+    // This would need to be created or use automation_email_queue
+    console.warn('cancelEmailSequence: user_email_sequences table not available');
+    return { success: false, error: 'Feature not available - table does not exist' };
   } catch (error: any) {
     console.error('Error in cancelEmailSequence:', error);
     return { success: false, error: error.message };
@@ -94,24 +88,9 @@ export async function getUserEmailSequences(
   userId: string
 ): Promise<{ sequences: any[]; error?: string }> {
   try {
-    const { data, error } = await supabase
-      .from('user_email_sequences')
-      .select(`
-        id,
-        current_step,
-        enrolled_at,
-        sequence:email_sequences(name, description)
-      `)
-      .eq('user_id', userId)
-      .is('completed_at', null)
-      .is('canceled_at', null);
-
-    if (error) {
-      console.error('Error getting user sequences:', error);
-      return { sequences: [], error: error.message };
-    }
-
-    return { sequences: data || [] };
+    // Note: user_email_sequences table doesn't exist in current schema
+    console.warn('getUserEmailSequences: user_email_sequences table not available');
+    return { sequences: [], error: 'Feature not available - table does not exist' };
   } catch (error: any) {
     console.error('Error in getUserEmailSequences:', error);
     return { sequences: [], error: error.message };
@@ -132,7 +111,7 @@ export async function scheduleEmail(params: {
 }): Promise<{ success: boolean; email_id?: string; error?: string }> {
   try {
     const { data, error } = await supabase
-      .from('email_queue')
+      .from('automation_email_queue')
       .insert([{
         to_email: params.to,
         subject: params.subject,
@@ -141,7 +120,8 @@ export async function scheduleEmail(params: {
         scheduled_for: params.sendAt?.toISOString() || new Date().toISOString(),
         priority: params.priority || 5,
         status: 'pending',
-        metadata: params.metadata || {},
+        template_key: 'custom',
+        user_id: null,
       }])
       .select('id')
       .single();
@@ -168,7 +148,7 @@ export async function trackEmailEvent(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const { error } = await supabase
-      .from('email_events')
+      .from('automation_email_events')
       .insert([{
         email_id: emailId,
         event_type: eventType,
@@ -183,7 +163,7 @@ export async function trackEmailEvent(
     // Update email status if delivered/bounced
     if (eventType === 'delivered' || eventType === 'bounced') {
       await supabase
-        .from('email_queue')
+        .from('automation_email_queue')
         .update({
           status: eventType === 'delivered' ? 'sent' : 'failed',
           sent_at: eventType === 'delivered' ? new Date().toISOString() : null,
@@ -207,7 +187,7 @@ export async function getEmailTemplates(): Promise<{
 }> {
   try {
     const { data, error } = await supabase
-      .from('email_templates')
+      .from('automation_email_templates')
       .select('*')
       .order('created_at', { ascending: false });
 
@@ -237,15 +217,15 @@ export async function createEmailTemplate(params: {
 }): Promise<{ success: boolean; template_id?: string; error?: string }> {
   try {
     const { data, error } = await supabase
-      .from('email_templates')
+      .from('automation_email_templates')
       .insert([{
-        name: params.name,
-        description: params.description || null,
-        subject_template: params.subject_template,
-        html_template: params.html_template,
-        text_template: params.text_template || null,
+        template_name: params.name,
+        template_key: params.name.toLowerCase().replace(/\s+/g, '_'),
+        subject: params.subject_template,
+        html_body: params.html_template,
+        text_body: params.text_template || null,
         category: params.category || 'general',
-        variables: params.variables || [],
+        variables: params.variables || {},
       }])
       .select('id')
       .single();
@@ -287,7 +267,7 @@ export async function getEmailMetrics(params?: {
     // For now, we'll do basic client-side aggregation
 
     let query = supabase
-      .from('email_queue')
+      .from('automation_email_queue')
       .select('id, status, sent_at');
 
     if (params?.dateFrom) {
@@ -320,7 +300,7 @@ export async function getEmailMetrics(params?: {
 
     // Get events
     const { data: events } = await supabase
-      .from('email_events')
+      .from('automation_email_events')
       .select('email_id, event_type')
       .in('email_id', emailIds);
 

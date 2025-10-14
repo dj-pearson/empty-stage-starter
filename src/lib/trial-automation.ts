@@ -95,8 +95,8 @@ export async function trackTrialActivity(
       .maybeSingle();
 
     if (lead) {
-      const currentMetadata = lead.metadata || {};
-      const activityCounts = currentMetadata.activity_counts || {};
+      const currentMetadata = (lead.metadata as Record<string, any>) || {};
+      const activityCounts = (currentMetadata.activity_counts as Record<string, number>) || {};
 
       activityCounts[activityType] = (activityCounts[activityType] || 0) + 1;
 
@@ -109,7 +109,7 @@ export async function trackTrialActivity(
             last_activity: new Date().toISOString(),
             last_activity_type: activityType,
             ...metadata,
-          },
+          } as any,
           last_contacted_at: new Date().toISOString(),
         })
         .eq('id', lead.id);
@@ -168,19 +168,20 @@ async function triggerTrialInterventions(
         .eq('converted_user_id', userId)
         .single();
 
-      const activityCounts = lead?.metadata?.activity_counts || {};
+      const activityCounts = (lead?.metadata as Record<string, any>)?.activity_counts || {};
       const totalActivity = Object.values(activityCounts).reduce((a: any, b: any) => a + b, 0) as number;
 
       if (totalActivity < 3) {
         // Send "need help?" email
         await supabase
-          .from('email_queue')
+          .from('automation_email_queue')
           .insert([{
             to_email: userEmail,
             subject: `Need help getting started with EatPal, ${profile?.full_name?.split(' ')[0] || 'there'}?`,
             html_body: generateNeedHelpEmail(profile?.full_name),
             scheduled_for: new Date().toISOString(),
             priority: 8,
+            template_key: 'trial_help',
           }]);
       }
     }
@@ -193,18 +194,19 @@ async function triggerTrialInterventions(
         .eq('converted_user_id', userId)
         .single();
 
-      const mealCount = lead?.metadata?.activity_counts?.meal_logged || 0;
+      const mealCount = ((lead?.metadata as Record<string, any>)?.activity_counts as Record<string, number>)?.meal_logged || 0;
 
       if (mealCount >= 10) {
         // Send upgrade offer
         await supabase
-          .from('email_queue')
+          .from('automation_email_queue')
           .insert([{
             to_email: userEmail,
             subject: `You're a power user! Upgrade to unlock more`,
             html_body: generatePowerUserEmail(profile?.full_name, mealCount),
             scheduled_for: new Date().toISOString(),
             priority: 9,
+            template_key: 'power_user',
           }]);
       }
     }
@@ -212,26 +214,28 @@ async function triggerTrialInterventions(
     // Intervention: Trial ending soon (3 days)
     if (daysUntilEnd === 3) {
       await supabase
-        .from('email_queue')
+        .from('automation_email_queue')
         .insert([{
           to_email: userEmail,
           subject: `Your EatPal trial ends in 3 days`,
           html_body: generateTrialEndingEmail(profile?.full_name, 3),
           scheduled_for: new Date().toISOString(),
           priority: 10,
+          template_key: 'trial_ending_3d',
         }]);
     }
 
     // Intervention: Trial ending tomorrow
     if (daysUntilEnd === 1) {
       await supabase
-        .from('email_queue')
+        .from('automation_email_queue')
         .insert([{
           to_email: userEmail,
           subject: `Last chance: Your trial ends tomorrow!`,
           html_body: generateTrialEndingEmail(profile?.full_name, 1, true),
           scheduled_for: new Date().toISOString(),
           priority: 10,
+          template_key: 'trial_ending_1d',
         }]);
     }
   } catch (error) {
@@ -264,13 +268,8 @@ export async function handleTrialConversion(
       console.error('Error updating lead on conversion:', leadError);
     }
 
-    // 2. Cancel trial-related email sequences
-    await supabase
-      .from('user_email_sequences')
-      .update({ canceled_at: new Date().toISOString() })
-      .eq('user_id', userId)
-      .is('canceled_at', null)
-      .is('completed_at', null);
+    // 2. Cancel trial-related email sequences (table doesn't exist, skip)
+    // Note: user_email_sequences table doesn't exist in current schema
 
     // 3. Start customer welcome sequence
     await triggerEmailSequence({
@@ -461,12 +460,14 @@ async function createAdminNotification(params: {
     await supabase
       .from('admin_notifications')
       .insert([{
+        notification_type: params.category,
         title: params.title,
         message: params.message,
         severity: params.severity,
-        category: params.category,
-        entity_type: params.entity_type || null,
-        entity_id: params.entity_id || null,
+        metadata: {
+          entity_type: params.entity_type || null,
+          entity_id: params.entity_id || null,
+        },
         is_read: false,
       }]);
   } catch (error) {

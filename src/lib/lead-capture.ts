@@ -85,11 +85,11 @@ export async function captureLeadWithAutomation(
           .single();
 
         updateData.metadata = {
-          ...(currentLead?.metadata || {}),
+          ...(currentLead?.metadata as Record<string, any> || {}),
           ...data.metadata,
           last_source: data.source,
           last_contact_date: new Date().toISOString(),
-        };
+        } as any;
       }
 
       const { error: updateError } = await supabase
@@ -259,7 +259,7 @@ async function queueWelcomeEmail(
 
     // Insert into email queue
     const { error } = await supabase
-      .from('email_queue')
+      .from('automation_email_queue')
       .insert([{
         to_email: email,
         subject: subject,
@@ -270,6 +270,7 @@ async function queueWelcomeEmail(
         priority: source === 'contact_form' ? 10 : 5,
         max_retries: 3,
         retry_count: 0,
+        template_key: 'lead_welcome',
       }]);
 
     if (error) {
