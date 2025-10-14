@@ -28,7 +28,10 @@ import {
   ShoppingCart,
   Menu,
   X,
+  Moon,
+  Sun,
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { Link } from "react-router-dom";
 import { WaitlistForm } from "@/components/WaitlistForm";
 import { EnhancedHero } from "@/components/EnhancedHero";
@@ -40,6 +43,7 @@ import { FeatureCard3D } from "@/components/Card3DTilt";
 
 const Landing = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   const features = [
     {
@@ -120,6 +124,15 @@ const Landing = () => {
             >
               Pricing
             </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            >
+              <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+              <span className="sr-only">Toggle theme</span>
+            </Button>
             <Link to="/auth">
               <Button variant="ghost" className="font-medium">
                 Sign In
@@ -173,6 +186,26 @@ const Landing = () => {
                   Pricing
                 </Link>
                 <div className="border-t pt-4 mt-4 space-y-3">
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start gap-3 text-lg py-6"
+                    onClick={() => {
+                      setTheme(theme === "dark" ? "light" : "dark");
+                      closeMobileMenu();
+                    }}
+                  >
+                    {theme === "dark" ? (
+                      <>
+                        <Sun className="h-5 w-5" />
+                        <span>Light Mode</span>
+                      </>
+                    ) : (
+                      <>
+                        <Moon className="h-5 w-5" />
+                        <span>Dark Mode</span>
+                      </>
+                    )}
+                  </Button>
                   <Link to="/auth" onClick={closeMobileMenu}>
                     <Button variant="outline" className="w-full text-lg py-6">
                       Sign In
