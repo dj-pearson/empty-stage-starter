@@ -44,6 +44,13 @@ All colors MUST be HSL.
     --try-bite: 28 100% 68%; /* Soft Orange */
     --sky-blue: 199 84% 74%; /* Sky Blue RGB(129, 212, 250) */
 
+    /* Trust colors - Light Mode (darker for better contrast on light bg) */
+    --trust-blue: 211 58% 48%; /* Darker blue for contrast */
+    --trust-green: 142 45% 35%; /* Forest green, darker for readability */
+    --trust-warm-orange: 28 85% 50%; /* Darker orange for better contrast */
+    --trust-soft-pink: 345 70% 50%; /* Darker pink for visibility */
+    --trust-calm-purple: 262 35% 50%; /* Darker purple for text */
+
     --gradient-hero: linear-gradient(
       135deg,
       hsl(142 45% 30%),
@@ -97,6 +104,14 @@ All colors MUST be HSL.
     --safe-food: 143 41% 74%;
     --try-bite: 28 100% 68%;
     --sky-blue: 199 84% 74%;
+
+    /* Trust colors - Dark Mode (lighter for better contrast on dark bg) */
+    --trust-blue: 211 70% 70%; /* Lighter blue for dark mode */
+    --trust-green: 142 50% 65%; /* Lighter green for dark mode */
+    --trust-warm-orange: 28 90% 75%; /* Lighter orange for dark mode */
+    --trust-soft-pink: 345 80% 75%; /* Lighter pink for dark mode */
+    --trust-calm-purple: 262 50% 75%; /* Lighter purple for dark mode */
+
     --gradient-hero: linear-gradient(
       135deg,
       hsl(143 41% 74%),
