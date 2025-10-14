@@ -270,11 +270,9 @@ const Landing = () => {
                   suggestions over time.
                 </p>
                 <p className="text-muted-foreground leading-relaxed">
-                  This gentle approach to introducing new foods has helped
-                  thousands of families expand their picky eater's diet without
-                  mealtime battles, tears, or force-feeding. Parents report that
-                  their children become more adventurous eaters and try new
-                  foods more willingly when using EatPal's try bite system.
+                  This gentle approach to introducing new foods aims to help families expand their picky eater's diet without
+                  mealtime battles, tears, or force-feeding. Our goal is to help children become more adventurous eaters and try new
+                  foods more willingly.
                 </p>
               </div>
             </div>

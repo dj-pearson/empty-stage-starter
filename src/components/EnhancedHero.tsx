@@ -13,21 +13,7 @@ import { LazyFoodOrbit } from '@/components/LazyFoodOrbit';
 export function EnhancedHero() {
   const shouldReduceMotion = useReducedMotion();
 
-  const trustBadges = [
-    {
-      variant: 'pediatrician' as const,
-      label: 'Pediatrician Approved',
-    },
-    {
-      variant: 'nutritionist' as const,
-      label: 'Certified Nutritionists',
-    },
-    {
-      variant: 'families' as const,
-      value: '1,000+',
-      label: 'Families Helped',
-    },
-  ];
+  // Trust badges removed - launching soon, no families helped yet
 
   return (
     <LazyMotion features={domAnimation} strict>
@@ -113,15 +99,7 @@ export function EnhancedHero() {
             try bites, track nutrition, and auto-generate grocery lists.
           </m.p>
 
-          {/* Trust Badges */}
-          <m.div
-            initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: shouldReduceMotion ? 0 : 0.8, delay: 0.3 }}
-            className="flex justify-center mb-10"
-          >
-            <TrustBadges badges={trustBadges} />
-          </m.div>
+          {/* Trust Badges removed - launching soon */}
 
           {/* CTA Buttons */}
           <m.div

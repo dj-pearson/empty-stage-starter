@@ -34,27 +34,13 @@ const sections: Section[] = [
     ],
     gradient: 'from-trust-green/20 dark:from-trust-green/30 to-trust-blue/10 dark:to-trust-blue/25'
   },
-  {
-    id: 'tips',
-    title: 'Expert Guidance',
-    icon: '💡',
-    description: 'Science-backed strategies from certified nutritionists',
-    trustSignal: '15+ years pediatric nutrition experience',
-    features: [
-      'Daily tips from feeding therapists',
-      'Video tutorials on mealtime strategies',
-      'Sensory integration techniques',
-      'Behavior management guides',
-      '24/7 chat with certified nutritionists'
-    ],
-    gradient: 'from-trust-warmOrange/20 dark:from-trust-warmOrange/30 to-trust-softPink/30 dark:to-trust-softPink/40'
-  },
+  // Expert Guidance section removed - feature coming later
   {
     id: 'progress',
     title: 'Track Progress',
     icon: '📊',
     description: 'Celebrate every new food your child tries',
-    trustSignal: '94% of families see improvement in 4 weeks',
+    trustSignal: 'Track every milestone',
     features: [
       'Visual progress dashboard',
       'New foods tried counter',
