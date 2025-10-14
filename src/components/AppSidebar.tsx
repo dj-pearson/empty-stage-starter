@@ -83,8 +83,8 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       {/* Header with Logo */}
-      <SidebarHeader className="border-b border-border px-4 py-3 space-y-3">
-        <div className="flex items-center justify-between">
+      <SidebarHeader className="border-b border-border px-4 py-4">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <img 
               src="/Logo-Green.png" 
@@ -118,12 +118,13 @@ export function AppSidebar() {
                       to={item.to}
                       end={item.to === "/dashboard"}
                       className={({ isActive }) =>
-                        isActive
+                        `flex items-center gap-2 ${isActive
                           ? "bg-primary/10 text-primary font-medium no-underline visited:no-underline"
                           : "text-sidebar-foreground visited:text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline visited:no-underline"
+                        }`
                       }
                     >
-                      <item.icon className="h-4 w-4" />
+                      <item.icon className="h-4 w-4 shrink-0" />
                       {!isCollapsed && <span>{item.label}</span>}
                     </NavLink>
                   </SidebarMenuButton>
@@ -144,12 +145,13 @@ export function AppSidebar() {
                   <NavLink
                     to={item.to}
                     className={({ isActive }) =>
-                      isActive
+                      `flex items-center gap-2 ${isActive
                         ? "bg-primary/10 text-primary font-medium no-underline visited:no-underline"
                         : "text-sidebar-foreground visited:text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline visited:no-underline"
+                      }`
                     }
                   >
-                    <item.icon className="h-4 w-4" />
+                    <item.icon className="h-4 w-4 shrink-0" />
                     {!isCollapsed && <span>{item.label}</span>}
                   </NavLink>
                   </SidebarMenuButton>
@@ -170,12 +172,13 @@ export function AppSidebar() {
                     <NavLink
                       to={item.to}
                       className={({ isActive }) =>
-                        isActive
+                        `flex items-center gap-2 ${isActive
                           ? "bg-primary/10 text-primary font-medium no-underline visited:no-underline"
                           : "text-sidebar-foreground visited:text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline visited:no-underline"
+                        }`
                       }
                     >
-                      <item.icon className="h-4 w-4" />
+                      <item.icon className="h-4 w-4 shrink-0" />
                       {!isCollapsed && <span>{item.label}</span>}
                     </NavLink>
                   </SidebarMenuButton>
@@ -196,12 +199,13 @@ export function AppSidebar() {
                     <NavLink
                       to="/admin"
                       className={({ isActive }) =>
-                        isActive
+                        `flex items-center gap-2 ${isActive
                           ? "bg-primary/10 text-primary font-medium no-underline visited:no-underline"
                           : "text-sidebar-foreground visited:text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline visited:no-underline"
+                        }`
                       }
                     >
-                      <Shield className="h-4 w-4" />
+                      <Shield className="h-4 w-4 shrink-0" />
                       {!isCollapsed && <span>Admin Panel</span>}
                     </NavLink>
                   </SidebarMenuButton>
