@@ -390,22 +390,23 @@ const Landing = () => {
       {/* CTA Section */}
       <section className="py-24 px-4 bg-gradient-to-br from-primary to-secondary">
         <div className="container mx-auto text-center max-w-3xl">
-          <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-white">
+          <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary-foreground">
             Launching November 1st, 2025
           </h2>
-          <p className="text-xl text-white/90 mb-10 leading-relaxed">
+          <p className="text-xl text-primary-foreground/90 mb-10 leading-relaxed">
             Join the waitlist to be the first to know when we launch. Transform
             how you plan meals for your picky eater!
           </p>
           <Link to="/auth">
             <Button
               size="lg"
-              className="gap-2 bg-white text-primary hover:bg-white/90 text-lg px-8 py-6 shadow-xl"
+              variant="secondary"
+              className="gap-2 text-lg px-8 py-6 shadow-xl"
             >
               Sign In (Existing Users) <ArrowRight className="h-5 w-5" />
             </Button>
           </Link>
-          <p className="text-sm text-white/70 mt-4">
+          <p className="text-sm text-primary-foreground/70 mt-4">
             New registrations opening soon
           </p>
         </div>

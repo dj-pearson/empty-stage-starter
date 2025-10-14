@@ -73,19 +73,19 @@ export function EnhancedHero() {
           </m.div>
 
           {/* Main Headline */}
-              <m.h1
-                initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: shouldReduceMotion ? 0 : 0.8, delay: 0.1 }}
-                className="text-5xl md:text-7xl font-heading font-bold mb-6 leading-tight"
-              >
-                <span className="bg-gradient-to-r from-trust-gradient-start to-trust-gradient-end dark:from-emerald-400 dark:to-green-400 bg-clip-text text-transparent">
-                  Kids Meal Planning
-                </span>{' '}
-                for
-                <br />
-                <span className="text-primary">Picky Eaters Made Easy</span>
-              </m.h1>
+          <m.h1
+            initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: shouldReduceMotion ? 0 : 0.8, delay: 0.1 }}
+            className="text-5xl md:text-7xl font-heading font-bold mb-6 leading-tight"
+          >
+            <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+              Kids Meal Planning
+            </span>{' '}
+            for
+            <br />
+            <span className="text-primary">Picky Eaters Made Easy</span>
+          </m.h1>
 
           {/* Subheadline */}
           <m.p
@@ -114,7 +114,7 @@ export function EnhancedHero() {
             >
               <Button
                 size="lg"
-                className="gap-2 text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-shadow bg-trust-green hover:bg-trust-green/90"
+                className="gap-2 text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-shadow"
                 onClick={() =>
                   document
                     .getElementById('waitlist')
@@ -177,7 +177,7 @@ export function EnhancedHero() {
                 whileHover={shouldReduceMotion ? {} : { scale: 1.05 }}
                 className="group cursor-default"
               >
-                <div className="text-4xl font-heading font-bold text-primary mb-2 transition-colors group-hover:text-trust-green">
+                <div className="text-4xl font-heading font-bold text-primary mb-2 transition-colors group-hover:text-primary/80">
                   {stat.value}
                 </div>
                 <div className="text-sm text-muted-foreground">{stat.label}</div>
