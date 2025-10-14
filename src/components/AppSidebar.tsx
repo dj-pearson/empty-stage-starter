@@ -119,8 +119,8 @@ export function AppSidebar() {
                       end={item.to === "/dashboard"}
                       className={({ isActive }) =>
                         isActive
-                          ? "bg-primary/10 text-primary font-medium"
-                          : "hover:bg-muted/50"
+                          ? "bg-primary/10 text-primary font-medium no-underline"
+                          : "text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline"
                       }
                     >
                       <item.icon className="h-4 w-4" />
@@ -145,8 +145,8 @@ export function AppSidebar() {
                       to={item.to}
                       className={({ isActive }) =>
                         isActive
-                          ? "bg-primary/10 text-primary font-medium"
-                          : "hover:bg-muted/50"
+                          ? "bg-primary/10 text-primary font-medium no-underline"
+                          : "text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline"
                       }
                     >
                       <item.icon className="h-4 w-4" />
@@ -171,8 +171,8 @@ export function AppSidebar() {
                       to={item.to}
                       className={({ isActive }) =>
                         isActive
-                          ? "bg-primary/10 text-primary font-medium"
-                          : "hover:bg-muted/50"
+                          ? "bg-primary/10 text-primary font-medium no-underline"
+                          : "text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline"
                       }
                     >
                       <item.icon className="h-4 w-4" />
@@ -197,8 +197,8 @@ export function AppSidebar() {
                       to="/admin"
                       className={({ isActive }) =>
                         isActive
-                          ? "bg-primary/10 text-primary font-medium"
-                          : "hover:bg-muted/50"
+                          ? "bg-primary/10 text-primary font-medium no-underline"
+                          : "text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline"
                       }
                     >
                       <Shield className="h-4 w-4" />
