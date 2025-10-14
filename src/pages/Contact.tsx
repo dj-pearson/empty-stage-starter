@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Mail, MessageSquare } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { captureContactFormLead } from "@/lib/lead-capture";
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -21,12 +22,28 @@ const Contact = () => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Simulate form submission
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      // Capture lead in database with full automation
+      const result = await captureContactFormLead(
+        formData.name,
+        formData.email,
+        formData.subject,
+        formData.message
+      );
 
-    toast.success("Message sent! We'll get back to you within 24-48 hours.");
-    setFormData({ name: "", email: "", subject: "", message: "" });
-    setIsSubmitting(false);
+      if (result.success) {
+        toast.success("Message sent! We'll get back to you within 24-48 hours. Check your email for a confirmation.");
+        setFormData({ name: "", email: "", subject: "", message: "" });
+      } else {
+        toast.error("There was an issue submitting your message. Please try again or email us directly.");
+        console.error("Lead capture error:", result.error);
+      }
+    } catch (error) {
+      console.error("Contact form error:", error);
+      toast.error("There was an issue submitting your message. Please try again or email us directly.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
