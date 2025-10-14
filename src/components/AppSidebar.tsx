@@ -119,8 +119,8 @@ export function AppSidebar() {
                       end={item.to === "/dashboard"}
                       className={({ isActive }) =>
                         isActive
-                          ? "bg-primary/10 text-primary font-medium no-underline"
-                          : "text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline"
+                          ? "bg-primary/10 text-primary font-medium no-underline visited:no-underline"
+                          : "text-sidebar-foreground visited:text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline visited:no-underline"
                       }
                     >
                       <item.icon className="h-4 w-4" />
@@ -141,17 +141,17 @@ export function AppSidebar() {
               {toolsNavItems.map((item) => (
                 <SidebarMenuItem key={item.to}>
                   <SidebarMenuButton asChild tooltip={item.label}>
-                    <NavLink
-                      to={item.to}
-                      className={({ isActive }) =>
-                        isActive
-                          ? "bg-primary/10 text-primary font-medium no-underline"
-                          : "text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline"
-                      }
-                    >
-                      <item.icon className="h-4 w-4" />
-                      {!isCollapsed && <span>{item.label}</span>}
-                    </NavLink>
+                  <NavLink
+                    to={item.to}
+                    className={({ isActive }) =>
+                      isActive
+                        ? "bg-primary/10 text-primary font-medium no-underline visited:no-underline"
+                        : "text-sidebar-foreground visited:text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline visited:no-underline"
+                    }
+                  >
+                    <item.icon className="h-4 w-4" />
+                    {!isCollapsed && <span>{item.label}</span>}
+                  </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -171,8 +171,8 @@ export function AppSidebar() {
                       to={item.to}
                       className={({ isActive }) =>
                         isActive
-                          ? "bg-primary/10 text-primary font-medium no-underline"
-                          : "text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline"
+                          ? "bg-primary/10 text-primary font-medium no-underline visited:no-underline"
+                          : "text-sidebar-foreground visited:text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline visited:no-underline"
                       }
                     >
                       <item.icon className="h-4 w-4" />
@@ -197,8 +197,8 @@ export function AppSidebar() {
                       to="/admin"
                       className={({ isActive }) =>
                         isActive
-                          ? "bg-primary/10 text-primary font-medium no-underline"
-                          : "text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline"
+                          ? "bg-primary/10 text-primary font-medium no-underline visited:no-underline"
+                          : "text-sidebar-foreground visited:text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline visited:no-underline"
                       }
                     >
                       <Shield className="h-4 w-4" />
