@@ -122,7 +122,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (mounted) {
           if (kidsRes.data) {
             setKids(kidsRes.data as unknown as Kid[]);
-            setActiveKidId(kidsRes.data[0]?.id ?? null);
+            // Default to Family view (null) instead of first kid
+            setActiveKidId(null);
           }
           if (foodsRes.data) setFoods(foodsRes.data as unknown as Food[]);
           if (recipesRes.data) setRecipes(recipesRes.data as unknown as Recipe[]);
@@ -154,7 +155,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             if (mounted) {
               if (kidsRes.data) {
                 setKids(kidsRes.data as unknown as Kid[]);
-                setActiveKidId(kidsRes.data[0]?.id ?? null);
+                // Default to Family view (null) instead of first kid
+                setActiveKidId(null);
               }
               if (foodsRes.data) setFoods(foodsRes.data as unknown as Food[]);
               
@@ -343,7 +345,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             setKids([...kids, { ...kid, id: generateId() }]);
           } else if (data) {
             setKids([...kids, data as unknown as Kid]);
-            setActiveKidId((data as any).id);
+            // Keep Family view instead of auto-selecting the new kid
+            // setActiveKidId((data as any).id);
           }
         });
     } else {
