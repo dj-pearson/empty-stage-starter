@@ -19,6 +19,7 @@ import Kids from "./pages/Kids";
 import InsightsDashboard from "./pages/InsightsDashboard";
 import Analytics from "./pages/Analytics";
 import Admin from "./pages/Admin";
+import AdminDashboard from "./pages/AdminDashboard";
 import FoodTracker from "./pages/FoodTracker";
 import AICoach from "./pages/AICoach";
 import MealBuilder from "./pages/MealBuilder";
@@ -53,6 +54,9 @@ const App = () => (
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/admin-dashboard" element={<AdminDashboard />} />
+
+            {/* Main Dashboard with nested routes */}
             <Route path="/dashboard" element={<Dashboard />}>
               <Route index element={<Home />} />
               <Route path="kids" element={<Kids />} />
@@ -67,6 +71,32 @@ const App = () => (
               <Route path="ai-coach" element={<AICoach />} />
               <Route path="meal-builder" element={<MealBuilder />} />
               <Route path="food-chaining" element={<FoodChaining />} />
+            </Route>
+
+            {/* Convenience aliases - redirect to dashboard nested routes */}
+            <Route path="/kids" element={<Dashboard />}>
+              <Route index element={<Kids />} />
+            </Route>
+            <Route path="/pantry" element={<Dashboard />}>
+              <Route index element={<Pantry />} />
+            </Route>
+            <Route path="/recipes" element={<Dashboard />}>
+              <Route index element={<Recipes />} />
+            </Route>
+            <Route path="/planner" element={<Dashboard />}>
+              <Route index element={<Planner />} />
+            </Route>
+            <Route path="/grocery" element={<Dashboard />}>
+              <Route index element={<Grocery />} />
+            </Route>
+            <Route path="/food-tracker" element={<Dashboard />}>
+              <Route index element={<FoodTracker />} />
+            </Route>
+            <Route path="/meal-builder" element={<Dashboard />}>
+              <Route index element={<MealBuilder />} />
+            </Route>
+            <Route path="/insights" element={<Dashboard />}>
+              <Route index element={<InsightsDashboard />} />
             </Route>
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
