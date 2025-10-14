@@ -41,6 +41,7 @@ import { toast } from "sonner";
 import { LiveActivityFeed } from "@/components/admin/LiveActivityFeed";
 import { SystemHealthDashboard } from "@/components/admin/SystemHealthDashboard";
 import { AlertManager } from "@/components/admin/AlertManager";
+import { AdminIntegrationManager } from "@/components/admin/AdminIntegrationManager";
 
 export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
@@ -259,6 +260,10 @@ export default function AdminDashboard() {
           <TabsTrigger value="notifications">
             <Bell className="w-4 h-4 mr-2" />
             Old Notifications
+          </TabsTrigger>
+          <TabsTrigger value="integrations">
+            <Zap className="w-4 h-4 mr-2" />
+            Integrations
           </TabsTrigger>
         </TabsList>
 
@@ -520,6 +525,11 @@ export default function AdminDashboard() {
               )}
             </div>
           </Card>
+        </TabsContent>
+
+        {/* Integrations Tab */}
+        <TabsContent value="integrations">
+          <AdminIntegrationManager />
         </TabsContent>
       </Tabs>
     </div>

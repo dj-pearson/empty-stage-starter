@@ -28,6 +28,7 @@ import { RecipeCollectionsSelector } from "@/components/RecipeCollectionsSelecto
 import { CreateCollectionDialog } from "@/components/CreateCollectionDialog";
 import { ManageCollectionsDialog } from "@/components/ManageCollectionsDialog";
 import { AddToCollectionsDialog } from "@/components/AddToCollectionsDialog";
+import { OrderIngredientsDialog } from "@/components/OrderIngredientsDialog";
 import {
   Dialog,
   DialogContent,
@@ -92,6 +93,10 @@ export default function Recipes() {
   const [collections, setCollections] = useState<RecipeCollection[]>([]);
   const [collectionItems, setCollectionItems] = useState<Record<string, string[]>>({});
   const [editingCollection, setEditingCollection] = useState<RecipeCollection | null>(null);
+  
+  // Order ingredients states
+  const [showOrderDialog, setShowOrderDialog] = useState(false);
+  const [recipeForOrder, setRecipeForOrder] = useState<Recipe | null>(null);
   
   // Fetch user data
   useEffect(() => {
@@ -421,6 +426,12 @@ export default function Recipes() {
     setShowManageCollectionsDialog(false);
     setShowCreateCollectionDialog(true);
   };
+  
+  // Handle order ingredients
+  const handleOrderIngredients = (recipe: Recipe) => {
+    setRecipeForOrder(recipe);
+    setShowOrderDialog(true);
+  };
 
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
@@ -546,6 +557,7 @@ export default function Recipes() {
                     onDelete={setDeleteId}
                     onAddToGroceryList={addRecipeToGroceryList}
                     onAddToCollections={handleAddToCollections}
+                    onOrderIngredients={handleOrderIngredients}
                   />
                 ))}
               </div>
@@ -749,6 +761,19 @@ export default function Recipes() {
             collections={collections}
             currentCollectionIds={getRecipeCollectionIds(recipeForCollections.id)}
             onCollectionsUpdated={loadCollectionItems}
+          />
+        )}
+        
+        {/* Order Ingredients Dialog */}
+        {recipeForOrder && (
+          <OrderIngredientsDialog
+            recipe={recipeForOrder}
+            foods={foods}
+            open={showOrderDialog}
+            onOpenChange={(open) => {
+              setShowOrderDialog(open);
+              if (!open) setRecipeForOrder(null);
+            }}
           />
         )}
       </div>

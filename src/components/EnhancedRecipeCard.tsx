@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { Recipe, Food, Kid } from "@/types";
 import { cn } from "@/lib/utils";
+import { RecipeSchemaMarkup } from "@/components/RecipeSchemaMarkup";
+import { RecipeExportActions } from "@/components/RecipeExportActions";
 
 interface EnhancedRecipeCardProps {
   recipe: Recipe;
@@ -27,6 +29,7 @@ interface EnhancedRecipeCardProps {
   onDelete?: (recipeId: string) => void;
   onAddToGroceryList?: (recipe: Recipe) => void;
   onAddToCollections?: (recipe: Recipe) => void;
+  onOrderIngredients?: (recipe: Recipe) => void;
   className?: string;
 }
 
@@ -38,6 +41,7 @@ export function EnhancedRecipeCard({
   onDelete,
   onAddToGroceryList,
   onAddToCollections,
+  onOrderIngredients,
   className,
 }: EnhancedRecipeCardProps) {
   // Get recipe foods and check stock status
@@ -82,8 +86,12 @@ export function EnhancedRecipeCard({
   };
 
   return (
-    <Card className={cn("hover:shadow-lg transition-all overflow-hidden", className)}>
-      {/* Recipe Image */}
+    <>
+      {/* Schema.org JSON-LD Markup for SEO */}
+      <RecipeSchemaMarkup recipe={recipe} foods={recipeFoods} />
+      
+      <Card className={cn("hover:shadow-lg transition-all overflow-hidden", className)}>
+        {/* Recipe Image */}
       {recipe.image_url && (
         <div className="relative w-full h-48 overflow-hidden">
           <img
@@ -331,7 +339,7 @@ export function EnhancedRecipeCard({
       </CardContent>
 
       {/* Footer Actions */}
-      {(onAddToGroceryList || onAddToCollections) && (
+      {(onAddToGroceryList || onAddToCollections || onOrderIngredients) && (
         <CardFooter className="pt-0 gap-2 flex-col sm:flex-row">
           {onAddToGroceryList && (
             <Button
@@ -345,6 +353,18 @@ export function EnhancedRecipeCard({
               Add to Grocery List
             </Button>
           )}
+          {onOrderIngredients && (
+            <Button
+              onClick={() => onOrderIngredients(recipe)}
+              variant="default"
+              size="sm"
+              className="w-full"
+              disabled={!recipe.food_ids || recipe.food_ids.length === 0}
+            >
+              <ShoppingCart className="h-4 w-4 mr-2" />
+              Order Ingredients
+            </Button>
+          )}
           {onAddToCollections && (
             <Button
               onClick={() => onAddToCollections(recipe)}
@@ -356,8 +376,19 @@ export function EnhancedRecipeCard({
               Add to Collection
             </Button>
           )}
+          {/* Export & Share Actions */}
+          <RecipeExportActions
+            recipe={recipe}
+            foods={recipeFoods}
+            trigger={
+              <Button variant="outline" size="sm" className="w-full">
+                Export & Share
+              </Button>
+            }
+          />
         </CardFooter>
       )}
-    </Card>
+      </Card>
+    </>
   );
 }
