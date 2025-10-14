@@ -108,19 +108,19 @@ const Landing = () => {
           <nav className="hidden md:flex gap-6 items-center">
             <a
               href="#features"
-              className="hover:text-primary transition-colors font-medium"
+              className="text-foreground hover:text-primary transition-colors font-medium"
             >
               Features
             </a>
             <a
               href="#how-it-works"
-              className="hover:text-primary transition-colors font-medium"
+              className="text-foreground hover:text-primary transition-colors font-medium"
             >
               How It Works
             </a>
             <Link
               to="/pricing"
-              className="hover:text-primary transition-colors font-medium"
+              className="text-foreground hover:text-primary transition-colors font-medium"
             >
               Pricing
             </Link>
