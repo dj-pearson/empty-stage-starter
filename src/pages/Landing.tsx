@@ -166,21 +166,21 @@ const Landing = () => {
               <nav className="flex flex-col gap-4 mt-8">
                 <a
                   href="#features"
-                  className="text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted transition-colors"
+                  className="text-foreground text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted hover:text-foreground transition-colors"
                   onClick={closeMobileMenu}
                 >
                   Features
                 </a>
                 <a
                   href="#how-it-works"
-                  className="text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted transition-colors"
+                  className="text-foreground text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted hover:text-foreground transition-colors"
                   onClick={closeMobileMenu}
                 >
                   How It Works
                 </a>
                 <Link
                   to="/pricing"
-                  className="text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted transition-colors"
+                  className="text-foreground text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted hover:text-foreground transition-colors"
                   onClick={closeMobileMenu}
                 >
                   Pricing
