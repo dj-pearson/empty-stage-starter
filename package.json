@@ -23,7 +23,8 @@
     "eas:build:all:production": "eas build --platform all --profile production --non-interactive",
     "eas:submit:ios": "eas submit --platform ios --latest",
     "eas:submit:android": "eas submit --platform android --latest",
-    "prebuild": "npx expo prebuild --clean"
+    "prebuild": "npx expo prebuild --clean",
+    "setup:mobile:assets": "node scripts/setup-mobile-assets.cjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
