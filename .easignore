@@ -1,0 +1,93 @@
+# Git
+.git
+.gitignore
+.github
+
+# Dependencies
+node_modules/.cache
+
+# Build artifacts
+dist
+dist-ssr
+build
+.expo
+.expo-shared
+
+# Logs
+*.log
+logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Testing
+coverage
+__tests__
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+test
+tests
+
+# Documentation (except README)
+docs
+*.md
+!README.md
+!LICENSE.md
+
+# Environment
+.env.local
+.env.*.local
+.env.development
+.env.test
+
+# Large assets not needed for build
+public/assets/*.mp4
+public/assets/*.mov
+public/assets/*.avi
+
+# CloudFlare Pages (not needed for mobile)
+_headers
+_redirects
+wrangler.toml
+functions
+
+# Capacitor (being removed)
+android/
+ios/
+capacitor.config.ts
+capacitor.config.json
+
+# Supabase migrations (handled separately)
+supabase/migrations
+
+# Build scripts not needed
+scripts
+
+# CI/CD configs
+.circleci
+.travis.yml
+.gitlab-ci.yml
+
+# Misc
+.cache
+*.tgz
+*.gz
+
