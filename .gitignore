@@ -23,10 +23,15 @@ dist-ssr
 *.sln
 *.sw?
 
-# Capacitor
+# Capacitor (deprecated, migrated to Expo)
 android/
 ios/
 .capacitor/
+
+# Expo
+.expo/
+.expo-shared/
+web-build/
 
 # Environment variables
 .env

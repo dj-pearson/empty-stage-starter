@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { Food, Kid, PlanEntry, GroceryItem, Recipe } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
+import { getStorage } from "@/lib/platform";
 
 interface AppContextType {
   foods: Food[];
@@ -66,33 +67,55 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [householdId, setHouseholdId] = useState<string | null>(null);
 
-  // Load from localStorage on mount
+  // Load from storage on mount (platform-aware)
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const data = JSON.parse(stored);
-      setFoods(data.foods || []);
-      setKids(data.kids || []);
-      setRecipes(data.recipes || []);
-      setActiveKidId(data.activeKidId || (data.kids?.[0]?.id ?? null));
-      setPlanEntriesState(data.planEntries || []);
-      setGroceryItemsState(data.groceryItems || []);
-    } else {
-      // Initialize with starter data
-      const starterFoods = STARTER_FOODS.map(f => ({ ...f, id: generateId() }));
-      setFoods(starterFoods);
-      const defaultKid = { id: generateId(), name: "My Child", age: 5 };
-      setKids([defaultKid]);
-      setActiveKidId(defaultKid.id);
-    }
+    const loadData = async () => {
+      try {
+        const storage = await getStorage();
+        const stored = await storage.getItem(STORAGE_KEY);
+        if (stored) {
+          const data = JSON.parse(stored);
+          setFoods(data.foods || []);
+          setKids(data.kids || []);
+          setRecipes(data.recipes || []);
+          setActiveKidId(data.activeKidId || (data.kids?.[0]?.id ?? null));
+          setPlanEntriesState(data.planEntries || []);
+          setGroceryItemsState(data.groceryItems || []);
+        } else {
+          // Initialize with starter data
+          const starterFoods = STARTER_FOODS.map(f => ({ ...f, id: generateId() }));
+          setFoods(starterFoods);
+          const defaultKid = { id: generateId(), name: "My Child", age: 5 };
+          setKids([defaultKid]);
+          setActiveKidId(defaultKid.id);
+        }
+      } catch (error) {
+        console.error("Error loading data from storage:", error);
+        // Initialize with starter data on error
+        const starterFoods = STARTER_FOODS.map(f => ({ ...f, id: generateId() }));
+        setFoods(starterFoods);
+        const defaultKid = { id: generateId(), name: "My Child", age: 5 };
+        setKids([defaultKid]);
+        setActiveKidId(defaultKid.id);
+      }
+    };
+    loadData();
   }, []);
 
-  // Save to localStorage whenever data changes
+  // Save to storage whenever data changes (platform-aware)
   useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ foods, kids, recipes, activeKidId, planEntries, groceryItems })
-    );
+    const saveData = async () => {
+      try {
+        const storage = await getStorage();
+        await storage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ foods, kids, recipes, activeKidId, planEntries, groceryItems })
+        );
+      } catch (error) {
+        console.error("Error saving data to storage:", error);
+      }
+    };
+    saveData();
   }, [foods, kids, recipes, activeKidId, planEntries, groceryItems]);
 
   // Sync with Supabase auth and fetch household/kids when logged in

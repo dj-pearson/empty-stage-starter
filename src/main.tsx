@@ -1,3 +1,9 @@
+/**
+ * Web Entry Point for EatPal
+ * This file is only used for web builds via Vite
+ * Mobile builds use index.mobile.js and Expo Router
+ */
+
 import { createRoot } from "react-dom/client";
 import * as Sentry from "@sentry/react";
 import App from "./App.tsx";

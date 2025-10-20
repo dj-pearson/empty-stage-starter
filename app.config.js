@@ -3,9 +3,11 @@ export default {
     name: "EatPal",
     slug: "eatpal",
     version: "1.0.0",
+    scheme: "eatpal",
     orientation: "portrait",
     icon: "./public/icon-512x512.png",
     userInterfaceStyle: "automatic",
+    entryPoint: "./index.mobile.js",
     splash: {
       image: "./public/splash.png",
       resizeMode: "contain",
@@ -57,7 +59,8 @@ export default {
         {
           "photosPermission": "EatPal needs access to your photos to let you add meal images"
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     extra: {
       eas: {
