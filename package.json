@@ -24,7 +24,9 @@
     "eas:submit:ios": "eas submit --platform ios --latest",
     "eas:submit:android": "eas submit --platform android --latest",
     "prebuild": "npx expo prebuild --clean",
-    "setup:mobile:assets": "node scripts/setup-mobile-assets.cjs"
+    "setup:mobile:assets": "node scripts/setup-mobile-assets.cjs",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
