@@ -63,6 +63,25 @@ export function SubscriptionStatusBanner() {
           const days = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
           setDaysRemaining(days > 0 ? days : 0);
         }
+      } else {
+        // No subscription found - user is on free plan
+        // Get the free plan ID
+        const { data: freePlan } = await supabase
+          .from("subscription_plans")
+          .select("id, name")
+          .eq("price_monthly", 0)
+          .single();
+
+        if (freePlan) {
+          setSubscription({
+            plan_name: freePlan.name,
+            status: null,
+            trial_end_date: null,
+            current_period_end: null,
+            cancel_at_period_end: false,
+            plan_id: freePlan.id,
+          });
+        }
       }
     } catch (error) {
       console.error("Error loading subscription:", error);
@@ -71,7 +90,42 @@ export function SubscriptionStatusBanner() {
     }
   };
 
-  if (loading || !subscription) return null;
+  if (loading) return null;
+  
+  // No subscription - show free plan with upgrade prompt
+  if (!subscription || subscription.status === null) {
+    return (
+      <Card className="mb-6 bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20">
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-full bg-primary/10">
+                <Sparkles className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-semibold text-lg">
+                    {subscription?.plan_name || "Free"} Plan
+                  </h3>
+                  <Badge variant="secondary">Current</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Upgrade to unlock advanced features like AI meal planning, unlimited recipes, and more!
+                </p>
+              </div>
+            </div>
+            <Button 
+              onClick={() => navigate("/pricing")}
+              className="w-full md:w-auto"
+            >
+              <TrendingUp className="w-4 h-4 mr-2" />
+              Upgrade Now
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   // Show trial banner
   if (subscription.status === "trialing" && daysRemaining !== null) {
