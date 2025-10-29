@@ -99,6 +99,7 @@ export function SEOManager() {
   const [robotsTxt, setRobotsTxt] = useState("");
   const [sitemapXml, setSitemapXml] = useState("");
   const [llmsTxt, setLlmsTxt] = useState("");
+  const [isRegeneratingSitemap, setIsRegeneratingSitemap] = useState(false);
   const [metaTags, setMetaTags] = useState({
     title: "EatPal - Picky Eater Meal Planning Made Easy",
     description:
@@ -1082,6 +1083,119 @@ export function SEOManager() {
     toast.success("Competitor removed");
   };
 
+  const regenerateSitemap = async () => {
+    setIsRegeneratingSitemap(true);
+    
+    try {
+      // Fetch all published blog posts
+      const { data: posts, error } = await supabase
+        .from('blog_posts')
+        .select('slug, updated_at, published_at, featured_image_url')
+        .eq('status', 'published')
+        .lte('published_at', new Date().toISOString())
+        .order('published_at', { ascending: false });
+
+      if (error) throw error;
+
+      const baseUrl = window.location.origin;
+      const today = new Date().toISOString().split('T')[0];
+
+      // Static pages
+      const staticPages = [
+        { url: "/", priority: "1.0", changefreq: "daily", lastmod: today },
+        { url: "/auth", priority: "0.8", changefreq: "monthly", lastmod: today },
+        { url: "/pricing", priority: "0.9", changefreq: "weekly", lastmod: today },
+        { url: "/dashboard", priority: "0.8", changefreq: "weekly", lastmod: today },
+        { url: "/planner", priority: "0.9", changefreq: "weekly", lastmod: today },
+        { url: "/kids", priority: "0.8", changefreq: "weekly", lastmod: today },
+        { url: "/tracker", priority: "0.8", changefreq: "weekly", lastmod: today },
+        { url: "/pantry", priority: "0.7", changefreq: "weekly", lastmod: today },
+        { url: "/recipes", priority: "0.8", changefreq: "weekly", lastmod: today },
+        { url: "/grocery", priority: "0.7", changefreq: "weekly", lastmod: today },
+        { url: "/blog", priority: "0.8", changefreq: "daily", lastmod: today },
+        { url: "/faq", priority: "0.7", changefreq: "monthly", lastmod: today },
+        { url: "/contact", priority: "0.6", changefreq: "monthly", lastmod: today },
+        { url: "/privacy", priority: "0.3", changefreq: "yearly", lastmod: today },
+        { url: "/terms", priority: "0.3", changefreq: "yearly", lastmod: today },
+      ];
+
+      // Build sitemap
+      let sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+
+  <!-- Homepage -->
+  <url>
+    <loc>${baseUrl}/</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>${baseUrl}/Cover.png</image:loc>
+      <image:title>EatPal - Kids Meal Planning for Picky Eaters</image:title>
+      <image:caption>The #1 meal planning app for picky eaters and selective eating</image:caption>
+    </image:image>
+  </url>
+
+`;
+
+      // Add static pages
+      staticPages.slice(1).forEach(page => {
+        sitemap += `  <!-- ${page.url.replace('/', '').replace('-', ' ').toUpperCase() || 'Page'} -->
+  <url>
+    <loc>${baseUrl}${page.url}</loc>
+    <lastmod>${page.lastmod}</lastmod>
+    <changefreq>${page.changefreq}</changefreq>
+    <priority>${page.priority}</priority>
+  </url>
+
+`;
+      });
+
+      // Add blog posts
+      if (posts && posts.length > 0) {
+        sitemap += `  <!-- Blog Posts (${posts.length} posts) -->\n`;
+        posts.forEach(post => {
+          const lastmod = post.updated_at 
+            ? new Date(post.updated_at).toISOString().split('T')[0]
+            : new Date(post.published_at).toISOString().split('T')[0];
+
+          sitemap += `  <url>
+    <loc>${baseUrl}/blog/${post.slug}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>`;
+
+          // Add featured image if available
+          if (post.featured_image_url) {
+            sitemap += `
+    <image:image>
+      <image:loc>${post.featured_image_url.startsWith('http') ? post.featured_image_url : baseUrl + post.featured_image_url}</image:loc>
+    </image:image>`;
+          }
+
+          sitemap += `
+  </url>
+
+`;
+        });
+      }
+
+      sitemap += `</urlset>`;
+
+      setSitemapXml(sitemap);
+      toast.success(`Sitemap regenerated with ${posts?.length || 0} blog posts!`);
+    } catch (error) {
+      console.error('Error regenerating sitemap:', error);
+      toast.error('Failed to regenerate sitemap');
+    } finally {
+      setIsRegeneratingSitemap(false);
+    }
+  };
+
   const loadSEOSettings = () => {
     // Generate default robots.txt
     const defaultRobots = `# Robots.txt for EatPal
@@ -1968,10 +2082,33 @@ RESTful API available for integrations. Contact for API access.
                 sitemap.xml
               </CardTitle>
               <CardDescription>
-                Help search engines discover your pages. Place this file in your /public directory.
+                Help search engines discover your pages. Regenerate to include all published blog posts.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center gap-2">
+                  <Info className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <span className="text-sm font-medium">Click Regenerate to include latest blog posts</span>
+                </div>
+                <Button
+                  onClick={regenerateSitemap}
+                  disabled={isRegeneratingSitemap}
+                  size="sm"
+                >
+                  {isRegeneratingSitemap ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Regenerating...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Regenerate Sitemap
+                    </>
+                  )}
+                </Button>
+              </div>
               <Textarea
                 value={sitemapXml}
                 onChange={(e) => setSitemapXml(e.target.value)}
@@ -1993,6 +2130,11 @@ RESTful API available for integrations. Contact for API access.
                   <Download className="h-4 w-4 mr-2" />
                   Download File
                 </Button>
+              </div>
+              <div className="p-4 bg-yellow-50 dark:bg-yellow-950/30 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                  <strong>Note:</strong> After regenerating, download the sitemap.xml file and manually replace the one in your public folder, or set up the dynamic sitemap edge function for automatic updates.
+                </p>
               </div>
             </CardContent>
           </Card>
