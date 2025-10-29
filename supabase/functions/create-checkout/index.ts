@@ -42,7 +42,9 @@ serve(async (req) => {
       throw new Error("Missing required fields");
     }
 
-    // Get plan details
+    console.log("Fetching plan for:", planId);
+
+    // Get plan details - log the full plan object to see what fields exist
     const { data: plan, error: planError } = await supabase
       .from("subscription_plans")
       .select("*")
@@ -50,8 +52,11 @@ serve(async (req) => {
       .single();
 
     if (planError || !plan) {
+      console.error("Plan fetch error:", planError);
       throw new Error("Plan not found");
     }
+
+    console.log("Plan object:", JSON.stringify(plan, null, 2));
 
     // Get or create Stripe customer
     let customerId: string;
@@ -75,20 +80,19 @@ serve(async (req) => {
       customerId = customer.id;
     }
 
-    // Determine the correct price ID with robust fallbacks
-    const priceCandidates = [
-      billingCycle === "yearly" ? plan.stripe_price_id_yearly : null,
-      plan[`stripe_price_id_${billingCycle}`], // e.g., stripe_price_id_monthly/yearly
-      plan.stripe_price_id, // common single price field
-      plan.stripe_price_id_monthly,
-      plan.stripe_price_id_yearly,
-    ].filter(Boolean) as string[];
+    // Try multiple possible field names for Stripe price ID
+    const priceId = 
+      plan.stripe_price_id ||
+      plan.stripePriceId ||
+      (billingCycle === "yearly" ? plan.stripe_price_id_yearly || plan.stripe_yearly_price_id : null) ||
+      (billingCycle === "monthly" ? plan.stripe_price_id_monthly || plan.stripe_monthly_price_id : null);
 
-    const priceId = priceCandidates[0];
+    console.log("Resolved price ID:", priceId);
 
     if (!priceId) {
+      console.error("No price ID found. Available plan fields:", Object.keys(plan));
       throw new Error(
-        `Price ID not configured for this plan (billingCycle=${billingCycle}). Expected one of: stripe_price_id, stripe_price_id_monthly, stripe_price_id_yearly`
+        `Price ID not configured for this plan. Billing cycle: ${billingCycle}. Please configure Stripe price IDs in Supabase.`
       );
     }
 
