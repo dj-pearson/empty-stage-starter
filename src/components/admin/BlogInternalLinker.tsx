@@ -230,17 +230,43 @@ const BlogInternalLinker = () => {
   };
 
   const insertLinkIntoContent = (content: string, keyword: string, targetSlug: string, targetTitle: string): string => {
-    // Find the first occurrence of the keyword (case-insensitive)
-    const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-    const match = content.match(regex);
+    console.log("Attempting to insert link for keyword:", keyword);
     
-    if (!match) return content;
+    // Clean keyword for better matching
+    const cleanKeyword = keyword.trim();
+    
+    // Try to find the keyword in plain text (handles both HTML and Markdown)
+    // Look for the keyword not already inside an <a> tag or [link]() syntax
+    const notInLinkRegex = new RegExp(
+      `(?<!<a[^>]*>)(?<!\\[)\\b(${cleanKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\b(?![^<]*</a>)(?!\\])`,
+      'i'
+    );
+    
+    const match = content.match(notInLinkRegex);
+    
+    if (!match) {
+      console.log("No match found for keyword:", cleanKeyword);
+      return content;
+    }
 
-    // Create the link
-    const link = `<a href="/blog/${targetSlug}" title="${targetTitle}">${match[0]}</a>`;
+    console.log("Match found:", match[0]);
+
+    // Check if content is Markdown or HTML
+    const isMarkdown = content.includes('##') || content.includes('**') || /\[.*\]\(.*\)/.test(content);
+    
+    let link: string;
+    if (isMarkdown) {
+      // Create Markdown link
+      link = `[${match[0]}](/blog/${targetSlug} "${targetTitle}")`;
+    } else {
+      // Create HTML link
+      link = `<a href="/blog/${targetSlug}" title="${targetTitle.replace(/"/g, '&quot;')}">${match[0]}</a>`;
+    }
     
     // Replace only the first occurrence
-    return content.replace(regex, link);
+    const updatedContent = content.replace(notInLinkRegex, link);
+    console.log("Link inserted successfully");
+    return updatedContent;
   };
 
   const approveOpportunities = async (indices: number[]) => {
@@ -249,13 +275,21 @@ const BlogInternalLinker = () => {
       return;
     }
 
+    console.log(`Starting approval for ${indices.length} opportunities`);
     setIsApproving(true);
     let successCount = 0;
     let errorCount = 0;
+    let noMatchCount = 0;
 
     try {
       for (const index of indices) {
         const opp = opportunities[index];
+        
+        console.log(`Processing opportunity ${index + 1}/${indices.length}:`, {
+          source: opp.sourcePost.title,
+          target: opp.targetPost.title,
+          keyword: opp.matchedKeywords[0]
+        });
         
         try {
           // Fetch the current post content
@@ -265,7 +299,12 @@ const BlogInternalLinker = () => {
             .eq("id", opp.sourcePost.id)
             .single();
 
-          if (fetchError) throw fetchError;
+          if (fetchError) {
+            console.error("Fetch error:", fetchError);
+            throw fetchError;
+          }
+
+          console.log("Original content length:", currentPost.content.length);
 
           // Insert the link into the content
           const updatedContent = insertLinkIntoContent(
@@ -275,20 +314,35 @@ const BlogInternalLinker = () => {
             opp.targetPost.title
           );
 
+          // Check if content actually changed
+          if (updatedContent === currentPost.content) {
+            console.warn("No changes made - keyword not found in content");
+            noMatchCount++;
+            continue;
+          }
+
+          console.log("Updated content length:", updatedContent.length);
+
           // Update the post
           const { error: updateError } = await supabase
             .from("blog_posts")
             .update({ content: updatedContent })
             .eq("id", opp.sourcePost.id);
 
-          if (updateError) throw updateError;
+          if (updateError) {
+            console.error("Update error:", updateError);
+            throw updateError;
+          }
 
+          console.log("Successfully updated post");
           successCount++;
         } catch (error) {
           console.error(`Error approving opportunity ${index}:`, error);
           errorCount++;
         }
       }
+
+      console.log(`Approval complete: ${successCount} success, ${errorCount} errors, ${noMatchCount} no match`);
 
       // Remove approved opportunities from the list
       const remainingOpportunities = opportunities.filter((_, i) => !indices.includes(i));
@@ -303,12 +357,15 @@ const BlogInternalLinker = () => {
       if (successCount > 0) {
         toast.success(`Successfully added ${successCount} internal link${successCount > 1 ? 's' : ''}`);
       }
+      if (noMatchCount > 0) {
+        toast.warning(`${noMatchCount} link${noMatchCount > 1 ? 's' : ''} skipped - keyword not found in content`);
+      }
       if (errorCount > 0) {
         toast.error(`Failed to add ${errorCount} link${errorCount > 1 ? 's' : ''}`);
       }
 
       // Refresh posts data
-      fetchPosts();
+      await fetchPosts();
     } catch (error) {
       console.error("Error approving opportunities:", error);
       toast.error("Failed to approve opportunities");
