@@ -445,7 +445,19 @@ export function SocialMediaManager() {
       if (error) throw error;
 
       if (data.error) {
-        toast.error(data.error);
+        if (data.isSafetyRejection) {
+          toast.error(data.error, {
+            description: "Try using different wording or a less sensitive topic.",
+            duration: 5000
+          });
+        } else if (data.isRateLimit) {
+          toast.error(data.error, {
+            description: "The AI service is currently busy. Wait a moment and try again.",
+            duration: 5000
+          });
+        } else {
+          toast.error(data.error);
+        }
         return;
       }
 

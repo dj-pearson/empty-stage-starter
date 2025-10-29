@@ -209,8 +209,22 @@ Format your response as JSON:
       
       if (aiResponse.status === 429) {
         return new Response(
-          JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
+          JSON.stringify({ 
+            error: 'Rate limit exceeded. Please try again later.',
+            isRateLimit: true 
+          }),
           { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      if (aiResponse.status === 400 && errorText.includes('safety system')) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'Content was rejected by AI safety filters. Please try rephrasing your topic or using different content.',
+            isSafetyRejection: true,
+            success: false
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
