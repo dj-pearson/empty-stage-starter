@@ -323,15 +323,15 @@ const BlogInternalLinker = () => {
 
           console.log("Updated content length:", updatedContent.length);
 
-          // Update the post
-          const { error: updateError } = await supabase
-            .from("blog_posts")
-            .update({ content: updatedContent })
-            .eq("id", opp.sourcePost.id);
+          // Update the post via secure RPC (bypasses RLS with admin check)
+          const { error: rpcError } = await supabase.rpc('apply_internal_link' as any, {
+            p_post_id: opp.sourcePost.id,
+            p_updated_content: updatedContent,
+          });
 
-          if (updateError) {
-            console.error("Update error:", updateError);
-            throw updateError;
+          if (rpcError) {
+            console.error("RPC update error:", rpcError);
+            throw rpcError;
           }
 
           console.log("Successfully updated post");
