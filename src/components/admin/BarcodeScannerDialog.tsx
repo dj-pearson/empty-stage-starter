@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
-import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
-import { Capacitor } from '@capacitor/core';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+
+// Note: Capacitor imports removed - using web scanner only
+// For mobile apps, this should be replaced with expo-camera
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -60,7 +61,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
   const [quantity, setQuantity] = useState(1);
   const [unit, setUnit] = useState<string>('packages');
   const [isProcessingScan, setIsProcessingScan] = useState(false);
-  const isNative = Capacitor.isNativePlatform();
+  const isNative = false; // Web-only for now - Expo camera integration needed for mobile
   const isEmbedded = typeof window !== 'undefined' && window.self !== window.top;
   const webScannerRef = useRef<Html5Qrcode | null>(null);
 
@@ -82,32 +83,9 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
   }
 
   const checkPermissions = async () => {
-    // First check existing permission status without forcing
-    let status = await BarcodeScanner.checkPermission({ force: false });
-    
-    if (status.granted) {
-      return true;
-    }
-    
-    // If permission is not granted and not denied, request it
-    if (!status.denied && !status.granted) {
-      status = await BarcodeScanner.checkPermission({ force: true });
-      
-      if (status.granted) {
-        return true;
-      }
-    }
-    
-    if (status.denied) {
-      toast({
-        title: "Camera permission denied",
-        description: "Please enable camera permissions in your device settings",
-        variant: "destructive",
-      });
-      return false;
-    }
-    
-    return false;
+    // Web scanner uses browser permissions via getUserMedia
+    // No special permission check needed for web
+    return true;
   };
 
   const startWebScan = async () => {
@@ -207,44 +185,8 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
   };
 
   const startScan = async () => {
-    // Use web fallback if not running natively (e.g., iOS Chrome)
-    if (!isNative) {
-      await startWebScan();
-      return;
-    }
-
-    const hasPermission = await checkPermissions();
-    if (!hasPermission) return;
-
-    setIsScanning(true);
-    setError(null);
-    setScannedFood(null);
-
-    try {
-      await BarcodeScanner.prepare();
-      document.body.classList.add('scanner-active');
-      document.querySelector('.dialog-content')?.classList.add('scanner-ui');
-      const result = await BarcodeScanner.startScan();
-      await BarcodeScanner.stopScan();
-      document.body.classList.remove('scanner-active');
-      document.querySelector('.dialog-content')?.classList.remove('scanner-ui');
-      if (result.hasContent) {
-        await lookupBarcode(result.content);
-      }
-    } catch (err) {
-      console.error('Scan error:', err);
-      try { await BarcodeScanner.stopScan(); } catch {}
-      document.body.classList.remove('scanner-active');
-      document.querySelector('.dialog-content')?.classList.remove('scanner-ui');
-      setError(err instanceof Error ? err.message : 'Failed to scan barcode');
-      toast({
-        title: 'Scan failed',
-        description: 'Unable to scan barcode. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsScanning(false);
-    }
+    // Always use web scanner (native/mobile scanning not yet implemented)
+    await startWebScan();
   };
 
   const lookupBarcode = async (barcode: string) => {
@@ -409,15 +351,6 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
   };
 
   const handleClose = async () => {
-    // Stop native scanner if it's running
-    if (isScanning) {
-      try {
-        await BarcodeScanner.stopScan();
-      } catch (err) {
-        // ignore
-      }
-    }
-
     // Stop web scanner if running
     try {
       if (webScannerRef.current) {

@@ -185,19 +185,76 @@ const Auth = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="mb-6 p-4 bg-accent/10 border border-accent/20 rounded-lg text-center">
-                <p className="text-sm font-semibold text-accent mb-1">
-                  🎉 Launching November 1st, 2025
+              <div className="mb-6 p-4 bg-primary/10 border border-primary/20 rounded-lg text-center">
+                <p className="text-sm font-semibold text-primary mb-1">
+                  🎉 Now Live! Start Your Free Trial
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Sign in if you already have an account. New registrations
-                  opening soon!
+                  Join families making mealtime easier
                 </p>
               </div>
-              <Tabs defaultValue="signin" className="w-full">
-                <TabsList className="grid w-full grid-cols-1">
+              <Tabs defaultValue="signup" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="signup">Sign Up</TabsTrigger>
                   <TabsTrigger value="signin">Sign In</TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="signup">
+                  <form onSubmit={handleSignUp} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-email">Email</Label>
+                      <Input
+                        id="signup-email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        className="h-11"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-password">Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="signup-password"
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                          minLength={6}
+                          className="h-11 pr-10"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-11 w-11 hover:bg-transparent"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <span className="sr-only">
+                            {showPassword ? "Hide password" : "Show password"}
+                          </span>
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Minimum 6 characters
+                      </p>
+                    </div>
+                    <LoadingButton
+                      type="submit"
+                      className="w-full h-11"
+                      isLoading={loading}
+                    >
+                      Sign Up
+                    </LoadingButton>
+                  </form>
+                </TabsContent>
 
                 <TabsContent value="signin">
                   <form onSubmit={handleSignIn} className="space-y-4">

@@ -14,7 +14,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ShieldCheck, Search, ScanBarcode, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
 
 interface ProductSafetyCheckerProps {
   kidName: string;
@@ -37,65 +36,18 @@ export function ProductSafetyChecker({ kidName, kidAllergens }: ProductSafetyChe
   const [result, setResult] = useState<ProductResult | null>(null);
 
   const checkPermissions = async () => {
-    const status = await BarcodeScanner.checkPermission({ force: true });
-    
-    if (status.granted) {
-      return true;
-    }
-    
-    if (status.denied) {
-      toast({
-        title: "Camera permission denied",
-        description: "Please enable camera permissions in your device settings",
-        variant: "destructive",
-      });
-      return false;
-    }
-    
-    return false;
+    // Web-only for now - no native scanning implemented
+    return true;
   };
 
   const handleScan = async () => {
-    const hasPermission = await checkPermissions();
-    if (!hasPermission) return;
-
-    setIsScanning(true);
-    setResult(null);
-
-    try {
-      // Prepare the scanner (important for mobile)
-      await BarcodeScanner.prepare();
-      
-      document.body.classList.add('scanner-active');
-      
-      const scanResult = await BarcodeScanner.startScan();
-      
-      // Stop scanner and cleanup
-      await BarcodeScanner.stopScan();
-      document.body.classList.remove('scanner-active');
-      
-      if (scanResult.hasContent) {
-        await lookupProduct(scanResult.content);
-      }
-    } catch (err) {
-      console.error('Scan error:', err);
-      
-      // Cleanup on error
-      try {
-        await BarcodeScanner.stopScan();
-      } catch (stopErr) {
-        console.error('Error stopping scanner:', stopErr);
-      }
-      
-      document.body.classList.remove('scanner-active');
-      toast({
-        title: "Scan failed",
-        description: "Unable to scan barcode. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsScanning(false);
-    }
+    // Native scanning not yet implemented - show user message
+    toast({
+      title: "Scanning unavailable",
+      description: "Please enter the barcode number manually or use the search feature.",
+      variant: "default",
+    });
+    setIsScanning(false);
   };
 
   const handleSearch = async () => {

@@ -38,8 +38,8 @@ export function RecipeSchemaMarkup({ recipe, foods, authorName = "EatPal Chef" }
       }));
     
     // Calculate total time in ISO 8601 format
-    const prepMinutes = parseInt(recipe.prep_time || '0');
-    const cookMinutes = parseInt(recipe.cook_time || '0');
+    const prepMinutes = parseInt(recipe.prepTime || '0');
+    const cookMinutes = parseInt(recipe.cookTime || '0');
     const totalMinutes = recipe.total_time_minutes || (prepMinutes + cookMinutes);
     
     const prepTimeISO = prepMinutes > 0 ? `PT${prepMinutes}M` : undefined;
@@ -75,7 +75,7 @@ export function RecipeSchemaMarkup({ recipe, foods, authorName = "EatPal Chef" }
         '@type': 'Person',
         name: authorName,
       },
-      datePublished: recipe.created_at || new Date().toISOString().split('T')[0],
+      datePublished: (recipe as any).created_at || new Date().toISOString().split('T')[0],
       description: recipe.description || `A delicious ${recipe.name} recipe`,
       prepTime: prepTimeISO,
       cookTime: cookTimeISO,
@@ -112,7 +112,7 @@ export function RecipeSchemaMarkup({ recipe, foods, authorName = "EatPal Chef" }
     if (!scriptTag) {
       scriptTag = document.createElement('script');
       scriptTag.id = scriptId;
-      scriptTag.type = 'application/ld+json';
+      (scriptTag as any).type = 'application/ld+json';
       document.head.appendChild(scriptTag);
     }
     
@@ -151,8 +151,8 @@ export function generateRecipeSchema(recipe: Recipe, foods: Food[], authorName =
       text: step.trim()
     }));
   
-  const prepMinutes = parseInt(recipe.prep_time || '0');
-  const cookMinutes = parseInt(recipe.cook_time || '0');
+  const prepMinutes = parseInt((recipe as any).prep_time || '0');
+  const cookMinutes = parseInt((recipe as any).cook_time || '0');
   const totalMinutes = recipe.total_time_minutes || (prepMinutes + cookMinutes);
   
   const prepTimeISO = prepMinutes > 0 ? `PT${prepMinutes}M` : undefined;
@@ -183,7 +183,7 @@ export function generateRecipeSchema(recipe: Recipe, foods: Food[], authorName =
       '@type': 'Person',
       name: authorName,
     },
-    datePublished: recipe.created_at || new Date().toISOString().split('T')[0],
+    datePublished: (recipe as any).created_at || new Date().toISOString().split('T')[0],
     description: recipe.description || `A delicious ${recipe.name} recipe`,
     prepTime: prepTimeISO,
     cookTime: cookTimeISO,

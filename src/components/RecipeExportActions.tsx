@@ -66,7 +66,7 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
     const lines = [
       `🛒 Shopping List: ${recipe.name}`,
       `📋 Makes: ${recipe.servings || '4 servings'}`,
-      recipe.prep_time || recipe.cook_time ? `⏱️ Time: ${recipe.prep_time || ''} prep + ${recipe.cook_time || ''} cook` : '',
+      recipe.prepTime || recipe.cookTime ? `⏱️ Time: ${recipe.prepTime || ''} prep + ${recipe.cookTime || ''} cook` : '',
       '',
       'INGREDIENTS:',
       '─'.repeat(40),
