@@ -68,8 +68,22 @@ export default defineConfig(({ mode }) => ({
           return `assets/[ext]/[name]-[hash][extname]`;
         },
       },
-      // External dependencies that should not be bundled
-      external: [],
+      // External dependencies that should not be bundled (mobile packages for web build)
+      external: [
+        'react-native',
+        'expo',
+        'expo-router',
+        'expo-camera',
+        'expo-image-picker',
+        'expo-secure-store',
+        'expo-file-system',
+        'expo-linking',
+        'expo-constants',
+        'expo-splash-screen',
+        'expo-status-bar',
+        'react-native-safe-area-context',
+        'react-native-screens',
+      ],
     },
     // Increase chunk size warning limit
     chunkSizeWarningLimit: 1000,
