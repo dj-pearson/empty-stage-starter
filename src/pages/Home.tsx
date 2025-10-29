@@ -26,6 +26,7 @@ import {
   AnimatedActionCard,
   AnimatedWelcomeBanner,
 } from "@/components/AnimatedDashboard";
+import { SubscriptionStatusBanner } from "@/components/SubscriptionStatusBanner";
 
 export default function Home() {
   const { foods, planEntries, groceryItems, kids, recipes, activeKidId, exportData, importData, resetAllData } = useApp();
@@ -94,6 +95,9 @@ export default function Home() {
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
       <AnimatedDashboard className="container mx-auto px-4 py-8 max-w-4xl">
+        {/* Subscription Status Banner */}
+        <SubscriptionStatusBanner />
+
         {/* Welcome Banner with Animations */}
         <AnimatedWelcomeBanner
           name={parentName}
