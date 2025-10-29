@@ -171,9 +171,29 @@ export default function Pricing() {
       return;
     }
 
-    // Navigate to subscription management or checkout
-    navigate("/admin");
-    toast.info("Please contact support to upgrade your plan");
+    try {
+      setLoading(true);
+      
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: {
+          planId: plan.id,
+          billingCycle,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.url) {
+        // Redirect to Stripe checkout
+        window.location.href = data.url;
+      } else {
+        throw new Error("No checkout URL returned");
+      }
+    } catch (error: any) {
+      console.error("Checkout error:", error);
+      toast.error("Failed to start checkout. Please try again.");
+      setLoading(false);
+    }
   };
 
   const getButtonText = (plan: SubscriptionPlan) => {

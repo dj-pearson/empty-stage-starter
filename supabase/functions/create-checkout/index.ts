@@ -1,0 +1,143 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import Stripe from "https://esm.sh/stripe@14.5.0?target=deno";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
+
+const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+  apiVersion: "2023-10-16",
+  httpClient: Stripe.createFetchHttpClient(),
+});
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Get user from auth header
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      throw new Error("No authorization header");
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      throw new Error("Unauthorized");
+    }
+
+    const { planId, billingCycle } = await req.json();
+
+    if (!planId || !billingCycle) {
+      throw new Error("Missing required fields");
+    }
+
+    // Get plan details
+    const { data: plan, error: planError } = await supabase
+      .from("subscription_plans")
+      .select("*")
+      .eq("id", planId)
+      .single();
+
+    if (planError || !plan) {
+      throw new Error("Plan not found");
+    }
+
+    // Get or create Stripe customer
+    let customerId: string;
+    
+    const { data: existingSub } = await supabase
+      .from("user_subscriptions")
+      .select("stripe_customer_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (existingSub?.stripe_customer_id) {
+      customerId = existingSub.stripe_customer_id;
+    } else {
+      // Create new Stripe customer
+      const customer = await stripe.customers.create({
+        email: user.email,
+        metadata: {
+          supabase_user_id: user.id,
+        },
+      });
+      customerId = customer.id;
+    }
+
+    // Determine the correct price ID based on billing cycle
+    const priceId = billingCycle === "yearly" 
+      ? plan.stripe_price_id_yearly 
+      : plan.stripe_price_id;
+
+    if (!priceId) {
+      throw new Error("Price ID not configured for this plan");
+    }
+
+    // Create checkout session
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: "subscription",
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      success_url: `${req.headers.get("origin") || "https://tryeatpal.com"}/dashboard?checkout=success`,
+      cancel_url: `${req.headers.get("origin") || "https://tryeatpal.com"}/pricing?checkout=cancelled`,
+      metadata: {
+        user_id: user.id,
+        plan_id: planId,
+      },
+      subscription_data: {
+        metadata: {
+          user_id: user.id,
+          plan_id: planId,
+        },
+      },
+    });
+
+    // Store customer ID if it's new
+    if (!existingSub?.stripe_customer_id) {
+      await supabase
+        .from("user_subscriptions")
+        .upsert({
+          user_id: user.id,
+          plan_id: planId,
+          stripe_customer_id: customerId,
+          status: "incomplete",
+        }, {
+          onConflict: "user_id",
+        });
+    }
+
+    return new Response(
+      JSON.stringify({ url: session.url }),
+      { 
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      }
+    );
+  } catch (error) {
+    console.error("Checkout error:", error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { 
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      }
+    );
+  }
+});
