@@ -70,7 +70,7 @@ export function SubscriptionStatusBanner() {
           .from("subscription_plans")
           .select("id, name")
           .eq("price_monthly", 0)
-          .single();
+          .maybeSingle();
 
         if (freePlan) {
           setSubscription({

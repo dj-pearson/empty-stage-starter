@@ -81,7 +81,7 @@ export default function Pricing() {
         .select("plan_id")
         .eq("user_id", user.id)
         .eq("status", "active")
-        .single();
+        .maybeSingle();
 
       if (subscription) {
         setCurrentPlanId(subscription.plan_id);
