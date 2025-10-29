@@ -67,11 +67,15 @@ const BlogPost = () => {
     } else {
       setPost(data);
       
-      // Increment view count
-      await supabase
-        .from("blog_posts")
-        .update({ views: (data.views || 0) + 1 })
-        .eq("id", data.id);
+      // Increment view count (disabled in client to avoid RLS noise; handled server-side or via analytics)
+      // try {
+      //   await supabase
+      //     .from("blog_posts")
+      //     .update({ views: (data.views || 0) + 1 })
+      //     .eq("id", data.id);
+      // } catch (e) {
+      //   console.warn("View increment skipped:", e);
+      // }
 
       // Fetch related posts
       if (data.category) {
