@@ -75,13 +75,21 @@ serve(async (req) => {
       customerId = customer.id;
     }
 
-    // Determine the correct price ID based on billing cycle
-    const priceId = billingCycle === "yearly" 
-      ? plan.stripe_price_id_yearly 
-      : plan.stripe_price_id;
+    // Determine the correct price ID with robust fallbacks
+    const priceCandidates = [
+      billingCycle === "yearly" ? plan.stripe_price_id_yearly : null,
+      plan[`stripe_price_id_${billingCycle}`], // e.g., stripe_price_id_monthly/yearly
+      plan.stripe_price_id, // common single price field
+      plan.stripe_price_id_monthly,
+      plan.stripe_price_id_yearly,
+    ].filter(Boolean) as string[];
+
+    const priceId = priceCandidates[0];
 
     if (!priceId) {
-      throw new Error("Price ID not configured for this plan");
+      throw new Error(
+        `Price ID not configured for this plan (billingCycle=${billingCycle}). Expected one of: stripe_price_id, stripe_price_id_monthly, stripe_price_id_yearly`
+      );
     }
 
     // Create checkout session
