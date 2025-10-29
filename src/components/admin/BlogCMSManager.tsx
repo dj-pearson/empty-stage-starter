@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import BlogInternalLinker from "@/components/admin/BlogInternalLinker";
 import {
   Card,
   CardContent,
@@ -565,38 +566,44 @@ export function BlogCMSManager() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold mb-2">Blog CMS</h2>
-          <p className="text-muted-foreground">
-            Create, manage, and publish blog content with AI assistance
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setShowTitleBankDialog(true)}
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Title Bank
-            {titleBankInsights && (
-              <Badge variant="secondary" className="ml-2">
-                {titleBankInsights.unused_titles} unused
-              </Badge>
-            )}
-          </Button>
-          <Button variant="outline" onClick={() => setShowWebhookDialog(true)}>
-            <Settings className="h-4 w-4 mr-2" />
-            {webhookUrl ? (
-              <CheckCircle className="h-4 w-4 mr-1 text-safe-food" />
-            ) : null}
-            Webhook
-          </Button>
-          <Button onClick={() => setShowAIDialog(true)}>
-            <Sparkles className="h-4 w-4 mr-2" />
-            AI Generate Article
-          </Button>
+    <Tabs defaultValue="posts" className="space-y-6">
+      <TabsList className="grid w-full grid-cols-2">
+        <TabsTrigger value="posts">Posts Management</TabsTrigger>
+        <TabsTrigger value="internal-links">Internal Linking</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="posts" className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold mb-2">Blog CMS</h2>
+            <p className="text-muted-foreground">
+              Create, manage, and publish blog content with AI assistance
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowTitleBankDialog(true)}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Title Bank
+              {titleBankInsights && (
+                <Badge variant="secondary" className="ml-2">
+                  {titleBankInsights.unused_titles} unused
+                </Badge>
+              )}
+            </Button>
+            <Button variant="outline" onClick={() => setShowWebhookDialog(true)}>
+              <Settings className="h-4 w-4 mr-2" />
+              {webhookUrl ? (
+                <CheckCircle className="h-4 w-4 mr-1 text-safe-food" />
+              ) : null}
+              Webhook
+            </Button>
+            <Button onClick={() => setShowAIDialog(true)}>
+              <Sparkles className="h-4 w-4 mr-2" />
+              AI Generate Article
+            </Button>
         </div>
       </div>
 
@@ -1356,6 +1363,11 @@ export function BlogCMSManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </TabsContent>
+
+      <TabsContent value="internal-links">
+        <BlogInternalLinker />
+      </TabsContent>
+    </Tabs>
   );
 }
