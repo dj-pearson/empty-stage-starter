@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Link2, ExternalLink, Search, TrendingUp, FileText, AlertCircle } from "lucide-react";
+import { Link2, ExternalLink, Search, TrendingUp, FileText, AlertCircle, CheckCircle } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
 interface BlogPost {
@@ -30,6 +30,8 @@ const BlogInternalLinker = () => {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [opportunities, setOpportunities] = useState<LinkOpportunity[]>([]);
   const [isScanning, setIsScanning] = useState(false);
+  const [selectedOpportunities, setSelectedOpportunities] = useState<Set<number>>(new Set());
+  const [isApproving, setIsApproving] = useState(false);
   const [stats, setStats] = useState({
     totalPosts: 0,
     postsAnalyzed: 0,
@@ -207,6 +209,124 @@ const BlogInternalLinker = () => {
     return "Low";
   };
 
+  const toggleOpportunity = (index: number) => {
+    setSelectedOpportunities(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedOpportunities.size === opportunities.length) {
+      setSelectedOpportunities(new Set());
+    } else {
+      setSelectedOpportunities(new Set(opportunities.map((_, i) => i)));
+    }
+  };
+
+  const insertLinkIntoContent = (content: string, keyword: string, targetSlug: string, targetTitle: string): string => {
+    // Find the first occurrence of the keyword (case-insensitive)
+    const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    const match = content.match(regex);
+    
+    if (!match) return content;
+
+    // Create the link
+    const link = `<a href="/blog/${targetSlug}" title="${targetTitle}">${match[0]}</a>`;
+    
+    // Replace only the first occurrence
+    return content.replace(regex, link);
+  };
+
+  const approveOpportunities = async (indices: number[]) => {
+    if (indices.length === 0) {
+      toast.error("No opportunities selected");
+      return;
+    }
+
+    setIsApproving(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      for (const index of indices) {
+        const opp = opportunities[index];
+        
+        try {
+          // Fetch the current post content
+          const { data: currentPost, error: fetchError } = await supabase
+            .from("blog_posts")
+            .select("content")
+            .eq("id", opp.sourcePost.id)
+            .single();
+
+          if (fetchError) throw fetchError;
+
+          // Insert the link into the content
+          const updatedContent = insertLinkIntoContent(
+            currentPost.content,
+            opp.matchedKeywords[0], // Use the first matched keyword
+            opp.targetPost.slug,
+            opp.targetPost.title
+          );
+
+          // Update the post
+          const { error: updateError } = await supabase
+            .from("blog_posts")
+            .update({ content: updatedContent })
+            .eq("id", opp.sourcePost.id);
+
+          if (updateError) throw updateError;
+
+          successCount++;
+        } catch (error) {
+          console.error(`Error approving opportunity ${index}:`, error);
+          errorCount++;
+        }
+      }
+
+      // Remove approved opportunities from the list
+      const remainingOpportunities = opportunities.filter((_, i) => !indices.includes(i));
+      setOpportunities(remainingOpportunities);
+      setSelectedOpportunities(new Set());
+      
+      setStats(prev => ({
+        ...prev,
+        opportunitiesFound: remainingOpportunities.length,
+      }));
+
+      if (successCount > 0) {
+        toast.success(`Successfully added ${successCount} internal link${successCount > 1 ? 's' : ''}`);
+      }
+      if (errorCount > 0) {
+        toast.error(`Failed to add ${errorCount} link${errorCount > 1 ? 's' : ''}`);
+      }
+
+      // Refresh posts data
+      fetchPosts();
+    } catch (error) {
+      console.error("Error approving opportunities:", error);
+      toast.error("Failed to approve opportunities");
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handleApproveSelected = () => {
+    const indices = Array.from(selectedOpportunities);
+    approveOpportunities(indices);
+  };
+
+  const handleApproveAll = () => {
+    const indices = opportunities.map((_, i) => i);
+    approveOpportunities(indices);
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -300,6 +420,48 @@ const BlogInternalLinker = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Bulk Action Buttons */}
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-6 p-4 bg-secondary/30 rounded-lg">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={selectedOpportunities.size === opportunities.length && opportunities.length > 0}
+                  onChange={toggleSelectAll}
+                  className="w-4 h-4 cursor-pointer"
+                />
+                <span className="text-sm font-medium">
+                  {selectedOpportunities.size} of {opportunities.length} selected
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleApproveSelected}
+                  disabled={selectedOpportunities.size === 0 || isApproving}
+                >
+                  {isApproving ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2" />
+                      Approving...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Approve Selected ({selectedOpportunities.size})
+                    </>
+                  )}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleApproveAll}
+                  disabled={opportunities.length === 0 || isApproving}
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Approve All ({opportunities.length})
+                </Button>
+              </div>
+            </div>
             <Tabs defaultValue="all" className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="all">
@@ -318,7 +480,14 @@ const BlogInternalLinker = () => {
                   <div className="space-y-4">
                     {opportunities.map((opp, index) => (
                       <Card key={index} className="p-4">
-                        <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-start gap-3 mb-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedOpportunities.has(index)}
+                            onChange={() => toggleOpportunity(index)}
+                            className="w-4 h-4 mt-1 cursor-pointer"
+                          />
+                          <div className="flex items-start justify-between flex-1">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <FileText className="h-4 w-4 text-muted-foreground" />
@@ -337,6 +506,7 @@ const BlogInternalLinker = () => {
                             <span className="text-xs text-muted-foreground">
                               {Math.round(opp.relevanceScore * 100)}%
                             </span>
+                          </div>
                           </div>
                         </div>
 
@@ -409,11 +579,18 @@ const BlogInternalLinker = () => {
                 <ScrollArea className="h-[600px] pr-4">
                   <div className="space-y-4">
                     {opportunities
-                      .filter(o => o.relevanceScore >= 0.7)
-                      .map((opp, index) => (
-                        <Card key={index} className="p-4">
-                          {/* Same card content as above */}
-                          <div className="flex items-start justify-between mb-3">
+                      .map((opp, index) => ({ opp, originalIndex: index }))
+                      .filter(({ opp }) => opp.relevanceScore >= 0.7)
+                      .map(({ opp, originalIndex }) => (
+                        <Card key={originalIndex} className="p-4">
+                          <div className="flex items-start gap-3 mb-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedOpportunities.has(originalIndex)}
+                              onChange={() => toggleOpportunity(originalIndex)}
+                              className="w-4 h-4 mt-1 cursor-pointer"
+                            />
+                            <div className="flex items-start justify-between flex-1">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
                                 <FileText className="h-4 w-4 text-muted-foreground" />
@@ -432,6 +609,7 @@ const BlogInternalLinker = () => {
                               <span className="text-xs text-muted-foreground">
                                 {Math.round(opp.relevanceScore * 100)}%
                               </span>
+                            </div>
                             </div>
                           </div>
                           <Separator className="my-3" />
@@ -498,11 +676,18 @@ const BlogInternalLinker = () => {
                 <ScrollArea className="h-[600px] pr-4">
                   <div className="space-y-4">
                     {opportunities
-                      .filter(o => o.relevanceScore >= 0.5 && o.relevanceScore < 0.7)
-                      .map((opp, index) => (
-                        <Card key={index} className="p-4">
-                          {/* Same card content */}
-                          <div className="flex items-start justify-between mb-3">
+                      .map((opp, index) => ({ opp, originalIndex: index }))
+                      .filter(({ opp }) => opp.relevanceScore >= 0.5 && opp.relevanceScore < 0.7)
+                      .map(({ opp, originalIndex }) => (
+                        <Card key={originalIndex} className="p-4">
+                          <div className="flex items-start gap-3 mb-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedOpportunities.has(originalIndex)}
+                              onChange={() => toggleOpportunity(originalIndex)}
+                              className="w-4 h-4 mt-1 cursor-pointer"
+                            />
+                            <div className="flex items-start justify-between flex-1">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
                                 <FileText className="h-4 w-4 text-muted-foreground" />
@@ -521,6 +706,7 @@ const BlogInternalLinker = () => {
                               <span className="text-xs text-muted-foreground">
                                 {Math.round(opp.relevanceScore * 100)}%
                               </span>
+                            </div>
                             </div>
                           </div>
                           <Separator className="my-3" />
