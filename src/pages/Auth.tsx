@@ -24,7 +24,6 @@ const Auth = () => {
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [isNewUser, setIsNewUser] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -34,11 +33,7 @@ const Auth = () => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session && isNewUser) {
-        // New signup - show onboarding
-        setShowOnboarding(true);
-        setIsNewUser(false);
-      } else if (session) {
+      if (session) {
         // Defer profile check to avoid deadlock
         setTimeout(() => {
           supabase
@@ -50,6 +45,7 @@ const Auth = () => {
               if (profile?.onboarding_completed) {
                 navigate("/dashboard");
               } else {
+                // First time login or incomplete onboarding - show setup
                 setShowOnboarding(true);
               }
             });
@@ -76,7 +72,7 @@ const Auth = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate, isNewUser]);
+  }, [navigate]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,10 +96,9 @@ const Auth = () => {
         variant: "destructive",
       });
     } else {
-      setIsNewUser(true);
       toast({
-        title: "Success!",
-        description: "Account created! Let's set up your profile.",
+        title: "Check your email!",
+        description: "Please confirm your email address to complete registration. Then sign in to set up your profile.",
       });
     }
   };
