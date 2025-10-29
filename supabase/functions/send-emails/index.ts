@@ -129,7 +129,7 @@ serve(async (req) => {
     switch (emailProvider) {
       case "resend":
         provider = new ResendProvider(
-          Deno.env.get("RESEND_API_KEY") ?? "",
+          Deno.env.get("RESEND_API") ?? "",
           Deno.env.get("EMAIL_FROM") ?? "noreply@eatpal.com"
         );
         break;
