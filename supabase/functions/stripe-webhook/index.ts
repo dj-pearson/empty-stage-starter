@@ -35,6 +35,12 @@ serve(async (req) => {
 
     // Handle different event types
     switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        await handleCheckoutCompleted(supabase, session);
+        break;
+      }
+
       case "customer.subscription.created":
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
@@ -75,19 +81,52 @@ serve(async (req) => {
   }
 });
 
+async function handleCheckoutCompleted(supabase: any, session: Stripe.Checkout.Session) {
+  const customerId = session.customer as string;
+  const subscriptionId = session.subscription as string;
+  
+  console.log(`Checkout completed for customer: ${customerId}, subscription: ${subscriptionId}`);
+
+  if (!subscriptionId) {
+    console.error("No subscription ID in checkout session");
+    return;
+  }
+
+  // The subscription details will be handled by the subscription.created/updated events
+  // This handler is mainly for logging and triggering any immediate post-purchase actions
+  
+  // Get user_id from session metadata
+  const userId = session.metadata?.user_id;
+  
+  if (userId) {
+    // Ensure the customer ID is saved to the user's subscription record
+    await supabase
+      .from("user_subscriptions")
+      .update({
+        stripe_customer_id: customerId,
+        stripe_subscription_id: subscriptionId,
+      })
+      .eq("user_id", userId);
+
+    console.log(`Successfully linked subscription ${subscriptionId} to user ${userId}`);
+  }
+}
+
 async function handleSubscriptionChange(supabase: any, subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string;
   const priceId = subscription.items.data[0]?.price.id;
 
-  // Get plan by Stripe price ID
-  const { data: plan } = await supabase
+  // Get plan by Stripe price ID (check both monthly and yearly fields)
+  const { data: plans } = await supabase
     .from("subscription_plans")
     .select("id")
-    .eq("stripe_price_id", priceId)
-    .single();
+    .or(`stripe_price_id_monthly.eq.${priceId},stripe_price_id_yearly.eq.${priceId}`);
+
+  const plan = plans?.[0];
 
   if (!plan) {
     console.error(`No plan found for price ID: ${priceId}`);
+    console.error(`Searched for monthly or yearly price matching: ${priceId}`);
     return;
   }
 
@@ -160,15 +199,20 @@ async function handleSubscriptionDeleted(supabase: any, subscription: Stripe.Sub
 async function handlePaymentSucceeded(supabase: any, invoice: Stripe.Invoice) {
   const customerId = invoice.customer as string;
 
-  const { data: sub } = await supabase
+  const { data: sub, error: subError } = await supabase
     .from("user_subscriptions")
     .select("user_id, id")
     .eq("stripe_customer_id", customerId)
     .single();
 
+  if (subError) {
+    console.error(`Error fetching subscription for customer ${customerId}:`, subError);
+    return;
+  }
+
   if (sub) {
     // Log successful payment
-    await supabase.from("payment_history").insert({
+    const { error: paymentError } = await supabase.from("payment_history").insert({
       user_id: sub.user_id,
       subscription_id: sub.id,
       stripe_payment_intent_id: invoice.payment_intent as string,
@@ -178,21 +222,34 @@ async function handlePaymentSucceeded(supabase: any, invoice: Stripe.Invoice) {
       status: "succeeded",
       description: invoice.lines.data[0]?.description || "Subscription payment",
     });
+
+    if (paymentError) {
+      console.error("Error logging payment:", paymentError);
+    } else {
+      console.log(`Payment succeeded: $${invoice.amount_paid / 100} for user ${sub.user_id}`);
+    }
+  } else {
+    console.warn(`No subscription found for customer ${customerId} on payment success`);
   }
 }
 
 async function handlePaymentFailed(supabase: any, invoice: Stripe.Invoice) {
   const customerId = invoice.customer as string;
 
-  const { data: sub } = await supabase
+  const { data: sub, error: subError } = await supabase
     .from("user_subscriptions")
     .select("user_id, id")
     .eq("stripe_customer_id", customerId)
     .single();
 
+  if (subError) {
+    console.error(`Error fetching subscription for customer ${customerId}:`, subError);
+    return;
+  }
+
   if (sub) {
     // Update subscription status
-    await supabase
+    const { error: updateError } = await supabase
       .from("user_subscriptions")
       .update({
         status: "past_due",
@@ -200,8 +257,12 @@ async function handlePaymentFailed(supabase: any, invoice: Stripe.Invoice) {
       })
       .eq("id", sub.id);
 
+    if (updateError) {
+      console.error("Error updating subscription status:", updateError);
+    }
+
     // Log failed payment
-    await supabase.from("payment_history").insert({
+    const { error: paymentError } = await supabase.from("payment_history").insert({
       user_id: sub.user_id,
       subscription_id: sub.id,
       stripe_payment_intent_id: invoice.payment_intent as string,
@@ -212,12 +273,24 @@ async function handlePaymentFailed(supabase: any, invoice: Stripe.Invoice) {
       description: invoice.lines.data[0]?.description || "Subscription payment",
     });
 
+    if (paymentError) {
+      console.error("Error logging failed payment:", paymentError);
+    }
+
     // Log event
-    await supabase.from("subscription_events").insert({
+    const { error: eventError } = await supabase.from("subscription_events").insert({
       user_id: sub.user_id,
       subscription_id: sub.id,
       event_type: "payment_failed",
       metadata: { invoice_id: invoice.id },
     });
+
+    if (eventError) {
+      console.error("Error logging payment_failed event:", eventError);
+    }
+
+    console.warn(`Payment failed for user ${sub.user_id}: $${invoice.amount_due / 100}`);
+  } else {
+    console.warn(`No subscription found for customer ${customerId} on payment failure`);
   }
 }
