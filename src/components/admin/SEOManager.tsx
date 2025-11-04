@@ -133,22 +133,122 @@ export function SEOManager() {
   const [competitorResults, setCompetitorResults] = useState<any[]>([]);
   const [isAnalyzingCompetitor, setIsAnalyzingCompetitor] = useState(false);
   const [activeTab, setActiveTab] = useState("audit");
+  const [currentAuditId, setCurrentAuditId] = useState<string | null>(null);
+  const [fixSuggestions, setFixSuggestions] = useState<any[]>([]);
+  const [isApplyingFixes, setIsApplyingFixes] = useState(false);
   const isMobile = useIsMobile();
 
   useEffect(() => {
     loadSEOSettings();
     loadTrackedKeywords();
+    loadCompetitorAnalysis();
+    loadPageAnalysis();
   }, []);
 
-  const loadTrackedKeywords = () => {
-    // Simulated keyword data - in production, this would come from a database
-    const mockKeywords: KeywordData[] = [
-      { keyword: "picky eater meal planning", position: 3, volume: 1200, difficulty: 42, url: "/", trend: "up" },
-      { keyword: "kid meal planner", position: 7, volume: 890, difficulty: 38, url: "/planner", trend: "up" },
-      { keyword: "safe foods for picky eaters", position: 12, volume: 650, difficulty: 35, url: "/pantry", trend: "stable" },
-      { keyword: "meal planning app", position: 24, volume: 5400, difficulty: 68, url: "/", trend: "down" },
-    ];
-    setTrackedKeywords(mockKeywords);
+  const loadTrackedKeywords = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('seo_keywords')
+        .select('*')
+        .order('priority', { ascending: false });
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const keywords: KeywordData[] = data.map((kw) => ({
+          keyword: kw.keyword,
+          position: kw.current_position || 0,
+          volume: kw.search_volume || 0,
+          difficulty: kw.difficulty || 0,
+          url: kw.target_url,
+          trend: kw.position_trend as "up" | "down" | "stable",
+        }));
+        setTrackedKeywords(keywords);
+      } else {
+        // Use fallback mock data if database is empty
+        const mockKeywords: KeywordData[] = [
+          { keyword: "picky eater meal planning", position: 3, volume: 1200, difficulty: 42, url: "/", trend: "up" },
+          { keyword: "kid meal planner", position: 7, volume: 890, difficulty: 38, url: "/planner", trend: "up" },
+          { keyword: "safe foods for picky eaters", position: 12, volume: 650, difficulty: 35, url: "/pantry", trend: "stable" },
+          { keyword: "meal planning app", position: 24, volume: 5400, difficulty: 68, url: "/", trend: "down" },
+        ];
+        setTrackedKeywords(mockKeywords);
+      }
+    } catch (error) {
+      console.error('Error loading keywords:', error);
+      toast.error('Failed to load keyword data');
+    }
+  };
+
+  const loadCompetitorAnalysis = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('seo_competitor_analysis')
+        .select('*')
+        .eq('is_active', true)
+        .order('analyzed_at', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        setCompetitorResults(data.map((comp) => ({
+          url: comp.competitor_url,
+          score: comp.overall_score,
+          status: comp.status_code,
+          analysis: comp.analysis,
+          analyzedAt: comp.analyzed_at,
+        })));
+      }
+    } catch (error) {
+      console.error('Error loading competitor analysis:', error);
+    }
+  };
+
+  const loadPageAnalysis = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('seo_page_scores')
+        .select('*')
+        .order('overall_score', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const pages: PageData[] = data.map((page) => ({
+          url: page.page_url,
+          title: page.page_title || '',
+          metaDescription: '',
+          wordCount: page.word_count || 0,
+          issues: page.issues_count || 0,
+          score: page.overall_score,
+        }));
+        setPageAnalysis(pages);
+      }
+    } catch (error) {
+      console.error('Error loading page analysis:', error);
+    }
+  };
+
+  const analyzeBlogPostsSEO = async () => {
+    toast.info("Analyzing all blog posts for SEO...");
+
+    try {
+      const { data, error } = await supabase.functions.invoke("analyze-blog-posts-seo");
+
+      if (error) throw error;
+
+      if (data.analyzed > 0) {
+        toast.success(`Analyzed ${data.analyzed} blog posts successfully!`);
+        await loadPageAnalysis();
+      } else {
+        toast.info("No published blog posts to analyze");
+      }
+    } catch (error: any) {
+      console.error("Error analyzing blog posts:", error);
+      toast.error(`Failed to analyze blog posts: ${error.message}`);
+    }
   };
 
   const runComprehensiveAudit = async () => {
@@ -176,9 +276,51 @@ export function SEOManager() {
     await runContentQualityChecks(results);
     
     setAuditResults(results);
-    calculateSEOScore(results);
+    const scores = calculateSEOScore(results);
+
+    // Save audit to database
+    try {
+      const passed = results.filter((r) => r.status === "passed").length;
+      const warnings = results.filter((r) => r.status === "warning").length;
+      const failed = results.filter((r) => r.status === "failed").length;
+
+      const { data: auditData, error: auditError } = await supabase
+        .from('seo_audit_history')
+        .insert({
+          url: auditUrl,
+          audit_type: 'comprehensive',
+          overall_score: scores.overall,
+          technical_score: scores.technical,
+          onpage_score: scores.onPage,
+          performance_score: scores.performance,
+          mobile_score: scores.mobile,
+          accessibility_score: scores.accessibility,
+          results: results,
+          total_checks: results.length,
+          passed_checks: passed,
+          warning_checks: warnings,
+          failed_checks: failed,
+          triggered_by: 'manual',
+        })
+        .select()
+        .single();
+
+      if (auditError) {
+        console.error('Error saving audit:', auditError);
+      } else if (auditData) {
+        setCurrentAuditId(auditData.id);
+
+        // Update last_audit_at in settings
+        await supabase
+          .from('seo_settings')
+          .update({ last_audit_at: new Date().toISOString() })
+          .eq('id', '00000000-0000-0000-0000-000000000001');
+      }
+    } catch (error) {
+      console.error('Error saving audit results:', error);
+    }
+
     setIsAuditing(false);
-    
     toast.success("SEO audit complete! Analyzed 50+ factors.");
   };
 
@@ -931,11 +1073,11 @@ export function SEOManager() {
 
     const calculateCategoryScore = (categoryResults: AuditResult[]) => {
       if (categoryResults.length === 0) return 100;
-      
+
       const passed = categoryResults.filter((r) => r.status === "passed").length;
       const warnings = categoryResults.filter((r) => r.status === "warning").length;
       const failed = categoryResults.filter((r) => r.status === "failed").length;
-      
+
       // Scoring: passed = 1.0, warning = 0.5, failed = 0
       const score = (passed + warnings * 0.5) / categoryResults.length * 100;
       return Math.round(score);
@@ -953,38 +1095,91 @@ export function SEOManager() {
       (scores.technical * 0.3 + scores.onPage * 0.25 + scores.performance * 0.25 + scores.mobile * 0.2)
     );
 
-    setSeoScore({
+    const finalScores = {
       overall,
       ...scores,
-    });
+    };
+
+    setSeoScore(finalScores);
+    return finalScores; // Return scores for saving to database
   };
 
   const runAIAutoHealing = async () => {
     setIsAutoHealing(true);
     toast.info("Running AI-powered SEO auto-healing...");
 
-    // Simulate AI analysis and fixes
-    const fixableIssues = auditResults.filter((r) => r.status !== "passed" && r.fix);
-    
-    // In production, this would:
-    // 1. Send issues to AI model for analysis
-    // 2. Generate optimized content/fixes
-    // 3. Apply fixes to database or suggest changes
-    // 4. Re-run audit to verify improvements
+    try {
+      // Call the apply-seo-fixes edge function
+      const { data, error } = await supabase.functions.invoke("apply-seo-fixes", {
+        body: {
+          auditResults: auditResults,
+          auditId: currentAuditId,
+          autoApply: false, // Set to true to automatically apply fixes
+          userId: (await supabase.auth.getUser()).data.user?.id,
+        },
+      });
 
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (error) throw error;
 
-    const suggestions = fixableIssues.map((issue) => ({
-      issue: issue.message,
-      fix: issue.fix,
-      priority: issue.impact,
-      aiRecommendation: `AI Suggestion: ${issue.fix} - Implementing this will improve your ${issue.category} score.`,
-    }));
+      setFixSuggestions(data.suggestions || []);
 
-    console.log("AI Healing Suggestions:", suggestions);
-    
-    setIsAutoHealing(false);
-    toast.success(`Generated ${suggestions.length} AI-powered optimization suggestions!`);
+      if (data.autoApplyEnabled && data.appliedFixes > 0) {
+        toast.success(`Applied ${data.appliedFixes} SEO fixes automatically!`);
+
+        // Re-run audit to see improvements
+        setTimeout(() => {
+          runComprehensiveAudit();
+        }, 1000);
+      } else {
+        toast.success(`Generated ${data.totalSuggestions} AI-powered optimization suggestions!`);
+      }
+
+      console.log("AI Healing Results:", data);
+    } catch (error: any) {
+      console.error("AI Auto-Healing error:", error);
+      toast.error(`Failed to generate suggestions: ${error.message}`);
+    } finally {
+      setIsAutoHealing(false);
+    }
+  };
+
+  const applyFixesBatch = async () => {
+    setIsApplyingFixes(true);
+    toast.info("Applying SEO fixes...");
+
+    try {
+      const { data, error } = await supabase.functions.invoke("apply-seo-fixes", {
+        body: {
+          auditResults: auditResults,
+          auditId: currentAuditId,
+          autoApply: true, // Actually apply the fixes
+          userId: (await supabase.auth.getUser()).data.user?.id,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.appliedFixes > 0) {
+        toast.success(`Successfully applied ${data.appliedFixes} SEO fixes!`);
+
+        // Reload SEO settings
+        await loadSEOSettings();
+
+        // Re-run audit to verify improvements
+        setTimeout(() => {
+          runComprehensiveAudit();
+        }, 1000);
+      }
+
+      if (data.failedFixes > 0) {
+        toast.warning(`${data.failedFixes} fixes failed to apply. Check the logs.`);
+      }
+    } catch (error: any) {
+      console.error("Error applying fixes:", error);
+      toast.error(`Failed to apply fixes: ${error.message}`);
+    } finally {
+      setIsApplyingFixes(false);
+    }
   };
 
   const exportAuditReport = (format: "json" | "csv") => {
@@ -1060,16 +1255,34 @@ export function SEOManager() {
 
       if (error) throw error;
 
-      const existingIndex = competitorResults.findIndex((c) => c.url === competitorUrl);
-      if (existingIndex >= 0) {
-        const updated = [...competitorResults];
-        updated[existingIndex] = { ...data, analyzedAt: new Date().toISOString() };
-        setCompetitorResults(updated);
-      } else {
-        setCompetitorResults([...competitorResults, { ...data, analyzedAt: new Date().toISOString() }]);
+      // Save to database
+      const userId = (await supabase.auth.getUser()).data.user?.id;
+
+      const { error: insertError } = await supabase
+        .from('seo_competitor_analysis')
+        .insert({
+          competitor_url: competitorUrl,
+          overall_score: data.score,
+          technical_score: data.analysis?.technical ? Math.round(data.analysis.technical.filter((i: any) => i.status === 'passed').length / data.analysis.technical.length * 100) : null,
+          onpage_score: data.analysis?.onPage ? Math.round(data.analysis.onPage.filter((i: any) => i.status === 'passed').length / data.analysis.onPage.length * 100) : null,
+          performance_score: data.analysis?.performance ? Math.round(data.analysis.performance.filter((i: any) => i.status === 'passed').length / data.analysis.performance.length * 100) : null,
+          mobile_score: data.analysis?.mobile ? Math.round(data.analysis.mobile.filter((i: any) => i.status === 'passed').length / data.analysis.mobile.length * 100) : null,
+          analysis: data.analysis,
+          status_code: data.status,
+          content_type: data.contentType,
+          our_score: seoScore.overall,
+          score_difference: data.score - seoScore.overall,
+          analyzed_by_user_id: userId,
+        });
+
+      if (insertError) {
+        console.error('Error saving competitor analysis:', insertError);
       }
 
-      toast.success("Competitor analysis complete!");
+      // Reload competitor analysis
+      await loadCompetitorAnalysis();
+
+      toast.success("Competitor analysis complete and saved!");
     } catch (error: any) {
       console.error("Competitor analysis error:", error);
       toast.error(`Failed to analyze competitor: ${error.message}`);
@@ -1078,9 +1291,20 @@ export function SEOManager() {
     }
   };
 
-  const removeCompetitor = (url: string) => {
-    setCompetitorResults(competitorResults.filter((c) => c.url !== url));
-    toast.success("Competitor removed");
+  const removeCompetitor = async (url: string) => {
+    try {
+      // Mark as inactive in database
+      await supabase
+        .from('seo_competitor_analysis')
+        .update({ is_active: false })
+        .eq('competitor_url', url);
+
+      setCompetitorResults(competitorResults.filter((c) => c.url !== url));
+      toast.success("Competitor removed");
+    } catch (error) {
+      console.error('Error removing competitor:', error);
+      toast.error('Failed to remove competitor');
+    }
   };
 
   const regenerateSitemap = async () => {
@@ -1371,6 +1595,12 @@ RESTful API available for integrations. Contact for API access.
             <Sparkles className="h-4 w-4 mr-2" />
             {isAutoHealing ? "Analyzing..." : "AI Auto-Heal"}
           </Button>
+          {fixSuggestions.length > 0 && (
+            <Button onClick={applyFixesBatch} variant="default" disabled={isApplyingFixes}>
+              <Zap className={`h-4 w-4 mr-2 ${isApplyingFixes ? "animate-pulse" : ""}`} />
+              {isApplyingFixes ? "Applying..." : `Apply ${fixSuggestions.length} Fixes`}
+            </Button>
+          )}
           <Button onClick={runComprehensiveAudit} disabled={isAuditing}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isAuditing ? "animate-spin" : ""}`} />
             {isAuditing ? "Auditing..." : "Run Full Audit"}
@@ -1904,20 +2134,91 @@ RESTful API available for integrations. Contact for API access.
         <TabsContent value="pages" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Eye className="h-5 w-5" />
-                Page Analysis
-              </CardTitle>
-              <CardDescription>SEO performance of individual pages</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Eye className="h-5 w-5" />
+                    Page Analysis
+                  </CardTitle>
+                  <CardDescription>SEO performance of individual pages</CardDescription>
+                </div>
+                <Button onClick={analyzeBlogPostsSEO} variant="outline" size="sm">
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  Analyze All Blog Posts
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-12">
-                <Eye className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Page-by-page analysis</h3>
-                <p className="text-muted-foreground mb-4">
-                  Coming soon: Individual page SEO scores and recommendations
-                </p>
-              </div>
+              {pageAnalysis.length === 0 ? (
+                <div className="text-center py-12">
+                  <Eye className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No page analysis data yet</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Analyze your blog posts to see individual SEO scores
+                  </p>
+                  <Button onClick={analyzeBlogPostsSEO}>
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    Analyze Blog Posts
+                  </Button>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Page URL</TableHead>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Score</TableHead>
+                      <TableHead>Word Count</TableHead>
+                      <TableHead>Issues</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pageAnalysis.map((page, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell>
+                          <a
+                            href={page.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline flex items-center gap-1"
+                          >
+                            {page.url}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </TableCell>
+                        <TableCell className="font-medium">{page.title}</TableCell>
+                        <TableCell>
+                          <Badge variant={page.score >= 90 ? "default" : page.score >= 70 ? "secondary" : "destructive"}>
+                            {page.score}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{page.wordCount.toLocaleString()}</TableCell>
+                        <TableCell>
+                          {page.issues > 0 ? (
+                            <Badge variant="destructive">{page.issues} issues</Badge>
+                          ) : (
+                            <Badge variant="default">No issues</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setAuditUrl(page.url);
+                              runComprehensiveAudit();
+                            }}
+                          >
+                            <Search className="h-3 w-3 mr-1" />
+                            Audit
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
