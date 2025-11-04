@@ -26,12 +26,11 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Fetch all published blog posts
+    // Fetch all published blog posts (including those with null published_at)
     const { data: posts, error: postsError } = await supabaseClient
       .from("blog_posts")
       .select("id, slug, title, content, excerpt, meta_title, meta_description, featured_image_url, status")
-      .eq("status", "published")
-      .lte("published_at", new Date().toISOString());
+      .eq("status", "published");
 
     if (postsError) throw postsError;
 
