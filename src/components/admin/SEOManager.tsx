@@ -58,6 +58,10 @@ import {
   Settings,
   Calendar,
   Mail,
+  ArrowRightCircle,
+  Network,
+  DollarSign,
+  Image,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -2115,6 +2119,38 @@ RESTful API available for integrations. Contact for API access.
               <Bell className="h-4 w-4 mr-2" />
               Monitoring
             </TabsTrigger>
+            <TabsTrigger value="site-crawler">
+              <Globe className="h-4 w-4 mr-2" />
+              Site Crawler
+            </TabsTrigger>
+            <TabsTrigger value="image-analysis">
+              <Image className="h-4 w-4 mr-2" />
+              Images
+            </TabsTrigger>
+            <TabsTrigger value="redirects">
+              <ArrowRightCircle className="h-4 w-4 mr-2" />
+              Redirects
+            </TabsTrigger>
+            <TabsTrigger value="duplicate-content">
+              <Copy className="h-4 w-4 mr-2" />
+              Duplicates
+            </TabsTrigger>
+            <TabsTrigger value="security">
+              <Shield className="h-4 w-4 mr-2" />
+              Security
+            </TabsTrigger>
+            <TabsTrigger value="link-structure">
+              <Network className="h-4 w-4 mr-2" />
+              Link Structure
+            </TabsTrigger>
+            <TabsTrigger value="mobile-check">
+              <Smartphone className="h-4 w-4 mr-2" />
+              Mobile Check
+            </TabsTrigger>
+            <TabsTrigger value="budget">
+              <DollarSign className="h-4 w-4 mr-2" />
+              Budget
+            </TabsTrigger>
           </TabsList>
         )}
 
@@ -2208,6 +2244,54 @@ RESTful API available for integrations. Contact for API access.
                   <div className="flex items-center gap-2">
                     <Bell className="h-4 w-4" />
                     <span>Monitoring</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="site-crawler">
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4" />
+                    <span>Site Crawler</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="image-analysis">
+                  <div className="flex items-center gap-2">
+                    <Image className="h-4 w-4" />
+                    <span>Image Analysis</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="redirects">
+                  <div className="flex items-center gap-2">
+                    <ArrowRightCircle className="h-4 w-4" />
+                    <span>Redirects</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="duplicate-content">
+                  <div className="flex items-center gap-2">
+                    <Copy className="h-4 w-4" />
+                    <span>Duplicate Content</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="security">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    <span>Security</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="link-structure">
+                  <div className="flex items-center gap-2">
+                    <Network className="h-4 w-4" />
+                    <span>Link Structure</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="mobile-check">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="h-4 w-4" />
+                    <span>Mobile Check</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="budget">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="h-4 w-4" />
+                    <span>Performance Budget</span>
                   </div>
                 </SelectItem>
               </SelectContent>
@@ -3954,6 +4038,857 @@ ${suggestions.map((s: any) => `• ${s.message}`).join('\n')}
                   <li>✅ Content structure (headings, paragraphs, links)</li>
                   <li>✅ Image optimization check</li>
                   <li>✅ Actionable improvement suggestions</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Site Crawler Tab */}
+        <TabsContent value="site-crawler" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Globe className="h-5 w-5" />
+                Technical SEO Site Crawler
+              </CardTitle>
+              <CardDescription>
+                Crawl your entire site and analyze SEO issues (like Screaming Frog)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="crawler-url">Start URL</Label>
+                <Input
+                  id="crawler-url"
+                  type="url"
+                  placeholder={`${window.location.origin}/`}
+                  defaultValue={`${window.location.origin}/`}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="max-pages">Maximum Pages to Crawl</Label>
+                <Input
+                  id="max-pages"
+                  type="number"
+                  defaultValue="50"
+                  min="1"
+                  max="500"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="follow-external"
+                  className="rounded"
+                />
+                <Label htmlFor="follow-external" className="text-sm cursor-pointer">
+                  Follow external links
+                </Label>
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={async () => {
+                  const urlInput = document.getElementById('crawler-url') as HTMLInputElement;
+                  const maxPagesInput = document.getElementById('max-pages') as HTMLInputElement;
+                  const followExternalInput = document.getElementById('follow-external') as HTMLInputElement;
+
+                  const startUrl = urlInput?.value || `${window.location.origin}/`;
+                  const maxPages = parseInt(maxPagesInput?.value || '50');
+                  const followExternal = followExternalInput?.checked || false;
+
+                  toast.loading('Crawling site...', { duration: Infinity });
+
+                  try {
+                    const { data, error } = await supabase.functions.invoke('crawl-site', {
+                      body: { startUrl, maxPages, followExternal }
+                    });
+
+                    if (data?.success) {
+                      const summary = data.data.summary;
+                      const message = `
+Site Crawl Complete!
+
+Total Pages: ${summary.totalPages}
+Pages with Issues: ${summary.pagesWithIssues}
+Orphaned Pages: ${summary.orphanedPages}
+
+Issues Breakdown:
+• Critical: ${summary.issueBreakdown.critical}
+• High: ${summary.issueBreakdown.high}
+• Medium: ${summary.issueBreakdown.medium}
+• Low: ${summary.issueBreakdown.low}
+
+Averages:
+• Word Count: ${summary.avgWordCount}
+• Load Time: ${summary.avgLoadTime}ms
+                      `.trim();
+
+                      alert(message);
+                      console.log('Full crawl results:', data.data);
+                    } else {
+                      throw new Error(data?.error || 'Failed to crawl site');
+                    }
+                  } catch (error: any) {
+                    toast.error(error.message || 'Failed to crawl site');
+                  } finally {
+                    toast.dismiss();
+                  }
+                }}
+              >
+                <Search className="h-4 w-4 mr-2" />
+                Start Crawl
+              </Button>
+
+              <div className="rounded-lg border p-4 bg-muted/50">
+                <p className="text-sm text-muted-foreground">
+                  <Info className="h-4 w-4 inline mr-2" />
+                  Crawls your entire site, finds SEO issues, maps internal links, and detects orphaned pages.
+                  No external API required!
+                </p>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <h4 className="font-semibold mb-2">Features:</h4>
+                <ul className="space-y-1 ml-4">
+                  <li>✅ Complete site crawling with link following</li>
+                  <li>✅ SEO issue detection (50+ checks per page)</li>
+                  <li>✅ Internal link graph mapping</li>
+                  <li>✅ Orphaned page detection</li>
+                  <li>✅ Content analysis (word count, headings)</li>
+                  <li>✅ Load time measurement</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Image Analysis Tab */}
+        <TabsContent value="image-analysis" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Image className="h-5 w-5" />
+                Image SEO Analyzer
+              </CardTitle>
+              <CardDescription>
+                Scan all images for SEO issues and optimization opportunities
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="image-url">Page URL to Analyze</Label>
+                <Input
+                  id="image-url"
+                  type="url"
+                  placeholder={`${window.location.origin}/`}
+                  defaultValue={`${window.location.origin}/`}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="max-file-size">Max File Size (KB)</Label>
+                <Input
+                  id="max-file-size"
+                  type="number"
+                  defaultValue="200"
+                  min="50"
+                  max="2000"
+                />
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={async () => {
+                  const urlInput = document.getElementById('image-url') as HTMLInputElement;
+                  const maxSizeInput = document.getElementById('max-file-size') as HTMLInputElement;
+
+                  const url = urlInput?.value || `${window.location.origin}/`;
+                  const maxFileSize = parseInt(maxSizeInput?.value || '200') * 1024;
+
+                  toast.loading('Analyzing images...', { duration: Infinity });
+
+                  try {
+                    const { data, error } = await supabase.functions.invoke('analyze-images', {
+                      body: { url, maxFileSize }
+                    });
+
+                    if (data?.success) {
+                      const summary = data.data.summary;
+                      const message = `
+Image Analysis Complete!
+
+Total Images: ${summary.totalImages}
+Without Alt Text: ${summary.imagesWithoutAlt}
+Without Dimensions: ${summary.imagesWithoutDimensions}
+Oversized: ${summary.oversizedImages}
+Unoptimized Formats: ${summary.unoptimizedFormats}
+Using Lazy Loading: ${summary.lazyLoadedImages}
+
+Total Size: ${Math.round(summary.totalSize / 1024)}KB
+Average Size: ${Math.round(summary.avgSize / 1024)}KB
+Total Issues: ${summary.issues.length}
+                      `.trim();
+
+                      alert(message);
+                      console.log('Full image analysis:', data.data);
+                    } else {
+                      throw new Error(data?.error || 'Failed to analyze images');
+                    }
+                  } catch (error: any) {
+                    toast.error(error.message || 'Failed to analyze images');
+                  } finally {
+                    toast.dismiss();
+                  }
+                }}
+              >
+                <Image className="h-4 w-4 mr-2" />
+                Analyze Images
+              </Button>
+
+              <div className="rounded-lg border p-4 bg-muted/50">
+                <p className="text-sm text-muted-foreground">
+                  <Info className="h-4 w-4 inline mr-2" />
+                  Scans all images on the page and checks for alt text, file sizes, formats, and dimensions.
+                </p>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <h4 className="font-semibold mb-2">Checks:</h4>
+                <ul className="space-y-1 ml-4">
+                  <li>✅ Missing or empty alt text</li>
+                  <li>✅ Missing width/height attributes</li>
+                  <li>✅ Oversized images</li>
+                  <li>✅ Unoptimized formats (recommends WebP)</li>
+                  <li>✅ Lazy loading implementation</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Redirects Tab */}
+        <TabsContent value="redirects" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ArrowRightCircle className="h-5 w-5" />
+                Redirect Chain Detector
+              </CardTitle>
+              <CardDescription>
+                Detect redirect chains, loops, and performance issues
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="redirect-urls">URLs to Check (one per line)</Label>
+                <textarea
+                  id="redirect-urls"
+                  className="w-full min-h-[100px] p-2 border rounded-md"
+                  placeholder={`${window.location.origin}/\n${window.location.origin}/about\n${window.location.origin}/contact`}
+                  defaultValue={`${window.location.origin}/`}
+                />
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={async () => {
+                  const urlsInput = document.getElementById('redirect-urls') as HTMLTextAreaElement;
+                  const urls = urlsInput?.value.split('\n').filter(u => u.trim());
+
+                  if (!urls || urls.length === 0) {
+                    toast.error('Please enter at least one URL');
+                    return;
+                  }
+
+                  toast.loading('Analyzing redirects...', { duration: Infinity });
+
+                  try {
+                    const { data, error } = await supabase.functions.invoke('detect-redirect-chains', {
+                      body: { urls, maxRedirects: 10 }
+                    });
+
+                    if (data?.success) {
+                      const summary = data.data.summary;
+                      const message = `
+Redirect Analysis Complete!
+
+Total URLs Checked: ${summary.totalUrls}
+URLs with Redirects: ${summary.urlsWithRedirects}
+URLs with Chains: ${summary.urlsWithChains}
+URLs with Loops: ${summary.urlsWithLoops}
+Average Chain Length: ${summary.avgChainLength}
+Total Issues: ${summary.totalIssues}
+                      `.trim();
+
+                      alert(message);
+                      console.log('Full redirect analysis:', data.data);
+                    } else {
+                      throw new Error(data?.error || 'Failed to analyze redirects');
+                    }
+                  } catch (error: any) {
+                    toast.error(error.message || 'Failed to analyze redirects');
+                  } finally {
+                    toast.dismiss();
+                  }
+                }}
+              >
+                <ArrowRightCircle className="h-4 w-4 mr-2" />
+                Analyze Redirects
+              </Button>
+
+              <div className="rounded-lg border p-4 bg-muted/50">
+                <p className="text-sm text-muted-foreground">
+                  <Info className="h-4 w-4 inline mr-2" />
+                  Follows redirect chains, detects loops, and measures redirect performance impact.
+                </p>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <h4 className="font-semibold mb-2">Detects:</h4>
+                <ul className="space-y-1 ml-4">
+                  <li>✅ Redirect chains (A→B→C→D)</li>
+                  <li>✅ Redirect loops</li>
+                  <li>✅ HTTPS/HTTP protocol downgrades</li>
+                  <li>✅ Slow redirect chains</li>
+                  <li>✅ Mixed 301/302 redirects</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Duplicate Content Tab */}
+        <TabsContent value="duplicate-content" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Copy className="h-5 w-5" />
+                Duplicate Content Detector
+              </CardTitle>
+              <CardDescription>
+                Find duplicate, similar, and thin content across pages
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="duplicate-urls">URLs to Compare (one per line, minimum 2)</Label>
+                <textarea
+                  id="duplicate-urls"
+                  className="w-full min-h-[120px] p-2 border rounded-md"
+                  placeholder={`${window.location.origin}/page1\n${window.location.origin}/page2\n${window.location.origin}/page3`}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="similarity-threshold">Similarity Threshold (%)</Label>
+                <Input
+                  id="similarity-threshold"
+                  type="number"
+                  defaultValue="85"
+                  min="50"
+                  max="100"
+                />
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={async () => {
+                  const urlsInput = document.getElementById('duplicate-urls') as HTMLTextAreaElement;
+                  const thresholdInput = document.getElementById('similarity-threshold') as HTMLInputElement;
+
+                  const urls = urlsInput?.value.split('\n').filter(u => u.trim());
+                  const similarityThreshold = parseInt(thresholdInput?.value || '85') / 100;
+
+                  if (!urls || urls.length < 2) {
+                    toast.error('Please enter at least 2 URLs');
+                    return;
+                  }
+
+                  toast.loading('Analyzing content similarity...', { duration: Infinity });
+
+                  try {
+                    const { data, error } = await supabase.functions.invoke('detect-duplicate-content', {
+                      body: { urls, similarityThreshold, thinContentThreshold: 300 }
+                    });
+
+                    if (data?.success) {
+                      const summary = data.data.summary;
+                      const message = `
+Duplicate Content Analysis Complete!
+
+Total Pages Analyzed: ${summary.totalPages}
+Exact Duplicates: ${summary.exactDuplicates}
+Near Duplicates: ${summary.nearDuplicates}
+Similar Pages: ${summary.similarPages}
+Thin Content Pages: ${summary.thinContent}
+Average Word Count: ${summary.avgWordCount}
+Total Issues: ${summary.totalIssues}
+                      `.trim();
+
+                      alert(message);
+                      console.log('Full duplicate content analysis:', data.data);
+                    } else {
+                      throw new Error(data?.error || 'Failed to analyze content');
+                    }
+                  } catch (error: any) {
+                    toast.error(error.message || 'Failed to analyze content');
+                  } finally {
+                    toast.dismiss();
+                  }
+                }}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Detect Duplicates
+              </Button>
+
+              <div className="rounded-lg border p-4 bg-muted/50">
+                <p className="text-sm text-muted-foreground">
+                  <Info className="h-4 w-4 inline mr-2" />
+                  Compares content across multiple pages to find exact duplicates, near-duplicates, and thin content.
+                </p>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <h4 className="font-semibold mb-2">Analysis:</h4>
+                <ul className="space-y-1 ml-4">
+                  <li>✅ Exact duplicate detection (100% match)</li>
+                  <li>✅ Near-duplicate detection (95%+ similar)</li>
+                  <li>✅ Similar content detection (configurable threshold)</li>
+                  <li>✅ Thin content detection (&lt;300 words)</li>
+                  <li>✅ Content similarity scoring</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Security Tab */}
+        <TabsContent value="security" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Security Headers Checker
+              </CardTitle>
+              <CardDescription>
+                Check HTTPS implementation and security headers
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="security-url">URL to Check</Label>
+                <Input
+                  id="security-url"
+                  type="url"
+                  placeholder={`${window.location.origin}/`}
+                  defaultValue={`${window.location.origin}/`}
+                />
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={async () => {
+                  const urlInput = document.getElementById('security-url') as HTMLInputElement;
+                  const url = urlInput?.value || `${window.location.origin}/`;
+
+                  toast.loading('Checking security...', { duration: Infinity });
+
+                  try {
+                    const { data, error } = await supabase.functions.invoke('check-security-headers', {
+                      body: { url }
+                    });
+
+                    if (data?.success) {
+                      const analysis = data.data;
+                      const message = `
+Security Analysis Complete!
+
+Grade: ${analysis.grade}
+Overall Score: ${analysis.overallScore}/100
+Protocol: ${analysis.protocol}
+HTTPS: ${analysis.isHttps ? 'Yes ✓' : 'No ✗'}
+
+Issues:
+• Critical: ${analysis.criticalIssues}
+• High: ${analysis.highIssues}
+• Medium: ${analysis.mediumIssues}
+• Low: ${analysis.lowIssues}
+
+Total Checks: ${analysis.checks.length}
+Passed: ${analysis.checks.filter((c: any) => c.severity === 'pass').length}
+                      `.trim();
+
+                      alert(message);
+                      console.log('Full security analysis:', data.data);
+                    } else {
+                      throw new Error(data?.error || 'Failed to check security');
+                    }
+                  } catch (error: any) {
+                    toast.error(error.message || 'Failed to check security');
+                  } finally {
+                    toast.dismiss();
+                  }
+                }}
+              >
+                <Shield className="h-4 w-4 mr-2" />
+                Check Security
+              </Button>
+
+              <div className="rounded-lg border p-4 bg-muted/50">
+                <p className="text-sm text-muted-foreground">
+                  <Info className="h-4 w-4 inline mr-2" />
+                  Validates HTTPS implementation and important security headers like HSTS, CSP, and X-Frame-Options.
+                </p>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <h4 className="font-semibold mb-2">Security Checks:</h4>
+                <ul className="space-y-1 ml-4">
+                  <li>✅ HTTPS implementation</li>
+                  <li>✅ Strict-Transport-Security (HSTS)</li>
+                  <li>✅ Content-Security-Policy (CSP)</li>
+                  <li>✅ X-Frame-Options</li>
+                  <li>✅ X-Content-Type-Options</li>
+                  <li>✅ Referrer-Policy</li>
+                  <li>✅ Permissions-Policy</li>
+                  <li>✅ Server information disclosure</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Link Structure Tab */}
+        <TabsContent value="link-structure" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Network className="h-5 w-5" />
+                Internal Link Analysis
+              </CardTitle>
+              <CardDescription>
+                Analyze link structure, PageRank scores, and find orphaned pages
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="link-url">Start URL (optional if using crawl ID)</Label>
+                <Input
+                  id="link-url"
+                  type="url"
+                  placeholder={`${window.location.origin}/`}
+                  defaultValue={`${window.location.origin}/`}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="link-max-pages">Maximum Pages to Analyze</Label>
+                <Input
+                  id="link-max-pages"
+                  type="number"
+                  defaultValue="100"
+                  min="10"
+                  max="500"
+                />
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={async () => {
+                  const urlInput = document.getElementById('link-url') as HTMLInputElement;
+                  const maxPagesInput = document.getElementById('link-max-pages') as HTMLInputElement;
+
+                  const startUrl = urlInput?.value || `${window.location.origin}/`;
+                  const maxPages = parseInt(maxPagesInput?.value || '100');
+
+                  toast.loading('Analyzing link structure...', { duration: Infinity });
+
+                  try {
+                    const { data, error } = await supabase.functions.invoke('analyze-internal-links', {
+                      body: { startUrl, maxPages }
+                    });
+
+                    if (data?.success) {
+                      const summary = data.data.summary;
+                      const message = `
+Link Structure Analysis Complete!
+
+Total Pages: ${summary.totalPages}
+Total Links: ${summary.totalLinks}
+Orphaned Pages: ${summary.orphanedPages}
+Hub Pages: ${summary.hubPages}
+Authority Pages: ${summary.authorityPages}
+
+Link Metrics:
+• Avg Inbound Links: ${summary.avgInboundLinks}
+• Avg Outbound Links: ${summary.avgOutboundLinks}
+• Max Depth: ${summary.maxDepth}
+• Avg Depth: ${summary.avgDepth}
+                      `.trim();
+
+                      alert(message);
+                      console.log('Full link analysis:', data.data);
+                    } else {
+                      throw new Error(data?.error || 'Failed to analyze links');
+                    }
+                  } catch (error: any) {
+                    toast.error(error.message || 'Failed to analyze links');
+                  } finally {
+                    toast.dismiss();
+                  }
+                }}
+              >
+                <Network className="h-4 w-4 mr-2" />
+                Analyze Links
+              </Button>
+
+              <div className="rounded-lg border p-4 bg-muted/50">
+                <p className="text-sm text-muted-foreground">
+                  <Info className="h-4 w-4 inline mr-2" />
+                  Analyzes internal linking structure, calculates PageRank-style scores, and identifies orphaned pages.
+                </p>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <h4 className="font-semibold mb-2">Analysis Includes:</h4>
+                <ul className="space-y-1 ml-4">
+                  <li>✅ PageRank-style link scoring</li>
+                  <li>✅ Orphaned page detection</li>
+                  <li>✅ Hub page identification (many outbound links)</li>
+                  <li>✅ Authority page identification (many inbound links)</li>
+                  <li>✅ Link depth from homepage</li>
+                  <li>✅ Internal link graph visualization data</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Mobile Check Tab */}
+        <TabsContent value="mobile-check" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Smartphone className="h-5 w-5" />
+                Mobile-First Checker
+              </CardTitle>
+              <CardDescription>
+                Comprehensive mobile usability and responsive design analysis
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="mobile-url">Page URL to Check</Label>
+                <Input
+                  id="mobile-url"
+                  type="url"
+                  placeholder={`${window.location.origin}/`}
+                  defaultValue={`${window.location.origin}/`}
+                />
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={async () => {
+                  const urlInput = document.getElementById('mobile-url') as HTMLInputElement;
+                  const url = urlInput?.value || `${window.location.origin}/`;
+
+                  toast.loading('Checking mobile usability...', { duration: Infinity });
+
+                  try {
+                    const { data, error } = await supabase.functions.invoke('check-mobile-first', {
+                      body: { url }
+                    });
+
+                    if (data?.success) {
+                      const analysis = data.data;
+                      const message = `
+Mobile Analysis Complete!
+
+Grade: ${analysis.grade}
+Overall Score: ${analysis.overallScore}/100
+
+Issues:
+• High: ${analysis.highIssues}
+• Medium: ${analysis.mediumIssues}
+• Low: ${analysis.lowIssues}
+
+Checks Performed: ${analysis.checks.length}
+Passed: ${analysis.checks.filter((c: any) => c.passed).length}
+Failed: ${analysis.checks.filter((c: any) => !c.passed).length}
+                      `.trim();
+
+                      alert(message);
+                      console.log('Full mobile analysis:', data.data);
+                    } else {
+                      throw new Error(data?.error || 'Failed to check mobile usability');
+                    }
+                  } catch (error: any) {
+                    toast.error(error.message || 'Failed to check mobile usability');
+                  } finally {
+                    toast.dismiss();
+                  }
+                }}
+              >
+                <Smartphone className="h-4 w-4 mr-2" />
+                Check Mobile
+              </Button>
+
+              <div className="rounded-lg border p-4 bg-muted/50">
+                <p className="text-sm text-muted-foreground">
+                  <Info className="h-4 w-4 inline mr-2" />
+                  Comprehensive mobile usability testing beyond viewport meta tags.
+                </p>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <h4 className="font-semibold mb-2">Mobile Checks:</h4>
+                <ul className="space-y-1 ml-4">
+                  <li>✅ Viewport meta tag configuration</li>
+                  <li>✅ Text readability (font sizes)</li>
+                  <li>✅ Responsive design (media queries)</li>
+                  <li>✅ Touch target sizes</li>
+                  <li>✅ Responsive images (srcset, sizes)</li>
+                  <li>✅ Fixed width elements</li>
+                  <li>✅ Mobile navigation patterns</li>
+                  <li>✅ Form input optimization</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Performance Budget Tab */}
+        <TabsContent value="budget" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Performance Budget Monitor
+              </CardTitle>
+              <CardDescription>
+                Track page size, resource counts, and performance budget compliance
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="budget-url">Page URL to Monitor</Label>
+                <Input
+                  id="budget-url"
+                  type="url"
+                  placeholder={`${window.location.origin}/`}
+                  defaultValue={`${window.location.origin}/`}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="max-page-size">Max Page Size (MB)</Label>
+                  <Input
+                    id="max-page-size"
+                    type="number"
+                    defaultValue="3"
+                    min="1"
+                    max="10"
+                    step="0.5"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="max-requests">Max Requests</Label>
+                  <Input
+                    id="max-requests"
+                    type="number"
+                    defaultValue="50"
+                    min="10"
+                    max="200"
+                  />
+                </div>
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={async () => {
+                  const urlInput = document.getElementById('budget-url') as HTMLInputElement;
+                  const pageSizeInput = document.getElementById('max-page-size') as HTMLInputElement;
+                  const requestsInput = document.getElementById('max-requests') as HTMLInputElement;
+
+                  const url = urlInput?.value || `${window.location.origin}/`;
+                  const maxPageSize = parseFloat(pageSizeInput?.value || '3') * 1024 * 1024;
+                  const maxRequests = parseInt(requestsInput?.value || '50');
+
+                  const budget = {
+                    maxPageSize,
+                    maxJsSize: 1024 * 1024,
+                    maxCssSize: 200 * 1024,
+                    maxImageSize: 1.5 * 1024 * 1024,
+                    maxFonts: 4,
+                    maxRequests,
+                    maxThirdParty: 10,
+                  };
+
+                  toast.loading('Monitoring performance budget...', { duration: Infinity });
+
+                  try {
+                    const { data, error } = await supabase.functions.invoke('monitor-performance-budget', {
+                      body: { url, budget }
+                    });
+
+                    if (data?.success) {
+                      const analysis = data.data;
+                      const totalSizeMB = (analysis.totalPageSize / (1024 * 1024)).toFixed(2);
+                      const message = `
+Performance Budget Analysis!
+
+Status: ${analysis.passedBudget ? 'PASSED ✓' : 'EXCEEDED ✗'}
+Score: ${analysis.score}/100
+
+Page Metrics:
+• Total Size: ${totalSizeMB}MB
+• Total Requests: ${analysis.totalRequests}
+• Third-Party Resources: ${analysis.thirdPartyResources}
+
+Budget Violations: ${analysis.violations.length}
+${analysis.violations.map((v: any) => `• ${v.metric}: ${v.message}`).join('\n')}
+                      `.trim();
+
+                      alert(message);
+                      console.log('Full performance budget analysis:', data.data);
+                    } else {
+                      throw new Error(data?.error || 'Failed to monitor performance');
+                    }
+                  } catch (error: any) {
+                    toast.error(error.message || 'Failed to monitor performance');
+                  } finally {
+                    toast.dismiss();
+                  }
+                }}
+              >
+                <DollarSign className="h-4 w-4 mr-2" />
+                Check Budget
+              </Button>
+
+              <div className="rounded-lg border p-4 bg-muted/50">
+                <p className="text-sm text-muted-foreground">
+                  <Info className="h-4 w-4 inline mr-2" />
+                  Monitors page weight, resource counts, and alerts when budgets are exceeded.
+                </p>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <h4 className="font-semibold mb-2">Tracks:</h4>
+                <ul className="space-y-1 ml-4">
+                  <li>✅ Total page size</li>
+                  <li>✅ JavaScript bundle size</li>
+                  <li>✅ CSS file sizes</li>
+                  <li>✅ Image total size</li>
+                  <li>✅ Font count</li>
+                  <li>✅ Total HTTP requests</li>
+                  <li>✅ Third-party resources</li>
                 </ul>
               </div>
             </CardContent>
