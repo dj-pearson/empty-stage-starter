@@ -72,7 +72,7 @@ export function EnhancedSubscriptionDialog({
         .order("sort_order");
 
       if (error) throw error;
-      setPlans(data || []);
+      setPlans((data as any) || []);
     } catch (error: any) {
       console.error("Error loading plans:", error);
       toast.error("Failed to load plans");

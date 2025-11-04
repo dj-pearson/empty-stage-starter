@@ -50,9 +50,10 @@ export function useSubscription() {
 
       if (data) {
         setSubscription({
-          ...data,
-          plan_name: data.plan.name,
-        });
+          ...(data as any),
+          plan_name: (data as any).plan.name,
+          billing_cycle: (data as any).billing_cycle || 'monthly',
+        } as any);
       } else {
         setSubscription(null);
       }

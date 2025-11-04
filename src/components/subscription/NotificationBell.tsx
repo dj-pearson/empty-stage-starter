@@ -63,7 +63,7 @@ export function NotificationBell() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("subscription_notifications")
         .select("*")
         .eq("user_id", user.id)
@@ -73,8 +73,8 @@ export function NotificationBell() {
 
       if (error) throw error;
 
-      setNotifications(data || []);
-      setUnreadCount(data?.filter((n) => !n.is_read).length || 0);
+      setNotifications((data as any) || []);
+      setUnreadCount((data as any)?.filter((n: any) => !n.is_read).length || 0);
     } catch (error: any) {
       console.error("Error fetching notifications:", error);
     } finally {
@@ -84,7 +84,7 @@ export function NotificationBell() {
 
   const markAsRead = async (notificationId: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("subscription_notifications")
         .update({ is_read: true })
         .eq("id", notificationId);
@@ -102,7 +102,7 @@ export function NotificationBell() {
 
   const dismissNotification = async (notificationId: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("subscription_notifications")
         .update({ dismissed_at: new Date().toISOString() })
         .eq("id", notificationId);
