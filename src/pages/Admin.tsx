@@ -44,19 +44,46 @@ const Admin = () => {
     }
 
     if (code && state) {
+      console.log('Admin - OAuth callback detected');
+      
+      // Add immediate popup close attempt for safety
+      if (window.opener && window.opener !== window) {
+        console.log('Admin - Attempting immediate popup close...');
+        
+        // Try multiple methods to close the popup
+        setTimeout(() => {
+          try {
+            window.opener.postMessage({ 
+              type: 'GSC_OAUTH_SUCCESS', 
+              code, 
+              state 
+            }, '*'); // Use wildcard for cross-origin issues
+            
+            setTimeout(() => window.close(), 50);
+          } catch (e) {
+            console.error('Admin - Immediate close failed:', e);
+          }
+        }, 100);
+      }
+      
       // Handle OAuth callback
       handleOAuthCallback(code, state);
     }
   }, [location]);
 
   const handleOAuthCallback = async (code: string, state: string) => {
+    console.log('Admin OAuth callback detected:', { code: code?.substring(0, 10) + '...', state: state?.substring(0, 10) + '...' });
+    
     try {
       // Check if this is running in a popup window
       const isPopup = window.opener && window.opener !== window;
+      console.log('Admin - Is popup window:', isPopup);
       
       if (isPopup) {
         // If this is a popup, communicate with parent and close
         try {
+          console.log('Admin - Sending message to parent window...');
+          
           // Send success message to parent window
           window.opener.postMessage({ 
             type: 'GSC_OAUTH_SUCCESS', 
@@ -64,13 +91,19 @@ const Admin = () => {
             state 
           }, window.location.origin);
           
-          // Close the popup
-          window.close();
+          console.log('Admin - Message sent, closing popup...');
+          
+          // Add a small delay to ensure message is sent
+          setTimeout(() => {
+            window.close();
+          }, 100);
           return;
         } catch (e) {
-          console.error('Error communicating with parent window:', e);
+          console.error('Admin - Error communicating with parent window:', e);
         }
       }
+
+      console.log('Admin - Handling OAuth callback directly...');
 
       // If not a popup or communication failed, handle callback directly
       const response = await fetch(`${supabase.supabaseUrl}/functions/v1/gsc-oauth?action=callback&code=${code}&state=${state}`, {
@@ -97,7 +130,7 @@ const Admin = () => {
         throw new Error(data.error || 'OAuth callback failed');
       }
     } catch (error: any) {
-      console.error('OAuth callback error:', error);
+      console.error('Admin - OAuth callback error:', error);
       toast.error(`Failed to complete OAuth: ${error.message}`);
       
       // Clear URL parameters even on error

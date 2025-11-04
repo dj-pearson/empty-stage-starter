@@ -336,11 +336,27 @@ export function SEOManager() {
 
         // Listen for messages from popup window
         const messageListener = async (event: MessageEvent) => {
-          if (event.origin !== window.location.origin) return;
+          console.log('Message received:', event);
+          
+          // Be more permissive with origins for OAuth callbacks
+          const allowedOrigins = [
+            window.location.origin,
+            'http://localhost:8080',
+            'https://tryeatpal.com'
+          ];
+          
+          if (!allowedOrigins.includes(event.origin)) {
+            console.log('Message from disallowed origin:', event.origin, 'allowed:', allowedOrigins);
+            return;
+          }
           
           if (event.data.type === 'GSC_OAUTH_SUCCESS') {
+            console.log('GSC OAuth success message received');
+            
             // Handle OAuth callback from popup
             try {
+              console.log('Processing OAuth callback...');
+              
               const response = await fetch(`${supabase.supabaseUrl}/functions/v1/gsc-oauth?action=callback&code=${event.data.code}&state=${event.data.state}`, {
                 method: 'GET',
                 headers: {
@@ -349,6 +365,7 @@ export function SEOManager() {
               });
 
               const callbackData = await response.json();
+              console.log('Callback response:', callbackData);
               
               if (callbackData.success) {
                 toast.success("Successfully connected to Google Search Console!");
@@ -363,6 +380,7 @@ export function SEOManager() {
             }
             
             // Clean up
+            console.log('Cleaning up OAuth listeners...');
             clearInterval(pollInterval);
             window.removeEventListener('message', messageListener);
             setIsConnectingGSC(false);
