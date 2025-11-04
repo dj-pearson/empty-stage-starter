@@ -53,7 +53,7 @@ export function AdminSidebar({ activeTab, onTabChange }: AdminSidebarProps) {
                     tooltip={item.title}
                   >
                     <item.icon className="h-4 w-4" />
-                    <span>{item.title}</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

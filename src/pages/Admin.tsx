@@ -185,7 +185,7 @@ const Admin = () => {
   }
 
   return (
-    <SidebarProvider defaultOpen={false}>
+    <SidebarProvider defaultOpen={true}>
       <div className="min-h-screen flex w-full">
         <AdminSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         
