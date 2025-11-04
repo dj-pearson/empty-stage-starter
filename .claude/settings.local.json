@@ -16,7 +16,9 @@
       "Bash(mcp list:*)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080)",
       "Bash(npx playwright install:*)",
-      "Bash(supabase db diff:*)"
+      "Bash(supabase db diff:*)",
+      "Bash(supabase functions list:*)",
+      "Bash(supabase functions deploy:*)"
     ],
     "deny": [],
     "ask": []
