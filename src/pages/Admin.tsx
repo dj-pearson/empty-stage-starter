@@ -53,13 +53,30 @@ const Admin = () => {
         // Try multiple methods to close the popup
         setTimeout(() => {
           try {
+            // First try same-origin
             window.opener.postMessage({ 
               type: 'GSC_OAUTH_SUCCESS', 
               code, 
               state 
-            }, '*'); // Use wildcard for cross-origin issues
+            }, window.location.origin);
             
-            setTimeout(() => window.close(), 50);
+            // Then try wildcard as fallback
+            setTimeout(() => {
+              window.opener.postMessage({ 
+                type: 'GSC_OAUTH_SUCCESS', 
+                code, 
+                state 
+              }, '*');
+              
+              // Force close after message attempts
+              setTimeout(() => {
+                try {
+                  window.close();
+                } catch (e) {
+                  console.log('Admin - Window close blocked, but message sent');
+                }
+              }, 100);
+            }, 50);
           } catch (e) {
             console.error('Admin - Immediate close failed:', e);
           }
@@ -151,6 +168,31 @@ const Admin = () => {
 
   if (!isAdmin) {
     return null;
+  }
+
+  // Check if this is an OAuth callback popup
+  const urlParams = new URLSearchParams(location.search);
+  const isOAuthCallback = urlParams.has('code') && urlParams.has('state');
+  const isPopup = window.opener && window.opener !== window;
+
+  if (isOAuthCallback && isPopup) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-center p-8 max-w-md">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold mb-2">Completing Authorization...</h2>
+          <p className="text-muted-foreground mb-4">
+            Please wait while we complete your Google Search Console connection.
+          </p>
+          <button 
+            onClick={() => window.close()} 
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          >
+            Close Window
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

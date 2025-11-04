@@ -331,21 +331,26 @@ export function SEOManager() {
         const authWindow = window.open(
           data.authUrl,
           "Google Search Console Authorization",
-          `width=${width},height=${height},left=${left},top=${top}`
+          `width=${width},height=${height},left=${left},top=${top},noopener=no,noreferrer=no`
         );
 
         // Listen for messages from popup window
         const messageListener = async (event: MessageEvent) => {
-          console.log('Message received:', event);
+          console.log('Message received from origin:', event.origin, 'data:', event.data);
           
           // Be more permissive with origins for OAuth callbacks
           const allowedOrigins = [
             window.location.origin,
             'http://localhost:8080',
-            'https://tryeatpal.com'
+            'http://localhost:5173',
+            'https://tryeatpal.com',
+            'null' // For file:// origins in some cases
           ];
           
-          if (!allowedOrigins.includes(event.origin)) {
+          // Allow any localhost origin for development
+          const isLocalhost = event.origin?.includes('localhost') || event.origin?.includes('127.0.0.1');
+          
+          if (!allowedOrigins.includes(event.origin) && !isLocalhost) {
             console.log('Message from disallowed origin:', event.origin, 'allowed:', allowedOrigins);
             return;
           }
@@ -392,25 +397,52 @@ export function SEOManager() {
         // Poll for OAuth completion (backup method)
         const pollInterval = setInterval(async () => {
           try {
-            if (authWindow?.closed) {
+            // Try to check if window is closed, but handle COOP errors gracefully
+            let windowClosed = false;
+            try {
+              windowClosed = authWindow?.closed || false;
+            } catch (coopError) {
+              // Cross-Origin-Opener-Policy blocked access - assume window might be closed
+              console.log("COOP blocked window.closed check, relying on message system");
+              return; // Don't clean up yet, rely on message system
+            }
+
+            if (windowClosed) {
               clearInterval(pollInterval);
               window.removeEventListener('message', messageListener);
               setIsConnectingGSC(false);
 
-              // Check if connection succeeded
-              await checkGSCConnection();
+              // Give message system a moment to work first
+              setTimeout(async () => {
+                // Check if connection succeeded
+                await checkGSCConnection();
 
-              if (gscConnected) {
-                toast.success("Connected to Google Search Console!");
-                await fetchGSCPropertiesList();
-              } else {
-                toast.info("Authorization window closed");
-              }
+                if (gscConnected) {
+                  toast.success("Connected to Google Search Console!");
+                  await fetchGSCPropertiesList();
+                } else {
+                  toast.info("Authorization window closed");
+                }
+              }, 500);
             }
           } catch (e) {
             console.error("Error polling auth window:", e);
           }
         }, 1000);
+
+        // Add a timeout to clean up after 5 minutes regardless
+        setTimeout(() => {
+          try {
+            clearInterval(pollInterval);
+            window.removeEventListener('message', messageListener);
+            if (!gscConnected) {
+              setIsConnectingGSC(false);
+              toast.info("OAuth timeout - please try connecting again");
+            }
+          } catch (e) {
+            console.error("Cleanup error:", e);
+          }
+        }, 300000); // 5 minutes
       }
     } catch (error: any) {
       console.error("Error connecting to GSC:", error);
