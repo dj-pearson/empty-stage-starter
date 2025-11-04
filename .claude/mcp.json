@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=tbuszxkevkpjcjapbrir&read_only=false",
+      "description": "Supabase MCP Server - Connect AI assistants to your Supabase project for database management, querying, and more"
+    }
+  }
+}

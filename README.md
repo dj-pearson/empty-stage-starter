@@ -97,3 +97,42 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+
+## 🤖 AI Integration & Development Tools
+
+This project includes advanced AI integration capabilities:
+
+### Supabase MCP (Model Context Protocol)
+
+Direct AI assistant access to your Supabase database through natural language commands.
+
+**Features**:
+- ✅ Database querying and management
+- ✅ Edge Function deployment and invocation
+- ✅ Schema inspection and migrations
+- ✅ Real-time debugging and analysis
+
+**Setup**: See [SUPABASE_MCP_SETUP.md](./SUPABASE_MCP_SETUP.md) for complete configuration guide.
+
+**Quick Example**:
+```
+Claude, show me all tables in the database
+Claude, query the seo_content_optimization table
+Claude, list all Edge Functions
+```
+
+### SEO Content Optimizer
+
+AI-powered content optimization with detailed suggestions:
+
+**Features**:
+- ✅ Title & meta description optimization
+- ✅ LSI keyword suggestions
+- ✅ Content gap analysis vs competitors
+- ✅ Semantic keyword analysis
+- ✅ Before/after rewrite examples
+
+**Location**: Admin Panel → SEO Manager → Content Optimizer
+
+**Documentation**: See [CONTENT_OPTIMIZER_GUIDE.md](./CONTENT_OPTIMIZER_GUIDE.md)
+
