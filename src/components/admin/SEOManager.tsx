@@ -3052,56 +3052,58 @@ RESTful API available for integrations. Contact for API access.
             </CardHeader>
             <CardContent>
               {pageAnalysis.length === 0 ? (
-                <div className="text-center py-12">
-                  <Eye className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No page analysis data yet</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Analyze your blog posts to see individual SEO scores
-                  </p>
-                  <Button onClick={analyzeBlogPostsSEO} disabled={isAnalyzingBlogPosts}>
-                    {isAnalyzingBlogPosts ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                        Analyzing...
-                      </>
-                    ) : (
-                      <>
-                        <BarChart3 className="h-4 w-4 mr-2" />
-                        Analyze Blog Posts
-                      </>
-                    )}
-                  </Button>
-                </div>
-                {blogPostsAnalysisResults && (
-                  <div className="mt-4">
-                    {blogPostsAnalysisResults.success ? (
-                      <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-                        <div className="flex items-start gap-3">
-                          <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-green-900 mb-1">Analysis Complete</h4>
-                            <p className="text-sm text-green-800">{blogPostsAnalysisResults.message}</p>
-                            {blogPostsAnalysisResults.analyzed > 0 && (
-                              <div className="mt-2">
-                                <Badge variant="default">{blogPostsAnalysisResults.analyzed} blog posts analyzed</Badge>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-                        <div className="flex items-start gap-3">
-                          <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-red-900 mb-1">Analysis Failed</h4>
-                            <p className="text-sm text-red-800">{blogPostsAnalysisResults.error}</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                <>
+                  <div className="text-center py-12">
+                    <Eye className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No page analysis data yet</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Analyze your blog posts to see individual SEO scores
+                    </p>
+                    <Button onClick={analyzeBlogPostsSEO} disabled={isAnalyzingBlogPosts}>
+                      {isAnalyzingBlogPosts ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Analyzing...
+                        </>
+                      ) : (
+                        <>
+                          <BarChart3 className="h-4 w-4 mr-2" />
+                          Analyze Blog Posts
+                        </>
+                      )}
+                    </Button>
                   </div>
-                )}
+                  {blogPostsAnalysisResults && (
+                    <div className="mt-4">
+                      {blogPostsAnalysisResults.success ? (
+                        <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                          <div className="flex items-start gap-3">
+                            <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-green-900 mb-1">Analysis Complete</h4>
+                              <p className="text-sm text-green-800">{blogPostsAnalysisResults.message}</p>
+                              {blogPostsAnalysisResults.analyzed > 0 && (
+                                <div className="mt-2">
+                                  <Badge variant="default">{blogPostsAnalysisResults.analyzed} blog posts analyzed</Badge>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                          <div className="flex items-start gap-3">
+                            <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-red-900 mb-1">Analysis Failed</h4>
+                              <p className="text-sm text-red-800">{blogPostsAnalysisResults.error}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               ) : (
                 <Table>
                   <TableHeader>
