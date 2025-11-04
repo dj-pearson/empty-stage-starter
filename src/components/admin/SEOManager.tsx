@@ -66,6 +66,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { ContentOptimizer } from "./ContentOptimizer";
 
 interface AuditResult {
   category: string;
@@ -2115,6 +2116,10 @@ RESTful API available for integrations. Contact for API access.
               <FileText className="h-4 w-4 mr-2" />
               Content
             </TabsTrigger>
+            <TabsTrigger value="content-optimizer">
+              <Sparkles className="h-4 w-4 mr-2" />
+              Content Optimizer
+            </TabsTrigger>
             <TabsTrigger value="monitoring">
               <Bell className="h-4 w-4 mr-2" />
               Monitoring
@@ -2238,6 +2243,12 @@ RESTful API available for integrations. Contact for API access.
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4" />
                     <span>Content</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="content-optimizer">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    <span>Content Optimizer</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="monitoring">
@@ -4136,6 +4147,11 @@ ${suggestions.map((s: any) => `• ${s.message}`).join('\n')}
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Content Optimizer Tab */}
+        <TabsContent value="content-optimizer" className="space-y-4">
+          <ContentOptimizer />
         </TabsContent>
 
         {/* Site Crawler Tab */}
