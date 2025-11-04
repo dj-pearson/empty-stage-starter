@@ -2095,6 +2095,22 @@ RESTful API available for integrations. Contact for API access.
             <TabsTrigger value="sitemap">sitemap.xml</TabsTrigger>
             <TabsTrigger value="llms">llms.txt</TabsTrigger>
             <TabsTrigger value="structured">Structured Data</TabsTrigger>
+            <TabsTrigger value="performance">
+              <Gauge className="h-4 w-4 mr-2" />
+              Performance
+            </TabsTrigger>
+            <TabsTrigger value="backlinks">
+              <Link2 className="h-4 w-4 mr-2" />
+              Backlinks
+            </TabsTrigger>
+            <TabsTrigger value="broken-links">
+              <XCircle className="h-4 w-4 mr-2" />
+              Broken Links
+            </TabsTrigger>
+            <TabsTrigger value="content">
+              <FileText className="h-4 w-4 mr-2" />
+              Content
+            </TabsTrigger>
             <TabsTrigger value="monitoring">
               <Bell className="h-4 w-4 mr-2" />
               Monitoring
@@ -2162,6 +2178,30 @@ RESTful API available for integrations. Contact for API access.
                   <div className="flex items-center gap-2">
                     <LinkIcon className="h-4 w-4" />
                     <span>Structured Data</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="performance">
+                  <div className="flex items-center gap-2">
+                    <Gauge className="h-4 w-4" />
+                    <span>Performance</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="backlinks">
+                  <div className="flex items-center gap-2">
+                    <Link2 className="h-4 w-4" />
+                    <span>Backlinks</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="broken-links">
+                  <div className="flex items-center gap-2">
+                    <XCircle className="h-4 w-4" />
+                    <span>Broken Links</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="content">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    <span>Content</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="monitoring">
@@ -3560,6 +3600,362 @@ RESTful API available for integrations. Contact for API access.
                   </TableBody>
                 </Table>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Core Web Vitals / Performance Tab */}
+        <TabsContent value="performance" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Gauge className="h-5 w-5" />
+                Core Web Vitals
+              </CardTitle>
+              <CardDescription>
+                Monitor page performance and Google's Core Web Vitals (LCP, FID, CLS)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Enter URL to test (leave empty for homepage)"
+                  defaultValue={window.location.origin}
+                  id="cwv-url"
+                />
+                <Button
+                  onClick={async () => {
+                    const url = (document.getElementById('cwv-url') as HTMLInputElement)?.value || window.location.origin;
+                    toast.loading('Checking Core Web Vitals...');
+
+                    try {
+                      const { data, error } = await supabase.functions.invoke('gsc-fetch-core-web-vitals', {
+                        body: { siteUrl: url }
+                      });
+
+                      if (error) throw error;
+
+                      if (data?.success) {
+                        toast.success('Core Web Vitals checked successfully!');
+
+                        // Show results
+                        const metrics = data.data.metrics;
+                        const message = `
+Performance Score: ${metrics.mobile_performance_score || 'N/A'}
+LCP: ${metrics.mobile_lcp || 'N/A'}s (${metrics.lcp_status || 'unknown'})
+CLS: ${metrics.mobile_cls || 'N/A'} (${metrics.cls_status || 'unknown'})
+Data Source: ${data.data.dataSource}
+                        `.trim();
+
+                        alert(message);
+                      } else {
+                        throw new Error(data?.error || 'Failed to check Core Web Vitals');
+                      }
+                    } catch (error: any) {
+                      toast.error(error.message || 'Failed to check Core Web Vitals');
+                    } finally {
+                      toast.dismiss();
+                    }
+                  }}
+                >
+                  <Zap className="h-4 w-4 mr-2" />
+                  Check Performance
+                </Button>
+              </div>
+
+              <div className="rounded-lg border p-4 bg-muted/50">
+                <p className="text-sm text-muted-foreground">
+                  <Info className="h-4 w-4 inline mr-2" />
+                  Uses your existing Google Search Console connection to fetch real user data from Chrome UX Report.
+                  Add a PageSpeed API key for more detailed metrics.
+                </p>
+              </div>
+
+              <div className="text-sm text-muted-foreground mt-4">
+                <h4 className="font-semibold mb-2">What are Core Web Vitals?</h4>
+                <ul className="space-y-1 ml-4">
+                  <li>• <strong>LCP</strong>: Largest Contentful Paint - Loading speed (Good: ≤2.5s)</li>
+                  <li>• <strong>FID/INP</strong>: First Input Delay/Interaction - Interactivity (Good: ≤100ms)</li>
+                  <li>• <strong>CLS</strong>: Cumulative Layout Shift - Visual stability (Good: ≤0.1)</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Backlinks Tab */}
+        <TabsContent value="backlinks" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Link2 className="h-5 w-5" />
+                Backlink Tracking
+              </CardTitle>
+              <CardDescription>
+                Monitor inbound links and track link quality
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Backlink source URL"
+                  id="backlink-source"
+                />
+                <Input
+                  placeholder="Your URL (target)"
+                  defaultValue={window.location.origin}
+                  id="backlink-target"
+                />
+                <Button
+                  onClick={async () => {
+                    const sourceUrl = (document.getElementById('backlink-source') as HTMLInputElement)?.value;
+                    const targetUrl = (document.getElementById('backlink-target') as HTMLInputElement)?.value || window.location.origin;
+
+                    if (!sourceUrl) {
+                      toast.error('Please enter a backlink source URL');
+                      return;
+                    }
+
+                    toast.loading('Adding backlink...');
+
+                    try {
+                      const { data, error } = await supabase.functions.invoke('sync-backlinks', {
+                        body: {
+                          targetDomain: new URL(targetUrl).hostname,
+                          source: 'manual',
+                          manualBacklinks: [{
+                            sourceUrl: sourceUrl,
+                            targetUrl: targetUrl,
+                            anchorText: '',
+                            linkType: 'dofollow',
+                            notes: 'Added manually'
+                          }]
+                        }
+                      });
+
+                      if (error) throw error;
+
+                      if (data?.success) {
+                        toast.success('Backlink added successfully!');
+                        (document.getElementById('backlink-source') as HTMLInputElement).value = '';
+                      } else {
+                        throw new Error(data?.error || 'Failed to add backlink');
+                      }
+                    } catch (error: any) {
+                      toast.error(error.message || 'Failed to add backlink');
+                    } finally {
+                      toast.dismiss();
+                    }
+                  }}
+                >
+                  <LinkIcon className="h-4 w-4 mr-2" />
+                  Add Backlink
+                </Button>
+              </div>
+
+              <div className="rounded-lg border p-4 bg-muted/50">
+                <p className="text-sm text-muted-foreground">
+                  <Info className="h-4 w-4 inline mr-2" />
+                  Track backlinks manually or integrate with Ahrefs/Moz APIs for automated discovery.
+                  Configure API keys in environment variables for automatic backlink syncing.
+                </p>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <h4 className="font-semibold mb-2">Backlink Tracking Features:</h4>
+                <ul className="space-y-1 ml-4">
+                  <li>✅ Track link quality (Domain Authority, Spam Score)</li>
+                  <li>✅ Monitor new and lost backlinks</li>
+                  <li>✅ Detect toxic links automatically</li>
+                  <li>✅ Historical metrics tracking</li>
+                  <li>✅ Manual or automated via APIs (Ahrefs, Moz)</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Broken Links Tab */}
+        <TabsContent value="broken-links" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <XCircle className="h-5 w-5" />
+                Broken Link Checker
+              </CardTitle>
+              <CardDescription>
+                Find and fix broken links across your site
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="URL to scan for broken links"
+                  defaultValue={window.location.origin}
+                  id="broken-links-url"
+                />
+                <Button
+                  onClick={async () => {
+                    const url = (document.getElementById('broken-links-url') as HTMLInputElement)?.value || window.location.origin;
+                    toast.loading('Scanning for broken links...');
+
+                    try {
+                      const { data, error } = await supabase.functions.invoke('check-broken-links', {
+                        body: {
+                          url: url,
+                          checkExternal: true,
+                          maxLinks: 100
+                        }
+                      });
+
+                      if (error) throw error;
+
+                      if (data?.success) {
+                        toast.success(`Scan complete! Found ${data.data.brokenLinksFound} broken links out of ${data.data.totalLinksChecked} checked.`);
+
+                        if (data.data.brokenLinksFound > 0) {
+                          console.log('Broken links:', data.data.brokenLinks);
+                          alert(`Found ${data.data.brokenLinksFound} broken links. Check console for details.`);
+                        }
+                      } else {
+                        throw new Error(data?.error || 'Failed to scan for broken links');
+                      }
+                    } catch (error: any) {
+                      toast.error(error.message || 'Failed to scan for broken links');
+                    } finally {
+                      toast.dismiss();
+                    }
+                  }}
+                >
+                  <Search className="h-4 w-4 mr-2" />
+                  Scan Page
+                </Button>
+              </div>
+
+              <div className="rounded-lg border p-4 bg-muted-50">
+                <p className="text-sm text-muted-foreground">
+                  <Info className="h-4 w-4 inline mr-2" />
+                  Scans all links on a page including internal links, external links, images, CSS, and JavaScript files.
+                  Broken links are prioritized by impact (critical, high, medium, low).
+                </p>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <h4 className="font-semibold mb-2">What Gets Checked:</h4>
+                <ul className="space-y-1 ml-4">
+                  <li>✅ Internal links (pages, posts)</li>
+                  <li>✅ External links (outbound)</li>
+                  <li>✅ Images (src attributes)</li>
+                  <li>✅ Stylesheets (CSS files)</li>
+                  <li>✅ Scripts (JavaScript files)</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Content Analysis Tab */}
+        <TabsContent value="content" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Content Analysis
+              </CardTitle>
+              <CardDescription>
+                Analyze content quality, readability, and keyword optimization
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-2">
+                <Input
+                  placeholder="URL to analyze"
+                  defaultValue={window.location.origin}
+                  id="content-url"
+                />
+                <Input
+                  placeholder="Target keyword (optional)"
+                  id="content-keyword"
+                />
+                <Button
+                  onClick={async () => {
+                    const url = (document.getElementById('content-url') as HTMLInputElement)?.value || window.location.origin;
+                    const keyword = (document.getElementById('content-keyword') as HTMLInputElement)?.value || '';
+
+                    toast.loading('Analyzing content...');
+
+                    try {
+                      const { data, error } = await supabase.functions.invoke('analyze-content', {
+                        body: {
+                          url: url,
+                          targetKeyword: keyword || undefined,
+                          contentType: 'blog_post'
+                        }
+                      });
+
+                      if (error) throw error;
+
+                      if (data?.success) {
+                        toast.success('Content analysis complete!');
+
+                        const scores = data.data.scores;
+                        const metrics = data.data.metrics;
+                        const suggestions = data.data.suggestions;
+
+                        const message = `
+Content Analysis Results:
+
+Overall Score: ${scores.overall}/100
+Readability: ${scores.readability}/100
+Keyword Optimization: ${scores.keywordOptimization}/100
+Structure: ${scores.structure}/100
+
+Metrics:
+Word Count: ${metrics.wordCount}
+Sentences: ${metrics.sentenceCount}
+Readability: ${metrics.fleschReadingEase} (Flesch Reading Ease)
+Grade Level: ${metrics.fleschKincaidGrade}
+${keyword ? `Keyword Density: ${metrics.keywordDensity}% (${metrics.keywordCount} times)` : ''}
+
+Suggestions: ${suggestions.length}
+${suggestions.map((s: any) => `• ${s.message}`).join('\n')}
+                        `.trim();
+
+                        alert(message);
+                        console.log('Full analysis:', data.data);
+                      } else {
+                        throw new Error(data?.error || 'Failed to analyze content');
+                      }
+                    } catch (error: any) {
+                      toast.error(error.message || 'Failed to analyze content');
+                    } finally {
+                      toast.dismiss();
+                    }
+                  }}
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Analyze Content
+                </Button>
+              </div>
+
+              <div className="rounded-lg border p-4 bg-muted/50">
+                <p className="text-sm text-muted-foreground">
+                  <Info className="h-4 w-4 inline mr-2" />
+                  Analyzes readability, keyword density, content structure, and provides actionable suggestions.
+                  No external API required - runs locally with instant results.
+                </p>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <h4 className="font-semibold mb-2">Analysis Includes:</h4>
+                <ul className="space-y-1 ml-4">
+                  <li>✅ Readability scores (Flesch, Gunning Fog, SMOG, etc.)</li>
+                  <li>✅ Keyword density analysis (optimal: 1-3%)</li>
+                  <li>✅ Content structure (headings, paragraphs, links)</li>
+                  <li>✅ Image optimization check</li>
+                  <li>✅ Actionable improvement suggestions</li>
+                </ul>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
