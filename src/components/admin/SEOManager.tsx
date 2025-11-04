@@ -334,11 +334,49 @@ export function SEOManager() {
           `width=${width},height=${height},left=${left},top=${top}`
         );
 
-        // Poll for OAuth completion
+        // Listen for messages from popup window
+        const messageListener = async (event: MessageEvent) => {
+          if (event.origin !== window.location.origin) return;
+          
+          if (event.data.type === 'GSC_OAUTH_SUCCESS') {
+            // Handle OAuth callback from popup
+            try {
+              const response = await fetch(`${supabase.supabaseUrl}/functions/v1/gsc-oauth?action=callback&code=${event.data.code}&state=${event.data.state}`, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Bearer ${supabase.supabaseKey}`,
+                }
+              });
+
+              const callbackData = await response.json();
+              
+              if (callbackData.success) {
+                toast.success("Successfully connected to Google Search Console!");
+                await checkGSCConnection();
+                await fetchGSCPropertiesList();
+              } else {
+                throw new Error(callbackData.error || 'OAuth callback failed');
+              }
+            } catch (error: any) {
+              console.error('OAuth callback error:', error);
+              toast.error(`Failed to complete OAuth: ${error.message}`);
+            }
+            
+            // Clean up
+            clearInterval(pollInterval);
+            window.removeEventListener('message', messageListener);
+            setIsConnectingGSC(false);
+          }
+        };
+        
+        window.addEventListener('message', messageListener);
+
+        // Poll for OAuth completion (backup method)
         const pollInterval = setInterval(async () => {
           try {
             if (authWindow?.closed) {
               clearInterval(pollInterval);
+              window.removeEventListener('message', messageListener);
               setIsConnectingGSC(false);
 
               // Check if connection succeeded
@@ -346,6 +384,7 @@ export function SEOManager() {
 
               if (gscConnected) {
                 toast.success("Connected to Google Search Console!");
+                await fetchGSCPropertiesList();
               } else {
                 toast.info("Authorization window closed");
               }

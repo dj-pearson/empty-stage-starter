@@ -31,6 +31,7 @@ import FAQ from "./pages/FAQ";
 import Contact from "./pages/Contact";
 import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
+import SEODashboard from "./pages/SEODashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -55,6 +56,7 @@ const App = () => (
             <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
+            <Route path="/seo-dashboard" element={<SEODashboard />} />
 
             {/* Main Dashboard with nested routes */}
             <Route path="/dashboard" element={<Dashboard />}>

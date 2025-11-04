@@ -19,7 +19,23 @@ const corsHeaders = {
 // Google OAuth Configuration
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") || "";
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET") || "";
-const GOOGLE_REDIRECT_URI = Deno.env.get("GOOGLE_REDIRECT_URI") || "http://localhost:5173/seo-dashboard";
+
+// Dynamic redirect URI based on environment or use configured one
+function getRedirectUri(req: Request): string {
+  const configuredUri = Deno.env.get("GOOGLE_REDIRECT_URI");
+  if (configuredUri) return configuredUri;
+  
+  // Fallback: determine from request origin
+  const origin = req.headers.get("origin") || req.headers.get("referer") || "http://localhost:8080";
+  const baseUrl = origin.replace(/\/$/, ""); // Remove trailing slash
+  
+  // Use /admin for production, /seo-dashboard for development
+  if (baseUrl.includes("tryeatpal.com")) {
+    return `${baseUrl}/admin`;
+  } else {
+    return `${baseUrl}/seo-dashboard`;
+  }
+}
 
 // Google Search Console OAuth Scope
 const GSC_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly";
@@ -74,10 +90,11 @@ serve(async (req) => {
 
       // Build OAuth URL with state parameter (contains user ID)
       const state = btoa(JSON.stringify({ userId, timestamp: Date.now() }));
+      const redirectUri = getRedirectUri(req);
 
       const authUrl = new URL(OAUTH_AUTHORIZE_URL);
       authUrl.searchParams.set("client_id", GOOGLE_CLIENT_ID);
-      authUrl.searchParams.set("redirect_uri", GOOGLE_REDIRECT_URI);
+      authUrl.searchParams.set("redirect_uri", redirectUri);
       authUrl.searchParams.set("response_type", "code");
       authUrl.searchParams.set("scope", GSC_SCOPE);
       authUrl.searchParams.set("access_type", "offline"); // Get refresh token
@@ -128,6 +145,8 @@ serve(async (req) => {
       }
 
       // Exchange authorization code for tokens
+      const redirectUri = getRedirectUri(req);
+      
       const tokenResponse = await fetch(OAUTH_TOKEN_URL, {
         method: "POST",
         headers: {
@@ -137,7 +156,7 @@ serve(async (req) => {
           code,
           client_id: GOOGLE_CLIENT_ID,
           client_secret: GOOGLE_CLIENT_SECRET,
-          redirect_uri: GOOGLE_REDIRECT_URI,
+          redirect_uri: redirectUri,
           grant_type: "authorization_code",
         }),
       });
