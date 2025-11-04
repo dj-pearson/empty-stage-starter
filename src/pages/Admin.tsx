@@ -26,37 +26,75 @@ import { FeatureFlagDashboard } from "@/components/admin/FeatureFlagDashboard";
 import { TicketQueue } from "@/components/admin/TicketQueue";
 
 const Admin = () => {
-  const { isAdmin, isLoading } = useAdminCheck();
   const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState("users");
+  
+  // Check for OAuth callback BEFORE authentication check
+  const urlParams = new URLSearchParams(location.search);
+  const code = urlParams.get('code');
+  const state = urlParams.get('state');
+  const error = urlParams.get('error');
 
+  // Handle OAuth callback immediately if present
   useEffect(() => {
-    // Check if this is an OAuth callback
-    const urlParams = new URLSearchParams(location.search);
-    const code = urlParams.get('code');
-    const state = urlParams.get('state');
-    const error = urlParams.get('error');
-
     if (error) {
       toast.error(`OAuth error: ${error}`);
-      // Clean up URL
+      // Store error state and redirect to auth if needed
+      sessionStorage.setItem('gsc_oauth_error', error);
       window.history.replaceState({}, document.title, '/admin?tab=seo');
-      setActiveTab("seo");
       return;
     }
 
     if (code && state) {
-      console.log('OAuth callback detected in Admin');
-      handleOAuthCallback(code, state);
+      console.log('OAuth callback detected - storing for processing after auth');
+      // Store OAuth data for processing after authentication
+      sessionStorage.setItem('gsc_oauth_code', code);
+      sessionStorage.setItem('gsc_oauth_state', state);
+      sessionStorage.setItem('gsc_oauth_pending', 'true');
+      
+      // Clean URL to prevent redirect loops
+      window.history.replaceState({}, document.title, '/admin?tab=seo');
+      return;
+    }
+  }, [code, state, error]);
+
+  // Now perform admin check
+  const { isAdmin, isLoading } = useAdminCheck();
+
+  useEffect(() => {
+    // Process stored OAuth callback after authentication is confirmed
+    const oauthPending = sessionStorage.getItem('gsc_oauth_pending');
+    const storedCode = sessionStorage.getItem('gsc_oauth_code');
+    const storedState = sessionStorage.getItem('gsc_oauth_state');
+    
+    if (isAdmin && oauthPending && storedCode && storedState) {
+      console.log('Processing stored OAuth callback after authentication');
+      // Clean up storage first
+      sessionStorage.removeItem('gsc_oauth_pending');
+      sessionStorage.removeItem('gsc_oauth_code');
+      sessionStorage.removeItem('gsc_oauth_state');
+      
+      // Process the OAuth callback
+      handleOAuthCallback(storedCode, storedState);
+      setActiveTab("seo");
       return;
     }
 
-    // Check for OAuth success from sessionStorage (fallback)
+    // Check for OAuth success from previous session
     const oauthSuccess = sessionStorage.getItem('gsc_oauth_success');
     if (oauthSuccess) {
       toast.success("Successfully connected to Google Search Console!");
       sessionStorage.removeItem('gsc_oauth_success');
+      setActiveTab("seo");
+      return;
+    }
+
+    // Check for OAuth error from previous session
+    const oauthError = sessionStorage.getItem('gsc_oauth_error');
+    if (oauthError) {
+      toast.error(`OAuth error: ${oauthError}`);
+      sessionStorage.removeItem('gsc_oauth_error');
       setActiveTab("seo");
       return;
     }
@@ -66,7 +104,7 @@ const Admin = () => {
     if (tab) {
       setActiveTab(tab);
     }
-  }, [location]);
+  }, [isAdmin, location]);
 
   const handleOAuthCallback = async (code: string, state: string) => {
     console.log('Admin OAuth callback detected:', { code: code?.substring(0, 10) + '...', state: state?.substring(0, 10) + '...' });
@@ -122,8 +160,7 @@ const Admin = () => {
     return null;
   }
 
-  // Check if this is an OAuth callback popup
-  const urlParams = new URLSearchParams(location.search);
+  // Check if this is an OAuth callback popup (reuse existing urlParams)
   const isOAuthCallback = urlParams.has('code') && urlParams.has('state');
   const isPopup = window.opener && window.opener !== window;
 

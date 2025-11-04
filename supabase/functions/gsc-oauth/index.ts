@@ -29,8 +29,8 @@ function getRedirectUri(req: Request): string {
   const origin = req.headers.get("origin") || req.headers.get("referer") || "http://localhost:8080";
   const baseUrl = origin.replace(/\/$/, ""); // Remove trailing slash
   
-  // Always use /admin for both development and production
-  return `${baseUrl}/admin`;
+  // Use dedicated OAuth callback route that bypasses authentication
+  return `${baseUrl}/oauth/callback`;
 }
 
 // Google Search Console OAuth Scope

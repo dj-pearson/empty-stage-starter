@@ -32,6 +32,7 @@ import Contact from "./pages/Contact";
 import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
 import SEODashboard from "./pages/SEODashboard";
+import OAuthCallback from "./pages/OAuthCallback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -54,6 +55,7 @@ const App = () => (
             <Route path="/contact" element={<Contact />} />
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<BlogPost />} />
+            <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
             <Route path="/seo-dashboard" element={<SEODashboard />} />
