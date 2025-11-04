@@ -3185,6 +3185,100 @@ RESTful API available for integrations. Contact for API access.
                   </li>
                 </ol>
               </div>
+
+              <Separator className="my-6" />
+
+              {/* Structured Data Validator Section */}
+              <div className="space-y-4 pt-4">
+                <div>
+                  <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5" />
+                    Validate Existing Structured Data
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Check any page for valid Schema.org JSON-LD markup
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="validate-structured-url">Page URL to Validate</Label>
+                  <Input
+                    id="validate-structured-url"
+                    type="url"
+                    placeholder={`${window.location.origin}/`}
+                    defaultValue={`${window.location.origin}/`}
+                  />
+                </div>
+
+                <Button
+                  className="w-full"
+                  onClick={async () => {
+                    const urlInput = document.getElementById('validate-structured-url') as HTMLInputElement;
+                    const url = urlInput?.value || `${window.location.origin}/`;
+
+                    toast.loading('Validating structured data...', { duration: Infinity });
+
+                    try {
+                      const { data, error } = await supabase.functions.invoke('validate-structured-data', {
+                        body: { url }
+                      });
+
+                      if (data?.success) {
+                        const result = data.data;
+                        const message = `
+Structured Data Validation Complete!
+
+Found: ${result.hasStructuredData ? 'Yes ✓' : 'No ✗'}
+Total Items: ${result.totalItems}
+Valid Items: ${result.validItems}
+Invalid Items: ${result.invalidItems}
+Overall Score: ${result.overallScore}/100
+
+${result.items.length > 0 ? 'Items Found:\n' + result.items.map((item: any) =>
+  `• ${item.type} (${item.isValid ? 'Valid ✓' : 'Invalid ✗'} - Score: ${item.score}/100)`
+).join('\n') : 'No structured data found on page'}
+
+${result.issues.length > 0 ? '\nIssues:\n' + result.issues.map((issue: any) =>
+  `• [${issue.severity}] ${issue.message}`
+).join('\n') : ''}
+                        `.trim();
+
+                        alert(message);
+                        console.log('Full structured data validation:', data.data);
+                      } else {
+                        throw new Error(data?.error || 'Failed to validate structured data');
+                      }
+                    } catch (error: any) {
+                      toast.error(error.message || 'Failed to validate structured data');
+                    } finally {
+                      toast.dismiss();
+                    }
+                  }}
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Validate Structured Data
+                </Button>
+
+                <div className="rounded-lg border p-4 bg-muted/50">
+                  <p className="text-sm text-muted-foreground">
+                    <Info className="h-4 w-4 inline mr-2" />
+                    Validates JSON-LD structured data against Schema.org standards. Checks 15+ types including Article, Recipe, Product, Organization, and more.
+                  </p>
+                </div>
+
+                <div className="text-sm text-muted-foreground">
+                  <h4 className="font-semibold mb-2">Validation Checks:</h4>
+                  <ul className="space-y-1 ml-4">
+                    <li>✅ JSON-LD syntax validation</li>
+                    <li>✅ Required properties for each type</li>
+                    <li>✅ Date format validation (ISO 8601)</li>
+                    <li>✅ URL format validation</li>
+                    <li>✅ Breadcrumb structure</li>
+                    <li>✅ Review and rating validation</li>
+                    <li>✅ Recipe, Product, Article validation</li>
+                  </ul>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
