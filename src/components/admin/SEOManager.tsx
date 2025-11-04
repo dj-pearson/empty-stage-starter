@@ -168,6 +168,23 @@ export function SEOManager() {
     loadCompetitorAnalysis();
     loadPageAnalysis();
     checkGSCConnection();
+    
+    // Check if we're returning from OAuth
+    const wasConnecting = sessionStorage.getItem('gsc_connecting');
+    if (wasConnecting === 'true') {
+      sessionStorage.removeItem('gsc_connecting');
+      setIsConnectingGSC(true);
+      
+      // Check connection status after a brief delay
+      setTimeout(async () => {
+        await checkGSCConnection();
+        if (gscConnected) {
+          toast.success("Successfully connected to Google Search Console!");
+          await fetchGSCPropertiesList();
+        }
+        setIsConnectingGSC(false);
+      }, 1000);
+    }
   }, []);
 
   const loadTrackedKeywords = async () => {
@@ -322,127 +339,12 @@ export function SEOManager() {
       if (error) throw error;
 
       if (data.authUrl) {
-        // Open OAuth URL in new window
-        const width = 600;
-        const height = 700;
-        const left = window.screen.width / 2 - width / 2;
-        const top = window.screen.height / 2 - height / 2;
-
-        const authWindow = window.open(
-          data.authUrl,
-          "Google Search Console Authorization",
-          `width=${width},height=${height},left=${left},top=${top},noopener=no,noreferrer=no`
-        );
-
-        // Listen for messages from popup window
-        const messageListener = async (event: MessageEvent) => {
-          console.log('Message received from origin:', event.origin, 'data:', event.data);
-          
-          // Be more permissive with origins for OAuth callbacks
-          const allowedOrigins = [
-            window.location.origin,
-            'http://localhost:8080',
-            'http://localhost:5173',
-            'https://tryeatpal.com',
-            'null' // For file:// origins in some cases
-          ];
-          
-          // Allow any localhost origin for development
-          const isLocalhost = event.origin?.includes('localhost') || event.origin?.includes('127.0.0.1');
-          
-          if (!allowedOrigins.includes(event.origin) && !isLocalhost) {
-            console.log('Message from disallowed origin:', event.origin, 'allowed:', allowedOrigins);
-            return;
-          }
-          
-          if (event.data.type === 'GSC_OAUTH_SUCCESS') {
-            console.log('GSC OAuth success message received');
-            
-            // Handle OAuth callback from popup
-            try {
-              console.log('Processing OAuth callback...');
-              
-              const response = await fetch(`${supabase.supabaseUrl}/functions/v1/gsc-oauth?action=callback&code=${event.data.code}&state=${event.data.state}`, {
-                method: 'GET',
-                headers: {
-                  'Authorization': `Bearer ${supabase.supabaseKey}`,
-                }
-              });
-
-              const callbackData = await response.json();
-              console.log('Callback response:', callbackData);
-              
-              if (callbackData.success) {
-                toast.success("Successfully connected to Google Search Console!");
-                await checkGSCConnection();
-                await fetchGSCPropertiesList();
-              } else {
-                throw new Error(callbackData.error || 'OAuth callback failed');
-              }
-            } catch (error: any) {
-              console.error('OAuth callback error:', error);
-              toast.error(`Failed to complete OAuth: ${error.message}`);
-            }
-            
-            // Clean up
-            console.log('Cleaning up OAuth listeners...');
-            clearInterval(pollInterval);
-            window.removeEventListener('message', messageListener);
-            setIsConnectingGSC(false);
-          }
-        };
+        // Store the connection state before redirecting
+        sessionStorage.setItem('gsc_connecting', 'true');
+        sessionStorage.setItem('gsc_user_id', user.id);
         
-        window.addEventListener('message', messageListener);
-
-        // Poll for OAuth completion (backup method)
-        const pollInterval = setInterval(async () => {
-          try {
-            // Try to check if window is closed, but handle COOP errors gracefully
-            let windowClosed = false;
-            try {
-              windowClosed = authWindow?.closed || false;
-            } catch (coopError) {
-              // Cross-Origin-Opener-Policy blocked access - assume window might be closed
-              console.log("COOP blocked window.closed check, relying on message system");
-              return; // Don't clean up yet, rely on message system
-            }
-
-            if (windowClosed) {
-              clearInterval(pollInterval);
-              window.removeEventListener('message', messageListener);
-              setIsConnectingGSC(false);
-
-              // Give message system a moment to work first
-              setTimeout(async () => {
-                // Check if connection succeeded
-                await checkGSCConnection();
-
-                if (gscConnected) {
-                  toast.success("Connected to Google Search Console!");
-                  await fetchGSCPropertiesList();
-                } else {
-                  toast.info("Authorization window closed");
-                }
-              }, 500);
-            }
-          } catch (e) {
-            console.error("Error polling auth window:", e);
-          }
-        }, 1000);
-
-        // Add a timeout to clean up after 5 minutes regardless
-        setTimeout(() => {
-          try {
-            clearInterval(pollInterval);
-            window.removeEventListener('message', messageListener);
-            if (!gscConnected) {
-              setIsConnectingGSC(false);
-              toast.info("OAuth timeout - please try connecting again");
-            }
-          } catch (e) {
-            console.error("Cleanup error:", e);
-          }
-        }, 300000); // 5 minutes
+        // Use full page redirect instead of popup to avoid COOP issues
+        window.location.href = data.authUrl;
       }
     } catch (error: any) {
       console.error("Error connecting to GSC:", error);

@@ -32,128 +32,23 @@ const Admin = () => {
   const [activeTab, setActiveTab] = useState("users");
 
   useEffect(() => {
-    // Check if this is an OAuth callback
-    const urlParams = new URLSearchParams(location.search);
-    const code = urlParams.get('code');
-    const state = urlParams.get('state');
-    const error = urlParams.get('error');
-
-    if (error) {
-      toast.error(`OAuth error: ${error}`);
-      return;
+    // Check for OAuth success from redirect
+    const oauthSuccess = sessionStorage.getItem('gsc_oauth_success');
+    if (oauthSuccess) {
+      toast.success("Successfully connected to Google Search Console!");
+      sessionStorage.removeItem('gsc_oauth_success');
+      setActiveTab("seo");
     }
 
-    if (code && state) {
-      console.log('Admin - OAuth callback detected');
-      
-      // Add immediate popup close attempt for safety
-      if (window.opener && window.opener !== window) {
-        console.log('Admin - Attempting immediate popup close...');
-        
-        // Try multiple methods to close the popup
-        setTimeout(() => {
-          try {
-            // First try same-origin
-            window.opener.postMessage({ 
-              type: 'GSC_OAUTH_SUCCESS', 
-              code, 
-              state 
-            }, window.location.origin);
-            
-            // Then try wildcard as fallback
-            setTimeout(() => {
-              window.opener.postMessage({ 
-                type: 'GSC_OAUTH_SUCCESS', 
-                code, 
-                state 
-              }, '*');
-              
-              // Force close after message attempts
-              setTimeout(() => {
-                try {
-                  window.close();
-                } catch (e) {
-                  console.log('Admin - Window close blocked, but message sent');
-                }
-              }, 100);
-            }, 50);
-          } catch (e) {
-            console.error('Admin - Immediate close failed:', e);
-          }
-        }, 100);
-      }
-      
-      // Handle OAuth callback
-      handleOAuthCallback(code, state);
+    // Set active tab based on URL params
+    const urlParams = new URLSearchParams(location.search);
+    const tab = urlParams.get('tab');
+    if (tab) {
+      setActiveTab(tab);
     }
   }, [location]);
 
-  const handleOAuthCallback = async (code: string, state: string) => {
-    console.log('Admin OAuth callback detected:', { code: code?.substring(0, 10) + '...', state: state?.substring(0, 10) + '...' });
-    
-    try {
-      // Check if this is running in a popup window
-      const isPopup = window.opener && window.opener !== window;
-      console.log('Admin - Is popup window:', isPopup);
-      
-      if (isPopup) {
-        // If this is a popup, communicate with parent and close
-        try {
-          console.log('Admin - Sending message to parent window...');
-          
-          // Send success message to parent window
-          window.opener.postMessage({ 
-            type: 'GSC_OAUTH_SUCCESS', 
-            code, 
-            state 
-          }, window.location.origin);
-          
-          console.log('Admin - Message sent, closing popup...');
-          
-          // Add a small delay to ensure message is sent
-          setTimeout(() => {
-            window.close();
-          }, 100);
-          return;
-        } catch (e) {
-          console.error('Admin - Error communicating with parent window:', e);
-        }
-      }
 
-      console.log('Admin - Handling OAuth callback directly...');
-
-      // If not a popup or communication failed, handle callback directly
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/gsc-oauth?action=callback&code=${code}&state=${state}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${supabase.supabaseKey}`,
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'OAuth callback failed');
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        toast.success("Successfully connected to Google Search Console!");
-        
-        // Clear URL parameters and switch to SEO tab
-        window.history.replaceState({}, document.title, '/admin');
-        setActiveTab("seo");
-      } else {
-        throw new Error(data.error || 'OAuth callback failed');
-      }
-    } catch (error: any) {
-      console.error('Admin - OAuth callback error:', error);
-      toast.error(`Failed to complete OAuth: ${error.message}`);
-      
-      // Clear URL parameters even on error
-      window.history.replaceState({}, document.title, '/admin');
-    }
-  };
 
   if (isLoading) {
     return (

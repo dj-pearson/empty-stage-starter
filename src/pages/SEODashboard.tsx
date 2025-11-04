@@ -16,50 +16,16 @@ export default function SEODashboard() {
 
     if (error) {
       toast.error(`OAuth error: ${error}`);
+      // Clear any OAuth state and redirect back to admin
+      sessionStorage.removeItem('gsc_connecting');
+      window.location.href = '/admin?tab=seo';
       return;
     }
 
     if (code && state) {
       console.log('SEO Dashboard - OAuth callback detected');
       
-      // Add immediate popup close attempt for safety
-      if (window.opener && window.opener !== window) {
-        console.log('SEO Dashboard - Attempting immediate popup close...');
-        
-        // Try multiple methods to close the popup
-        setTimeout(() => {
-          try {
-            // First try same-origin
-            window.opener.postMessage({ 
-              type: 'GSC_OAUTH_SUCCESS', 
-              code, 
-              state 
-            }, window.location.origin);
-            
-            // Then try wildcard as fallback
-            setTimeout(() => {
-              window.opener.postMessage({ 
-                type: 'GSC_OAUTH_SUCCESS', 
-                code, 
-                state 
-              }, '*');
-              
-              // Force close after message attempts
-              setTimeout(() => {
-                try {
-                  window.close();
-                } catch (e) {
-                  console.log('Window close blocked, but message sent');
-                }
-              }, 100);
-            }, 50);
-          } catch (e) {
-            console.error('Immediate close failed:', e);
-          }
-        }, 100);
-      }
-      
-      // Handle OAuth callback
+      // Handle OAuth callback directly (no popup logic needed)
       handleOAuthCallback(code, state);
     }
   }, [location]);
@@ -68,37 +34,8 @@ export default function SEODashboard() {
     console.log('OAuth callback detected:', { code: code?.substring(0, 10) + '...', state: state?.substring(0, 10) + '...' });
     
     try {
-      // Check if this is running in a popup window
-      const isPopup = window.opener && window.opener !== window;
-      console.log('Is popup window:', isPopup);
+      console.log('Processing OAuth callback...');
       
-      if (isPopup) {
-        // If this is a popup, communicate with parent and close
-        try {
-          console.log('Sending message to parent window...');
-          
-          // Send success message to parent window
-          window.opener.postMessage({ 
-            type: 'GSC_OAUTH_SUCCESS', 
-            code, 
-            state 
-          }, window.location.origin);
-          
-          console.log('Message sent, closing popup...');
-          
-          // Add a small delay to ensure message is sent
-          setTimeout(() => {
-            window.close();
-          }, 100);
-          return;
-        } catch (e) {
-          console.error('Error communicating with parent window:', e);
-        }
-      }
-
-      console.log('Handling OAuth callback directly...');
-      
-      // If not a popup or communication failed, handle callback directly
       const response = await fetch(`${supabase.supabaseUrl}/functions/v1/gsc-oauth?action=callback&code=${code}&state=${state}`, {
         method: 'GET',
         headers: {
@@ -114,14 +51,11 @@ export default function SEODashboard() {
       const data = await response.json();
       
       if (data.success) {
-        toast.success("Successfully connected to Google Search Console!");
+        // Set success state for redirect
+        sessionStorage.setItem('gsc_oauth_success', 'true');
         
-        // Clear URL parameters - use correct path based on current location
-        const currentPath = window.location.pathname;
-        window.history.replaceState({}, document.title, currentPath);
-        
-        // The SEOManager component will automatically detect the connection
-        // and update the UI through its checkGSCConnection function
+        // Redirect back to admin with SEO tab
+        window.location.href = '/admin?tab=seo';
       } else {
         throw new Error(data.error || 'OAuth callback failed');
       }
@@ -129,9 +63,11 @@ export default function SEODashboard() {
       console.error('OAuth callback error:', error);
       toast.error(`Failed to complete OAuth: ${error.message}`);
       
-      // Clear URL parameters even on error
-      const currentPath = window.location.pathname;
-      window.history.replaceState({}, document.title, currentPath);
+      // Clear OAuth state and redirect back
+      sessionStorage.removeItem('gsc_connecting');
+      setTimeout(() => {
+        window.location.href = '/admin?tab=seo';
+      }, 2000);
     }
   };
 
