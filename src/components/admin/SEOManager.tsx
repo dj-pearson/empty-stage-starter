@@ -185,6 +185,25 @@ export function SEOManager() {
   const [mobileResults, setMobileResults] = useState<any>(null);
   const [budgetResults, setBudgetResults] = useState<any>(null);
 
+  // Additional operation results state
+  const [brokenLinksResults, setBrokenLinksResults] = useState<any>(null);
+  const [contentAnalysisResults, setContentAnalysisResults] = useState<any>(null);
+  const [blogPostsAnalysisResults, setBlogPostsAnalysisResults] = useState<any>(null);
+  const [structuredDataValidationResults, setStructuredDataValidationResults] = useState<any>(null);
+  const [coreWebVitalsResults, setCoreWebVitalsResults] = useState<any>(null);
+  const [backlinksResults, setBacklinksResults] = useState<any[]>([]);
+  const [gscSyncResults, setGscSyncResults] = useState<any>(null);
+  const [autoHealingResults, setAutoHealingResults] = useState<any>(null);
+  const [fixesAppliedResults, setFixesAppliedResults] = useState<any>(null);
+
+  // Loading states for operations
+  const [isScanningBrokenLinks, setIsScanningBrokenLinks] = useState(false);
+  const [isAnalyzingContent, setIsAnalyzingContent] = useState(false);
+  const [isAnalyzingBlogPosts, setIsAnalyzingBlogPosts] = useState(false);
+  const [isValidatingStructuredData, setIsValidatingStructuredData] = useState(false);
+  const [isCheckingWebVitals, setIsCheckingWebVitals] = useState(false);
+  const [isAddingBacklink, setIsAddingBacklink] = useState(false);
+
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -302,22 +321,33 @@ export function SEOManager() {
   };
 
   const analyzeBlogPostsSEO = async () => {
-    toast.info("Analyzing all blog posts for SEO...");
+    setIsAnalyzingBlogPosts(true);
+    setBlogPostsAnalysisResults(null);
 
     try {
       const { data, error} = await supabase.functions.invoke("analyze-blog-posts-seo");
 
       if (error) throw error;
 
+      setBlogPostsAnalysisResults({
+        success: true,
+        analyzed: data.analyzed || 0,
+        message: data.analyzed > 0
+          ? `Analyzed ${data.analyzed} blog posts successfully!`
+          : "No published blog posts to analyze"
+      });
+
       if (data.analyzed > 0) {
-        toast.success(`Analyzed ${data.analyzed} blog posts successfully!`);
         await loadPageAnalysis();
-      } else {
-        toast.info("No published blog posts to analyze");
       }
     } catch (error: any) {
       console.error("Error analyzing blog posts:", error);
-      toast.error(`Failed to analyze blog posts: ${error.message}`);
+      setBlogPostsAnalysisResults({
+        success: false,
+        error: error.message || "Failed to analyze blog posts"
+      });
+    } finally {
+      setIsAnalyzingBlogPosts(false);
     }
   };
 
@@ -405,12 +435,15 @@ export function SEOManager() {
 
   const syncGSCData = async () => {
     if (!selectedProperty) {
-      toast.error("Please select a property first");
+      setGscSyncResults({
+        success: false,
+        error: "Please select a property first"
+      });
       return;
     }
 
     setIsSyncingGSC(true);
-    toast.info("Syncing data from Google Search Console...");
+    setGscSyncResults(null);
 
     try {
       const user = (await supabase.auth.getUser()).data.user;
@@ -426,14 +459,21 @@ export function SEOManager() {
 
       if (error) throw error;
 
-      toast.success(`Synced ${data.recordsSynced} records from Google Search Console!`);
+      setGscSyncResults({
+        success: true,
+        recordsSynced: data.recordsSynced || 0,
+        message: `Synced ${data.recordsSynced} records from Google Search Console!`
+      });
       setLastSyncedAt(new Date().toISOString());
 
       // Reload keywords to show updated GSC data
       await loadTrackedKeywords();
     } catch (error: any) {
       console.error("Error syncing GSC data:", error);
-      toast.error(`Failed to sync: ${error.message}`);
+      setGscSyncResults({
+        success: false,
+        error: error.message || "Failed to sync"
+      });
     } finally {
       setIsSyncingGSC(false);
     }
@@ -1510,7 +1550,7 @@ export function SEOManager() {
 
   const runAIAutoHealing = async () => {
     setIsAutoHealing(true);
-    toast.info("Running AI-powered SEO auto-healing...");
+    setAutoHealingResults(null);
 
     try {
       // Call the apply-seo-fixes edge function
@@ -1527,21 +1567,30 @@ export function SEOManager() {
 
       setFixSuggestions(data.suggestions || []);
 
-      if (data.autoApplyEnabled && data.appliedFixes > 0) {
-        toast.success(`Applied ${data.appliedFixes} SEO fixes automatically!`);
+      setAutoHealingResults({
+        success: true,
+        appliedFixes: data.appliedFixes || 0,
+        totalSuggestions: data.totalSuggestions || 0,
+        autoApplyEnabled: data.autoApplyEnabled || false,
+        message: data.autoApplyEnabled && data.appliedFixes > 0
+          ? `Applied ${data.appliedFixes} SEO fixes automatically!`
+          : `Generated ${data.totalSuggestions} AI-powered optimization suggestions!`
+      });
 
+      if (data.autoApplyEnabled && data.appliedFixes > 0) {
         // Re-run audit to see improvements
         setTimeout(() => {
           runComprehensiveAudit();
         }, 1000);
-      } else {
-        toast.success(`Generated ${data.totalSuggestions} AI-powered optimization suggestions!`);
       }
 
       console.log("AI Healing Results:", data);
     } catch (error: any) {
       console.error("AI Auto-Healing error:", error);
-      toast.error(`Failed to generate suggestions: ${error.message}`);
+      setAutoHealingResults({
+        success: false,
+        error: error.message || "Failed to generate suggestions"
+      });
     } finally {
       setIsAutoHealing(false);
     }
@@ -1549,7 +1598,7 @@ export function SEOManager() {
 
   const applyFixesBatch = async () => {
     setIsApplyingFixes(true);
-    toast.info("Applying SEO fixes...");
+    setFixesAppliedResults(null);
 
     try {
       const { data, error } = await supabase.functions.invoke("apply-seo-fixes", {
@@ -1563,9 +1612,19 @@ export function SEOManager() {
 
       if (error) throw error;
 
-      if (data.appliedFixes > 0) {
-        toast.success(`Successfully applied ${data.appliedFixes} SEO fixes!`);
+      setFixesAppliedResults({
+        success: true,
+        appliedFixes: data.appliedFixes || 0,
+        failedFixes: data.failedFixes || 0,
+        message: data.appliedFixes > 0
+          ? `Successfully applied ${data.appliedFixes} SEO fixes!`
+          : "No fixes were applied",
+        warning: data.failedFixes > 0
+          ? `${data.failedFixes} fixes failed to apply. Check the logs.`
+          : null
+      });
 
+      if (data.appliedFixes > 0) {
         // Reload SEO settings
         await loadSEOSettings();
 
@@ -1574,13 +1633,12 @@ export function SEOManager() {
           runComprehensiveAudit();
         }, 1000);
       }
-
-      if (data.failedFixes > 0) {
-        toast.warning(`${data.failedFixes} fixes failed to apply. Check the logs.`);
-      }
     } catch (error: any) {
       console.error("Error applying fixes:", error);
-      toast.error(`Failed to apply fixes: ${error.message}`);
+      setFixesAppliedResults({
+        success: false,
+        error: error.message || "Failed to apply fixes"
+      });
     } finally {
       setIsApplyingFixes(false);
     }
@@ -2011,6 +2069,93 @@ RESTful API available for integrations. Contact for API access.
           </Button>
         </div>
       </div>
+
+      {/* Auto-Healing Results */}
+      {autoHealingResults && (
+        <div className="mt-4">
+          {autoHealingResults.success ? (
+            <Card className="border-green-200 bg-green-50">
+              <CardContent className="pt-4">
+                <div className="flex items-start gap-3 mb-4">
+                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-green-900 mb-1">AI Auto-Healing Complete</h4>
+                    <p className="text-sm text-green-800">{autoHealingResults.message}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-white rounded p-3">
+                    <div className="text-sm text-muted-foreground">Total Suggestions</div>
+                    <div className="text-2xl font-bold">{autoHealingResults.totalSuggestions}</div>
+                  </div>
+                  {autoHealingResults.autoApplyEnabled && (
+                    <div className="bg-white rounded p-3">
+                      <div className="text-sm text-muted-foreground">Applied Fixes</div>
+                      <div className="text-2xl font-bold text-green-600">{autoHealingResults.appliedFixes}</div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                <div className="flex-1">
+                  <h4 className="font-semibold text-red-900 mb-1">AI Auto-Healing Failed</h4>
+                  <p className="text-sm text-red-800">{autoHealingResults.error}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Fixes Applied Results */}
+      {fixesAppliedResults && (
+        <div className="mt-4">
+          {fixesAppliedResults.success ? (
+            <Card className="border-green-200 bg-green-50">
+              <CardContent className="pt-4">
+                <div className="flex items-start gap-3 mb-4">
+                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-green-900 mb-1">SEO Fixes Applied</h4>
+                    <p className="text-sm text-green-800">{fixesAppliedResults.message}</p>
+                    {fixesAppliedResults.warning && (
+                      <p className="text-sm text-yellow-800 mt-2">⚠️ {fixesAppliedResults.warning}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white rounded p-3">
+                    <div className="text-sm text-muted-foreground">Successfully Applied</div>
+                    <div className="text-2xl font-bold text-green-600">{fixesAppliedResults.appliedFixes}</div>
+                  </div>
+                  {fixesAppliedResults.failedFixes > 0 && (
+                    <div className="bg-white rounded p-3">
+                      <div className="text-sm text-muted-foreground">Failed Fixes</div>
+                      <div className="text-2xl font-bold text-red-600">{fixesAppliedResults.failedFixes}</div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                <div className="flex-1">
+                  <h4 className="font-semibold text-red-900 mb-1">Failed to Apply Fixes</h4>
+                  <p className="text-sm text-red-800">{fixesAppliedResults.error}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* SEO Score Dashboard */}
       {seoScore.overall > 0 && (
@@ -2567,6 +2712,37 @@ RESTful API available for integrations. Contact for API access.
                     </div>
                   )}
                 </div>
+
+                {gscSyncResults && (
+                  <div className="mt-4">
+                    {gscSyncResults.success ? (
+                      <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                        <div className="flex items-start gap-3">
+                          <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-green-900 mb-1">Sync Complete</h4>
+                            <p className="text-sm text-green-800">{gscSyncResults.message}</p>
+                            {gscSyncResults.recordsSynced > 0 && (
+                              <div className="mt-2">
+                                <Badge variant="default">{gscSyncResults.recordsSynced} records synced</Badge>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                        <div className="flex items-start gap-3">
+                          <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-red-900 mb-1">Sync Failed</h4>
+                            <p className="text-sm text-red-800">{gscSyncResults.error}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             )}
           </Card>
@@ -2859,25 +3035,75 @@ RESTful API available for integrations. Contact for API access.
                   </CardTitle>
                   <CardDescription>SEO performance of individual pages</CardDescription>
                 </div>
-                <Button onClick={analyzeBlogPostsSEO} variant="outline" size="sm">
-                  <BarChart3 className="h-4 w-4 mr-2" />
-                  Analyze All Blog Posts
+                <Button onClick={analyzeBlogPostsSEO} variant="outline" size="sm" disabled={isAnalyzingBlogPosts}>
+                  {isAnalyzingBlogPosts ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <BarChart3 className="h-4 w-4 mr-2" />
+                      Analyze All Blog Posts
+                    </>
+                  )}
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
               {pageAnalysis.length === 0 ? (
-                <div className="text-center py-12">
-                  <Eye className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No page analysis data yet</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Analyze your blog posts to see individual SEO scores
-                  </p>
-                  <Button onClick={analyzeBlogPostsSEO}>
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    Analyze Blog Posts
-                  </Button>
-                </div>
+                <>
+                  <div className="text-center py-12">
+                    <Eye className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No page analysis data yet</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Analyze your blog posts to see individual SEO scores
+                    </p>
+                    <Button onClick={analyzeBlogPostsSEO} disabled={isAnalyzingBlogPosts}>
+                      {isAnalyzingBlogPosts ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Analyzing...
+                        </>
+                      ) : (
+                        <>
+                          <BarChart3 className="h-4 w-4 mr-2" />
+                          Analyze Blog Posts
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  {blogPostsAnalysisResults && (
+                    <div className="mt-4">
+                      {blogPostsAnalysisResults.success ? (
+                        <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                          <div className="flex items-start gap-3">
+                            <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-green-900 mb-1">Analysis Complete</h4>
+                              <p className="text-sm text-green-800">{blogPostsAnalysisResults.message}</p>
+                              {blogPostsAnalysisResults.analyzed > 0 && (
+                                <div className="mt-2">
+                                  <Badge variant="default">{blogPostsAnalysisResults.analyzed} blog posts analyzed</Badge>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                          <div className="flex items-start gap-3">
+                            <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-red-900 mb-1">Analysis Failed</h4>
+                              <p className="text-sm text-red-800">{blogPostsAnalysisResults.error}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               ) : (
                 <Table>
                   <TableHeader>
@@ -3294,11 +3520,13 @@ RESTful API available for integrations. Contact for API access.
 
                 <Button
                   className="w-full"
+                  disabled={isValidatingStructuredData}
                   onClick={async () => {
                     const urlInput = document.getElementById('validate-structured-url') as HTMLInputElement;
                     const url = urlInput?.value || `${window.location.origin}/`;
 
-                    toast.loading('Validating structured data...', { duration: Infinity });
+                    setIsValidatingStructuredData(true);
+                    setStructuredDataValidationResults(null);
 
                     try {
                       const { data, error } = await supabase.functions.invoke('validate-structured-data', {
@@ -3306,39 +3534,35 @@ RESTful API available for integrations. Contact for API access.
                       });
 
                       if (data?.success) {
-                        const result = data.data;
-                        const message = `
-Structured Data Validation Complete!
-
-Found: ${result.hasStructuredData ? 'Yes ✓' : 'No ✗'}
-Total Items: ${result.totalItems}
-Valid Items: ${result.validItems}
-Invalid Items: ${result.invalidItems}
-Overall Score: ${result.overallScore}/100
-
-${result.items.length > 0 ? 'Items Found:\n' + result.items.map((item: any) =>
-  `• ${item.type} (${item.isValid ? 'Valid ✓' : 'Invalid ✗'} - Score: ${item.score}/100)`
-).join('\n') : 'No structured data found on page'}
-
-${result.issues.length > 0 ? '\nIssues:\n' + result.issues.map((issue: any) =>
-  `• [${issue.severity}] ${issue.message}`
-).join('\n') : ''}
-                        `.trim();
-
-                        alert(message);
+                        setStructuredDataValidationResults({
+                          success: true,
+                          data: data.data
+                        });
                         console.log('Full structured data validation:', data.data);
                       } else {
                         throw new Error(data?.error || 'Failed to validate structured data');
                       }
                     } catch (error: any) {
-                      toast.error(error.message || 'Failed to validate structured data');
+                      setStructuredDataValidationResults({
+                        success: false,
+                        error: error.message || 'Failed to validate structured data'
+                      });
                     } finally {
-                      toast.dismiss();
+                      setIsValidatingStructuredData(false);
                     }
                   }}
                 >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Validate Structured Data
+                  {isValidatingStructuredData ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Validating...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Validate Structured Data
+                    </>
+                  )}
                 </Button>
 
                 <div className="rounded-lg border p-4 bg-muted/50">
@@ -3360,6 +3584,90 @@ ${result.issues.length > 0 ? '\nIssues:\n' + result.issues.map((issue: any) =>
                     <li>✅ Recipe, Product, Article validation</li>
                   </ul>
                 </div>
+
+                {structuredDataValidationResults && (
+                  <div className="mt-4">
+                    {structuredDataValidationResults.success ? (
+                      <Card className="border-green-200 bg-green-50">
+                        <CardContent className="pt-4">
+                          <div className="flex items-start gap-3 mb-4">
+                            <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-green-900 mb-1">Validation Complete</h4>
+                              <p className="text-sm text-green-800">
+                                Structured data {structuredDataValidationResults.data.hasStructuredData ? 'found' : 'not found'} on this page
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div className="bg-white rounded p-3">
+                              <div className="text-sm text-muted-foreground">Overall Score</div>
+                              <div className="text-2xl font-bold text-green-600">{structuredDataValidationResults.data.overallScore}/100</div>
+                            </div>
+                            <div className="bg-white rounded p-3">
+                              <div className="text-sm text-muted-foreground">Total Items</div>
+                              <div className="text-2xl font-bold">{structuredDataValidationResults.data.totalItems}</div>
+                            </div>
+                            <div className="bg-white rounded p-3">
+                              <div className="text-sm text-muted-foreground">Valid Items</div>
+                              <div className="text-2xl font-bold text-green-600">{structuredDataValidationResults.data.validItems}</div>
+                            </div>
+                            <div className="bg-white rounded p-3">
+                              <div className="text-sm text-muted-foreground">Invalid Items</div>
+                              <div className="text-2xl font-bold text-red-600">{structuredDataValidationResults.data.invalidItems}</div>
+                            </div>
+                          </div>
+
+                          {structuredDataValidationResults.data.items && structuredDataValidationResults.data.items.length > 0 && (
+                            <div className="space-y-2">
+                              <h5 className="font-semibold text-sm">Items Found:</h5>
+                              {structuredDataValidationResults.data.items.map((item: any, idx: number) => (
+                                <div key={idx} className="bg-white rounded p-3">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-medium">{item.type}</span>
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant={item.isValid ? "default" : "destructive"}>
+                                        Score: {item.score}/100
+                                      </Badge>
+                                      {item.isValid ? (
+                                        <CheckCircle className="h-4 w-4 text-green-600" />
+                                      ) : (
+                                        <XCircle className="h-4 w-4 text-red-600" />
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {structuredDataValidationResults.data.issues && structuredDataValidationResults.data.issues.length > 0 && (
+                            <div className="mt-4 space-y-2">
+                              <h5 className="font-semibold text-sm text-red-900">Issues:</h5>
+                              {structuredDataValidationResults.data.issues.map((issue: any, idx: number) => (
+                                <div key={idx} className="bg-red-100 rounded p-2 text-sm">
+                                  <span className="font-semibold text-red-900">[{issue.severity}]</span>{' '}
+                                  <span className="text-red-800">{issue.message}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                        <div className="flex items-start gap-3">
+                          <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-red-900 mb-1">Validation Failed</h4>
+                            <p className="text-sm text-red-800">{structuredDataValidationResults.error}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -3886,9 +4194,12 @@ ${result.issues.length > 0 ? '\nIssues:\n' + result.issues.map((issue: any) =>
                   id="cwv-url"
                 />
                 <Button
+                  disabled={isCheckingWebVitals}
                   onClick={async () => {
                     const url = (document.getElementById('cwv-url') as HTMLInputElement)?.value || window.location.origin;
-                    toast.loading('Checking Core Web Vitals...');
+
+                    setIsCheckingWebVitals(true);
+                    setCoreWebVitalsResults(null);
 
                     try {
                       const { data, error } = await supabase.functions.invoke('gsc-fetch-core-web-vitals', {
@@ -3898,30 +4209,34 @@ ${result.issues.length > 0 ? '\nIssues:\n' + result.issues.map((issue: any) =>
                       if (error) throw error;
 
                       if (data?.success) {
-                        toast.success('Core Web Vitals checked successfully!');
-
-                        // Show results
-                        const metrics = data.data.metrics;
-                        const message = `
-Performance Score: ${metrics.mobile_performance_score || 'N/A'}
-LCP: ${metrics.mobile_lcp || 'N/A'}s (${metrics.lcp_status || 'unknown'})
-CLS: ${metrics.mobile_cls || 'N/A'} (${metrics.cls_status || 'unknown'})
-Data Source: ${data.data.dataSource}
-                        `.trim();
-
-                        alert(message);
+                        setCoreWebVitalsResults({
+                          success: true,
+                          data: data.data
+                        });
                       } else {
                         throw new Error(data?.error || 'Failed to check Core Web Vitals');
                       }
                     } catch (error: any) {
-                      toast.error(error.message || 'Failed to check Core Web Vitals');
+                      setCoreWebVitalsResults({
+                        success: false,
+                        error: error.message || 'Failed to check Core Web Vitals'
+                      });
                     } finally {
-                      toast.dismiss();
+                      setIsCheckingWebVitals(false);
                     }
                   }}
                 >
-                  <Zap className="h-4 w-4 mr-2" />
-                  Check Performance
+                  {isCheckingWebVitals ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-4 w-4 mr-2" />
+                      Check Performance
+                    </>
+                  )}
                 </Button>
               </div>
 
@@ -3941,6 +4256,61 @@ Data Source: ${data.data.dataSource}
                   <li>• <strong>CLS</strong>: Cumulative Layout Shift - Visual stability (Good: ≤0.1)</li>
                 </ul>
               </div>
+
+              {coreWebVitalsResults && (
+                <div className="mt-4">
+                  {coreWebVitalsResults.success ? (
+                    <Card className="border-green-200 bg-green-50">
+                      <CardContent className="pt-4">
+                        <div className="flex items-start gap-3 mb-4">
+                          <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-green-900 mb-1">Core Web Vitals Check Complete</h4>
+                            <p className="text-sm text-green-800">Data Source: {coreWebVitalsResults.data.dataSource || 'N/A'}</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-white rounded p-3">
+                            <div className="text-sm text-muted-foreground">Performance Score</div>
+                            <div className="text-2xl font-bold">{coreWebVitalsResults.data.metrics?.mobile_performance_score || 'N/A'}</div>
+                          </div>
+                          <div className="bg-white rounded p-3">
+                            <div className="text-sm text-muted-foreground">LCP</div>
+                            <div className="text-2xl font-bold">
+                              {coreWebVitalsResults.data.metrics?.mobile_lcp ? `${coreWebVitalsResults.data.metrics.mobile_lcp}s` : 'N/A'}
+                            </div>
+                            {coreWebVitalsResults.data.metrics?.lcp_status && (
+                              <Badge variant={coreWebVitalsResults.data.metrics.lcp_status === 'good' ? 'default' : 'destructive'}>
+                                {coreWebVitalsResults.data.metrics.lcp_status}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="bg-white rounded p-3">
+                            <div className="text-sm text-muted-foreground">CLS</div>
+                            <div className="text-2xl font-bold">{coreWebVitalsResults.data.metrics?.mobile_cls || 'N/A'}</div>
+                            {coreWebVitalsResults.data.metrics?.cls_status && (
+                              <Badge variant={coreWebVitalsResults.data.metrics.cls_status === 'good' ? 'default' : 'destructive'}>
+                                {coreWebVitalsResults.data.metrics.cls_status}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-red-900 mb-1">Check Failed</h4>
+                          <p className="text-sm text-red-800">{coreWebVitalsResults.error}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -3969,16 +4339,21 @@ Data Source: ${data.data.dataSource}
                   id="backlink-target"
                 />
                 <Button
+                  disabled={isAddingBacklink}
                   onClick={async () => {
                     const sourceUrl = (document.getElementById('backlink-source') as HTMLInputElement)?.value;
                     const targetUrl = (document.getElementById('backlink-target') as HTMLInputElement)?.value || window.location.origin;
 
                     if (!sourceUrl) {
-                      toast.error('Please enter a backlink source URL');
+                      setBacklinksResults([{
+                        success: false,
+                        error: 'Please enter a backlink source URL',
+                        timestamp: new Date().toISOString()
+                      }]);
                       return;
                     }
 
-                    toast.loading('Adding backlink...');
+                    setIsAddingBacklink(true);
 
                     try {
                       const { data, error } = await supabase.functions.invoke('sync-backlinks', {
@@ -3998,20 +4373,39 @@ Data Source: ${data.data.dataSource}
                       if (error) throw error;
 
                       if (data?.success) {
-                        toast.success('Backlink added successfully!');
+                        setBacklinksResults([{
+                          success: true,
+                          message: 'Backlink added successfully!',
+                          sourceUrl,
+                          targetUrl,
+                          timestamp: new Date().toISOString()
+                        }, ...backlinksResults]);
                         (document.getElementById('backlink-source') as HTMLInputElement).value = '';
                       } else {
                         throw new Error(data?.error || 'Failed to add backlink');
                       }
                     } catch (error: any) {
-                      toast.error(error.message || 'Failed to add backlink');
+                      setBacklinksResults([{
+                        success: false,
+                        error: error.message || 'Failed to add backlink',
+                        timestamp: new Date().toISOString()
+                      }]);
                     } finally {
-                      toast.dismiss();
+                      setIsAddingBacklink(false);
                     }
                   }}
                 >
-                  <LinkIcon className="h-4 w-4 mr-2" />
-                  Add Backlink
+                  {isAddingBacklink ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    <>
+                      <LinkIcon className="h-4 w-4 mr-2" />
+                      Add Backlink
+                    </>
+                  )}
                 </Button>
               </div>
 
@@ -4033,6 +4427,45 @@ Data Source: ${data.data.dataSource}
                   <li>✅ Manual or automated via APIs (Ahrefs, Moz)</li>
                 </ul>
               </div>
+
+              {backlinksResults && backlinksResults.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <h5 className="font-semibold text-sm">Recent Backlink Actions:</h5>
+                  {backlinksResults.slice(0, 5).map((result: any, idx: number) => (
+                    <div key={idx}>
+                      {result.success ? (
+                        <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                          <div className="flex items-start gap-3">
+                            <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-green-900">{result.message}</p>
+                              <p className="text-xs text-green-800 mt-1">
+                                Source: {result.sourceUrl} → Target: {result.targetUrl}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {new Date(result.timestamp).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                          <div className="flex items-start gap-3">
+                            <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-red-900">Failed to add backlink</p>
+                              <p className="text-xs text-red-800 mt-1">{result.error}</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {new Date(result.timestamp).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -4059,7 +4492,8 @@ Data Source: ${data.data.dataSource}
                 <Button
                   onClick={async () => {
                     const url = (document.getElementById('broken-links-url') as HTMLInputElement)?.value || window.location.origin;
-                    toast.loading('Scanning for broken links...');
+                    setIsScanningBrokenLinks(true);
+                    setBrokenLinksResults(null);
 
                     try {
                       const { data, error } = await supabase.functions.invoke('check-broken-links', {
@@ -4073,26 +4507,102 @@ Data Source: ${data.data.dataSource}
                       if (error) throw error;
 
                       if (data?.success) {
-                        toast.success(`Scan complete! Found ${data.data.brokenLinksFound} broken links out of ${data.data.totalLinksChecked} checked.`);
-
-                        if (data.data.brokenLinksFound > 0) {
-                          console.log('Broken links:', data.data.brokenLinks);
-                          alert(`Found ${data.data.brokenLinksFound} broken links. Check console for details.`);
-                        }
+                        setBrokenLinksResults(data.data);
                       } else {
                         throw new Error(data?.error || 'Failed to scan for broken links');
                       }
                     } catch (error: any) {
-                      toast.error(error.message || 'Failed to scan for broken links');
+                      setBrokenLinksResults({ error: error.message || 'Failed to scan for broken links' });
                     } finally {
-                      toast.dismiss();
+                      setIsScanningBrokenLinks(false);
                     }
                   }}
+                  disabled={isScanningBrokenLinks}
                 >
-                  <Search className="h-4 w-4 mr-2" />
-                  Scan Page
+                  {isScanningBrokenLinks ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Scanning...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="h-4 w-4 mr-2" />
+                      Scan Page
+                    </>
+                  )}
                 </Button>
               </div>
+
+              {brokenLinksResults && !brokenLinksResults.error && (
+                <Card className="mt-4">
+                  <CardHeader>
+                    <CardTitle className="text-base">Scan Results</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="text-center p-4 rounded-lg border bg-card">
+                        <div className="text-2xl font-bold">{brokenLinksResults.totalLinksChecked || 0}</div>
+                        <div className="text-sm text-muted-foreground">Links Checked</div>
+                      </div>
+                      <div className="text-center p-4 rounded-lg border bg-card">
+                        <div className="text-2xl font-bold text-destructive">{brokenLinksResults.brokenLinksFound || 0}</div>
+                        <div className="text-sm text-muted-foreground">Broken Links</div>
+                      </div>
+                      <div className="text-center p-4 rounded-lg border bg-card">
+                        <div className="text-2xl font-bold text-yellow-600">{brokenLinksResults.redirectsFound || 0}</div>
+                        <div className="text-sm text-muted-foreground">Redirects</div>
+                      </div>
+                      <div className="text-center p-4 rounded-lg border bg-card">
+                        <div className="text-2xl font-bold text-green-600">{brokenLinksResults.workingLinks || 0}</div>
+                        <div className="text-sm text-muted-foreground">Working</div>
+                      </div>
+                    </div>
+
+                    {brokenLinksResults.brokenLinks && brokenLinksResults.brokenLinks.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="font-semibold text-sm flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-destructive" />
+                          Broken Links Found
+                        </h4>
+                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                          {brokenLinksResults.brokenLinks.map((link: any, index: number) => (
+                            <div key={index} className="p-3 rounded-lg border bg-card space-y-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-mono text-destructive break-all">{link.url}</div>
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    Status: {link.statusCode} • Type: {link.linkType}
+                                    {link.impact && <span className="ml-2">Impact: <Badge variant={link.impact === 'critical' ? 'destructive' : 'secondary'}>{link.impact}</Badge></span>}
+                                  </div>
+                                </div>
+                              </div>
+                              {link.foundOn && (
+                                <div className="text-xs text-muted-foreground">
+                                  Found on: {link.foundOn}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {brokenLinksResults.brokenLinksFound === 0 && (
+                      <div className="flex items-center gap-2 p-4 rounded-lg border bg-green-50 text-green-700">
+                        <CheckCircle className="h-5 w-5" />
+                        <span className="font-medium">No broken links found! All links are working correctly.</span>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {brokenLinksResults?.error && (
+                <div className="flex items-center gap-2 p-4 rounded-lg border bg-destructive/10 text-destructive">
+                  <AlertCircle className="h-5 w-5" />
+                  <span>{brokenLinksResults.error}</span>
+                </div>
+              )}
 
               <div className="rounded-lg border p-4 bg-muted-50">
                 <p className="text-sm text-muted-foreground">
@@ -4144,7 +4654,8 @@ Data Source: ${data.data.dataSource}
                     const url = (document.getElementById('content-url') as HTMLInputElement)?.value || window.location.origin;
                     const keyword = (document.getElementById('content-keyword') as HTMLInputElement)?.value || '';
 
-                    toast.loading('Analyzing content...');
+                    setIsAnalyzingContent(true);
+                    setContentAnalysisResults(null);
 
                     try {
                       const { data, error } = await supabase.functions.invoke('analyze-content', {
@@ -4158,47 +4669,140 @@ Data Source: ${data.data.dataSource}
                       if (error) throw error;
 
                       if (data?.success) {
-                        toast.success('Content analysis complete!');
-
-                        const scores = data.data.scores;
-                        const metrics = data.data.metrics;
-                        const suggestions = data.data.suggestions;
-
-                        const message = `
-Content Analysis Results:
-
-Overall Score: ${scores.overall}/100
-Readability: ${scores.readability}/100
-Keyword Optimization: ${scores.keywordOptimization}/100
-Structure: ${scores.structure}/100
-
-Metrics:
-Word Count: ${metrics.wordCount}
-Sentences: ${metrics.sentenceCount}
-Readability: ${metrics.fleschReadingEase} (Flesch Reading Ease)
-Grade Level: ${metrics.fleschKincaidGrade}
-${keyword ? `Keyword Density: ${metrics.keywordDensity}% (${metrics.keywordCount} times)` : ''}
-
-Suggestions: ${suggestions.length}
-${suggestions.map((s: any) => `• ${s.message}`).join('\n')}
-                        `.trim();
-
-                        alert(message);
-                        console.log('Full analysis:', data.data);
+                        setContentAnalysisResults({
+                          ...data.data,
+                          url,
+                          keyword
+                        });
                       } else {
                         throw new Error(data?.error || 'Failed to analyze content');
                       }
                     } catch (error: any) {
-                      toast.error(error.message || 'Failed to analyze content');
+                      setContentAnalysisResults({ error: error.message || 'Failed to analyze content' });
                     } finally {
-                      toast.dismiss();
+                      setIsAnalyzingContent(false);
                     }
                   }}
+                  disabled={isAnalyzingContent}
                 >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Analyze Content
+                  {isAnalyzingContent ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Analyze Content
+                    </>
+                  )}
                 </Button>
               </div>
+
+              {contentAnalysisResults && !contentAnalysisResults.error && (
+                <Card className="mt-4">
+                  <CardHeader>
+                    <CardTitle className="text-base">Analysis Results</CardTitle>
+                    <CardDescription className="text-xs break-all">{contentAnalysisResults.url}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Scores */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="text-center p-4 rounded-lg border bg-card">
+                        <div className="text-2xl font-bold">{contentAnalysisResults.scores?.overall || 0}</div>
+                        <div className="text-sm text-muted-foreground">Overall Score</div>
+                        <Progress value={contentAnalysisResults.scores?.overall || 0} className="mt-2" />
+                      </div>
+                      <div className="text-center p-4 rounded-lg border bg-card">
+                        <div className="text-2xl font-bold">{contentAnalysisResults.scores?.readability || 0}</div>
+                        <div className="text-sm text-muted-foreground">Readability</div>
+                        <Progress value={contentAnalysisResults.scores?.readability || 0} className="mt-2" />
+                      </div>
+                      <div className="text-center p-4 rounded-lg border bg-card">
+                        <div className="text-2xl font-bold">{contentAnalysisResults.scores?.keywordOptimization || 0}</div>
+                        <div className="text-sm text-muted-foreground">Keyword Optimization</div>
+                        <Progress value={contentAnalysisResults.scores?.keywordOptimization || 0} className="mt-2" />
+                      </div>
+                      <div className="text-center p-4 rounded-lg border bg-card">
+                        <div className="text-2xl font-bold">{contentAnalysisResults.scores?.structure || 0}</div>
+                        <div className="text-sm text-muted-foreground">Structure</div>
+                        <Progress value={contentAnalysisResults.scores?.structure || 0} className="mt-2" />
+                      </div>
+                    </div>
+
+                    {/* Metrics */}
+                    <div>
+                      <h4 className="font-semibold text-sm mb-3">Content Metrics</h4>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <div className="p-3 rounded-lg border bg-muted/30">
+                          <div className="text-xs text-muted-foreground">Word Count</div>
+                          <div className="text-lg font-semibold">{contentAnalysisResults.metrics?.wordCount || 0}</div>
+                        </div>
+                        <div className="p-3 rounded-lg border bg-muted/30">
+                          <div className="text-xs text-muted-foreground">Sentences</div>
+                          <div className="text-lg font-semibold">{contentAnalysisResults.metrics?.sentenceCount || 0}</div>
+                        </div>
+                        <div className="p-3 rounded-lg border bg-muted/30">
+                          <div className="text-xs text-muted-foreground">Flesch Reading Ease</div>
+                          <div className="text-lg font-semibold">{contentAnalysisResults.metrics?.fleschReadingEase || 0}</div>
+                        </div>
+                        <div className="p-3 rounded-lg border bg-muted/30">
+                          <div className="text-xs text-muted-foreground">Grade Level</div>
+                          <div className="text-lg font-semibold">{contentAnalysisResults.metrics?.fleschKincaidGrade || 0}</div>
+                        </div>
+                        {contentAnalysisResults.keyword && (
+                          <>
+                            <div className="p-3 rounded-lg border bg-muted/30">
+                              <div className="text-xs text-muted-foreground">Keyword Density</div>
+                              <div className="text-lg font-semibold">{contentAnalysisResults.metrics?.keywordDensity || 0}%</div>
+                            </div>
+                            <div className="p-3 rounded-lg border bg-muted/30">
+                              <div className="text-xs text-muted-foreground">Keyword Count</div>
+                              <div className="text-lg font-semibold">{contentAnalysisResults.metrics?.keywordCount || 0}</div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Suggestions */}
+                    {contentAnalysisResults.suggestions && contentAnalysisResults.suggestions.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                          <Info className="h-4 w-4" />
+                          Improvement Suggestions ({contentAnalysisResults.suggestions.length})
+                        </h4>
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {contentAnalysisResults.suggestions.map((suggestion: any, index: number) => (
+                            <div key={index} className="p-3 rounded-lg border bg-card flex items-start gap-3">
+                              <Badge variant={
+                                suggestion.priority === 'high' ? 'destructive' :
+                                suggestion.priority === 'medium' ? 'default' :
+                                'secondary'
+                              }>
+                                {suggestion.priority || 'info'}
+                              </Badge>
+                              <div className="flex-1">
+                                <div className="text-sm">{suggestion.message}</div>
+                                {suggestion.details && (
+                                  <div className="text-xs text-muted-foreground mt-1">{suggestion.details}</div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {contentAnalysisResults?.error && (
+                <div className="flex items-center gap-2 p-4 rounded-lg border bg-destructive/10 text-destructive">
+                  <AlertCircle className="h-5 w-5" />
+                  <span>{contentAnalysisResults.error}</span>
+                </div>
+              )}
 
               <div className="rounded-lg border p-4 bg-muted/50">
                 <p className="text-sm text-muted-foreground">
@@ -4283,8 +4887,6 @@ ${suggestions.map((s: any) => `• ${s.message}`).join('\n')}
                   const maxPages = parseInt(maxPagesInput?.value || '50');
                   const followExternal = followExternalInput?.checked || false;
 
-                  toast.loading('Crawling site...', { duration: Infinity });
-
                   try {
                     const { data, error } = await supabase.functions.invoke('crawl-site', {
                       body: { startUrl, maxPages, followExternal }
@@ -4292,14 +4894,14 @@ ${suggestions.map((s: any) => `• ${s.message}`).join('\n')}
 
                     if (data?.success) {
                       setCrawlResults(data.data);
-                      toast.success(`Crawl complete! Found ${data.data.summary.totalPages} pages with ${data.data.summary.pagesWithIssues} issues.`);
                     } else {
                       throw new Error(data?.error || 'Failed to crawl site');
                     }
                   } catch (error: any) {
-                    toast.error(error.message || 'Failed to crawl site');
-                  } finally {
-                    toast.dismiss();
+                    setCrawlResults({
+                      error: error.message || 'Failed to crawl site',
+                      summary: { totalPages: 0, pagesWithIssues: 0 }
+                    });
                   }
                 }}
               >
@@ -4375,8 +4977,6 @@ ${suggestions.map((s: any) => `• ${s.message}`).join('\n')}
                   const url = urlInput?.value || `${window.location.origin}/`;
                   const maxFileSize = parseInt(maxSizeInput?.value || '200') * 1024;
 
-                  toast.loading('Analyzing images...', { duration: Infinity });
-
                   try {
                     const { data, error } = await supabase.functions.invoke('analyze-images', {
                       body: { url, maxFileSize }
@@ -4384,14 +4984,14 @@ ${suggestions.map((s: any) => `• ${s.message}`).join('\n')}
 
                     if (data?.success) {
                       setImageResults(data.data);
-                      toast.success(`Analysis complete! Found ${data.data.summary.totalImages} images with ${data.data.summary.issues.length} issues.`);
                     } else {
                       throw new Error(data?.error || 'Failed to analyze images');
                     }
                   } catch (error: any) {
-                    toast.error(error.message || 'Failed to analyze images');
-                  } finally {
-                    toast.dismiss();
+                    setImageResults({
+                      error: error.message || 'Failed to analyze images',
+                      summary: { totalImages: 0, issues: [] }
+                    });
                   }
                 }}
               >
@@ -4452,11 +5052,12 @@ ${suggestions.map((s: any) => `• ${s.message}`).join('\n')}
                   const urls = urlsInput?.value.split('\n').filter(u => u.trim());
 
                   if (!urls || urls.length === 0) {
-                    toast.error('Please enter at least one URL');
+                    setRedirectResults({
+                      error: 'Please enter at least one URL',
+                      summary: { totalUrls: 0, urlsWithRedirects: 0, urlsWithChains: 0, urlsWithLoops: 0, avgChainLength: 0, totalIssues: 0 }
+                    });
                     return;
                   }
-
-                  toast.loading('Analyzing redirects...', { duration: Infinity });
 
                   try {
                     const { data, error } = await supabase.functions.invoke('detect-redirect-chains', {
@@ -4464,27 +5065,16 @@ ${suggestions.map((s: any) => `• ${s.message}`).join('\n')}
                     });
 
                     if (data?.success) {
-                      const summary = data.data.summary;
-                      const message = `
-Redirect Analysis Complete!
-
-Total URLs Checked: ${summary.totalUrls}
-URLs with Redirects: ${summary.urlsWithRedirects}
-URLs with Chains: ${summary.urlsWithChains}
-URLs with Loops: ${summary.urlsWithLoops}
-Average Chain Length: ${summary.avgChainLength}
-Total Issues: ${summary.totalIssues}
-                      `.trim();
-
-                      alert(message);
+                      setRedirectResults(data.data);
                       console.log('Full redirect analysis:', data.data);
                     } else {
                       throw new Error(data?.error || 'Failed to analyze redirects');
                     }
                   } catch (error: any) {
-                    toast.error(error.message || 'Failed to analyze redirects');
-                  } finally {
-                    toast.dismiss();
+                    setRedirectResults({
+                      error: error.message || 'Failed to analyze redirects',
+                      summary: { totalUrls: 0, urlsWithRedirects: 0, urlsWithChains: 0, urlsWithLoops: 0, avgChainLength: 0, totalIssues: 0 }
+                    });
                   }
                 }}
               >
@@ -4558,11 +5148,12 @@ Total Issues: ${summary.totalIssues}
                   const similarityThreshold = parseInt(thresholdInput?.value || '85') / 100;
 
                   if (!urls || urls.length < 2) {
-                    toast.error('Please enter at least 2 URLs');
+                    setDuplicateResults({
+                      error: 'Please enter at least 2 URLs',
+                      summary: { totalPages: 0, exactDuplicates: 0, nearDuplicates: 0, similarPages: 0, thinContent: 0, avgWordCount: 0, totalIssues: 0 }
+                    });
                     return;
                   }
-
-                  toast.loading('Analyzing content similarity...', { duration: Infinity });
 
                   try {
                     const { data, error } = await supabase.functions.invoke('detect-duplicate-content', {
@@ -4570,28 +5161,16 @@ Total Issues: ${summary.totalIssues}
                     });
 
                     if (data?.success) {
-                      const summary = data.data.summary;
-                      const message = `
-Duplicate Content Analysis Complete!
-
-Total Pages Analyzed: ${summary.totalPages}
-Exact Duplicates: ${summary.exactDuplicates}
-Near Duplicates: ${summary.nearDuplicates}
-Similar Pages: ${summary.similarPages}
-Thin Content Pages: ${summary.thinContent}
-Average Word Count: ${summary.avgWordCount}
-Total Issues: ${summary.totalIssues}
-                      `.trim();
-
-                      alert(message);
+                      setDuplicateResults(data.data);
                       console.log('Full duplicate content analysis:', data.data);
                     } else {
                       throw new Error(data?.error || 'Failed to analyze content');
                     }
                   } catch (error: any) {
-                    toast.error(error.message || 'Failed to analyze content');
-                  } finally {
-                    toast.dismiss();
+                    setDuplicateResults({
+                      error: error.message || 'Failed to analyze content',
+                      summary: { totalPages: 0, exactDuplicates: 0, nearDuplicates: 0, similarPages: 0, thinContent: 0, avgWordCount: 0, totalIssues: 0 }
+                    });
                   }
                 }}
               >
@@ -4651,42 +5230,30 @@ Total Issues: ${summary.totalIssues}
                   const urlInput = document.getElementById('security-url') as HTMLInputElement;
                   const url = urlInput?.value || `${window.location.origin}/`;
 
-                  toast.loading('Checking security...', { duration: Infinity });
-
                   try {
                     const { data, error } = await supabase.functions.invoke('check-security-headers', {
                       body: { url }
                     });
 
                     if (data?.success) {
-                      const analysis = data.data;
-                      const message = `
-Security Analysis Complete!
-
-Grade: ${analysis.grade}
-Overall Score: ${analysis.overallScore}/100
-Protocol: ${analysis.protocol}
-HTTPS: ${analysis.isHttps ? 'Yes ✓' : 'No ✗'}
-
-Issues:
-• Critical: ${analysis.criticalIssues}
-• High: ${analysis.highIssues}
-• Medium: ${analysis.mediumIssues}
-• Low: ${analysis.lowIssues}
-
-Total Checks: ${analysis.checks.length}
-Passed: ${analysis.checks.filter((c: any) => c.severity === 'pass').length}
-                      `.trim();
-
-                      alert(message);
+                      setSecurityResults(data.data);
                       console.log('Full security analysis:', data.data);
                     } else {
                       throw new Error(data?.error || 'Failed to check security');
                     }
                   } catch (error: any) {
-                    toast.error(error.message || 'Failed to check security');
-                  } finally {
-                    toast.dismiss();
+                    setSecurityResults({
+                      error: error.message || 'Failed to check security',
+                      grade: 'F',
+                      overallScore: 0,
+                      protocol: 'unknown',
+                      isHttps: false,
+                      criticalIssues: 0,
+                      highIssues: 0,
+                      mediumIssues: 0,
+                      lowIssues: 0,
+                      checks: []
+                    });
                   }
                 }}
               >
@@ -4763,40 +5330,22 @@ Passed: ${analysis.checks.filter((c: any) => c.severity === 'pass').length}
                   const startUrl = urlInput?.value || `${window.location.origin}/`;
                   const maxPages = parseInt(maxPagesInput?.value || '100');
 
-                  toast.loading('Analyzing link structure...', { duration: Infinity });
-
                   try {
                     const { data, error } = await supabase.functions.invoke('analyze-internal-links', {
                       body: { startUrl, maxPages }
                     });
 
                     if (data?.success) {
-                      const summary = data.data.summary;
-                      const message = `
-Link Structure Analysis Complete!
-
-Total Pages: ${summary.totalPages}
-Total Links: ${summary.totalLinks}
-Orphaned Pages: ${summary.orphanedPages}
-Hub Pages: ${summary.hubPages}
-Authority Pages: ${summary.authorityPages}
-
-Link Metrics:
-• Avg Inbound Links: ${summary.avgInboundLinks}
-• Avg Outbound Links: ${summary.avgOutboundLinks}
-• Max Depth: ${summary.maxDepth}
-• Avg Depth: ${summary.avgDepth}
-                      `.trim();
-
-                      alert(message);
+                      setLinkStructureResults(data.data);
                       console.log('Full link analysis:', data.data);
                     } else {
                       throw new Error(data?.error || 'Failed to analyze links');
                     }
                   } catch (error: any) {
-                    toast.error(error.message || 'Failed to analyze links');
-                  } finally {
-                    toast.dismiss();
+                    setLinkStructureResults({
+                      error: error.message || 'Failed to analyze links',
+                      summary: { totalPages: 0, totalLinks: 0, orphanedPages: 0, hubPages: 0, authorityPages: 0, avgInboundLinks: 0, avgOutboundLinks: 0, maxDepth: 0, avgDepth: 0 }
+                    });
                   }
                 }}
               >
@@ -4857,40 +5406,27 @@ Link Metrics:
                   const urlInput = document.getElementById('mobile-url') as HTMLInputElement;
                   const url = urlInput?.value || `${window.location.origin}/`;
 
-                  toast.loading('Checking mobile usability...', { duration: Infinity });
-
                   try {
                     const { data, error } = await supabase.functions.invoke('check-mobile-first', {
                       body: { url }
                     });
 
                     if (data?.success) {
-                      const analysis = data.data;
-                      const message = `
-Mobile Analysis Complete!
-
-Grade: ${analysis.grade}
-Overall Score: ${analysis.overallScore}/100
-
-Issues:
-• High: ${analysis.highIssues}
-• Medium: ${analysis.mediumIssues}
-• Low: ${analysis.lowIssues}
-
-Checks Performed: ${analysis.checks.length}
-Passed: ${analysis.checks.filter((c: any) => c.passed).length}
-Failed: ${analysis.checks.filter((c: any) => !c.passed).length}
-                      `.trim();
-
-                      alert(message);
+                      setMobileResults(data.data);
                       console.log('Full mobile analysis:', data.data);
                     } else {
                       throw new Error(data?.error || 'Failed to check mobile usability');
                     }
                   } catch (error: any) {
-                    toast.error(error.message || 'Failed to check mobile usability');
-                  } finally {
-                    toast.dismiss();
+                    setMobileResults({
+                      error: error.message || 'Failed to check mobile usability',
+                      grade: 'F',
+                      overallScore: 0,
+                      highIssues: 0,
+                      mediumIssues: 0,
+                      lowIssues: 0,
+                      checks: []
+                    });
                   }
                 }}
               >
@@ -4993,8 +5529,6 @@ Failed: ${analysis.checks.filter((c: any) => !c.passed).length}
                     maxThirdParty: 10,
                   };
 
-                  toast.loading('Monitoring performance budget...', { duration: Infinity });
-
                   try {
                     const { data, error } = await supabase.functions.invoke('monitor-performance-budget', {
                       body: { url, budget }
@@ -5002,15 +5536,16 @@ Failed: ${analysis.checks.filter((c: any) => !c.passed).length}
 
                     if (data?.success) {
                       setBudgetResults(data.data);
-                      const analysis = data.data;
-                      toast.success(`Analysis complete! Budget ${analysis.passedBudget ? 'PASSED' : 'EXCEEDED'} - Score: ${analysis.score}/100`);
                     } else {
                       throw new Error(data?.error || 'Failed to monitor performance');
                     }
                   } catch (error: any) {
-                    toast.error(error.message || 'Failed to monitor performance');
-                  } finally {
-                    toast.dismiss();
+                    setBudgetResults({
+                      error: error.message || 'Failed to monitor performance',
+                      passedBudget: false,
+                      score: 0,
+                      checks: []
+                    });
                   }
                 }}
               >
