@@ -7,69 +7,10 @@ import { toast } from "sonner";
 export default function SEODashboard() {
   const location = useLocation();
 
-  useEffect(() => {
-    // Check if this is an OAuth callback
-    const urlParams = new URLSearchParams(location.search);
-    const code = urlParams.get('code');
-    const state = urlParams.get('state');
-    const error = urlParams.get('error');
+  // No longer handling OAuth callbacks in SEODashboard
+  // All OAuth callbacks are now handled directly in Admin.tsx
 
-    if (error) {
-      toast.error(`OAuth error: ${error}`);
-      // Clear any OAuth state and redirect back to admin
-      sessionStorage.removeItem('gsc_connecting');
-      window.location.href = '/admin?tab=seo';
-      return;
-    }
 
-    if (code && state) {
-      console.log('SEO Dashboard - OAuth callback detected');
-      
-      // Handle OAuth callback directly (no popup logic needed)
-      handleOAuthCallback(code, state);
-    }
-  }, [location]);
-
-  const handleOAuthCallback = async (code: string, state: string) => {
-    console.log('OAuth callback detected:', { code: code?.substring(0, 10) + '...', state: state?.substring(0, 10) + '...' });
-    
-    try {
-      console.log('Processing OAuth callback...');
-      
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/gsc-oauth?action=callback&code=${code}&state=${state}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${supabase.supabaseKey}`,
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'OAuth callback failed');
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        // Set success state for redirect
-        sessionStorage.setItem('gsc_oauth_success', 'true');
-        
-        // Redirect back to admin with SEO tab
-        window.location.href = '/admin?tab=seo';
-      } else {
-        throw new Error(data.error || 'OAuth callback failed');
-      }
-    } catch (error: any) {
-      console.error('OAuth callback error:', error);
-      toast.error(`Failed to complete OAuth: ${error.message}`);
-      
-      // Clear OAuth state and redirect back
-      sessionStorage.removeItem('gsc_connecting');
-      setTimeout(() => {
-        window.location.href = '/admin?tab=seo';
-      }, 2000);
-    }
-  };
 
   // Check if this is an OAuth callback popup
   const urlParams = new URLSearchParams(location.search);

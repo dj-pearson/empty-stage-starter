@@ -29,12 +29,8 @@ function getRedirectUri(req: Request): string {
   const origin = req.headers.get("origin") || req.headers.get("referer") || "http://localhost:8080";
   const baseUrl = origin.replace(/\/$/, ""); // Remove trailing slash
   
-  // Use /admin for production, /seo-dashboard for development
-  if (baseUrl.includes("tryeatpal.com")) {
-    return `${baseUrl}/admin`;
-  } else {
-    return `${baseUrl}/seo-dashboard`;
-  }
+  // Always use /admin for both development and production
+  return `${baseUrl}/admin`;
 }
 
 // Google Search Console OAuth Scope

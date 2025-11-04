@@ -32,23 +32,80 @@ const Admin = () => {
   const [activeTab, setActiveTab] = useState("users");
 
   useEffect(() => {
-    // Check for OAuth success from redirect
+    // Check if this is an OAuth callback
+    const urlParams = new URLSearchParams(location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+    const error = urlParams.get('error');
+
+    if (error) {
+      toast.error(`OAuth error: ${error}`);
+      // Clean up URL
+      window.history.replaceState({}, document.title, '/admin?tab=seo');
+      setActiveTab("seo");
+      return;
+    }
+
+    if (code && state) {
+      console.log('OAuth callback detected in Admin');
+      handleOAuthCallback(code, state);
+      return;
+    }
+
+    // Check for OAuth success from sessionStorage (fallback)
     const oauthSuccess = sessionStorage.getItem('gsc_oauth_success');
     if (oauthSuccess) {
       toast.success("Successfully connected to Google Search Console!");
       sessionStorage.removeItem('gsc_oauth_success');
       setActiveTab("seo");
+      return;
     }
 
     // Set active tab based on URL params
-    const urlParams = new URLSearchParams(location.search);
     const tab = urlParams.get('tab');
     if (tab) {
       setActiveTab(tab);
     }
   }, [location]);
 
+  const handleOAuthCallback = async (code: string, state: string) => {
+    console.log('Admin OAuth callback detected:', { code: code?.substring(0, 10) + '...', state: state?.substring(0, 10) + '...' });
+    
+    try {
+      console.log('Processing OAuth callback directly in Admin...');
 
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/gsc-oauth?action=callback&code=${code}&state=${state}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${supabase.supabaseKey}`,
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'OAuth callback failed');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        toast.success("Successfully connected to Google Search Console!");
+        
+        // Clear URL parameters and switch to SEO tab
+        window.history.replaceState({}, document.title, '/admin?tab=seo');
+        setActiveTab("seo");
+      } else {
+        throw new Error(data.error || 'OAuth callback failed');
+      }
+    } catch (error: any) {
+      console.error('Admin OAuth callback error:', error);
+      toast.error(`Failed to complete OAuth: ${error.message}`);
+      
+      // Clear URL parameters even on error and go to SEO tab
+      window.history.replaceState({}, document.title, '/admin?tab=seo');
+      setActiveTab("seo");
+    }
+  };
 
   if (isLoading) {
     return (
