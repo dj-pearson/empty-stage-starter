@@ -20,17 +20,36 @@ const corsHeaders = {
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") || "";
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET") || "";
 
-// Dynamic redirect URI based on environment or use configured one
+// Dynamic redirect URI based on environment
 function getRedirectUri(req: Request): string {
-  const configuredUri = Deno.env.get("GOOGLE_REDIRECT_URI");
-  if (configuredUri) return configuredUri;
-  
-  // Fallback: determine from request origin
+  // Get origin from request headers
   const origin = req.headers.get("origin") || req.headers.get("referer") || "http://localhost:8080";
   const baseUrl = origin.replace(/\/$/, ""); // Remove trailing slash
   
-  // Use dedicated OAuth callback route that bypasses authentication
-  return `${baseUrl}/oauth/callback`;
+  console.log('OAuth getRedirectUri - Origin detected:', origin);
+  
+  // Use environment-specific redirect URIs that match Google Cloud Console
+  if (baseUrl.includes("localhost")) {
+    const redirectUri = `${baseUrl}/oauth/callback`;
+    console.log('OAuth getRedirectUri - Using localhost URI:', redirectUri);
+    return redirectUri;
+  } else if (baseUrl.includes("tryeatpal.com")) {
+    const redirectUri = "https://tryeatpal.com/oauth/callback";
+    console.log('OAuth getRedirectUri - Using production URI:', redirectUri);
+    return redirectUri;
+  }
+  
+  // Fallback to configured URI if available
+  const configuredUri = Deno.env.get("GOOGLE_REDIRECT_URI");
+  if (configuredUri) {
+    console.log('OAuth getRedirectUri - Using configured URI:', configuredUri);
+    return configuredUri;
+  }
+  
+  // Final fallback
+  const fallbackUri = `${baseUrl}/oauth/callback`;
+  console.log('OAuth getRedirectUri - Using fallback URI:', fallbackUri);
+  return fallbackUri;
 }
 
 // Google Search Console OAuth Scope
