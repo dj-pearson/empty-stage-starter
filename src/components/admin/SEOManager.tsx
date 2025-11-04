@@ -84,6 +84,9 @@ interface KeywordData {
   difficulty: number;
   url: string;
   trend: "up" | "down" | "stable";
+  impressions?: number;  // From GSC
+  clicks?: number;        // From GSC
+  ctr?: number;          // From GSC
 }
 
 interface PageData {
@@ -136,6 +139,15 @@ export function SEOManager() {
   const [currentAuditId, setCurrentAuditId] = useState<string | null>(null);
   const [fixSuggestions, setFixSuggestions] = useState<any[]>([]);
   const [isApplyingFixes, setIsApplyingFixes] = useState(false);
+
+  // Google Search Console state
+  const [gscConnected, setGscConnected] = useState(false);
+  const [gscProperties, setGscProperties] = useState<any[]>([]);
+  const [selectedProperty, setSelectedProperty] = useState<string>("");
+  const [isSyncingGSC, setIsSyncingGSC] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [isConnectingGSC, setIsConnectingGSC] = useState(false);
+
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -143,6 +155,7 @@ export function SEOManager() {
     loadTrackedKeywords();
     loadCompetitorAnalysis();
     loadPageAnalysis();
+    checkGSCConnection();
   }, []);
 
   const loadTrackedKeywords = async () => {
@@ -162,6 +175,9 @@ export function SEOManager() {
           difficulty: kw.difficulty || 0,
           url: kw.target_url,
           trend: kw.position_trend as "up" | "down" | "stable",
+          impressions: kw.impressions || undefined,
+          clicks: kw.clicks || undefined,
+          ctr: kw.ctr || undefined,
         }));
         setTrackedKeywords(keywords);
       } else {
@@ -235,7 +251,7 @@ export function SEOManager() {
     toast.info("Analyzing all blog posts for SEO...");
 
     try {
-      const { data, error } = await supabase.functions.invoke("analyze-blog-posts-seo");
+      const { data, error} = await supabase.functions.invoke("analyze-blog-posts-seo");
 
       if (error) throw error;
 
@@ -250,6 +266,177 @@ export function SEOManager() {
       toast.error(`Failed to analyze blog posts: ${error.message}`);
     }
   };
+
+  // =====================================================
+  // GOOGLE SEARCH CONSOLE FUNCTIONS
+  // =====================================================
+
+  const checkGSCConnection = async () => {
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+
+      const { data, error } = await supabase.functions.invoke("gsc-oauth", {
+        body: { action: "status", userId: user.id },
+      });
+
+      if (error) throw error;
+
+      setGscConnected(data.connected || false);
+
+      if (data.connected) {
+        // Load properties
+        await fetchGSCPropertiesList();
+      }
+    } catch (error: any) {
+      console.error("Error checking GSC connection:", error);
+    }
+  };
+
+  const connectToGSC = async () => {
+    setIsConnectingGSC(true);
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) {
+        toast.error("Please log in first");
+        return;
+      }
+
+      // Get OAuth URL
+      const { data, error } = await supabase.functions.invoke("gsc-oauth", {
+        body: { action: "initiate", userId: user.id },
+      });
+
+      if (error) throw error;
+
+      if (data.authUrl) {
+        // Open OAuth URL in new window
+        const width = 600;
+        const height = 700;
+        const left = window.screen.width / 2 - width / 2;
+        const top = window.screen.height / 2 - height / 2;
+
+        const authWindow = window.open(
+          data.authUrl,
+          "Google Search Console Authorization",
+          `width=${width},height=${height},left=${left},top=${top}`
+        );
+
+        // Poll for OAuth completion
+        const pollInterval = setInterval(async () => {
+          try {
+            if (authWindow?.closed) {
+              clearInterval(pollInterval);
+              setIsConnectingGSC(false);
+
+              // Check if connection succeeded
+              await checkGSCConnection();
+
+              if (gscConnected) {
+                toast.success("Connected to Google Search Console!");
+              } else {
+                toast.info("Authorization window closed");
+              }
+            }
+          } catch (e) {
+            console.error("Error polling auth window:", e);
+          }
+        }, 1000);
+      }
+    } catch (error: any) {
+      console.error("Error connecting to GSC:", error);
+      toast.error(`Failed to connect: ${error.message}`);
+      setIsConnectingGSC(false);
+    }
+  };
+
+  const fetchGSCPropertiesList = async () => {
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+
+      const { data, error } = await supabase.functions.invoke("gsc-fetch-properties", {
+        body: { userId: user.id },
+      });
+
+      if (error) throw error;
+
+      if (data.properties && data.properties.length > 0) {
+        setGscProperties(data.properties);
+
+        // Auto-select primary property
+        const primary = data.properties.find((p: any) => p.is_primary);
+        if (primary) {
+          setSelectedProperty(primary.property_url);
+        }
+      }
+    } catch (error: any) {
+      console.error("Error fetching GSC properties:", error);
+    }
+  };
+
+  const syncGSCData = async () => {
+    if (!selectedProperty) {
+      toast.error("Please select a property first");
+      return;
+    }
+
+    setIsSyncingGSC(true);
+    toast.info("Syncing data from Google Search Console...");
+
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) throw new Error("Not logged in");
+
+      const { data, error } = await supabase.functions.invoke("gsc-sync-data", {
+        body: {
+          userId: user.id,
+          propertyUrl: selectedProperty,
+          syncType: "all",
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success(`Synced ${data.recordsSynced} records from Google Search Console!`);
+      setLastSyncedAt(new Date().toISOString());
+
+      // Reload keywords to show updated GSC data
+      await loadTrackedKeywords();
+    } catch (error: any) {
+      console.error("Error syncing GSC data:", error);
+      toast.error(`Failed to sync: ${error.message}`);
+    } finally {
+      setIsSyncingGSC(false);
+    }
+  };
+
+  const disconnectGSC = async () => {
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+
+      const { data, error } = await supabase.functions.invoke("gsc-oauth", {
+        body: { action: "disconnect", userId: user.id },
+      });
+
+      if (error) throw error;
+
+      setGscConnected(false);
+      setGscProperties([]);
+      setSelectedProperty("");
+      setLastSyncedAt(null);
+
+      toast.success("Disconnected from Google Search Console");
+    } catch (error: any) {
+      console.error("Error disconnecting from GSC:", error);
+      toast.error(`Failed to disconnect: ${error.message}`);
+    }
+  };
+
+  // =====================================================
+  // END GOOGLE SEARCH CONSOLE FUNCTIONS
+  // =====================================================
 
   const runComprehensiveAudit = async () => {
     setIsAuditing(true);
@@ -1886,13 +2073,107 @@ RESTful API available for integrations. Contact for API access.
 
         {/* Keyword Tracking Tab */}
         <TabsContent value="keywords" className="space-y-4">
+          {/* Google Search Console Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Globe className="h-5 w-5" />
+                    Google Search Console
+                  </CardTitle>
+                  <CardDescription>
+                    {gscConnected
+                      ? "Connected - Real data from Google"
+                      : "Connect to get real keyword data from Google"}
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  {gscConnected ? (
+                    <>
+                      <Button
+                        onClick={syncGSCData}
+                        disabled={isSyncingGSC || !selectedProperty}
+                        variant="default"
+                        size="sm"
+                      >
+                        {isSyncingGSC ? (
+                          <>
+                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                            Syncing...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Sync Data
+                          </>
+                        )}
+                      </Button>
+                      <Button onClick={disconnectGSC} variant="outline" size="sm">
+                        Disconnect
+                      </Button>
+                    </>
+                  ) : (
+                    <Button onClick={connectToGSC} disabled={isConnectingGSC}>
+                      {isConnectingGSC ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Connecting...
+                        </>
+                      ) : (
+                        <>
+                          <Globe className="h-4 w-4 mr-2" />
+                          Connect to GSC
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            {gscConnected && gscProperties.length > 0 && (
+              <CardContent>
+                <div className="flex items-center gap-4">
+                  <Label className="text-sm font-medium">Property:</Label>
+                  <Select value={selectedProperty} onValueChange={setSelectedProperty}>
+                    <SelectTrigger className="w-[400px]">
+                      <SelectValue placeholder="Select a property" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {gscProperties.map((prop) => (
+                        <SelectItem key={prop.id} value={prop.property_url}>
+                          {prop.display_name || prop.property_url}
+                          {prop.is_primary && (
+                            <Badge variant="default" className="ml-2">
+                              Primary
+                            </Badge>
+                          )}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {lastSyncedAt && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Clock className="h-4 w-4" />
+                      Last synced: {new Date(lastSyncedAt).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            )}
+          </Card>
+
+          {/* Keyword Tracking Card */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Target className="h-5 w-5" />
                 Keyword Tracking
               </CardTitle>
-              <CardDescription>Monitor keyword rankings and performance</CardDescription>
+              <CardDescription>
+                Monitor keyword rankings and performance
+                {gscConnected && <Badge className="ml-2">Real GSC Data</Badge>}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-2">
@@ -1910,6 +2191,13 @@ RESTful API available for integrations. Contact for API access.
                   <TableRow>
                     <TableHead>Keyword</TableHead>
                     <TableHead>Position</TableHead>
+                    {gscConnected && (
+                      <>
+                        <TableHead>Impressions</TableHead>
+                        <TableHead>Clicks</TableHead>
+                        <TableHead>CTR</TableHead>
+                      </>
+                    )}
                     <TableHead>Volume</TableHead>
                     <TableHead>Difficulty</TableHead>
                     <TableHead>URL</TableHead>
@@ -1925,11 +2213,32 @@ RESTful API available for integrations. Contact for API access.
                           #{kw.position}
                         </Badge>
                       </TableCell>
-                      <TableCell>{kw.volume.toLocaleString()}</TableCell>
+                      {gscConnected && (
+                        <>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Eye className="h-3 w-3 text-muted-foreground" />
+                              {kw.impressions?.toLocaleString() || "—"}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Target className="h-3 w-3 text-muted-foreground" />
+                              {kw.clicks?.toLocaleString() || "—"}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {kw.ctr ? `${kw.ctr.toFixed(2)}%` : "—"}
+                            </Badge>
+                          </TableCell>
+                        </>
+                      )}
+                      <TableCell>{kw.volume?.toLocaleString() || "—"}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Progress value={kw.difficulty} className="w-16 h-2" />
-                          <span className="text-xs">{kw.difficulty}</span>
+                          <Progress value={kw.difficulty || 0} className="w-16 h-2" />
+                          <span className="text-xs">{kw.difficulty || "—"}</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">{kw.url}</TableCell>
