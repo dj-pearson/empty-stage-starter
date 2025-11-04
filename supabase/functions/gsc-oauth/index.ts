@@ -39,14 +39,32 @@ serve(async (req) => {
     );
 
     const url = new URL(req.url);
-    const action = url.searchParams.get("action") || "initiate";
+    
+    // Try to get action from URL params first (for GET callback), then from body
+    let action = url.searchParams.get("action");
+    let userId: string | null = null;
+
+    // For callback action, get from URL params
+    if (action === "callback") {
+      // Handle callback action from URL params (this is correct)
+    } else {
+      // For all other actions, get from request body
+      try {
+        const body = await req.json();
+        action = body.action || "initiate";
+        userId = body.userId;
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: "Invalid request body" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
 
     // =====================================================
     // ACTION: INITIATE OAUTH FLOW
     // =====================================================
     if (action === "initiate") {
-      const userId = url.searchParams.get("userId");
-
       if (!userId) {
         return new Response(
           JSON.stringify({ error: "userId is required" }),
@@ -174,8 +192,6 @@ serve(async (req) => {
     // ACTION: REFRESH TOKEN
     // =====================================================
     else if (action === "refresh") {
-      const { userId } = await req.json();
-
       if (!userId) {
         return new Response(
           JSON.stringify({ error: "userId is required" }),
@@ -256,8 +272,6 @@ serve(async (req) => {
     // ACTION: CHECK STATUS
     // =====================================================
     else if (action === "status") {
-      const { userId } = await req.json();
-
       if (!userId) {
         return new Response(
           JSON.stringify({ error: "userId is required" }),
@@ -300,8 +314,6 @@ serve(async (req) => {
     // ACTION: DISCONNECT
     // =====================================================
     else if (action === "disconnect") {
-      const { userId } = await req.json();
-
       if (!userId) {
         return new Response(
           JSON.stringify({ error: "userId is required" }),
