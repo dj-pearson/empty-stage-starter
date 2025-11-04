@@ -54,6 +54,10 @@ import {
   Trophy,
   XCircle,
   Info,
+  Bell,
+  Settings,
+  Calendar,
+  Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -147,6 +151,14 @@ export function SEOManager() {
   const [isSyncingGSC, setIsSyncingGSC] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [isConnectingGSC, setIsConnectingGSC] = useState(false);
+
+  // Monitoring & Alerts state
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [alertRules, setAlertRules] = useState<any[]>([]);
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [notificationPrefs, setNotificationPrefs] = useState<any>(null);
+  const [activeAlertsCount, setActiveAlertsCount] = useState(0);
+  const [isLoadingMonitoring, setIsLoadingMonitoring] = useState(false);
 
   const isMobile = useIsMobile();
 
@@ -436,6 +448,195 @@ export function SEOManager() {
 
   // =====================================================
   // END GOOGLE SEARCH CONSOLE FUNCTIONS
+  // =====================================================
+
+  // =====================================================
+  // MONITORING & ALERTS FUNCTIONS
+  // =====================================================
+
+  const loadMonitoringData = async () => {
+    try {
+      setIsLoadingMonitoring(true);
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+
+      // Load active alerts
+      const { data: alertsData } = await supabase
+        .from("seo_alerts")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      setAlerts(alertsData || []);
+      setActiveAlertsCount(alertsData?.length || 0);
+
+      // Load alert rules
+      const { data: rulesData } = await supabase
+        .from("seo_alert_rules")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      setAlertRules(rulesData || []);
+
+      // Load schedules
+      const { data: schedulesData } = await supabase
+        .from("seo_monitoring_schedules")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false});
+
+      setSchedules(schedulesData || []);
+
+      // Load notification preferences - create default if doesn't exist
+      const { data: prefsData, error: prefsError } = await supabase
+        .from("seo_notification_preferences")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
+
+      if (prefsError && prefsError.code === "PGRST116") {
+        // No preferences found - create default
+        const defaultPrefs = {
+          user_id: user.id,
+          email_enabled: true,
+          email_address: user.email,
+          immediate_alerts: true,
+          daily_digest: true,
+          notify_score_drops: true,
+          notify_keyword_changes: true,
+          notify_gsc_issues: true,
+          notify_performance_issues: true,
+        };
+
+        const { data: newPrefs } = await supabase
+          .from("seo_notification_preferences")
+          .insert(defaultPrefs)
+          .select()
+          .single();
+
+        setNotificationPrefs(newPrefs || defaultPrefs);
+
+        // Also create default alert rule
+        await supabase.from("seo_alert_rules").insert({
+          user_id: user.id,
+          rule_name: "SEO Score Drop Alert",
+          rule_type: "score_drop",
+          condition: { type: "score_drop", threshold: 10, timeframe_hours: 24 },
+          severity: "high",
+        });
+
+        // Create default monitoring schedule
+        await supabase.from("seo_monitoring_schedules").insert({
+          user_id: user.id,
+          schedule_name: "Daily SEO Audit",
+          schedule_type: "audit",
+          cron_expression: "0 3 * * *",
+          config: { audit_type: "full" },
+        });
+
+        // Reload data to show newly created defaults
+        setTimeout(() => loadMonitoringData(), 500);
+      } else {
+        setNotificationPrefs(prefsData || {
+          email_enabled: true,
+          immediate_alerts: true,
+          daily_digest: true,
+          notify_score_drops: true,
+          notify_keyword_changes: true,
+        });
+      }
+    } catch (error: any) {
+      console.error("Error loading monitoring data:", error);
+    } finally {
+      setIsLoadingMonitoring(false);
+    }
+  };
+
+  const acknowledgeAlert = async (alertId: string) => {
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+
+      const { error } = await supabase
+        .from("seo_alerts")
+        .update({
+          status: "acknowledged",
+          acknowledged_at: new Date().toISOString(),
+          acknowledged_by: user.id,
+        })
+        .eq("id", alertId);
+
+      if (error) throw error;
+
+      await loadMonitoringData();
+      toast.success("Alert acknowledged");
+    } catch (error: any) {
+      console.error("Error acknowledging alert:", error);
+      toast.error("Failed to acknowledge alert");
+    }
+  };
+
+  const dismissAlert = async (alertId: string) => {
+    try {
+      const { error } = await supabase
+        .from("seo_alerts")
+        .update({ status: "dismissed" })
+        .eq("id", alertId);
+
+      if (error) throw error;
+
+      await loadMonitoringData();
+      toast.success("Alert dismissed");
+    } catch (error: any) {
+      console.error("Error dismissing alert:", error);
+      toast.error("Failed to dismiss alert");
+    }
+  };
+
+  const toggleSchedule = async (scheduleId: string, enabled: boolean) => {
+    try {
+      const { error } = await supabase
+        .from("seo_monitoring_schedules")
+        .update({ is_enabled: enabled })
+        .eq("id", scheduleId);
+
+      if (error) throw error;
+
+      await loadMonitoringData();
+      toast.success(enabled ? "Schedule enabled" : "Schedule disabled");
+    } catch (error: any) {
+      console.error("Error toggling schedule:", error);
+      toast.error("Failed to update schedule");
+    }
+  };
+
+  const saveNotificationPreferences = async (prefs: any) => {
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+
+      const { error } = await supabase
+        .from("seo_notification_preferences")
+        .upsert({
+          user_id: user.id,
+          ...prefs,
+        });
+
+      if (error) throw error;
+
+      setNotificationPrefs(prefs);
+      toast.success("Notification preferences saved");
+    } catch (error: any) {
+      console.error("Error saving preferences:", error);
+      toast.error("Failed to save preferences");
+    }
+  };
+
+  // =====================================================
+  // END MONITORING & ALERTS FUNCTIONS
   // =====================================================
 
   const runComprehensiveAudit = async () => {
@@ -1903,6 +2104,10 @@ RESTful API available for integrations. Contact for API access.
             <TabsTrigger value="sitemap">sitemap.xml</TabsTrigger>
             <TabsTrigger value="llms">llms.txt</TabsTrigger>
             <TabsTrigger value="structured">Structured Data</TabsTrigger>
+            <TabsTrigger value="monitoring">
+              <Bell className="h-4 w-4 mr-2" />
+              Monitoring
+            </TabsTrigger>
           </TabsList>
         )}
 
@@ -1966,6 +2171,12 @@ RESTful API available for integrations. Contact for API access.
                   <div className="flex items-center gap-2">
                     <LinkIcon className="h-4 w-4" />
                     <span>Structured Data</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="monitoring">
+                  <div className="flex items-center gap-2">
+                    <Bell className="h-4 w-4" />
+                    <span>Monitoring</span>
                   </div>
                 </SelectItem>
               </SelectContent>
@@ -2862,6 +3073,506 @@ RESTful API available for integrations. Contact for API access.
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Monitoring & Alerts Tab */}
+        <TabsContent value="monitoring" className="space-y-4">
+          {/* Load data when tab is opened */}
+          {activeTab === "monitoring" && !isLoadingMonitoring && alerts.length === 0 && alertRules.length === 0 && (
+            <div className="hidden">{loadMonitoringData()}</div>
+          )}
+
+          {/* Active Alerts Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-5 w-5" />
+                  Active Alerts
+                  {activeAlertsCount > 0 && (
+                    <Badge variant="destructive">{activeAlertsCount}</Badge>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadMonitoringData}
+                  disabled={isLoadingMonitoring}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isLoadingMonitoring ? "animate-spin" : ""}`} />
+                  Refresh
+                </Button>
+              </CardTitle>
+              <CardDescription>
+                SEO issues and changes that require your attention
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingMonitoring ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : alerts.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <CheckCircle className="h-12 w-12 mx-auto mb-2 text-green-500" />
+                  <p>No active alerts - your SEO is looking good!</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {alerts.map((alert) => (
+                    <div
+                      key={alert.id}
+                      className={`p-4 border rounded-lg ${
+                        alert.severity === "critical"
+                          ? "border-red-500 bg-red-50 dark:bg-red-950"
+                          : alert.severity === "high"
+                          ? "border-orange-500 bg-orange-50 dark:bg-orange-950"
+                          : alert.severity === "medium"
+                          ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-950"
+                          : "border-blue-500 bg-blue-50 dark:bg-blue-950"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge
+                              variant={
+                                alert.severity === "critical" || alert.severity === "high"
+                                  ? "destructive"
+                                  : "secondary"
+                              }
+                            >
+                              {alert.severity.toUpperCase()}
+                            </Badge>
+                            <Badge variant="outline">{alert.alert_type}</Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(alert.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                          <h4 className="font-semibold mb-1">{alert.title}</h4>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            {alert.message}
+                          </p>
+                          {alert.details && Object.keys(alert.details).length > 0 && (
+                            <div className="text-xs bg-white dark:bg-gray-900 p-2 rounded border mt-2">
+                              {Object.entries(alert.details).map(([key, value]) => (
+                                <div key={key} className="flex justify-between py-1">
+                                  <span className="font-medium">{key}:</span>
+                                  <span>{String(value)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => acknowledgeAlert(alert.id)}
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Acknowledge
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => dismissAlert(alert.id)}
+                          >
+                            <XCircle className="h-4 w-4 mr-1" />
+                            Dismiss
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Monitoring Schedules Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Automated Monitoring Schedules
+              </CardTitle>
+              <CardDescription>
+                Configure automated SEO audits and keyword position checks
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {schedules.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  <Info className="h-8 w-8 mx-auto mb-2" />
+                  <p>No monitoring schedules configured yet</p>
+                  <p className="text-sm mt-1">Default daily audit schedule will be created automatically</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Schedule</TableHead>
+                      <TableHead>Last Run</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Enabled</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {schedules.map((schedule) => (
+                      <TableRow key={schedule.id}>
+                        <TableCell className="font-medium">
+                          {schedule.schedule_name}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{schedule.schedule_type}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {schedule.cron_expression}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {schedule.last_run_at ? (
+                            <div>
+                              <div>{new Date(schedule.last_run_at).toLocaleDateString()}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {new Date(schedule.last_run_at).toLocaleTimeString()}
+                              </div>
+                            </div>
+                          ) : (
+                            "Never"
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {schedule.last_run_status === "success" ? (
+                            <Badge variant="default" className="bg-green-500">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Success
+                            </Badge>
+                          ) : schedule.last_run_status === "failed" ? (
+                            <Badge variant="destructive">
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Failed
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary">Pending</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant={schedule.is_enabled ? "default" : "outline"}
+                            size="sm"
+                            onClick={() =>
+                              toggleSchedule(schedule.id, !schedule.is_enabled)
+                            }
+                          >
+                            {schedule.is_enabled ? "Enabled" : "Disabled"}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Notification Preferences Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Notification Preferences
+              </CardTitle>
+              <CardDescription>
+                Configure how and when you want to receive SEO alerts
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {notificationPrefs && (
+                <div className="space-y-6">
+                  {/* Email Settings */}
+                  <div className="space-y-4">
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <Mail className="h-4 w-4" />
+                      Email Notifications
+                    </h3>
+                    <div className="grid gap-4 pl-6">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="email-enabled">Email Enabled</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Receive alerts via email
+                          </p>
+                        </div>
+                        <Button
+                          id="email-enabled"
+                          variant={notificationPrefs.email_enabled ? "default" : "outline"}
+                          size="sm"
+                          onClick={() =>
+                            saveNotificationPreferences({
+                              ...notificationPrefs,
+                              email_enabled: !notificationPrefs.email_enabled,
+                            })
+                          }
+                        >
+                          {notificationPrefs.email_enabled ? "Enabled" : "Disabled"}
+                        </Button>
+                      </div>
+
+                      {notificationPrefs.email_enabled && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Immediate Alerts</Label>
+                              <p className="text-sm text-muted-foreground">
+                                Get notified immediately when issues occur
+                              </p>
+                            </div>
+                            <Button
+                              variant={notificationPrefs.immediate_alerts ? "default" : "outline"}
+                              size="sm"
+                              onClick={() =>
+                                saveNotificationPreferences({
+                                  ...notificationPrefs,
+                                  immediate_alerts: !notificationPrefs.immediate_alerts,
+                                })
+                              }
+                            >
+                              {notificationPrefs.immediate_alerts ? "On" : "Off"}
+                            </Button>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Daily Digest</Label>
+                              <p className="text-sm text-muted-foreground">
+                                Daily summary of SEO metrics and alerts
+                              </p>
+                            </div>
+                            <Button
+                              variant={notificationPrefs.daily_digest ? "default" : "outline"}
+                              size="sm"
+                              onClick={() =>
+                                saveNotificationPreferences({
+                                  ...notificationPrefs,
+                                  daily_digest: !notificationPrefs.daily_digest,
+                                })
+                              }
+                            >
+                              {notificationPrefs.daily_digest ? "On" : "Off"}
+                            </Button>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Weekly Digest</Label>
+                              <p className="text-sm text-muted-foreground">
+                                Weekly performance report
+                              </p>
+                            </div>
+                            <Button
+                              variant={notificationPrefs.weekly_digest ? "default" : "outline"}
+                              size="sm"
+                              onClick={() =>
+                                saveNotificationPreferences({
+                                  ...notificationPrefs,
+                                  weekly_digest: !notificationPrefs.weekly_digest,
+                                })
+                              }
+                            >
+                              {notificationPrefs.weekly_digest ? "On" : "Off"}
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Alert Types */}
+                  <div className="space-y-4">
+                    <h3 className="font-semibold">What to Monitor</h3>
+                    <div className="grid gap-4 pl-6">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>SEO Score Drops</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Alert when your SEO score decreases
+                          </p>
+                        </div>
+                        <Button
+                          variant={notificationPrefs.notify_score_drops ? "default" : "outline"}
+                          size="sm"
+                          onClick={() =>
+                            saveNotificationPreferences({
+                              ...notificationPrefs,
+                              notify_score_drops: !notificationPrefs.notify_score_drops,
+                            })
+                          }
+                        >
+                          {notificationPrefs.notify_score_drops ? "On" : "Off"}
+                        </Button>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>Keyword Position Changes</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Alert when keyword rankings change significantly
+                          </p>
+                        </div>
+                        <Button
+                          variant={notificationPrefs.notify_keyword_changes ? "default" : "outline"}
+                          size="sm"
+                          onClick={() =>
+                            saveNotificationPreferences({
+                              ...notificationPrefs,
+                              notify_keyword_changes: !notificationPrefs.notify_keyword_changes,
+                            })
+                          }
+                        >
+                          {notificationPrefs.notify_keyword_changes ? "On" : "Off"}
+                        </Button>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>Competitor Changes</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Alert when competitors' rankings change
+                          </p>
+                        </div>
+                        <Button
+                          variant={notificationPrefs.notify_competitor_changes ? "default" : "outline"}
+                          size="sm"
+                          onClick={() =>
+                            saveNotificationPreferences({
+                              ...notificationPrefs,
+                              notify_competitor_changes: !notificationPrefs.notify_competitor_changes,
+                            })
+                          }
+                        >
+                          {notificationPrefs.notify_competitor_changes ? "On" : "Off"}
+                        </Button>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>GSC Issues</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Alert about Google Search Console issues
+                          </p>
+                        </div>
+                        <Button
+                          variant={notificationPrefs.notify_gsc_issues ? "default" : "outline"}
+                          size="sm"
+                          onClick={() =>
+                            saveNotificationPreferences({
+                              ...notificationPrefs,
+                              notify_gsc_issues: !notificationPrefs.notify_gsc_issues,
+                            })
+                          }
+                        >
+                          {notificationPrefs.notify_gsc_issues ? "On" : "Off"}
+                        </Button>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>Performance Issues</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Alert about page speed and performance problems
+                          </p>
+                        </div>
+                        <Button
+                          variant={notificationPrefs.notify_performance_issues ? "default" : "outline"}
+                          size="sm"
+                          onClick={() =>
+                            saveNotificationPreferences({
+                              ...notificationPrefs,
+                              notify_performance_issues: !notificationPrefs.notify_performance_issues,
+                            })
+                          }
+                        >
+                          {notificationPrefs.notify_performance_issues ? "On" : "Off"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Alert Rules Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Alert Rules
+              </CardTitle>
+              <CardDescription>
+                Custom rules that trigger alerts based on specific conditions
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {alertRules.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  <p>Default alert rules are configured automatically</p>
+                  <p className="text-sm mt-1">
+                    Custom rules can be added via the database
+                  </p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Rule Name</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Severity</TableHead>
+                      <TableHead>Enabled</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {alertRules.map((rule) => (
+                      <TableRow key={rule.id}>
+                        <TableCell className="font-medium">
+                          {rule.rule_name}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{rule.rule_type}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              rule.severity === "critical" || rule.severity === "high"
+                                ? "destructive"
+                                : "secondary"
+                            }
+                          >
+                            {rule.severity}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {rule.is_enabled ? (
+                            <Badge variant="default" className="bg-green-500">
+                              Enabled
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary">Disabled</Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
       </Tabs>
     </div>
   );
