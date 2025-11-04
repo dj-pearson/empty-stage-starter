@@ -137,12 +137,13 @@ export function UsageMeter({
 
         {/* Progress Bar */}
         {limit !== null && (
-          <div className="space-y-2">
-            <Progress 
-              value={Math.min(percentage, 100)} 
-              className="h-2"
-              indicatorClassName={getProgressColor()}
-            />
+           <div className="space-y-2">
+            <div className={getProgressColor()}>
+              <Progress 
+                value={Math.min(percentage, 100)} 
+                className="h-2"
+              />
+            </div>
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>{percentage}% used</span>
               {resetsAt && <span>{formatResetTime()}</span>}

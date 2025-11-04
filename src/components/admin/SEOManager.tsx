@@ -194,7 +194,7 @@ export function SEOManager() {
 
   const loadTrackedKeywords = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('seo_keywords')
         .select('*')
         .order('priority', { ascending: false });
@@ -232,7 +232,7 @@ export function SEOManager() {
 
   const loadCompetitorAnalysis = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('seo_competitor_analysis')
         .select('*')
         .eq('is_active', true)
@@ -257,7 +257,7 @@ export function SEOManager() {
 
   const loadPageAnalysis = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('seo_page_scores')
         .select('*')
         .order('overall_score', { ascending: false })
@@ -457,7 +457,7 @@ export function SEOManager() {
       if (!user) return;
 
       // Load active alerts
-      const { data: alertsData } = await supabase
+      const { data: alertsData } = await (supabase as any)
         .from("seo_alerts")
         .select("*")
         .eq("user_id", user.id)
@@ -469,7 +469,7 @@ export function SEOManager() {
       setActiveAlertsCount(alertsData?.length || 0);
 
       // Load alert rules
-      const { data: rulesData } = await supabase
+      const { data: rulesData } = await (supabase as any)
         .from("seo_alert_rules")
         .select("*")
         .eq("user_id", user.id)
@@ -478,7 +478,7 @@ export function SEOManager() {
       setAlertRules(rulesData || []);
 
       // Load schedules
-      const { data: schedulesData } = await supabase
+      const { data: schedulesData } = await (supabase as any)
         .from("seo_monitoring_schedules")
         .select("*")
         .eq("user_id", user.id)
@@ -487,7 +487,7 @@ export function SEOManager() {
       setSchedules(schedulesData || []);
 
       // Load notification preferences - create default if doesn't exist
-      const { data: prefsData, error: prefsError } = await supabase
+      const { data: prefsData, error: prefsError } = await (supabase as any)
         .from("seo_notification_preferences")
         .select("*")
         .eq("user_id", user.id)
@@ -507,7 +507,7 @@ export function SEOManager() {
           notify_performance_issues: true,
         };
 
-        const { data: newPrefs } = await supabase
+        const { data: newPrefs } = await (supabase as any)
           .from("seo_notification_preferences")
           .insert(defaultPrefs)
           .select()
@@ -516,7 +516,7 @@ export function SEOManager() {
         setNotificationPrefs(newPrefs || defaultPrefs);
 
         // Also create default alert rule
-        await supabase.from("seo_alert_rules").insert({
+        await (supabase as any).from("seo_alert_rules").insert({
           user_id: user.id,
           rule_name: "SEO Score Drop Alert",
           rule_type: "score_drop",
@@ -525,7 +525,7 @@ export function SEOManager() {
         });
 
         // Create default monitoring schedule
-        await supabase.from("seo_monitoring_schedules").insert({
+        await (supabase as any).from("seo_monitoring_schedules").insert({
           user_id: user.id,
           schedule_name: "Daily SEO Audit",
           schedule_type: "audit",
@@ -556,7 +556,7 @@ export function SEOManager() {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) return;
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("seo_alerts")
         .update({
           status: "acknowledged",
@@ -577,7 +577,7 @@ export function SEOManager() {
 
   const dismissAlert = async (alertId: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("seo_alerts")
         .update({ status: "dismissed" })
         .eq("id", alertId);
@@ -594,7 +594,7 @@ export function SEOManager() {
 
   const toggleSchedule = async (scheduleId: string, enabled: boolean) => {
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("seo_monitoring_schedules")
         .update({ is_enabled: enabled })
         .eq("id", scheduleId);
@@ -614,7 +614,7 @@ export function SEOManager() {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) return;
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("seo_notification_preferences")
         .upsert({
           user_id: user.id,
@@ -668,7 +668,7 @@ export function SEOManager() {
       const warnings = results.filter((r) => r.status === "warning").length;
       const failed = results.filter((r) => r.status === "failed").length;
 
-      const { data: auditData, error: auditError } = await supabase
+      const { data: auditData, error: auditError } = await (supabase as any)
         .from('seo_audit_history')
         .insert({
           url: auditUrl,
@@ -695,7 +695,7 @@ export function SEOManager() {
         setCurrentAuditId(auditData.id);
 
         // Update last_audit_at in settings
-        await supabase
+        await (supabase as any)
           .from('seo_settings')
           .update({ last_audit_at: new Date().toISOString() })
           .eq('id', '00000000-0000-0000-0000-000000000001');
@@ -1642,7 +1642,7 @@ export function SEOManager() {
       // Save to database
       const userId = (await supabase.auth.getUser()).data.user?.id;
 
-      const { error: insertError } = await supabase
+      const { error: insertError } = await (supabase as any)
         .from('seo_competitor_analysis')
         .insert({
           competitor_url: competitorUrl,
@@ -1678,7 +1678,7 @@ export function SEOManager() {
   const removeCompetitor = async (url: string) => {
     try {
       // Mark as inactive in database
-      await supabase
+      await (supabase as any)
         .from('seo_competitor_analysis')
         .update({ is_active: false })
         .eq('competitor_url', url);
@@ -3298,7 +3298,9 @@ ${result.issues.length > 0 ? '\nIssues:\n' + result.issues.map((issue: any) =>
         <TabsContent value="monitoring" className="space-y-4">
           {/* Load data when tab is opened */}
           {activeTab === "monitoring" && !isLoadingMonitoring && alerts.length === 0 && alertRules.length === 0 && (
-            <div className="hidden">{loadMonitoringData()}</div>
+            <>
+              {(() => { loadMonitoringData(); return null; })()}
+            </>
           )}
 
           {/* Active Alerts Section */}
