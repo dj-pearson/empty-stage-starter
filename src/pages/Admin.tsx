@@ -1,6 +1,8 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -26,7 +28,82 @@ import { TicketQueue } from "@/components/admin/TicketQueue";
 const Admin = () => {
   const { isAdmin, isLoading } = useAdminCheck();
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState("users");
+
+  useEffect(() => {
+    // Check if this is an OAuth callback
+    const urlParams = new URLSearchParams(location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+    const error = urlParams.get('error');
+
+    if (error) {
+      toast.error(`OAuth error: ${error}`);
+      return;
+    }
+
+    if (code && state) {
+      // Handle OAuth callback
+      handleOAuthCallback(code, state);
+    }
+  }, [location]);
+
+  const handleOAuthCallback = async (code: string, state: string) => {
+    try {
+      // Check if this is running in a popup window
+      const isPopup = window.opener && window.opener !== window;
+      
+      if (isPopup) {
+        // If this is a popup, communicate with parent and close
+        try {
+          // Send success message to parent window
+          window.opener.postMessage({ 
+            type: 'GSC_OAUTH_SUCCESS', 
+            code, 
+            state 
+          }, window.location.origin);
+          
+          // Close the popup
+          window.close();
+          return;
+        } catch (e) {
+          console.error('Error communicating with parent window:', e);
+        }
+      }
+
+      // If not a popup or communication failed, handle callback directly
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/gsc-oauth?action=callback&code=${code}&state=${state}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${supabase.supabaseKey}`,
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'OAuth callback failed');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        toast.success("Successfully connected to Google Search Console!");
+        
+        // Clear URL parameters and switch to SEO tab
+        window.history.replaceState({}, document.title, '/admin');
+        setActiveTab("seo");
+      } else {
+        throw new Error(data.error || 'OAuth callback failed');
+      }
+    } catch (error: any) {
+      console.error('OAuth callback error:', error);
+      toast.error(`Failed to complete OAuth: ${error.message}`);
+      
+      // Clear URL parameters even on error
+      window.history.replaceState({}, document.title, '/admin');
+    }
+  };
 
   if (isLoading) {
     return (
