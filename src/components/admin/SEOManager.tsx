@@ -2076,145 +2076,142 @@ RESTful API available for integrations. Contact for API access.
 
       {/* Main Content Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        {/* Desktop Sidebar Navigation */}
-        {!isMobile && (
-          <div className="flex gap-6">
-            <Card className="w-64 shrink-0 h-fit sticky top-4">
-              <CardContent className="p-4">
-                <div className="space-y-6">
-                  {/* Technical SEO */}
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold text-muted-foreground px-2 mb-2">TECHNICAL SEO</p>
-                    <TabsTrigger value="audit" className="w-full justify-start">
-                      <Search className="h-4 w-4 mr-2" />
-                      Audit
-                    </TabsTrigger>
-                    <TabsTrigger value="site-crawler" className="w-full justify-start">
-                      <Globe className="h-4 w-4 mr-2" />
-                      Site Crawler
-                    </TabsTrigger>
-                    <TabsTrigger value="broken-links" className="w-full justify-start">
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Broken Links
-                    </TabsTrigger>
-                    <TabsTrigger value="redirects" className="w-full justify-start">
-                      <ArrowRightCircle className="h-4 w-4 mr-2" />
-                      Redirects
-                    </TabsTrigger>
-                    <TabsTrigger value="security" className="w-full justify-start">
-                      <Shield className="h-4 w-4 mr-2" />
-                      Security
-                    </TabsTrigger>
-                    <TabsTrigger value="mobile-check" className="w-full justify-start">
-                      <Smartphone className="h-4 w-4 mr-2" />
-                      Mobile Check
-                    </TabsTrigger>
-                  </div>
-
-                  <Separator />
-
-                  {/* Content & On-Page */}
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold text-muted-foreground px-2 mb-2">CONTENT & ON-PAGE</p>
-                    <TabsTrigger value="content" className="w-full justify-start">
-                      <FileText className="h-4 w-4 mr-2" />
-                      Content
-                    </TabsTrigger>
-                    <TabsTrigger value="content-optimizer" className="w-full justify-start">
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Optimizer
-                    </TabsTrigger>
-                    <TabsTrigger value="pages" className="w-full justify-start">
-                      <Eye className="h-4 w-4 mr-2" />
-                      Pages
-                    </TabsTrigger>
-                    <TabsTrigger value="meta" className="w-full justify-start">
-                      <FileText className="h-4 w-4 mr-2" />
-                      Meta Tags
-                    </TabsTrigger>
-                    <TabsTrigger value="duplicate-content" className="w-full justify-start">
-                      <Copy className="h-4 w-4 mr-2" />
-                      Duplicates
-                    </TabsTrigger>
-                    <TabsTrigger value="image-analysis" className="w-full justify-start">
-                      <Image className="h-4 w-4 mr-2" />
-                      Images
-                    </TabsTrigger>
-                  </div>
-
-                  <Separator />
-
-                  {/* Links & Ranking */}
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold text-muted-foreground px-2 mb-2">LINKS & RANKING</p>
-                    <TabsTrigger value="keywords" className="w-full justify-start">
-                      <Target className="h-4 w-4 mr-2" />
-                      Keywords
-                    </TabsTrigger>
-                    <TabsTrigger value="competitors" className="w-full justify-start">
-                      <Trophy className="h-4 w-4 mr-2" />
-                      Competitors
-                    </TabsTrigger>
-                    <TabsTrigger value="backlinks" className="w-full justify-start">
-                      <Link2 className="h-4 w-4 mr-2" />
-                      Backlinks
-                    </TabsTrigger>
-                    <TabsTrigger value="link-structure" className="w-full justify-start">
-                      <Network className="h-4 w-4 mr-2" />
-                      Link Structure
-                    </TabsTrigger>
-                  </div>
-
-                  <Separator />
-
-                  {/* Performance */}
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold text-muted-foreground px-2 mb-2">PERFORMANCE</p>
-                    <TabsTrigger value="performance" className="w-full justify-start">
-                      <Gauge className="h-4 w-4 mr-2" />
-                      Core Web Vitals
-                    </TabsTrigger>
-                    <TabsTrigger value="budget" className="w-full justify-start">
-                      <DollarSign className="h-4 w-4 mr-2" />
-                      Budget Monitor
-                    </TabsTrigger>
-                  </div>
-
-                  <Separator />
-
-                  {/* Configuration */}
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold text-muted-foreground px-2 mb-2">CONFIGURATION</p>
-                    <TabsTrigger value="robots" className="w-full justify-start">
-                      <Globe className="h-4 w-4 mr-2" />
-                      robots.txt
-                    </TabsTrigger>
-                    <TabsTrigger value="sitemap" className="w-full justify-start">
-                      <Code className="h-4 w-4 mr-2" />
-                      sitemap.xml
-                    </TabsTrigger>
-                    <TabsTrigger value="llms" className="w-full justify-start">
-                      <FileText className="h-4 w-4 mr-2" />
-                      llms.txt
-                    </TabsTrigger>
-                    <TabsTrigger value="structured" className="w-full justify-start">
-                      <LinkIcon className="h-4 w-4 mr-2" />
-                      Structured Data
-                    </TabsTrigger>
-                    <TabsTrigger value="monitoring" className="w-full justify-start">
-                      <Bell className="h-4 w-4 mr-2" />
-                      Monitoring
-                    </TabsTrigger>
-                  </div>
+        <div className={!isMobile ? "flex gap-6" : ""}>
+          {/* Desktop Sidebar Navigation */}
+          {!isMobile && (
+            <TabsList className="w-64 shrink-0 h-fit sticky top-4 flex-col items-stretch bg-card border">
+              <div className="p-4 space-y-6">
+                {/* Technical SEO */}
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground px-2 mb-2">TECHNICAL SEO</p>
+                  <TabsTrigger value="audit" className="w-full justify-start">
+                    <Search className="h-4 w-4 mr-2" />
+                    Audit
+                  </TabsTrigger>
+                  <TabsTrigger value="site-crawler" className="w-full justify-start">
+                    <Globe className="h-4 w-4 mr-2" />
+                    Site Crawler
+                  </TabsTrigger>
+                  <TabsTrigger value="broken-links" className="w-full justify-start">
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Broken Links
+                  </TabsTrigger>
+                  <TabsTrigger value="redirects" className="w-full justify-start">
+                    <ArrowRightCircle className="h-4 w-4 mr-2" />
+                    Redirects
+                  </TabsTrigger>
+                  <TabsTrigger value="security" className="w-full justify-start">
+                    <Shield className="h-4 w-4 mr-2" />
+                    Security
+                  </TabsTrigger>
+                  <TabsTrigger value="mobile-check" className="w-full justify-start">
+                    <Smartphone className="h-4 w-4 mr-2" />
+                    Mobile Check
+                  </TabsTrigger>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
 
-        <div className={!isMobile ? "flex-1 min-w-0" : ""}>
-          {/* Mobile Dropdown Selector */}
-          {isMobile && (
+                <Separator />
+
+                {/* Content & On-Page */}
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground px-2 mb-2">CONTENT & ON-PAGE</p>
+                  <TabsTrigger value="content" className="w-full justify-start">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Content
+                  </TabsTrigger>
+                  <TabsTrigger value="content-optimizer" className="w-full justify-start">
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Optimizer
+                  </TabsTrigger>
+                  <TabsTrigger value="pages" className="w-full justify-start">
+                    <Eye className="h-4 w-4 mr-2" />
+                    Pages
+                  </TabsTrigger>
+                  <TabsTrigger value="meta" className="w-full justify-start">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Meta Tags
+                  </TabsTrigger>
+                  <TabsTrigger value="duplicate-content" className="w-full justify-start">
+                    <Copy className="h-4 w-4 mr-2" />
+                    Duplicates
+                  </TabsTrigger>
+                  <TabsTrigger value="image-analysis" className="w-full justify-start">
+                    <Image className="h-4 w-4 mr-2" />
+                    Images
+                  </TabsTrigger>
+                </div>
+
+                <Separator />
+
+                {/* Links & Ranking */}
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground px-2 mb-2">LINKS & RANKING</p>
+                  <TabsTrigger value="keywords" className="w-full justify-start">
+                    <Target className="h-4 w-4 mr-2" />
+                    Keywords
+                  </TabsTrigger>
+                  <TabsTrigger value="competitors" className="w-full justify-start">
+                    <Trophy className="h-4 w-4 mr-2" />
+                    Competitors
+                  </TabsTrigger>
+                  <TabsTrigger value="backlinks" className="w-full justify-start">
+                    <Link2 className="h-4 w-4 mr-2" />
+                    Backlinks
+                  </TabsTrigger>
+                  <TabsTrigger value="link-structure" className="w-full justify-start">
+                    <Network className="h-4 w-4 mr-2" />
+                    Link Structure
+                  </TabsTrigger>
+                </div>
+
+                <Separator />
+
+                {/* Performance */}
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground px-2 mb-2">PERFORMANCE</p>
+                  <TabsTrigger value="performance" className="w-full justify-start">
+                    <Gauge className="h-4 w-4 mr-2" />
+                    Core Web Vitals
+                  </TabsTrigger>
+                  <TabsTrigger value="budget" className="w-full justify-start">
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Budget Monitor
+                  </TabsTrigger>
+                </div>
+
+                <Separator />
+
+                {/* Configuration */}
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground px-2 mb-2">CONFIGURATION</p>
+                  <TabsTrigger value="robots" className="w-full justify-start">
+                    <Globe className="h-4 w-4 mr-2" />
+                    robots.txt
+                  </TabsTrigger>
+                  <TabsTrigger value="sitemap" className="w-full justify-start">
+                    <Code className="h-4 w-4 mr-2" />
+                    sitemap.xml
+                  </TabsTrigger>
+                  <TabsTrigger value="llms" className="w-full justify-start">
+                    <FileText className="h-4 w-4 mr-2" />
+                    llms.txt
+                  </TabsTrigger>
+                  <TabsTrigger value="structured" className="w-full justify-start">
+                    <LinkIcon className="h-4 w-4 mr-2" />
+                    Structured Data
+                  </TabsTrigger>
+                  <TabsTrigger value="monitoring" className="w-full justify-start">
+                    <Bell className="h-4 w-4 mr-2" />
+                    Monitoring
+                  </TabsTrigger>
+                </div>
+              </div>
+            </TabsList>
+          )}
+
+          <div className={!isMobile ? "flex-1 min-w-0" : "w-full"}>
+            {/* Mobile Dropdown Selector */}
+            {isMobile && (
           <div className="w-full mb-4">
             <Select value={activeTab} onValueChange={setActiveTab}>
               <SelectTrigger className="w-full">
@@ -5060,8 +5057,8 @@ ${analysis.violations.map((v: any) => `• ${v.metric}: ${v.message}`).join('\n'
             </CardContent>
           </Card>
         </TabsContent>
+          </div>
         </div>
-
       </Tabs>
     </div>
   );
