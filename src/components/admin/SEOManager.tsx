@@ -67,6 +67,16 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ContentOptimizer } from "./ContentOptimizer";
+import {
+  CrawlResults,
+  ImageResults,
+  RedirectResults,
+  DuplicateResults,
+  SecurityResults,
+  LinkStructureResults,
+  MobileResults,
+  BudgetResults
+} from "./SEOResultsDisplay";
 
 interface AuditResult {
   category: string;
@@ -164,6 +174,16 @@ export function SEOManager() {
   const [notificationPrefs, setNotificationPrefs] = useState<any>(null);
   const [activeAlertsCount, setActiveAlertsCount] = useState(0);
   const [isLoadingMonitoring, setIsLoadingMonitoring] = useState(false);
+
+  // New SEO features state
+  const [crawlResults, setCrawlResults] = useState<any>(null);
+  const [imageResults, setImageResults] = useState<any>(null);
+  const [redirectResults, setRedirectResults] = useState<any>(null);
+  const [duplicateResults, setDuplicateResults] = useState<any>(null);
+  const [securityResults, setSecurityResults] = useState<any>(null);
+  const [linkStructureResults, setLinkStructureResults] = useState<any>(null);
+  const [mobileResults, setMobileResults] = useState<any>(null);
+  const [budgetResults, setBudgetResults] = useState<any>(null);
 
   const isMobile = useIsMobile();
 
@@ -4271,27 +4291,8 @@ ${suggestions.map((s: any) => `• ${s.message}`).join('\n')}
                     });
 
                     if (data?.success) {
-                      const summary = data.data.summary;
-                      const message = `
-Site Crawl Complete!
-
-Total Pages: ${summary.totalPages}
-Pages with Issues: ${summary.pagesWithIssues}
-Orphaned Pages: ${summary.orphanedPages}
-
-Issues Breakdown:
-• Critical: ${summary.issueBreakdown.critical}
-• High: ${summary.issueBreakdown.high}
-• Medium: ${summary.issueBreakdown.medium}
-• Low: ${summary.issueBreakdown.low}
-
-Averages:
-• Word Count: ${summary.avgWordCount}
-• Load Time: ${summary.avgLoadTime}ms
-                      `.trim();
-
-                      alert(message);
-                      console.log('Full crawl results:', data.data);
+                      setCrawlResults(data.data);
+                      toast.success(`Crawl complete! Found ${data.data.summary.totalPages} pages with ${data.data.summary.pagesWithIssues} issues.`);
                     } else {
                       throw new Error(data?.error || 'Failed to crawl site');
                     }
@@ -4325,6 +4326,8 @@ Averages:
                   <li>✅ Load time measurement</li>
                 </ul>
               </div>
+
+              <CrawlResults results={crawlResults} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -4380,24 +4383,8 @@ Averages:
                     });
 
                     if (data?.success) {
-                      const summary = data.data.summary;
-                      const message = `
-Image Analysis Complete!
-
-Total Images: ${summary.totalImages}
-Without Alt Text: ${summary.imagesWithoutAlt}
-Without Dimensions: ${summary.imagesWithoutDimensions}
-Oversized: ${summary.oversizedImages}
-Unoptimized Formats: ${summary.unoptimizedFormats}
-Using Lazy Loading: ${summary.lazyLoadedImages}
-
-Total Size: ${Math.round(summary.totalSize / 1024)}KB
-Average Size: ${Math.round(summary.avgSize / 1024)}KB
-Total Issues: ${summary.issues.length}
-                      `.trim();
-
-                      alert(message);
-                      console.log('Full image analysis:', data.data);
+                      setImageResults(data.data);
+                      toast.success(`Analysis complete! Found ${data.data.summary.totalImages} images with ${data.data.summary.issues.length} issues.`);
                     } else {
                       throw new Error(data?.error || 'Failed to analyze images');
                     }
@@ -4429,6 +4416,8 @@ Total Issues: ${summary.issues.length}
                   <li>✅ Lazy loading implementation</li>
                 </ul>
               </div>
+
+              <ImageResults results={imageResults} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -4520,6 +4509,8 @@ Total Issues: ${summary.totalIssues}
                   <li>✅ Mixed 301/302 redirects</li>
                 </ul>
               </div>
+
+              <RedirectResults results={redirectResults} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -4625,6 +4616,8 @@ Total Issues: ${summary.totalIssues}
                   <li>✅ Content similarity scoring</li>
                 </ul>
               </div>
+
+              <DuplicateResults results={duplicateResults} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -4721,6 +4714,8 @@ Passed: ${analysis.checks.filter((c: any) => c.severity === 'pass').length}
                   <li>✅ Server information disclosure</li>
                 </ul>
               </div>
+
+              <SecurityResults results={securityResults} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -4827,6 +4822,8 @@ Link Metrics:
                   <li>✅ Internal link graph visualization data</li>
                 </ul>
               </div>
+
+              <LinkStructureResults results={linkStructureResults} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -4921,6 +4918,8 @@ Failed: ${analysis.checks.filter((c: any) => !c.passed).length}
                   <li>✅ Form input optimization</li>
                 </ul>
               </div>
+
+              <MobileResults results={mobileResults} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -5002,25 +5001,9 @@ Failed: ${analysis.checks.filter((c: any) => !c.passed).length}
                     });
 
                     if (data?.success) {
+                      setBudgetResults(data.data);
                       const analysis = data.data;
-                      const totalSizeMB = (analysis.totalPageSize / (1024 * 1024)).toFixed(2);
-                      const message = `
-Performance Budget Analysis!
-
-Status: ${analysis.passedBudget ? 'PASSED ✓' : 'EXCEEDED ✗'}
-Score: ${analysis.score}/100
-
-Page Metrics:
-• Total Size: ${totalSizeMB}MB
-• Total Requests: ${analysis.totalRequests}
-• Third-Party Resources: ${analysis.thirdPartyResources}
-
-Budget Violations: ${analysis.violations.length}
-${analysis.violations.map((v: any) => `• ${v.metric}: ${v.message}`).join('\n')}
-                      `.trim();
-
-                      alert(message);
-                      console.log('Full performance budget analysis:', data.data);
+                      toast.success(`Analysis complete! Budget ${analysis.passedBudget ? 'PASSED' : 'EXCEEDED'} - Score: ${analysis.score}/100`);
                     } else {
                       throw new Error(data?.error || 'Failed to monitor performance');
                     }
@@ -5054,6 +5037,8 @@ ${analysis.violations.map((v: any) => `• ${v.metric}: ${v.message}`).join('\n'
                   <li>✅ Third-party resources</li>
                 </ul>
               </div>
+
+              <BudgetResults results={budgetResults} />
             </CardContent>
           </Card>
         </TabsContent>
