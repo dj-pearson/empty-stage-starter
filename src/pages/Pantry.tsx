@@ -374,18 +374,18 @@ export default function Pantry() {
           </div>
 
           {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" />
               <Input
                 placeholder="Search foods..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 h-11"
+                className="pl-10"
               />
             </div>
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full sm:w-48 h-11">
+              <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Filter by category" />
               </SelectTrigger>
               <SelectContent>
@@ -401,26 +401,26 @@ export default function Pantry() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-card rounded-lg p-4 border">
-              <p className="text-sm text-muted-foreground mb-1">Total Foods</p>
-              <p className="text-2xl font-bold">{foods.length}</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-card rounded-lg p-4 border active:scale-[0.98] transition-transform">
+              <p className="text-xs sm:text-sm text-muted-foreground mb-1">Total Foods</p>
+              <p className="text-xl sm:text-2xl font-bold">{foods.length}</p>
             </div>
-            <div className="bg-card rounded-lg p-4 border">
-              <p className="text-sm text-muted-foreground mb-1">Safe Foods</p>
-              <p className="text-2xl font-bold text-safe-food">
+            <div className="bg-card rounded-lg p-4 border active:scale-[0.98] transition-transform">
+              <p className="text-xs sm:text-sm text-muted-foreground mb-1">Safe Foods</p>
+              <p className="text-xl sm:text-2xl font-bold text-safe-food">
                 {foods.filter((f) => f.is_safe).length}
               </p>
             </div>
-            <div className="bg-card rounded-lg p-4 border">
-              <p className="text-sm text-muted-foreground mb-1">Try Bites</p>
-              <p className="text-2xl font-bold text-try-bite">
+            <div className="bg-card rounded-lg p-4 border active:scale-[0.98] transition-transform">
+              <p className="text-xs sm:text-sm text-muted-foreground mb-1">Try Bites</p>
+              <p className="text-xl sm:text-2xl font-bold text-try-bite">
                 {foods.filter((f) => f.is_try_bite).length}
               </p>
             </div>
-            <div className="bg-card rounded-lg p-4 border">
-              <p className="text-sm text-muted-foreground mb-1">Filtered</p>
-              <p className="text-2xl font-bold">{filteredFoods.length}</p>
+            <div className="bg-card rounded-lg p-4 border active:scale-[0.98] transition-transform">
+              <p className="text-xs sm:text-sm text-muted-foreground mb-1">Filtered</p>
+              <p className="text-xl sm:text-2xl font-bold">{filteredFoods.length}</p>
             </div>
           </div>
 
@@ -473,13 +473,13 @@ export default function Pantry() {
         />
 
         <Dialog open={showSuggestions} onOpenChange={setShowSuggestions}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto w-[95vw] sm:w-full">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
+              <DialogTitle className="flex items-center gap-2 text-lg">
                 <Sparkles className="h-5 w-5 text-primary" />
                 AI Food Suggestions
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-base">
                 These foods are suggested based on your child's current
                 preferences and eating history.
               </DialogDescription>
