@@ -148,8 +148,8 @@ const Landing = () => {
                 <span className="sr-only">Open menu</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[300px] sm:w-[400px]">
-              <SheetHeader>
+            <SheetContent side="right" className="w-[85vw] max-w-[360px] flex flex-col">
+              <SheetHeader className="pb-4 border-b">
                 <SheetTitle className="flex items-center gap-2">
                   <img
                     src="/Logo-Green.png"
@@ -163,32 +163,33 @@ const Landing = () => {
                   />
                 </SheetTitle>
               </SheetHeader>
-              <nav className="flex flex-col gap-4 mt-8">
+              <nav className="flex flex-col gap-2 mt-6 flex-1">
                 <a
                   href="#features"
-                  className="text-foreground text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted hover:text-foreground transition-colors"
+                  className="text-foreground text-base font-medium py-4 px-4 rounded-lg hover:bg-muted active:scale-[0.98] transition-all"
                   onClick={closeMobileMenu}
                 >
                   Features
                 </a>
                 <a
                   href="#how-it-works"
-                  className="text-foreground text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted hover:text-foreground transition-colors"
+                  className="text-foreground text-base font-medium py-4 px-4 rounded-lg hover:bg-muted active:scale-[0.98] transition-all"
                   onClick={closeMobileMenu}
                 >
                   How It Works
                 </a>
                 <Link
                   to="/pricing"
-                  className="text-foreground text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted hover:text-foreground transition-colors"
+                  className="text-foreground text-base font-medium py-4 px-4 rounded-lg hover:bg-muted active:scale-[0.98] transition-all"
                   onClick={closeMobileMenu}
                 >
                   Pricing
                 </Link>
-                <div className="border-t pt-4 mt-4 space-y-3">
+                <div className="border-t pt-4 mt-auto space-y-3 pb-safe">
                   <Button
                     variant="outline"
-                    className="w-full justify-start gap-3 text-lg py-6"
+                    size="lg"
+                    className="w-full justify-start gap-3"
                     onClick={() => {
                       setTheme(theme === "dark" ? "light" : "dark");
                       closeMobileMenu();
@@ -207,7 +208,7 @@ const Landing = () => {
                     )}
                   </Button>
                   <Link to="/auth" onClick={closeMobileMenu}>
-                    <Button variant="outline" className="w-full text-lg py-6">
+                    <Button size="lg" className="w-full">
                       Sign In
                     </Button>
                   </Link>

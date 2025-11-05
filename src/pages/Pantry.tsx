@@ -44,6 +44,10 @@ import { Food, FoodCategory } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { starterFoods } from "@/lib/starterFoods";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import { PullToRefreshIndicator } from "@/components/PullToRefreshIndicator";
+import { haptic } from "@/lib/haptics";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface FoodSuggestion {
   name: string;
@@ -60,8 +64,10 @@ export default function Pantry() {
     planEntries,
     kids,
     activeKidId,
+    refreshFoods,
   } = useApp();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editFood, setEditFood] = useState<Food | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -71,6 +77,24 @@ export default function Pantry() {
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [imageCaptureOpen, setImageCaptureOpen] = useState(false);
+
+  // Pull-to-refresh functionality (mobile only)
+  const { pullToRefreshRef, isRefreshing, pullDistance } = usePullToRefresh({
+    onRefresh: async () => {
+      haptic.light();
+      // Simulate refresh - in real app, this would refetch from server
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (refreshFoods) {
+        await refreshFoods();
+      }
+      haptic.success();
+      toast({
+        title: "Refreshed",
+        description: "Your pantry has been updated.",
+      });
+    },
+    enabled: isMobile,
+  });
 
   const filteredFoods = foods.filter((food) => {
     if (!food || !food.name) return false;
@@ -253,8 +277,25 @@ export default function Pantry() {
   };
 
   return (
-    <div className="min-h-screen pb-20 md:pt-20 bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div
+      ref={pullToRefreshRef}
+      className="min-h-screen pb-20 md:pt-20 bg-background overflow-y-auto"
+    >
+      {/* Pull to Refresh Indicator */}
+      {isMobile && (
+        <PullToRefreshIndicator
+          pullDistance={pullDistance}
+          isRefreshing={isRefreshing}
+        />
+      )}
+
+      <div
+        className="container mx-auto px-4 py-8 max-w-6xl"
+        style={{
+          transform: isMobile && !isRefreshing ? `translateY(${pullDistance}px)` : 'none',
+          transition: pullDistance === 0 ? 'transform 0.2s ease-out' : 'none',
+        }}
+      >
         <div className="flex flex-col gap-6">
           {/* Header */}
           <div className="flex flex-col gap-4">
@@ -268,7 +309,10 @@ export default function Pantry() {
             {/* Mobile Actions - Consolidated */}
             <div className="flex gap-2 md:hidden">
               <Button
-                onClick={() => setDialogOpen(true)}
+                onClick={() => {
+                  haptic.light();
+                  setDialogOpen(true);
+                }}
                 size="lg"
                 className="flex-1 touch-target"
               >
@@ -374,18 +418,18 @@ export default function Pantry() {
           </div>
 
           {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" />
               <Input
                 placeholder="Search foods..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 h-11"
+                className="pl-10"
               />
             </div>
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full sm:w-48 h-11">
+              <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Filter by category" />
               </SelectTrigger>
               <SelectContent>
@@ -401,26 +445,26 @@ export default function Pantry() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-card rounded-lg p-4 border">
-              <p className="text-sm text-muted-foreground mb-1">Total Foods</p>
-              <p className="text-2xl font-bold">{foods.length}</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-card rounded-lg p-4 border active:scale-[0.98] transition-transform">
+              <p className="text-xs sm:text-sm text-muted-foreground mb-1">Total Foods</p>
+              <p className="text-xl sm:text-2xl font-bold">{foods.length}</p>
             </div>
-            <div className="bg-card rounded-lg p-4 border">
-              <p className="text-sm text-muted-foreground mb-1">Safe Foods</p>
-              <p className="text-2xl font-bold text-safe-food">
+            <div className="bg-card rounded-lg p-4 border active:scale-[0.98] transition-transform">
+              <p className="text-xs sm:text-sm text-muted-foreground mb-1">Safe Foods</p>
+              <p className="text-xl sm:text-2xl font-bold text-safe-food">
                 {foods.filter((f) => f.is_safe).length}
               </p>
             </div>
-            <div className="bg-card rounded-lg p-4 border">
-              <p className="text-sm text-muted-foreground mb-1">Try Bites</p>
-              <p className="text-2xl font-bold text-try-bite">
+            <div className="bg-card rounded-lg p-4 border active:scale-[0.98] transition-transform">
+              <p className="text-xs sm:text-sm text-muted-foreground mb-1">Try Bites</p>
+              <p className="text-xl sm:text-2xl font-bold text-try-bite">
                 {foods.filter((f) => f.is_try_bite).length}
               </p>
             </div>
-            <div className="bg-card rounded-lg p-4 border">
-              <p className="text-sm text-muted-foreground mb-1">Filtered</p>
-              <p className="text-2xl font-bold">{filteredFoods.length}</p>
+            <div className="bg-card rounded-lg p-4 border active:scale-[0.98] transition-transform">
+              <p className="text-xs sm:text-sm text-muted-foreground mb-1">Filtered</p>
+              <p className="text-xl sm:text-2xl font-bold">{filteredFoods.length}</p>
             </div>
           </div>
 
@@ -473,13 +517,13 @@ export default function Pantry() {
         />
 
         <Dialog open={showSuggestions} onOpenChange={setShowSuggestions}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto w-[95vw] sm:w-full">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
+              <DialogTitle className="flex items-center gap-2 text-lg">
                 <Sparkles className="h-5 w-5 text-primary" />
                 AI Food Suggestions
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-base">
                 These foods are suggested based on your child's current
                 preferences and eating history.
               </DialogDescription>
