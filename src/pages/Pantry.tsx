@@ -44,6 +44,10 @@ import { Food, FoodCategory } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { starterFoods } from "@/lib/starterFoods";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import { PullToRefreshIndicator } from "@/components/PullToRefreshIndicator";
+import { haptic } from "@/lib/haptics";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface FoodSuggestion {
   name: string;
@@ -60,8 +64,10 @@ export default function Pantry() {
     planEntries,
     kids,
     activeKidId,
+    refreshFoods,
   } = useApp();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editFood, setEditFood] = useState<Food | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -71,6 +77,24 @@ export default function Pantry() {
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [imageCaptureOpen, setImageCaptureOpen] = useState(false);
+
+  // Pull-to-refresh functionality (mobile only)
+  const { pullToRefreshRef, isRefreshing, pullDistance } = usePullToRefresh({
+    onRefresh: async () => {
+      haptic.light();
+      // Simulate refresh - in real app, this would refetch from server
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (refreshFoods) {
+        await refreshFoods();
+      }
+      haptic.success();
+      toast({
+        title: "Refreshed",
+        description: "Your pantry has been updated.",
+      });
+    },
+    enabled: isMobile,
+  });
 
   const filteredFoods = foods.filter((food) => {
     if (!food || !food.name) return false;
@@ -253,8 +277,25 @@ export default function Pantry() {
   };
 
   return (
-    <div className="min-h-screen pb-20 md:pt-20 bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div
+      ref={pullToRefreshRef}
+      className="min-h-screen pb-20 md:pt-20 bg-background overflow-y-auto"
+    >
+      {/* Pull to Refresh Indicator */}
+      {isMobile && (
+        <PullToRefreshIndicator
+          pullDistance={pullDistance}
+          isRefreshing={isRefreshing}
+        />
+      )}
+
+      <div
+        className="container mx-auto px-4 py-8 max-w-6xl"
+        style={{
+          transform: isMobile && !isRefreshing ? `translateY(${pullDistance}px)` : 'none',
+          transition: pullDistance === 0 ? 'transform 0.2s ease-out' : 'none',
+        }}
+      >
         <div className="flex flex-col gap-6">
           {/* Header */}
           <div className="flex flex-col gap-4">
@@ -268,7 +309,10 @@ export default function Pantry() {
             {/* Mobile Actions - Consolidated */}
             <div className="flex gap-2 md:hidden">
               <Button
-                onClick={() => setDialogOpen(true)}
+                onClick={() => {
+                  haptic.light();
+                  setDialogOpen(true);
+                }}
                 size="lg"
                 className="flex-1 touch-target"
               >
