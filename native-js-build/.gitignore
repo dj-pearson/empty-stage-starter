@@ -1,0 +1,45 @@
+# OSX
+.DS_Store
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# React Native
+.expo/
+.expo-shared/
+
+# Android
+android/app/build/
+android/app/src/main/assets/index.android.bundle
+android/app/src/main/res/drawable-*
+android/app/src/main/res/raw/
+android/.gradle/
+android/build/
+android/local.properties
+
+# iOS
+ios/build/
+ios/Pods/
+ios/*.xcworkspace
+!ios/EatPal.xcworkspace
+ios/*.xcuserdata
+ios/main.jsbundle
+ios/main.jsbundle.meta
+
+# Fastlane
+ios/fastlane/report.xml
+ios/fastlane/Preview.html
+android/fastlane/report.xml
+android/fastlane/Preview.html
+
+# Bundle artifacts
+*.jsbundle
+
+# CocoaPods
+ios/Podfile.lock
+
+# Misc
+.env
+.env.*
