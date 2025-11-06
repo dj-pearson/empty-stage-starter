@@ -185,7 +185,7 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
       setFormData({ ...formData, profile_picture_url: publicUrl });
       toast.success("Image uploaded successfully!");
     } catch (error) {
-      console.error("Error uploading image:", error);
+      logger.error("Error uploading image:", error);
       toast.error("Failed to upload image");
     } finally {
       setUploading(false);

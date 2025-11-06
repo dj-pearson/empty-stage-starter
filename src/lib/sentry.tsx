@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/react";
+import { logger } from "@/lib/logger";
 
 export function initializeSentry() {
   // Only initialize in production or if explicitly enabled
@@ -144,7 +145,7 @@ export function ErrorFallback({ error, resetError }: { error: Error; resetError:
 
 // Custom error logging utility
 export function logError(error: Error, context?: Record<string, any>) {
-  console.error('Error:', error);
+  logger.error('Error:', error);
 
   if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {
     Sentry.captureException(error, {
@@ -165,7 +166,7 @@ export function logApiError(endpoint: string, error: any, requestData?: any) {
     statusText: error?.statusText,
   };
 
-  console.error('API Error:', errorContext);
+  logger.error('API Error:', errorContext);
 
   if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {
     Sentry.captureException(error, {

@@ -31,6 +31,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { logger } from "@/lib/logger";
 
 const MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
   { slot: "breakfast", label: "Breakfast" },
@@ -196,7 +197,7 @@ export default function Planner() {
         description: "Review and adjust as needed",
       });
     } catch (error) {
-      console.error("Error generating AI meal plan:", error);
+      logger.error("Error generating AI meal plan:", error);
       toast.error("Failed to generate AI meal plan. Please try again.");
     } finally {
       setIsGeneratingPlan(false);
@@ -280,7 +281,7 @@ export default function Planner() {
         `${recipe.name} (${recipe.food_ids.length} items) added to calendar`
       );
     } catch (error) {
-      console.error("Error scheduling recipe:", error);
+      logger.error("Error scheduling recipe:", error);
       const message =
         (error as any)?.message ||
         (typeof error === "string" ? error : "Failed to schedule recipe");
@@ -327,7 +328,7 @@ export default function Planner() {
             });
           }
         } catch (error) {
-          console.error("Error deducting quantity:", error);
+          logger.error("Error deducting quantity:", error);
           toast.error("Failed to update inventory");
         }
       }

@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { logger } from "@/lib/logger";
 
 interface EmailList {
   id: string;
@@ -125,7 +126,7 @@ export function EmailMarketingManager() {
         setStats(data[0]);
       }
     } catch (error: any) {
-      console.error("Error loading stats:", error);
+      logger.error("Error loading stats:", error);
     }
   };
 
@@ -138,7 +139,7 @@ export function EmailMarketingManager() {
       if (error) throw error;
       setLists(data || []);
     } catch (error: any) {
-      console.error("Error loading lists:", error);
+      logger.error("Error loading lists:", error);
     }
   };
 
@@ -151,7 +152,7 @@ export function EmailMarketingManager() {
       if (error) throw error;
       setSubscribers(data || []);
     } catch (error: any) {
-      console.error("Error loading subscribers:", error);
+      logger.error("Error loading subscribers:", error);
     }
   };
 
@@ -164,7 +165,7 @@ export function EmailMarketingManager() {
       if (error) throw error;
       setCampaigns(data || []);
     } catch (error: any) {
-      console.error("Error loading campaigns:", error);
+      logger.error("Error loading campaigns:", error);
     }
   };
 
@@ -177,7 +178,7 @@ export function EmailMarketingManager() {
       if (error) throw error;
       setTemplates(data || []);
     } catch (error: any) {
-      console.error("Error loading templates:", error);
+      logger.error("Error loading templates:", error);
     }
   };
 

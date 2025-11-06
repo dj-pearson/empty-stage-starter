@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 export interface PlatformHealth {
   total_users: number;
@@ -106,13 +107,13 @@ const { data, error } = await (supabase as any)
       .single();
 
     if (error) {
-      console.error("Failed to fetch platform health:", error);
+      logger.error("Failed to fetch platform health:", error);
       return null;
     }
 
     return data as PlatformHealth;
   } catch (error) {
-    console.error("Failed to fetch platform health:", error);
+    logger.error("Failed to fetch platform health:", error);
     return null;
   }
 }
@@ -131,13 +132,13 @@ const { data, error } = await (supabase as any)
       .limit(limit);
 
     if (error) {
-      console.error("Failed to fetch user engagement:", error);
+      logger.error("Failed to fetch user engagement:", error);
       return [];
     }
 
     return data as UserEngagement[];
   } catch (error) {
-    console.error("Failed to fetch user engagement:", error);
+    logger.error("Failed to fetch user engagement:", error);
     return [];
   }
 }
@@ -154,13 +155,13 @@ const { data, error } = await (supabase as any)
       .limit(days);
 
     if (error) {
-      console.error("Failed to fetch daily activity:", error);
+      logger.error("Failed to fetch daily activity:", error);
       return [];
     }
 
     return data as DailyActivity[];
   } catch (error) {
-    console.error("Failed to fetch daily activity:", error);
+    logger.error("Failed to fetch daily activity:", error);
     return [];
   }
 }
@@ -176,13 +177,13 @@ const { data, error } = await (supabase as any)
       .order("total_requests", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch AI usage:", error);
+      logger.error("Failed to fetch AI usage:", error);
       return [];
     }
 
     return data as AIUsage[];
   } catch (error) {
-    console.error("Failed to fetch AI usage:", error);
+    logger.error("Failed to fetch AI usage:", error);
     return [];
   }
 }
@@ -206,13 +207,13 @@ const { data, error } = await (supabase as any)
       .order("adoption_rate_pct", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch feature adoption:", error);
+      logger.error("Failed to fetch feature adoption:", error);
       return [];
     }
 
     return data as any[];
   } catch (error) {
-    console.error("Failed to fetch feature adoption:", error);
+    logger.error("Failed to fetch feature adoption:", error);
     return [];
   }
 }
@@ -237,13 +238,13 @@ let query = (supabase as any)
     const { data, error } = await query;
 
     if (error) {
-      console.error("Failed to fetch admin notifications:", error);
+      logger.error("Failed to fetch admin notifications:", error);
       return [];
     }
 
     return data as AdminNotification[];
   } catch (error) {
-    console.error("Failed to fetch admin notifications:", error);
+    logger.error("Failed to fetch admin notifications:", error);
     return [];
   }
 }
@@ -259,13 +260,13 @@ const { error } = await (supabase as any)
       .eq("id", notificationId);
 
     if (error) {
-      console.error("Failed to mark notification as read:", error);
+      logger.error("Failed to mark notification as read:", error);
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error("Failed to mark notification as read:", error);
+    logger.error("Failed to mark notification as read:", error);
     return false;
   }
 }
@@ -281,7 +282,7 @@ const { error } = await (supabase as any)
       .eq("is_read", false);
 
     if (error) {
-      console.error("Failed to mark all notifications as read:", error);
+      logger.error("Failed to mark all notifications as read:", error);
       toast.error("Failed to mark notifications as read");
       return false;
     }
@@ -289,7 +290,7 @@ const { error } = await (supabase as any)
     toast.success("All notifications marked as read");
     return true;
   } catch (error) {
-    console.error("Failed to mark all notifications as read:", error);
+    logger.error("Failed to mark all notifications as read:", error);
     toast.error("Failed to mark notifications as read");
     return false;
   }
@@ -306,13 +307,13 @@ const { data, error } = await (supabase as any)
       .order("cohort_month", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch user retention:", error);
+      logger.error("Failed to fetch user retention:", error);
       return [];
     }
 
     return data || [];
   } catch (error) {
-    console.error("Failed to fetch user retention:", error);
+    logger.error("Failed to fetch user retention:", error);
     return [];
   }
 }
@@ -328,13 +329,13 @@ const { data, error } = await (supabase as any)
       .order("error_count", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch error tracking:", error);
+      logger.error("Failed to fetch error tracking:", error);
       return [];
     }
 
     return data || [];
   } catch (error) {
-    console.error("Failed to fetch error tracking:", error);
+    logger.error("Failed to fetch error tracking:", error);
     return [];
   }
 }

@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, CheckCircle, XCircle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { logger } from "@/lib/logger";
 
 interface SubscriptionPlan {
   id: string;
@@ -73,7 +74,7 @@ export function PromotionalCampaignManager() {
       setPlans(plansRes.data || []);
     } catch (error: any) {
       toast.error("Failed to load campaigns");
-      console.error(error);
+      logger.error(error);
     } finally {
       setIsLoading(false);
     }
@@ -121,7 +122,7 @@ export function PromotionalCampaignManager() {
       fetchData();
     } catch (error: any) {
       toast.error(editingCampaign ? "Failed to update campaign" : "Failed to create campaign");
-      console.error(error);
+      logger.error(error);
     }
   };
 
@@ -155,7 +156,7 @@ export function PromotionalCampaignManager() {
       fetchData();
     } catch (error: any) {
       toast.error("Failed to delete campaign");
-      console.error(error);
+      logger.error(error);
     }
   };
 
@@ -171,7 +172,7 @@ export function PromotionalCampaignManager() {
       fetchData();
     } catch (error: any) {
       toast.error("Failed to update campaign status");
-      console.error(error);
+      logger.error(error);
     }
   };
 

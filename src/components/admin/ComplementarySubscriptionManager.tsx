@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Trash2, Gift } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { logger } from "@/lib/logger";
 
 interface Profile {
   id: string;
@@ -97,7 +98,7 @@ export function ComplementarySubscriptionManager() {
       setPlans(plansRes.data || []);
     } catch (error: any) {
       toast.error("Failed to load data");
-      console.error(error);
+      logger.error(error);
     } finally {
       setIsLoading(false);
     }
@@ -126,7 +127,7 @@ export function ComplementarySubscriptionManager() {
       }
     } catch (error: any) {
       toast.error("Failed to search for user");
-      console.error(error);
+      logger.error(error);
     }
   };
 
@@ -168,7 +169,7 @@ export function ComplementarySubscriptionManager() {
       fetchData();
     } catch (error: any) {
       toast.error("Failed to grant subscription");
-      console.error(error);
+      logger.error(error);
     }
   };
 
@@ -186,7 +187,7 @@ export function ComplementarySubscriptionManager() {
       fetchData();
     } catch (error: any) {
       toast.error("Failed to revoke subscription");
-      console.error(error);
+      logger.error(error);
     }
   };
 

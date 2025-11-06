@@ -9,6 +9,7 @@ import { Sparkles, Calendar, AlertCircle, TrendingUp, Apple, Target, Leaf } from
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { KidSelector } from "@/components/KidSelector";
+import { logger } from "@/lib/logger";
 
 export default function AIPlanner() {
   const { kids, activeKidId, setActiveKidId, addPlanEntries } = useApp();
@@ -44,7 +45,7 @@ export default function AIPlanner() {
       const kidName = kids.find(k => k.id === targetKidId)?.name;
       toast.success(`AI meal plan generated for ${kidName}!`);
     } catch (error: any) {
-      console.error('Error generating meal plan:', error);
+      logger.error('Error generating meal plan:', error);
       toast.error(error.message || "Failed to generate meal plan");
     } finally {
       setIsGenerating(false);
@@ -64,7 +65,7 @@ export default function AIPlanner() {
       setInsights(null);
       setStrategy(null);
     } catch (error: any) {
-      console.error('Error saving plan:', error);
+      logger.error('Error saving plan:', error);
       toast.error("Failed to save meal plan");
     }
   };

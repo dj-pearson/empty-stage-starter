@@ -3,6 +3,7 @@ import { Food, Kid, PlanEntry, GroceryItem, Recipe } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
 import { getStorage } from "@/lib/platform";
+import { logger } from "@/lib/logger";
 
 interface AppContextType {
   foods: Food[];
@@ -90,7 +91,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setActiveKidId(defaultKid.id);
         }
       } catch (error) {
-        console.error("Error loading data from storage:", error);
+        logger.error("Error loading data from storage:", error);
         // Initialize with starter data on error
         const starterFoods = STARTER_FOODS.map(f => ({ ...f, id: generateId() }));
         setFoods(starterFoods);
@@ -112,7 +113,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           JSON.stringify({ foods, kids, recipes, activeKidId, planEntries, groceryItems })
         );
       } catch (error) {
-        console.error("Error saving data to storage:", error);
+        logger.error("Error saving data to storage:", error);
       }
     };
     saveData();
@@ -201,7 +202,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     
                     // Migrate local recipes to database
                     if (localOnlyRecipes.length > 0) {
-                      console.log(`Migrating ${localOnlyRecipes.length} local recipes to database...`);
+                      logger.debug(`Migrating ${localOnlyRecipes.length} local recipes to database...`);
                       for (const localRecipe of localOnlyRecipes) {
                         const { id, ...recipeData } = localRecipe;
                         const dbPayload: any = {
@@ -235,7 +236,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                       setRecipes(dbRecipes);
                     }
                   } catch (e) {
-                    console.error('Error migrating recipes:', e);
+                    logger.error('Error migrating recipes:', e);
                     setRecipes(dbRecipes);
                   }
                 } else {
@@ -274,7 +275,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           filter: `household_id=eq.${householdId}`
         },
         (payload) => {
-          console.log('Grocery item changed:', payload);
+          logger.debug('Grocery item changed:', payload);
 
           if (payload.eventType === 'INSERT') {
             setGroceryItemsState(prev => {
@@ -312,7 +313,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .single()
         .then(({ data, error }) => {
           if (error) {
-            console.error('Supabase addFood error:', error);
+            logger.error('Supabase addFood error:', error);
             setFoods([...foods, { ...food, id: generateId() }]);
           } else if (data) {
             setFoods([...foods, data as unknown as Food]);
@@ -330,7 +331,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .update(updates)
         .eq('id', id)
         .then(({ error }) => {
-          if (error) console.error('Supabase updateFood error:', error);
+          if (error) logger.error('Supabase updateFood error:', error);
           setFoods(foods.map(f => (f.id === id ? { ...f, ...updates } : f)));
         });
     } else {
@@ -345,7 +346,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .delete()
         .eq('id', id)
         .then(({ error }) => {
-          if (error) console.error('Supabase deleteFood error:', error);
+          if (error) logger.error('Supabase deleteFood error:', error);
           setFoods(foods.filter(f => f.id !== id));
         });
     } else {
@@ -363,7 +364,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .single()
         .then(({ data, error }) => {
           if (error) {
-            console.error('Supabase addKid error:', error);
+            logger.error('Supabase addKid error:', error);
             // Fallback to local so user isn't blocked
             setKids([...kids, { ...kid, id: generateId() }]);
           } else if (data) {
@@ -385,7 +386,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .eq('id', id)
         .then(({ error }) => {
           if (error) {
-            console.error('Supabase updateKid error:', error);
+            logger.error('Supabase updateKid error:', error);
           }
           setKids(kids.map(k => (k.id === id ? { ...k, ...updates } : k)));
         });
@@ -410,7 +411,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .eq('id', id)
         .then(({ error }) => {
           if (error) {
-            console.error('Supabase deleteKid error:', error);
+            logger.error('Supabase deleteKid error:', error);
           }
           afterDelete();
         });
@@ -449,8 +450,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error) {
-        console.error('Supabase addRecipe error:', error);
-        console.error('Failed payload:', dbPayload);
+        logger.error('Supabase addRecipe error:', error);
+        logger.error('Failed payload:', dbPayload);
         throw new Error(`Database error: ${error.message}`);
       } else if (data) {
         // Normalize DB response to our Recipe type (camelCase for UI)
@@ -498,7 +499,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .update(dbUpdates)
         .eq('id', id)
         .then(({ error }) => {
-          if (error) console.error('Supabase updateRecipe error:', error);
+          if (error) logger.error('Supabase updateRecipe error:', error);
           // Keep UI state in camelCase
           setRecipes(recipes.map(r => (r.id === id ? { ...r, ...updates } : r)));
         });
@@ -514,7 +515,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .delete()
         .eq('id', id)
         .then(({ error }) => {
-          if (error) console.error('Supabase deleteRecipe error:', error);
+          if (error) logger.error('Supabase deleteRecipe error:', error);
           setRecipes(recipes.filter(r => r.id !== id));
         });
     } else {
@@ -535,7 +536,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .single()
         .then(({ data, error }) => {
           if (error) {
-            console.error('Supabase addPlanEntry error:', error);
+            logger.error('Supabase addPlanEntry error:', error);
             setPlanEntriesState([...planEntries, { ...entry, id: generateId() }]);
           } else if (data) {
             setPlanEntriesState([...planEntries, data as unknown as PlanEntry]);
@@ -556,7 +557,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .select();
       
       if (error) {
-        console.error('Supabase addPlanEntries error:', error);
+        logger.error('Supabase addPlanEntries error:', error);
         const localEntries = entries.map(e => ({ ...e, id: generateId() }));
         setPlanEntriesState([...planEntries, ...localEntries]);
       } else if (data) {
@@ -575,7 +576,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .update(updates)
         .eq('id', id)
         .then(({ error }) => {
-          if (error) console.error('Supabase updatePlanEntry error:', error);
+          if (error) logger.error('Supabase updatePlanEntry error:', error);
           setPlanEntriesState(planEntries.map(e => (e.id === id ? { ...e, ...updates } : e)));
         });
     } else {
@@ -596,7 +597,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .single()
         .then(({ data, error }) => {
           if (error) {
-            console.error('Supabase addGroceryItem error:', error);
+            logger.error('Supabase addGroceryItem error:', error);
             setGroceryItemsState([...groceryItems, { ...item, id: generateId(), checked: false }]);
           } else if (data) {
             setGroceryItemsState([...groceryItems, data as unknown as GroceryItem]);
@@ -619,7 +620,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .update({ checked: newChecked })
         .eq('id', id)
         .then(({ error }) => {
-          if (error) console.error('Supabase toggleGroceryItem error:', error);
+          if (error) logger.error('Supabase toggleGroceryItem error:', error);
           setGroceryItemsState(
             groceryItems.map(item =>
               item.id === id ? { ...item, checked: newChecked } : item
@@ -643,7 +644,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .delete()
         .in('id', checkedIds)
         .then(({ error }) => {
-          if (error) console.error('Supabase clearCheckedGroceryItems error:', error);
+          if (error) logger.error('Supabase clearCheckedGroceryItems error:', error);
           setGroceryItemsState(groceryItems.filter(item => !item.checked));
         });
     } else {

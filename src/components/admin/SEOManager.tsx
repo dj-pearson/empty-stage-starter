@@ -264,7 +264,7 @@ export function SEOManager() {
         setTrackedKeywords(mockKeywords);
       }
     } catch (error) {
-      console.error('Error loading keywords:', error);
+      logger.error('Error loading keywords:', error);
       toast.error('Failed to load keyword data');
     }
   };
@@ -290,7 +290,7 @@ export function SEOManager() {
         })));
       }
     } catch (error) {
-      console.error('Error loading competitor analysis:', error);
+      logger.error('Error loading competitor analysis:', error);
     }
   };
 
@@ -316,7 +316,7 @@ export function SEOManager() {
         setPageAnalysis(pages);
       }
     } catch (error) {
-      console.error('Error loading page analysis:', error);
+      logger.error('Error loading page analysis:', error);
     }
   };
 
@@ -341,7 +341,7 @@ export function SEOManager() {
         await loadPageAnalysis();
       }
     } catch (error: any) {
-      console.error("Error analyzing blog posts:", error);
+      logger.error("Error analyzing blog posts:", error);
       setBlogPostsAnalysisResults({
         success: false,
         error: error.message || "Failed to analyze blog posts"
@@ -373,7 +373,7 @@ export function SEOManager() {
         await fetchGSCPropertiesList();
       }
     } catch (error: any) {
-      console.error("Error checking GSC connection:", error);
+      logger.error("Error checking GSC connection:", error);
     }
   };
 
@@ -402,7 +402,7 @@ export function SEOManager() {
         window.location.href = data.authUrl;
       }
     } catch (error: any) {
-      console.error("Error connecting to GSC:", error);
+      logger.error("Error connecting to GSC:", error);
       toast.error(`Failed to connect: ${error.message}`);
       setIsConnectingGSC(false);
     }
@@ -429,7 +429,7 @@ export function SEOManager() {
         }
       }
     } catch (error: any) {
-      console.error("Error fetching GSC properties:", error);
+      logger.error("Error fetching GSC properties:", error);
     }
   };
 
@@ -469,7 +469,7 @@ export function SEOManager() {
       // Reload keywords to show updated GSC data
       await loadTrackedKeywords();
     } catch (error: any) {
-      console.error("Error syncing GSC data:", error);
+      logger.error("Error syncing GSC data:", error);
       setGscSyncResults({
         success: false,
         error: error.message || "Failed to sync"
@@ -497,7 +497,7 @@ export function SEOManager() {
 
       toast.success("Disconnected from Google Search Console");
     } catch (error: any) {
-      console.error("Error disconnecting from GSC:", error);
+      logger.error("Error disconnecting from GSC:", error);
       toast.error(`Failed to disconnect: ${error.message}`);
     }
   };
@@ -605,7 +605,7 @@ export function SEOManager() {
         });
       }
     } catch (error: any) {
-      console.error("Error loading monitoring data:", error);
+      logger.error("Error loading monitoring data:", error);
     } finally {
       setIsLoadingMonitoring(false);
     }
@@ -630,7 +630,7 @@ export function SEOManager() {
       await loadMonitoringData();
       toast.success("Alert acknowledged");
     } catch (error: any) {
-      console.error("Error acknowledging alert:", error);
+      logger.error("Error acknowledging alert:", error);
       toast.error("Failed to acknowledge alert");
     }
   };
@@ -647,7 +647,7 @@ export function SEOManager() {
       await loadMonitoringData();
       toast.success("Alert dismissed");
     } catch (error: any) {
-      console.error("Error dismissing alert:", error);
+      logger.error("Error dismissing alert:", error);
       toast.error("Failed to dismiss alert");
     }
   };
@@ -664,7 +664,7 @@ export function SEOManager() {
       await loadMonitoringData();
       toast.success(enabled ? "Schedule enabled" : "Schedule disabled");
     } catch (error: any) {
-      console.error("Error toggling schedule:", error);
+      logger.error("Error toggling schedule:", error);
       toast.error("Failed to update schedule");
     }
   };
@@ -686,7 +686,7 @@ export function SEOManager() {
       setNotificationPrefs(prefs);
       toast.success("Notification preferences saved");
     } catch (error: any) {
-      console.error("Error saving preferences:", error);
+      logger.error("Error saving preferences:", error);
       toast.error("Failed to save preferences");
     }
   };
@@ -750,7 +750,7 @@ export function SEOManager() {
         .single();
 
       if (auditError) {
-        console.error('Error saving audit:', auditError);
+        logger.error('Error saving audit:', auditError);
       } else if (auditData) {
         setCurrentAuditId(auditData.id);
 
@@ -761,7 +761,7 @@ export function SEOManager() {
           .eq('id', '00000000-0000-0000-0000-000000000001');
       }
     } catch (error) {
-      console.error('Error saving audit results:', error);
+      logger.error('Error saving audit results:', error);
     }
 
     setIsAuditing(false);
@@ -1584,9 +1584,9 @@ export function SEOManager() {
         }, 1000);
       }
 
-      console.log("AI Healing Results:", data);
+      logger.debug("AI Healing Results:", data);
     } catch (error: any) {
-      console.error("AI Auto-Healing error:", error);
+      logger.error("AI Auto-Healing error:", error);
       setAutoHealingResults({
         success: false,
         error: error.message || "Failed to generate suggestions"
@@ -1634,7 +1634,7 @@ export function SEOManager() {
         }, 1000);
       }
     } catch (error: any) {
-      console.error("Error applying fixes:", error);
+      logger.error("Error applying fixes:", error);
       setFixesAppliedResults({
         success: false,
         error: error.message || "Failed to apply fixes"
@@ -1738,7 +1738,7 @@ export function SEOManager() {
         });
 
       if (insertError) {
-        console.error('Error saving competitor analysis:', insertError);
+        logger.error('Error saving competitor analysis:', insertError);
       }
 
       // Reload competitor analysis
@@ -1746,7 +1746,7 @@ export function SEOManager() {
 
       toast.success("Competitor analysis complete and saved!");
     } catch (error: any) {
-      console.error("Competitor analysis error:", error);
+      logger.error("Competitor analysis error:", error);
       toast.error(`Failed to analyze competitor: ${error.message}`);
     } finally {
       setIsAnalyzingCompetitor(false);
@@ -1764,7 +1764,7 @@ export function SEOManager() {
       setCompetitorResults(competitorResults.filter((c) => c.url !== url));
       toast.success("Competitor removed");
     } catch (error) {
-      console.error('Error removing competitor:', error);
+      logger.error('Error removing competitor:', error);
       toast.error('Failed to remove competitor');
     }
   };
@@ -1875,7 +1875,7 @@ export function SEOManager() {
       setSitemapXml(sitemap);
       toast.success(`Sitemap regenerated with ${posts?.length || 0} blog posts!`);
     } catch (error) {
-      console.error('Error regenerating sitemap:', error);
+      logger.error('Error regenerating sitemap:', error);
       toast.error('Failed to regenerate sitemap');
     } finally {
       setIsRegeneratingSitemap(false);
@@ -3538,7 +3538,7 @@ RESTful API available for integrations. Contact for API access.
                           success: true,
                           data: data.data
                         });
-                        console.log('Full structured data validation:', data.data);
+                        logger.debug('Full structured data validation:', data.data);
                       } else {
                         throw new Error(data?.error || 'Failed to validate structured data');
                       }
@@ -5066,7 +5066,7 @@ RESTful API available for integrations. Contact for API access.
 
                     if (data?.success) {
                       setRedirectResults(data.data);
-                      console.log('Full redirect analysis:', data.data);
+                      logger.debug('Full redirect analysis:', data.data);
                     } else {
                       throw new Error(data?.error || 'Failed to analyze redirects');
                     }
@@ -5162,7 +5162,7 @@ RESTful API available for integrations. Contact for API access.
 
                     if (data?.success) {
                       setDuplicateResults(data.data);
-                      console.log('Full duplicate content analysis:', data.data);
+                      logger.debug('Full duplicate content analysis:', data.data);
                     } else {
                       throw new Error(data?.error || 'Failed to analyze content');
                     }
@@ -5237,7 +5237,7 @@ RESTful API available for integrations. Contact for API access.
 
                     if (data?.success) {
                       setSecurityResults(data.data);
-                      console.log('Full security analysis:', data.data);
+                      logger.debug('Full security analysis:', data.data);
                     } else {
                       throw new Error(data?.error || 'Failed to check security');
                     }
@@ -5337,7 +5337,7 @@ RESTful API available for integrations. Contact for API access.
 
                     if (data?.success) {
                       setLinkStructureResults(data.data);
-                      console.log('Full link analysis:', data.data);
+                      logger.debug('Full link analysis:', data.data);
                     } else {
                       throw new Error(data?.error || 'Failed to analyze links');
                     }
@@ -5413,7 +5413,7 @@ RESTful API available for integrations. Contact for API access.
 
                     if (data?.success) {
                       setMobileResults(data.data);
-                      console.log('Full mobile analysis:', data.data);
+                      logger.debug('Full mobile analysis:', data.data);
                     } else {
                       throw new Error(data?.error || 'Failed to check mobile usability');
                     }

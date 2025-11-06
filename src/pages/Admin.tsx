@@ -24,6 +24,7 @@ import { ReferralProgramManager } from "@/components/admin/ReferralProgramManage
 import { BarcodeEnrichmentTool } from "@/components/admin/BarcodeEnrichmentTool";
 import { FeatureFlagDashboard } from "@/components/admin/FeatureFlagDashboard";
 import { TicketQueue } from "@/components/admin/TicketQueue";
+import { logger } from "@/lib/logger";
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -47,7 +48,7 @@ const Admin = () => {
     }
 
     if (code && state) {
-      console.log('OAuth callback detected - storing for processing after auth');
+      logger.debug('OAuth callback detected - storing for processing after auth');
       // Store OAuth data for processing after authentication
       sessionStorage.setItem('gsc_oauth_code', code);
       sessionStorage.setItem('gsc_oauth_state', state);
@@ -69,7 +70,7 @@ const Admin = () => {
     const storedState = sessionStorage.getItem('gsc_oauth_state');
     
     if (isAdmin && oauthPending && storedCode && storedState) {
-      console.log('Processing stored OAuth callback after authentication');
+      logger.debug('Processing stored OAuth callback after authentication');
       // Clean up storage first
       sessionStorage.removeItem('gsc_oauth_pending');
       sessionStorage.removeItem('gsc_oauth_code');
@@ -107,10 +108,10 @@ const Admin = () => {
   }, [isAdmin, location]);
 
   const handleOAuthCallback = async (code: string, state: string) => {
-    console.log('Admin OAuth callback detected:', { code: code?.substring(0, 10) + '...', state: state?.substring(0, 10) + '...' });
+    logger.debug('Admin OAuth callback detected:', { code: code?.substring(0, 10) + '...', state: state?.substring(0, 10) + '...' });
     
     try {
-      console.log('Processing OAuth callback directly in Admin...');
+      logger.debug('Processing OAuth callback directly in Admin...');
 
       const response = await fetch(`https://tbuszxkevkpjcjapbrir.supabase.co/functions/v1/gsc-oauth?action=callback&code=${code}&state=${state}`, {
         method: 'GET',
@@ -136,7 +137,7 @@ const Admin = () => {
         throw new Error(data.error || 'OAuth callback failed');
       }
     } catch (error: any) {
-      console.error('Admin OAuth callback error:', error);
+      logger.error('Admin OAuth callback error:', error);
       toast.error(`Failed to complete OAuth: ${error.message}`);
       
       // Clear URL parameters even on error and go to SEO tab

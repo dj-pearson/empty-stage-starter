@@ -6,6 +6,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from "@/lib/logger";
 
 export interface InstacartConfig {
   apiKey: string;
@@ -100,7 +101,7 @@ export class InstacartAPI {
       // });
 
       // Mock implementation for development
-      console.log(`Searching Instacart for: ${ingredient}`);
+      logger.debug(`Searching Instacart for: ${ingredient}`);
       
       // Return mock products
       return [
@@ -116,7 +117,7 @@ export class InstacartAPI {
         },
       ];
     } catch (error) {
-      console.error('Error searching Instacart products:', error);
+      logger.error('Error searching Instacart products:', error);
       throw error;
     }
   }
@@ -140,7 +141,7 @@ export class InstacartAPI {
       // });
 
       // Mock implementation
-      console.log(`Fetching stores near: ${zipCode}`);
+      logger.debug(`Fetching stores near: ${zipCode}`);
       
       return [
         {
@@ -161,7 +162,7 @@ export class InstacartAPI {
         },
       ];
     } catch (error) {
-      console.error('Error fetching Instacart stores:', error);
+      logger.error('Error fetching Instacart stores:', error);
       throw error;
     }
   }
@@ -192,7 +193,7 @@ export class InstacartAPI {
       // });
 
       // Mock implementation
-      console.log(`Creating Instacart cart for store: ${storeId}`);
+      logger.debug(`Creating Instacart cart for store: ${storeId}`);
       
       const subtotal = items.reduce((sum, item) => sum + (item.quantity * 3.99), 0);
       const deliveryFee = 5.99;
@@ -211,7 +212,7 @@ export class InstacartAPI {
         total,
       };
     } catch (error) {
-      console.error('Error creating Instacart cart:', error);
+      logger.error('Error creating Instacart cart:', error);
       throw error;
     }
   }
@@ -409,7 +410,7 @@ export async function getInstacartConfig(): Promise<InstacartConfig> {
       enabled: false, // Set to true when configured
     };
   } catch (error) {
-    console.error('Error loading Instacart config:', error);
+    logger.error('Error loading Instacart config:', error);
     return {
       apiKey: '',
       enabled: false,
@@ -447,9 +448,9 @@ export async function trackInstacartUsage(
     //   timestamp: new Date().toISOString(),
     // });
 
-    console.log('Instacart usage:', action, metadata);
+    logger.debug('Instacart usage:', action, metadata);
   } catch (error) {
-    console.error('Error tracking Instacart usage:', error);
+    logger.error('Error tracking Instacart usage:', error);
   }
 }
 

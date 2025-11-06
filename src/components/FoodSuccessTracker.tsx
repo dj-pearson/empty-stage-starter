@@ -38,6 +38,7 @@ import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 interface FoodAttempt {
   id: string;
@@ -138,7 +139,7 @@ export function FoodSuccessTracker() {
 
       setAttempts(data || []);
     } catch (error: any) {
-      console.error("Error loading attempts:", error);
+      logger.error("Error loading attempts:", error);
       toast.error("Failed to load food attempts");
     } finally {
       setLoading(false);
@@ -157,7 +158,7 @@ export function FoodSuccessTracker() {
       if (error) throw error;
       setAchievements(data || []);
     } catch (error: any) {
-      console.error("Error loading achievements:", error);
+      logger.error("Error loading achievements:", error);
     }
   }, [activeKidId]);
 
@@ -192,7 +193,7 @@ export function FoodSuccessTracker() {
       loadAttempts();
       loadAchievements(); // Reload to show new achievements
     } catch (error: any) {
-      console.error("Error adding attempt:", error);
+      logger.error("Error adding attempt:", error);
       toast.error("Failed to log attempt");
     } finally {
       setLoading(false);

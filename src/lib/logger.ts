@@ -36,7 +36,7 @@ class Logger {
    */
   debug(message: string, ...args: unknown[]): void {
     if (this.isDev) {
-      console.debug(`[DEBUG] ${message}`, ...args);
+      logger.debug(`[DEBUG] ${message}`, ...args);
     }
   }
 
@@ -46,7 +46,7 @@ class Logger {
    */
   info(message: string, ...args: unknown[]): void {
     if (this.isDev) {
-      console.info(`[INFO] ${message}`, ...args);
+      logger.info(`[INFO] ${message}`, ...args);
     }
   }
 
@@ -55,7 +55,7 @@ class Logger {
    * Use for non-critical issues that should be investigated
    */
   warn(message: string, ...args: unknown[]): void {
-    console.warn(`[WARN] ${message}`, ...args);
+    logger.warn(`[WARN] ${message}`, ...args);
   }
 
   /**
@@ -63,7 +63,7 @@ class Logger {
    * Use for errors that need immediate attention
    */
   error(message: string, error?: unknown, ...args: unknown[]): void {
-    console.error(`[ERROR] ${message}`, error, ...args);
+    logger.error(`[ERROR] ${message}`, error, ...args);
   }
 
   /**

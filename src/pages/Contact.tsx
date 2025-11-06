@@ -8,6 +8,7 @@ import { ArrowLeft, Mail, MessageSquare } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { captureContactFormLead } from "@/lib/lead-capture";
+import { logger } from "@/lib/logger";
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -36,10 +37,10 @@ const Contact = () => {
         setFormData({ name: "", email: "", subject: "", message: "" });
       } else {
         toast.error("There was an issue submitting your message. Please try again or email us directly.");
-        console.error("Lead capture error:", result.error);
+        logger.error("Lead capture error:", result.error);
       }
     } catch (error) {
-      console.error("Contact form error:", error);
+      logger.error("Contact form error:", error);
       toast.error("There was an issue submitting your message. Please try again or email us directly.");
     } finally {
       setIsSubmitting(false);

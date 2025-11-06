@@ -59,6 +59,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { logger } from "@/lib/logger";
 
 interface UserProfile {
   id: string;
@@ -116,7 +117,7 @@ export function UserManagementDashboard() {
       };
       setUserStats(stats);
     } catch (error) {
-      console.error("Error loading users:", error);
+      logger.error("Error loading users:", error);
       toast.error("Failed to load users");
     } finally {
       setLoading(false);
@@ -163,7 +164,7 @@ export function UserManagementDashboard() {
       setBanUserId(null);
       loadUsers();
     } catch (error) {
-      console.error("Error banning/unbanning user:", error);
+      logger.error("Error banning/unbanning user:", error);
       toast.error(ban ? "Failed to ban user" : "Failed to unban user");
     }
   };
@@ -179,7 +180,7 @@ export function UserManagementDashboard() {
       toast.success("User promoted to admin");
       loadUsers();
     } catch (error) {
-      console.error("Error making admin:", error);
+      logger.error("Error making admin:", error);
       toast.error("Failed to promote user");
     }
   };
@@ -195,7 +196,7 @@ export function UserManagementDashboard() {
       toast.success("Admin role removed");
       loadUsers();
     } catch (error) {
-      console.error("Error removing admin:", error);
+      logger.error("Error removing admin:", error);
       toast.error("Failed to remove admin role");
     }
   };

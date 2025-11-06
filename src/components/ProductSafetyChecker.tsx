@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ShieldCheck, Search, ScanBarcode, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { logger } from "@/lib/logger";
 
 interface ProductSafetyCheckerProps {
   kidName: string;
@@ -127,7 +128,7 @@ export function ProductSafetyChecker({ kidName, kidAllergens }: ProductSafetyChe
         });
       }
     } catch (error) {
-      console.error('Lookup error:', error);
+      logger.error('Lookup error:', error);
       toast({
         title: "Error",
         description: "Failed to lookup product. Please try again.",

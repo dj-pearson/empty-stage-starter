@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { MapPin, Award, Users } from "lucide-react";
+import { logger } from "@/lib/logger";
 
 interface AisleContributionDialogProps {
   open: boolean;
@@ -44,7 +45,7 @@ export function AisleContributionDialog({
 
         setUserStats(data);
       } catch (error) {
-        console.error('Error loading user stats:', error);
+        logger.error('Error loading user stats:', error);
       }
     };
 
@@ -133,7 +134,7 @@ export function AisleContributionDialog({
       onContribute();
       onOpenChange(false);
     } catch (error) {
-      console.error('Error submitting contribution:', error);
+      logger.error('Error submitting contribution:', error);
       toast.error("Failed to save contribution");
     } finally {
       setIsSubmitting(false);

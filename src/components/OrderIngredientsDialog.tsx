@@ -102,7 +102,7 @@ export function OrderIngredientsDialog({
         storesFound: foundStores.length,
       });
     } catch (error) {
-      console.error('Error finding stores:', error);
+      logger.error('Error finding stores:', error);
       toast.error('Failed to find stores. Please try again.');
       await trackInstacartUsage('error', { error: 'store_search_failed' });
     } finally {
@@ -134,7 +134,7 @@ export function OrderIngredientsDialog({
       
       toast.success('Ingredients matched to products');
     } catch (error) {
-      console.error('Error matching ingredients:', error);
+      logger.error('Error matching ingredients:', error);
       toast.error('Failed to match ingredients');
       await trackInstacartUsage('error', { error: 'ingredient_matching_failed' });
     } finally {
@@ -182,7 +182,7 @@ export function OrderIngredientsDialog({
         total: order.total,
       });
     } catch (error) {
-      console.error('Error creating cart:', error);
+      logger.error('Error creating cart:', error);
       toast.error('Failed to create cart');
       await trackInstacartUsage('error', { error: 'cart_creation_failed' });
     } finally {

@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 
 interface OptimizationResult {
   url: string;
@@ -164,7 +165,7 @@ export function ContentOptimizer() {
         throw new Error(data.error || "Optimization failed");
       }
     } catch (error: any) {
-      console.error("Optimization error:", error);
+      logger.error("Optimization error:", error);
       toast.error(error.message || "Failed to optimize content");
     } finally {
       setIsAnalyzing(false);
@@ -196,7 +197,7 @@ export function ContentOptimizer() {
         throw new Error(data.error || "Analysis failed");
       }
     } catch (error: any) {
-      console.error("Semantic analysis error:", error);
+      logger.error("Semantic analysis error:", error);
       toast.error(error.message || "Failed to analyze semantic keywords");
     } finally {
       setIsAnalyzing(false);

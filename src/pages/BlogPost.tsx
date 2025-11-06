@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import { logger } from "@/lib/logger";
 
 interface BlogPostData {
   id: string;
@@ -62,7 +63,7 @@ const BlogPost = () => {
       .single();
 
     if (error) {
-      console.error("Error fetching post:", error);
+      logger.error("Error fetching post:", error);
       setPost(null);
     } else {
       setPost(data);
@@ -74,7 +75,7 @@ const BlogPost = () => {
       //     .update({ views: (data.views || 0) + 1 })
       //     .eq("id", data.id);
       // } catch (e) {
-      //   console.warn("View increment skipped:", e);
+      //   logger.warn("View increment skipped:", e);
       // }
 
       // Fetch related posts

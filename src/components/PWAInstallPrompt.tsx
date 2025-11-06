@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { X, Download, Smartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { haptic } from "@/lib/haptics";
+import { logger } from "@/lib/logger";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -78,10 +79,10 @@ export function PWAInstallPrompt() {
     const { outcome } = await deferredPrompt.userChoice;
 
     if (outcome === "accepted") {
-      console.log("User accepted the install prompt");
+      logger.debug("User accepted the install prompt");
       haptic.success();
     } else {
-      console.log("User dismissed the install prompt");
+      logger.debug("User dismissed the install prompt");
     }
 
     // Clear the deferred prompt

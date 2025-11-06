@@ -11,6 +11,7 @@ import { Plus, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { GroceryList } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
+import { logger } from "@/lib/logger";
 
 interface GroceryListSelectorProps {
   userId: string;
@@ -63,7 +64,7 @@ export function GroceryListSelector({
           }
         }
       } catch (err) {
-        console.error('Error loading grocery lists:', err);
+        logger.error('Error loading grocery lists:', err);
       } finally {
         setLoading(false);
       }

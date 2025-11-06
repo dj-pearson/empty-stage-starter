@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { logger } from "@/lib/logger";
 
 interface IntegrationConfig {
   id: string;
@@ -136,9 +137,9 @@ export function AdminIntegrationManager() {
       //   .select('*');
       
       // For now, using local state
-      console.log('Loading integration configs...');
+      logger.debug('Loading integration configs...');
     } catch (error) {
-      console.error('Error loading integration configs:', error);
+      logger.error('Error loading integration configs:', error);
     }
   };
 
@@ -164,7 +165,7 @@ export function AdminIntegrationManager() {
       ];
       setMetrics(mockMetrics);
     } catch (error) {
-      console.error('Error loading integration metrics:', error);
+      logger.error('Error loading integration metrics:', error);
     }
   };
 
@@ -202,7 +203,7 @@ export function AdminIntegrationManager() {
       // Clear editing state
       setEditingKeys(prev => ({ ...prev, [integrationId]: '' }));
     } catch (error) {
-      console.error('Error saving API key:', error);
+      logger.error('Error saving API key:', error);
       toast.error('Failed to save API key');
     } finally {
       setLoading(false);
@@ -239,7 +240,7 @@ export function AdminIntegrationManager() {
         description: 'Integration is working correctly',
       });
     } catch (error) {
-      console.error('Error testing connection:', error);
+      logger.error('Error testing connection:', error);
       toast.error('Connection test failed');
       
       setIntegrations(prev =>
@@ -267,7 +268,7 @@ export function AdminIntegrationManager() {
 
       toast.success(enabled ? 'Integration enabled' : 'Integration disabled');
     } catch (error) {
-      console.error('Error toggling integration:', error);
+      logger.error('Error toggling integration:', error);
       toast.error('Failed to update integration status');
     } finally {
       setLoading(false);

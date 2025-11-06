@@ -11,6 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import { Gift, TrendingUp, Users, Award } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { logger } from "@/lib/logger";
 
 interface ReferralConfig {
   id: string;
@@ -65,7 +66,7 @@ export function ReferralProgramManager() {
         setEditingConfig(config);
       }
     } catch (error: any) {
-      console.error("Error loading configs:", error);
+      logger.error("Error loading configs:", error);
       toast({ title: "Error loading configs", description: error.message, variant: "destructive" });
     } finally {
       setLoading(false);
@@ -111,7 +112,7 @@ export function ReferralProgramManager() {
         top_referrers: topReferrersArray,
       });
     } catch (error: any) {
-      console.error("Error loading stats:", error);
+      logger.error("Error loading stats:", error);
     }
   };
 
@@ -140,7 +141,7 @@ export function ReferralProgramManager() {
       toast({ title: "Success", description: "Referral program config updated" });
       loadConfigs();
     } catch (error: any) {
-      console.error("Error saving config:", error);
+      logger.error("Error saving config:", error);
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   };

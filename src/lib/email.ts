@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 export interface EmailSubscriptions {
   welcome_emails: boolean;
@@ -38,13 +39,13 @@ export async function getEmailSubscriptions(): Promise<EmailSubscriptions | null
       .maybeSingle();
 
     if (error) {
-      console.error("Failed to fetch email subscriptions:", error);
+      logger.error("Failed to fetch email subscriptions:", error);
       return null;
     }
 
     return data as EmailSubscriptions;
   } catch (error) {
-    console.error("Failed to fetch email subscriptions:", error);
+    logger.error("Failed to fetch email subscriptions:", error);
     return null;
   }
 }
@@ -74,7 +75,7 @@ export async function updateEmailSubscriptions(
       .eq("user_id", user.id);
 
     if (error) {
-      console.error("Failed to update email subscriptions:", error);
+      logger.error("Failed to update email subscriptions:", error);
       toast.error("Failed to update email preferences", {
         description: error.message,
       });
@@ -84,7 +85,7 @@ export async function updateEmailSubscriptions(
     toast.success("Email preferences updated");
     return true;
   } catch (error) {
-    console.error("Failed to update email subscriptions:", error);
+    logger.error("Failed to update email subscriptions:", error);
     toast.error("Failed to update email preferences");
     return false;
   }
@@ -110,13 +111,13 @@ export async function unsubscribeAll(token: string): Promise<boolean> {
       .maybeSingle();
 
     if (error) {
-      console.error("Failed to unsubscribe:", error);
+      logger.error("Failed to unsubscribe:", error);
       return false;
     }
 
     return !!data;
   } catch (error) {
-    console.error("Failed to unsubscribe:", error);
+    logger.error("Failed to unsubscribe:", error);
     return false;
   }
 }
@@ -140,13 +141,13 @@ export async function getEmailHistory(limit: number = 20): Promise<EmailLog[]> {
       .limit(limit);
 
     if (error) {
-      console.error("Failed to fetch email history:", error);
+      logger.error("Failed to fetch email history:", error);
       return [];
     }
 
     return data as EmailLog[];
   } catch (error) {
-    console.error("Failed to fetch email history:", error);
+    logger.error("Failed to fetch email history:", error);
     return [];
   }
 }
@@ -179,7 +180,7 @@ export async function sendTestEmail(): Promise<boolean> {
     });
 
     if (error) {
-      console.error("Failed to send test email:", error);
+      logger.error("Failed to send test email:", error);
       toast.error("Failed to send test email", {
         description: error.message,
       });
@@ -191,7 +192,7 @@ export async function sendTestEmail(): Promise<boolean> {
     });
     return true;
   } catch (error) {
-    console.error("Failed to send test email:", error);
+    logger.error("Failed to send test email:", error);
     toast.error("Failed to send test email");
     return false;
   }

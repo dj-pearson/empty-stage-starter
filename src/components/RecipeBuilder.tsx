@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 interface RecipeBuilderProps {
   foods: Food[];
@@ -126,7 +127,7 @@ export function RecipeBuilder({ foods, editRecipe, onSave, onCancel, kids, activ
 
       toast.success("AI recipe generated! Review and adjust as needed.");
     } catch (error) {
-      console.error('Error generating recipe:', error);
+      logger.error('Error generating recipe:', error);
       toast.error("Failed to generate recipe. Please try again.");
     } finally {
       setIsGenerating(false);

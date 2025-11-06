@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Barcode, Package } from "lucide-react";
+import { logger } from "@/lib/logger";
 
 export const BarcodeEnrichmentTool = () => {
   const [isProcessingPantry, setIsProcessingPantry] = useState(false);
@@ -31,7 +32,7 @@ export const BarcodeEnrichmentTool = () => {
         toast.error('Enrichment failed', { description: data.error });
       }
     } catch (error) {
-      console.error('Error enriching barcodes:', error);
+      logger.error('Error enriching barcodes:', error);
       toast.error('Error', {
         description: error instanceof Error ? error.message : 'Failed to enrich barcodes'
       });

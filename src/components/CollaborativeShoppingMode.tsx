@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Users, UserCheck, ShoppingBag, Play, StopCircle, Loader2 } from "lucide-react";
 import { GroceryItem } from "@/types";
+import { logger } from "@/lib/logger";
 
 interface ShoppingSession {
   id: string;
@@ -65,7 +66,7 @@ export function CollaborativeShoppingMode({
 
         setActiveSession(data as any);
       } catch (error) {
-        console.error('Error loading shopping session:', error);
+        logger.error('Error loading shopping session:', error);
       }
     };
 
@@ -136,7 +137,7 @@ export function CollaborativeShoppingMode({
         description: "Household members can now see your progress in real-time"
       });
     } catch (error) {
-      console.error('Error starting session:', error);
+      logger.error('Error starting session:', error);
       toast.error("Failed to start shopping session");
     } finally {
       setIsStarting(false);
@@ -161,7 +162,7 @@ export function CollaborativeShoppingMode({
       setActiveSession(null);
       toast.success("Shopping session ended");
     } catch (error) {
-      console.error('Error ending session:', error);
+      logger.error('Error ending session:', error);
       toast.error("Failed to end shopping session");
     } finally {
       setIsEnding(false);

@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { RecipeCollection } from "@/types";
 import { Folder, Star, Heart, Zap, Pizza, Clock, Users, Sparkles } from "lucide-react";
+import { logger } from "@/lib/logger";
 
 const COLLECTION_ICONS = [
   { value: "folder", icon: Folder, label: "Folder" },
@@ -161,7 +162,7 @@ export function CreateCollectionDialog({
 
       handleClose();
     } catch (error) {
-      console.error('Error saving collection:', error);
+      logger.error('Error saving collection:', error);
       toast.error(editCollection ? "Failed to update collection" : "Failed to create collection");
     } finally {
       setSaving(false);

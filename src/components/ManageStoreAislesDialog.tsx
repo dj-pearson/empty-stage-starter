@@ -26,6 +26,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, GripVertical, Edit, Trash2, Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { logger } from "@/lib/logger";
 
 interface StoreLayout {
   id: string;
@@ -87,7 +88,7 @@ export function ManageStoreAislesDialog({
 
       setAisles(data as unknown as StoreAisle[] || []);
     } catch (error) {
-      console.error('Error loading aisles:', error);
+      logger.error('Error loading aisles:', error);
       toast.error("Failed to load aisles");
     } finally {
       setLoading(false);
@@ -126,7 +127,7 @@ export function ManageStoreAislesDialog({
       setNewAisleName("");
       setNewAisleNumber("");
     } catch (error) {
-      console.error('Error adding aisle:', error);
+      logger.error('Error adding aisle:', error);
       toast.error("Failed to add aisle");
     } finally {
       setAdding(false);
@@ -150,7 +151,7 @@ export function ManageStoreAislesDialog({
       setDeleteDialogOpen(false);
       setAisleToDelete(null);
     } catch (error) {
-      console.error('Error deleting aisle:', error);
+      logger.error('Error deleting aisle:', error);
       toast.error("Failed to delete aisle");
     } finally {
       setDeleting(false);

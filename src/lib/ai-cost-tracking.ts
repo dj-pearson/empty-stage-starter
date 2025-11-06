@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 export interface AIUsageLog {
   id: string;
@@ -69,13 +70,13 @@ const { data, error } = await (supabase as any).rpc("log_ai_usage", {
     });
 
     if (error) {
-      console.error("Failed to log AI usage:", error);
+      logger.error("Failed to log AI usage:", error);
       return null;
     }
 
     return data as string;
   } catch (error) {
-    console.error("Failed to log AI usage:", error);
+    logger.error("Failed to log AI usage:", error);
     return null;
   }
 }
@@ -99,7 +100,7 @@ const { data, error } = await (supabase as any).rpc("check_ai_budget", {
     });
 
     if (error) {
-      console.error("Failed to check AI budget:", error);
+      logger.error("Failed to check AI budget:", error);
       return null;
     }
 
@@ -107,7 +108,7 @@ const { data, error } = await (supabase as any).rpc("check_ai_budget", {
 
     return data[0] as BudgetCheck;
   } catch (error) {
-    console.error("Failed to check AI budget:", error);
+    logger.error("Failed to check AI budget:", error);
     return null;
   }
 }
@@ -131,13 +132,13 @@ const { data, error } = await (supabase as any)
       .limit(limit);
 
     if (error) {
-      console.error("Failed to fetch AI usage logs:", error);
+      logger.error("Failed to fetch AI usage logs:", error);
       return [];
     }
 
     return data as AIUsageLog[];
   } catch (error) {
-    console.error("Failed to fetch AI usage logs:", error);
+    logger.error("Failed to fetch AI usage logs:", error);
     return [];
   }
 }
@@ -154,13 +155,13 @@ const { data, error } = await (supabase as any)
       .limit(days);
 
     if (error) {
-      console.error("Failed to fetch daily cost summary:", error);
+      logger.error("Failed to fetch daily cost summary:", error);
       return [];
     }
 
     return data as CostSummary[];
   } catch (error) {
-    console.error("Failed to fetch daily cost summary:", error);
+    logger.error("Failed to fetch daily cost summary:", error);
     return [];
   }
 }
@@ -188,13 +189,13 @@ const { data, error } = await (supabase as any)
       .order("total_cost_cents", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch cost by endpoint:", error);
+      logger.error("Failed to fetch cost by endpoint:", error);
       return [];
     }
 
     return data as any[];
   } catch (error) {
-    console.error("Failed to fetch cost by endpoint:", error);
+    logger.error("Failed to fetch cost by endpoint:", error);
     return [];
   }
 }
@@ -223,13 +224,13 @@ const { data, error } = await (supabase as any)
       .order("total_cost_cents", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch cost by model:", error);
+      logger.error("Failed to fetch cost by model:", error);
       return [];
     }
 
     return data as any[];
   } catch (error) {
-    console.error("Failed to fetch cost by model:", error);
+    logger.error("Failed to fetch cost by model:", error);
     return [];
   }
 }
@@ -258,13 +259,13 @@ const { data, error } = await (supabase as any)
       .limit(limit);
 
     if (error) {
-      console.error("Failed to fetch cost by user:", error);
+      logger.error("Failed to fetch cost by user:", error);
       return [];
     }
 
     return data as any[];
   } catch (error) {
-    console.error("Failed to fetch cost by user:", error);
+    logger.error("Failed to fetch cost by user:", error);
     return [];
   }
 }

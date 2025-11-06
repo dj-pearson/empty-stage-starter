@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { Recipe, Food } from '@/types';
 import { toast } from 'sonner';
+import { logger } from "@/lib/logger";
 
 interface RecipeExportActionsProps {
   recipe: Recipe;
@@ -105,7 +106,7 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
       });
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      console.error('Failed to copy:', error);
+      logger.error('Failed to copy:', error);
       toast.error('Failed to copy to clipboard');
     }
   };
@@ -120,7 +121,7 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
       toast.success('Shopping list copied!');
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      console.error('Failed to copy:', error);
+      logger.error('Failed to copy:', error);
       toast.error('Failed to copy to clipboard');
     }
   };
@@ -249,7 +250,7 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
       toast.success('Recipe shared!');
     } catch (error: any) {
       if (error.name !== 'AbortError') {
-        console.error('Error sharing:', error);
+        logger.error('Error sharing:', error);
         toast.error('Failed to share recipe');
       }
     }

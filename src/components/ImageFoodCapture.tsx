@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { FoodCategory } from "@/types";
+import { logger } from "@/lib/logger";
 
 interface FoodIdentification {
   name: string;
@@ -52,7 +53,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
   const quantityValid = editedQuantity.trim().length > 0 && /^\d+$/.test(editedQuantity) && parseInt(editedQuantity) >= 1;
   const startCamera = async () => {
     try {
-      console.log('Starting Html5Qrcode camera...');
+      logger.debug('Starting Html5Qrcode camera...');
       setCapturedImage(null);
       setIdentifiedFood(null);
       setShowCamera(true);
@@ -67,7 +68,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
           await scannerRef.current.clear();
         } catch (error) {
           // Ignore cleanup errors - scanner may already be stopped
-          console.debug('Scanner cleanup error (expected):', error);
+          logger.debug('Scanner cleanup error (expected):', error);
         }
         scannerRef.current = null;
       }
@@ -106,9 +107,9 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
         () => { /* ignore decode errors */ }
       );
 
-      console.log('Html5Qrcode camera started on device:', back.label || back.id);
+      logger.debug('Html5Qrcode camera started on device:', back.label || back.id);
     } catch (error) {
-      console.error('Error starting camera with Html5Qrcode:', error);
+      logger.error('Error starting camera with Html5Qrcode:', error);
       toast({
         title: "Camera Error",
         description: (error instanceof Error ? error.message : 'Unable to access camera') + (isEmbedded ? ' (embedded preview may restrict camera; open in a new tab if issues persist)' : ''),
@@ -126,7 +127,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
         scannerRef.current = null;
       }
     } catch (e) {
-      console.error('Error stopping camera:', e);
+      logger.error('Error stopping camera:', e);
     }
 
     if (stream) {
@@ -139,7 +140,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
   const capturePhoto = async () => {
     const videoEl = document.querySelector('#food-camera video') as HTMLVideoElement | null;
     if (!videoEl) {
-      console.error('No video element found in scanner container');
+      logger.error('No video element found in scanner container');
       toast({
         title: "Camera Not Ready",
         description: "Please wait for the camera to fully load",
@@ -148,7 +149,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
       return;
     }
 
-    console.log('Video dimensions:', videoEl.videoWidth, 'x', videoEl.videoHeight);
+    logger.debug('Video dimensions:', videoEl.videoWidth, 'x', videoEl.videoHeight);
 
     if (videoEl.videoWidth === 0 || videoEl.videoHeight === 0) {
       toast({
@@ -166,7 +167,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
     if (ctx) {
       ctx.drawImage(videoEl, 0, 0);
       const imageData = canvas.toDataURL('image/jpeg', 0.85);
-      console.log('Image captured, data URL length:', imageData.length);
+      logger.debug('Image captured, data URL length:', imageData.length);
       setCapturedImage(imageData);
       await stopCamera();
       analyzeImage(imageData);
@@ -210,7 +211,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
         });
       }
     } catch (error) {
-      console.error('Error analyzing image:', error);
+      logger.error('Error analyzing image:', error);
       toast({
         title: "Analysis Failed",
         description: error instanceof Error ? error.message : "Failed to identify food from image",

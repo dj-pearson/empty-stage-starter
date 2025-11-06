@@ -35,6 +35,7 @@ import {
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import blogTitlesData from "../../../Blog_Titles.md?raw";
+import { logger } from "@/lib/logger";
 
 interface BlogPost {
   id: string;
@@ -105,7 +106,7 @@ export function BlogCMSManager() {
         }
       }
     } catch (error: any) {
-      console.error("Error loading title bank insights:", error);
+      logger.error("Error loading title bank insights:", error);
     }
   };
 
@@ -118,7 +119,7 @@ export function BlogCMSManager() {
       if (error) throw error;
       setTitleSuggestions(Array.isArray(data) ? data : []);
     } catch (error: any) {
-      console.error("Error loading title suggestions:", error);
+      logger.error("Error loading title suggestions:", error);
       toast.error("Failed to load title suggestions");
     }
   };
@@ -160,7 +161,7 @@ export function BlogCMSManager() {
         toast.error(data.error || "Failed to populate title bank");
       }
     } catch (error: any) {
-      console.error("Error populating title bank:", error);
+      logger.error("Error populating title bank:", error);
       toast.error(error.message || "Failed to populate title bank");
     } finally {
       setLoadingTitleBank(false);
@@ -201,7 +202,7 @@ export function BlogCMSManager() {
         toast.error("Webhook test failed");
       }
     } catch (error: any) {
-      console.error("Error testing webhook:", error);
+      logger.error("Error testing webhook:", error);
       toast.error(error.message || "Failed to send test webhook");
     } finally {
       setTestingWebhook(false);
@@ -266,7 +267,7 @@ export function BlogCMSManager() {
         toast.error(`Webhook returned status ${response.status}`);
       }
     } catch (error: any) {
-      console.error("Error resending webhook:", error);
+      logger.error("Error resending webhook:", error);
       toast.error(error.message || "Failed to resend webhook");
     } finally {
       setResendingWebhook(null);
@@ -282,7 +283,7 @@ export function BlogCMSManager() {
       if (error) throw error;
       setPosts(data || []);
     } catch (error: any) {
-      console.error("Error loading posts:", error);
+      logger.error("Error loading posts:", error);
       toast.error(error.message);
     }
   };
@@ -393,11 +394,11 @@ export function BlogCMSManager() {
             }),
           });
         } catch (e) {
-          console.error("Webhook error:", e);
+          logger.error("Webhook error:", e);
         }
       }
     } catch (error: any) {
-      console.error("Error generating AI content:", error);
+      logger.error("Error generating AI content:", error);
       toast.error(error.message || "Failed to generate content");
     } finally {
       setAiGenerating(false);
@@ -432,7 +433,7 @@ export function BlogCMSManager() {
       setEditingPost(null);
       loadPosts();
     } catch (error: any) {
-      console.error("Error updating post:", error);
+      logger.error("Error updating post:", error);
       toast.error(error.message || "Failed to update post");
     }
   };
@@ -465,7 +466,7 @@ export function BlogCMSManager() {
       setShowSocialDialog(true);
       toast.success("Social media posts generated!");
     } catch (error: any) {
-      console.error("Error generating social content:", error);
+      logger.error("Error generating social content:", error);
       toast.error(error.message || "Failed to generate social posts");
     } finally {
       setGeneratingSocial(null);
@@ -491,7 +492,7 @@ export function BlogCMSManager() {
       // Generate social media posts about this blog
       const blogUrl = `https://tryeatpal.com/blog/${post.slug}`;
 
-      console.log("Calling generate-social-content for published post:", postId);
+      logger.debug("Calling generate-social-content for published post:", postId);
 
       // Read webhook URL if configured and let the edge function auto-publish
       const webhookUrl = localStorage.getItem("blog_webhook_url");
@@ -512,10 +513,10 @@ export function BlogCMSManager() {
           },
         });
 
-      console.log("Social generation response:", { socialData, socialError });
+      logger.debug("Social generation response:", { socialData, socialError });
 
       if (socialError) {
-        console.error("Error generating social content:", socialError);
+        logger.error("Error generating social content:", socialError);
         toast.warning("Post published, but failed to generate social posts");
       } else if (socialData?.content || socialData?.facebook || socialData?.twitter) {
         // Handle both wrapped and unwrapped content formats
@@ -544,7 +545,7 @@ export function BlogCMSManager() {
 
       loadPosts();
     } catch (error: any) {
-      console.error("Error publishing post:", error);
+      logger.error("Error publishing post:", error);
       toast.error(error.message || "Failed to publish post");
     }
   };
@@ -560,7 +561,7 @@ export function BlogCMSManager() {
       toast.success("Post unpublished");
       loadPosts();
     } catch (error: any) {
-      console.error("Error unpublishing post:", error);
+      logger.error("Error unpublishing post:", error);
       toast.error(error.message || "Failed to unpublish post");
     }
   };

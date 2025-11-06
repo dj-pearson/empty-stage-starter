@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { GroceryList } from "@/types";
 import { Trash2, Archive, Star, StarOff, ArchiveRestore } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { logger } from "@/lib/logger";
 
 interface ManageGroceryListsDialogProps {
   open: boolean;
@@ -75,7 +76,7 @@ export function ManageGroceryListsDialog({
         setLists(data as unknown as GroceryList[]);
       }
     } catch (err) {
-      console.error('Error loading lists:', err);
+      logger.error('Error loading lists:', err);
     } finally {
       setLoading(false);
     }
@@ -100,7 +101,7 @@ export function ManageGroceryListsDialog({
       toast.success("Default list updated");
       loadLists();
     } catch (error) {
-      console.error('Error setting default:', error);
+      logger.error('Error setting default:', error);
       toast.error("Failed to set default list");
     }
   };
@@ -122,7 +123,7 @@ export function ManageGroceryListsDialog({
       toast.success(archive ? "List archived" : "List restored");
       loadLists();
     } catch (error) {
-      console.error('Error archiving list:', error);
+      logger.error('Error archiving list:', error);
       toast.error(archive ? "Failed to archive list" : "Failed to restore list");
     }
   };
@@ -150,7 +151,7 @@ export function ManageGroceryListsDialog({
       setDeleteId(null);
       loadLists();
     } catch (error) {
-      console.error('Error deleting list:', error);
+      logger.error('Error deleting list:', error);
       toast.error("Failed to delete list");
     }
   };

@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Loader2, ArrowUp, ArrowDown, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { logger } from "@/lib/logger";
 
 interface Plan {
   id: string;
@@ -64,7 +65,7 @@ export function SubscriptionManagementDialog({
         features: Array.isArray(plan.features) ? plan.features as string[] : []
       })));
     } catch (error) {
-      console.error("Error loading plans:", error);
+      logger.error("Error loading plans:", error);
       toast.error("Failed to load plans");
     }
   };
@@ -101,7 +102,7 @@ export function SubscriptionManagementDialog({
       onOpenChange(false);
       navigate("/pricing");
     } catch (error) {
-      console.error("Error managing subscription:", error);
+      logger.error("Error managing subscription:", error);
       toast.error("Failed to update subscription. Please contact support.");
     } finally {
       setLoading(false);

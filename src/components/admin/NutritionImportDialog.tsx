@@ -12,6 +12,7 @@ import {
 import { Upload, Download, AlertCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { logger } from "@/lib/logger";
 
 type NutritionCsvRow = {
   id?: string;
@@ -194,7 +195,7 @@ Almonds,Snack,1 oz,16 oz,16,almonds,164,6,6,14,tree nuts`;
       setErrors([]);
       onImportComplete();
     } catch (error) {
-      console.error("Import error:", error);
+      logger.error("Import error:", error);
       toast({
         title: "Import failed",
         description: error instanceof Error ? error.message : "Failed to import nutrition data",

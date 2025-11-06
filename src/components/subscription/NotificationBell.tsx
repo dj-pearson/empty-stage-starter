@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
+import { logger } from "@/lib/logger";
 
 interface Notification {
   id: string;
@@ -76,7 +77,7 @@ export function NotificationBell() {
       setNotifications((data as any) || []);
       setUnreadCount((data as any)?.filter((n: any) => !n.is_read).length || 0);
     } catch (error: any) {
-      console.error("Error fetching notifications:", error);
+      logger.error("Error fetching notifications:", error);
     } finally {
       setLoading(false);
     }
@@ -96,7 +97,7 @@ export function NotificationBell() {
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (error: any) {
-      console.error("Error marking notification as read:", error);
+      logger.error("Error marking notification as read:", error);
     }
   };
 
@@ -111,7 +112,7 @@ export function NotificationBell() {
 
       setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
     } catch (error: any) {
-      console.error("Error dismissing notification:", error);
+      logger.error("Error dismissing notification:", error);
     }
   };
 

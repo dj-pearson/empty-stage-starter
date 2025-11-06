@@ -100,7 +100,7 @@ export function FoodChainingRecommendations() {
           handleSelectFood(foodArray[0]);
         }
       } catch (error: any) {
-        console.error("Error loading successful foods:", error);
+        logger.error("Error loading successful foods:", error);
         toast.error("Failed to load food success data");
       } finally {
         setLoading(false);
@@ -136,7 +136,7 @@ export function FoodChainingRecommendations() {
         await generateChainSuggestions(sourceFoodId);
       }
     } catch (error: any) {
-      console.error("Error loading chain suggestions:", error);
+      logger.error("Error loading chain suggestions:", error);
       toast.error("Failed to load recommendations");
     } finally {
       setLoading(false);
@@ -222,7 +222,7 @@ export function FoodChainingRecommendations() {
         toast.success("Generated recommendations!");
       }
     } catch (error: any) {
-      console.error("Error generating suggestions:", error);
+      logger.error("Error generating suggestions:", error);
     }
   };
 

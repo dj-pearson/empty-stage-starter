@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { Link2, ExternalLink, Search, TrendingUp, FileText, AlertCircle, CheckCircle } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { logger } from "@/lib/logger";
 
 interface BlogPost {
   id: string;
@@ -58,7 +59,7 @@ const BlogInternalLinker = () => {
       .order("published_at", { ascending: false });
 
     if (error) {
-      console.error("Error fetching posts:", error);
+      logger.error("Error fetching posts:", error);
       toast.error("Failed to load blog posts");
       return;
     }
@@ -190,7 +191,7 @@ const BlogInternalLinker = () => {
 
       toast.success(`Found ${foundOpportunities.length} internal linking opportunities!`);
     } catch (error) {
-      console.error("Error scanning posts:", error);
+      logger.error("Error scanning posts:", error);
       toast.error("Failed to scan posts for link opportunities");
     } finally {
       setIsScanning(false);
@@ -230,7 +231,7 @@ const BlogInternalLinker = () => {
   };
 
   const insertLinkIntoContent = (content: string, keyword: string, targetSlug: string, targetTitle: string): string => {
-    console.log("Attempting to insert link for keyword:", keyword);
+    logger.debug("Attempting to insert link for keyword:", keyword);
     
     // Clean keyword for better matching
     const cleanKeyword = keyword.trim();
@@ -245,11 +246,11 @@ const BlogInternalLinker = () => {
     const match = content.match(notInLinkRegex);
     
     if (!match) {
-      console.log("No match found for keyword:", cleanKeyword);
+      logger.debug("No match found for keyword:", cleanKeyword);
       return content;
     }
 
-    console.log("Match found:", match[0]);
+    logger.debug("Match found:", match[0]);
 
     // Check if content is Markdown or HTML
     const isMarkdown = content.includes('##') || content.includes('**') || /\[.*\]\(.*\)/.test(content);
@@ -265,7 +266,7 @@ const BlogInternalLinker = () => {
     
     // Replace only the first occurrence
     const updatedContent = content.replace(notInLinkRegex, link);
-    console.log("Link inserted successfully");
+    logger.debug("Link inserted successfully");
     return updatedContent;
   };
 
@@ -275,7 +276,7 @@ const BlogInternalLinker = () => {
       return;
     }
 
-    console.log(`Starting approval for ${indices.length} opportunities`);
+    logger.debug(`Starting approval for ${indices.length} opportunities`);
     setIsApproving(true);
     let successCount = 0;
     let errorCount = 0;
@@ -285,7 +286,7 @@ const BlogInternalLinker = () => {
       for (const index of indices) {
         const opp = opportunities[index];
         
-        console.log(`Processing opportunity ${index + 1}/${indices.length}:`, {
+        logger.debug(`Processing opportunity ${index + 1}/${indices.length}:`, {
           source: opp.sourcePost.title,
           target: opp.targetPost.title,
           keyword: opp.matchedKeywords[0]
@@ -300,11 +301,11 @@ const BlogInternalLinker = () => {
             .single();
 
           if (fetchError) {
-            console.error("Fetch error:", fetchError);
+            logger.error("Fetch error:", fetchError);
             throw fetchError;
           }
 
-          console.log("Original content length:", currentPost.content.length);
+          logger.debug("Original content length:", currentPost.content.length);
 
           // Insert the link into the content
           const updatedContent = insertLinkIntoContent(
@@ -316,12 +317,12 @@ const BlogInternalLinker = () => {
 
           // Check if content actually changed
           if (updatedContent === currentPost.content) {
-            console.warn("No changes made - keyword not found in content");
+            logger.warn("No changes made - keyword not found in content");
             noMatchCount++;
             continue;
           }
 
-          console.log("Updated content length:", updatedContent.length);
+          logger.debug("Updated content length:", updatedContent.length);
 
           // Update the post via secure RPC (bypasses RLS with admin check)
           const { error: rpcError } = await supabase.rpc('apply_internal_link' as any, {
@@ -330,19 +331,19 @@ const BlogInternalLinker = () => {
           });
 
           if (rpcError) {
-            console.error("RPC update error:", rpcError);
+            logger.error("RPC update error:", rpcError);
             throw rpcError;
           }
 
-          console.log("Successfully updated post");
+          logger.debug("Successfully updated post");
           successCount++;
         } catch (error) {
-          console.error(`Error approving opportunity ${index}:`, error);
+          logger.error(`Error approving opportunity ${index}:`, error);
           errorCount++;
         }
       }
 
-      console.log(`Approval complete: ${successCount} success, ${errorCount} errors, ${noMatchCount} no match`);
+      logger.debug(`Approval complete: ${successCount} success, ${errorCount} errors, ${noMatchCount} no match`);
 
       // Remove approved opportunities from the list
       const remainingOpportunities = opportunities.filter((_, i) => !indices.includes(i));
@@ -367,7 +368,7 @@ const BlogInternalLinker = () => {
       // Refresh posts data
       await fetchPosts();
     } catch (error) {
-      console.error("Error approving opportunities:", error);
+      logger.error("Error approving opportunities:", error);
       toast.error("Failed to approve opportunities");
     } finally {
       setIsApproving(false);

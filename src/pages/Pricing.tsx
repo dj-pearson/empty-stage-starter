@@ -21,6 +21,7 @@ import {
 import { toast } from "sonner";
 import { useNavigate, Link } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
+import { logger } from "@/lib/logger";
 
 interface SubscriptionPlan {
   id: string;
@@ -147,7 +148,7 @@ export default function Pricing() {
 
       setPlans(plansWithDiscounts);
     } catch (error: any) {
-      console.error("Error loading plans:", error);
+      logger.error("Error loading plans:", error);
       toast.error("Failed to load pricing plans");
     } finally {
       setLoading(false);
@@ -190,7 +191,7 @@ export default function Pricing() {
         throw new Error("No checkout URL returned");
       }
     } catch (error: any) {
-      console.error("Checkout error:", error);
+      logger.error("Checkout error:", error);
       toast.error("Failed to start checkout. Please try again.");
       setLoading(false);
     }

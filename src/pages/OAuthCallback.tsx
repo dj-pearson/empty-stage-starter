@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { logger } from "@/lib/logger";
 
 const OAuthCallback = () => {
   const location = useLocation();
@@ -11,10 +12,10 @@ const OAuthCallback = () => {
     const state = urlParams.get('state');
     const error = urlParams.get('error');
 
-    console.log('OAuth Callback Handler - processing:', { code: !!code, state: !!state, error });
+    logger.debug('OAuth Callback Handler - processing:', { code: !!code, state: !!state, error });
 
     if (error) {
-      console.error('OAuth error:', error);
+      logger.error('OAuth error:', error);
       // Store error and redirect to admin
       sessionStorage.setItem('gsc_oauth_error', error);
       navigate('/admin?tab=seo', { replace: true });
@@ -22,7 +23,7 @@ const OAuthCallback = () => {
     }
 
     if (code && state) {
-      console.log('Storing OAuth data and redirecting to admin');
+      logger.debug('Storing OAuth data and redirecting to admin');
       // Store OAuth data for processing in admin after authentication
       sessionStorage.setItem('gsc_oauth_code', code);
       sessionStorage.setItem('gsc_oauth_state', state);

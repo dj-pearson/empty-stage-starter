@@ -21,6 +21,7 @@ import { ShoppingCart, Copy, Trash2, Printer, Download, Plus, Share2, FileText, 
 import { toast } from "sonner";
 import { FoodCategory } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 
 const categoryLabels: Record<FoodCategory, string> = {
   protein: "Protein",
@@ -135,7 +136,7 @@ export default function Grocery() {
           setShowAisleContribution(true);
         }
       } catch (error) {
-        console.error('Error checking contribution status:', error);
+        logger.error('Error checking contribution status:', error);
       }
     }
 
@@ -226,7 +227,7 @@ export default function Grocery() {
         });
       }
     } catch (error) {
-      console.error('Error generating restock:', error);
+      logger.error('Error generating restock:', error);
       toast.error("Failed to generate restock suggestions");
     } finally {
       setIsGeneratingRestock(false);

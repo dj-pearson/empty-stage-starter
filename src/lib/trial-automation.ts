@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { triggerEmailSequence } from "./email-automation";
+import { logger } from "@/lib/logger";
 
 /**
  * Trial Automation Library
@@ -36,7 +37,7 @@ export async function initializeTrialAutomation(
     });
 
     if (!sequenceResult.success) {
-      console.error('Failed to enroll in trial sequence:', sequenceResult.error);
+      logger.error('Failed to enroll in trial sequence:', sequenceResult.error);
     }
 
     // 2. Update or create lead record to track trial
@@ -57,7 +58,7 @@ export async function initializeTrialAutomation(
       });
 
     if (leadError) {
-      console.error('Error updating lead for trial:', leadError);
+      logger.error('Error updating lead for trial:', leadError);
     }
 
     // 3. Create admin notification for high-value trial starts
@@ -73,7 +74,7 @@ export async function initializeTrialAutomation(
 
     return { success: true };
   } catch (error: any) {
-    console.error('Error in initializeTrialAutomation:', error);
+    logger.error('Error in initializeTrialAutomation:', error);
     return { success: false, error: error.message };
   }
 }
@@ -118,7 +119,7 @@ export async function trackTrialActivity(
     // Trigger specific interventions based on activity
     await triggerTrialInterventions(userId, activityType, metadata);
   } catch (error) {
-    console.error('Error tracking trial activity:', error);
+    logger.error('Error tracking trial activity:', error);
   }
 }
 
@@ -239,7 +240,7 @@ async function triggerTrialInterventions(
         }]);
     }
   } catch (error) {
-    console.error('Error in triggerTrialInterventions:', error);
+    logger.error('Error in triggerTrialInterventions:', error);
   }
 }
 
@@ -265,7 +266,7 @@ export async function handleTrialConversion(
       .eq('converted_user_id', userId);
 
     if (leadError) {
-      console.error('Error updating lead on conversion:', leadError);
+      logger.error('Error updating lead on conversion:', leadError);
     }
 
     // 2. Cancel trial-related email sequences (table doesn't exist, skip)
@@ -321,7 +322,7 @@ export async function handleTrialConversion(
 
     return { success: true };
   } catch (error: any) {
-    console.error('Error in handleTrialConversion:', error);
+    logger.error('Error in handleTrialConversion:', error);
     return { success: false, error: error.message };
   }
 }
@@ -365,7 +366,7 @@ export async function handleSubscriptionCancellation(
 
     return { success: true };
   } catch (error: any) {
-    console.error('Error in handleSubscriptionCancellation:', error);
+    logger.error('Error in handleSubscriptionCancellation:', error);
     return { success: false, error: error.message };
   }
 }
@@ -471,6 +472,6 @@ async function createAdminNotification(params: {
         is_read: false,
       }]);
   } catch (error) {
-    console.error('Error creating admin notification:', error);
+    logger.error('Error creating admin notification:', error);
   }
 }

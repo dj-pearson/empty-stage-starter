@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { RecipeCollection } from "@/types";
 import { Folder, ChevronDown, Plus, Settings, Star, Heart, Zap, Pizza, Clock, Users, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 const ICON_MAP: Record<string, any> = {
   folder: Folder,
@@ -75,7 +76,7 @@ export function RecipeCollectionsSelector({
 
       setCollections(data as unknown as RecipeCollection[] || []);
     } catch (error) {
-      console.error('Error loading collections:', error);
+      logger.error('Error loading collections:', error);
       toast.error("Failed to load recipe collections");
     } finally {
       setLoading(false);

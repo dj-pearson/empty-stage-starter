@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { FoodCategory } from "@/types";
 import { Html5Qrcode } from "html5-qrcode";
+import { logger } from "@/lib/logger";
 
 interface ParsedIngredient {
   name: string;
@@ -69,7 +70,7 @@ export function ImportRecipeToGroceryDialog({ open, onOpenChange, onImport }: Im
         toast.success(`Found ${data.recipe.ingredients.length} ingredients from "${data.recipe.title}"`);
       }
     } catch (error) {
-      console.error('Error parsing recipe:', error);
+      logger.error('Error parsing recipe:', error);
       toast.error(error instanceof Error ? error.message : "Failed to parse recipe");
     } finally {
       setIsParsing(false);
@@ -95,7 +96,7 @@ export function ImportRecipeToGroceryDialog({ open, onOpenChange, onImport }: Im
         toast.success(`Found ${data.recipe.ingredients.length} ingredients from the recipe photo`);
       }
     } catch (error) {
-      console.error('Error parsing recipe image:', error);
+      logger.error('Error parsing recipe image:', error);
       toast.error(error instanceof Error ? error.message : "Failed to parse recipe from image");
     } finally {
       setIsParsing(false);
@@ -116,7 +117,7 @@ export function ImportRecipeToGroceryDialog({ open, onOpenChange, onImport }: Im
           await scannerRef.current.clear();
         } catch (error) {
           // Ignore cleanup errors - scanner may already be stopped
-          console.debug('Scanner cleanup error (expected):', error);
+          logger.debug('Scanner cleanup error (expected):', error);
         }
         scannerRef.current = null;
       }
@@ -140,7 +141,7 @@ export function ImportRecipeToGroceryDialog({ open, onOpenChange, onImport }: Im
         () => {}
       );
     } catch (error) {
-      console.error('Camera error:', error);
+      logger.error('Camera error:', error);
       toast.error("Failed to start camera");
       setShowCamera(false);
     }
