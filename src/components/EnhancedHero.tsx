@@ -61,17 +61,6 @@ export function EnhancedHero() {
         </div>
 
         <div className="container mx-auto text-center max-w-5xl relative z-10">
-          {/* Launch Badge */}
-          <m.div
-            initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: shouldReduceMotion ? 0 : 0.6 }}
-          >
-            <Badge className="mb-6 bg-accent/10 text-accent border-accent/20 px-4 py-1.5 text-base">
-              🎉 Now Live!
-            </Badge>
-          </m.div>
-
           {/* Main Headline */}
           <m.h1
             initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 30 }}
