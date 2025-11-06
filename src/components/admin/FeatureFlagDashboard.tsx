@@ -72,7 +72,7 @@ export function FeatureFlagDashboard() {
 
       if (error) throw error;
       setFlags(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error loading feature flags",
         description: error.message,
@@ -100,7 +100,7 @@ export function FeatureFlagDashboard() {
         title: "Feature flag updated",
         description: `Flag has been ${!currentEnabled ? "enabled" : "disabled"}`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error updating feature flag",
         description: error.message,
@@ -126,7 +126,7 @@ export function FeatureFlagDashboard() {
         title: "Rollout percentage updated",
         description: `Rollout set to ${percentage}%`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error updating rollout",
         description: error.message,
@@ -164,7 +164,7 @@ export function FeatureFlagDashboard() {
         rollout_percentage: 0,
       });
       fetchFlags();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error creating feature flag",
         description: error.message,
@@ -189,7 +189,7 @@ export function FeatureFlagDashboard() {
         title: "Feature flag deleted",
         description: "The feature flag has been removed",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error deleting feature flag",
         description: error.message,

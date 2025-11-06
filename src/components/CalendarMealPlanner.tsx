@@ -25,19 +25,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Food, PlanEntry, MealSlot } from "@/types";
+import { Food, PlanEntry, MealSlot, Recipe, Kid } from "@/types";
 import { Sparkles, Calendar as CalendarIcon, AlertTriangle, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Users, Copy, MoreVertical } from "lucide-react";
 import { format, addDays, startOfWeek } from "date-fns";
 import { cn } from "@/lib/utils";
 import { DailyMacrosSummary } from "@/components/DailyMacrosSummary";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 
 interface CalendarMealPlannerProps {
   weekStart: Date;
   planEntries: PlanEntry[];
   foods: Food[];
-  recipes: any[];
-  kids: any[];
+  recipes: Recipe[];
+  kids: Kid[];
   kidId: string;
   kidName: string;
   kidAge?: number;
@@ -108,7 +109,7 @@ export function CalendarMealPlanner({
     const { active } = event;
     setActiveId(active.id as string);
     
-    console.log('Drag started:', active.id);
+    logger.debug('Drag started:', active.id);
     
     // Find the entry being dragged
     const entry = planEntries.find(e => e.id === active.id);
@@ -116,11 +117,11 @@ export function CalendarMealPlanner({
       // For display in drag overlay
       if (entry.recipe_id) {
         const recipe = recipes.find(r => r.id === entry.recipe_id);
-        console.log('Dragging recipe:', recipe?.name);
+        logger.debug('Dragging recipe:', recipe?.name);
       } else {
         const food = foods.find(f => f.id === entry.food_id);
         setDraggedFood(food || null);
-        console.log('Dragging food:', food?.name);
+        logger.debug('Dragging food:', food?.name);
       }
     }
   };
@@ -128,12 +129,12 @@ export function CalendarMealPlanner({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     
-    console.log('Drag ended - Active:', active.id, 'Over:', over?.id);
+    logger.debug('Drag ended - Active:', active.id, 'Over:', over?.id);
     
     if (!over) {
       setActiveId(null);
       setDraggedFood(null);
-      console.log('No drop target, canceling drag');
+      logger.debug('No drop target, canceling drag');
       return;
     }
 
@@ -141,7 +142,7 @@ export function CalendarMealPlanner({
     if (!activeEntry) {
       setActiveId(null);
       setDraggedFood(null);
-      console.log('Could not find active entry:', active.id);
+      logger.debug('Could not find active entry:', active.id);
       return;
     }
 
@@ -150,12 +151,12 @@ export function CalendarMealPlanner({
     const targetSlot = dropIdParts[dropIdParts.length - 1];
     const targetDate = dropIdParts.slice(0, -1).join('-');
     
-    console.log('Parsed drop target - Date:', targetDate, 'Slot:', targetSlot);
+    logger.debug('Parsed drop target - Date:', targetDate, 'Slot:', targetSlot);
     
     if (targetDate && targetSlot) {
       // Don't do anything if dropping in the same slot
       if (activeEntry.date === targetDate && activeEntry.meal_slot === targetSlot) {
-        console.log('Dropped in same slot, no update needed');
+        logger.debug('Dropped in same slot, no update needed');
         setActiveId(null);
         setDraggedFood(null);
         return;
@@ -169,7 +170,7 @@ export function CalendarMealPlanner({
                e.meal_slot === activeEntry.meal_slot
         );
         
-        console.log('Moving recipe with', allRecipeEntries.length, 'entries');
+        logger.debug('Moving recipe with', allRecipeEntries.length, 'entries');
         
         allRecipeEntries.forEach(entry => {
           onUpdateEntry(entry.id, {
@@ -185,7 +186,7 @@ export function CalendarMealPlanner({
         });
       }
     } else {
-      console.log('Invalid drop target format');
+      logger.debug('Invalid drop target format');
     }
 
     setActiveId(null);

@@ -48,7 +48,7 @@ export function useFeatureLimit() {
       }
 
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error checking feature limit:", error);
       return {
         allowed: true,
@@ -72,7 +72,7 @@ export function useFeatureLimit() {
       });
 
       if (error) throw error;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error incrementing usage:", error);
     }
   };

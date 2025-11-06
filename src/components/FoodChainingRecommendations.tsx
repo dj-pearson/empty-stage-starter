@@ -39,78 +39,78 @@ export function FoodChainingRecommendations() {
   const activeKid = kids.find(k => k.id === activeKidId);
 
   useEffect(() => {
+    const loadSuccessfulFoods = async () => {
+      try {
+        setLoading(true);
+
+        // Get foods with at least one successful or partial attempt
+        const { data: attempts, error } = await supabase
+          .from("food_attempts")
+          .select(`
+            food_id,
+            outcome,
+            foods (
+              id,
+              name
+            )
+          `)
+          .eq("kid_id", activeKidId)
+          .in("outcome", ["success", "partial"]);
+
+        if (error) throw error;
+
+        // Group by food and calculate success rate
+        const foodStats: Map<string, { id: string; name: string; successes: number; total: number }> = new Map();
+
+        attempts?.forEach((attempt: any) => {
+          const foodId = attempt.food_id;
+          const foodName = attempt.foods?.name || "Unknown";
+
+          if (!foodStats.has(foodId)) {
+            foodStats.set(foodId, {
+              id: foodId,
+              name: foodName,
+              successes: 0,
+              total: 0,
+            });
+          }
+
+          const stats = foodStats.get(foodId)!;
+          stats.total += 1;
+          if (attempt.outcome === "success") {
+            stats.successes += 1;
+          }
+        });
+
+        // Convert to array and calculate success rate
+        const foodArray: FoodWithSuccess[] = Array.from(foodStats.values())
+          .map((stats) => ({
+            id: stats.id,
+            name: stats.name,
+            success_rate: (stats.successes / stats.total) * 100,
+            total_attempts: stats.total,
+          }))
+          .filter((f) => f.success_rate >= 50) // Only show foods with 50%+ success
+          .sort((a, b) => b.success_rate - a.success_rate);
+
+        setSuccessfulFoods(foodArray);
+
+        // Auto-select first food if available
+        if (foodArray.length > 0 && !selectedFood) {
+          handleSelectFood(foodArray[0]);
+        }
+      } catch (error: unknown) {
+        logger.error("Error loading successful foods:", error);
+        toast.error("Failed to load food success data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
     if (activeKidId || kids.length > 0) {
       loadSuccessfulFoods();
     }
-  }, [activeKidId, kids]);
-
-  const loadSuccessfulFoods = async () => {
-    try {
-      setLoading(true);
-
-      // Get foods with at least one successful or partial attempt
-      const { data: attempts, error } = await supabase
-        .from("food_attempts")
-        .select(`
-          food_id,
-          outcome,
-          foods (
-            id,
-            name
-          )
-        `)
-        .eq("kid_id", activeKidId)
-        .in("outcome", ["success", "partial"]);
-
-      if (error) throw error;
-
-      // Group by food and calculate success rate
-      const foodStats: Map<string, { id: string; name: string; successes: number; total: number }> = new Map();
-
-      attempts?.forEach((attempt: any) => {
-        const foodId = attempt.food_id;
-        const foodName = attempt.foods?.name || "Unknown";
-
-        if (!foodStats.has(foodId)) {
-          foodStats.set(foodId, {
-            id: foodId,
-            name: foodName,
-            successes: 0,
-            total: 0,
-          });
-        }
-
-        const stats = foodStats.get(foodId)!;
-        stats.total += 1;
-        if (attempt.outcome === "success") {
-          stats.successes += 1;
-        }
-      });
-
-      // Convert to array and calculate success rate
-      const foodArray: FoodWithSuccess[] = Array.from(foodStats.values())
-        .map((stats) => ({
-          id: stats.id,
-          name: stats.name,
-          success_rate: (stats.successes / stats.total) * 100,
-          total_attempts: stats.total,
-        }))
-        .filter((f) => f.success_rate >= 50) // Only show foods with 50%+ success
-        .sort((a, b) => b.success_rate - a.success_rate);
-
-      setSuccessfulFoods(foodArray);
-
-      // Auto-select first food if available
-      if (foodArray.length > 0 && !selectedFood) {
-        handleSelectFood(foodArray[0]);
-      }
-    } catch (error: any) {
-      console.error("Error loading successful foods:", error);
-      toast.error("Failed to load food success data");
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [activeKidId, kids, selectedFood]);
 
   const handleSelectFood = async (food: FoodWithSuccess) => {
     setSelectedFood(food);
@@ -135,8 +135,8 @@ export function FoodChainingRecommendations() {
       if (!data || data.length === 0) {
         await generateChainSuggestions(sourceFoodId);
       }
-    } catch (error: any) {
-      console.error("Error loading chain suggestions:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading chain suggestions:", error);
       toast.error("Failed to load recommendations");
     } finally {
       setLoading(false);
@@ -166,7 +166,7 @@ export function FoodChainingRecommendations() {
       if (similarError) throw similarError;
 
       // Calculate similarity and create suggestions
-      const suggestions: any[] = [];
+      const suggestions: FoodChainSuggestion[] = [];
 
       for (const food of similarFoods || []) {
         const { data: score } = await supabase.rpc("calculate_food_similarity", {
@@ -221,8 +221,8 @@ export function FoodChainingRecommendations() {
         await loadChainSuggestions(sourceFoodId);
         toast.success("Generated recommendations!");
       }
-    } catch (error: any) {
-      console.error("Error generating suggestions:", error);
+    } catch (error: unknown) {
+      logger.error("Error generating suggestions:", error);
     }
   };
 

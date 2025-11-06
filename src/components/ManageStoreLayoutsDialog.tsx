@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { Store, MapPin, Edit, Trash2, List, GripVertical, Plus, Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
+import { logger } from "@/lib/logger";
 
 interface StoreLayout {
   id: string;
@@ -85,7 +86,7 @@ export function ManageStoreLayoutsDialog({
         loadAisleCounts(data.map(s => s.id));
       }
     } catch (error) {
-      console.error('Error loading stores:', error);
+      logger.error('Error loading stores:', error);
       toast.error("Failed to load stores");
     } finally {
       setLoading(false);
@@ -109,7 +110,7 @@ export function ManageStoreLayoutsDialog({
 
       setAisleCounts(counts);
     } catch (error) {
-      console.error('Error loading aisle counts:', error);
+      logger.error('Error loading aisle counts:', error);
     }
   };
 
@@ -139,7 +140,7 @@ export function ManageStoreLayoutsDialog({
       setDeleteDialogOpen(false);
       setStoreToDelete(null);
     } catch (error) {
-      console.error('Error deleting store:', error);
+      logger.error('Error deleting store:', error);
       toast.error("Failed to delete store");
     } finally {
       setDeleting(false);

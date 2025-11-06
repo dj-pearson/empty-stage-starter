@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 
 export interface LeadCaptureData {
   email: string;
@@ -37,7 +38,7 @@ export async function captureLeadWithAutomation(
       .maybeSingle();
 
     if (checkError) {
-      console.error('Error checking existing lead:', checkError);
+      logger.error('Error checking existing lead:', checkError);
     }
 
     let leadId: string;
@@ -98,7 +99,7 @@ export async function captureLeadWithAutomation(
         .eq('id', leadId);
 
       if (updateError) {
-        console.error('Error updating lead:', updateError);
+        logger.error('Error updating lead:', updateError);
         return { success: false, error: updateError.message };
       }
     } else {
@@ -128,7 +129,7 @@ export async function captureLeadWithAutomation(
         .single();
 
       if (insertError) {
-        console.error('Error creating lead:', insertError);
+        logger.error('Error creating lead:', insertError);
         return { success: false, error: insertError.message };
       }
 
@@ -153,7 +154,7 @@ export async function captureLeadWithAutomation(
       .insert([interactionData]);
 
     if (interactionError) {
-      console.error('Error creating lead interaction:', interactionError);
+      logger.error('Error creating lead interaction:', interactionError);
       // Don't fail the entire operation for interaction logging
     }
 
@@ -168,15 +169,15 @@ export async function captureLeadWithAutomation(
       .eq('id', leadId);
 
     if (scoreError) {
-      console.error('Error triggering score update:', scoreError);
+      logger.error('Error triggering score update:', scoreError);
     }
 
     return {
       success: true,
       lead_id: leadId,
     };
-  } catch (error: any) {
-    console.error('Error in captureLeadWithAutomation:', error);
+  } catch (error: unknown) {
+    logger.error('Error in captureLeadWithAutomation:', error);
     return {
       success: false,
       error: error.message || 'Unknown error occurred',
@@ -274,10 +275,10 @@ async function queueWelcomeEmail(
       }]);
 
     if (error) {
-      console.error('Error queueing welcome email:', error);
+      logger.error('Error queueing welcome email:', error);
     }
   } catch (error) {
-    console.error('Error in queueWelcomeEmail:', error);
+    logger.error('Error in queueWelcomeEmail:', error);
   }
 }
 
@@ -356,13 +357,13 @@ export async function findOrCreateCampaignFromUTM(
       .single();
 
     if (error) {
-      console.error('Error creating campaign:', error);
+      logger.error('Error creating campaign:', error);
       return null;
     }
 
     return newCampaign.id;
   } catch (error) {
-    console.error('Error in findOrCreateCampaignFromUTM:', error);
+    logger.error('Error in findOrCreateCampaignFromUTM:', error);
     return null;
   }
 }

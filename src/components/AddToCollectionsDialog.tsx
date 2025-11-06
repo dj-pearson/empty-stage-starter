@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { RecipeCollection } from "@/types";
 import { Folder, Star, Heart, Zap, Pizza, Clock, Users, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 const ICON_MAP: Record<string, any> = {
   folder: Folder,
@@ -108,7 +109,7 @@ export function AddToCollectionsDialog({
       }
       onOpenChange(false);
     } catch (error) {
-      console.error('Error updating collections:', error);
+      logger.error('Error updating collections:', error);
       toast.error("Failed to update collections");
     } finally {
       setSaving(false);

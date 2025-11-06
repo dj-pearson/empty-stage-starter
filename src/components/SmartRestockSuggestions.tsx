@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FoodCategory } from "@/types";
+import { logger } from "@/lib/logger";
 
 interface RestockSuggestion {
   food_id: string;
@@ -56,15 +57,15 @@ export function SmartRestockSuggestions({
       });
 
       if (error) {
-        console.error('Error loading restock suggestions:', error);
+        logger.error('Error loading restock suggestions:', error);
       } else if (data) {
-        setSuggestions(data.map((item: any) => ({
+        setSuggestions(data.map((item: unknown) => ({
           ...item,
           priority: item.priority as 'low' | 'medium' | 'high'
         })));
       }
     } catch (err) {
-      console.error('Failed to load suggestions:', err);
+      logger.error('Failed to load suggestions:', err);
     } finally {
       setLoading(false);
     }

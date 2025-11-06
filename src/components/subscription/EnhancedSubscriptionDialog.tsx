@@ -27,6 +27,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { logger } from "@/lib/logger";
 
 interface Plan {
   id: string;
@@ -73,8 +74,8 @@ export function EnhancedSubscriptionDialog({
 
       if (error) throw error;
       setPlans((data as any) || []);
-    } catch (error: any) {
-      console.error("Error loading plans:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading plans:", error);
       toast.error("Failed to load plans");
     } finally {
       setLoading(false);

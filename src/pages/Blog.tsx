@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Search, Calendar, Clock, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { logger } from "@/lib/logger";
 
 interface BlogPost {
   id: string;
@@ -54,7 +55,7 @@ const Blog = () => {
       .order("published_at", { ascending: false });
 
     if (error) {
-      console.error("Error fetching posts:", error);
+      logger.error("Error fetching posts:", error);
     } else {
       setPosts(data || []);
     }
@@ -68,7 +69,7 @@ const Blog = () => {
       .order("name");
 
     if (error) {
-      console.error("Error fetching categories:", error);
+      logger.error("Error fetching categories:", error);
     } else {
       setCategories(data || []);
     }

@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { logger } from "@/lib/logger";
 
 interface Campaign {
   id: string;
@@ -159,7 +160,7 @@ export function LeadCampaignManager() {
       if (error) throw error;
       setCampaigns(data || []);
     } catch (error) {
-      console.error("Error loading campaigns:", error);
+      logger.error("Error loading campaigns:", error);
       toast.error("Failed to load campaigns");
     }
   };
@@ -185,7 +186,7 @@ export function LeadCampaignManager() {
 
       setLeads(formattedLeads);
     } catch (error) {
-      console.error("Error loading leads:", error);
+      logger.error("Error loading leads:", error);
       toast.error("Failed to load leads");
     } finally {
       setLoading(false);
@@ -211,7 +212,7 @@ export function LeadCampaignManager() {
         conversion_rate: total > 0 ? (converted / total) * 100 : 0,
       });
     } catch (error) {
-      console.error("Error loading stats:", error);
+      logger.error("Error loading stats:", error);
     }
   };
 
@@ -243,7 +244,7 @@ export function LeadCampaignManager() {
       });
       loadCampaigns();
     } catch (error) {
-      console.error("Error creating campaign:", error);
+      logger.error("Error creating campaign:", error);
       toast.error("Failed to create campaign");
     }
   };
@@ -252,7 +253,7 @@ export function LeadCampaignManager() {
     if (!selectedLead) return;
 
     try {
-      const updates: any = {
+      const updates: Record<string, unknown> = {
         status: leadStatus,
         last_contacted_at: new Date().toISOString(),
       };
@@ -287,7 +288,7 @@ export function LeadCampaignManager() {
       loadLeads();
       loadStats();
     } catch (error) {
-      console.error("Error updating lead:", error);
+      logger.error("Error updating lead:", error);
       toast.error("Failed to update lead");
     }
   };

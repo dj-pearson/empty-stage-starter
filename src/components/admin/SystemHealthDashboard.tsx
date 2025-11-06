@@ -70,7 +70,7 @@ export function SystemHealthDashboard() {
 
       setMetrics(metricsMap);
       setLastUpdate(new Date());
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error loading system health",
         description: error.message,

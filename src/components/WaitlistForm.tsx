@@ -37,7 +37,7 @@ export const WaitlistForm = () => {
         title: "You're on the list! 🎉",
         description: "Check your email for a confirmation message.",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
         description: error.message || "Failed to join waitlist. Please try again.",

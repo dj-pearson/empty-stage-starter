@@ -144,7 +144,7 @@ export function LiveActivityFeed() {
 
       if (error) throw error;
       setActivities(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error loading activity feed",
         description: error.message,

@@ -21,6 +21,7 @@ import { ShoppingCart, Copy, Trash2, Printer, Download, Plus, Share2, FileText, 
 import { toast } from "sonner";
 import { FoodCategory } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 
 const categoryLabels: Record<FoodCategory, string> = {
   protein: "Protein",
@@ -106,7 +107,7 @@ export default function Grocery() {
     if (!item.checked && selectedStoreLayoutId && userId) {
       try {
         // Check if user has already contributed for this item at this store
-        const { data: existingContribution } = await (supabase as any)
+        const { data: existingContribution } = await supabase
           .from('user_store_contributions')
           .select('*')
           .eq('user_id', userId)
@@ -115,7 +116,7 @@ export default function Grocery() {
           .maybeSingle();
 
         // Check if there's already a mapping
-        const { data: existingMapping } = await (supabase as any)
+        const { data: existingMapping } = await supabase
           .from('food_aisle_mappings')
           .select('*')
           .eq('store_layout_id', selectedStoreLayoutId)
@@ -135,7 +136,7 @@ export default function Grocery() {
           setShowAisleContribution(true);
         }
       } catch (error) {
-        console.error('Error checking contribution status:', error);
+        logger.error('Error checking contribution status:', error);
       }
     }
 
@@ -198,7 +199,7 @@ export default function Grocery() {
       }
 
       // Call the database function to detect and add restock items
-      const { data, error } = await (supabase as any).rpc('auto_add_restock_items', {
+      const { data, error } = await supabase.rpc('auto_add_restock_items', {
         p_user_id: user.id,
         p_kid_id: activeKidId
       });
@@ -226,7 +227,7 @@ export default function Grocery() {
         });
       }
     } catch (error) {
-      console.error('Error generating restock:', error);
+      logger.error('Error generating restock:', error);
       toast.error("Failed to generate restock suggestions");
     } finally {
       setIsGeneratingRestock(false);

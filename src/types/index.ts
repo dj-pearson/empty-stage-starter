@@ -171,3 +171,14 @@ export interface ShoppingSession {
   actual_total?: number;
   created_at: string;
 }
+
+export interface NutritionData {
+  name: string;
+  calories: number;
+  protein_g: string;
+  carbs_g: string;
+  fat_g: string;
+  fiber_g?: string;
+  calcium_mg?: string;
+  iron_mg?: string;
+}

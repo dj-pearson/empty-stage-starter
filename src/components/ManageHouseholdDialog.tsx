@@ -114,7 +114,7 @@ export function ManageHouseholdDialog() {
         setInvitations(invitesData);
       }
     } catch (error) {
-      console.error("Error loading household:", error);
+      logger.error("Error loading household:", error);
       toast.error("Failed to load household data");
     }
   };
@@ -140,8 +140,8 @@ export function ManageHouseholdDialog() {
       toast.success(`Invitation sent to ${inviteEmail}`);
       setInviteEmail("");
       loadHouseholdData();
-    } catch (error: any) {
-      console.error("Error sending invitation:", error);
+    } catch (error: unknown) {
+      logger.error("Error sending invitation:", error);
       if (error.code === '23505') {
         toast.error("This email has already been invited");
       } else {
@@ -164,7 +164,7 @@ export function ManageHouseholdDialog() {
       toast.success("Member removed from household");
       loadHouseholdData();
     } catch (error) {
-      console.error("Error removing member:", error);
+      logger.error("Error removing member:", error);
       toast.error("Failed to remove member");
     }
   };
@@ -181,7 +181,7 @@ export function ManageHouseholdDialog() {
       toast.success("Invitation cancelled");
       loadHouseholdData();
     } catch (error) {
-      console.error("Error cancelling invitation:", error);
+      logger.error("Error cancelling invitation:", error);
       toast.error("Failed to cancel invitation");
     }
   };
@@ -199,7 +199,7 @@ export function ManageHouseholdDialog() {
 
       toast.success("Household name updated");
     } catch (error) {
-      console.error("Error updating household name:", error);
+      logger.error("Error updating household name:", error);
       toast.error("Failed to update household name");
     }
   };

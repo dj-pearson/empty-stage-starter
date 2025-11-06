@@ -144,7 +144,7 @@ export default function Recipes() {
       
       setCollections(data as unknown as RecipeCollection[] || []);
     } catch (error) {
-      console.error('Error loading collections:', error);
+      logger.error('Error loading collections:', error);
     }
   };
   
@@ -160,7 +160,7 @@ export default function Recipes() {
       
       // Group by collection_id
       const itemsByCollection: Record<string, string[]> = {};
-      data?.forEach((item: any) => {
+      data?.forEach((item: unknown) => {
         if (!itemsByCollection[item.collection_id]) {
           itemsByCollection[item.collection_id] = [];
         }
@@ -169,7 +169,7 @@ export default function Recipes() {
       
       setCollectionItems(itemsByCollection);
     } catch (error) {
-      console.error('Error loading collection items:', error);
+      logger.error('Error loading collection items:', error);
     }
   };
 
@@ -189,7 +189,7 @@ export default function Recipes() {
       }
       handleClose();
     } catch (error) {
-      console.error("Error saving recipe:", error);
+      logger.error("Error saving recipe:", error);
       toast.error("Failed to save recipe");
     }
   };
@@ -199,7 +199,7 @@ export default function Recipes() {
       await addRecipe(recipeData);
       toast.success("Recipe imported successfully!");
     } catch (error) {
-      console.error("Error importing recipe:", error);
+      logger.error("Error importing recipe:", error);
       toast.error("Failed to import recipe");
     }
   };
@@ -295,7 +295,7 @@ export default function Recipes() {
         setSuggestions(data.suggestions || []);
       }
     } catch (error) {
-      console.error("Error getting AI suggestions:", error);
+      logger.error("Error getting AI suggestions:", error);
       toast.error("Failed to get suggestions", {
         description: "Please try again",
       });
@@ -307,7 +307,7 @@ export default function Recipes() {
 
   const handleAddSuggestion = async (suggestion: RecipeSuggestion) => {
     try {
-      console.log("Adding AI suggestion:", suggestion);
+      logger.debug("Adding AI suggestion:", suggestion);
       const createdRecipe = await addRecipe({
         name: suggestion.name,
         description: suggestion.description,
@@ -317,7 +317,7 @@ export default function Recipes() {
         tips: suggestion.reason,
       });
 
-      console.log("Created recipe:", createdRecipe);
+      logger.debug("Created recipe:", createdRecipe);
 
       if (!createdRecipe?.id) {
         throw new Error("Recipe was not saved to database");
@@ -325,7 +325,7 @@ export default function Recipes() {
 
       toast.success(`Added "${suggestion.name}" to recipes!`);
     } catch (error) {
-      console.error("Error adding recipe:", error);
+      logger.error("Error adding recipe:", error);
       const message = error instanceof Error ? error.message : "Unknown error";
       toast.error("Failed to add recipe", {
         description: message,

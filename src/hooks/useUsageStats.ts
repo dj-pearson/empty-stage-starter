@@ -55,14 +55,14 @@ export function useUsageStats() {
         throw new Error("Not authenticated");
       }
 
-      const { data, error: rpcError } = await (supabase as any).rpc("get_usage_stats", {
+      const { data, error: rpcError } = await supabase.rpc("get_usage_stats", {
         p_user_id: user.id,
       });
 
       if (rpcError) throw rpcError;
 
       setStats(data as any as UsageStats);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching usage stats:", err);
       setError(err.message);
     } finally {

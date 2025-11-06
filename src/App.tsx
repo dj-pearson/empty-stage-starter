@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -5,36 +6,45 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppProvider } from "@/contexts/AppContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { Navigation } from "@/components/Navigation";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
-import Landing from "./pages/Landing";
-import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
-import Home from "./pages/Home";
-import Pantry from "./pages/Pantry";
-import Recipes from "./pages/Recipes";
-import Planner from "./pages/Planner";
-import AIPlanner from "./pages/AIPlanner";
-import Grocery from "./pages/Grocery";
-import Kids from "./pages/Kids";
-import InsightsDashboard from "./pages/InsightsDashboard";
-import Analytics from "./pages/Analytics";
-import Admin from "./pages/Admin";
-import AdminDashboard from "./pages/AdminDashboard";
-import FoodTracker from "./pages/FoodTracker";
-import AICoach from "./pages/AICoach";
-import MealBuilder from "./pages/MealBuilder";
-import FoodChaining from "./pages/FoodChaining";
-import Pricing from "./pages/Pricing";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import TermsOfService from "./pages/TermsOfService";
-import FAQ from "./pages/FAQ";
-import Contact from "./pages/Contact";
-import Blog from "./pages/Blog";
-import BlogPost from "./pages/BlogPost";
-import SEODashboard from "./pages/SEODashboard";
-import OAuthCallback from "./pages/OAuthCallback";
-import NotFound from "./pages/NotFound";
+import { Loader2 } from "lucide-react";
+
+// Lazy load all route components for better performance
+const Landing = lazy(() => import("./pages/Landing"));
+const Auth = lazy(() => import("./pages/Auth"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Home = lazy(() => import("./pages/Home"));
+const Pantry = lazy(() => import("./pages/Pantry"));
+const Recipes = lazy(() => import("./pages/Recipes"));
+const Planner = lazy(() => import("./pages/Planner"));
+const AIPlanner = lazy(() => import("./pages/AIPlanner"));
+const Grocery = lazy(() => import("./pages/Grocery"));
+const Kids = lazy(() => import("./pages/Kids"));
+const InsightsDashboard = lazy(() => import("./pages/InsightsDashboard"));
+const Analytics = lazy(() => import("./pages/Analytics"));
+const Admin = lazy(() => import("./pages/Admin"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const FoodTracker = lazy(() => import("./pages/FoodTracker"));
+const AICoach = lazy(() => import("./pages/AICoach"));
+const MealBuilder = lazy(() => import("./pages/MealBuilder"));
+const FoodChaining = lazy(() => import("./pages/FoodChaining"));
+const Pricing = lazy(() => import("./pages/Pricing"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const TermsOfService = lazy(() => import("./pages/TermsOfService"));
+const FAQ = lazy(() => import("./pages/FAQ"));
+const Contact = lazy(() => import("./pages/Contact"));
+const Blog = lazy(() => import("./pages/Blog"));
+const BlogPost = lazy(() => import("./pages/BlogPost"));
+const SEODashboard = lazy(() => import("./pages/SEODashboard"));
+const OAuthCallback = lazy(() => import("./pages/OAuthCallback"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+
+// Loading fallback component
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+  </div>
+);
 
 const queryClient = new QueryClient();
 
@@ -47,6 +57,7 @@ const App = () => (
           <Sonner />
           <PWAInstallPrompt />
           <BrowserRouter>
+          <Suspense fallback={<LoadingFallback />}>
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
@@ -107,6 +118,7 @@ const App = () => (
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
           </BrowserRouter>
         </AppProvider>
       </TooltipProvider>

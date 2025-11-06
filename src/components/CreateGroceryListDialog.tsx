@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ShoppingCart, Store, Package } from "lucide-react";
+import { logger } from "@/lib/logger";
 
 const LIST_ICONS = [
   { value: "🛒", label: "Shopping Cart" },
@@ -98,7 +99,7 @@ export function CreateGroceryListDialog({
       onListCreated(data.id);
       handleClose();
     } catch (error) {
-      console.error('Error creating list:', error);
+      logger.error('Error creating list:', error);
       toast.error("Failed to create list");
     } finally {
       setCreating(false);

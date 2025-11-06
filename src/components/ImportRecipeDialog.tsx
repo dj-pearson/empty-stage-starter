@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Loader2, Link2, FileJson, Sparkles, Upload, Camera, ChefHat, Users, User } from "lucide-react";
 import { Food, Kid } from "@/types";
 import { Html5Qrcode } from "html5-qrcode";
+import { logger } from "@/lib/logger";
 
 interface ImportRecipeDialogProps {
   open: boolean;
@@ -45,7 +46,13 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
       await new Promise((r) => setTimeout(r, 50));
 
       if (scannerRef.current) {
-        try { await scannerRef.current.stop(); await scannerRef.current.clear(); } catch {}
+        try {
+          await scannerRef.current.stop();
+          await scannerRef.current.clear();
+        } catch (error) {
+          // Ignore cleanup errors - scanner may already be stopped
+          logger.debug('Scanner cleanup error (expected):', error);
+        }
         scannerRef.current = null;
       }
 
@@ -59,7 +66,7 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
 
       await scanner.start(back.id, { fps: 10, aspectRatio: 1.333 }, () => {}, () => {});
     } catch (error) {
-      console.error('Camera error:', error);
+      logger.error('Camera error:', error);
       toast.error("Failed to start camera");
       setShowCamera(false);
     }
@@ -127,7 +134,7 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
       toast.success("Recipe imported from photo!");
       handleClose();
     } catch (error) {
-      console.error('Error importing from photo:', error);
+      logger.error('Error importing from photo:', error);
       toast.error("Failed to import recipe from photo");
     } finally {
       setIsLoading(false);
@@ -157,7 +164,7 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
       toast.success("Recipe imported from URL!");
       handleClose();
     } catch (error) {
-      console.error('Error importing from URL:', error);
+      logger.error('Error importing from URL:', error);
       toast.error("Failed to import recipe from URL");
     } finally {
       setIsLoading(false);
@@ -202,7 +209,7 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
       toast.success("Recipe imported from text!");
       handleClose();
     } catch (error) {
-      console.error('Error importing from text:', error);
+      logger.error('Error importing from text:', error);
       toast.error("Failed to import recipe from text");
     } finally {
       setIsLoading(false);
@@ -223,7 +230,7 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
       toast.success("Recipe imported from JSON!");
       handleClose();
     } catch (error) {
-      console.error('Error parsing JSON:', error);
+      logger.error('Error parsing JSON:', error);
       toast.error("Invalid JSON format");
     }
   };

@@ -11,6 +11,7 @@ import { Plus, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { GroceryList } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
+import { logger } from "@/lib/logger";
 
 interface GroceryListSelectorProps {
   userId: string;
@@ -33,44 +34,44 @@ export function GroceryListSelector({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadLists();
-  }, [userId, householdId]);
+    const loadLists = async () => {
+      setLoading(true);
+      try {
+        const query = supabase
+          .from('grocery_lists')
+          .select('*')
+          .eq('is_archived', false)
+          .order('is_default', { ascending: false })
+          .order('name');
 
-  const loadLists = async () => {
-    setLoading(true);
-    try {
-      const query = supabase
-        .from('grocery_lists')
-        .select('*')
-        .eq('is_archived', false)
-        .order('is_default', { ascending: false })
-        .order('name');
-
-      // Filter by user_id or household_id
-      if (householdId) {
-        query.or(`user_id.eq.${userId},household_id.eq.${householdId}`);
-      } else {
-        query.eq('user_id', userId);
-      }
-
-      const { data, error } = await query;
-
-      if (!error && data) {
-        const groceryLists = data as unknown as GroceryList[];
-        setLists(groceryLists);
-
-        // Auto-select default list if none selected
-        if (!selectedListId && groceryLists.length > 0) {
-          const defaultList = groceryLists.find(l => l.is_default) || groceryLists[0];
-          onListChange(defaultList.id);
+        // Filter by user_id or household_id
+        if (householdId) {
+          query.or(`user_id.eq.${userId},household_id.eq.${householdId}`);
+        } else {
+          query.eq('user_id', userId);
         }
+
+        const { data, error } = await query;
+
+        if (!error && data) {
+          const groceryLists = data as unknown as GroceryList[];
+          setLists(groceryLists);
+
+          // Auto-select default list if none selected
+          if (!selectedListId && groceryLists.length > 0) {
+            const defaultList = groceryLists.find(l => l.is_default) || groceryLists[0];
+            onListChange(defaultList.id);
+          }
+        }
+      } catch (err) {
+        logger.error('Error loading grocery lists:', err);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Error loading grocery lists:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+
+    loadLists();
+  }, [userId, householdId, selectedListId, onListChange]);
 
   if (loading) {
     return (

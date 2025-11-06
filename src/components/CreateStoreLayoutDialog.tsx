@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Store, MapPin } from "lucide-react";
+import { logger } from "@/lib/logger";
 
 interface StoreLayout {
   id: string;
@@ -122,7 +123,7 @@ export function CreateStoreLayoutDialog({
 
       handleClose();
     } catch (error) {
-      console.error('Error saving store:', error);
+      logger.error('Error saving store:', error);
       toast.error(editStore ? "Failed to update store" : "Failed to create store");
     } finally {
       setSaving(false);

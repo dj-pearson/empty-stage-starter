@@ -7,6 +7,7 @@ import { Sparkles, Clock, TrendingUp, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { SubscriptionManagementDialog } from "./SubscriptionManagementDialog";
+import { logger } from "@/lib/logger";
 
 interface SubscriptionStatus {
   plan_name: string;
@@ -84,7 +85,7 @@ export function SubscriptionStatusBanner() {
         }
       }
     } catch (error) {
-      console.error("Error loading subscription:", error);
+      logger.error("Error loading subscription:", error);
     } finally {
       setLoading(false);
     }

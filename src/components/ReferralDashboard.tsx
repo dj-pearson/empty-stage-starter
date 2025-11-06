@@ -7,6 +7,7 @@ import { toast } from "@/hooks/use-toast";
 import { Copy, Share2, Gift, Users, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { logger } from "@/lib/logger";
 
 interface ReferralCode {
   code: string;
@@ -111,8 +112,8 @@ export function ReferralDashboard() {
         .order("created_at", { ascending: false });
 
       setRewards(rewardData || []);
-    } catch (error: any) {
-      console.error("Error loading referral data:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading referral data:", error);
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
       setLoading(false);
@@ -140,7 +141,7 @@ export function ReferralDashboard() {
           url,
         });
       } catch (error) {
-        console.error("Error sharing:", error);
+        logger.error("Error sharing:", error);
       }
     } else {
       copyReferralLink();

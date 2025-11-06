@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 export interface AIUsageLog {
   id: string;
@@ -55,7 +56,7 @@ export async function logAIUsage(params: {
   responseMetadata?: any;
 }): Promise<string | null> {
   try {
-const { data, error } = await (supabase as any).rpc("log_ai_usage", {
+const { data, error } = await supabase.rpc("log_ai_usage", {
       p_user_id: params.userId,
       p_endpoint: params.endpoint,
       p_model: params.model,
@@ -69,13 +70,13 @@ const { data, error } = await (supabase as any).rpc("log_ai_usage", {
     });
 
     if (error) {
-      console.error("Failed to log AI usage:", error);
+      logger.error("Failed to log AI usage:", error);
       return null;
     }
 
     return data as string;
   } catch (error) {
-    console.error("Failed to log AI usage:", error);
+    logger.error("Failed to log AI usage:", error);
     return null;
   }
 }
@@ -93,13 +94,13 @@ export async function checkAIBudget(
 
     if (!user) return null;
 
-const { data, error } = await (supabase as any).rpc("check_ai_budget", {
+const { data, error } = await supabase.rpc("check_ai_budget", {
       p_user_id: user.id,
       p_budget_type: budgetType,
     });
 
     if (error) {
-      console.error("Failed to check AI budget:", error);
+      logger.error("Failed to check AI budget:", error);
       return null;
     }
 
@@ -107,7 +108,7 @@ const { data, error } = await (supabase as any).rpc("check_ai_budget", {
 
     return data[0] as BudgetCheck;
   } catch (error) {
-    console.error("Failed to check AI budget:", error);
+    logger.error("Failed to check AI budget:", error);
     return null;
   }
 }
@@ -123,7 +124,7 @@ export async function getAIUsageLogs(limit: number = 50): Promise<AIUsageLog[]> 
 
     if (!user) return [];
 
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("ai_usage_logs")
       .select("*")
       .eq("user_id", user.id)
@@ -131,13 +132,13 @@ const { data, error } = await (supabase as any)
       .limit(limit);
 
     if (error) {
-      console.error("Failed to fetch AI usage logs:", error);
+      logger.error("Failed to fetch AI usage logs:", error);
       return [];
     }
 
     return data as AIUsageLog[];
   } catch (error) {
-    console.error("Failed to fetch AI usage logs:", error);
+    logger.error("Failed to fetch AI usage logs:", error);
     return [];
   }
 }
@@ -147,20 +148,20 @@ const { data, error } = await (supabase as any)
  */
 export async function getDailyCostSummary(days: number = 30): Promise<CostSummary[]> {
   try {
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("ai_cost_daily_summary")
       .select("*")
       .order("date", { ascending: false })
       .limit(days);
 
     if (error) {
-      console.error("Failed to fetch daily cost summary:", error);
+      logger.error("Failed to fetch daily cost summary:", error);
       return [];
     }
 
     return data as CostSummary[];
   } catch (error) {
-    console.error("Failed to fetch daily cost summary:", error);
+    logger.error("Failed to fetch daily cost summary:", error);
     return [];
   }
 }
@@ -182,19 +183,19 @@ export async function getCostByEndpoint(): Promise<
   }>
 > {
   try {
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("ai_cost_by_endpoint")
       .select("*")
       .order("total_cost_cents", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch cost by endpoint:", error);
+      logger.error("Failed to fetch cost by endpoint:", error);
       return [];
     }
 
     return data as any[];
   } catch (error) {
-    console.error("Failed to fetch cost by endpoint:", error);
+    logger.error("Failed to fetch cost by endpoint:", error);
     return [];
   }
 }
@@ -217,19 +218,19 @@ export async function getCostByModel(): Promise<
   }>
 > {
   try {
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("ai_cost_by_model")
       .select("*")
       .order("total_cost_cents", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch cost by model:", error);
+      logger.error("Failed to fetch cost by model:", error);
       return [];
     }
 
     return data as any[];
   } catch (error) {
-    console.error("Failed to fetch cost by model:", error);
+    logger.error("Failed to fetch cost by model:", error);
     return [];
   }
 }
@@ -251,20 +252,20 @@ export async function getCostByUser(limit: number = 20): Promise<
   }>
 > {
   try {
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("ai_cost_by_user")
       .select("*")
       .order("total_cost_cents", { ascending: false })
       .limit(limit);
 
     if (error) {
-      console.error("Failed to fetch cost by user:", error);
+      logger.error("Failed to fetch cost by user:", error);
       return [];
     }
 
     return data as any[];
   } catch (error) {
-    console.error("Failed to fetch cost by user:", error);
+    logger.error("Failed to fetch cost by user:", error);
     return [];
   }
 }

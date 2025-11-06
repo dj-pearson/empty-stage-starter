@@ -31,6 +31,7 @@ import { Loader2, CheckCircle2 } from "lucide-react";
 import { Food, FoodCategory } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 interface AddFoodDialogProps {
   open: boolean;
@@ -103,7 +104,7 @@ export function AddFoodDialog({
         if (error) throw error;
         setSearchResults(data || []);
       } catch (error) {
-        console.error('Search error:', error);
+        logger.error('Search error:', error);
       } finally {
         setIsSearching(false);
       }

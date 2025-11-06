@@ -23,6 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { RecipeCollection } from "@/types";
 import { Folder, Edit, Trash2, GripVertical, Star, Heart, Zap, Pizza, Clock, Users, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 const ICON_MAP: Record<string, any> = {
   folder: Folder,
@@ -89,7 +90,7 @@ export function ManageCollectionsDialog({
 
       setCollections(data as unknown as RecipeCollection[] || []);
     } catch (error) {
-      console.error('Error loading collections:', error);
+      logger.error('Error loading collections:', error);
       toast.error("Failed to load collections");
     } finally {
       setLoading(false);
@@ -133,7 +134,7 @@ export function ManageCollectionsDialog({
       setDeleteDialogOpen(false);
       setCollectionToDelete(null);
     } catch (error) {
-      console.error('Error deleting collection:', error);
+      logger.error('Error deleting collection:', error);
       toast.error("Failed to delete collection");
     } finally {
       setDeleting(false);

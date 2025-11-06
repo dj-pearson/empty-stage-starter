@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 interface Message {
   id: string;
@@ -86,8 +87,8 @@ export function AIMealCoach() {
         updated_at: conv.updated_at,
         is_archived: conv.is_archived || false
       })));
-    } catch (error: any) {
-      console.error("Error loading conversations:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading conversations:", error);
     }
   };
 
@@ -109,8 +110,8 @@ export function AIMealCoach() {
         content: msg.content,
         created_at: msg.created_at
       })));
-    } catch (error: any) {
-      console.error("Error loading messages:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading messages:", error);
       toast.error("Failed to load conversation");
     } finally {
       setLoading(false);
@@ -140,8 +141,8 @@ export function AIMealCoach() {
       setActiveConversation(data.id);
       setMessages([]);
       toast.success("New conversation started!");
-    } catch (error: any) {
-      console.error("Error creating conversation:", error);
+    } catch (error: unknown) {
+      logger.error("Error creating conversation:", error);
       toast.error("Failed to create conversation");
     }
   };
@@ -163,8 +164,8 @@ export function AIMealCoach() {
         setMessages([]);
       }
       toast.success("Conversation deleted");
-    } catch (error: any) {
-      console.error("Error deleting conversation:", error);
+    } catch (error: unknown) {
+      logger.error("Error deleting conversation:", error);
       toast.error("Failed to delete conversation");
     }
   };
@@ -341,8 +342,8 @@ Provide helpful, empathetic, and practical advice. Keep responses conversational
       ]);
 
       toast.success("AI Coach responded!");
-    } catch (error: any) {
-      console.error("Error sending message:", error);
+    } catch (error: unknown) {
+      logger.error("Error sending message:", error);
       toast.error(error.message || "Failed to send message. Check AI settings.");
       // Remove the temporary message on error
       setMessages(messages.filter((m) => !m.id.startsWith("temp-")));

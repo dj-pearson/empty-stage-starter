@@ -30,6 +30,7 @@ import {
 import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
 import { cn } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 interface MealCreation {
   id: string;
@@ -109,8 +110,8 @@ export function KidMealBuilder() {
         ...creation,
         foods: Array.isArray(creation.foods) ? creation.foods as any : []
       })));
-    } catch (error: any) {
-      console.error("Error loading creations:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading creations:", error);
     } finally {
       setLoading(false);
     }
@@ -127,8 +128,8 @@ export function KidMealBuilder() {
 
       if (error) throw error;
       setRecentAchievements(data || []);
-    } catch (error: any) {
-      console.error("Error loading achievements:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading achievements:", error);
     }
   };
 
@@ -191,8 +192,8 @@ export function KidMealBuilder() {
       resetBuilder();
       loadCreations();
       loadRecentAchievements();
-    } catch (error: any) {
-      console.error("Error saving creation:", error);
+    } catch (error: unknown) {
+      logger.error("Error saving creation:", error);
       toast.error("Failed to save meal");
     } finally {
       setLoading(false);
@@ -213,8 +214,8 @@ export function KidMealBuilder() {
 
       toast.success("Added to meal requests! ⭐");
       loadCreations();
-    } catch (error: any) {
-      console.error("Error requesting meal:", error);
+    } catch (error: unknown) {
+      logger.error("Error requesting meal:", error);
       toast.error("Failed to request meal");
     }
   };
@@ -230,8 +231,8 @@ export function KidMealBuilder() {
 
       toast.success("Meal deleted");
       loadCreations();
-    } catch (error: any) {
-      console.error("Error deleting creation:", error);
+    } catch (error: unknown) {
+      logger.error("Error deleting creation:", error);
       toast.error("Failed to delete meal");
     }
   };

@@ -43,6 +43,7 @@ import { useApp } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import { format, differenceInYears } from "date-fns";
 import { cn } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 const PREDEFINED_ALLERGENS = [
   "peanuts",
@@ -124,7 +125,7 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
       setChildData({ ...childData, profile_picture_url: publicUrl });
       toast.success("Image uploaded successfully!");
     } catch (error) {
-      console.error("Error uploading image:", error);
+      logger.error("Error uploading image:", error);
       toast.error("Failed to upload image");
     } finally {
       setUploading(false);

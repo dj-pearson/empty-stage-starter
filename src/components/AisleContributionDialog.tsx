@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { MapPin, Award, Users } from "lucide-react";
+import { logger } from "@/lib/logger";
 
 interface AisleContributionDialogProps {
   open: boolean;
@@ -32,26 +33,26 @@ export function AisleContributionDialog({
 
   // Load user stats when dialog opens
   useEffect(() => {
+    const loadUserStats = async () => {
+      if (!userId) return;
+
+      try {
+        const { data } = await supabase
+          .from('user_contribution_stats')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        setUserStats(data);
+      } catch (error) {
+        logger.error('Error loading user stats:', error);
+      }
+    };
+
     if (open && userId) {
       loadUserStats();
     }
   }, [open, userId]);
-
-  const loadUserStats = async () => {
-    if (!userId) return;
-
-    try {
-      const { data } = await (supabase as any)
-        .from('user_contribution_stats')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      setUserStats(data);
-    } catch (error) {
-      console.error('Error loading user stats:', error);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,7 +70,7 @@ export function AisleContributionDialog({
     setIsSubmitting(true);
     try {
       // Check if contribution already exists
-      const { data: existing } = await (supabase as any)
+      const { data: existing } = await supabase
         .from('user_store_contributions')
         .select('*')
         .eq('user_id', userId)
@@ -79,7 +80,7 @@ export function AisleContributionDialog({
 
       if (existing) {
         // Update existing contribution
-        const { error } = await (supabase as any)
+        const { error } = await supabase
           .from('user_store_contributions')
           .update({
             aisle_number: aisleNumber || existing.aisle_number,
@@ -92,7 +93,7 @@ export function AisleContributionDialog({
         if (error) throw error;
       } else {
         // Create new contribution
-        const { error } = await (supabase as any)
+        const { error } = await supabase
           .from('user_store_contributions')
           .insert([{
             user_id: userId,
@@ -106,7 +107,7 @@ export function AisleContributionDialog({
       }
 
       // Create food_aisle_mapping if doesn't exist
-      const { error: mappingError } = await (supabase as any)
+      const { error: mappingError } = await supabase
         .from('food_aisle_mappings')
         .insert([{
           store_layout_id: storeLayoutId,
@@ -133,7 +134,7 @@ export function AisleContributionDialog({
       onContribute();
       onOpenChange(false);
     } catch (error) {
-      console.error('Error submitting contribution:', error);
+      logger.error('Error submitting contribution:', error);
       toast.error("Failed to save contribution");
     } finally {
       setIsSubmitting(false);

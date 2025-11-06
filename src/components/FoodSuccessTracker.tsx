@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 interface FoodAttempt {
   id: string;
@@ -115,14 +116,7 @@ export function FoodSuccessTracker() {
     is_milestone: false,
   });
 
-  useEffect(() => {
-    if (activeKidId) {
-      loadAttempts();
-      loadAchievements();
-    }
-  }, [activeKidId, filterOutcome]);
-
-  const loadAttempts = async () => {
+  const loadAttempts = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -144,15 +138,15 @@ export function FoodSuccessTracker() {
       if (error) throw error;
 
       setAttempts(data || []);
-    } catch (error: any) {
-      console.error("Error loading attempts:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading attempts:", error);
       toast.error("Failed to load food attempts");
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeKidId, filterOutcome]);
 
-  const loadAchievements = async () => {
+  const loadAchievements = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("kid_achievements")
@@ -163,10 +157,17 @@ export function FoodSuccessTracker() {
 
       if (error) throw error;
       setAchievements(data || []);
-    } catch (error: any) {
-      console.error("Error loading achievements:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading achievements:", error);
     }
-  };
+  }, [activeKidId]);
+
+  useEffect(() => {
+    if (activeKidId) {
+      loadAttempts();
+      loadAchievements();
+    }
+  }, [activeKidId, loadAttempts, loadAchievements]);
 
   const handleAddAttempt = async () => {
     if (!attemptForm.food_id) {
@@ -191,8 +192,8 @@ export function FoodSuccessTracker() {
       resetForm();
       loadAttempts();
       loadAchievements(); // Reload to show new achievements
-    } catch (error: any) {
-      console.error("Error adding attempt:", error);
+    } catch (error: unknown) {
+      logger.error("Error adding attempt:", error);
       toast.error("Failed to log attempt");
     } finally {
       setLoading(false);

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Food, PlanEntry } from "@/types";
+import { Food, PlanEntry, NutritionData } from "@/types";
 import { Apple, Droplets, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +14,7 @@ interface DailyMacrosSummaryProps {
   kidWeight?: number;
   planEntries: PlanEntry[];
   foods: Food[];
-  nutritionData: any[];
+  nutritionData: NutritionData[];
 }
 
 // Calculate recommended daily intake based on age and weight

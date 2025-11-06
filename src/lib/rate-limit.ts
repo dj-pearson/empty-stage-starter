@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -23,13 +24,13 @@ export async function checkRateLimit(endpoint: string): Promise<RateLimitResult 
       return null;
     }
 
-    const { data, error } = await (supabase as any).rpc('check_rate_limit_with_tier', {
+    const { data, error } = await supabase.rpc('check_rate_limit_with_tier', {
       p_user_id: user.id,
       p_endpoint: endpoint
     });
 
     if (error) {
-      console.error('Rate limit check error:', error);
+      logger.error('Rate limit check error:', error);
       // Allow request on error to avoid blocking users
       return {
         allowed: true,
@@ -52,7 +53,7 @@ export async function checkRateLimit(endpoint: string): Promise<RateLimitResult 
 
     return result;
   } catch (error) {
-    console.error('Rate limit check failed:', error);
+    logger.error('Rate limit check failed:', error);
     return null;
   }
 }
@@ -104,7 +105,7 @@ export async function callWithRateLimit<T = any>(
     const { data, error } = await supabase.functions.invoke(functionName, { body });
 
     if (error) {
-      console.error(`${functionName} error:`, error);
+      logger.error(`${functionName} error:`, error);
       toast.error("Request failed", {
         description: error.message || "Please try again"
       });
@@ -113,7 +114,7 @@ export async function callWithRateLimit<T = any>(
 
     return data;
   } catch (error) {
-    console.error(`${functionName} failed:`, error);
+    logger.error(`${functionName} failed:`, error);
     toast.error("Request failed", {
       description: "An unexpected error occurred"
     });
@@ -138,7 +139,7 @@ export async function getRateLimitStatus(endpoint: string): Promise<{
 
     if (!user) return null;
 
-    const { data, error } = await (supabase as any).rpc('check_rate_limit_with_tier', {
+    const { data, error } = await supabase.rpc('check_rate_limit_with_tier', {
       p_user_id: user.id,
       p_endpoint: endpoint
     });
@@ -159,7 +160,7 @@ export async function getRateLimitStatus(endpoint: string): Promise<{
       tier: result.tier
     };
   } catch (error) {
-    console.error('Failed to get rate limit status:', error);
+    logger.error('Failed to get rate limit status:', error);
     return null;
   }
 }

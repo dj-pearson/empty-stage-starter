@@ -179,7 +179,7 @@ serve(async (req) => {
     // Keyword analysis
     let keywordDensity = 0;
     let keywordCount = 0;
-    let keywordVariations: string[] = [];
+    const keywordVariations: string[] = [];
 
     if (targetKeyword) {
       const keywordLower = targetKeyword.toLowerCase();

@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
+import { logger } from "@/lib/logger";
 
 interface Notification {
   id: string;
@@ -63,7 +64,7 @@ export function NotificationBell() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("subscription_notifications")
         .select("*")
         .eq("user_id", user.id)
@@ -73,10 +74,10 @@ export function NotificationBell() {
 
       if (error) throw error;
 
-      setNotifications((data as any) || []);
-      setUnreadCount((data as any)?.filter((n: any) => !n.is_read).length || 0);
-    } catch (error: any) {
-      console.error("Error fetching notifications:", error);
+      setNotifications((data as unknown) || []);
+      setUnreadCount((data as unknown)?.filter((n) => !n.is_read).length || 0);
+    } catch (error: unknown) {
+      logger.error("Error fetching notifications:", error);
     } finally {
       setLoading(false);
     }
@@ -84,7 +85,7 @@ export function NotificationBell() {
 
   const markAsRead = async (notificationId: string) => {
     try {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from("subscription_notifications")
         .update({ is_read: true })
         .eq("id", notificationId);
@@ -95,14 +96,14 @@ export function NotificationBell() {
         prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n))
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
-    } catch (error: any) {
-      console.error("Error marking notification as read:", error);
+    } catch (error: unknown) {
+      logger.error("Error marking notification as read:", error);
     }
   };
 
   const dismissNotification = async (notificationId: string) => {
     try {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from("subscription_notifications")
         .update({ dismissed_at: new Date().toISOString() })
         .eq("id", notificationId);
@@ -110,8 +111,8 @@ export function NotificationBell() {
       if (error) throw error;
 
       setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
-    } catch (error: any) {
-      console.error("Error dismissing notification:", error);
+    } catch (error: unknown) {
+      logger.error("Error dismissing notification:", error);
     }
   };
 

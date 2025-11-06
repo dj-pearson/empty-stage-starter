@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, CheckCircle, XCircle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { logger } from "@/lib/logger";
 
 interface SubscriptionPlan {
   id: string;
@@ -71,9 +72,9 @@ export function PromotionalCampaignManager() {
 
       setCampaigns(campaignsRes.data || []);
       setPlans(plansRes.data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load campaigns");
-      console.error(error);
+      logger.error(error);
     } finally {
       setIsLoading(false);
     }
@@ -119,9 +120,9 @@ export function PromotionalCampaignManager() {
 
       resetForm();
       fetchData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error(editingCampaign ? "Failed to update campaign" : "Failed to create campaign");
-      console.error(error);
+      logger.error(error);
     }
   };
 
@@ -153,9 +154,9 @@ export function PromotionalCampaignManager() {
       if (error) throw error;
       toast.success("Campaign deleted successfully");
       fetchData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to delete campaign");
-      console.error(error);
+      logger.error(error);
     }
   };
 
@@ -169,9 +170,9 @@ export function PromotionalCampaignManager() {
       if (error) throw error;
       toast.success(`Campaign ${!campaign.is_active ? "activated" : "deactivated"}`);
       fetchData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to update campaign status");
-      console.error(error);
+      logger.error(error);
     }
   };
 
@@ -279,7 +280,7 @@ export function PromotionalCampaignManager() {
                   <Label htmlFor="discount_duration">Discount Duration *</Label>
                   <Select
                     value={formData.discount_duration_type}
-                    onValueChange={(value: any) =>
+                    onValueChange={(value: unknown) =>
                       setFormData({ ...formData, discount_duration_type: value })
                     }
                   >

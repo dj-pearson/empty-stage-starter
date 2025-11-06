@@ -233,7 +233,7 @@ export function SEOManager() {
 
   const loadTrackedKeywords = async () => {
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('seo_keywords')
         .select('*')
         .order('priority', { ascending: false });
@@ -264,14 +264,14 @@ export function SEOManager() {
         setTrackedKeywords(mockKeywords);
       }
     } catch (error) {
-      console.error('Error loading keywords:', error);
+      logger.error('Error loading keywords:', error);
       toast.error('Failed to load keyword data');
     }
   };
 
   const loadCompetitorAnalysis = async () => {
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('seo_competitor_analysis')
         .select('*')
         .eq('is_active', true)
@@ -290,13 +290,13 @@ export function SEOManager() {
         })));
       }
     } catch (error) {
-      console.error('Error loading competitor analysis:', error);
+      logger.error('Error loading competitor analysis:', error);
     }
   };
 
   const loadPageAnalysis = async () => {
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('seo_page_scores')
         .select('*')
         .order('overall_score', { ascending: false })
@@ -316,7 +316,7 @@ export function SEOManager() {
         setPageAnalysis(pages);
       }
     } catch (error) {
-      console.error('Error loading page analysis:', error);
+      logger.error('Error loading page analysis:', error);
     }
   };
 
@@ -340,8 +340,8 @@ export function SEOManager() {
       if (data.analyzed > 0) {
         await loadPageAnalysis();
       }
-    } catch (error: any) {
-      console.error("Error analyzing blog posts:", error);
+    } catch (error: unknown) {
+      logger.error("Error analyzing blog posts:", error);
       setBlogPostsAnalysisResults({
         success: false,
         error: error.message || "Failed to analyze blog posts"
@@ -372,8 +372,8 @@ export function SEOManager() {
         // Load properties
         await fetchGSCPropertiesList();
       }
-    } catch (error: any) {
-      console.error("Error checking GSC connection:", error);
+    } catch (error: unknown) {
+      logger.error("Error checking GSC connection:", error);
     }
   };
 
@@ -401,8 +401,8 @@ export function SEOManager() {
         // Use full page redirect instead of popup to avoid COOP issues
         window.location.href = data.authUrl;
       }
-    } catch (error: any) {
-      console.error("Error connecting to GSC:", error);
+    } catch (error: unknown) {
+      logger.error("Error connecting to GSC:", error);
       toast.error(`Failed to connect: ${error.message}`);
       setIsConnectingGSC(false);
     }
@@ -423,13 +423,13 @@ export function SEOManager() {
         setGscProperties(data.properties);
 
         // Auto-select primary property
-        const primary = data.properties.find((p: any) => p.is_primary);
+        const primary = data.properties.find((p) => p.is_primary);
         if (primary) {
           setSelectedProperty(primary.property_url);
         }
       }
-    } catch (error: any) {
-      console.error("Error fetching GSC properties:", error);
+    } catch (error: unknown) {
+      logger.error("Error fetching GSC properties:", error);
     }
   };
 
@@ -468,8 +468,8 @@ export function SEOManager() {
 
       // Reload keywords to show updated GSC data
       await loadTrackedKeywords();
-    } catch (error: any) {
-      console.error("Error syncing GSC data:", error);
+    } catch (error: unknown) {
+      logger.error("Error syncing GSC data:", error);
       setGscSyncResults({
         success: false,
         error: error.message || "Failed to sync"
@@ -496,8 +496,8 @@ export function SEOManager() {
       setLastSyncedAt(null);
 
       toast.success("Disconnected from Google Search Console");
-    } catch (error: any) {
-      console.error("Error disconnecting from GSC:", error);
+    } catch (error: unknown) {
+      logger.error("Error disconnecting from GSC:", error);
       toast.error(`Failed to disconnect: ${error.message}`);
     }
   };
@@ -517,7 +517,7 @@ export function SEOManager() {
       if (!user) return;
 
       // Load active alerts
-      const { data: alertsData } = await (supabase as any)
+      const { data: alertsData } = await supabase
         .from("seo_alerts")
         .select("*")
         .eq("user_id", user.id)
@@ -529,7 +529,7 @@ export function SEOManager() {
       setActiveAlertsCount(alertsData?.length || 0);
 
       // Load alert rules
-      const { data: rulesData } = await (supabase as any)
+      const { data: rulesData } = await supabase
         .from("seo_alert_rules")
         .select("*")
         .eq("user_id", user.id)
@@ -538,7 +538,7 @@ export function SEOManager() {
       setAlertRules(rulesData || []);
 
       // Load schedules
-      const { data: schedulesData } = await (supabase as any)
+      const { data: schedulesData } = await supabase
         .from("seo_monitoring_schedules")
         .select("*")
         .eq("user_id", user.id)
@@ -547,7 +547,7 @@ export function SEOManager() {
       setSchedules(schedulesData || []);
 
       // Load notification preferences - create default if doesn't exist
-      const { data: prefsData, error: prefsError } = await (supabase as any)
+      const { data: prefsData, error: prefsError } = await supabase
         .from("seo_notification_preferences")
         .select("*")
         .eq("user_id", user.id)
@@ -567,7 +567,7 @@ export function SEOManager() {
           notify_performance_issues: true,
         };
 
-        const { data: newPrefs } = await (supabase as any)
+        const { data: newPrefs } = await supabase
           .from("seo_notification_preferences")
           .insert(defaultPrefs)
           .select()
@@ -576,7 +576,7 @@ export function SEOManager() {
         setNotificationPrefs(newPrefs || defaultPrefs);
 
         // Also create default alert rule
-        await (supabase as any).from("seo_alert_rules").insert({
+        await supabase.from("seo_alert_rules").insert({
           user_id: user.id,
           rule_name: "SEO Score Drop Alert",
           rule_type: "score_drop",
@@ -585,7 +585,7 @@ export function SEOManager() {
         });
 
         // Create default monitoring schedule
-        await (supabase as any).from("seo_monitoring_schedules").insert({
+        await supabase.from("seo_monitoring_schedules").insert({
           user_id: user.id,
           schedule_name: "Daily SEO Audit",
           schedule_type: "audit",
@@ -604,8 +604,8 @@ export function SEOManager() {
           notify_keyword_changes: true,
         });
       }
-    } catch (error: any) {
-      console.error("Error loading monitoring data:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading monitoring data:", error);
     } finally {
       setIsLoadingMonitoring(false);
     }
@@ -616,7 +616,7 @@ export function SEOManager() {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) return;
 
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from("seo_alerts")
         .update({
           status: "acknowledged",
@@ -629,15 +629,15 @@ export function SEOManager() {
 
       await loadMonitoringData();
       toast.success("Alert acknowledged");
-    } catch (error: any) {
-      console.error("Error acknowledging alert:", error);
+    } catch (error: unknown) {
+      logger.error("Error acknowledging alert:", error);
       toast.error("Failed to acknowledge alert");
     }
   };
 
   const dismissAlert = async (alertId: string) => {
     try {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from("seo_alerts")
         .update({ status: "dismissed" })
         .eq("id", alertId);
@@ -646,15 +646,15 @@ export function SEOManager() {
 
       await loadMonitoringData();
       toast.success("Alert dismissed");
-    } catch (error: any) {
-      console.error("Error dismissing alert:", error);
+    } catch (error: unknown) {
+      logger.error("Error dismissing alert:", error);
       toast.error("Failed to dismiss alert");
     }
   };
 
   const toggleSchedule = async (scheduleId: string, enabled: boolean) => {
     try {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from("seo_monitoring_schedules")
         .update({ is_enabled: enabled })
         .eq("id", scheduleId);
@@ -663,18 +663,18 @@ export function SEOManager() {
 
       await loadMonitoringData();
       toast.success(enabled ? "Schedule enabled" : "Schedule disabled");
-    } catch (error: any) {
-      console.error("Error toggling schedule:", error);
+    } catch (error: unknown) {
+      logger.error("Error toggling schedule:", error);
       toast.error("Failed to update schedule");
     }
   };
 
-  const saveNotificationPreferences = async (prefs: any) => {
+  const saveNotificationPreferences = async (prefs: Record<string, unknown>) => {
     try {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) return;
 
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from("seo_notification_preferences")
         .upsert({
           user_id: user.id,
@@ -685,8 +685,8 @@ export function SEOManager() {
 
       setNotificationPrefs(prefs);
       toast.success("Notification preferences saved");
-    } catch (error: any) {
-      console.error("Error saving preferences:", error);
+    } catch (error: unknown) {
+      logger.error("Error saving preferences:", error);
       toast.error("Failed to save preferences");
     }
   };
@@ -728,7 +728,7 @@ export function SEOManager() {
       const warnings = results.filter((r) => r.status === "warning").length;
       const failed = results.filter((r) => r.status === "failed").length;
 
-      const { data: auditData, error: auditError } = await (supabase as any)
+      const { data: auditData, error: auditError } = await supabase
         .from('seo_audit_history')
         .insert({
           url: auditUrl,
@@ -750,18 +750,18 @@ export function SEOManager() {
         .single();
 
       if (auditError) {
-        console.error('Error saving audit:', auditError);
+        logger.error('Error saving audit:', auditError);
       } else if (auditData) {
         setCurrentAuditId(auditData.id);
 
         // Update last_audit_at in settings
-        await (supabase as any)
+        await supabase
           .from('seo_settings')
           .update({ last_audit_at: new Date().toISOString() })
           .eq('id', '00000000-0000-0000-0000-000000000001');
       }
     } catch (error) {
-      console.error('Error saving audit results:', error);
+      logger.error('Error saving audit results:', error);
     }
 
     setIsAuditing(false);
@@ -1584,9 +1584,9 @@ export function SEOManager() {
         }, 1000);
       }
 
-      console.log("AI Healing Results:", data);
-    } catch (error: any) {
-      console.error("AI Auto-Healing error:", error);
+      logger.debug("AI Healing Results:", data);
+    } catch (error: unknown) {
+      logger.error("AI Auto-Healing error:", error);
       setAutoHealingResults({
         success: false,
         error: error.message || "Failed to generate suggestions"
@@ -1633,8 +1633,8 @@ export function SEOManager() {
           runComprehensiveAudit();
         }, 1000);
       }
-    } catch (error: any) {
-      console.error("Error applying fixes:", error);
+    } catch (error: unknown) {
+      logger.error("Error applying fixes:", error);
       setFixesAppliedResults({
         success: false,
         error: error.message || "Failed to apply fixes"
@@ -1720,15 +1720,15 @@ export function SEOManager() {
       // Save to database
       const userId = (await supabase.auth.getUser()).data.user?.id;
 
-      const { error: insertError } = await (supabase as any)
+      const { error: insertError } = await supabase
         .from('seo_competitor_analysis')
         .insert({
           competitor_url: competitorUrl,
           overall_score: data.score,
-          technical_score: data.analysis?.technical ? Math.round(data.analysis.technical.filter((i: any) => i.status === 'passed').length / data.analysis.technical.length * 100) : null,
-          onpage_score: data.analysis?.onPage ? Math.round(data.analysis.onPage.filter((i: any) => i.status === 'passed').length / data.analysis.onPage.length * 100) : null,
-          performance_score: data.analysis?.performance ? Math.round(data.analysis.performance.filter((i: any) => i.status === 'passed').length / data.analysis.performance.length * 100) : null,
-          mobile_score: data.analysis?.mobile ? Math.round(data.analysis.mobile.filter((i: any) => i.status === 'passed').length / data.analysis.mobile.length * 100) : null,
+          technical_score: data.analysis?.technical ? Math.round(data.analysis.technical.filter((i) => i.status === 'passed').length / data.analysis.technical.length * 100) : null,
+          onpage_score: data.analysis?.onPage ? Math.round(data.analysis.onPage.filter((i) => i.status === 'passed').length / data.analysis.onPage.length * 100) : null,
+          performance_score: data.analysis?.performance ? Math.round(data.analysis.performance.filter((i) => i.status === 'passed').length / data.analysis.performance.length * 100) : null,
+          mobile_score: data.analysis?.mobile ? Math.round(data.analysis.mobile.filter((i) => i.status === 'passed').length / data.analysis.mobile.length * 100) : null,
           analysis: data.analysis,
           status_code: data.status,
           content_type: data.contentType,
@@ -1738,15 +1738,15 @@ export function SEOManager() {
         });
 
       if (insertError) {
-        console.error('Error saving competitor analysis:', insertError);
+        logger.error('Error saving competitor analysis:', insertError);
       }
 
       // Reload competitor analysis
       await loadCompetitorAnalysis();
 
       toast.success("Competitor analysis complete and saved!");
-    } catch (error: any) {
-      console.error("Competitor analysis error:", error);
+    } catch (error: unknown) {
+      logger.error("Competitor analysis error:", error);
       toast.error(`Failed to analyze competitor: ${error.message}`);
     } finally {
       setIsAnalyzingCompetitor(false);
@@ -1756,7 +1756,7 @@ export function SEOManager() {
   const removeCompetitor = async (url: string) => {
     try {
       // Mark as inactive in database
-      await (supabase as any)
+      await supabase
         .from('seo_competitor_analysis')
         .update({ is_active: false })
         .eq('competitor_url', url);
@@ -1764,7 +1764,7 @@ export function SEOManager() {
       setCompetitorResults(competitorResults.filter((c) => c.url !== url));
       toast.success("Competitor removed");
     } catch (error) {
-      console.error('Error removing competitor:', error);
+      logger.error('Error removing competitor:', error);
       toast.error('Failed to remove competitor');
     }
   };
@@ -1875,7 +1875,7 @@ export function SEOManager() {
       setSitemapXml(sitemap);
       toast.success(`Sitemap regenerated with ${posts?.length || 0} blog posts!`);
     } catch (error) {
-      console.error('Error regenerating sitemap:', error);
+      logger.error('Error regenerating sitemap:', error);
       toast.error('Failed to regenerate sitemap');
     } finally {
       setIsRegeneratingSitemap(false);
@@ -3538,11 +3538,11 @@ RESTful API available for integrations. Contact for API access.
                           success: true,
                           data: data.data
                         });
-                        console.log('Full structured data validation:', data.data);
+                        logger.debug('Full structured data validation:', data.data);
                       } else {
                         throw new Error(data?.error || 'Failed to validate structured data');
                       }
-                    } catch (error: any) {
+                    } catch (error: unknown) {
                       setStructuredDataValidationResults({
                         success: false,
                         error: error.message || 'Failed to validate structured data'
@@ -4216,7 +4216,7 @@ RESTful API available for integrations. Contact for API access.
                       } else {
                         throw new Error(data?.error || 'Failed to check Core Web Vitals');
                       }
-                    } catch (error: any) {
+                    } catch (error: unknown) {
                       setCoreWebVitalsResults({
                         success: false,
                         error: error.message || 'Failed to check Core Web Vitals'
@@ -4384,7 +4384,7 @@ RESTful API available for integrations. Contact for API access.
                       } else {
                         throw new Error(data?.error || 'Failed to add backlink');
                       }
-                    } catch (error: any) {
+                    } catch (error: unknown) {
                       setBacklinksResults([{
                         success: false,
                         error: error.message || 'Failed to add backlink',
@@ -4511,7 +4511,7 @@ RESTful API available for integrations. Contact for API access.
                       } else {
                         throw new Error(data?.error || 'Failed to scan for broken links');
                       }
-                    } catch (error: any) {
+                    } catch (error: unknown) {
                       setBrokenLinksResults({ error: error.message || 'Failed to scan for broken links' });
                     } finally {
                       setIsScanningBrokenLinks(false);
@@ -4677,7 +4677,7 @@ RESTful API available for integrations. Contact for API access.
                       } else {
                         throw new Error(data?.error || 'Failed to analyze content');
                       }
-                    } catch (error: any) {
+                    } catch (error: unknown) {
                       setContentAnalysisResults({ error: error.message || 'Failed to analyze content' });
                     } finally {
                       setIsAnalyzingContent(false);
@@ -4897,7 +4897,7 @@ RESTful API available for integrations. Contact for API access.
                     } else {
                       throw new Error(data?.error || 'Failed to crawl site');
                     }
-                  } catch (error: any) {
+                  } catch (error: unknown) {
                     setCrawlResults({
                       error: error.message || 'Failed to crawl site',
                       summary: { totalPages: 0, pagesWithIssues: 0 }
@@ -4987,7 +4987,7 @@ RESTful API available for integrations. Contact for API access.
                     } else {
                       throw new Error(data?.error || 'Failed to analyze images');
                     }
-                  } catch (error: any) {
+                  } catch (error: unknown) {
                     setImageResults({
                       error: error.message || 'Failed to analyze images',
                       summary: { totalImages: 0, issues: [] }
@@ -5066,11 +5066,11 @@ RESTful API available for integrations. Contact for API access.
 
                     if (data?.success) {
                       setRedirectResults(data.data);
-                      console.log('Full redirect analysis:', data.data);
+                      logger.debug('Full redirect analysis:', data.data);
                     } else {
                       throw new Error(data?.error || 'Failed to analyze redirects');
                     }
-                  } catch (error: any) {
+                  } catch (error: unknown) {
                     setRedirectResults({
                       error: error.message || 'Failed to analyze redirects',
                       summary: { totalUrls: 0, urlsWithRedirects: 0, urlsWithChains: 0, urlsWithLoops: 0, avgChainLength: 0, totalIssues: 0 }
@@ -5162,11 +5162,11 @@ RESTful API available for integrations. Contact for API access.
 
                     if (data?.success) {
                       setDuplicateResults(data.data);
-                      console.log('Full duplicate content analysis:', data.data);
+                      logger.debug('Full duplicate content analysis:', data.data);
                     } else {
                       throw new Error(data?.error || 'Failed to analyze content');
                     }
-                  } catch (error: any) {
+                  } catch (error: unknown) {
                     setDuplicateResults({
                       error: error.message || 'Failed to analyze content',
                       summary: { totalPages: 0, exactDuplicates: 0, nearDuplicates: 0, similarPages: 0, thinContent: 0, avgWordCount: 0, totalIssues: 0 }
@@ -5237,11 +5237,11 @@ RESTful API available for integrations. Contact for API access.
 
                     if (data?.success) {
                       setSecurityResults(data.data);
-                      console.log('Full security analysis:', data.data);
+                      logger.debug('Full security analysis:', data.data);
                     } else {
                       throw new Error(data?.error || 'Failed to check security');
                     }
-                  } catch (error: any) {
+                  } catch (error: unknown) {
                     setSecurityResults({
                       error: error.message || 'Failed to check security',
                       grade: 'F',
@@ -5337,11 +5337,11 @@ RESTful API available for integrations. Contact for API access.
 
                     if (data?.success) {
                       setLinkStructureResults(data.data);
-                      console.log('Full link analysis:', data.data);
+                      logger.debug('Full link analysis:', data.data);
                     } else {
                       throw new Error(data?.error || 'Failed to analyze links');
                     }
-                  } catch (error: any) {
+                  } catch (error: unknown) {
                     setLinkStructureResults({
                       error: error.message || 'Failed to analyze links',
                       summary: { totalPages: 0, totalLinks: 0, orphanedPages: 0, hubPages: 0, authorityPages: 0, avgInboundLinks: 0, avgOutboundLinks: 0, maxDepth: 0, avgDepth: 0 }
@@ -5413,11 +5413,11 @@ RESTful API available for integrations. Contact for API access.
 
                     if (data?.success) {
                       setMobileResults(data.data);
-                      console.log('Full mobile analysis:', data.data);
+                      logger.debug('Full mobile analysis:', data.data);
                     } else {
                       throw new Error(data?.error || 'Failed to check mobile usability');
                     }
-                  } catch (error: any) {
+                  } catch (error: unknown) {
                     setMobileResults({
                       error: error.message || 'Failed to check mobile usability',
                       grade: 'F',
@@ -5539,7 +5539,7 @@ RESTful API available for integrations. Contact for API access.
                     } else {
                       throw new Error(data?.error || 'Failed to monitor performance');
                     }
-                  } catch (error: any) {
+                  } catch (error: unknown) {
                     setBudgetResults({
                       error: error.message || 'Failed to monitor performance',
                       passedBudget: false,

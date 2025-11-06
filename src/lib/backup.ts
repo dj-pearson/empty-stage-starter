@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 export interface BackupLog {
   id: string;
@@ -62,7 +63,7 @@ export async function createBackup(download: boolean = true): Promise<{
     });
 
     if (error) {
-      console.error("Backup error:", error);
+      logger.error("Backup error:", error);
       toast.error("Backup failed", { description: error.message });
       return { success: false, error: error.message };
     }
@@ -87,7 +88,7 @@ export async function createBackup(download: boolean = true): Promise<{
 
     return { success: true, backupId: data.backup_id };
   } catch (error) {
-    console.error("Backup failed:", error);
+    logger.error("Backup failed:", error);
     toast.error("Backup failed", {
       description: error instanceof Error ? error.message : "An unexpected error occurred",
     });
@@ -127,7 +128,7 @@ function downloadBackup(base64Data: string, filename: string) {
       description: "Save this file in a secure location",
     });
   } catch (error) {
-    console.error("Download failed:", error);
+    logger.error("Download failed:", error);
     toast.error("Failed to download backup");
   }
 }
@@ -143,7 +144,7 @@ export async function getBackupHistory(limit: number = 10): Promise<BackupLog[]>
 
     if (!user) return [];
 
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("backup_logs")
       .select("*")
       .eq("user_id", user.id)
@@ -151,13 +152,13 @@ const { data, error } = await (supabase as any)
       .limit(limit);
 
     if (error) {
-      console.error("Failed to fetch backup history:", error);
+      logger.error("Failed to fetch backup history:", error);
       return [];
     }
 
     return data as BackupLog[];
   } catch (error) {
-    console.error("Failed to fetch backup history:", error);
+    logger.error("Failed to fetch backup history:", error);
     return [];
   }
 }
@@ -172,14 +173,14 @@ export async function getBackupConfig(): Promise<BackupConfig | null> {
 
     if (!user) return null;
 
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("backup_config")
       .select("*")
       .eq("user_id", user.id)
       .single();
 
     if (error) {
-      console.error("Failed to fetch backup config:", error);
+      logger.error("Failed to fetch backup config:", error);
       return null;
     }
 
@@ -192,7 +193,7 @@ const { data, error } = await (supabase as any)
       email_notifications: data.email_notifications,
     };
   } catch (error) {
-    console.error("Failed to fetch backup config:", error);
+    logger.error("Failed to fetch backup config:", error);
     return null;
   }
 }
@@ -213,7 +214,7 @@ export async function updateBackupConfig(
       return false;
     }
 
-const { error } = await (supabase as any)
+const { error } = await supabase
       .from("backup_config")
       .upsert({
         user_id: user.id,
@@ -222,7 +223,7 @@ const { error } = await (supabase as any)
       .eq("user_id", user.id);
 
     if (error) {
-      console.error("Failed to update backup config:", error);
+      logger.error("Failed to update backup config:", error);
       toast.error("Failed to update backup settings", {
         description: error.message,
       });
@@ -232,7 +233,7 @@ const { error } = await (supabase as any)
     toast.success("Backup settings updated");
     return true;
   } catch (error) {
-    console.error("Failed to update backup config:", error);
+    logger.error("Failed to update backup config:", error);
     toast.error("Failed to update backup settings");
     return false;
   }

@@ -26,6 +26,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Scan, AlertCircle, CheckCircle2, Loader2, Minus, Plus, Package2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { logger } from "@/lib/logger";
 
 type ScannedFood = {
   name: string;
@@ -48,7 +49,7 @@ type ScannedFood = {
 interface BarcodeScannerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onFoodAdded?: (food?: any) => void;
+  onFoodAdded?: (food?: Record<string, unknown>) => void;
   targetTable?: 'nutrition' | 'foods';
 }
 
@@ -106,7 +107,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
       const qrboxWidth = Math.round(containerWidth * 0.95);
       const qrboxHeight = Math.max(160, Math.round(qrboxWidth * 0.4));
 
-      const config: any = {
+      const config: Record<string, unknown> = {
         fps: 10,
         aspectRatio: 1.777,
         qrbox: { width: qrboxWidth, height: qrboxHeight },
@@ -142,7 +143,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
         async (decodedText) => {
           // Prevent processing the same scan multiple times
           if (isProcessingScan) {
-            console.log('Already processing a scan, ignoring duplicate');
+            logger.debug('Already processing a scan, ignoring duplicate');
             return;
           }
           
@@ -158,13 +159,13 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
           setIsProcessingScan(false);
         },
         (errMsg) => {
-          if (typeof errMsg === 'string') console.debug('decode failure:', errMsg);
+          if (typeof errMsg === 'string') logger.debug('decode failure:', errMsg);
         }
       );
 
       document.body.classList.add('scanner-active');
     } catch (err) {
-      console.error('Web scan error:', err);
+      logger.error('Web scan error:', err);
       try {
         if (webScannerRef.current) {
           await webScannerRef.current.stop();
@@ -233,7 +234,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
         });
       }
     } catch (err) {
-      console.error('Lookup error:', err);
+      logger.error('Lookup error:', err);
       setError(err instanceof Error ? err.message : "Failed to lookup product");
       toast({
         title: "Lookup failed",
@@ -341,7 +342,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
       setScannedFood(null);
       setError(null);
     } catch (err) {
-      console.error('Add error:', err);
+      logger.error('Add error:', err);
       toast({
         title: "Failed to add",
         description: err instanceof Error ? err.message : "Unable to add to database",
@@ -359,7 +360,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
         webScannerRef.current = null;
       }
     } catch (err) {
-      console.error('Error stopping web scanner on close:', err);
+      logger.error('Error stopping web scanner on close:', err);
     }
 
     document.body.classList.remove('scanner-active');

@@ -12,6 +12,7 @@ import { ChevronLeft, ChevronRight, Check, Sparkles, AlertTriangle } from "lucid
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 interface ChildIntakeQuestionnaireProps {
   open: boolean;
@@ -191,7 +192,7 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
       onComplete();
       onOpenChange(false);
     } catch (error) {
-      console.error("Error saving profile:", error);
+      logger.error("Error saving profile:", error);
       toast.error("Failed to save profile");
     } finally {
       setSaving(false);

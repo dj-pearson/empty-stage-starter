@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { logger } from "@/lib/logger";
 
 interface EmailList {
   id: string;
@@ -124,8 +125,8 @@ export function EmailMarketingManager() {
       if (data && data.length > 0) {
         setStats(data[0]);
       }
-    } catch (error: any) {
-      console.error("Error loading stats:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading stats:", error);
     }
   };
 
@@ -137,8 +138,8 @@ export function EmailMarketingManager() {
         .order("created_at", { ascending: false });
       if (error) throw error;
       setLists(data || []);
-    } catch (error: any) {
-      console.error("Error loading lists:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading lists:", error);
     }
   };
 
@@ -150,8 +151,8 @@ export function EmailMarketingManager() {
         .order("subscribed_at", { ascending: false });
       if (error) throw error;
       setSubscribers(data || []);
-    } catch (error: any) {
-      console.error("Error loading subscribers:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading subscribers:", error);
     }
   };
 
@@ -163,8 +164,8 @@ export function EmailMarketingManager() {
         .order("created_at", { ascending: false });
       if (error) throw error;
       setCampaigns(data || []);
-    } catch (error: any) {
-      console.error("Error loading campaigns:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading campaigns:", error);
     }
   };
 
@@ -176,8 +177,8 @@ export function EmailMarketingManager() {
         .order("created_at", { ascending: false });
       if (error) throw error;
       setTemplates(data || []);
-    } catch (error: any) {
-      console.error("Error loading templates:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading templates:", error);
     }
   };
 

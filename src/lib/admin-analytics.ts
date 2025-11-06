@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 export interface PlatformHealth {
   total_users: number;
@@ -100,19 +101,19 @@ export async function isAdmin(): Promise<boolean> {
  */
 export async function getPlatformHealth(): Promise<PlatformHealth | null> {
   try {
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("admin_platform_health")
       .select("*")
       .single();
 
     if (error) {
-      console.error("Failed to fetch platform health:", error);
+      logger.error("Failed to fetch platform health:", error);
       return null;
     }
 
     return data as PlatformHealth;
   } catch (error) {
-    console.error("Failed to fetch platform health:", error);
+    logger.error("Failed to fetch platform health:", error);
     return null;
   }
 }
@@ -124,20 +125,20 @@ export async function getUserEngagement(
   limit: number = 50
 ): Promise<UserEngagement[]> {
   try {
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("admin_user_engagement")
       .select("*")
       .order("engagement_score", { ascending: false })
       .limit(limit);
 
     if (error) {
-      console.error("Failed to fetch user engagement:", error);
+      logger.error("Failed to fetch user engagement:", error);
       return [];
     }
 
     return data as UserEngagement[];
   } catch (error) {
-    console.error("Failed to fetch user engagement:", error);
+    logger.error("Failed to fetch user engagement:", error);
     return [];
   }
 }
@@ -147,20 +148,20 @@ const { data, error } = await (supabase as any)
  */
 export async function getDailyActivity(days: number = 30): Promise<DailyActivity[]> {
   try {
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("admin_daily_activity")
       .select("*")
       .order("date", { ascending: false })
       .limit(days);
 
     if (error) {
-      console.error("Failed to fetch daily activity:", error);
+      logger.error("Failed to fetch daily activity:", error);
       return [];
     }
 
     return data as DailyActivity[];
   } catch (error) {
-    console.error("Failed to fetch daily activity:", error);
+    logger.error("Failed to fetch daily activity:", error);
     return [];
   }
 }
@@ -170,19 +171,19 @@ const { data, error } = await (supabase as any)
  */
 export async function getAIUsage(): Promise<AIUsage[]> {
   try {
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("admin_ai_usage")
       .select("*")
       .order("total_requests", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch AI usage:", error);
+      logger.error("Failed to fetch AI usage:", error);
       return [];
     }
 
     return data as AIUsage[];
   } catch (error) {
-    console.error("Failed to fetch AI usage:", error);
+    logger.error("Failed to fetch AI usage:", error);
     return [];
   }
 }
@@ -200,19 +201,19 @@ export async function getFeatureAdoption(): Promise<
   }>
 > {
   try {
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("admin_feature_adoption")
       .select("*")
       .order("adoption_rate_pct", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch feature adoption:", error);
+      logger.error("Failed to fetch feature adoption:", error);
       return [];
     }
 
     return data as any[];
   } catch (error) {
-    console.error("Failed to fetch feature adoption:", error);
+    logger.error("Failed to fetch feature adoption:", error);
     return [];
   }
 }
@@ -224,7 +225,7 @@ export async function getAdminNotifications(
   unreadOnly: boolean = false
 ): Promise<AdminNotification[]> {
   try {
-let query = (supabase as any)
+let query = supabase
       .from("admin_notifications")
       .select("*")
       .order("created_at", { ascending: false })
@@ -237,13 +238,13 @@ let query = (supabase as any)
     const { data, error } = await query;
 
     if (error) {
-      console.error("Failed to fetch admin notifications:", error);
+      logger.error("Failed to fetch admin notifications:", error);
       return [];
     }
 
     return data as AdminNotification[];
   } catch (error) {
-    console.error("Failed to fetch admin notifications:", error);
+    logger.error("Failed to fetch admin notifications:", error);
     return [];
   }
 }
@@ -253,19 +254,19 @@ let query = (supabase as any)
  */
 export async function markNotificationRead(notificationId: string): Promise<boolean> {
   try {
-const { error } = await (supabase as any)
+const { error } = await supabase
       .from("admin_notifications")
       .update({ is_read: true })
       .eq("id", notificationId);
 
     if (error) {
-      console.error("Failed to mark notification as read:", error);
+      logger.error("Failed to mark notification as read:", error);
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error("Failed to mark notification as read:", error);
+    logger.error("Failed to mark notification as read:", error);
     return false;
   }
 }
@@ -275,13 +276,13 @@ const { error } = await (supabase as any)
  */
 export async function markAllNotificationsRead(): Promise<boolean> {
   try {
-const { error } = await (supabase as any)
+const { error } = await supabase
       .from("admin_notifications")
       .update({ is_read: true })
       .eq("is_read", false);
 
     if (error) {
-      console.error("Failed to mark all notifications as read:", error);
+      logger.error("Failed to mark all notifications as read:", error);
       toast.error("Failed to mark notifications as read");
       return false;
     }
@@ -289,7 +290,7 @@ const { error } = await (supabase as any)
     toast.success("All notifications marked as read");
     return true;
   } catch (error) {
-    console.error("Failed to mark all notifications as read:", error);
+    logger.error("Failed to mark all notifications as read:", error);
     toast.error("Failed to mark notifications as read");
     return false;
   }
@@ -300,19 +301,19 @@ const { error } = await (supabase as any)
  */
 export async function getUserRetention(): Promise<any[]> {
   try {
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("admin_user_retention")
       .select("*")
       .order("cohort_month", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch user retention:", error);
+      logger.error("Failed to fetch user retention:", error);
       return [];
     }
 
     return data || [];
   } catch (error) {
-    console.error("Failed to fetch user retention:", error);
+    logger.error("Failed to fetch user retention:", error);
     return [];
   }
 }
@@ -322,19 +323,19 @@ const { data, error } = await (supabase as any)
  */
 export async function getErrorTracking(): Promise<any[]> {
   try {
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("admin_error_tracking")
       .select("*")
       .order("error_count", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch error tracking:", error);
+      logger.error("Failed to fetch error tracking:", error);
       return [];
     }
 
     return data || [];
   } catch (error) {
-    console.error("Failed to fetch error tracking:", error);
+    logger.error("Failed to fetch error tracking:", error);
     return [];
   }
 }

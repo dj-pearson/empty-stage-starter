@@ -48,6 +48,7 @@ import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { PullToRefreshIndicator } from "@/components/PullToRefreshIndicator";
 import { haptic } from "@/lib/haptics";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { logger } from "@/lib/logger";
 
 interface FoodSuggestion {
   name: string;
@@ -148,7 +149,7 @@ export default function Pantry() {
         setSuggestions(data.suggestions || []);
       }
     } catch (error) {
-      console.error("Error getting suggestions:", error);
+      logger.error("Error getting suggestions:", error);
       toast({
         title: "Error",
         description: "Failed to get AI suggestions. Please try again.",
@@ -225,8 +226,8 @@ export default function Pantry() {
   };
 
   const handleFoodIdentified = (foodData: any) => {
-    console.log("handleFoodIdentified received:", foodData);
-    console.log(
+    logger.debug("handleFoodIdentified received:", foodData);
+    logger.debug(
       "Quantity:",
       foodData.quantity,
       "ServingSize:",
@@ -266,7 +267,7 @@ export default function Pantry() {
         quantity: foodData.quantity || 1,
         package_quantity: foodData.servingSize || undefined,
       };
-      console.log("Adding food to pantry:", foodToAdd);
+      logger.debug("Adding food to pantry:", foodToAdd);
       addFood(foodToAdd);
 
       toast({

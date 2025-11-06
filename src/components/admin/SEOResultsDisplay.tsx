@@ -2,8 +2,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { AlertCircle, CheckCircle, XCircle, Info } from "lucide-react";
+import type {
+  CrawlResultsSummary,
+  ImageResultsSummary,
+  RedirectAnalysisResults,
+  DuplicateAnalysisResults,
+  SecurityAnalysisResults,
+  LinkStructureResults,
+  MobileAnalysisResults,
+  PerformanceBudgetResults,
+} from "@/types/seo-types";
 
-export const CrawlResults = ({ results }: { results: any }) => {
+export const CrawlResults = ({ results }: { results: CrawlResultsSummary }) => {
   if (!results) return null;
   
   const summary = results.summary;
@@ -46,7 +56,7 @@ export const CrawlResults = ({ results }: { results: any }) => {
   );
 };
 
-export const ImageResults = ({ results }: { results: any }) => {
+export const ImageResults = ({ results }: { results: ImageResultsSummary }) => {
   if (!results) return null;
   
   const summary = results.summary;
@@ -87,7 +97,7 @@ export const ImageResults = ({ results }: { results: any }) => {
   );
 };
 
-export const RedirectResults = ({ results }: { results: any }) => {
+export const RedirectResults = ({ results }: { results: RedirectAnalysisResults }) => {
   if (!results) return null;
   
   return (
@@ -127,7 +137,7 @@ export const RedirectResults = ({ results }: { results: any }) => {
   );
 };
 
-export const DuplicateResults = ({ results }: { results: any }) => {
+export const DuplicateResults = ({ results }: { results: DuplicateAnalysisResults }) => {
   if (!results) return null;
   
   return (
@@ -167,7 +177,7 @@ export const DuplicateResults = ({ results }: { results: any }) => {
   );
 };
 
-export const SecurityResults = ({ results }: { results: any }) => {
+export const SecurityResults = ({ results }: { results: SecurityAnalysisResults }) => {
   if (!results) return null;
   
   const getScoreColor = (score: number) => {
@@ -219,7 +229,7 @@ export const SecurityResults = ({ results }: { results: any }) => {
   );
 };
 
-export const LinkStructureResults = ({ results }: { results: any }) => {
+export const LinkStructureResults = ({ results }: { results: LinkStructureResults }) => {
   if (!results) return null;
   
   const summary = results.summary;
@@ -260,7 +270,7 @@ export const LinkStructureResults = ({ results }: { results: any }) => {
   );
 };
 
-export const MobileResults = ({ results }: { results: any }) => {
+export const MobileResults = ({ results }: { results: MobileAnalysisResults }) => {
   if (!results) return null;
   
   const summary = results.summary;
@@ -315,7 +325,7 @@ export const MobileResults = ({ results }: { results: any }) => {
   );
 };
 
-export const BudgetResults = ({ results }: { results: any }) => {
+export const BudgetResults = ({ results }: { results: PerformanceBudgetResults }) => {
   if (!results) return null;
   
   const totalSizeMB = (results.totalPageSize / (1024 * 1024)).toFixed(2);
@@ -362,7 +372,7 @@ export const BudgetResults = ({ results }: { results: any }) => {
           <div className="space-y-2">
             <p className="text-sm font-semibold">Budget Violations: {results.violations.length}</p>
             <div className="space-y-1">
-              {results.violations.map((v: any, i: number) => (
+              {results.violations.map((v, i: number) => (
                 <div key={i} className="flex items-start gap-2 text-sm p-2 bg-destructive/10 rounded">
                   <AlertCircle className="h-4 w-4 text-destructive mt-0.5" />
                   <div>

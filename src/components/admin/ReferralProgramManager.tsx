@@ -11,6 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import { Gift, TrendingUp, Users, Award } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { logger } from "@/lib/logger";
 
 interface ReferralConfig {
   id: string;
@@ -64,8 +65,8 @@ export function ReferralProgramManager() {
         const config = data.find(c => c.tier === selectedTier) || data[0];
         setEditingConfig(config);
       }
-    } catch (error: any) {
-      console.error("Error loading configs:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading configs:", error);
       toast({ title: "Error loading configs", description: error.message, variant: "destructive" });
     } finally {
       setLoading(false);
@@ -91,7 +92,7 @@ export function ReferralProgramManager() {
         .not("referrer_id", "is", null);
 
       const referrerCounts = new Map<string, { name: string; count: number }>();
-      topReferrers?.forEach((ref: any) => {
+      topReferrers?.forEach((ref) => {
         if (ref.referrer_id) {
           const current = referrerCounts.get(ref.referrer_id) || { name: ref.profiles?.full_name || "Unknown", count: 0 };
           referrerCounts.set(ref.referrer_id, { ...current, count: current.count + 1 });
@@ -110,8 +111,8 @@ export function ReferralProgramManager() {
         total_rewards_issued: rewards?.length || 0,
         top_referrers: topReferrersArray,
       });
-    } catch (error: any) {
-      console.error("Error loading stats:", error);
+    } catch (error: unknown) {
+      logger.error("Error loading stats:", error);
     }
   };
 
@@ -139,8 +140,8 @@ export function ReferralProgramManager() {
 
       toast({ title: "Success", description: "Referral program config updated" });
       loadConfigs();
-    } catch (error: any) {
-      console.error("Error saving config:", error);
+    } catch (error: unknown) {
+      logger.error("Error saving config:", error);
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   };

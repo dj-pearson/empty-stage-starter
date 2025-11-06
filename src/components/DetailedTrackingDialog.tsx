@@ -22,6 +22,7 @@ import { CheckCircle, Minus, XCircle, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { PlanEntry, Food } from "@/types";
+import { logger } from "@/lib/logger";
 
 interface DetailedTrackingDialogProps {
   open: boolean;
@@ -134,7 +135,7 @@ export function DetailedTrackingDialog({
       setMoodAfter("happy");
       setNotes("");
     } catch (error) {
-      console.error("Error saving detailed tracking:", error);
+      logger.error("Error saving detailed tracking:", error);
       toast.error("Failed to save tracking data");
     } finally {
       setSaving(false);

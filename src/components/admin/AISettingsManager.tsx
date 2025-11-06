@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from "@/hooks/use-toast";
 import { Brain, Plus, Trash2, CheckCircle2, Loader2, Sparkles } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { logger } from "@/lib/logger";
 
 type AIModel = {
   id: string;
@@ -23,7 +24,7 @@ type AIModel = {
   is_active: boolean;
   temperature?: number;
   max_tokens?: number;
-  additional_params?: any;
+  additional_params?: Record<string, unknown>;
 };
 
 export function AISettingsManager() {
@@ -58,7 +59,7 @@ export function AISettingsManager() {
       if (error) throw error;
       setModels(data || []);
     } catch (error) {
-      console.error('Error fetching AI models:', error);
+      logger.error('Error fetching AI models:', error);
       toast({
         title: "Error",
         description: "Failed to load AI model settings",
@@ -91,7 +92,7 @@ export function AISettingsManager() {
         description: "AI model has been set as active",
       });
     } catch (error) {
-      console.error('Error setting active model:', error);
+      logger.error('Error setting active model:', error);
       toast({
         title: "Error",
         description: "Failed to activate model",
@@ -136,8 +137,8 @@ export function AISettingsManager() {
           description: "AI model is responding correctly",
         });
       }
-    } catch (error: any) {
-      console.error('Error testing model:', error);
+    } catch (error: unknown) {
+      logger.error('Error testing model:', error);
       setTestResult({ success: false, message: error.message });
       toast({
         title: "Test failed",
@@ -176,8 +177,8 @@ export function AISettingsManager() {
         title: "Model added",
         description: "AI model configuration has been saved",
       });
-    } catch (error: any) {
-      console.error('Error adding model:', error);
+    } catch (error: unknown) {
+      logger.error('Error adding model:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to add model",
@@ -200,8 +201,8 @@ export function AISettingsManager() {
         title: "Model deleted",
         description: "AI model configuration has been removed",
       });
-    } catch (error: any) {
-      console.error('Error deleting model:', error);
+    } catch (error: unknown) {
+      logger.error('Error deleting model:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to delete model",

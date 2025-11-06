@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Users, UserCheck, ShoppingBag, Play, StopCircle, Loader2 } from "lucide-react";
 import { GroceryItem } from "@/types";
+import { logger } from "@/lib/logger";
 
 interface ShoppingSession {
   id: string;
@@ -47,7 +48,27 @@ export function CollaborativeShoppingMode({
 
   // Load active session on mount
   useEffect(() => {
-    if (!groceryListId || !householdId) return;
+    const loadActiveSession = async () => {
+      if (!groceryListId || !householdId) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('shopping_sessions')
+          .select('*')
+          .eq('grocery_list_id', groceryListId)
+          .eq('household_id', householdId)
+          .eq('is_active', true)
+          .order('started_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (error && error.code !== 'PGRST116') throw error; // Ignore not found error
+
+        setActiveSession(data as any);
+      } catch (error) {
+        logger.error('Error loading shopping session:', error);
+      }
+    };
 
     loadActiveSession();
   }, [groceryListId, householdId]);
@@ -86,27 +107,7 @@ export function CollaborativeShoppingMode({
     };
   }, [activeSession, householdId]);
 
-  const loadActiveSession = async () => {
-    if (!groceryListId || !householdId) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('shopping_sessions')
-        .select('*')
-        .eq('grocery_list_id', groceryListId)
-        .eq('household_id', householdId)
-        .eq('is_active', true)
-        .order('started_at', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error; // Ignore not found error
-
-      setActiveSession(data as any);
-    } catch (error) {
-      console.error('Error loading shopping session:', error);
-    }
-  };
+  // loadActiveSession moved into useEffect to avoid dependency warnings
 
   const handleStartSession = async () => {
     if (!groceryListId || !householdId || !userId) {
@@ -136,7 +137,7 @@ export function CollaborativeShoppingMode({
         description: "Household members can now see your progress in real-time"
       });
     } catch (error) {
-      console.error('Error starting session:', error);
+      logger.error('Error starting session:', error);
       toast.error("Failed to start shopping session");
     } finally {
       setIsStarting(false);
@@ -161,7 +162,7 @@ export function CollaborativeShoppingMode({
       setActiveSession(null);
       toast.success("Shopping session ended");
     } catch (error) {
-      console.error('Error ending session:', error);
+      logger.error('Error ending session:', error);
       toast.error("Failed to end shopping session");
     } finally {
       setIsEnding(false);

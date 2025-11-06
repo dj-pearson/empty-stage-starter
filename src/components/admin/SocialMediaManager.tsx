@@ -46,6 +46,7 @@ import {
 import { toast } from "sonner";
 import { format, addDays } from "date-fns";
 import { cn } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 const PLATFORMS = [
   { value: "facebook", label: "Facebook", icon: Facebook, color: "text-blue-600" },
@@ -139,7 +140,7 @@ export function SocialMediaManager() {
       if (error) throw error;
       setPosts((data || []) as any);
     } catch (error) {
-      console.error("Error loading posts:", error);
+      logger.error("Error loading posts:", error);
       toast.error("Failed to load posts");
     } finally {
       setLoading(false);
@@ -156,7 +157,7 @@ export function SocialMediaManager() {
       if (error) throw error;
       setAccounts((data || []) as any);
     } catch (error) {
-      console.error("Error loading accounts:", error);
+      logger.error("Error loading accounts:", error);
     }
   };
 
@@ -168,7 +169,7 @@ export function SocialMediaManager() {
         setStats(data[0]);
       }
     } catch (error) {
-      console.error("Error loading stats:", error);
+      logger.error("Error loading stats:", error);
     }
   };
 
@@ -216,7 +217,7 @@ export function SocialMediaManager() {
       loadPosts();
       loadStats();
     } catch (error) {
-      console.error("Error creating post:", error);
+      logger.error("Error creating post:", error);
       toast.error("Failed to create post");
     }
   };
@@ -273,7 +274,7 @@ export function SocialMediaManager() {
           return;
         }
       } catch (webhookError) {
-        console.error("Webhook error:", webhookError);
+        logger.error("Webhook error:", webhookError);
         toast.error("Failed to send to webhook. Check webhook logs for details.");
         return;
       }
@@ -293,7 +294,7 @@ export function SocialMediaManager() {
       loadPosts();
       loadStats();
     } catch (error) {
-      console.error("Error publishing post:", error);
+      logger.error("Error publishing post:", error);
       toast.error("Failed to publish post");
     }
   };
@@ -306,7 +307,7 @@ export function SocialMediaManager() {
       loadPosts();
       loadStats();
     } catch (error) {
-      console.error("Error deleting post:", error);
+      logger.error("Error deleting post:", error);
       toast.error("Failed to delete post");
     }
   };
@@ -324,7 +325,7 @@ export function SocialMediaManager() {
       }
 
       // Send to webhook
-      console.log("Resending to webhook:", globalAccount.webhook_url);
+      logger.debug("Resending to webhook:", globalAccount.webhook_url);
       const webhookResponse = await fetch(globalAccount.webhook_url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -350,8 +351,8 @@ export function SocialMediaManager() {
       }
 
       toast.success("Post resent to webhook!");
-    } catch (error: any) {
-      console.error("Error resending to webhook:", error);
+    } catch (error: unknown) {
+      logger.error("Error resending to webhook:", error);
       toast.error(error.message || "Failed to resend to webhook");
     }
   };
@@ -363,7 +364,7 @@ export function SocialMediaManager() {
         return;
       }
 
-      console.log("Saving webhook account:", {
+      logger.debug("Saving webhook account:", {
         platform: accountForm.platform,
         account_name: accountForm.account_name || "Global Webhook",
         webhook_url: accountForm.webhook_url,
@@ -381,17 +382,17 @@ export function SocialMediaManager() {
       ]).select();
 
       if (error) {
-        console.error("Database error saving webhook:", error);
+        logger.error("Database error saving webhook:", error);
         throw error;
       }
 
-      console.log("Webhook saved successfully:", data);
+      logger.debug("Webhook saved successfully:", data);
       toast.success("Webhook configured successfully");
       setShowAccountDialog(false);
       setAccountForm({ platform: "webhook", account_name: "", webhook_url: "", is_global: true });
       loadAccounts();
-    } catch (error: any) {
-      console.error("Error saving webhook account:", error);
+    } catch (error: unknown) {
+      logger.error("Error saving webhook account:", error);
       toast.error(error.message || "Failed to save webhook");
     }
   };
@@ -482,8 +483,8 @@ export function SocialMediaManager() {
         setShowAIDialog(false);
         setShowPostDialog(true);
       }
-    } catch (error: any) {
-      console.error("Error generating AI content:", error);
+    } catch (error: unknown) {
+      logger.error("Error generating AI content:", error);
       toast.error(error.message || "Failed to generate content");
     } finally {
       setAiGenerating(false);

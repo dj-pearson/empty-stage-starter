@@ -58,7 +58,7 @@ Hummus,protein,false,true,sesame,Deli`;
       const values = lines[i].split(",").map(v => v.trim());
       if (values.length < headers.length) continue;
 
-      const food: any = {};
+      const food: Record<string, unknown> = {};
       headers.forEach((header, index) => {
         food[header] = values[index]?.replace(/^"|"$/g, "") || "";
       });

@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { logger } from "@/lib/logger";
 
 interface SubscriptionPlan {
   id: string;
@@ -134,7 +135,7 @@ export function SubscriptionManagement() {
         features: Array.isArray(plan.features) ? plan.features as string[] : []
       })));
     } catch (error) {
-      console.error("Error loading plans:", error);
+      logger.error("Error loading plans:", error);
       toast.error("Failed to load subscription plans");
     }
   };
@@ -172,9 +173,9 @@ export function SubscriptionManagement() {
       const { data: { users: authUsers } } = await supabase.auth.admin.listUsers();
 
       // Combine data
-      const combined: UserSubscription[] = subs?.map((sub: any) => {
+      const combined: UserSubscription[] = subs?.map((sub) => {
         const profile = profiles?.find((p) => p.id === sub.user_id);
-        const authUser = authUsers?.find((u: any) => u.id === sub.user_id);
+        const authUser = authUsers?.find((u) => u.id === sub.user_id);
 
         return {
           id: sub.id,
@@ -193,7 +194,7 @@ export function SubscriptionManagement() {
 
       setSubscriptions(combined);
     } catch (error) {
-      console.error("Error loading subscriptions:", error);
+      logger.error("Error loading subscriptions:", error);
       toast.error("Failed to load subscriptions");
     } finally {
       setLoading(false);
@@ -227,7 +228,7 @@ export function SubscriptionManagement() {
         arr: mrr * 12,
       });
     } catch (error) {
-      console.error("Error loading stats:", error);
+      logger.error("Error loading stats:", error);
     }
   };
 
@@ -267,7 +268,7 @@ export function SubscriptionManagement() {
       resetPlanForm();
       loadPlans();
     } catch (error) {
-      console.error("Error saving plan:", error);
+      logger.error("Error saving plan:", error);
       toast.error("Failed to save plan");
     }
   };
