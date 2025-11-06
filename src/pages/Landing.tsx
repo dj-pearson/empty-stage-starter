@@ -379,9 +379,8 @@ const Landing = () => {
               successful kids meal planning.
             </p>
             <p className="text-muted-foreground leading-relaxed">
-              Be among the first to join the EatPal community when we launch
-              November 1st, 2025. Discover how easy kids meal planning for picky
-              eaters can be with our comprehensive platform built specifically
+              Join the EatPal community today and discover how easy kids meal 
+              planning for picky eaters can be with our comprehensive platform built specifically
               for families dealing with selective eating challenges.
             </p>
           </div>
@@ -392,11 +391,11 @@ const Landing = () => {
       <section className="py-24 px-4 bg-gradient-to-br from-primary to-secondary">
         <div className="container mx-auto text-center max-w-3xl">
           <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary-foreground">
-            Launching November 1st, 2025
+            Now Live!
           </h2>
           <p className="text-xl text-primary-foreground/90 mb-10 leading-relaxed">
-            Join the waitlist to be the first to know when we launch. Transform
-            how you plan meals for your picky eater!
+            Start your free account today and transform how you plan meals for 
+            your picky eater!
           </p>
           <Link to="/auth">
             <Button
@@ -413,8 +412,8 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Waitlist Section */}
-      <section id="waitlist" className="py-24 px-4 bg-gradient-to-b from-background to-secondary/10">
+      {/* Get Started Section */}
+      <section id="get-started" className="py-24 px-4 bg-gradient-to-b from-background to-secondary/10">
         <div className="container mx-auto max-w-2xl">
           <WaitlistForm />
         </div>

@@ -68,7 +68,7 @@ export function EnhancedHero() {
             transition={{ duration: shouldReduceMotion ? 0 : 0.6 }}
           >
             <Badge className="mb-6 bg-accent/10 text-accent border-accent/20 px-4 py-1.5 text-base">
-              🎉 Launching November 1st, 2025
+              🎉 Now Live!
             </Badge>
           </m.div>
 
@@ -117,11 +117,11 @@ export function EnhancedHero() {
                 className="gap-2 text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-shadow"
                 onClick={() =>
                   document
-                    .getElementById('waitlist')
+                    .getElementById('get-started')
                     ?.scrollIntoView({ behavior: 'smooth' })
                 }
               >
-                Join the Waitlist <ArrowRight className="h-5 w-5" />
+                Try It Free <ArrowRight className="h-5 w-5" />
               </Button>
             </m.div>
             <m.div

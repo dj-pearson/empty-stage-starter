@@ -57,11 +57,11 @@ const FAQ = () => {
 
           <AccordionItem value="item-2">
             <AccordionTrigger className="text-left text-lg font-semibold">
-              When is EatPal launching?
+              Is EatPal available now?
             </AccordionTrigger>
             <AccordionContent className="text-muted-foreground leading-relaxed">
-              EatPal is launching November 1st, 2025. While you can sign in if you already have an account, new registrations 
-              will open on the launch date. Be sure to check back on November 1st to join!
+              Yes! EatPal is now live and ready to help you plan meals for your picky eater. 
+              Sign up today and start creating personalized meal plans with safe foods and try bites.
             </AccordionContent>
           </AccordionItem>
 
