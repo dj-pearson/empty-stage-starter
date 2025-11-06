@@ -11,7 +11,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { haptics } from "@/lib/haptics";
+import { haptic } from "@/lib/haptics";
 
 interface QuickAction {
   id: string;
@@ -26,12 +26,12 @@ export function QuickActionsMenu() {
   const navigate = useNavigate();
 
   const toggleMenu = () => {
-    haptics.light();
+    haptic.light();
     setIsOpen(!isOpen);
   };
 
   const handleAction = (action: () => void) => {
-    haptics.medium();
+    haptic.medium();
     action();
     setIsOpen(false);
   };
