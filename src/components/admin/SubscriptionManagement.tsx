@@ -173,9 +173,9 @@ export function SubscriptionManagement() {
       const { data: { users: authUsers } } = await supabase.auth.admin.listUsers();
 
       // Combine data
-      const combined: UserSubscription[] = subs?.map((sub: any) => {
+      const combined: UserSubscription[] = subs?.map((sub) => {
         const profile = profiles?.find((p) => p.id === sub.user_id);
-        const authUser = authUsers?.find((u: any) => u.id === sub.user_id);
+        const authUser = authUsers?.find((u) => u.id === sub.user_id);
 
         return {
           id: sub.id,

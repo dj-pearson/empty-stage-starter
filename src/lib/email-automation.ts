@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
+import type { EmailTemplate } from "@/types/marketing-types";
 
 export type EmailTriggerEvent =
   | 'lead_created'
@@ -59,7 +60,7 @@ export async function triggerEmailSequence(
     }
 
     return { success: true, enrollment_id: data as string || undefined };
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Error in triggerEmailSequence:', error);
     return { success: false, error: error.message };
   }
@@ -76,7 +77,7 @@ export async function cancelEmailSequence(
     // This would need to be created or use automation_email_queue
     logger.warn('cancelEmailSequence: user_email_sequences table not available');
     return { success: false, error: 'Feature not available - table does not exist' };
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Error in cancelEmailSequence:', error);
     return { success: false, error: error.message };
   }
@@ -87,12 +88,12 @@ export async function cancelEmailSequence(
  */
 export async function getUserEmailSequences(
   userId: string
-): Promise<{ sequences: any[]; error?: string }> {
+): Promise<{ sequences: EmailSequence[]; error?: string }> {
   try {
     // Note: user_email_sequences table doesn't exist in current schema
     logger.warn('getUserEmailSequences: user_email_sequences table not available');
     return { sequences: [], error: 'Feature not available - table does not exist' };
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Error in getUserEmailSequences:', error);
     return { sequences: [], error: error.message };
   }
@@ -133,7 +134,7 @@ export async function scheduleEmail(params: {
     }
 
     return { success: true, email_id: data.id };
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Error in scheduleEmail:', error);
     return { success: false, error: error.message };
   }
@@ -173,7 +174,7 @@ export async function trackEmailEvent(
     }
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Error in trackEmailEvent:', error);
     return { success: false, error: error.message };
   }
@@ -183,7 +184,7 @@ export async function trackEmailEvent(
  * Get email templates
  */
 export async function getEmailTemplates(): Promise<{
-  templates: any[];
+  templates: EmailTemplate[];
   error?: string;
 }> {
   try {
@@ -198,7 +199,7 @@ export async function getEmailTemplates(): Promise<{
     }
 
     return { templates: data || [] };
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Error in getEmailTemplates:', error);
     return { templates: [], error: error.message };
   }
@@ -237,7 +238,7 @@ export async function createEmailTemplate(params: {
     }
 
     return { success: true, template_id: data.id };
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Error in createEmailTemplate:', error);
     return { success: false, error: error.message };
   }
@@ -322,7 +323,7 @@ export async function getEmailMetrics(params?: {
         bounce_rate: total_sent > 0 ? (total_bounced / total_sent) * 100 : 0,
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Error in getEmailMetrics:', error);
     return {
       metrics: {

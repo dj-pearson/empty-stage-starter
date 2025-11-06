@@ -129,7 +129,7 @@ export function TicketQueue() {
 
       if (error) throw error;
       setTickets(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error loading tickets",
         description: error.message,
@@ -157,14 +157,14 @@ export function TicketQueue() {
       if (error) throw error;
 
       // Flatten the author data
-      const flattenedMessages = (data || []).map((msg: any) => ({
+      const flattenedMessages = (data || []).map((msg) => ({
         ...msg,
         author_email: msg.author?.email,
         author_name: msg.author?.profiles?.full_name,
       }));
 
       setMessages(flattenedMessages);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error loading messages",
         description: error.message,
@@ -175,7 +175,7 @@ export function TicketQueue() {
 
   const handleStatusChange = async (ticketId: string, newStatus: string) => {
     try {
-      const updateData: any = { status: newStatus };
+      const updateData: Record<string, unknown> = { status: newStatus };
 
       if (newStatus === "resolved") {
         const { data: { user } } = await supabase.auth.getUser();
@@ -198,7 +198,7 @@ export function TicketQueue() {
         title: "Ticket updated",
         description: `Status changed to ${newStatus}`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error updating ticket",
         description: error.message,
@@ -229,7 +229,7 @@ export function TicketQueue() {
         title: "Message sent",
         description: isInternal ? "Internal note added" : "Reply sent to user",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error sending message",
         description: error.message,

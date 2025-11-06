@@ -73,7 +73,7 @@ export async function initializeTrialAutomation(
     });
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Error in initializeTrialAutomation:', error);
     return { success: false, error: error.message };
   }
@@ -321,7 +321,7 @@ export async function handleTrialConversion(
     }
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Error in handleTrialConversion:', error);
     return { success: false, error: error.message };
   }
@@ -365,7 +365,7 @@ export async function handleSubscriptionCancellation(
     });
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Error in handleSubscriptionCancellation:', error);
     return { success: false, error: error.message };
   }

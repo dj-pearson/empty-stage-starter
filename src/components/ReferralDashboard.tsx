@@ -112,7 +112,7 @@ export function ReferralDashboard() {
         .order("created_at", { ascending: false });
 
       setRewards(rewardData || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error loading referral data:", error);
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {

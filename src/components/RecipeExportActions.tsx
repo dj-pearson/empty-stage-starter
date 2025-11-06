@@ -248,7 +248,7 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
         url: recipe.source_url || window.location.href,
       });
       toast.success('Recipe shared!');
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error.name !== 'AbortError') {
         logger.error('Error sharing:', error);
         toast.error('Failed to share recipe');

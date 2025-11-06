@@ -110,7 +110,7 @@ export function KidMealBuilder() {
         ...creation,
         foods: Array.isArray(creation.foods) ? creation.foods as any : []
       })));
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error loading creations:", error);
     } finally {
       setLoading(false);
@@ -128,7 +128,7 @@ export function KidMealBuilder() {
 
       if (error) throw error;
       setRecentAchievements(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error loading achievements:", error);
     }
   };
@@ -192,7 +192,7 @@ export function KidMealBuilder() {
       resetBuilder();
       loadCreations();
       loadRecentAchievements();
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error saving creation:", error);
       toast.error("Failed to save meal");
     } finally {
@@ -214,7 +214,7 @@ export function KidMealBuilder() {
 
       toast.success("Added to meal requests! ⭐");
       loadCreations();
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error requesting meal:", error);
       toast.error("Failed to request meal");
     }
@@ -231,7 +231,7 @@ export function KidMealBuilder() {
 
       toast.success("Meal deleted");
       loadCreations();
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error deleting creation:", error);
       toast.error("Failed to delete meal");
     }

@@ -107,7 +107,7 @@ export default function Grocery() {
     if (!item.checked && selectedStoreLayoutId && userId) {
       try {
         // Check if user has already contributed for this item at this store
-        const { data: existingContribution } = await (supabase as any)
+        const { data: existingContribution } = await supabase
           .from('user_store_contributions')
           .select('*')
           .eq('user_id', userId)
@@ -116,7 +116,7 @@ export default function Grocery() {
           .maybeSingle();
 
         // Check if there's already a mapping
-        const { data: existingMapping } = await (supabase as any)
+        const { data: existingMapping } = await supabase
           .from('food_aisle_mappings')
           .select('*')
           .eq('store_layout_id', selectedStoreLayoutId)
@@ -199,7 +199,7 @@ export default function Grocery() {
       }
 
       // Call the database function to detect and add restock items
-      const { data, error } = await (supabase as any).rpc('auto_add_restock_items', {
+      const { data, error } = await supabase.rpc('auto_add_restock_items', {
         p_user_id: user.id,
         p_kid_id: activeKidId
       });

@@ -57,7 +57,7 @@ export function useSubscription() {
       } else {
         setSubscription(null);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching subscription:", err);
     } finally {
       setLoading(false);
@@ -114,7 +114,7 @@ export function useSubscription() {
       }
 
       return { success: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error upgrading subscription:", err);
       toast.error(err.message || "Failed to upgrade subscription");
       return { success: false, error: err.message };
@@ -142,7 +142,7 @@ export function useSubscription() {
       await fetchSubscription();
 
       return { success: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error canceling subscription:", err);
       toast.error(err.message || "Failed to cancel subscription");
       return { success: false, error: err.message };
@@ -170,7 +170,7 @@ export function useSubscription() {
       await fetchSubscription();
 
       return { success: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error reactivating subscription:", err);
       toast.error(err.message || "Failed to reactivate subscription");
       return { success: false, error: err.message };
@@ -199,7 +199,7 @@ export function useSubscription() {
       await fetchSubscription();
 
       return { success: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error changing billing cycle:", err);
       toast.error(err.message || "Failed to change billing cycle");
       return { success: false, error: err.message };

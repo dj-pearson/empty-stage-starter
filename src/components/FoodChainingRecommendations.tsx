@@ -99,7 +99,7 @@ export function FoodChainingRecommendations() {
         if (foodArray.length > 0 && !selectedFood) {
           handleSelectFood(foodArray[0]);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         logger.error("Error loading successful foods:", error);
         toast.error("Failed to load food success data");
       } finally {
@@ -135,7 +135,7 @@ export function FoodChainingRecommendations() {
       if (!data || data.length === 0) {
         await generateChainSuggestions(sourceFoodId);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error loading chain suggestions:", error);
       toast.error("Failed to load recommendations");
     } finally {
@@ -166,7 +166,7 @@ export function FoodChainingRecommendations() {
       if (similarError) throw similarError;
 
       // Calculate similarity and create suggestions
-      const suggestions: any[] = [];
+      const suggestions: FoodChainSuggestion[] = [];
 
       for (const food of similarFoods || []) {
         const { data: score } = await supabase.rpc("calculate_food_similarity", {
@@ -221,7 +221,7 @@ export function FoodChainingRecommendations() {
         await loadChainSuggestions(sourceFoodId);
         toast.success("Generated recommendations!");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error generating suggestions:", error);
     }
   };

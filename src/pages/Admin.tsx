@@ -136,7 +136,7 @@ const Admin = () => {
       } else {
         throw new Error(data.error || 'OAuth callback failed');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Admin OAuth callback error:', error);
       toast.error(`Failed to complete OAuth: ${error.message}`);
       

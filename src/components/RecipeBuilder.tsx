@@ -30,7 +30,7 @@ type AIRecipe = {
   tips: string;
 };
 
-export function RecipeBuilder({ foods, editRecipe, onSave, onCancel, kids, activeKidId }: RecipeBuilderProps & { kids?: any[], activeKidId?: string }) {
+export function RecipeBuilder({ foods, editRecipe, onSave, onCancel, kids, activeKidId }: RecipeBuilderProps & { kids?: Kid[], activeKidId?: string }) {
   const [formData, setFormData] = useState({
     name: editRecipe?.name || "",
     description: editRecipe?.description || "",

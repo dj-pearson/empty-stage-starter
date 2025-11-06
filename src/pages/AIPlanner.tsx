@@ -44,7 +44,7 @@ export default function AIPlanner() {
       
       const kidName = kids.find(k => k.id === targetKidId)?.name;
       toast.success(`AI meal plan generated for ${kidName}!`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error generating meal plan:', error);
       toast.error(error.message || "Failed to generate meal plan");
     } finally {
@@ -64,7 +64,7 @@ export default function AIPlanner() {
       setMealPlan([]);
       setInsights(null);
       setStrategy(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error saving plan:', error);
       toast.error("Failed to save meal plan");
     }

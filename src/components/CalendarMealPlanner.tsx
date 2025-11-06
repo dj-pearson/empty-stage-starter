@@ -25,7 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Food, PlanEntry, MealSlot } from "@/types";
+import { Food, PlanEntry, MealSlot, Recipe, Kid } from "@/types";
 import { Sparkles, Calendar as CalendarIcon, AlertTriangle, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Users, Copy, MoreVertical } from "lucide-react";
 import { format, addDays, startOfWeek } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -37,8 +37,8 @@ interface CalendarMealPlannerProps {
   weekStart: Date;
   planEntries: PlanEntry[];
   foods: Food[];
-  recipes: any[];
-  kids: any[];
+  recipes: Recipe[];
+  kids: Kid[];
   kidId: string;
   kidName: string;
   kidAge?: number;

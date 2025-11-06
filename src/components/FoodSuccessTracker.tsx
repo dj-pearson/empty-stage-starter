@@ -138,7 +138,7 @@ export function FoodSuccessTracker() {
       if (error) throw error;
 
       setAttempts(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error loading attempts:", error);
       toast.error("Failed to load food attempts");
     } finally {
@@ -157,7 +157,7 @@ export function FoodSuccessTracker() {
 
       if (error) throw error;
       setAchievements(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error loading achievements:", error);
     }
   }, [activeKidId]);
@@ -192,7 +192,7 @@ export function FoodSuccessTracker() {
       resetForm();
       loadAttempts();
       loadAchievements(); // Reload to show new achievements
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error adding attempt:", error);
       toast.error("Failed to log attempt");
     } finally {

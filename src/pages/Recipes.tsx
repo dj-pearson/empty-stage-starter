@@ -160,7 +160,7 @@ export default function Recipes() {
       
       // Group by collection_id
       const itemsByCollection: Record<string, string[]> = {};
-      data?.forEach((item: any) => {
+      data?.forEach((item: unknown) => {
         if (!itemsByCollection[item.collection_id]) {
           itemsByCollection[item.collection_id] = [];
         }

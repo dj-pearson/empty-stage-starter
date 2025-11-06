@@ -96,7 +96,7 @@ export function ComplementarySubscriptionManager() {
 
       setSubscriptions(subsRes.data || []);
       setPlans(plansRes.data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load data");
       logger.error(error);
     } finally {
@@ -125,7 +125,7 @@ export function ComplementarySubscriptionManager() {
       } else {
         toast.error("No users found with that email");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to search for user");
       logger.error(error);
     }
@@ -167,7 +167,7 @@ export function ComplementarySubscriptionManager() {
       toast.success("Complementary subscription granted successfully");
       resetForm();
       fetchData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to grant subscription");
       logger.error(error);
     }
@@ -185,7 +185,7 @@ export function ComplementarySubscriptionManager() {
       if (error) throw error;
       toast.success("Subscription revoked successfully");
       fetchData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to revoke subscription");
       logger.error(error);
     }

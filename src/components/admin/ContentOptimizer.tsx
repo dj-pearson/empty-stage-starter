@@ -164,7 +164,7 @@ export function ContentOptimizer() {
       } else {
         throw new Error(data.error || "Optimization failed");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Optimization error:", error);
       toast.error(error.message || "Failed to optimize content");
     } finally {
@@ -196,7 +196,7 @@ export function ContentOptimizer() {
       } else {
         throw new Error(data.error || "Analysis failed");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Semantic analysis error:", error);
       toast.error(error.message || "Failed to analyze semantic keywords");
     } finally {

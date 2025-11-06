@@ -49,7 +49,7 @@ type ScannedFood = {
 interface BarcodeScannerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onFoodAdded?: (food?: any) => void;
+  onFoodAdded?: (food?: Record<string, unknown>) => void;
   targetTable?: 'nutrition' | 'foods';
 }
 
@@ -107,7 +107,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
       const qrboxWidth = Math.round(containerWidth * 0.95);
       const qrboxHeight = Math.max(160, Math.round(qrboxWidth * 0.4));
 
-      const config: any = {
+      const config: Record<string, unknown> = {
         fps: 10,
         aspectRatio: 1.777,
         qrbox: { width: qrboxWidth, height: qrboxHeight },

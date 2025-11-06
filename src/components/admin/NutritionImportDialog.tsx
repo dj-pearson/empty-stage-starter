@@ -78,7 +78,7 @@ Almonds,Snack,1 oz,16 oz,16,almonds,164,6,6,14,tree nuts`;
       const values = lines[i].split(",").map(v => v.trim());
       if (values.length < headers.length) continue;
 
-      const row: any = {};
+      const row: Record<string, unknown> = {};
       headers.forEach((header, index) => {
         row[header] = values[index]?.replace(/^"|"$/g, "") || "";
       });

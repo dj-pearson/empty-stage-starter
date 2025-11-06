@@ -106,7 +106,7 @@ export function AlertManager() {
 
       if (error) throw error;
       setAlerts((data as any) || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error loading alerts",
         description: error.message,
@@ -129,7 +129,7 @@ export function AlertManager() {
       setAlerts((prev) =>
         prev.map((alert) => (alert.id === alertId ? { ...alert, is_read: true } : alert))
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error marking alert as read",
         description: error.message,
@@ -178,7 +178,7 @@ export function AlertManager() {
       });
 
       setSelectedAlert(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error resolving alert",
         description: error.message,

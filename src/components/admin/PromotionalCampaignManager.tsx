@@ -72,7 +72,7 @@ export function PromotionalCampaignManager() {
 
       setCampaigns(campaignsRes.data || []);
       setPlans(plansRes.data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to load campaigns");
       logger.error(error);
     } finally {
@@ -120,7 +120,7 @@ export function PromotionalCampaignManager() {
 
       resetForm();
       fetchData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error(editingCampaign ? "Failed to update campaign" : "Failed to create campaign");
       logger.error(error);
     }
@@ -154,7 +154,7 @@ export function PromotionalCampaignManager() {
       if (error) throw error;
       toast.success("Campaign deleted successfully");
       fetchData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to delete campaign");
       logger.error(error);
     }
@@ -170,7 +170,7 @@ export function PromotionalCampaignManager() {
       if (error) throw error;
       toast.success(`Campaign ${!campaign.is_active ? "activated" : "deactivated"}`);
       fetchData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to update campaign status");
       logger.error(error);
     }
@@ -280,7 +280,7 @@ export function PromotionalCampaignManager() {
                   <Label htmlFor="discount_duration">Discount Duration *</Label>
                   <Select
                     value={formData.discount_duration_type}
-                    onValueChange={(value: any) =>
+                    onValueChange={(value: unknown) =>
                       setFormData({ ...formData, discount_duration_type: value })
                     }
                   >

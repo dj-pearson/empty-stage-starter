@@ -24,7 +24,7 @@ type AIModel = {
   is_active: boolean;
   temperature?: number;
   max_tokens?: number;
-  additional_params?: any;
+  additional_params?: Record<string, unknown>;
 };
 
 export function AISettingsManager() {
@@ -137,7 +137,7 @@ export function AISettingsManager() {
           description: "AI model is responding correctly",
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error testing model:', error);
       setTestResult({ success: false, message: error.message });
       toast({
@@ -177,7 +177,7 @@ export function AISettingsManager() {
         title: "Model added",
         description: "AI model configuration has been saved",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error adding model:', error);
       toast({
         title: "Error",
@@ -201,7 +201,7 @@ export function AISettingsManager() {
         title: "Model deleted",
         description: "AI model configuration has been removed",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error deleting model:', error);
       toast({
         title: "Error",

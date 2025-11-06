@@ -351,7 +351,7 @@ export function SocialMediaManager() {
       }
 
       toast.success("Post resent to webhook!");
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error resending to webhook:", error);
       toast.error(error.message || "Failed to resend to webhook");
     }
@@ -391,7 +391,7 @@ export function SocialMediaManager() {
       setShowAccountDialog(false);
       setAccountForm({ platform: "webhook", account_name: "", webhook_url: "", is_global: true });
       loadAccounts();
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error saving webhook account:", error);
       toast.error(error.message || "Failed to save webhook");
     }
@@ -483,7 +483,7 @@ export function SocialMediaManager() {
         setShowAIDialog(false);
         setShowPostDialog(true);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error generating AI content:", error);
       toast.error(error.message || "Failed to generate content");
     } finally {

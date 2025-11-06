@@ -59,7 +59,7 @@ export function SmartRestockSuggestions({
       if (error) {
         logger.error('Error loading restock suggestions:', error);
       } else if (data) {
-        setSuggestions(data.map((item: any) => ({
+        setSuggestions(data.map((item: unknown) => ({
           ...item,
           priority: item.priority as 'low' | 'medium' | 'high'
         })));

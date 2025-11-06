@@ -105,7 +105,7 @@ export function BlogCMSManager() {
           }
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error loading title bank insights:", error);
     }
   };
@@ -118,7 +118,7 @@ export function BlogCMSManager() {
       );
       if (error) throw error;
       setTitleSuggestions(Array.isArray(data) ? data : []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error loading title suggestions:", error);
       toast.error("Failed to load title suggestions");
     }
@@ -160,7 +160,7 @@ export function BlogCMSManager() {
       } else {
         toast.error(data.error || "Failed to populate title bank");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error populating title bank:", error);
       toast.error(error.message || "Failed to populate title bank");
     } finally {
@@ -201,7 +201,7 @@ export function BlogCMSManager() {
       } else {
         toast.error("Webhook test failed");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error testing webhook:", error);
       toast.error(error.message || "Failed to send test webhook");
     } finally {
@@ -266,7 +266,7 @@ export function BlogCMSManager() {
       } else {
         toast.error(`Webhook returned status ${response.status}`);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error resending webhook:", error);
       toast.error(error.message || "Failed to resend webhook");
     } finally {
@@ -282,7 +282,7 @@ export function BlogCMSManager() {
         .order("created_at", { ascending: false });
       if (error) throw error;
       setPosts(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error loading posts:", error);
       toast.error(error.message);
     }
@@ -397,7 +397,7 @@ export function BlogCMSManager() {
           logger.error("Webhook error:", e);
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error generating AI content:", error);
       toast.error(error.message || "Failed to generate content");
     } finally {
@@ -432,7 +432,7 @@ export function BlogCMSManager() {
       setShowEditDialog(false);
       setEditingPost(null);
       loadPosts();
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error updating post:", error);
       toast.error(error.message || "Failed to update post");
     }
@@ -465,7 +465,7 @@ export function BlogCMSManager() {
       setSocialContent(data.content ?? data);
       setShowSocialDialog(true);
       toast.success("Social media posts generated!");
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error generating social content:", error);
       toast.error(error.message || "Failed to generate social posts");
     } finally {
@@ -544,7 +544,7 @@ export function BlogCMSManager() {
       }
 
       loadPosts();
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error publishing post:", error);
       toast.error(error.message || "Failed to publish post");
     }
@@ -560,7 +560,7 @@ export function BlogCMSManager() {
       if (error) throw error;
       toast.success("Post unpublished");
       loadPosts();
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error unpublishing post:", error);
       toast.error(error.message || "Failed to unpublish post");
     }

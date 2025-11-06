@@ -37,7 +37,7 @@ export function AisleContributionDialog({
       if (!userId) return;
 
       try {
-        const { data } = await (supabase as any)
+        const { data } = await supabase
           .from('user_contribution_stats')
           .select('*')
           .eq('user_id', userId)
@@ -70,7 +70,7 @@ export function AisleContributionDialog({
     setIsSubmitting(true);
     try {
       // Check if contribution already exists
-      const { data: existing } = await (supabase as any)
+      const { data: existing } = await supabase
         .from('user_store_contributions')
         .select('*')
         .eq('user_id', userId)
@@ -80,7 +80,7 @@ export function AisleContributionDialog({
 
       if (existing) {
         // Update existing contribution
-        const { error } = await (supabase as any)
+        const { error } = await supabase
           .from('user_store_contributions')
           .update({
             aisle_number: aisleNumber || existing.aisle_number,
@@ -93,7 +93,7 @@ export function AisleContributionDialog({
         if (error) throw error;
       } else {
         // Create new contribution
-        const { error } = await (supabase as any)
+        const { error } = await supabase
           .from('user_store_contributions')
           .insert([{
             user_id: userId,
@@ -107,7 +107,7 @@ export function AisleContributionDialog({
       }
 
       // Create food_aisle_mapping if doesn't exist
-      const { error: mappingError } = await (supabase as any)
+      const { error: mappingError } = await supabase
         .from('food_aisle_mappings')
         .insert([{
           store_layout_id: storeLayoutId,

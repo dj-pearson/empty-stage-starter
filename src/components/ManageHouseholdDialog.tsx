@@ -140,7 +140,7 @@ export function ManageHouseholdDialog() {
       toast.success(`Invitation sent to ${inviteEmail}`);
       setInviteEmail("");
       loadHouseholdData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error sending invitation:", error);
       if (error.code === '23505') {
         toast.error("This email has already been invited");

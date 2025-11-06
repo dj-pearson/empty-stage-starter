@@ -206,7 +206,7 @@ export default function InsightsDashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {insights.coverage?.map((item: any) => (
+          {insights.coverage?.map((item: unknown) => (
             <div key={item.category}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium capitalize">{item.category}</span>

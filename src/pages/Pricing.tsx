@@ -147,7 +147,7 @@ export default function Pricing() {
       });
 
       setPlans(plansWithDiscounts);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error loading plans:", error);
       toast.error("Failed to load pricing plans");
     } finally {
@@ -190,7 +190,7 @@ export default function Pricing() {
       } else {
         throw new Error("No checkout URL returned");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Checkout error:", error);
       toast.error("Failed to start checkout. Please try again.");
       setLoading(false);

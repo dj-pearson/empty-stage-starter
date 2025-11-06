@@ -74,7 +74,7 @@ export function EnhancedSubscriptionDialog({
 
       if (error) throw error;
       setPlans((data as any) || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error("Error loading plans:", error);
       toast.error("Failed to load plans");
     } finally {

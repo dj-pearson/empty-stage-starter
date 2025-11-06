@@ -82,7 +82,7 @@ export function SupportWidget() {
         priority: "medium",
       });
       setIsOpen(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error submitting ticket",
         description: error.message,

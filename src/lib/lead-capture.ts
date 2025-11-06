@@ -176,7 +176,7 @@ export async function captureLeadWithAutomation(
       success: true,
       lead_id: leadId,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Error in captureLeadWithAutomation:', error);
     return {
       success: false,

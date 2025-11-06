@@ -56,7 +56,7 @@ export async function logAIUsage(params: {
   responseMetadata?: any;
 }): Promise<string | null> {
   try {
-const { data, error } = await (supabase as any).rpc("log_ai_usage", {
+const { data, error } = await supabase.rpc("log_ai_usage", {
       p_user_id: params.userId,
       p_endpoint: params.endpoint,
       p_model: params.model,
@@ -94,7 +94,7 @@ export async function checkAIBudget(
 
     if (!user) return null;
 
-const { data, error } = await (supabase as any).rpc("check_ai_budget", {
+const { data, error } = await supabase.rpc("check_ai_budget", {
       p_user_id: user.id,
       p_budget_type: budgetType,
     });
@@ -124,7 +124,7 @@ export async function getAIUsageLogs(limit: number = 50): Promise<AIUsageLog[]> 
 
     if (!user) return [];
 
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("ai_usage_logs")
       .select("*")
       .eq("user_id", user.id)
@@ -148,7 +148,7 @@ const { data, error } = await (supabase as any)
  */
 export async function getDailyCostSummary(days: number = 30): Promise<CostSummary[]> {
   try {
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("ai_cost_daily_summary")
       .select("*")
       .order("date", { ascending: false })
@@ -183,7 +183,7 @@ export async function getCostByEndpoint(): Promise<
   }>
 > {
   try {
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("ai_cost_by_endpoint")
       .select("*")
       .order("total_cost_cents", { ascending: false });
@@ -218,7 +218,7 @@ export async function getCostByModel(): Promise<
   }>
 > {
   try {
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("ai_cost_by_model")
       .select("*")
       .order("total_cost_cents", { ascending: false });
@@ -252,7 +252,7 @@ export async function getCostByUser(limit: number = 20): Promise<
   }>
 > {
   try {
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("ai_cost_by_user")
       .select("*")
       .order("total_cost_cents", { ascending: false })

@@ -253,7 +253,7 @@ export function LeadCampaignManager() {
     if (!selectedLead) return;
 
     try {
-      const updates: any = {
+      const updates: Record<string, unknown> = {
         status: leadStatus,
         last_contacted_at: new Date().toISOString(),
       };

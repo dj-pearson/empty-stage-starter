@@ -144,7 +144,7 @@ export async function getBackupHistory(limit: number = 10): Promise<BackupLog[]>
 
     if (!user) return [];
 
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("backup_logs")
       .select("*")
       .eq("user_id", user.id)
@@ -173,7 +173,7 @@ export async function getBackupConfig(): Promise<BackupConfig | null> {
 
     if (!user) return null;
 
-const { data, error } = await (supabase as any)
+const { data, error } = await supabase
       .from("backup_config")
       .select("*")
       .eq("user_id", user.id)
@@ -214,7 +214,7 @@ export async function updateBackupConfig(
       return false;
     }
 
-const { error } = await (supabase as any)
+const { error } = await supabase
       .from("backup_config")
       .upsert({
         user_id: user.id,
