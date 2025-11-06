@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -115,14 +115,7 @@ export function FoodSuccessTracker() {
     is_milestone: false,
   });
 
-  useEffect(() => {
-    if (activeKidId) {
-      loadAttempts();
-      loadAchievements();
-    }
-  }, [activeKidId, filterOutcome]);
-
-  const loadAttempts = async () => {
+  const loadAttempts = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -150,9 +143,9 @@ export function FoodSuccessTracker() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeKidId, filterOutcome]);
 
-  const loadAchievements = async () => {
+  const loadAchievements = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("kid_achievements")
@@ -166,7 +159,14 @@ export function FoodSuccessTracker() {
     } catch (error: any) {
       console.error("Error loading achievements:", error);
     }
-  };
+  }, [activeKidId]);
+
+  useEffect(() => {
+    if (activeKidId) {
+      loadAttempts();
+      loadAchievements();
+    }
+  }, [activeKidId, loadAttempts, loadAchievements]);
 
   const handleAddAttempt = async () => {
     if (!attemptForm.food_id) {

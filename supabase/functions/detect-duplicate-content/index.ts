@@ -215,7 +215,7 @@ async function fetchPageContent(url: string): Promise<PageContent> {
   const title = titleMatch ? titleMatch[1].trim() : "";
 
   // Extract main content (remove scripts, styles, etc.)
-  let content = html
+  const content = html
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "")

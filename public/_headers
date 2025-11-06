@@ -12,11 +12,10 @@
   
   # Performance and caching
   Cache-Control: public, max-age=0, must-revalidate
-  
-  # CORS headers for API endpoints
-  Access-Control-Allow-Origin: *
-  Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
-  Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With
+
+  # CORS headers removed - not needed for same-origin SPA
+  # Supabase handles CORS for its API endpoints
+  # If you need CORS for specific routes, add them below with specific origins
 
 # Static assets - long-term caching
 /assets/*

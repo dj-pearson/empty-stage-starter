@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,26 +32,26 @@ export function AisleContributionDialog({
 
   // Load user stats when dialog opens
   useEffect(() => {
+    const loadUserStats = async () => {
+      if (!userId) return;
+
+      try {
+        const { data } = await (supabase as any)
+          .from('user_contribution_stats')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        setUserStats(data);
+      } catch (error) {
+        console.error('Error loading user stats:', error);
+      }
+    };
+
     if (open && userId) {
       loadUserStats();
     }
   }, [open, userId]);
-
-  const loadUserStats = async () => {
-    if (!userId) return;
-
-    try {
-      const { data } = await (supabase as any)
-        .from('user_contribution_stats')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      setUserStats(data);
-    } catch (error) {
-      console.error('Error loading user stats:', error);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

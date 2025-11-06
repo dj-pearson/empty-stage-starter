@@ -47,7 +47,27 @@ export function CollaborativeShoppingMode({
 
   // Load active session on mount
   useEffect(() => {
-    if (!groceryListId || !householdId) return;
+    const loadActiveSession = async () => {
+      if (!groceryListId || !householdId) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('shopping_sessions')
+          .select('*')
+          .eq('grocery_list_id', groceryListId)
+          .eq('household_id', householdId)
+          .eq('is_active', true)
+          .order('started_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (error && error.code !== 'PGRST116') throw error; // Ignore not found error
+
+        setActiveSession(data as any);
+      } catch (error) {
+        console.error('Error loading shopping session:', error);
+      }
+    };
 
     loadActiveSession();
   }, [groceryListId, householdId]);
@@ -86,27 +106,7 @@ export function CollaborativeShoppingMode({
     };
   }, [activeSession, householdId]);
 
-  const loadActiveSession = async () => {
-    if (!groceryListId || !householdId) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('shopping_sessions')
-        .select('*')
-        .eq('grocery_list_id', groceryListId)
-        .eq('household_id', householdId)
-        .eq('is_active', true)
-        .order('started_at', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error; // Ignore not found error
-
-      setActiveSession(data as any);
-    } catch (error) {
-      console.error('Error loading shopping session:', error);
-    }
-  };
+  // loadActiveSession moved into useEffect to avoid dependency warnings
 
   const handleStartSession = async () => {
     if (!groceryListId || !householdId || !userId) {

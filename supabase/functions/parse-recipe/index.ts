@@ -136,7 +136,7 @@ Extract all available information. If something is missing, use an empty string 
     const aiData = await aiResponse.json();
     console.log('AI response received');
 
-    let recipeText = aiData.choices?.[0]?.message?.content || '';
+    const recipeText = aiData.choices?.[0]?.message?.content || '';
 
     // Try to extract JSON from the response
     let recipe;

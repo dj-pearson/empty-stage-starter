@@ -246,7 +246,7 @@ serve(async (req) => {
 
     // Save position history and update keywords
     let updatedCount = 0;
-    let positionChanges = [];
+    const positionChanges = [];
 
     for (const keyword of keywordsToCheck) {
       const result = positionResults.find(
