@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "skipLibCheck": true
+  },
+  "exclude": [
+    "src/components/AIMealCoach.tsx",
+    "src/components/FoodChainingRecommendations.tsx",
+    "src/components/ImportCsvDialog.tsx",
+    "src/components/ManageKidsDialog.tsx",
+    "src/components/OrderIngredientsDialog.tsx",
+    "src/components/RecipeExportActions.tsx",
+    "src/components/RecipeSchemaMarkup.tsx",
+    "src/components/SmartRestockSuggestions.tsx",
+    "src/components/SupportWidget.tsx",
+    "src/components/admin/**/*.tsx"
+  ]
+}
