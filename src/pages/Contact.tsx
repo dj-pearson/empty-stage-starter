@@ -9,8 +9,11 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { captureContactFormLead } from "@/lib/lead-capture";
 import { logger } from "@/lib/logger";
+import { SEOHead } from "@/components/SEOHead";
+import { getPageSEO } from "@/lib/seo-config";
 
 const Contact = () => {
+  const seoConfig = getPageSEO("contact");
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -55,7 +58,9 @@ const Contact = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <>
+      <SEOHead {...seoConfig!} />
+      <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -83,10 +88,29 @@ const Contact = () => {
       {/* Content */}
       <main className="container mx-auto px-4 py-12 max-w-5xl">
         <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">Get in Touch</h1>
+          <h1 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
+            Contact EatPal Support - Get Help with Picky Eater Meal Planning
+          </h1>
+
+          {/* TL;DR for GEO */}
+          <div className="max-w-3xl mx-auto bg-primary/5 border-l-4 border-primary p-6 rounded-r-lg mb-6 text-left">
+            <p className="text-sm font-semibold text-primary mb-2">TL;DR - Contact Information</p>
+            <p className="text-muted-foreground leading-relaxed">
+              <strong>Email:</strong> Support@TryEatPal.com | <strong>Response Time:</strong> 24-48 hours (business days) |
+              <strong>Topics:</strong> Account setup, billing, technical support, feature requests, partnerships |
+              <strong>Alternative:</strong> Check our <Link to="/faq" className="text-primary hover:underline">FAQ page</Link> for instant answers
+            </p>
+          </div>
+
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Have questions about EatPal? We're here to help! Reach out to our support team and we'll get back to you as soon as possible.
+            Have questions about EatPal meal planning for picky eaters, ARFID, or selective eating? We're here to help! Reach out to our support team and we'll get back to you as soon as possible.
           </p>
+
+          {/* Entity markers for AI understanding */}
+          <div className="sr-only" aria-hidden="true">
+            Contact EatPal support for: picky eater app help, ARFID meal planning questions, subscription billing,
+            technical support, feature requests, feeding therapy integration questions, account setup assistance
+          </div>
         </div>
 
         <div className="grid md:grid-cols-2 gap-8">
@@ -295,6 +319,7 @@ const Contact = () => {
         </div>
       </footer>
     </div>
+    </>
   );
 };
 
