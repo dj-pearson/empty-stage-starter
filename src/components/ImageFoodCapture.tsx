@@ -62,7 +62,13 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
 
       // Clean up any previous instance
       if (scannerRef.current) {
-        try { await scannerRef.current.stop(); await scannerRef.current.clear(); } catch {}
+        try {
+          await scannerRef.current.stop();
+          await scannerRef.current.clear();
+        } catch (error) {
+          // Ignore cleanup errors - scanner may already be stopped
+          console.debug('Scanner cleanup error (expected):', error);
+        }
         scannerRef.current = null;
       }
 

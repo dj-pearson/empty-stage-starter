@@ -85,8 +85,8 @@ export default defineConfig(({ mode }) => ({
         'react-native-screens',
       ],
     },
-    // Increase chunk size warning limit
-    chunkSizeWarningLimit: 1000,
+    // Chunk size warning limit (reduced to encourage better code splitting)
+    chunkSizeWarningLimit: 500,
   },
   // Preview server configuration for local development
   preview: {

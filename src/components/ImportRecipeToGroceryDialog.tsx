@@ -111,7 +111,13 @@ export function ImportRecipeToGroceryDialog({ open, onOpenChange, onImport }: Im
       await new Promise((r) => setTimeout(r, 50));
 
       if (scannerRef.current) {
-        try { await scannerRef.current.stop(); await scannerRef.current.clear(); } catch {}
+        try {
+          await scannerRef.current.stop();
+          await scannerRef.current.clear();
+        } catch (error) {
+          // Ignore cleanup errors - scanner may already be stopped
+          console.debug('Scanner cleanup error (expected):', error);
+        }
         scannerRef.current = null;
       }
 
