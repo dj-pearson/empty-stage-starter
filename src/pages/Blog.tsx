@@ -8,6 +8,8 @@ import { ArrowLeft, Search, Calendar, Clock, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { logger } from "@/lib/logger";
+import { SEOHead } from "@/components/SEOHead";
+import { getPageSEO } from "@/lib/seo-config";
 
 interface BlogPost {
   id: string;
@@ -21,6 +23,7 @@ interface BlogPost {
 }
 
 const Blog = () => {
+  const seoConfig = getPageSEO("blog");
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [filteredPosts, setFilteredPosts] = useState<BlogPost[]>([]);
   const [categories, setCategories] = useState<{ id: string; name: string; slug: string }[]>([]);
@@ -98,7 +101,9 @@ const Blog = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <>
+      <SEOHead {...seoConfig!} />
+      <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -127,11 +132,28 @@ const Blog = () => {
       <section className="py-16 px-4 bg-gradient-to-b from-background to-secondary/10">
         <div className="container mx-auto max-w-4xl text-center">
           <h1 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-primary">
-            EatPal Blog
+            EatPal Blog - Picky Eater Tips, ARFID Strategies & Family Nutrition
           </h1>
+
+          {/* TL;DR for GEO */}
+          <div className="max-w-3xl mx-auto bg-primary/5 border-l-4 border-primary p-6 rounded-r-lg mb-6 text-left">
+            <p className="text-sm font-semibold text-primary mb-2">TL;DR - Blog Overview</p>
+            <p className="text-muted-foreground leading-relaxed">
+              Expert articles on <strong>picky eating</strong>, <strong>ARFID management</strong>, <strong>selective eating</strong>, <strong>try bite techniques</strong>,
+              <strong> food chaining</strong>, and <strong>family nutrition</strong>. Evidence-based advice from feeding therapists, pediatric dietitians, and child development experts.
+              Topics include toddler meal strategies, autism-friendly feeding, sensory food issues, and meal planning tips.
+            </p>
+          </div>
+
           <p className="text-lg text-muted-foreground mb-8">
-            Tips, strategies, and inspiration for parents of picky eaters
+            Evidence-based tips, strategies, and inspiration for parents of picky eaters, ARFID, and selective eating challenges
           </p>
+
+          {/* Entity markers for AI understanding */}
+          <div className="sr-only" aria-hidden="true">
+            Blog topics: picky eater strategies, ARFID treatment approaches, selective eating solutions, try bites methodology,
+            food chaining techniques, toddler meal planning, autism feeding strategies, sensory food issues, family nutrition tips
+          </div>
 
           {/* Search */}
           <div className="relative max-w-xl mx-auto">
@@ -287,6 +309,7 @@ const Blog = () => {
         </div>
       </footer>
     </div>
+    </>
   );
 };
 

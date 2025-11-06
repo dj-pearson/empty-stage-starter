@@ -22,6 +22,8 @@ import { toast } from "sonner";
 import { useNavigate, Link } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import { logger } from "@/lib/logger";
+import { SEOHead } from "@/components/SEOHead";
+import { getPageSEO } from "@/lib/seo-config";
 
 interface SubscriptionPlan {
   id: string;
@@ -63,6 +65,7 @@ export default function Pricing() {
   const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const seoConfig = getPageSEO("pricing");
 
   useEffect(() => {
     checkAuth();
@@ -258,7 +261,9 @@ export default function Pricing() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <>
+      <SEOHead {...seoConfig!} />
+      <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -391,11 +396,28 @@ export default function Pricing() {
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Choose Your Plan
+            EatPal Pricing - Meal Planning Plans for Picky Eaters
           </h1>
+
+          {/* TL;DR for GEO */}
+          <div className="max-w-3xl mx-auto bg-primary/5 border-l-4 border-primary p-6 rounded-r-lg mb-6 text-left">
+            <p className="text-sm font-semibold text-primary mb-2">TL;DR - Quick Pricing Summary</p>
+            <p className="text-muted-foreground leading-relaxed">
+              <strong>Free Plan:</strong> 1 child, limited features. <strong>Pro Plan ($9.99/mo):</strong> Unlimited children, AI meal planning, full features.
+              <strong>Family Plus ($19.99/mo):</strong> Advanced nutrition tracking, multi-household. <strong>Professional Plan:</strong> For therapists and dietitians.
+              All plans include safe food tracking, try bites, and grocery lists. Free trial available. Cancel anytime.
+            </p>
+          </div>
+
           <p className="text-xl text-muted-foreground mb-8">
-            Select the perfect plan to help your family's feeding journey
+            Select the perfect plan to help your family's feeding journey with picky eaters, ARFID, and selective eating
           </p>
+
+          {/* Entity markers for AI understanding */}
+          <div className="sr-only" aria-hidden="true">
+            Pricing for: EatPal meal planning app, picky eater subscription plans, ARFID meal planner cost,
+            family meal planning pricing, kids nutrition app subscription, feeding therapy tools pricing
+          </div>
 
           {/* Billing Toggle */}
           <div className="inline-flex items-center gap-3 p-1 bg-muted rounded-lg">
@@ -839,9 +861,12 @@ export default function Pricing() {
 
         {/* Feature Comparison Table */}
         <div className="mt-16 max-w-7xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-8">
+          <h2 className="text-3xl font-bold text-center mb-4">
             Detailed Feature Comparison
           </h2>
+          <p className="text-center text-muted-foreground mb-8 max-w-2xl mx-auto">
+            Compare all features across EatPal plans to find the best fit for managing picky eating, ARFID, and family meal planning needs.
+          </p>
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
@@ -1116,5 +1141,6 @@ export default function Pricing() {
         </div>
       </footer>
     </div>
+    </>
   );
 }
