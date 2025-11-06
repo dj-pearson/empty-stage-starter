@@ -1,0 +1,14 @@
+rootProject.name = 'EatPal'
+apply from: file("../node_modules/@react-native/gradle-plugin/settings.gradle")
+
+includeBuild("../node_modules/@react-native/gradle-plugin")
+
+include ':app'
+includeBuild('../node_modules/react-native-gradle-plugin')
+
+if (settings.hasProperty("newArchEnabled") && settings.newArchEnabled == "true") {
+    include(":ReactAndroid")
+    project(":ReactAndroid").projectDir = file('../node_modules/react-native/ReactAndroid')
+    include(":ReactAndroid:hermes-engine")
+    project(":ReactAndroid:hermes-engine").projectDir = file('../node_modules/react-native/ReactAndroid/hermes-engine')
+}
