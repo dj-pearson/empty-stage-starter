@@ -200,11 +200,19 @@ const Admin = () => {
                   <p className="text-sm text-muted-foreground hidden md:block">Manage nutrition database and user roles</p>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={() => navigate("/dashboard")}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Back to Dashboard</span>
-                <span className="sm:hidden">Back</span>
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => navigate("/search-traffic")}>
+                  Search Analytics
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => navigate("/admin-dashboard")}>
+                  Analytics
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => navigate("/dashboard")}>
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">Back to Dashboard</span>
+                  <span className="sm:hidden">Back</span>
+                </Button>
+              </div>
             </div>
           </div>
 

@@ -37,6 +37,7 @@ const Contact = lazy(() => import("./pages/Contact"));
 const Blog = lazy(() => import("./pages/Blog"));
 const BlogPost = lazy(() => import("./pages/BlogPost"));
 const SEODashboard = lazy(() => import("./pages/SEODashboard"));
+const SearchTrafficDashboard = lazy(() => import("./pages/SearchTrafficDashboard"));
 const OAuthCallback = lazy(() => import("./pages/OAuthCallback"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -74,6 +75,7 @@ const App = () => (
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
             <Route path="/seo-dashboard" element={<SEODashboard />} />
+            <Route path="/search-traffic" element={<SearchTrafficDashboard />} />
 
             {/* Main Dashboard with nested routes */}
             <Route path="/dashboard" element={<Dashboard />}>
