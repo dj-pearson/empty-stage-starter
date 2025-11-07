@@ -16,6 +16,8 @@ export interface Subscription {
   trial_end: string | null;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
+  is_complementary: boolean;
+  complementary_subscription_id: string | null;
 }
 
 export function useSubscription() {
@@ -42,7 +44,7 @@ export function useSubscription() {
         `
         )
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
       if (error && error.code !== "PGRST116") {
         throw error;
@@ -53,9 +55,47 @@ export function useSubscription() {
           ...(data as any),
           plan_name: (data as any).plan.name,
           billing_cycle: (data as any).billing_cycle || 'monthly',
+          is_complementary: (data as any).is_complementary || false,
+          complementary_subscription_id: (data as any).complementary_subscription_id || null,
         } as any);
       } else {
-        setSubscription(null);
+        // Check for active complementary subscription
+        const { data: compData } = await supabase
+          .rpc('get_complementary_subscription', { p_user_id: user.id })
+          .maybeSingle();
+
+        if (compData) {
+          // User has complementary subscription but no user_subscriptions record
+          // Fetch the plan details
+          const { data: planData } = await supabase
+            .from('subscription_plans')
+            .select('*')
+            .eq('id', compData.plan_id)
+            .single();
+
+          if (planData) {
+            setSubscription({
+              id: compData.id,
+              user_id: user.id,
+              plan_id: compData.plan_id,
+              plan_name: compData.plan_name,
+              status: 'active',
+              billing_cycle: null,
+              current_period_start: null,
+              current_period_end: compData.end_date,
+              cancel_at_period_end: false,
+              trial_end: null,
+              stripe_customer_id: null,
+              stripe_subscription_id: null,
+              is_complementary: true,
+              complementary_subscription_id: compData.id,
+            } as any);
+          } else {
+            setSubscription(null);
+          }
+        } else {
+          setSubscription(null);
+        }
       }
     } catch (err: unknown) {
       console.error("Error fetching subscription:", err);
@@ -91,6 +131,12 @@ export function useSubscription() {
   const upgrade = async (planId: string, billingCycle: string) => {
     try {
       setActionLoading(true);
+
+      // Check if user has complementary subscription
+      if (subscription?.is_complementary) {
+        toast.error("You have complementary access to a plan. Please contact support to make changes.");
+        return { success: false, error: "Complementary subscription cannot be upgraded directly" };
+      }
 
       const { data, error } = await supabase.functions.invoke(
         "manage-subscription",

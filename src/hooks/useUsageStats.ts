@@ -11,6 +11,7 @@ export interface UsageStats {
     has_food_chaining: boolean;
     has_meal_builder: boolean;
     has_nutrition_tracking: boolean;
+    is_complementary?: boolean;
   };
   usage: {
     children: {

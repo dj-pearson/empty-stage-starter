@@ -2,10 +2,11 @@ import { useUsageStats } from "@/hooks/useUsageStats";
 import { UsageMeter } from "./UsageMeter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, Baby, Apple, Bot, CheckSquare, TrendingUp } from "lucide-react";
+import { AlertCircle, Baby, Apple, Bot, CheckSquare, TrendingUp, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { shouldShowUsageUpgradePrompt } from "@/lib/subscription-helpers";
 
 export function UsageDashboard() {
   const { stats, loading, error, refetch } = useUsageStats();
@@ -48,11 +49,18 @@ export function UsageDashboard() {
     return null;
   }
 
-  const hasLimitWarnings = 
+  // Check if user has complementary access
+  const isComplementary = stats.plan.is_complementary || false;
+  const isTopTier = stats.plan.name === 'Professional';
+
+  const hasLimitWarnings =
     (stats.usage.children.limit !== null && stats.usage.children.percentage >= 75) ||
     (stats.usage.pantry_foods.limit !== null && stats.usage.pantry_foods.percentage >= 75) ||
     (stats.usage.ai_coach.limit !== null && stats.usage.ai_coach.percentage >= 75) ||
     (stats.usage.food_tracker.limit !== null && stats.usage.food_tracker.percentage >= 75);
+
+  // Don't show upgrade prompts for complementary or top-tier users
+  const showUpgradeButton = !isComplementary && !isTopTier && hasLimitWarnings;
 
   return (
     <div className="space-y-6">
@@ -60,13 +68,25 @@ export function UsageDashboard() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Your {stats.plan.name} Plan</CardTitle>
-              <CardDescription className="mt-1">
-                Current usage across all features
-              </CardDescription>
+            <div className="flex items-center gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <CardTitle>Your {stats.plan.name} Plan</CardTitle>
+                  {isComplementary && (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-medium">
+                      <Gift className="w-3 h-3" />
+                      Complementary
+                    </span>
+                  )}
+                </div>
+                <CardDescription className="mt-1">
+                  {isComplementary
+                    ? "Enjoy all features with complimentary access"
+                    : "Current usage across all features"}
+                </CardDescription>
+              </div>
             </div>
-            {hasLimitWarnings && (
+            {showUpgradeButton && (
               <Button onClick={() => navigate("/pricing")}>
                 <TrendingUp className="w-4 h-4 mr-2" />
                 Upgrade Plan
@@ -144,7 +164,7 @@ export function UsageDashboard() {
       </Card>
 
       {/* Global upgrade prompt if any limits are close */}
-      {hasLimitWarnings && (
+      {showUpgradeButton && (
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>You're approaching your plan limits</AlertTitle>
@@ -155,6 +175,17 @@ export function UsageDashboard() {
             <Button variant="default" size="sm" onClick={() => navigate("/pricing")}>
               View Plans
             </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Info message for complementary users approaching limits */}
+      {isComplementary && hasLimitWarnings && (
+        <Alert>
+          <Gift className="h-4 w-4" />
+          <AlertTitle>Usage Notice</AlertTitle>
+          <AlertDescription>
+            You're approaching your plan limits. Please contact support if you need to adjust your complementary subscription.
           </AlertDescription>
         </Alert>
       )}
