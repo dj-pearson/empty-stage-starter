@@ -1,0 +1,20 @@
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
+interface Props {
+  dateRange: { from: Date; to: Date };
+  connections: any[];
+}
+
+export function TrafficSources({ dateRange, connections }: Props) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Traffic Sources</CardTitle>
+        <CardDescription>Where your traffic comes from</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <p className="text-muted-foreground text-sm">Traffic source data will appear here</p>
+      </CardContent>
+    </Card>
+  );
+}
