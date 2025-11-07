@@ -54,6 +54,8 @@ export default function Planner() {
     updatePlanEntry,
     addPlanEntry,
     updateFood,
+    copyWeekPlan,
+    deleteWeekPlan,
   } = useApp();
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<PlanEntry | null>(null);
@@ -230,6 +232,34 @@ export default function Planner() {
 
   const handleThisWeek = () => {
     setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 0 }));
+  };
+
+  const handleCopyWeek = async (toDate: string) => {
+    if (!activeKidId || !copyWeekPlan) return;
+
+    try {
+      const fromDate = format(currentWeekStart, 'yyyy-MM-dd');
+      await copyWeekPlan(fromDate, toDate, activeKidId);
+      toast.success("Week plan copied successfully!");
+      // Move to the next week to show the copied plan
+      setCurrentWeekStart(addWeeks(currentWeekStart, 1));
+    } catch (error) {
+      logger.error("Error copying week:", error);
+      toast.error("Failed to copy week plan");
+    }
+  };
+
+  const handleClearWeek = async () => {
+    if (!activeKidId || !deleteWeekPlan) return;
+
+    try {
+      const weekStart = format(currentWeekStart, 'yyyy-MM-dd');
+      await deleteWeekPlan(weekStart, activeKidId);
+      toast.success("Week plan cleared");
+    } catch (error) {
+      logger.error("Error clearing week:", error);
+      toast.error("Failed to clear week plan");
+    }
   };
 
   const handleOpenFoodSelector = (date: string, slot: MealSlot) => {
@@ -580,6 +610,8 @@ export default function Planner() {
                   onAddEntry={handleAddEntry}
                   onOpenFoodSelector={handleOpenFoodSelector}
                   onCopyToChild={handleCopyToChild}
+                  onCopyWeek={handleCopyWeek}
+                  onClearWeek={handleClearWeek}
                 />
               </div>
             ))}
@@ -602,6 +634,8 @@ export default function Planner() {
             onAddEntry={handleAddEntry}
             onOpenFoodSelector={handleOpenFoodSelector}
             onCopyToChild={handleCopyToChild}
+            onCopyWeek={handleCopyWeek}
+            onClearWeek={handleClearWeek}
           />
         )}
 
