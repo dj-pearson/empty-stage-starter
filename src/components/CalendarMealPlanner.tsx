@@ -26,7 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Food, PlanEntry, MealSlot, Recipe, Kid } from "@/types";
-import { Sparkles, Calendar as CalendarIcon, AlertTriangle, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Users, Copy, MoreVertical } from "lucide-react";
+import { Sparkles, Calendar as CalendarIcon, AlertTriangle, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Users, Copy, MoreVertical, Trash2 } from "lucide-react";
 import { format, addDays, startOfWeek } from "date-fns";
 import { cn } from "@/lib/utils";
 import { DailyMacrosSummary } from "@/components/DailyMacrosSummary";
@@ -47,6 +47,8 @@ interface CalendarMealPlannerProps {
   onAddEntry: (date: string, slot: MealSlot, foodId: string) => void;
   onOpenFoodSelector: (date: string, slot: MealSlot) => void;
   onCopyToChild: (entry: PlanEntry, targetKidId: string) => void;
+  onCopyWeek?: (toDate: string) => void;
+  onClearWeek?: () => void;
 }
 
 const MEAL_SLOTS: { slot: MealSlot; label: string; color: string }[] = [
@@ -74,6 +76,8 @@ export function CalendarMealPlanner({
   onAddEntry,
   onOpenFoodSelector,
   onCopyToChild,
+  onCopyWeek,
+  onClearWeek,
 }: CalendarMealPlannerProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draggedFood, setDraggedFood] = useState<Food | null>(null);
@@ -515,9 +519,36 @@ export function CalendarMealPlanner({
     >
       {/* Desktop View */}
       <div className="hidden lg:block space-y-4">
-        {/* View mode toggle */}
-        {kids.length > 1 && (
-          <div className="flex justify-end">
+        {/* Week Actions Toolbar */}
+        <div className="flex items-center justify-between gap-4 p-4 bg-card border rounded-lg">
+          <div className="flex items-center gap-2">
+            {onCopyWeek && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const nextWeek = addDays(weekStart, 7);
+                  onCopyWeek(format(nextWeek, 'yyyy-MM-dd'));
+                }}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Copy to Next Week
+              </Button>
+            )}
+            {onClearWeek && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onClearWeek}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Clear Week
+              </Button>
+            )}
+          </div>
+
+          {/* View mode toggle */}
+          {kids.length > 1 && (
             <Button
               variant="outline"
               size="sm"
@@ -526,8 +557,8 @@ export function CalendarMealPlanner({
               <Users className="h-4 w-4 mr-2" />
               {showAllKids ? 'Show Active Child Only' : 'Show All Children'}
             </Button>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Daily Macros Summary */}
         <div className="grid grid-cols-7 gap-2">

@@ -34,6 +34,17 @@ interface AppContextType {
   exportData: () => string;
   importData: (jsonData: string) => void;
   resetAllData: () => void;
+  // Bulk operations
+  addFoods: (foods: Omit<Food, "id">[]) => Promise<void>;
+  updateFoods: (updates: { id: string; updates: Partial<Food> }[]) => Promise<void>;
+  deleteFoods: (ids: string[]) => Promise<void>;
+  // Week operations for meal planner
+  copyWeekPlan: (fromDate: string, toDate: string, kidId: string) => Promise<void>;
+  deleteWeekPlan: (weekStart: string, kidId: string) => Promise<void>;
+  // Refresh functions
+  refreshFoods?: () => Promise<void>;
+  refreshRecipes?: () => Promise<void>;
+  refreshKids?: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -680,6 +691,166 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setGroceryItemsState([]);
   };
 
+  // Bulk operations for foods
+  const addFoods = async (foodsToAdd: Omit<Food, "id">[]) => {
+    if (userId && householdId) {
+      const foodsWithUserData = foodsToAdd.map(f => ({ ...f, user_id: userId, household_id: householdId }));
+      const { data, error } = await supabase
+        .from('foods')
+        .insert(foodsWithUserData)
+        .select();
+
+      if (error) {
+        logger.error('Supabase addFoods error:', error);
+        const localFoods = foodsToAdd.map(f => ({ ...f, id: generateId() }));
+        setFoods([...foods, ...localFoods]);
+      } else if (data) {
+        setFoods([...foods, ...(data as unknown as Food[])]);
+      }
+    } else {
+      const localFoods = foodsToAdd.map(f => ({ ...f, id: generateId() }));
+      setFoods([...foods, ...localFoods]);
+    }
+  };
+
+  const updateFoods = async (updates: { id: string; updates: Partial<Food> }[]) => {
+    if (userId) {
+      // Update each food in the database
+      const promises = updates.map(({ id, updates: foodUpdates }) =>
+        supabase
+          .from('foods')
+          .update(foodUpdates)
+          .eq('id', id)
+      );
+
+      const results = await Promise.all(promises);
+      const errors = results.filter(r => r.error);
+
+      if (errors.length > 0) {
+        logger.error('Supabase updateFoods errors:', errors);
+      }
+    }
+
+    // Update local state
+    setFoods(foods.map(f => {
+      const update = updates.find(u => u.id === f.id);
+      return update ? { ...f, ...update.updates } : f;
+    }));
+  };
+
+  const deleteFoods = async (ids: string[]) => {
+    if (userId) {
+      const { error } = await supabase
+        .from('foods')
+        .delete()
+        .in('id', ids);
+
+      if (error) {
+        logger.error('Supabase deleteFoods error:', error);
+      }
+    }
+
+    setFoods(foods.filter(f => !ids.includes(f.id)));
+  };
+
+  // Week operations for meal planner
+  const copyWeekPlan = async (fromDate: string, toDate: string, kidId: string) => {
+    // Get all entries for the week starting from fromDate
+    const fromDateObj = new Date(fromDate);
+    const toDateObj = new Date(toDate);
+
+    const weekEntries = planEntries.filter(entry => {
+      const entryDate = new Date(entry.date);
+      const daysDiff = Math.floor((entryDate.getTime() - fromDateObj.getTime()) / (1000 * 60 * 60 * 24));
+      return entry.kid_id === kidId && daysDiff >= 0 && daysDiff < 7;
+    });
+
+    // Create new entries with adjusted dates
+    const newEntries = weekEntries.map(entry => {
+      const entryDate = new Date(entry.date);
+      const daysDiff = Math.floor((entryDate.getTime() - fromDateObj.getTime()) / (1000 * 60 * 60 * 24));
+      const newDate = new Date(toDateObj);
+      newDate.setDate(newDate.getDate() + daysDiff);
+
+      return {
+        kid_id: entry.kid_id,
+        food_id: entry.food_id,
+        recipe_id: entry.recipe_id,
+        meal_slot: entry.meal_slot,
+        date: newDate.toISOString().split('T')[0],
+        outcome: undefined,
+        notes: entry.notes,
+      };
+    });
+
+    await addPlanEntries(newEntries);
+  };
+
+  const deleteWeekPlan = async (weekStart: string, kidId: string) => {
+    const weekStartObj = new Date(weekStart);
+
+    const entriesToDelete = planEntries.filter(entry => {
+      const entryDate = new Date(entry.date);
+      const daysDiff = Math.floor((entryDate.getTime() - weekStartObj.getTime()) / (1000 * 60 * 60 * 24));
+      return entry.kid_id === kidId && daysDiff >= 0 && daysDiff < 7;
+    });
+
+    const idsToDelete = entriesToDelete.map(e => e.id);
+
+    if (userId && idsToDelete.length > 0) {
+      const { error } = await supabase
+        .from('plan_entries')
+        .delete()
+        .in('id', idsToDelete);
+
+      if (error) {
+        logger.error('Supabase deleteWeekPlan error:', error);
+      }
+    }
+
+    setPlanEntriesState(planEntries.filter(e => !idsToDelete.includes(e.id)));
+  };
+
+  // Refresh functions
+  const refreshFoods = async () => {
+    if (userId) {
+      const { data } = await supabase
+        .from('foods')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (data) {
+        setFoods(data as unknown as Food[]);
+      }
+    }
+  };
+
+  const refreshRecipes = async () => {
+    if (userId) {
+      const { data } = await supabase
+        .from('recipes')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (data) {
+        setRecipes(data as unknown as Recipe[]);
+      }
+    }
+  };
+
+  const refreshKids = async () => {
+    if (userId) {
+      const { data } = await supabase
+        .from('kids')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (data) {
+        setKids(data as unknown as Kid[]);
+      }
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -711,6 +882,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         exportData,
         importData,
         resetAllData,
+        // Bulk operations
+        addFoods,
+        updateFoods,
+        deleteFoods,
+        // Week operations
+        copyWeekPlan,
+        deleteWeekPlan,
+        // Refresh functions
+        refreshFoods,
+        refreshRecipes,
+        refreshKids,
       }}
     >
       {children}

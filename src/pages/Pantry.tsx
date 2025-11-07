@@ -5,6 +5,7 @@ import { AddFoodDialog } from "@/components/AddFoodDialog";
 import { ImportCsvDialog } from "@/components/ImportCsvDialog";
 import { BarcodeScannerDialog } from "@/components/admin/BarcodeScannerDialog";
 import { ImageFoodCapture } from "@/components/ImageFoodCapture";
+import { BulkAddFoodDialog } from "@/components/BulkAddFoodDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -60,6 +61,7 @@ export default function Pantry() {
   const {
     foods,
     addFood,
+    addFoods,
     updateFood,
     deleteFood,
     planEntries,
@@ -78,6 +80,7 @@ export default function Pantry() {
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [imageCaptureOpen, setImageCaptureOpen] = useState(false);
+  const [bulkAddOpen, setBulkAddOpen] = useState(false);
 
   // Pull-to-refresh functionality (mobile only)
   const { pullToRefreshRef, isRefreshing, pullDistance } = usePullToRefresh({
@@ -277,6 +280,32 @@ export default function Pantry() {
     }
   };
 
+  const handleBulkAdd = async (foods: Omit<Food, "id">[]) => {
+    if (!addFoods) {
+      toast({
+        title: "Error",
+        description: "Bulk add feature is not available",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await addFoods(foods);
+      toast({
+        title: "Foods Added",
+        description: `${foods.length} food${foods.length !== 1 ? "s" : ""} added to your pantry!`,
+      });
+    } catch (error) {
+      logger.error("Error bulk adding foods:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add foods. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div
       ref={pullToRefreshRef}
@@ -333,6 +362,13 @@ export default function Pantry() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel>Quick Add</DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={() => setBulkAddOpen(true)}
+                    className="min-h-[44px]"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Bulk Add Foods
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => setImageCaptureOpen(true)}
                     className="min-h-[44px]"
@@ -401,6 +437,10 @@ export default function Pantry() {
                 </Button>
               </div>
               <div className="flex gap-2 flex-wrap">
+                <Button variant="outline" onClick={() => setBulkAddOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Bulk Add Foods
+                </Button>
                 <Button variant="outline" onClick={handleLoadStarterList}>
                   <Download className="h-4 w-4 mr-2" />
                   Load Starter List
@@ -596,6 +636,12 @@ export default function Pantry() {
           open={imageCaptureOpen}
           onOpenChange={setImageCaptureOpen}
           onFoodIdentified={handleFoodIdentified}
+        />
+
+        <BulkAddFoodDialog
+          open={bulkAddOpen}
+          onOpenChange={setBulkAddOpen}
+          onSave={handleBulkAdd}
         />
       </div>
     </div>
