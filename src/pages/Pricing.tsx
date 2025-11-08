@@ -182,6 +182,8 @@ export default function Pricing() {
         body: {
           planId: plan.id,
           billingCycle,
+          successUrl: `${window.location.origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+          cancelUrl: `${window.location.origin}/pricing`,
         },
       });
 
