@@ -1,9 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders, privateCacheHeaders, noCacheHeaders, CACHE_DURATIONS } from "../_shared/headers.ts";
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -29,10 +25,27 @@ serve(async (req) => {
       );
     }
 
-    // Analyze available foods
-    const safeFoods = foods.filter((f: any) => f.is_safe && (f.quantity || 0) > 0);
-    const tryBiteFoods = foods.filter((f: any) => f.is_try_bite && (f.quantity || 0) > 0);
-    
+    // Performance: Analyze available foods (only essential fields)
+    const safeFoods = foods
+      .filter((f: any) => f.is_safe && (f.quantity || 0) > 0)
+      .map((f: any) => ({
+        id: f.id,
+        name: f.name,
+        category: f.category,
+        quantity: f.quantity,
+        unit: f.unit,
+        allergens: f.allergens || [],
+      }));
+
+    const tryBiteFoods = foods
+      .filter((f: any) => f.is_try_bite && (f.quantity || 0) > 0)
+      .map((f: any) => ({
+        id: f.id,
+        name: f.name,
+        category: f.category,
+        allergens: f.allergens || [],
+      }));
+
     // Filter out foods with kid's allergens
     const kidAllergens = kid.allergens || [];
     const safeForKid = safeFoods.filter((f: any) => {
@@ -45,12 +58,17 @@ serve(async (req) => {
       return !f.allergens.some((a: string) => kidAllergens.includes(a));
     });
 
-    // Prepare recipe information
-    const availableRecipes = recipes.map((r: any) => ({
-      name: r.name,
-      description: r.description,
-      ingredients: r.food_ids.map((id: string) => foods.find((f: any) => f.id === id)?.name).filter(Boolean),
-    }));
+    // Performance: Limit recipes to top 20 most recent (reduces payload size)
+    const availableRecipes = recipes
+      .slice(0, 20)
+      .map((r: any) => ({
+        name: r.name,
+        // Only include first 10 ingredients to keep payload small
+        ingredients: r.food_ids
+          .slice(0, 10)
+          .map((id: string) => foods.find((f: any) => f.id === id)?.name)
+          .filter(Boolean),
+      }));
 
     // Build context for AI
     const systemPrompt = `You are a pediatric nutrition assistant helping plan meals for picky eaters.
@@ -220,16 +238,20 @@ Return a JSON array of meal entries in this exact format:
       };
     });
 
+    // Performance: Cache meal plans for 1 minute (private, user-specific)
     return new Response(
       JSON.stringify({ plan: planWithIds }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      {
+        status: 200,
+        headers: privateCacheHeaders(CACHE_DURATIONS.DYNAMIC)
+      }
     );
 
   } catch (error) {
     console.error('Error in ai-meal-plan function:', error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: noCacheHeaders() }
     );
   }
 });
