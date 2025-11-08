@@ -147,6 +147,7 @@ const Auth = () => {
       <OnboardingDialog
         open={showOnboarding}
         onComplete={handleOnboardingComplete}
+        onOpenChange={setShowOnboarding}
       />
 
       <PasswordResetDialog
