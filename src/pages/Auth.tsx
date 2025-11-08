@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Utensils, Eye, EyeOff } from "lucide-react";
 import { Link } from "react-router-dom";
 import { OnboardingDialog } from "@/components/OnboardingDialog";
+import { PasswordResetDialog } from "@/components/PasswordResetDialog";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
@@ -25,6 +26,7 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showResetDialog, setShowResetDialog] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -145,6 +147,11 @@ const Auth = () => {
       <OnboardingDialog
         open={showOnboarding}
         onComplete={handleOnboardingComplete}
+      />
+
+      <PasswordResetDialog
+        open={showResetDialog}
+        onOpenChange={setShowResetDialog}
       />
 
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
@@ -291,6 +298,16 @@ const Auth = () => {
                           <span className="sr-only">
                             {showPassword ? "Hide password" : "Show password"}
                           </span>
+                        </Button>
+                      </div>
+                      <div className="text-right">
+                        <Button
+                          type="button"
+                          variant="link"
+                          className="text-sm px-0 h-auto"
+                          onClick={() => setShowResetDialog(true)}
+                        >
+                          Forgot Password?
                         </Button>
                       </div>
                     </div>
