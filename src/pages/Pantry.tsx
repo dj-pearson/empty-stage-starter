@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Plus,
   Search,
@@ -40,6 +41,7 @@ import {
   Camera,
   MoreVertical,
   Upload,
+  Utensils,
 } from "lucide-react";
 import { Food, FoodCategory } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
@@ -512,15 +514,93 @@ export default function Pantry() {
           {/* Food Grid */}
           {filteredFoods.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-muted-foreground mb-4 px-4">
-                {searchQuery || categoryFilter !== "all"
-                  ? "No foods match your filters"
-                  : "No foods yet. Start by adding some!"}
-              </p>
-              <Button onClick={() => setDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Your First Food
-              </Button>
+              {searchQuery || categoryFilter !== "all" ? (
+                // Filtered empty state
+                <>
+                  <p className="text-muted-foreground mb-4 px-4">
+                    No foods match your filters
+                  </p>
+                  <Button onClick={() => {
+                    setSearchQuery("");
+                    setCategoryFilter("all");
+                  }}>
+                    Clear Filters
+                  </Button>
+                </>
+              ) : (
+                // True empty state with helpful guidance
+                <div className="max-w-3xl mx-auto px-4">
+                  <div className="mb-8">
+                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                      <Utensils className="h-8 w-8 text-primary" />
+                    </div>
+                    <h3 className="text-2xl font-bold mb-2">Build Your Food Pantry</h3>
+                    <p className="text-muted-foreground mb-6">
+                      Start by adding foods your child already loves (safe foods) and new foods to try.
+                      This helps us create personalized meal plans!
+                    </p>
+                  </div>
+
+                  {/* 3 Quick Action Cards */}
+                  <div className="grid md:grid-cols-3 gap-4 mb-8">
+                    <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => handleLoadStarterList()}>
+                      <CardContent className="pt-6 text-center">
+                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                          <Download className="h-6 w-6 text-primary" />
+                        </div>
+                        <h4 className="font-semibold mb-2">Quick Start</h4>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          Load 50+ common kid-friendly foods
+                        </p>
+                        <Badge variant="secondary">Recommended</Badge>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setDialogOpen(true)}>
+                      <CardContent className="pt-6 text-center">
+                        <div className="w-12 h-12 rounded-full bg-safe-food/10 flex items-center justify-center mx-auto mb-3">
+                          <Plus className="h-6 w-6 text-safe-food" />
+                        </div>
+                        <h4 className="font-semibold mb-2">Add Manually</h4>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          Type in specific foods one at a time
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={handleGetSuggestions}>
+                      <CardContent className="pt-6 text-center">
+                        <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-3">
+                          <Sparkles className="h-6 w-6 text-accent" />
+                        </div>
+                        <h4 className="font-semibold mb-2">AI Suggestions</h4>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          Get personalized food recommendations
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Helpful Tips */}
+                  <div className="bg-muted/50 rounded-lg p-6">
+                    <h4 className="font-semibold mb-3">💡 Quick Tips</h4>
+                    <ul className="space-y-2 text-sm text-muted-foreground text-left">
+                      <li className="flex gap-2">
+                        <span>•</span>
+                        <span><strong>Safe Foods:</strong> Foods your child already eats and enjoys</span>
+                      </li>
+                      <li className="flex gap-2">
+                        <span>•</span>
+                        <span><strong>Try Bites:</strong> New foods you want to introduce gradually</span>
+                      </li>
+                      <li className="flex gap-2">
+                        <span>•</span>
+                        <span><strong>Categories:</strong> Help organize foods (protein, carb, fruit, etc.)</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
