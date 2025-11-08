@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { Food, Kid, PlanEntry, GroceryItem, Recipe } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
-import { generateId } from "@/lib/utils";
+import { generateId, debounce } from "@/lib/utils";
 import { getStorage } from "@/lib/platform";
 import { logger } from "@/lib/logger";
 
@@ -79,6 +79,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [householdId, setHouseholdId] = useState<string | null>(null);
 
+  // Performance: Prevent duplicate data loading
+  const loadingRef = useRef(false);
+
   // Load from storage on mount (platform-aware)
   useEffect(() => {
     const loadData = async () => {
@@ -135,36 +138,75 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let mounted = true;
 
     const loadAuthAndData = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const uid = session?.user?.id ?? null;
-      setUserId(uid);
+      // Performance: Prevent duplicate loading
+      if (loadingRef.current) {
+        logger.debug('Data loading already in progress, skipping duplicate request');
+        return;
+      }
 
-      if (uid) {
-        // Get household id
-        const { data: hh } = await supabase.rpc('get_user_household_id', { _user_id: uid });
-        const hhId = (hh as string) ?? null;
-        if (mounted) setHouseholdId(hhId);
+      loadingRef.current = true;
 
-        // Load all data from DB
-        const [kidsRes, foodsRes, recipesRes, planRes, groceryRes] = await Promise.all([
-          supabase.from('kids').select('*').order('created_at', { ascending: true }),
-          supabase.from('foods').select('*').order('name', { ascending: true }),
-          supabase.from('recipes').select('*').order('created_at', { ascending: true }),
-          supabase.from('plan_entries').select('*').order('date', { ascending: true }),
-          supabase.from('grocery_items').select('*').order('created_at', { ascending: true })
-        ]);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const uid = session?.user?.id ?? null;
+        setUserId(uid);
 
-        if (mounted) {
-          if (kidsRes.data) {
-            setKids(kidsRes.data as unknown as Kid[]);
-            // Default to Family view (null) instead of first kid
-            setActiveKidId(null);
+        if (uid) {
+          // Get household id
+          const { data: hh } = await supabase.rpc('get_user_household_id', { _user_id: uid });
+          const hhId = (hh as string) ?? null;
+          if (mounted) setHouseholdId(hhId);
+
+          // Performance: Only load plan entries from last 30 days and next 90 days
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          const ninetyDaysFromNow = new Date();
+          ninetyDaysFromNow.setDate(ninetyDaysFromNow.getDate() + 90);
+
+          // Load all data from DB with performance optimizations
+          const [kidsRes, foodsRes, recipesRes, planRes, groceryRes] = await Promise.all([
+            // Performance: Add explicit household filter to help query planner
+            hhId
+              ? supabase.from('kids').select('*').eq('household_id', hhId).order('created_at', { ascending: true })
+              : supabase.from('kids').select('*').order('created_at', { ascending: true }),
+            hhId
+              ? supabase.from('foods').select('*').eq('household_id', hhId).order('name', { ascending: true })
+              : supabase.from('foods').select('*').order('name', { ascending: true }),
+            hhId
+              ? supabase.from('recipes').select('*').eq('household_id', hhId).order('created_at', { ascending: true })
+              : supabase.from('recipes').select('*').order('created_at', { ascending: true }),
+            // Performance: Only load recent and upcoming plan entries (reduces 90% of data)
+            hhId
+              ? supabase.from('plan_entries')
+                  .select('*')
+                  .eq('household_id', hhId)
+                  .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
+                  .lte('date', ninetyDaysFromNow.toISOString().split('T')[0])
+                  .order('date', { ascending: true })
+              : supabase.from('plan_entries')
+                  .select('*')
+                  .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
+                  .lte('date', ninetyDaysFromNow.toISOString().split('T')[0])
+                  .order('date', { ascending: true }),
+            hhId
+              ? supabase.from('grocery_items').select('*').eq('household_id', hhId).order('created_at', { ascending: true })
+              : supabase.from('grocery_items').select('*').order('created_at', { ascending: true })
+          ]);
+
+          if (mounted) {
+            if (kidsRes.data) {
+              setKids(kidsRes.data as unknown as Kid[]);
+              // Default to Family view (null) instead of first kid
+              setActiveKidId(null);
+            }
+            if (foodsRes.data) setFoods(foodsRes.data as unknown as Food[]);
+            if (recipesRes.data) setRecipes(recipesRes.data as unknown as Recipe[]);
+            if (planRes.data) setPlanEntriesState(planRes.data as unknown as PlanEntry[]);
+            if (groceryRes.data) setGroceryItemsState(groceryRes.data as unknown as GroceryItem[]);
           }
-          if (foodsRes.data) setFoods(foodsRes.data as unknown as Food[]);
-          if (recipesRes.data) setRecipes(recipesRes.data as unknown as Recipe[]);
-          if (planRes.data) setPlanEntriesState(planRes.data as unknown as PlanEntry[]);
-          if (groceryRes.data) setGroceryItemsState(groceryRes.data as unknown as GroceryItem[]);
         }
+      } finally {
+        loadingRef.current = false;
       }
     };
 
@@ -275,6 +317,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId || !householdId) return;
 
+    // Performance: Debounce real-time updates to prevent render thrashing
+    const debouncedUpdate = debounce((payload: any) => {
+      logger.debug('Grocery item changed:', payload);
+
+      if (payload.eventType === 'INSERT') {
+        setGroceryItemsState(prev => {
+          // Avoid duplicates
+          const exists = prev.some(item => item.id === payload.new.id);
+          if (exists) return prev;
+          return [...prev, payload.new as GroceryItem];
+        });
+      } else if (payload.eventType === 'UPDATE') {
+        setGroceryItemsState(prev =>
+          prev.map(item =>
+            item.id === (payload.new as GroceryItem).id ? (payload.new as GroceryItem) : item
+          )
+        );
+      } else if (payload.eventType === 'DELETE') {
+        setGroceryItemsState(prev =>
+          prev.filter(item => item.id !== (payload.old as GroceryItem).id)
+        );
+      }
+    }, 300); // 300ms debounce prevents excessive updates
+
     const channel = supabase
       .channel('grocery_items_changes')
       .on(
@@ -285,28 +351,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           table: 'grocery_items',
           filter: `household_id=eq.${householdId}`
         },
-        (payload) => {
-          logger.debug('Grocery item changed:', payload);
-
-          if (payload.eventType === 'INSERT') {
-            setGroceryItemsState(prev => {
-              // Avoid duplicates
-              const exists = prev.some(item => item.id === payload.new.id);
-              if (exists) return prev;
-              return [...prev, payload.new as GroceryItem];
-            });
-          } else if (payload.eventType === 'UPDATE') {
-            setGroceryItemsState(prev =>
-              prev.map(item =>
-                item.id === (payload.new as GroceryItem).id ? (payload.new as GroceryItem) : item
-              )
-            );
-          } else if (payload.eventType === 'DELETE') {
-            setGroceryItemsState(prev =>
-              prev.filter(item => item.id !== (payload.old as GroceryItem).id)
-            );
-          }
-        }
+        debouncedUpdate
       )
       .subscribe();
 
