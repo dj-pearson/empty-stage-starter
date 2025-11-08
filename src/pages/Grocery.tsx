@@ -17,7 +17,7 @@ import { ManageStoreAislesDialog } from "@/components/ManageStoreAislesDialog";
 import { AisleContributionDialog } from "@/components/AisleContributionDialog";
 import { ImportRecipeToGroceryDialog } from "@/components/ImportRecipeToGroceryDialog";
 import { generateGroceryList } from "@/lib/mealPlanner";
-import { ShoppingCart, Copy, Trash2, Printer, Download, Plus, Share2, FileText, Sparkles, Store, Barcode } from "lucide-react";
+import { ShoppingCart, Copy, Trash2, Printer, Download, Plus, Share2, FileText, Sparkles, Store, Barcode, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { FoodCategory } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
@@ -78,16 +78,41 @@ export default function Grocery() {
     ? groceryItems.filter(item => item.grocery_list_id === selectedListId)
     : groceryItems;
 
-  useEffect(() => {
-    if (planEntries.length > 0) {
-      // In family mode, generate list from all kids' plans. Otherwise, just active kid.
-      const filteredEntries = isFamilyMode 
-        ? planEntries 
-        : planEntries.filter(e => e.kid_id === activeKidId);
-      const newList = generateGroceryList(filteredEntries, foods);
-      setGroceryItems(newList);
+  // Manual regeneration function instead of automatic useEffect
+  const handleRegenerateFromPlan = () => {
+    if (planEntries.length === 0) {
+      toast.info("No meal plan found", {
+        description: "Create a meal plan first to generate a grocery list"
+      });
+      return;
     }
-  }, [planEntries, foods, activeKidId, isFamilyMode]);
+
+    const filteredEntries = isFamilyMode
+      ? planEntries
+      : planEntries.filter(e => e.kid_id === activeKidId);
+
+    const generated = generateGroceryList(filteredEntries, foods);
+
+    // Smart merge: preserve manual items and checked items
+    const manual = groceryItems.filter(item => item.is_manual);
+    const checked = groceryItems.filter(item => item.checked && !item.is_manual);
+
+    // Add generated items that don't conflict with manual/checked items
+    const existingNames = new Set([
+      ...manual.map(i => i.name.toLowerCase()),
+      ...checked.map(i => i.name.toLowerCase())
+    ]);
+
+    const newItems = generated.filter(
+      gen => !existingNames.has(gen.name.toLowerCase())
+    );
+
+    setGroceryItems([...manual, ...checked, ...newItems]);
+
+    toast.success(`Added ${newItems.length} items from meal plan`, {
+      description: `Preserved ${manual.length + checked.length} existing items`
+    });
+  };
 
   const handleCopyList = () => {
     const text = groceryItems
@@ -401,7 +426,12 @@ export default function Grocery() {
               <FileText className="h-4 w-4 mr-2" />
               Import Recipe
             </Button>
-            
+
+            <Button onClick={handleRegenerateFromPlan} variant="outline">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Sync from Meal Plan
+            </Button>
+
             {/* Store Layout Manager Button */}
             {userId && (
               <Button

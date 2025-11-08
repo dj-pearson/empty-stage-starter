@@ -7,6 +7,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -69,13 +79,15 @@ const COMMON_FOODS = [
 interface OnboardingDialogProps {
   open: boolean;
   onComplete: () => void;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
+export function OnboardingDialog({ open, onComplete, onOpenChange }: OnboardingDialogProps) {
   const { addKid, addFood } = useApp();
   const [step, setStep] = useState(1);
   const [uploading, setUploading] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
 
   const [childData, setChildData] = useState({
     name: "",
@@ -212,13 +224,39 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
 
   const progress = (step / 4) * 100;
 
+  const handleSkip = () => {
+    // Mark onboarding as complete even if skipped
+    onComplete();
+    setShowSkipConfirm(false);
+  };
+
+  const handleDialogChange = (open: boolean) => {
+    if (!open) {
+      // User trying to close - show skip confirmation
+      setShowSkipConfirm(true);
+    } else if (onOpenChange) {
+      onOpenChange(open);
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={() => {}}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-hidden flex flex-col"  onInteractOutside={(e) => e.preventDefault()}>
+    <>
+    <Dialog open={open} onOpenChange={handleDialogChange}>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            <DialogTitle>Welcome to EatPal!</DialogTitle>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              <DialogTitle>Welcome to EatPal!</DialogTitle>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowSkipConfirm(true)}
+              className="text-xs"
+            >
+              Skip for now
+            </Button>
           </div>
           <Progress value={progress} className="h-2" />
           <DialogDescription>
@@ -549,5 +587,24 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
         </div>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={showSkipConfirm} onOpenChange={setShowSkipConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Skip onboarding?</AlertDialogTitle>
+          <AlertDialogDescription>
+            You can always complete this setup later from your dashboard.
+            We recommend setting up at least one child profile to get started with meal planning.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Continue Setup</AlertDialogCancel>
+          <AlertDialogAction onClick={handleSkip}>
+            Skip Onboarding
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
