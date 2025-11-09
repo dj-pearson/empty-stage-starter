@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
@@ -29,7 +29,11 @@ const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
+
+  // Get the redirect URL from query params (where user was trying to go)
+  const redirectTo = searchParams.get("redirect") || "/dashboard";
 
   useEffect(() => {
     // Set up listener first
@@ -46,7 +50,8 @@ const Auth = () => {
             .single()
             .then(({ data: profile }) => {
               if (profile?.onboarding_completed) {
-                navigate("/dashboard");
+                // Restore user's previous location
+                navigate(redirectTo, { replace: true });
               } else {
                 // First time login or incomplete onboarding - show setup
                 setShowOnboarding(true);
@@ -66,7 +71,8 @@ const Auth = () => {
           .single()
           .then(({ data: profile }) => {
             if (profile?.onboarding_completed) {
-              navigate("/dashboard");
+              // Restore user's previous location
+              navigate(redirectTo, { replace: true });
             } else {
               setShowOnboarding(true);
             }
@@ -75,7 +81,7 @@ const Auth = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, redirectTo]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,7 +169,8 @@ const Auth = () => {
         .eq("id", user.id);
     }
 
-    navigate("/dashboard");
+    // Navigate to intended destination (or dashboard if none)
+    navigate(redirectTo, { replace: true });
   };
 
   return (

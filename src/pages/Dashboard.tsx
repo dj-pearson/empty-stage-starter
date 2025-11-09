@@ -51,7 +51,6 @@ const mobileNavItems = [
 
 const Dashboard = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -60,35 +59,33 @@ const Dashboard = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Set up listener first
+    // Set up listener for auth state changes
+    // Auth protection is handled by ProtectedRoute wrapper
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!session) {
-        navigate("/auth");
-      } else {
+      if (session) {
         setUser(session.user);
-        setLoading(false);
         // Defer admin check to avoid deadlock
         setTimeout(() => {
           checkAdminStatus(session.user.id);
         }, 0);
+      } else {
+        setUser(null);
+        setIsAdmin(false);
       }
     });
 
-    // Then check existing session
+    // Get current session for initial render
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        navigate("/auth");
-      } else {
+      if (session) {
         setUser(session.user);
-        setLoading(false);
         checkAdminStatus(session.user.id);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, []);
 
   const checkAdminStatus = async (userId: string) => {
     const { data } = await supabase
@@ -111,14 +108,6 @@ const Dashboard = () => {
   };
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
 
   const navItemsWithAdmin = isAdmin
     ? [...mobileNavItems, { to: "/admin", icon: Shield, label: "Admin" }]

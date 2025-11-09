@@ -3,6 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 
+/**
+ * useAdminCheck - Hook for verifying admin role permissions
+ *
+ * NOTE: This hook assumes the user is already authenticated.
+ * Admin routes should be wrapped with ProtectedRoute component
+ * which handles authentication before this hook runs.
+ *
+ * This hook only checks for admin role in user_roles table.
+ */
 export const useAdminCheck = () => {
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -11,23 +20,24 @@ export const useAdminCheck = () => {
   useEffect(() => {
     const checkAdminStatus = async () => {
       try {
-        console.log('[useAdminCheck] Starting admin check...');
+        console.log('[useAdminCheck] Starting admin role check...');
         const { data: { user } } = await supabase.auth.getUser();
-        
+
         console.log('[useAdminCheck] User from auth:', user);
-        
+
+        // ProtectedRoute ensures user exists, but double-check for safety
         if (!user) {
-          console.log("[useAdminCheck] No user found - redirecting to auth");
+          console.log("[useAdminCheck] No user found - this should not happen with ProtectedRoute");
           toast({
             title: "Access Denied",
-            description: "You must be logged in to access this page.",
+            description: "Authentication required.",
             variant: "destructive",
           });
-          navigate("/auth?redirect=/admin");
+          navigate("/");
           return;
         }
 
-        console.log("[useAdminCheck] Checking admin status for user:", user.id);
+        console.log("[useAdminCheck] Checking admin role for user:", user.id);
 
         const { data, error } = await supabase
           .from("user_roles")
@@ -51,7 +61,7 @@ export const useAdminCheck = () => {
           console.log("[useAdminCheck] Admin check result:", data);
           console.log("[useAdminCheck] Is admin?:", !!data);
           setIsAdmin(!!data);
-          
+
           if (!data) {
             console.log("[useAdminCheck] No admin role found - redirecting to home");
             toast({

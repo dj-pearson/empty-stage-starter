@@ -8,6 +8,7 @@ import { HelmetProvider } from "react-helmet-async";
 import { AppProvider } from "@/contexts/AppContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Loader2 } from "lucide-react";
 
 // Lazy load all route components for better performance
@@ -76,13 +77,14 @@ const App = () => (
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
-            <Route path="/admin" element={<Admin />} />
-            <Route path="/admin-dashboard" element={<AdminDashboard />} />
-            <Route path="/seo-dashboard" element={<SEODashboard />} />
-            <Route path="/search-traffic" element={<SearchTrafficDashboard />} />
+            {/* Admin routes - Protected with role check */}
+            <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+            <Route path="/admin-dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+            <Route path="/seo-dashboard" element={<ProtectedRoute><SEODashboard /></ProtectedRoute>} />
+            <Route path="/search-traffic" element={<ProtectedRoute><SearchTrafficDashboard /></ProtectedRoute>} />
 
-            {/* Main Dashboard with nested routes */}
-            <Route path="/dashboard" element={<Dashboard />}>
+            {/* Main Dashboard with nested routes - Protected */}
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
               <Route index element={<Home />} />
               <Route path="kids" element={<Kids />} />
               <Route path="pantry" element={<Pantry />} />
@@ -98,29 +100,29 @@ const App = () => (
               <Route path="food-chaining" element={<FoodChaining />} />
             </Route>
 
-            {/* Convenience aliases - redirect to dashboard nested routes */}
-            <Route path="/kids" element={<Dashboard />}>
+            {/* Convenience aliases - redirect to dashboard nested routes - Protected */}
+            <Route path="/kids" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
               <Route index element={<Kids />} />
             </Route>
-            <Route path="/pantry" element={<Dashboard />}>
+            <Route path="/pantry" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
               <Route index element={<Pantry />} />
             </Route>
-            <Route path="/recipes" element={<Dashboard />}>
+            <Route path="/recipes" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
               <Route index element={<Recipes />} />
             </Route>
-            <Route path="/planner" element={<Dashboard />}>
+            <Route path="/planner" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
               <Route index element={<Planner />} />
             </Route>
-            <Route path="/grocery" element={<Dashboard />}>
+            <Route path="/grocery" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
               <Route index element={<Grocery />} />
             </Route>
-            <Route path="/food-tracker" element={<Dashboard />}>
+            <Route path="/food-tracker" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
               <Route index element={<FoodTracker />} />
             </Route>
-            <Route path="/meal-builder" element={<Dashboard />}>
+            <Route path="/meal-builder" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
               <Route index element={<MealBuilder />} />
             </Route>
-            <Route path="/insights" element={<Dashboard />}>
+            <Route path="/insights" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
               <Route index element={<InsightsDashboard />} />
             </Route>
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
