@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useDebounce } from "./use-debounce";
+import { logger } from "@/lib/logger";
 
 interface UseAutoSaveOptions<T> {
   key: string;
@@ -50,7 +51,7 @@ export function useAutoSave<T>({
         lastSavedData.current = dataString;
         setLastSaved(new Date());
       } catch (error) {
-        console.error("Auto-save error:", error);
+        logger.error("Auto-save error", error);
         setSaveError(error instanceof Error ? error : new Error("Unknown error"));
       } finally {
         setIsSaving(false);
@@ -84,7 +85,7 @@ export function useAutoSave<T>({
 
       return JSON.parse(saved) as T;
     } catch (error) {
-      console.error("Error loading draft:", error);
+      logger.error("Error loading draft", error);
       return null;
     }
   }, [key]);
