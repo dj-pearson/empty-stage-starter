@@ -4,6 +4,7 @@
  */
 
 import { isWeb } from './platform';
+import { supabase as webSupabase } from '@/integrations/supabase/client';
 
 // Re-export types
 export type { Database } from '@/integrations/supabase/types';
@@ -21,23 +22,14 @@ export const getSupabaseClient = async () => {
 
 // For synchronous imports (web-only, existing code)
 // This maintains backwards compatibility with existing web code
-let _cachedClient: any = null;
-
 export const getSupabaseClientSync = () => {
   if (!isWeb()) {
     throw new Error('Synchronous Supabase client is only available on web. Use getSupabaseClient() instead.');
   }
   
-  if (!_cachedClient) {
-    // This will only work on web due to the synchronous require
-    _cachedClient = require('@/integrations/supabase/client').supabase;
-  }
-  
-  return _cachedClient;
+  return webSupabase;
 };
 
 // Export supabase directly for web (backwards compatibility)
 // Admin dashboard components are web-only, so this is safe
-export const supabase = isWeb() 
-  ? require('@/integrations/supabase/client').supabase 
-  : null;
+export const supabase = isWeb() ? webSupabase : null;
