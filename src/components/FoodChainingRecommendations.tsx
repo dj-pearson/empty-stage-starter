@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sparkles, TrendingUp, CheckCircle, ChevronRight, Info, Plus, Calendar } from "lucide-react";
+import { logger } from "@/lib/logger";
 import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
 import {
@@ -99,9 +100,9 @@ export function FoodChainingRecommendations() {
         if (foodArray.length > 0 && !selectedFood) {
           handleSelectFood(foodArray[0]);
         }
-      } catch (error: unknown) {
-        logger.error("Error loading successful foods:", error);
-        toast.error("Failed to load food success data");
+        } catch (error: unknown) {
+          logger.error("Error loading successful foods:", error);
+          toast.error("Failed to load food success data");
       } finally {
         setLoading(false);
       }
@@ -165,8 +166,15 @@ export function FoodChainingRecommendations() {
 
       if (similarError) throw similarError;
 
-      // Calculate similarity and create suggestions
-      const suggestions: FoodChainSuggestion[] = [];
+      type NewSuggestion = {
+        source_food_id: string;
+        target_food_id: string;
+        similarity_score: number;
+        chain_reason: string[];
+        recommended_order: number;
+      };
+
+      const suggestions: NewSuggestion[] = [];
 
       for (const food of similarFoods || []) {
         const { data: score } = await supabase.rpc("calculate_food_similarity", {

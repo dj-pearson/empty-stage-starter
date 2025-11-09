@@ -344,7 +344,8 @@ Provide helpful, empathetic, and practical advice. Keep responses conversational
       toast.success("AI Coach responded!");
     } catch (error: unknown) {
       logger.error("Error sending message:", error);
-      toast.error(error.message || "Failed to send message. Check AI settings.");
+      const msg = error instanceof Error ? error.message : "Failed to send message. Check AI settings.";
+      toast.error(msg);
       // Remove the temporary message on error
       setMessages(messages.filter((m) => !m.id.startsWith("temp-")));
     } finally {

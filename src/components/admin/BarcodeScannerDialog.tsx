@@ -107,7 +107,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
       const qrboxWidth = Math.round(containerWidth * 0.95);
       const qrboxHeight = Math.max(160, Math.round(qrboxWidth * 0.4));
 
-      const config: Record<string, unknown> = {
+      const config: any = {
         fps: 10,
         aspectRatio: 1.777,
         qrbox: { width: qrboxWidth, height: qrboxHeight },

@@ -17,7 +17,7 @@ interface RecipeSchemaMarkupProps {
  * - Importable into AnyList, Paprika, Copy Me That apps
  * - Rich snippets with ratings, cook time, calories
  */
-export function RecipeSchemaMarkup({ recipe, foods, authorName = "EatPal Chef" }: RecipeSchemaMarkupProps) {
+export function RecipeSchemaMarkup({ recipe, foods, authorName = "EatPal Chef" }: RecipeSchemaMarkupProps): JSX.Element | null {
   
   useEffect(() => {
     // Generate schema.org JSON-LD
@@ -82,7 +82,7 @@ export function RecipeSchemaMarkup({ recipe, foods, authorName = "EatPal Chef" }
       totalTime: totalTimeISO,
       recipeYield: recipe.servings || '4 servings',
       recipeCategory: recipe.category || 'Main Course',
-      recipeCuisine: undefined, // Could extract from tags
+      
       recipeIngredient: recipeIngredients.length > 0 ? recipeIngredients : undefined,
       recipeInstructions: instructionSteps.length > 0 ? instructionSteps : undefined,
       nutrition: nutrition,

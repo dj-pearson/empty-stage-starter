@@ -57,7 +57,7 @@ export function AISettingsManager() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setModels(data || []);
+      setModels((data as unknown as AIModel[]) || []);
     } catch (error) {
       logger.error('Error fetching AI models:', error);
       toast({
@@ -139,10 +139,11 @@ export function AISettingsManager() {
       }
     } catch (error: unknown) {
       logger.error('Error testing model:', error);
-      setTestResult({ success: false, message: error.message });
+      const msg = error instanceof Error ? error.message : 'Failed to test AI model';
+      setTestResult({ success: false, message: msg });
       toast({
         title: "Test failed",
-        description: error.message || "Failed to test AI model",
+        description: msg,
         variant: "destructive",
       });
     } finally {
@@ -179,9 +180,10 @@ export function AISettingsManager() {
       });
     } catch (error: unknown) {
       logger.error('Error adding model:', error);
+      const msg = error instanceof Error ? error.message : 'Failed to add model';
       toast({
         title: "Error",
-        description: error.message || "Failed to add model",
+        description: msg,
         variant: "destructive",
       });
     }
@@ -203,9 +205,10 @@ export function AISettingsManager() {
       });
     } catch (error: unknown) {
       logger.error('Error deleting model:', error);
+      const msg = error instanceof Error ? error.message : 'Failed to delete model';
       toast({
         title: "Error",
-        description: error.message || "Failed to delete model",
+        description: msg,
         variant: "destructive",
       });
     }
