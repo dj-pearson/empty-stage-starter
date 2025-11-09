@@ -11,10 +11,13 @@ export const useAdminCheck = () => {
   useEffect(() => {
     const checkAdminStatus = async () => {
       try {
+        console.log('[useAdminCheck] Starting admin check...');
         const { data: { user } } = await supabase.auth.getUser();
         
+        console.log('[useAdminCheck] User from auth:', user);
+        
         if (!user) {
-          console.log("No user found - redirecting to auth");
+          console.log("[useAdminCheck] No user found - redirecting to auth");
           toast({
             title: "Access Denied",
             description: "You must be logged in to access this page.",
@@ -24,7 +27,7 @@ export const useAdminCheck = () => {
           return;
         }
 
-        console.log("Checking admin status for user:", user.id);
+        console.log("[useAdminCheck] Checking admin status for user:", user.id);
 
         const { data, error } = await supabase
           .from("user_roles")
@@ -33,8 +36,10 @@ export const useAdminCheck = () => {
           .eq("role", "admin")
           .maybeSingle();
 
+        console.log('[useAdminCheck] Query result - data:', data, 'error:', error);
+
         if (error) {
-          console.error("Error checking admin status:", error);
+          console.error("[useAdminCheck] Error checking admin status:", error);
           toast({
             title: "Error",
             description: "Failed to verify admin permissions. Please try again.",
@@ -43,23 +48,28 @@ export const useAdminCheck = () => {
           setIsAdmin(false);
           navigate("/");
         } else {
-          console.log("Admin check result:", data);
+          console.log("[useAdminCheck] Admin check result:", data);
+          console.log("[useAdminCheck] Is admin?:", !!data);
           setIsAdmin(!!data);
           
           if (!data) {
+            console.log("[useAdminCheck] No admin role found - redirecting to home");
             toast({
               title: "Access Denied",
               description: "You don't have admin permissions.",
               variant: "destructive",
             });
             navigate("/");
+          } else {
+            console.log("[useAdminCheck] Admin access GRANTED!");
           }
         }
       } catch (error) {
-        console.error("Error in admin check:", error);
+        console.error("[useAdminCheck] Caught exception:", error);
         setIsAdmin(false);
         navigate("/");
       } finally {
+        console.log('[useAdminCheck] Setting isLoading to false');
         setIsLoading(false);
       }
     };
