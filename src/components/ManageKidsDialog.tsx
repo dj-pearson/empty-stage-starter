@@ -34,6 +34,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format, differenceInYears } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useRef } from "react";
+import { logger } from "@/lib/logger";
 import {
   AlertDialog,
   AlertDialogAction,

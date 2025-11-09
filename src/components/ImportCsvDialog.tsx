@@ -58,7 +58,7 @@ Hummus,protein,false,true,sesame,Deli`;
       const values = lines[i].split(",").map(v => v.trim());
       if (values.length < headers.length) continue;
 
-      const food: Record<string, unknown> = {};
+      const food: any = {};
       headers.forEach((header, index) => {
         food[header] = values[index]?.replace(/^"|"$/g, "") || "";
       });
@@ -69,16 +69,18 @@ Hummus,protein,false,true,sesame,Deli`;
         continue;
       }
 
-      if (!validCategories.includes(food.category)) {
+      if (!(validCategories as any).includes(food.category as any)) {
         errors.push(`Row ${i + 1}: Invalid category "${food.category}". Must be one of: ${validCategories.join(", ")}`);
         continue;
       }
 
-      food.is_safe = food.is_safe.toLowerCase() === "true";
-      food.is_try_bite = food.is_try_bite.toLowerCase() === "true";
+      const isSafeStr = String(food.is_safe || "");
+      food.is_safe = isSafeStr.toLowerCase() === "true";
+      const tryStr = String(food.is_try_bite || "");
+      food.is_try_bite = tryStr.toLowerCase() === "true";
       
       if (food.allergens) {
-        food.allergens = food.allergens.split(";").map((a: string) => a.trim()).filter(Boolean);
+        food.allergens = String(food.allergens).split(";").map((a: string) => a.trim()).filter(Boolean);
       }
 
       foods.push(food);

@@ -42,6 +42,7 @@ import {
   type IngredientMatch,
   type InstacartProduct,
 } from '@/lib/integrations/instacart';
+import { logger } from "@/lib/logger";
 
 interface OrderIngredientsDialogProps {
   recipe: Recipe;
@@ -101,7 +102,7 @@ export function OrderIngredientsDialog({
         zipCode,
         storesFound: foundStores.length,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error finding stores:', error);
       toast.error('Failed to find stores. Please try again.');
       await trackInstacartUsage('error', { error: 'store_search_failed' });
@@ -133,7 +134,7 @@ export function OrderIngredientsDialog({
       setStep('review');
       
       toast.success('Ingredients matched to products');
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error matching ingredients:', error);
       toast.error('Failed to match ingredients');
       await trackInstacartUsage('error', { error: 'ingredient_matching_failed' });
@@ -181,7 +182,7 @@ export function OrderIngredientsDialog({
         itemCount: cartItems.length,
         total: order.total,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error creating cart:', error);
       toast.error('Failed to create cart');
       await trackInstacartUsage('error', { error: 'cart_creation_failed' });

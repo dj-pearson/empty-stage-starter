@@ -67,6 +67,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ContentOptimizer } from "./ContentOptimizer";
+import { logger } from "@/lib/logger";
 import {
   CrawlResults,
   ImageResults,
@@ -233,7 +234,7 @@ export function SEOManager() {
 
   const loadTrackedKeywords = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('seo_keywords')
         .select('*')
         .order('priority', { ascending: false });
@@ -271,7 +272,7 @@ export function SEOManager() {
 
   const loadCompetitorAnalysis = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('seo_competitor_analysis')
         .select('*')
         .eq('is_active', true)
@@ -296,7 +297,7 @@ export function SEOManager() {
 
   const loadPageAnalysis = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('seo_page_scores')
         .select('*')
         .order('overall_score', { ascending: false })

@@ -85,7 +85,7 @@ export function SupportWidget() {
     } catch (error: unknown) {
       toast({
         title: "Error submitting ticket",
-        description: error.message,
+        description: error instanceof Error ? error.message : "Failed to submit support ticket",
         variant: "destructive",
       });
     } finally {

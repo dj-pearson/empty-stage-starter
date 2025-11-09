@@ -249,7 +249,8 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
       });
       toast.success('Recipe shared!');
     } catch (error: unknown) {
-      if (error.name !== 'AbortError') {
+      const err = error as any;
+      if (err?.name !== 'AbortError') {
         logger.error('Error sharing:', error);
         toast.error('Failed to share recipe');
       }
