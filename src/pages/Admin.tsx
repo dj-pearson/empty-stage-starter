@@ -25,6 +25,7 @@ import { BarcodeEnrichmentTool } from "@/components/admin/BarcodeEnrichmentTool"
 import { FeatureFlagDashboard } from "@/components/admin/FeatureFlagDashboard";
 import { TicketQueue } from "@/components/admin/TicketQueue";
 import { UserIntelligenceDashboard } from "@/components/admin/UserIntelligenceDashboard";
+import { SupportPerformanceDashboard } from "@/components/admin/SupportPerformanceDashboard";
 import { logger } from "@/lib/logger";
 
 const Admin = () => {
@@ -371,7 +372,19 @@ const Admin = () => {
                 </CardContent>
               </Card>
             )}
-            
+
+            {activeTab === "support-performance" && (
+              <div>
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold">Support Performance Dashboard</h2>
+                  <p className="text-muted-foreground">
+                    Track AI automation effectiveness and support metrics
+                  </p>
+                </div>
+                <SupportPerformanceDashboard />
+              </div>
+            )}
+
             {activeTab === "tickets" && (
               <Card>
                 <CardHeader>
