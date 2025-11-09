@@ -1,18 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { corsHeaders, privateCacheHeaders, noCacheHeaders, CACHE_DURATIONS } from "../_shared/headers.ts";
+import { getCorsHeaders, securityHeaders, privateCacheHeaders, noCacheHeaders, CACHE_DURATIONS } from "../_shared/headers.ts";
 
 serve(async (req) => {
+  // Get secure CORS headers based on request origin
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const { kid, foods, recipes, planHistory, aiModel, days = 7 } = await req.json();
-    
+
     if (!kid || !aiModel) {
       return new Response(
         JSON.stringify({ error: 'Missing required parameters' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...corsHeaders, ...securityHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -21,7 +24,7 @@ serve(async (req) => {
     if (!apiKey) {
       return new Response(
         JSON.stringify({ error: `API key ${aiModel.api_key_env_var} not configured` }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 500, headers: { ...corsHeaders, ...securityHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -160,20 +163,20 @@ Return a JSON array of meal entries in this exact format:
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 429, headers: { ...corsHeaders, ...securityHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
       if (response.status === 402) {
         return new Response(
           JSON.stringify({ error: 'Payment required. Please check your AI service credits.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 402, headers: { ...corsHeaders, ...securityHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
       return new Response(
         JSON.stringify({ error: 'AI service error', details: errorText }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 500, headers: { ...corsHeaders, ...securityHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -201,7 +204,7 @@ Return a JSON array of meal entries in this exact format:
       console.log('Failed to parse AI response as JSON:', e);
       return new Response(
         JSON.stringify({ error: 'Failed to parse AI meal plan', details: mealPlanText }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 500, headers: { ...corsHeaders, ...securityHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

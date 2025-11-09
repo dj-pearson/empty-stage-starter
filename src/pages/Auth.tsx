@@ -18,6 +18,7 @@ import { Utensils, Eye, EyeOff } from "lucide-react";
 import { Link } from "react-router-dom";
 import { OnboardingDialog } from "@/components/OnboardingDialog";
 import { PasswordResetDialog } from "@/components/PasswordResetDialog";
+import { PasswordSchema, EmailSchema } from "@/lib/validations";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
@@ -78,6 +79,29 @@ const Auth = () => {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate email format
+    const emailValidation = EmailSchema.safeParse(email);
+    if (!emailValidation.success) {
+      toast({
+        title: "Invalid Email",
+        description: emailValidation.error.errors[0].message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate password strength
+    const passwordValidation = PasswordSchema.safeParse(password);
+    if (!passwordValidation.success) {
+      toast({
+        title: "Weak Password",
+        description: passwordValidation.error.errors[0].message,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     const { error } = await supabase.auth.signUp({
@@ -225,7 +249,7 @@ const Auth = () => {
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           required
-                          minLength={6}
+                          minLength={12}
                           className="h-11 pr-10"
                         />
                         <Button
@@ -246,7 +270,7 @@ const Auth = () => {
                         </Button>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Minimum 6 characters
+                        Must be 12+ characters with uppercase, lowercase, number, and special character
                       </p>
                     </div>
                     <LoadingButton
