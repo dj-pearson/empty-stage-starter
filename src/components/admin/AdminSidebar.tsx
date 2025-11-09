@@ -1,4 +1,4 @@
-import { Users, Database, Brain, UserCog, CreditCard, Target, Share2, BookOpen, Mail, Search, Percent, Gift, Flag, Ticket, UserPlus } from "lucide-react";
+import { Users, Database, Brain, UserCog, CreditCard, Target, Share2, BookOpen, Mail, Search, Percent, Gift, Flag, Ticket, UserPlus, Sparkles, BarChart3, DollarSign } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -12,12 +12,15 @@ import {
 } from "@/components/ui/sidebar";
 
 const adminItems = [
+  { title: "User Intelligence", value: "intelligence", icon: Sparkles },
+  { title: "Revenue Operations", value: "revenue-ops", icon: DollarSign },
+  { title: "Support Performance", value: "support-performance", icon: BarChart3 },
+  { title: "Support Tickets", value: "tickets", icon: Ticket },
   { title: "Users", value: "users", icon: UserCog },
   { title: "Subscriptions", value: "subscriptions", icon: CreditCard },
   { title: "Complementary", value: "complementary", icon: Gift },
   { title: "Referrals", value: "referrals", icon: UserPlus },
   { title: "Promos", value: "campaigns", icon: Percent },
-  { title: "Support Tickets", value: "tickets", icon: Ticket },
   { title: "Leads", value: "leads", icon: Target },
   { title: "Social", value: "social", icon: Share2 },
   { title: "Blog", value: "blog", icon: BookOpen },

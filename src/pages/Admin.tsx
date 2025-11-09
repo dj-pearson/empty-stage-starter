@@ -24,6 +24,9 @@ import { ReferralProgramManager } from "@/components/admin/ReferralProgramManage
 import { BarcodeEnrichmentTool } from "@/components/admin/BarcodeEnrichmentTool";
 import { FeatureFlagDashboard } from "@/components/admin/FeatureFlagDashboard";
 import { TicketQueue } from "@/components/admin/TicketQueue";
+import { UserIntelligenceDashboard } from "@/components/admin/UserIntelligenceDashboard";
+import { SupportPerformanceDashboard } from "@/components/admin/SupportPerformanceDashboard";
+import { RevenueOperationsCenter } from "@/components/admin/RevenueOperationsCenter";
 import { logger } from "@/lib/logger";
 
 const Admin = () => {
@@ -217,6 +220,20 @@ const Admin = () => {
           </div>
 
           <div className="p-4 md:p-6">
+            {activeTab === "intelligence" && <UserIntelligenceDashboard />}
+
+            {activeTab === "revenue-ops" && (
+              <div>
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold">Revenue Operations Command Center</h2>
+                  <p className="text-muted-foreground">
+                    Churn prevention, revenue forecasting, and growth optimization
+                  </p>
+                </div>
+                <RevenueOperationsCenter />
+              </div>
+            )}
+
             {activeTab === "users" && (
               <Card>
                 <CardHeader>
@@ -368,7 +385,19 @@ const Admin = () => {
                 </CardContent>
               </Card>
             )}
-            
+
+            {activeTab === "support-performance" && (
+              <div>
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold">Support Performance Dashboard</h2>
+                  <p className="text-muted-foreground">
+                    Track AI automation effectiveness and support metrics
+                  </p>
+                </div>
+                <SupportPerformanceDashboard />
+              </div>
+            )}
+
             {activeTab === "tickets" && (
               <Card>
                 <CardHeader>
