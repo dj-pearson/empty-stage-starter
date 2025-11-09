@@ -18,7 +18,7 @@ import {
   TrendingUp,
   Zap,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase-platform";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 

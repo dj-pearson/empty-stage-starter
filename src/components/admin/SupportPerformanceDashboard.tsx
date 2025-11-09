@@ -13,7 +13,7 @@ import {
   MessageSquare,
   AlertCircle,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase-platform";
 import { formatDistanceToNow } from "date-fns";
 
 interface PerformanceMetrics {

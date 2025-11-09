@@ -36,7 +36,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase-platform";
 import { formatDistanceToNow, format } from "date-fns";
 import {
   Dialog,
