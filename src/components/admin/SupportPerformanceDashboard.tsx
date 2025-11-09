@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -49,15 +48,17 @@ export function SupportPerformanceDashboard() {
   const loadMetrics = async () => {
     setLoading(true);
     try {
+      // @ts-ignore - Table exists but not in generated types
       const { data, error } = await supabase
+        // @ts-ignore
         .from('support_performance_metrics')
         .select('*')
         .order('metric_date', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      setMetrics(data);
+      setMetrics(data as PerformanceMetrics | null);
     } catch (error) {
       console.error('Error loading metrics:', error);
     } finally {
