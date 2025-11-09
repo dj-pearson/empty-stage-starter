@@ -152,6 +152,9 @@ END;
 $$;
 
 -- Function to get complementary subscription details
+-- Drop existing function first to allow return type change
+DROP FUNCTION IF EXISTS get_complementary_subscription(UUID);
+
 CREATE OR REPLACE FUNCTION get_complementary_subscription(p_user_id UUID)
 RETURNS TABLE(
   id UUID,
