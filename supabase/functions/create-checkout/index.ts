@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.5.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
+import { getCorsHeaders, securityHeaders } from "../_shared/headers.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
   apiVersion: "2023-10-16",
@@ -10,12 +11,10 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
 serve(async (req) => {
+  // Get secure CORS headers based on request origin
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -137,8 +136,12 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ url: session.url }),
-      { 
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      {
+        headers: {
+          ...corsHeaders,
+          ...securityHeaders,
+          "Content-Type": "application/json"
+        },
         status: 200,
       }
     );
@@ -146,8 +149,12 @@ serve(async (req) => {
     console.error("Checkout error:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
-      { 
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      {
+        headers: {
+          ...corsHeaders,
+          ...securityHeaders,
+          "Content-Type": "application/json"
+        },
         status: 400,
       }
     );
