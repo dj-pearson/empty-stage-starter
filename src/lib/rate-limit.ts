@@ -31,13 +31,15 @@ export async function checkRateLimit(endpoint: string): Promise<RateLimitResult 
 
     if (error) {
       logger.error('Rate limit check error:', error);
-      // Allow request on error to avoid blocking users
+      // SECURITY: Fail-closed to prevent rate limit bypass attacks
+      // If rate limit check fails, deny the request to be safe
+      toast.error("Unable to verify rate limit. Please try again.");
       return {
-        allowed: true,
+        allowed: false,
         current_count: 0,
-        max_requests: 100,
-        reset_at: new Date(Date.now() + 3600000).toISOString(),
-        tier: 'free'
+        max_requests: 0,
+        reset_at: new Date(Date.now() + 300000).toISOString(), // 5 minute retry
+        tier: 'unknown'
       };
     }
 

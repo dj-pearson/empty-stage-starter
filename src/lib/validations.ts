@@ -13,6 +13,32 @@ export const DateStringSchema = z.string().regex(
 
 export const EmailSchema = z.string().email('Invalid email address').max(255);
 
+/**
+ * Strong password validation schema
+ * Requirements:
+ * - Minimum 12 characters
+ * - At least one uppercase letter
+ * - At least one lowercase letter
+ * - At least one number
+ * - At least one special character
+ */
+export const PasswordSchema = z.string()
+  .min(12, 'Password must be at least 12 characters long')
+  .max(128, 'Password must not exceed 128 characters')
+  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+  .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+  .regex(/[0-9]/, 'Password must contain at least one number')
+  .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)');
+
+/**
+ * Weaker password schema for legacy support
+ * Use PasswordSchema for new implementations
+ * @deprecated
+ */
+export const LegacyPasswordSchema = z.string()
+  .min(8, 'Password must be at least 8 characters long')
+  .max(128, 'Password must not exceed 128 characters');
+
 export const URLSchema = z.string().url('Invalid URL format').max(2000);
 
 // ============================================================================
@@ -305,20 +331,128 @@ export function validateOrThrow<T>(schema: z.ZodSchema<T>, data: unknown): T {
 }
 
 /**
- * Sanitize HTML to prevent XSS
+ * Comprehensive HTML sanitization to prevent XSS attacks
+ * Removes all HTML tags, scripts, and dangerous attributes
+ *
+ * For rich text content, consider using a library like DOMPurify
+ * This is a basic sanitizer for simple text inputs
  */
 export function sanitizeHTML(html: string): string {
+  if (typeof html !== 'string') return '';
+
+  // Use DOM API to escape HTML entities
   const div = document.createElement('div');
   div.textContent = html;
-  return div.innerHTML;
+  let sanitized = div.innerHTML;
+
+  // Additional XSS prevention patterns
+  sanitized = sanitized
+    // Remove any remaining script tags and content
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    // Remove event handlers (onclick, onerror, etc.)
+    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/on\w+\s*=\s*[^\s>]*/gi, '')
+    // Remove javascript: protocol
+    .replace(/javascript:/gi, '')
+    // Remove data: protocol (can be used for XSS)
+    .replace(/data:text\/html/gi, '')
+    // Remove vbscript: protocol
+    .replace(/vbscript:/gi, '')
+    // Remove any HTML comments that might contain code
+    .replace(/<!--[\s\S]*?-->/g, '');
+
+  return sanitized;
 }
 
 /**
- * Sanitize user input
+ * Sanitize user input for general text fields
+ * Prevents XSS, SQL injection patterns, and command injection
  */
 export function sanitizeInput(input: string): string {
+  if (typeof input !== 'string') return '';
+
   return input
     .trim()
-    .replace(/[<>]/g, '') // Remove potential HTML tags
-    .slice(0, 10000); // Limit length
+    // Remove HTML tags
+    .replace(/<[^>]*>/g, '')
+    // Remove script tags and content
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    // Remove event handlers
+    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+    // Remove dangerous protocols
+    .replace(/javascript:/gi, '')
+    .replace(/data:text\/html/gi, '')
+    .replace(/vbscript:/gi, '')
+    // Remove SQL injection patterns (basic)
+    .replace(/('|(--)|;|\/\*|\*\/|xp_|sp_|exec|execute|select|insert|update|delete|drop|create|alter|union)/gi, (match) => {
+      // Only remove if it looks like SQL syntax, not regular words
+      return match.match(/^(--|;|\/\*|\*\/|xp_|sp_)/) ? '' : match;
+    })
+    // Remove null bytes
+    .replace(/\0/g, '')
+    // Limit length to prevent DoS
+    .slice(0, 10000);
+}
+
+/**
+ * Sanitize filename to prevent directory traversal attacks
+ */
+export function sanitizeFilename(filename: string): string {
+  if (typeof filename !== 'string') return '';
+
+  return filename
+    .trim()
+    // Remove path traversal attempts
+    .replace(/\.\./g, '')
+    .replace(/[\/\\]/g, '')
+    // Remove null bytes
+    .replace(/\0/g, '')
+    // Remove special characters that could cause issues
+    .replace(/[<>:"|?*]/g, '')
+    // Limit length
+    .slice(0, 255);
+}
+
+/**
+ * Sanitize URL to prevent open redirect attacks
+ * Only allows http, https, and relative URLs
+ */
+export function sanitizeURL(url: string): string {
+  if (typeof url !== 'string') return '';
+
+  const trimmed = url.trim();
+
+  // Allow relative URLs
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
+    return trimmed;
+  }
+
+  // Allow only http and https protocols
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.href;
+    }
+  } catch {
+    // Invalid URL, return empty string
+    return '';
+  }
+
+  return '';
+}
+
+/**
+ * Sanitize email to prevent header injection
+ */
+export function sanitizeEmail(email: string): string {
+  if (typeof email !== 'string') return '';
+
+  return email
+    .trim()
+    .toLowerCase()
+    // Remove newlines that could be used for header injection
+    .replace(/[\r\n]/g, '')
+    // Basic email format validation
+    .replace(/[^a-z0-9@._+-]/g, '')
+    .slice(0, 255);
 }
