@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
@@ -140,9 +139,10 @@ const Admin = () => {
       } else {
         throw new Error(data.error || 'OAuth callback failed');
       }
-    } catch (error: unknown) {
+    } catch (error) {
       logger.error('Admin OAuth callback error:', error);
-      toast.error(`Failed to complete OAuth: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(`Failed to complete OAuth: ${errorMessage}`);
       
       // Clear URL parameters even on error and go to SEO tab
       window.history.replaceState({}, document.title, '/admin?tab=seo');

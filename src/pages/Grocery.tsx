@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
@@ -95,7 +94,9 @@ export default function Grocery() {
     const generated = generateGroceryList(filteredEntries, foods);
 
     // Smart merge: preserve manual items and checked items
+    // @ts-ignore - is_manual property exists in database but not in type
     const manual = groceryItems.filter(item => item.is_manual);
+    // @ts-ignore - is_manual property exists in database but not in type
     const checked = groceryItems.filter(item => item.checked && !item.is_manual);
 
     // Add generated items that don't conflict with manual/checked items
@@ -133,7 +134,9 @@ export default function Grocery() {
     if (!item.checked && selectedStoreLayoutId && userId) {
       try {
         // Check if user has already contributed for this item at this store
+        // @ts-ignore - user_store_contributions table exists but not in types
         const { data: existingContribution } = await supabase
+          // @ts-ignore - user_store_contributions table exists but not in types
           .from('user_store_contributions')
           .select('*')
           .eq('user_id', userId)
@@ -155,6 +158,7 @@ export default function Grocery() {
         // 3. Confidence is still low
         const shouldAskContribution = !existingContribution || 
           !existingMapping || 
+          // @ts-ignore - confidence_level property exists but not in type
           existingMapping?.confidence_level === 'low';
 
         if (shouldAskContribution && Math.random() < 0.5) { // Ask for ~50% of items to get more data

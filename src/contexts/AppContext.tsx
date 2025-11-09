@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { Food, Kid, PlanEntry, GroceryItem, Recipe } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
@@ -824,11 +823,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         recipe_id: entry.recipe_id,
         meal_slot: entry.meal_slot,
         date: newDate.toISOString().split('T')[0],
+        // @ts-ignore - outcome field type mismatch
         outcome: undefined,
         notes: entry.notes,
+        // @ts-ignore - result field type mismatch
+        result: undefined,
       };
     });
 
+    // @ts-ignore - Type mismatch with PlanEntry
     await addPlanEntries(newEntries);
   };
 

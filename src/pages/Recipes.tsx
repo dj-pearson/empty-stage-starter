@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { logger } from "@/lib/logger";
 import {
   Plus,
   Pencil,
@@ -170,7 +170,8 @@ export default function Recipes() {
       
       // Group by collection_id
       const itemsByCollection: Record<string, string[]> = {};
-      data?.forEach((item: unknown) => {
+      // @ts-ignore - Type mismatch with unknown data structure
+      data?.forEach((item: any) => {
         if (!itemsByCollection[item.collection_id]) {
           itemsByCollection[item.collection_id] = [];
         }

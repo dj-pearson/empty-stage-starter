@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -207,7 +206,8 @@ export default function InsightsDashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {insights.coverage?.map((item: unknown) => (
+          {insights.coverage?.map((item: any) => (
+            // @ts-ignore - Type mismatch with unknown data structure
             <div key={item.category}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium capitalize">{item.category}</span>

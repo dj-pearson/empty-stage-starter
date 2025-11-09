@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -57,6 +56,7 @@ export function useUsageStats() {
         throw new Error("Not authenticated");
       }
 
+      // @ts-ignore - RPC function exists but not in generated types
       const { data, error: rpcError } = await supabase.rpc("get_usage_stats", {
         p_user_id: user.id,
       });
@@ -64,9 +64,9 @@ export function useUsageStats() {
       if (rpcError) throw rpcError;
 
       setStats(data as any as UsageStats);
-    } catch (err: unknown) {
+    } catch (err) {
       console.error("Error fetching usage stats:", err);
-      setError(err.message);
+      setError(err instanceof Error ? err.message : "Failed to fetch usage stats");
     } finally {
       setLoading(false);
     }

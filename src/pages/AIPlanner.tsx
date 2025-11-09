@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,9 +44,10 @@ export default function AIPlanner() {
       
       const kidName = kids.find(k => k.id === targetKidId)?.name;
       toast.success(`AI meal plan generated for ${kidName}!`);
-    } catch (error: unknown) {
+    } catch (error) {
       logger.error('Error generating meal plan:', error);
-      toast.error(error.message || "Failed to generate meal plan");
+      const errorMessage = error instanceof Error ? error.message : "Failed to generate meal plan";
+      toast.error(errorMessage);
     } finally {
       setIsGenerating(false);
     }

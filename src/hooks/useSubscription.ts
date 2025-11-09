@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -61,7 +60,9 @@ export function useSubscription() {
         } as any);
       } else {
         // Check for active complementary subscription
+        // @ts-ignore - RPC function exists but not in generated types
         const { data: compData } = await supabase
+          // @ts-ignore - RPC function exists but not in generated types
           .rpc('get_complementary_subscription', { p_user_id: user.id })
           .maybeSingle();
 
@@ -71,25 +72,25 @@ export function useSubscription() {
           const { data: planData } = await supabase
             .from('subscription_plans')
             .select('*')
-            .eq('id', compData.plan_id)
+            .eq('id', (compData as any).plan_id)
             .single();
 
           if (planData) {
             setSubscription({
-              id: compData.id,
+              id: (compData as any).id,
               user_id: user.id,
-              plan_id: compData.plan_id,
-              plan_name: compData.plan_name,
+              plan_id: (compData as any).plan_id,
+              plan_name: (compData as any).plan_name,
               status: 'active',
               billing_cycle: null,
               current_period_start: null,
-              current_period_end: compData.end_date,
+              current_period_end: (compData as any).end_date,
               cancel_at_period_end: false,
               trial_end: null,
               stripe_customer_id: null,
               stripe_subscription_id: null,
               is_complementary: true,
-              complementary_subscription_id: compData.id,
+              complementary_subscription_id: (compData as any).id,
             } as any);
           } else {
             setSubscription(null);
@@ -161,10 +162,11 @@ export function useSubscription() {
       }
 
       return { success: true };
-    } catch (err: unknown) {
+    } catch (err) {
       console.error("Error upgrading subscription:", err);
-      toast.error(err.message || "Failed to upgrade subscription");
-      return { success: false, error: err.message };
+      const errorMessage = err instanceof Error ? err.message : "Failed to upgrade subscription";
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
     } finally {
       setActionLoading(false);
     }
@@ -189,10 +191,11 @@ export function useSubscription() {
       await fetchSubscription();
 
       return { success: true };
-    } catch (err: unknown) {
+    } catch (err) {
       console.error("Error canceling subscription:", err);
-      toast.error(err.message || "Failed to cancel subscription");
-      return { success: false, error: err.message };
+      const errorMessage = err instanceof Error ? err.message : "Failed to cancel subscription";
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
     } finally {
       setActionLoading(false);
     }
@@ -217,10 +220,11 @@ export function useSubscription() {
       await fetchSubscription();
 
       return { success: true };
-    } catch (err: unknown) {
+    } catch (err) {
       console.error("Error reactivating subscription:", err);
-      toast.error(err.message || "Failed to reactivate subscription");
-      return { success: false, error: err.message };
+      const errorMessage = err instanceof Error ? err.message : "Failed to reactivate subscription";
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
     } finally {
       setActionLoading(false);
     }
@@ -246,10 +250,11 @@ export function useSubscription() {
       await fetchSubscription();
 
       return { success: true };
-    } catch (err: unknown) {
+    } catch (err) {
       console.error("Error changing billing cycle:", err);
-      toast.error(err.message || "Failed to change billing cycle");
-      return { success: false, error: err.message };
+      const errorMessage = err instanceof Error ? err.message : "Failed to change billing cycle";
+      toast.error(errorMessage);
+      return { success: false, error: errorMessage };
     } finally {
       setActionLoading(false);
     }
