@@ -52,6 +52,7 @@ import { PullToRefreshIndicator } from "@/components/PullToRefreshIndicator";
 import { haptic } from "@/lib/haptics";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { logger } from "@/lib/logger";
+import { useDebounce } from "@/hooks/use-debounce";
 
 interface FoodSuggestion {
   name: string;
@@ -84,6 +85,9 @@ export default function Pantry() {
   const [imageCaptureOpen, setImageCaptureOpen] = useState(false);
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
 
+  // Debounce search query to improve performance
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
   // Pull-to-refresh functionality (mobile only)
   const { pullToRefreshRef, isRefreshing, pullDistance } = usePullToRefresh({
     onRefresh: async () => {
@@ -106,7 +110,7 @@ export default function Pantry() {
     if (!food || !food.name) return false;
     const matchesSearch = food.name
       .toLowerCase()
-      .includes(searchQuery.toLowerCase());
+      .includes(debouncedSearchQuery.toLowerCase());
     const matchesCategory =
       categoryFilter === "all" || food.category === categoryFilter;
     return matchesSearch && matchesCategory;

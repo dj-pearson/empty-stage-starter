@@ -20,6 +20,7 @@ import {
 import { Food, FoodCategory } from "@/types";
 import { Loader2, Plus, Info } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { logger } from "@/lib/logger";
 
 interface BulkAddFoodDialogProps {
   open: boolean;
@@ -75,7 +76,7 @@ export function BulkAddFoodDialog({
       setFoodText("");
       onOpenChange(false);
     } catch (error) {
-      console.error("Error in bulk add:", error);
+      logger.error("Error in bulk add", error);
     } finally {
       setIsLoading(false);
     }
