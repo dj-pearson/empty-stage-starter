@@ -74,7 +74,7 @@ export function AddFoodDialog({
   const [searchResults, setSearchResults] = useState<NutritionItem[]>([]);
   const [selectedNutrition, setSelectedNutrition] = useState<NutritionItem | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  
+
   const [name, setName] = useState("");
   const [category, setCategory] = useState<FoodCategory>("protein");
   const [isSafe, setIsSafe] = useState(true);
@@ -84,6 +84,9 @@ export function AddFoodDialog({
   const [unit, setUnit] = useState("servings");
   const [servingsPerContainer, setServingsPerContainer] = useState<number | undefined>();
   const [packageQuantity, setPackageQuantity] = useState("");
+
+  // Validation state
+  const [nameError, setNameError] = useState("");
 
   // Search nutrition database as user types
   useEffect(() => {
@@ -171,7 +174,12 @@ export function AddFoodDialog({
   };
 
   const handleSave = () => {
-    if (!name.trim()) return;
+    // Validate name
+    if (!name.trim()) {
+      setNameError("Food name is required");
+      return;
+    }
+    setNameError("");
 
     onSave({
       name: name.trim(),
@@ -276,13 +284,31 @@ export function AddFoodDialog({
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="name">Food Name</Label>
+            <Label htmlFor="name">Food Name *</Label>
             <Input
               id="name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (nameError && e.target.value.trim()) {
+                  setNameError("");
+                }
+              }}
+              onBlur={() => {
+                if (!name.trim()) {
+                  setNameError("Food name is required");
+                }
+              }}
               placeholder="e.g., Chicken Nuggets"
+              className={nameError ? "border-red-500 focus-visible:ring-red-500" : ""}
+              aria-invalid={!!nameError}
+              aria-describedby={nameError ? "name-error" : undefined}
             />
+            {nameError && (
+              <p id="name-error" className="text-sm text-red-500 mt-1">
+                {nameError}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

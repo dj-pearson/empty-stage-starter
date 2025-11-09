@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { FoodCard } from "@/components/FoodCard";
 import { AddFoodDialog } from "@/components/AddFoodDialog";
@@ -8,6 +8,8 @@ import { ImageFoodCapture } from "@/components/ImageFoodCapture";
 import { BulkAddFoodDialog } from "@/components/BulkAddFoodDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import {
   Select,
   SelectContent,
@@ -84,9 +86,57 @@ export default function Pantry() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [imageCaptureOpen, setImageCaptureOpen] = useState(false);
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+
+  // Ref for search input
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Debounce search query to improve performance
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    shortcuts: [
+      {
+        key: "n",
+        ctrlKey: true,
+        metaKey: true,
+        description: "New food",
+        action: () => {
+          setDialogOpen(true);
+          haptic.light();
+        },
+      },
+      {
+        key: "f",
+        ctrlKey: true,
+        metaKey: true,
+        description: "Focus search",
+        action: () => {
+          searchInputRef.current?.focus();
+          searchInputRef.current?.select();
+        },
+      },
+      {
+        key: "Escape",
+        description: "Close dialogs",
+        action: () => {
+          if (dialogOpen) setDialogOpen(false);
+          if (scannerOpen) setScannerOpen(false);
+          if (imageCaptureOpen) setImageCaptureOpen(false);
+          if (bulkAddOpen) setBulkAddOpen(false);
+          if (showSuggestions) setShowSuggestions(false);
+        },
+      },
+    ],
+  });
+
+  // Track initial data loading
+  useEffect(() => {
+    if (foods.length > 0 || kids.length > 0) {
+      setIsInitialLoading(false);
+    }
+  }, [foods, kids]);
 
   // Pull-to-refresh functionality (mobile only)
   const { pullToRefreshRef, isRefreshing, pullDistance } = usePullToRefresh({
@@ -469,7 +519,8 @@ export default function Pantry() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" />
               <Input
-                placeholder="Search foods..."
+                ref={searchInputRef}
+                placeholder="Search foods... (Ctrl+F)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -516,7 +567,29 @@ export default function Pantry() {
           </div>
 
           {/* Food Grid */}
-          {filteredFoods.length === 0 ? (
+          {isInitialLoading ? (
+            /* Loading Skeletons */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="bg-card rounded-lg border p-4 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <Skeleton className="h-6 w-32" />
+                    <Skeleton className="h-8 w-8 rounded-full" />
+                  </div>
+                  <Skeleton className="h-4 w-24" />
+                  <div className="flex gap-2">
+                    <Skeleton className="h-6 w-20" />
+                    <Skeleton className="h-6 w-20" />
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    <Skeleton className="h-9 w-9" />
+                    <Skeleton className="h-9 flex-1" />
+                    <Skeleton className="h-9 w-9" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filteredFoods.length === 0 ? (
             <div className="text-center py-12">
               {searchQuery || categoryFilter !== "all" ? (
                 // Filtered empty state

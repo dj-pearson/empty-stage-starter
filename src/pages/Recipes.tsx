@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Plus,
   Pencil,
@@ -81,6 +82,7 @@ export default function Recipes() {
   const [aiSuggestionsOpen, setAiSuggestionsOpen] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<RecipeSuggestion[]>([]);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   
   // Collection states
   const [userId, setUserId] = useState<string | null>(null);
@@ -121,10 +123,17 @@ export default function Recipes() {
     fetchUserData();
   }, []);
   
+  // Track initial loading
+  useEffect(() => {
+    if (recipes.length > 0 || foods.length > 0) {
+      setIsInitialLoading(false);
+    }
+  }, [recipes, foods]);
+
   // Load collections and their items
   useEffect(() => {
     if (!userId) return;
-    
+
     loadCollections();
     loadCollectionItems();
   }, [userId, householdId]);
@@ -511,7 +520,34 @@ export default function Recipes() {
           </div>
         </div>
 
-        {recipes.length === 0 ? (
+        {isInitialLoading ? (
+          /* Loading Skeletons */
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <Card key={i} className="overflow-hidden">
+                <CardHeader>
+                  <div className="space-y-2">
+                    <Skeleton className="h-6 w-3/4" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-2/3" />
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-2">
+                    <Skeleton className="h-6 w-20" />
+                    <Skeleton className="h-6 w-20" />
+                  </div>
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                  <div className="flex gap-2 mt-4">
+                    <Skeleton className="h-9 flex-1" />
+                    <Skeleton className="h-9 w-9" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : recipes.length === 0 ? (
           <Card className="p-12 text-center">
             <div className="max-w-md mx-auto">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
