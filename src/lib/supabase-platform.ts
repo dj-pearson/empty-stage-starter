@@ -36,3 +36,8 @@ export const getSupabaseClientSync = () => {
   return _cachedClient;
 };
 
+// Export supabase directly for web (backwards compatibility)
+// Admin dashboard components are web-only, so this is safe
+export const supabase = isWeb() 
+  ? require('@/integrations/supabase/client').supabase 
+  : null;
