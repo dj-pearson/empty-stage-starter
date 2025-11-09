@@ -24,6 +24,7 @@ import { ReferralProgramManager } from "@/components/admin/ReferralProgramManage
 import { BarcodeEnrichmentTool } from "@/components/admin/BarcodeEnrichmentTool";
 import { FeatureFlagDashboard } from "@/components/admin/FeatureFlagDashboard";
 import { TicketQueue } from "@/components/admin/TicketQueue";
+import { UserIntelligenceDashboard } from "@/components/admin/UserIntelligenceDashboard";
 import { logger } from "@/lib/logger";
 
 const Admin = () => {
@@ -217,6 +218,8 @@ const Admin = () => {
           </div>
 
           <div className="p-4 md:p-6">
+            {activeTab === "intelligence" && <UserIntelligenceDashboard />}
+
             {activeTab === "users" && (
               <Card>
                 <CardHeader>
