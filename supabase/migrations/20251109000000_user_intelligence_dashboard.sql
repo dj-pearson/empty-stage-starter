@@ -20,7 +20,7 @@ SELECT
 
   -- Engagement metrics
   COUNT(DISTINCT fa.id) FILTER (WHERE fa.created_at > NOW() - INTERVAL '30 days') as food_attempts_30d,
-  COUNT(DISTINCT ka.id) FILTER (WHERE ka.created_at > NOW() - INTERVAL '30 days') as achievements_30d,
+  COUNT(DISTINCT ka.id) FILTER (WHERE ka.earned_at > NOW() - INTERVAL '30 days') as achievements_30d,
 
   -- Error tracking
   COUNT(DISTINCT ala.id) FILTER (WHERE ala.severity = 'error' AND ala.created_at > NOW() - INTERVAL '7 days') as errors_7d,
@@ -46,8 +46,9 @@ LEFT JOIN admin_live_activity ala ON p.id = ala.user_id
 LEFT JOIN plan_entries pe ON p.id = pe.user_id
 LEFT JOIN recipes r ON p.id = r.user_id
 LEFT JOIN foods f ON p.id = f.user_id
-LEFT JOIN food_attempts fa ON p.id = fa.user_id
-LEFT JOIN kid_achievements ka ON EXISTS (SELECT 1 FROM kids k WHERE k.user_id = p.id AND k.id = ka.kid_id)
+LEFT JOIN kids k ON p.id = k.user_id
+LEFT JOIN food_attempts fa ON k.id = fa.kid_id
+LEFT JOIN kid_achievements ka ON k.id = ka.kid_id
 GROUP BY p.id;
 
 -- Create index for fast lookups
@@ -150,8 +151,8 @@ $$;
 CREATE OR REPLACE VIEW admin_user_intelligence AS
 SELECT
   p.id,
-  p.email,
-  p.name,
+  u.email,
+  p.full_name as name,
   p.created_at,
 
   -- Health scoring
@@ -169,12 +170,12 @@ SELECT
   s.stripe_customer_id,
   s.current_period_end as next_billing_date,
   s.cancel_at_period_end,
-  COALESCE(spm.price_monthly, 0) as mrr,
+  COALESCE(sp.price_monthly, 0) as mrr,
 
   -- Calculate LTV (simplified: months active * MRR)
   ROUND(
-    EXTRACT(EPOCH FROM (COALESCE(s.canceled_at, NOW()) - s.created_at)) / (86400 * 30) *
-    COALESCE(spm.price_monthly, 0)
+    EXTRACT(EPOCH FROM (s.current_period_end - s.created_at)) / (86400 * 30) *
+    COALESCE(sp.price_monthly, 0)
   ) as estimated_ltv,
 
   -- Calculate account age in days
@@ -228,8 +229,9 @@ SELECT
   END as at_risk_payment
 
 FROM profiles p
-LEFT JOIN subscriptions s ON p.id = s.user_id AND s.status IN ('active', 'trialing', 'past_due')
-LEFT JOIN stripe_product_mapping spm ON s.stripe_price_id = spm.stripe_price_id
+LEFT JOIN auth.users u ON p.id = u.id
+LEFT JOIN user_subscriptions s ON p.id = s.user_id AND s.status IN ('active', 'trialing', 'past_due')
+LEFT JOIN subscription_plans sp ON s.plan_id = sp.id
 LEFT JOIN user_engagement_stats ues ON p.id = ues.user_id
 LEFT JOIN user_ticket_summary uts ON p.id = uts.user_id;
 
@@ -298,28 +300,28 @@ BEGIN
         'subscription_id', s.id,
         'status', s.status
       ) as metadata
-    FROM subscriptions s
+    FROM user_subscriptions s
     WHERE s.user_id = p_user_id
 
     UNION ALL
 
     -- Payment events
     SELECT
-      sp.created_at as activity_date,
-      'payment_' || sp.status as activity_type,
-      'Payment ' || sp.status || ': $' || sp.amount as activity_description,
-      CASE sp.status
+      ph.created_at as activity_date,
+      'payment_' || ph.status as activity_type,
+      'Payment ' || ph.status || ': $' || ph.amount as activity_description,
+      CASE ph.status
         WHEN 'succeeded' THEN 'info'
         WHEN 'failed' THEN 'error'
         ELSE 'warning'
       END as severity,
       jsonb_build_object(
-        'payment_id', sp.id,
-        'amount', sp.amount,
-        'status', sp.status
+        'payment_id', ph.id,
+        'amount', ph.amount,
+        'status', ph.status
       ) as metadata
-    FROM subscription_payments sp
-    WHERE sp.user_id = p_user_id
+    FROM payment_history ph
+    WHERE ph.user_id = p_user_id
   )
   SELECT *
   FROM all_activities

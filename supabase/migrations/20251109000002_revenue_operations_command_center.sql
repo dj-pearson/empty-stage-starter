@@ -121,7 +121,7 @@ CREATE INDEX idx_interventions_triggered ON revenue_interventions(triggered_at);
 
 CREATE TABLE IF NOT EXISTS payment_recovery_attempts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+  subscription_id UUID NOT NULL REFERENCES user_subscriptions(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
 
   -- Payment failure details
@@ -236,11 +236,14 @@ WITH cohort_data AS (
     s.id as subscription_id,
     s.status as subscription_status,
     s.created_at as subscription_start,
-    s.canceled_at as subscription_end,
-    COALESCE(spm.price_monthly, 0) as mrr
+    CASE 
+      WHEN s.status = 'canceled' THEN s.updated_at
+      ELSE NULL 
+    END as subscription_end,
+    COALESCE(sp.price_monthly, 0) as mrr
   FROM profiles p
-  LEFT JOIN subscriptions s ON p.id = s.user_id
-  LEFT JOIN stripe_product_mapping spm ON s.stripe_price_id = spm.stripe_price_id
+  LEFT JOIN user_subscriptions s ON p.id = s.user_id
+  LEFT JOIN subscription_plans sp ON s.plan_id = sp.id
   WHERE p.created_at >= NOW() - INTERVAL '12 months'
 ),
 monthly_retention AS (
@@ -337,34 +340,34 @@ CREATE UNIQUE INDEX idx_cohort_retention_month ON revenue_cohort_retention(cohor
 CREATE MATERIALIZED VIEW IF NOT EXISTS revenue_metrics_daily AS
 WITH daily_metrics AS (
   SELECT
-    DATE(created_at) as metric_date,
+    DATE(s.created_at) as metric_date,
 
     -- MRR calculation (active subscriptions)
-    COUNT(DISTINCT CASE WHEN status IN ('active', 'trialing') THEN id END) as active_subscriptions,
+    COUNT(DISTINCT CASE WHEN s.status IN ('active', 'trialing') THEN s.id END) as active_subscriptions,
     SUM(CASE
-      WHEN status IN ('active', 'trialing')
-      THEN (SELECT price_monthly FROM stripe_product_mapping WHERE stripe_price_id = s.stripe_price_id)
+      WHEN s.status IN ('active', 'trialing')
+      THEN (SELECT price_monthly FROM subscription_plans WHERE id = s.plan_id)
       ELSE 0
     END) as mrr,
 
     -- New subscriptions
-    COUNT(CASE WHEN DATE(created_at) = DATE(NOW()) THEN 1 END) as new_subscriptions_today,
+    COUNT(CASE WHEN DATE(s.created_at) = DATE(NOW()) THEN 1 END) as new_subscriptions_today,
 
-    -- Churned subscriptions
-    COUNT(CASE WHEN DATE(canceled_at) = DATE(NOW()) THEN 1 END) as churned_subscriptions_today,
+    -- Churned subscriptions (using updated_at when status became 'canceled')
+    COUNT(CASE WHEN s.status = 'canceled' AND DATE(s.updated_at) = DATE(NOW()) THEN 1 END) as churned_subscriptions_today,
 
     -- Revenue
-    SUM(CASE WHEN DATE(created_at) = DATE(NOW()) THEN
-      (SELECT price_monthly FROM stripe_product_mapping WHERE stripe_price_id = s.stripe_price_id)
+    SUM(CASE WHEN DATE(s.created_at) = DATE(NOW()) THEN
+      (SELECT price_monthly FROM subscription_plans WHERE id = s.plan_id)
     ELSE 0 END) as new_mrr_today,
 
-    SUM(CASE WHEN DATE(canceled_at) = DATE(NOW()) THEN
-      (SELECT price_monthly FROM stripe_product_mapping WHERE stripe_price_id = s.stripe_price_id)
+    SUM(CASE WHEN s.status = 'canceled' AND DATE(s.updated_at) = DATE(NOW()) THEN
+      (SELECT price_monthly FROM subscription_plans WHERE id = s.plan_id)
     ELSE 0 END) as churned_mrr_today
 
-  FROM subscriptions s
-  WHERE created_at >= NOW() - INTERVAL '90 days'
-  GROUP BY DATE(created_at)
+  FROM user_subscriptions s
+  WHERE s.created_at >= NOW() - INTERVAL '90 days'
+  GROUP BY DATE(s.created_at)
 )
 SELECT
   dm.metric_date,
@@ -507,7 +510,7 @@ BEGIN
   FOR v_user IN
     SELECT DISTINCT p.id as user_id
     FROM profiles p
-    JOIN subscriptions s ON p.id = s.user_id
+    JOIN user_subscriptions s ON p.id = s.user_id
     WHERE s.status IN ('active', 'trialing', 'past_due')
   LOOP
     -- Calculate churn probability
