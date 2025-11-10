@@ -43,6 +43,12 @@ const SEODashboard = lazy(() => import("./pages/SEODashboard"));
 const SearchTrafficDashboard = lazy(() => import("./pages/SearchTrafficDashboard"));
 const OAuthCallback = lazy(() => import("./pages/OAuthCallback"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const PickyEaterQuiz = lazy(() => import("./pages/PickyEaterQuiz"));
+const PickyEaterQuizResults = lazy(() => import("./pages/PickyEaterQuizResults"));
+const BudgetCalculator = lazy(() => import("./pages/BudgetCalculator"));
+const BudgetCalculatorResults = lazy(() => import("./pages/BudgetCalculatorResults"));
+const MealPlanGenerator = lazy(() => import("./pages/MealPlanGenerator"));
+const MealPlanGeneratorResults = lazy(() => import("./pages/MealPlanGeneratorResults"));
 
 // Loading fallback component
 const LoadingFallback = () => (
@@ -77,6 +83,12 @@ const App = () => (
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
+            <Route path="/picky-eater-quiz" element={<PickyEaterQuiz />} />
+            <Route path="/picky-eater-quiz/results" element={<PickyEaterQuizResults />} />
+            <Route path="/budget-calculator" element={<BudgetCalculator />} />
+            <Route path="/budget-calculator/results" element={<BudgetCalculatorResults />} />
+            <Route path="/meal-plan" element={<MealPlanGenerator />} />
+            <Route path="/meal-plan/results" element={<MealPlanGeneratorResults />} />
             {/* Admin routes - Protected with role check */}
             <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
             <Route path="/admin-dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
