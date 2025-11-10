@@ -47,6 +47,8 @@ const PickyEaterQuiz = lazy(() => import("./pages/PickyEaterQuiz"));
 const PickyEaterQuizResults = lazy(() => import("./pages/PickyEaterQuizResults"));
 const BudgetCalculator = lazy(() => import("./pages/BudgetCalculator"));
 const BudgetCalculatorResults = lazy(() => import("./pages/BudgetCalculatorResults"));
+const MealPlanGenerator = lazy(() => import("./pages/MealPlanGenerator"));
+const MealPlanGeneratorResults = lazy(() => import("./pages/MealPlanGeneratorResults"));
 
 // Loading fallback component
 const LoadingFallback = () => (
@@ -85,6 +87,8 @@ const App = () => (
             <Route path="/picky-eater-quiz/results" element={<PickyEaterQuizResults />} />
             <Route path="/budget-calculator" element={<BudgetCalculator />} />
             <Route path="/budget-calculator/results" element={<BudgetCalculatorResults />} />
+            <Route path="/meal-plan" element={<MealPlanGenerator />} />
+            <Route path="/meal-plan/results" element={<MealPlanGeneratorResults />} />
             {/* Admin routes - Protected with role check */}
             <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
             <Route path="/admin-dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
