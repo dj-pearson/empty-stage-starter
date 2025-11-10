@@ -88,10 +88,10 @@
       ]
     },
     {
-      "name": "Safe Foods",
-      "short_name": "Foods",
-      "description": "Manage your child's safe foods library",
-      "url": "/dashboard/pantry",
+      "name": "Vote on Meals",
+      "short_name": "Vote",
+      "description": "Kids vote on upcoming meals",
+      "url": "/vote",
       "icons": [
         {
           "src": "/icon-food.png",
@@ -101,26 +101,26 @@
       ]
     },
     {
-      "name": "Grocery List",
-      "short_name": "Grocery",
-      "description": "View and manage grocery lists",
-      "url": "/dashboard/grocery",
+      "name": "Meal Suggestions",
+      "short_name": "Suggest",
+      "description": "Get AI meal suggestions",
+      "url": "/suggestions",
       "icons": [
         {
-          "src": "/icon-cart.png",
+          "src": "/icon-food.png",
           "sizes": "96x96",
           "type": "image/png"
         }
       ]
     },
     {
-      "name": "Progress Tracker",
-      "short_name": "Progress",
-      "description": "Track your picky eater's food acceptance",
-      "url": "/dashboard/analytics",
+      "name": "Grocery Delivery",
+      "short_name": "Delivery",
+      "description": "Order groceries for delivery",
+      "url": "/delivery",
       "icons": [
         {
-          "src": "/icon-chart.png",
+          "src": "/icon-cart.png",
           "sizes": "96x96",
           "type": "image/png"
         }
