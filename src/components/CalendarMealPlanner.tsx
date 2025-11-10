@@ -33,6 +33,7 @@ import { DailyMacrosSummary } from "@/components/DailyMacrosSummary";
 import { SaveMealPlanTemplateDialog } from "@/components/SaveMealPlanTemplateDialog";
 import { MealPlanTemplateGallery } from "@/components/MealPlanTemplateGallery";
 import { ApplyTemplateDialog } from "@/components/ApplyTemplateDialog";
+import { VoteResultsDisplay } from "@/components/VoteResultsDisplay";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 
@@ -489,15 +490,15 @@ export function CalendarMealPlanner({
   };
 
   // Droppable slot component
-  const DroppableSlot = ({ 
-    dropId, 
-    entries, 
+  const DroppableSlot = ({
+    dropId,
+    entries,
     color,
     date,
     slot,
-  }: { 
-    dropId: string; 
-    entries: PlanEntry[]; 
+  }: {
+    dropId: string;
+    entries: PlanEntry[];
     color: string;
     date: string;
     slot: MealSlot;
@@ -507,6 +508,10 @@ export function CalendarMealPlanner({
     });
 
     const hasEntries = entries.length > 0;
+
+    // Get plan entry ID for vote results (use first entry)
+    const planEntryId = entries.length > 0 ? entries[0].id : undefined;
+    const recipeId = entries.length > 0 ? entries[0].recipe_id : undefined;
 
     return (
       <div
@@ -524,6 +529,19 @@ export function CalendarMealPlanner({
             {entries.map((entry) => (
               <DraggableMeal key={entry.id} entry={entry} />
             ))}
+
+            {/* Show vote results if we have kids and entries */}
+            {kids.length > 0 && (
+              <VoteResultsDisplay
+                planEntryId={planEntryId}
+                recipeId={recipeId}
+                mealDate={date}
+                mealSlot={slot}
+                kids={kids}
+                compact={true}
+                className="mt-1"
+              />
+            )}
           </div>
         ) : (
           <div className="flex items-center justify-center h-full text-[10px] md:text-xs text-muted-foreground hover:text-primary transition-colors">
