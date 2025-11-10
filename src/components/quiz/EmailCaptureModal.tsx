@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -10,14 +11,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { PersonalityType } from '@/types/quiz';
+import { PersonalityType, EmailCaptureData } from '@/types/quiz';
 import { getPersonalityName } from '@/lib/quiz/personalityTypes';
-import { Download, Mail, Gift } from 'lucide-react';
+import { captureEmailLead } from '@/lib/quiz/supabaseIntegration';
+import { Download, Mail, Gift, Loader2 } from 'lucide-react';
 
 interface EmailCaptureModalProps {
   isOpen: boolean;
   onClose: () => void;
   personalityType: PersonalityType;
+  quizResponseId: string | null;
   onEmailCaptured: (email: string, childName: string, parentName: string) => void;
 }
 
@@ -25,6 +28,7 @@ export function EmailCaptureModal({
   isOpen,
   onClose,
   personalityType,
+  quizResponseId,
   onEmailCaptured,
 }: EmailCaptureModalProps) {
   const [email, setEmail] = useState('');
@@ -37,15 +41,29 @@ export function EmailCaptureModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!quizResponseId) {
+      toast.error('Quiz response not found. Please try again.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      // Save to Supabase (will implement)
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulated delay
+      const emailData: EmailCaptureData = {
+        email,
+        childName,
+        parentName,
+        acceptsMarketing,
+      };
 
+      await captureEmailLead(quizResponseId, emailData, personalityType);
+
+      toast.success('Email saved successfully!');
       onEmailCaptured(email, childName, parentName);
     } catch (error) {
       console.error('Error saving email:', error);
+      toast.error('Failed to save email. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

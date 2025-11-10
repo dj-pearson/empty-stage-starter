@@ -3,12 +3,13 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { QuizAnswers, QuizResult } from '@/types/quiz';
-import { generateQuizResults } from '@/lib/quiz/scoring';
+import { generateQuizResults, calculatePersonalityScores, determinePersonalityTypes } from '@/lib/quiz/scoring';
 import { getPersonalityType } from '@/lib/quiz/personalityTypes';
 import { PersonalityChart } from '@/components/quiz/PersonalityChart';
 import { FoodRecommendationsDisplay } from '@/components/quiz/FoodRecommendationsDisplay';
@@ -17,7 +18,9 @@ import { SampleMealsCarousel } from '@/components/quiz/SampleMealsCarousel';
 import { ProgressPathway } from '@/components/quiz/ProgressPathway';
 import { EmailCaptureModal } from '@/components/quiz/EmailCaptureModal';
 import { ShareButtons } from '@/components/quiz/ShareButtons';
-import { Download, Share2, Sparkles, TrendingUp } from 'lucide-react';
+import { downloadPDFReport } from '@/lib/quiz/pdfGenerator';
+import { saveQuizResponse, trackQuizAnalytics, trackPDFDownload } from '@/lib/quiz/supabaseIntegration';
+import { Download, Share2, Sparkles, TrendingUp, Loader2 } from 'lucide-react';
 
 export default function PickyEaterQuizResults() {
   const location = useLocation();
@@ -25,6 +28,10 @@ export default function PickyEaterQuizResults() {
   const [results, setResults] = useState<QuizResult | null>(null);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailCaptured, setEmailCaptured] = useState(false);
+  const [quizResponseId, setQuizResponseId] = useState<string | null>(null);
+  const [childName, setChildName] = useState<string>('');
+  const [parentName, setParentName] = useState<string>('');
+  const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
 
   useEffect(() => {
     const state = location.state as {
@@ -50,24 +57,87 @@ export default function PickyEaterQuizResults() {
       origin: { y: 0.6 },
     });
 
-    // Track analytics
-    console.log('Results viewed:', {
-      personalityType: quizResults.profile.primaryType,
-      completionTime: state.completionTime,
-    });
+    // Save to database
+    (async () => {
+      try {
+        const scores = calculatePersonalityScores(state.answers);
+        const { primary, secondary } = determinePersonalityTypes(scores);
+
+        const scoresObj = scores.reduce((acc, score) => {
+          acc[score.type] = score.score;
+          return acc;
+        }, {} as Record<string, number>);
+
+        const responseId = await saveQuizResponse(
+          state.sessionId,
+          state.answers,
+          primary,
+          secondary,
+          scoresObj as any,
+          state.completionTime
+        );
+
+        setQuizResponseId(responseId);
+
+        // Track results viewed
+        await trackQuizAnalytics({
+          sessionId: state.sessionId,
+          quizResponseId: responseId,
+          eventType: 'results_viewed',
+          eventData: {
+            personalityType: primary,
+            completionTime: state.completionTime,
+          },
+        });
+      } catch (error) {
+        console.error('Error saving quiz response:', error);
+      }
+    })();
   }, [location.state, navigate]);
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
+    if (!results) return;
+
     if (!emailCaptured) {
       setShowEmailModal(true);
-    } else {
-      // Generate PDF (will implement)
-      console.log('Downloading PDF...');
+      return;
+    }
+
+    try {
+      setIsDownloadingPDF(true);
+
+      await downloadPDFReport(results, {
+        childName: childName || undefined,
+        parentName: parentName || undefined,
+        includeProgressPath: true,
+        includeMealIdeas: true,
+      });
+
+      // Track PDF download
+      if (quizResponseId) {
+        await trackPDFDownload(quizResponseId);
+      }
+
+      toast.success('PDF downloaded successfully!');
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      toast.error('Failed to download PDF. Please try again.');
+    } finally {
+      setIsDownloadingPDF(false);
     }
   };
 
   const handleShare = () => {
-    console.log('Sharing results...');
+    // ShareButtons component handles the actual sharing
+    toast.info('Choose a platform to share your results!');
+  };
+
+  const handleEmailCaptured = (email: string, child: string, parent: string) => {
+    setEmailCaptured(true);
+    setChildName(child);
+    setParentName(parent);
+    setShowEmailModal(false);
+    toast.success('Email saved! You can now download your full report.');
   };
 
   if (!results) {
@@ -121,9 +191,19 @@ export default function PickyEaterQuizResults() {
                 size="lg"
                 onClick={handleDownloadPDF}
                 className="gap-2"
+                disabled={isDownloadingPDF}
               >
-                <Download className="w-4 h-4" />
-                Download Full Report (PDF)
+                {isDownloadingPDF ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating PDF...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Download Full Report (PDF)
+                  </>
+                )}
               </Button>
               <Button
                 size="lg"
@@ -136,7 +216,11 @@ export default function PickyEaterQuizResults() {
               </Button>
             </div>
 
-            <ShareButtons personalityType={results.profile.primaryType} />
+            <ShareButtons
+              personalityType={results.profile.primaryType}
+              quizResponseId={quizResponseId}
+              childName={childName || undefined}
+            />
           </motion.div>
 
           {/* Personality Overview */}
@@ -302,10 +386,8 @@ export default function PickyEaterQuizResults() {
         isOpen={showEmailModal}
         onClose={() => setShowEmailModal(false)}
         personalityType={results.profile.primaryType}
-        onEmailCaptured={() => {
-          setEmailCaptured(true);
-          setShowEmailModal(false);
-        }}
+        quizResponseId={quizResponseId}
+        onEmailCaptured={handleEmailCaptured}
       />
     </>
   );
