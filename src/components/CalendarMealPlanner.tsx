@@ -26,10 +26,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Food, PlanEntry, MealSlot, Recipe, Kid } from "@/types";
-import { Sparkles, Calendar as CalendarIcon, AlertTriangle, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Users, Copy, MoreVertical, Trash2 } from "lucide-react";
+import { Sparkles, Calendar as CalendarIcon, AlertTriangle, Package, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Users, Copy, MoreVertical, Trash2, Save, BookTemplate } from "lucide-react";
 import { format, addDays, startOfWeek } from "date-fns";
 import { cn } from "@/lib/utils";
 import { DailyMacrosSummary } from "@/components/DailyMacrosSummary";
+import { SaveMealPlanTemplateDialog } from "@/components/SaveMealPlanTemplateDialog";
+import { MealPlanTemplateGallery } from "@/components/MealPlanTemplateGallery";
+import { ApplyTemplateDialog } from "@/components/ApplyTemplateDialog";
+import { VoteResultsDisplay } from "@/components/VoteResultsDisplay";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 
@@ -85,6 +89,12 @@ export function CalendarMealPlanner({
   const [expandedRecipes, setExpandedRecipes] = useState<Set<string>>(new Set());
   const [nutritionData, setNutritionData] = useState<any[]>([]);
   const [showAllKids, setShowAllKids] = useState(false);
+
+  // Template dialogs state
+  const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false);
+  const [showTemplateGallery, setShowTemplateGallery] = useState(false);
+  const [showApplyTemplateDialog, setShowApplyTemplateDialog] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
 
   // Load nutrition data
   useEffect(() => {
@@ -239,6 +249,22 @@ export function CalendarMealPlanner({
       }
       return newSet;
     });
+  };
+
+  // Template handlers
+  const handleSelectTemplate = (template: any) => {
+    setSelectedTemplate(template);
+    setShowApplyTemplateDialog(true);
+  };
+
+  const handleTemplateApplied = () => {
+    // Refresh the plan entries - parent component should handle this
+    // Could emit event or callback here
+    logger.info('Template applied successfully');
+  };
+
+  const handleTemplateSaved = () => {
+    logger.info('Template saved successfully');
   };
 
   const renderFoodBadge = (entry: PlanEntry, isDragging = false) => {
@@ -464,15 +490,15 @@ export function CalendarMealPlanner({
   };
 
   // Droppable slot component
-  const DroppableSlot = ({ 
-    dropId, 
-    entries, 
+  const DroppableSlot = ({
+    dropId,
+    entries,
     color,
     date,
     slot,
-  }: { 
-    dropId: string; 
-    entries: PlanEntry[]; 
+  }: {
+    dropId: string;
+    entries: PlanEntry[];
     color: string;
     date: string;
     slot: MealSlot;
@@ -482,6 +508,10 @@ export function CalendarMealPlanner({
     });
 
     const hasEntries = entries.length > 0;
+
+    // Get plan entry ID for vote results (use first entry)
+    const planEntryId = entries.length > 0 ? entries[0].id : undefined;
+    const recipeId = entries.length > 0 ? entries[0].recipe_id : undefined;
 
     return (
       <div
@@ -499,6 +529,19 @@ export function CalendarMealPlanner({
             {entries.map((entry) => (
               <DraggableMeal key={entry.id} entry={entry} />
             ))}
+
+            {/* Show vote results if we have kids and entries */}
+            {kids.length > 0 && (
+              <VoteResultsDisplay
+                planEntryId={planEntryId}
+                recipeId={recipeId}
+                mealDate={date}
+                mealSlot={slot}
+                kids={kids}
+                compact={true}
+                className="mt-1"
+              />
+            )}
           </div>
         ) : (
           <div className="flex items-center justify-center h-full text-[10px] md:text-xs text-muted-foreground hover:text-primary transition-colors">
@@ -521,7 +564,30 @@ export function CalendarMealPlanner({
       <div className="hidden lg:block space-y-4">
         {/* Week Actions Toolbar */}
         <div className="flex items-center justify-between gap-4 p-4 bg-card border rounded-lg">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Template Actions */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowTemplateGallery(true)}
+              className="bg-primary/5 hover:bg-primary/10"
+            >
+              <BookTemplate className="h-4 w-4 mr-2" />
+              Use Template
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSaveTemplateDialog(true)}
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Save as Template
+            </Button>
+
+            {/* Divider */}
+            <div className="h-6 w-px bg-border mx-1" />
+
+            {/* Week Actions */}
             {onCopyWeek && (
               <Button
                 variant="outline"
@@ -705,6 +771,30 @@ export function CalendarMealPlanner({
           })()
         ) : null}
       </DragOverlay>
+
+      {/* Template Dialogs */}
+      <SaveMealPlanTemplateDialog
+        open={showSaveTemplateDialog}
+        onOpenChange={setShowSaveTemplateDialog}
+        startDate={format(weekStart, 'yyyy-MM-dd')}
+        endDate={format(addDays(weekStart, 6), 'yyyy-MM-dd')}
+        kidId={kidId}
+        onTemplateSaved={handleTemplateSaved}
+      />
+
+      <MealPlanTemplateGallery
+        open={showTemplateGallery}
+        onOpenChange={setShowTemplateGallery}
+        onSelectTemplate={handleSelectTemplate}
+      />
+
+      <ApplyTemplateDialog
+        open={showApplyTemplateDialog}
+        onOpenChange={setShowApplyTemplateDialog}
+        template={selectedTemplate}
+        kids={kids}
+        onTemplateApplied={handleTemplateApplied}
+      />
     </DndContext>
   );
 }
