@@ -166,24 +166,12 @@ CREATE POLICY "Users can delete template entries"
 CREATE POLICY "Admins can manage all templates"
   ON meal_plan_templates
   FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE user_id = auth.uid()
-      AND role = 'admin'
-    )
-  );
+  USING (public.has_role(auth.uid(), 'admin'));
 
 CREATE POLICY "Admins can manage all template entries"
   ON meal_plan_template_entries
   FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE user_id = auth.uid()
-      AND role = 'admin'
-    )
-  );
+  USING (public.has_role(auth.uid(), 'admin'));
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_meal_plan_template_updated_at()

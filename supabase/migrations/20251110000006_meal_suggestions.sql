@@ -167,7 +167,7 @@ CREATE POLICY "Users can view household suggestions"
   ON meal_suggestions FOR SELECT
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -179,7 +179,7 @@ CREATE POLICY "Users can update household suggestions"
   ON meal_suggestions FOR UPDATE
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -187,7 +187,7 @@ CREATE POLICY "Users can delete household suggestions"
   ON meal_suggestions FOR DELETE
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -196,7 +196,7 @@ CREATE POLICY "Users can view household feedback"
   ON suggestion_feedback FOR SELECT
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -205,7 +205,7 @@ CREATE POLICY "Users can create feedback"
   WITH CHECK (
     user_id = auth.uid()
     AND household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -215,7 +215,7 @@ CREATE POLICY "Users can view their preferences"
   USING (
     user_id = auth.uid()
     OR household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -232,7 +232,7 @@ CREATE POLICY "Users can view household analytics"
   ON suggestion_analytics FOR SELECT
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 

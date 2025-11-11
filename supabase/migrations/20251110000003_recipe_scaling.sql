@@ -9,7 +9,10 @@ ALTER TABLE recipes
 
 -- Update default_servings to match existing servings where null
 UPDATE recipes
-SET default_servings = servings
+SET default_servings = CASE
+  WHEN servings ~ '^\d+$' THEN servings::INTEGER
+  ELSE NULL
+END
 WHERE default_servings IS NULL AND servings IS NOT NULL;
 
 -- Add constraints
@@ -24,9 +27,18 @@ ALTER TABLE recipes
 -- Update existing recipes to have sensible defaults
 UPDATE recipes
 SET
-  servings_min = GREATEST(1, FLOOR(servings * 0.5)),
-  servings_max = LEAST(12, CEILING(servings * 2)),
-  default_servings = servings
+  servings_min = CASE
+    WHEN servings ~ '^\d+$' THEN GREATEST(1, FLOOR((servings::INTEGER) * 0.5))
+    ELSE 1
+  END,
+  servings_max = CASE
+    WHEN servings ~ '^\d+$' THEN LEAST(12, CEILING((servings::INTEGER) * 2))
+    ELSE 12
+  END,
+  default_servings = CASE
+    WHEN servings ~ '^\d+$' THEN servings::INTEGER
+    ELSE 4
+  END
 WHERE servings IS NOT NULL AND servings_min IS NULL;
 
 -- Helper function to parse quantity strings (e.g., "1 1/2", "2.5", "1/4")
@@ -143,7 +155,10 @@ DECLARE
   scaled_value DECIMAL;
 BEGIN
   -- Get original servings
-  SELECT COALESCE(default_servings, servings) INTO original_servings
+  SELECT COALESCE(default_servings, CASE
+    WHEN servings ~ '^\d+$' THEN servings::INTEGER
+    ELSE NULL
+  END) INTO original_servings
   FROM recipes
   WHERE id = recipe_id_input;
 

@@ -234,7 +234,7 @@ CREATE POLICY "Users can view household rules"
   ON notification_rules FOR SELECT
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -243,7 +243,7 @@ CREATE POLICY "Users can create household rules"
   WITH CHECK (
     created_by = auth.uid()
     AND household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -251,7 +251,7 @@ CREATE POLICY "Users can update household rules"
   ON notification_rules FOR UPDATE
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -262,13 +262,7 @@ CREATE POLICY "Users can delete own rules"
 -- Admins have full access
 CREATE POLICY "Admins can manage all notifications"
   ON notification_queue FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE user_id = auth.uid()
-      AND role = 'admin'
-    )
-  );
+  USING (public.has_role(auth.uid(), 'admin'));
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_notification_updated_at()

@@ -186,7 +186,7 @@ CREATE POLICY "Users can view household reports"
   ON weekly_reports FOR SELECT
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -198,7 +198,7 @@ CREATE POLICY "Users can update household reports"
   ON weekly_reports FOR UPDATE
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -207,7 +207,7 @@ CREATE POLICY "Users can view household insights"
   ON report_insights FOR SELECT
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -217,7 +217,7 @@ CREATE POLICY "Users can view their preferences"
   USING (
     user_id = auth.uid()
     OR household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -238,18 +238,14 @@ CREATE POLICY "Users can view household trends"
   ON report_trends FOR SELECT
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
 -- Admins have full access
 CREATE POLICY "Admins can manage all reports"
   ON weekly_reports FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles WHERE user_id = auth.uid() AND role = 'admin'
-    )
-  );
+  USING (public.has_role(auth.uid(), 'admin'));
 
 -- Triggers for updated_at
 CREATE TRIGGER update_weekly_reports_updated_at

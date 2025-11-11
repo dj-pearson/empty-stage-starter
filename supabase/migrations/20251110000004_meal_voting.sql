@@ -177,7 +177,7 @@ CREATE POLICY "Users can view household votes"
   ON meal_votes FOR SELECT
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -186,8 +186,8 @@ CREATE POLICY "Users can create votes for household kids"
   WITH CHECK (
     kid_id IN (
       SELECT k.id FROM kids k
-      JOIN profiles p ON p.household_id = k.household_id
-      WHERE p.user_id = auth.uid()
+      JOIN household_members hm ON hm.household_id = k.household_id
+      WHERE hm.user_id = auth.uid()
     )
   );
 
@@ -196,8 +196,8 @@ CREATE POLICY "Users can update votes for household kids"
   USING (
     kid_id IN (
       SELECT k.id FROM kids k
-      JOIN profiles p ON p.household_id = k.household_id
-      WHERE p.user_id = auth.uid()
+      JOIN household_members hm ON hm.household_id = k.household_id
+      WHERE hm.user_id = auth.uid()
     )
   );
 
@@ -206,7 +206,7 @@ CREATE POLICY "Users can view household sessions"
   ON voting_sessions FOR SELECT
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -215,7 +215,7 @@ CREATE POLICY "Users can create sessions"
   WITH CHECK (
     created_by = auth.uid()
     AND household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -223,7 +223,7 @@ CREATE POLICY "Users can update household sessions"
   ON voting_sessions FOR UPDATE
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -232,7 +232,7 @@ CREATE POLICY "Users can view household vote summaries"
   ON meal_vote_summary FOR SELECT
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -241,7 +241,7 @@ CREATE POLICY "Users can view household suggestions"
   ON kid_meal_suggestions FOR SELECT
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -250,8 +250,8 @@ CREATE POLICY "Users can create suggestions for household kids"
   WITH CHECK (
     kid_id IN (
       SELECT k.id FROM kids k
-      JOIN profiles p ON p.household_id = k.household_id
-      WHERE p.user_id = auth.uid()
+      JOIN household_members hm ON hm.household_id = k.household_id
+      WHERE hm.user_id = auth.uid()
     )
   );
 
@@ -259,7 +259,7 @@ CREATE POLICY "Users can update household suggestions"
   ON kid_meal_suggestions FOR UPDATE
   USING (
     household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
 
@@ -269,27 +269,19 @@ CREATE POLICY "Users can view household achievements"
   USING (
     kid_id IN (
       SELECT k.id FROM kids k
-      JOIN profiles p ON p.household_id = k.household_id
-      WHERE p.user_id = auth.uid()
+      JOIN household_members hm ON hm.household_id = k.household_id
+      WHERE hm.user_id = auth.uid()
     )
   );
 
 -- Admins have full access
 CREATE POLICY "Admins can manage all voting data"
   ON meal_votes FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles WHERE user_id = auth.uid() AND role = 'admin'
-    )
-  );
+  USING (public.has_role(auth.uid(), 'admin'));
 
 CREATE POLICY "Admins can manage all sessions"
   ON voting_sessions FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles WHERE user_id = auth.uid() AND role = 'admin'
-    )
-  );
+  USING (public.has_role(auth.uid(), 'admin'));
 
 -- Triggers for updated_at
 CREATE TRIGGER update_meal_votes_updated_at
