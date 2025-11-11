@@ -15,19 +15,63 @@ const baseUrl = "https://tryeatpal.com";
 // Core entities for entity-based SEO (used across site)
 export const coreEntities = {
   product: "EatPal",
-  category: "Kids Meal Planning App",
-  targetAudience: "Parents of Picky Eaters",
-  primaryConditions: ["Picky Eating", "ARFID", "Selective Eating", "Food Aversions"],
+  category: "Feeding Therapy Operating System",
+  positioning: "The Salesforce of Feeding Therapy",
+  targetAudience: "Feeding Therapists, Parents of Children with ARFID/Autism, Researchers, Food Manufacturers",
+  primaryConditions: ["ARFID", "Autism Feeding Challenges", "Selective Eating Disorders", "Pediatric Feeding Disorders"],
+  strategicPillars: [
+    "AI Predictive Engine (70%+ accuracy, data network effects)",
+    "Professional Platform (200+ therapists, insurance integration, therapist lock-in)",
+    "Data Insights Marketplace (100K+ data points, research licensing, first-mover advantage)",
+    "Community Ecosystem (500+ resources, two-sided marketplace, network effects)",
+  ],
+  competitiveMoats: [
+    "Data Network Effects",
+    "Therapist Lock-In",
+    "First-Mover Research Advantage",
+    "Community Network Effects",
+  ],
   keyFeatures: [
-    "AI Meal Planning",
-    "Safe Food Tracking",
-    "Try Bites",
-    "Grocery Lists",
-    "Nutrition Tracking",
+    "AI Predictive Food Acceptance (70%+ accuracy)",
+    "Professional Therapist Dashboard",
+    "Insurance Billing & Superbills",
+    "HIPAA-Compliant Platform",
+    "Research Data Licensing",
+    "Community Marketplace",
   ],
 };
 
 export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
+  home: {
+    title: "EatPal - The Operating System for Feeding Therapy | AI, Professionals & Research",
+    description:
+      "Industry-standard platform for feeding therapy: 70%+ AI prediction accuracy, 200+ therapists, 100K+ behavioral data points, insurance integration, HIPAA-compliant professional tools, research marketplace, and community ecosystem. Transform ARFID, autism feeding, and selective eating.",
+    keywords:
+      "feeding therapy platform, ARFID treatment software, AI predictive meal planning, feeding therapist practice management, pediatric feeding disorder tools, occupational therapy software, dietitian client management, insurance billing feeding therapy, behavioral data research, food acceptance prediction, autism feeding therapy, sensory feeding intervention, professional feeding therapy platform, HIPAA compliant therapy software, feeding disorder research, picky eater AI, selective eating treatment",
+    canonicalUrl: `${baseUrl}/`,
+    aiPurpose:
+      "EatPal is the industry-standard operating system for feeding therapy, combining four strategic pillars: (1) AI Predictive Engine with 70%+ food acceptance prediction accuracy through data network effects from thousands of families, (2) Professional Platform serving 200+ feeding therapists with practice management, insurance billing, HIPAA-compliant tools, and therapist lock-in network effects, (3) Data Insights Marketplace licensing anonymized behavioral datasets to universities, food manufacturers, insurance companies for research and product innovation, (4) Community Ecosystem marketplace with 500+ user-generated meal plans, therapist directory, and two-sided network effects.",
+    aiAudience:
+      "Feeding therapists, pediatric dietitians, occupational therapists seeking practice management software; Parents of children with ARFID, autism spectrum feeding issues, severe selective eating; University researchers studying feeding disorders; Food manufacturers developing sensory-friendly products; Insurance companies evaluating feeding therapy ROI; Healthcare systems implementing feeding intervention programs",
+    aiKeyFeatures:
+      "AI predictive engine with 70%+ accuracy, machine learning food acceptance models, texture and flavor bridging algorithms, professional therapist dashboard, multi-client management, SOAP note documentation, insurance superbill generation, CPT and ICD-10 coding, telehealth integration, HIPAA-compliant data storage, anonymized research datasets with 100K+ food attempts, GDPR and IRB compliance, community marketplace with 500+ meal plan templates, therapist directory with 200+ professionals",
+    aiUseCases:
+      "Predicting food acceptance success rates for individual children, managing feeding therapy practice with multiple clients, documenting therapy sessions with insurance billing, submitting insurance claims for feeding therapy, conducting feeding disorder research, licensing behavioral data for product development, finding feeding therapists specializing in ARFID or autism, accessing evidence-based meal plan templates, collaborating between parents and therapists, tracking therapy outcomes and ROI",
+    structuredData: [
+      {
+        "@type": "WebPage",
+        "@id": `${baseUrl}/#webpage`,
+        url: `${baseUrl}/`,
+        name: "EatPal - The Operating System for Feeding Therapy",
+        description:
+          "Industry-standard platform combining AI predictions, professional therapy tools, research marketplace, and community ecosystem",
+        isPartOf: {
+          "@id": `${baseUrl}/#website`,
+        },
+      },
+    ],
+  },
+
   pricing: {
     title: "Pricing Plans for Picky Eater Meal Planning",
     description:
