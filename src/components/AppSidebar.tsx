@@ -14,6 +14,7 @@ import {
   Shield,
   ChevronsLeft,
   ChevronsRight,
+  Globe,
 } from "lucide-react";
 import {
   Sidebar,
@@ -56,26 +57,43 @@ const insightsNavItems = [
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isProfessional, setIsProfessional] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const checkAdminStatus = async () => {
+    const checkUserStatus = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data } = await supabase
+      // Check admin status
+      const { data: adminData } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", user.id)
         .eq("role", "admin")
         .maybeSingle();
 
-      setIsAdmin(!!data);
+      setIsAdmin(!!adminData);
+
+      // Check Professional subscription status
+      const { data: subscriptionData } = await supabase
+        .from("user_subscriptions")
+        .select(`
+          status,
+          subscription_plans(name)
+        `)
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .maybeSingle();
+
+      if (subscriptionData?.subscription_plans?.name === "Professional") {
+        setIsProfessional(true);
+      }
     };
 
-    checkAdminStatus();
+    checkUserStatus();
   }, []);
 
   const isCollapsed = state === "collapsed";
@@ -187,6 +205,33 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Professional Section */}
+        {isProfessional && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Professional</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild tooltip="Professional Portal">
+                    <NavLink
+                      to="/dashboard/professional-settings"
+                      className={({ isActive }) =>
+                        `flex items-center gap-2 ${isActive
+                          ? "bg-primary/10 text-primary font-medium no-underline visited:no-underline"
+                          : "text-sidebar-foreground visited:text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline visited:no-underline"
+                        }`
+                      }
+                    >
+                      <Globe className="h-4 w-4 shrink-0" />
+                      {!isCollapsed && <span>Professional Portal</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {/* Admin Section */}
         {isAdmin && (

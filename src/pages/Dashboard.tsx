@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Moon, Sun, LogOut, Menu } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useToast } from "@/hooks/use-toast";
+import { useWhiteLabelTheme } from "@/hooks/useWhiteLabelTheme";
 import {
   Sheet,
   SheetContent,
@@ -57,6 +58,9 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
+
+  // Apply white-label theme for Professional subscribers
+  useWhiteLabelTheme();
 
   useEffect(() => {
     // Set up listener for auth state changes
