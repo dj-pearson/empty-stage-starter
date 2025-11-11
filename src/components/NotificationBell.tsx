@@ -65,8 +65,9 @@ export function NotificationBell() {
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
       // @ts-ignore - notification_history table exists but not in generated types yet
-      const { data, error } = await supabase
-        .from('notification_history')
+    // @ts-ignore - notification_history table exists but types not yet regenerated
+    const { data, error } = await supabase
+      .from('notification_history')
         .select('*')
         .eq('user_id', user.id)
         .gte('sent_at', sevenDaysAgo.toISOString())

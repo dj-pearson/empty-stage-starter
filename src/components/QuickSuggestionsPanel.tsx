@@ -36,6 +36,7 @@ export function QuickSuggestionsPanel({
   const loadSuggestions = async () => {
     try {
       setIsLoading(true);
+      // @ts-ignore - active_suggestions table exists but types not yet regenerated
       const { data, error } = await supabase
         .from('active_suggestions')
         .select('*')
@@ -59,7 +60,7 @@ export function QuickSuggestionsPanel({
       setIsGenerating(true);
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/generate-meal-suggestions`,
+        `https://tbuszxkevkpjcjapbrir.supabase.co/functions/v1/generate-meal-suggestions`,
         {
           method: 'POST',
           headers: {

@@ -21,6 +21,7 @@ export async function saveMealPlanGeneration(
   mealPlan: MealPlanResult
 ): Promise<string> {
   try {
+    // @ts-ignore - meal_plan_generations table exists but types not yet regenerated
     const { data, error } = await supabase
       .from('meal_plan_generations')
       .insert({

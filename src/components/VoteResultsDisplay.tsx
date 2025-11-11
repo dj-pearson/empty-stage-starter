@@ -81,6 +81,7 @@ export function VoteResultsDisplay({
 
   const loadVotes = async () => {
     try {
+      // @ts-ignore - meal_votes table exists but types not yet regenerated
       let query = supabase.from('meal_votes').select(`
         kid_id,
         vote,

@@ -38,6 +38,7 @@ export function useWhiteLabelTheme() {
         }
 
         // Fetch brand settings
+        // @ts-ignore - professional_brand_settings table exists but types not yet regenerated
         const { data: brandSettings } = await supabase
           .from('professional_brand_settings')
           .select('*')

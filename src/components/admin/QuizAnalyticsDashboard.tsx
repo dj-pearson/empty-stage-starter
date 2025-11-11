@@ -44,6 +44,7 @@ export function QuizAnalyticsDashboard() {
 
   const loadData = async () => {
     try {
+      // @ts-ignore - quiz_responses table exists but types not yet regenerated
       setRefreshing(true);
       const [summary, recentLeads] = await Promise.all([
         getQuizAnalyticsSummary(),

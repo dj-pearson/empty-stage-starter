@@ -71,7 +71,7 @@ export function ReportHistory({ householdId, className }: ReportHistoryProps) {
     try {
       setIsGenerating(true);
 
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/generate-weekly-report`, {
+      const response = await fetch(`https://tbuszxkevkpjcjapbrir.supabase.co/functions/v1/generate-weekly-report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -30,6 +30,7 @@ export async function saveQuizResponse(
   abTestVariant?: string
 ): Promise<string> {
   try {
+    // @ts-ignore - quiz_responses table exists but types not yet regenerated
     const { data, error } = await supabase
       .from('quiz_responses')
       .insert({

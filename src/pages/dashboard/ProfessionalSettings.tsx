@@ -62,6 +62,7 @@ export default function ProfessionalSettings() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // @ts-ignore - professional tables exist but types not yet regenerated
       const [domainRes, brandRes] = await Promise.all([
         supabase
           .from("professional_custom_domains")

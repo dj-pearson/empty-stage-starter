@@ -21,6 +21,7 @@ export async function saveBudgetCalculation(
   calculation: BudgetCalculation
 ): Promise<string> {
   try {
+    // @ts-ignore - budget_calculations table exists but types not yet regenerated
     const { data, error } = await supabase
       .from('budget_calculations')
       .insert({

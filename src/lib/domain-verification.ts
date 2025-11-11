@@ -239,6 +239,7 @@ export async function getUserCustomDomain(userId: string) {
  */
 export async function getUserBrandSettings(userId: string) {
   try {
+    // @ts-ignore - professional_brand_settings table exists but types not yet regenerated
     const { data, error } = await supabase
       .from('professional_brand_settings')
       .select('*')
