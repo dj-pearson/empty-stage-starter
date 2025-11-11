@@ -194,7 +194,7 @@ export default function ResetPassword() {
         </Card>
 
         <div className="text-center mt-4">
-          <Link to="/auth" className="text-sm text-muted-foreground hover:text-primary">
+          <Link to="/auth?tab=signin" className="text-sm text-muted-foreground hover:text-primary">
             Back to Sign In
           </Link>
         </div>

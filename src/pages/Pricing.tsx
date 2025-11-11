@@ -305,12 +305,12 @@ export default function Pricing() {
               </Link>
             ) : (
               <>
-                <Link to="/auth">
+                <Link to="/auth?tab=signin">
                   <Button variant="ghost" className="font-medium">
                     Sign In
                   </Button>
                 </Link>
-                <Link to="/auth">
+                <Link to="/auth?tab=signup">
                   <Button className="font-semibold shadow-md">
                     Get Started Free
                   </Button>
@@ -373,7 +373,7 @@ export default function Pricing() {
                     </Link>
                   ) : (
                     <>
-                      <Link to="/auth" onClick={closeMobileMenu}>
+                      <Link to="/auth?tab=signin" onClick={closeMobileMenu}>
                         <Button
                           variant="outline"
                           className="w-full text-lg py-6"
@@ -381,7 +381,7 @@ export default function Pricing() {
                           Sign In
                         </Button>
                       </Link>
-                      <Link to="/auth" onClick={closeMobileMenu}>
+                      <Link to="/auth?tab=signup" onClick={closeMobileMenu}>
                         <Button className="w-full text-lg py-6 shadow-md">
                           Get Started Free
                         </Button>

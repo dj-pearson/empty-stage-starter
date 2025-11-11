@@ -34,6 +34,9 @@ const Auth = () => {
 
   // Get the redirect URL from query params (where user was trying to go)
   const redirectTo = searchParams.get("redirect") || "/dashboard";
+  
+  // Get the default tab from query params (signin or signup)
+  const defaultTab = searchParams.get("tab") || "signup";
 
   useEffect(() => {
     // Set up listener first
@@ -227,7 +230,7 @@ const Auth = () => {
                   Join families making mealtime easier
                 </p>
               </div>
-              <Tabs defaultValue="signup" className="w-full">
+              <Tabs defaultValue={defaultTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="signup">Sign Up</TabsTrigger>
                   <TabsTrigger value="signin">Sign In</TabsTrigger>

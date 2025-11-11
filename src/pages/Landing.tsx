@@ -133,7 +133,7 @@ const Landing = () => {
               <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
               <span className="sr-only">Toggle theme</span>
             </Button>
-            <Link to="/auth">
+            <Link to="/auth?tab=signin">
               <Button variant="ghost" className="font-medium">
                 Sign In
               </Button>
@@ -207,7 +207,7 @@ const Landing = () => {
                       </>
                     )}
                   </Button>
-                  <Link to="/auth" onClick={closeMobileMenu}>
+                  <Link to="/auth?tab=signin" onClick={closeMobileMenu}>
                     <Button size="lg" className="w-full">
                       Sign In
                     </Button>
