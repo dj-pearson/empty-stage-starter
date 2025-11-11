@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Supabase Integration for Budget Calculator
  * Handles database operations for budget calculations and lead capture

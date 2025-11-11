@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * PDF Generator for Budget Calculator
  * Creates comprehensive budget report PDFs

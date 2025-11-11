@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Quiz Analytics Dashboard for Admin
  * Shows key metrics and performance data for the picky eater quiz

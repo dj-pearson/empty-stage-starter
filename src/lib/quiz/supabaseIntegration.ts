@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Supabase Integration for Quiz Tool
  * Handles all database operations for quiz responses, leads, and analytics

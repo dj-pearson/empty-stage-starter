@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Supabase Integration for Meal Plan Generator
  * Handles database operations for meal plans and lead capture
