@@ -10,6 +10,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { logger } from "@/lib/logger";
+import DOMPurify from "dompurify";
 
 interface BlogPostData {
   id: string;
@@ -140,8 +141,13 @@ const BlogPost = () => {
     // Check if content is Markdown (contains markdown syntax)
     const hasMarkdownSyntax = /^#{1,6}\s|^\*{1,2}[^*]|\[.*\]\(.*\)|^\d+\.|^[-*+]\s/m.test(content);
     
-    // If it has HTML tags, render as HTML
+    // If it has HTML tags, render as HTML (with sanitization to prevent XSS)
     if (hasHTMLTags && !hasMarkdownSyntax) {
+      const sanitizedContent = DOMPurify.sanitize(content, {
+        ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'img', 'blockquote', 'code', 'pre', 'div', 'span'],
+        ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id']
+      });
+      
       return (
         <div 
           className="prose prose-lg max-w-none dark:prose-invert
@@ -160,7 +166,7 @@ const BlogPost = () => {
             prose-strong:text-foreground prose-strong:font-semibold
             prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:rounded
             prose-pre:bg-secondary prose-pre:p-4 prose-pre:rounded-lg prose-pre:my-6"
-          dangerouslySetInnerHTML={{ __html: content }}
+          dangerouslySetInnerHTML={{ __html: sanitizedContent }}
         />
       );
     }

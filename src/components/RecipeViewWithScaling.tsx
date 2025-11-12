@@ -143,9 +143,9 @@ export function RecipeViewWithScaling({
                 <TabsContent value="ingredients" className="space-y-6 mt-6">
                   {/* Scaling Control */}
                   <RecipeScalingControl
-                    originalServings={recipe.servings || 4}
-                    servingsMin={recipe.servings_min || 1}
-                    servingsMax={recipe.servings_max || 12}
+                    originalServings={Number(recipe.servings) || 4}
+                    servingsMin={1}
+                    servingsMax={12}
                     ingredients={ingredients.map(ing => ({
                       id: ing.id,
                       ingredient_name: ing.ingredient_name,

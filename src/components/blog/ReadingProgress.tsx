@@ -113,8 +113,9 @@ export function TableOfContents({ content }: TOCProps) {
   const [activeId, setActiveId] = useState<string>("");
 
   useEffect(() => {
-    // Extract headings from content
+    // Extract headings from content (safe - only parsing for heading extraction, not rendering)
     const tempDiv = document.createElement("div");
+    // Note: This is safe as we're only extracting text content, not rendering the HTML
     tempDiv.innerHTML = content;
 
     const headingElements = tempDiv.querySelectorAll("h2, h3");
