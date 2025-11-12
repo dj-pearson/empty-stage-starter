@@ -93,7 +93,7 @@ export default function PickyEaterQuiz() {
     }
   };
 
-  const isCurrentQuestionAnswered = currentQuestion && quizState.answers[currentQuestion.id];
+  const isCurrentQuestionAnswered = currentQuestion && (quizState.answers as any)[currentQuestion.id];
 
   return (
     <>
@@ -160,7 +160,7 @@ export default function PickyEaterQuiz() {
                   {currentQuestion && (
                     <QuizQuestion
                       question={currentQuestion}
-                      value={quizState.answers[currentQuestion.id]}
+                      value={(quizState.answers as any)[currentQuestion.id]}
                       onChange={(value) => handleAnswer(currentQuestion.id, value)}
                     />
                   )}
