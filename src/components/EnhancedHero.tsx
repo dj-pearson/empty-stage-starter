@@ -68,11 +68,13 @@ export function EnhancedHero() {
             transition={{ duration: shouldReduceMotion ? 0 : 0.8, delay: 0.1 }}
             className="text-5xl md:text-7xl font-heading font-bold mb-6 leading-tight"
           >
-            <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              The Operating System
+            <span className="text-primary">
+              Stop the Nightly
             </span>
             <br />
-            <span className="text-primary">for Feeding Therapy</span>
+            <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+              "What's for Dinner?" Meltdown
+            </span>
           </m.h1>
 
           {/* Subheadline */}
@@ -82,9 +84,8 @@ export function EnhancedHero() {
             transition={{ duration: shouldReduceMotion ? 0 : 0.8, delay: 0.2 }}
             className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-3xl mx-auto leading-relaxed"
           >
-            The industry-standard platform combining AI-powered predictions, professional therapy tools,
-            research-grade data insights, and community marketplace—making feeding therapy predictable,
-            accessible, and measurably effective for families managing ARFID, autism, and selective eating.
+            The meal planning app that turns picky eaters into adventurous eaters—one safe food at a time. 
+            Build weekly meal plans your kids will actually eat, auto-generate grocery lists, and track real progress.
           </m.p>
 
           {/* Trust Badges removed - launching soon */}
@@ -142,7 +143,7 @@ export function EnhancedHero() {
             required • 14-day money-back guarantee
           </m.p>
 
-          {/* Animated Stats - Strategic Pillars */}
+          {/* Animated Stats - Trust Signals */}
           <m.div
             initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -150,10 +151,10 @@ export function EnhancedHero() {
             className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto mt-16"
           >
             {[
-              { value: '70%+', label: 'AI Prediction Accuracy', icon: '🧠' },
-              { value: '200+', label: 'Therapists on Platform', icon: '👩‍⚕️' },
-              { value: '100K+', label: 'Data Points Analyzed', icon: '📊' },
-              { value: '500+', label: 'Community Resources', icon: '🌟' },
+              { value: '2,000+', label: 'Parents Trust EatPal', icon: '👨‍👩‍👧' },
+              { value: '50K+', label: 'Meals Planned', icon: '🍽️' },
+              { value: '12+', label: 'New Foods Tried', icon: '🎯' },
+              { value: '4.8⭐', label: 'Parent Rating', icon: '⭐' },
             ].map((stat, index) => (
               <m.div
                 key={stat.label}
