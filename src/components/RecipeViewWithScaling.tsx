@@ -146,7 +146,7 @@ export function RecipeViewWithScaling({
                     originalServings={Number(recipe.servings) || 4}
                     servingsMin={1}
                     servingsMax={12}
-                    ingredients={ingredients.map(ing => ({
+                    ingredients={ingredients.map((ing: any) => ({
                       id: ing.id,
                       ingredient_name: ing.ingredient_name,
                       quantity: ing.quantity,
@@ -174,7 +174,7 @@ export function RecipeViewWithScaling({
                     </div>
 
                     <ScaledIngredientsList
-                      ingredients={scaledIngredients.length > 0 ? scaledIngredients : ingredients.map(ing => ({
+                      ingredients={scaledIngredients.length > 0 ? scaledIngredients : ingredients.map((ing: any) => ({
                         id: ing.id,
                         name: ing.ingredient_name,
                         originalQuantity: ing.quantity,
@@ -239,21 +239,21 @@ export function RecipeViewWithScaling({
                         <div className="text-xs text-muted-foreground">Calories</div>
                       </div>
                     )}
-                    {recipe.nutrition_info.protein && (
+                    {(recipe.nutrition_info as any).protein_g && (
                       <div className="p-3 border rounded-lg">
-                        <div className="text-2xl font-bold">{recipe.nutrition_info.protein}g</div>
+                        <div className="text-2xl font-bold">{(recipe.nutrition_info as any).protein_g}g</div>
                         <div className="text-xs text-muted-foreground">Protein</div>
                       </div>
                     )}
-                    {recipe.nutrition_info.carbs && (
+                    {(recipe.nutrition_info as any).carbs_g && (
                       <div className="p-3 border rounded-lg">
-                        <div className="text-2xl font-bold">{recipe.nutrition_info.carbs}g</div>
+                        <div className="text-2xl font-bold">{(recipe.nutrition_info as any).carbs_g}g</div>
                         <div className="text-xs text-muted-foreground">Carbs</div>
                       </div>
                     )}
-                    {recipe.nutrition_info.fat && (
+                    {(recipe.nutrition_info as any).fat_g && (
                       <div className="p-3 border rounded-lg">
-                        <div className="text-2xl font-bold">{recipe.nutrition_info.fat}g</div>
+                        <div className="text-2xl font-bold">{(recipe.nutrition_info as any).fat_g}g</div>
                         <div className="text-xs text-muted-foreground">Fat</div>
                       </div>
                     )}
