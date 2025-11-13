@@ -43,14 +43,61 @@ export default defineConfig(({ mode }) => ({
     },
     rollupOptions: {
       output: {
-        // Manual chunking for better caching
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          router: ['react-router-dom'],
-          ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-tabs'],
-          utils: ['clsx', 'tailwind-merge', 'date-fns'],
-          supabase: ['@supabase/supabase-js'],
-          dnd: ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
+        // Manual chunking for better caching and smaller initial bundles
+        manualChunks: (id) => {
+          // Vendor chunks
+          if (id.includes('node_modules')) {
+            // React core (highest priority, loaded first)
+            if (id.includes('react') && !id.includes('react-router') && !id.includes('react-hook-form')) {
+              return 'vendor-react';
+            }
+            // React Router (separate chunk for route changes)
+            if (id.includes('react-router')) {
+              return 'vendor-router';
+            }
+            // Form libraries (only loaded on pages with forms)
+            if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform')) {
+              return 'vendor-forms';
+            }
+            // Radix UI (large UI library, separate chunk)
+            if (id.includes('@radix-ui')) {
+              return 'vendor-ui';
+            }
+            // Supabase (database operations)
+            if (id.includes('@supabase')) {
+              return 'vendor-supabase';
+            }
+            // Drag and drop (only on planner page)
+            if (id.includes('@dnd-kit')) {
+              return 'vendor-dnd';
+            }
+            // Animation libraries (can be lazy loaded)
+            if (id.includes('framer-motion')) {
+              return 'vendor-animation';
+            }
+            // 3D graphics (large, should be lazy loaded)
+            if (id.includes('three') || id.includes('@react-three')) {
+              return 'vendor-3d';
+            }
+            // Charts (only on analytics pages)
+            if (id.includes('recharts')) {
+              return 'vendor-charts';
+            }
+            // Markdown (only on blog)
+            if (id.includes('react-markdown') || id.includes('rehype') || id.includes('remark')) {
+              return 'vendor-markdown';
+            }
+            // TanStack Query (data fetching)
+            if (id.includes('@tanstack')) {
+              return 'vendor-query';
+            }
+            // Utilities (small, can bundle together)
+            if (id.includes('clsx') || id.includes('tailwind-merge') || id.includes('date-fns')) {
+              return 'vendor-utils';
+            }
+            // Everything else
+            return 'vendor-misc';
+          }
         },
         // Consistent naming for better caching
         chunkFileNames: 'assets/js/[name]-[hash].js',

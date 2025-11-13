@@ -9,6 +9,7 @@ import { AppProvider } from "@/contexts/AppContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { SkipToContent } from "@/components/SkipToContent";
 import { Loader2 } from "lucide-react";
 
 // Lazy load all route components for better performance
@@ -70,7 +71,8 @@ const App = () => (
             <Sonner />
             <PWAInstallPrompt />
             <BrowserRouter>
-          <Suspense fallback={<LoadingFallback />}>
+              <SkipToContent />
+              <Suspense fallback={<LoadingFallback />}>
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
