@@ -47,7 +47,6 @@ export {
 export {
   lazyWithPreload,
   useLazyPreload,
-  useLazyPreloadOnHover,
   useLazyPreloadOnIntersect,
   useLazyPreloadOnIdle,
   preloadComponents,
@@ -93,11 +92,6 @@ export {
 // Re-export types
 export type { WindowSize } from './useWindowSize';
 export type { UseIntersectionObserverOptions } from './useIntersectionObserver';
-export type {
-  MobileInfo,
-  OptimizedSettings,
-  HapticFeedback,
-  NetworkStatus,
-} from './useMobileOptimizations';
+export type { MobileInfo } from './useMobileOptimizations';
 export type { KeyboardNavigationOptions } from './useKeyboardNavigation';
 export type { AsyncState } from './useAsync';

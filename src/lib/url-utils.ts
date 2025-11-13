@@ -662,6 +662,7 @@ export interface UTMParams {
   utm_campaign?: string;
   utm_term?: string;
   utm_content?: string;
+  [key: string]: string | undefined;
 }
 
 /**

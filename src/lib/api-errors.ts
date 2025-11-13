@@ -126,28 +126,28 @@ export function handleSupabaseError(error: PostgrestError | Error): APIError {
 
     // Unique constraint violation
     if (pgError.code === '23505') {
-      code = ErrorCodes.ALREADY_EXISTS;
+      code = ErrorCodes.ALREADY_EXISTS as any;
       statusCode = 409;
       message = 'This resource already exists.';
     }
 
     // Foreign key violation
     if (pgError.code === '23503') {
-      code = ErrorCodes.CONSTRAINT_VIOLATION;
+      code = ErrorCodes.CONSTRAINT_VIOLATION as any;
       statusCode = 400;
       message = 'Referenced resource does not exist.';
     }
 
     // Not null violation
     if (pgError.code === '23502') {
-      code = ErrorCodes.MISSING_REQUIRED_FIELD;
+      code = ErrorCodes.MISSING_REQUIRED_FIELD as any;
       statusCode = 400;
       message = 'Required field is missing.';
     }
 
     // Row level security violation
     if (pgError.code === '42501') {
-      code = ErrorCodes.FORBIDDEN;
+      code = ErrorCodes.FORBIDDEN as any;
       statusCode = 403;
       message = 'You do not have permission to access this resource.';
     }
@@ -212,31 +212,31 @@ export async function handleHTTPError(response: Response): Promise<APIError> {
   // Map HTTP status codes to error codes
   switch (response.status) {
     case 400:
-      code = ErrorCodes.INVALID_INPUT;
+      code = ErrorCodes.INVALID_INPUT as any;
       break;
     case 401:
-      code = ErrorCodes.UNAUTHORIZED;
+      code = ErrorCodes.UNAUTHORIZED as any;
       break;
     case 403:
-      code = ErrorCodes.FORBIDDEN;
+      code = ErrorCodes.FORBIDDEN as any;
       break;
     case 404:
-      code = ErrorCodes.NOT_FOUND;
+      code = ErrorCodes.NOT_FOUND as any;
       break;
     case 409:
-      code = ErrorCodes.CONFLICT;
+      code = ErrorCodes.CONFLICT as any;
       break;
     case 422:
-      code = ErrorCodes.VALIDATION_ERROR;
+      code = ErrorCodes.VALIDATION_ERROR as any;
       break;
     case 429:
-      code = ErrorCodes.RATE_LIMIT_EXCEEDED;
+      code = ErrorCodes.RATE_LIMIT_EXCEEDED as any;
       break;
     case 500:
-      code = ErrorCodes.INTERNAL_SERVER_ERROR;
+      code = ErrorCodes.INTERNAL_SERVER_ERROR as any;
       break;
     case 503:
-      code = ErrorCodes.SERVICE_UNAVAILABLE;
+      code = ErrorCodes.SERVICE_UNAVAILABLE as any;
       break;
   }
 
@@ -279,7 +279,7 @@ export function isRetryableError(error: APIError): boolean {
     ErrorCodes.INTERNAL_SERVER_ERROR,
   ];
 
-  return error.code ? retryableCodes.includes(error.code) : false;
+  return error.code ? retryableCodes.includes(error.code as any) : false;
 }
 
 /**

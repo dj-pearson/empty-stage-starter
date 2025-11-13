@@ -301,7 +301,7 @@ export function getPasswordStrengthLabel(score: number): {
  * Trim all string fields in an object
  */
 export function trimObjectStrings<T extends Record<string, any>>(obj: T): T {
-  const result = { ...obj };
+  const result = { ...obj } as any;
 
   Object.keys(result).forEach((key) => {
     if (typeof result[key] === 'string') {

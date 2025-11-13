@@ -187,8 +187,8 @@ export function useMobileDocumentOptimizations() {
       html.classList.add('disable-animations');
 
       // Reduce font smoothing
-      body.style.webkitFontSmoothing = 'subpixel-antialiased';
-      body.style.mozOsxFontSmoothing = 'auto';
+      (body.style as any).webkitFontSmoothing = 'subpixel-antialiased';
+      (body.style as any).mozOsxFontSmoothing = 'auto';
     }
 
     // Viewport height fix for mobile (accounts for browser chrome)

@@ -7,9 +7,6 @@
 // Date and Time Utilities
 export * from './date-utils';
 
-// String Manipulation
-export * from './string-utils';
-
 // Array and Object Utilities
 export * from './array-utils';
 
@@ -21,9 +18,6 @@ export * from './api-errors';
 
 // Analytics
 export * from './analytics';
-
-// Performance Monitoring
-export * from './performance';
 
 // SEO Utilities
 export * from './sitemap-utils';
@@ -40,6 +34,3 @@ export * from './browser-utils';
 
 // File Handling
 export * from './file-utils';
-
-// URL and Query String Utilities
-export * from './url-utils';

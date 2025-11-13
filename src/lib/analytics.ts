@@ -129,7 +129,7 @@ class AnalyticsManager {
     this.isInitialized = true;
 
     // Process queued events
-    this.queue.forEach((event) => this.trackEvent(event));
+    this.queue.forEach((event) => this.trackEvent(event.name, event.properties));
     this.queue = [];
   }
 
