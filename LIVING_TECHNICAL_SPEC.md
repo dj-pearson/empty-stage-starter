@@ -1,7 +1,7 @@
 # Living Technical Specification - EatPal (Munch Maker Mate)
 
-**Document Version:** 1.0.0
-**Last Updated:** November 11, 2025
+**Document Version:** 1.1.0
+**Last Updated:** November 13, 2025
 **Status:** Active Development
 **Product Name:** EatPal (Internal: Munch Maker Mate)
 
@@ -38,11 +38,13 @@
 - **Multi-Platform**: Web (PWA), iOS, and Android native apps
 
 ### Current State
-- **Codebase**: ~51,749 lines of TypeScript/React
-- **Database**: 87 migrations, 35+ tables
-- **APIs**: 70+ Edge Functions
-- **Status**: Production-ready web platform, mobile apps in development
+- **Codebase**: ~42,454 lines of TypeScript/React (28,597 in components, 13,857 in pages)
+- **Components**: 100+ React components with Radix UI primitives
+- **Database**: 70+ SQL migrations, 35+ tables with RLS
+- **Edge Functions**: 70+ Supabase/Deno functions
+- **Status**: Production-ready web platform, mobile apps in development (Expo configured)
 - **Deployment**: Cloudflare Pages (primary), Vercel/Netlify (alternatives)
+- **Bundle Size**: ~450KB gzipped with Vite optimizations
 
 ---
 
@@ -141,6 +143,91 @@ Help parents of picky eaters reduce mealtime stress through intelligent meal pla
 - **Rationale**: Catch errors at compile time, better DX
 - **Implementation**: TypeScript 5.8.3, Zod validation
 - **Benefits**: Fewer runtime errors, better IDE support, self-documenting code
+
+### Actual Code Structure
+
+**Source Code Organization:**
+```
+/src (42,454 lines)
+├── /components (100+ components, 28,597 lines)
+│   ├── /ui - Shadcn/Radix UI primitives (20+ components)
+│   ├── /admin - Admin dashboard components (10+ files)
+│   ├── /blog - Blog system components (15+ files)
+│   ├── /subscription - Subscription management
+│   └── /quiz - Lead magnet components
+├── /pages (30+ pages, 13,857 lines)
+│   └── /dashboard - Nested dashboard routes
+├── /hooks (18 custom hooks)
+│   ├── useDebounce - Performance optimization
+│   ├── useIsDesktop - Responsive design
+│   ├── useReducedMotion - Accessibility
+│   └── useAuth - Authentication management
+├── /lib (Business logic)
+│   ├── /validations.ts (459 lines) - Zod schemas & sanitization
+│   ├── /seo-config.ts (338 lines) - SEO metadata
+│   ├── /quiz - Quiz logic & PDF generation
+│   └── /integrations - External API integrations
+├── /contexts
+│   └── AppContext.tsx (959 lines) - Global state with local/cloud sync
+├── /integrations/supabase
+│   ├── client.ts - Web Supabase client
+│   ├── client.mobile.ts - Mobile-optimized client
+│   └── types.ts - Auto-generated database types
+├── /types - TypeScript definitions
+└── /styles - Global styles
+
+/supabase
+├── /migrations (70+ SQL files)
+└── /functions (70+ Edge Functions)
+
+/app (Expo mobile structure)
+├── _layout.tsx - Root mobile layout
+└── /mobile - Native app components
+
+/public
+├── /images - Static assets (1.9MB+ optimized images)
+├── _headers - Security headers configuration
+├── manifest.json - PWA manifest
+├── service-worker.js - Offline support
+├── sitemap.xml - SEO sitemap
+└── robots.txt - Search engine directives
+```
+
+**Key Implementation Details:**
+
+1. **State Management (AppContext.tsx):**
+   - Dual-mode storage: localStorage (offline) + Supabase (cloud sync)
+   - Real-time subscriptions with 300ms debouncing
+   - Date-range filtering (30 days past + 90 days future)
+   - Optimistic updates with rollback support
+
+2. **Performance Optimizations:**
+   - Route-level lazy loading (React.lazy for all pages)
+   - Component-level lazy loading (3D graphics, large components)
+   - Manual chunk splitting (vendor, router, ui, supabase, dnd)
+   - Terser minification with console.log removal
+   - 500KB chunk size limit
+
+3. **Security Implementation:**
+   - Comprehensive input validation (Zod schemas)
+   - HTML sanitization (XSS prevention)
+   - SQL injection pattern removal
+   - File upload validation
+   - Protected routes with session management
+   - Row-Level Security on all database tables
+
+4. **SEO Implementation:**
+   - Dynamic SEO component with React Helmet Async
+   - AI search optimization (GEO tags)
+   - 100+ meta tags in index.html
+   - JSON-LD structured data
+   - Per-page customizable metadata
+
+5. **Mobile Architecture:**
+   - Expo + React Native for native capabilities
+   - Platform detection with shared codebase
+   - Native modules: Camera, Secure Store, File System
+   - Mobile-optimized Supabase client
 
 ---
 
@@ -2145,6 +2232,7 @@ const Blog = lazy(() => import('./pages/Blog'));
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
 | 1.0.0 | 2025-11-11 | Initial Living Technical Specification | AI Assistant |
+| 1.1.0 | 2025-11-13 | Added actual code structure analysis, updated current state metrics, added implementation details | AI Assistant |
 
 ---
 
