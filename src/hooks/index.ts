@@ -71,6 +71,25 @@ export {
   useRovingTabIndex,
 } from './useKeyboardNavigation';
 
+// Async Operations
+export { useAsync, useFetch, usePoll, useRetry } from './useAsync';
+
+// Common Patterns
+export {
+  useCopyToClipboard,
+  useIdle,
+  useOnline,
+  usePrevious,
+  useToggle,
+  useCounter,
+  useArray,
+  useSet,
+  useMap,
+  useInterval,
+  useTimeout,
+  useIntervalUpdate,
+} from './useCommon';
+
 // Re-export types
 export type { WindowSize } from './useWindowSize';
 export type { UseIntersectionObserverOptions } from './useIntersectionObserver';
@@ -81,3 +100,4 @@ export type {
   NetworkStatus,
 } from './useMobileOptimizations';
 export type { KeyboardNavigationOptions } from './useKeyboardNavigation';
+export type { AsyncState } from './useAsync';
