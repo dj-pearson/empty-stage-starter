@@ -62,6 +62,15 @@ export {
   useNetworkStatus,
 } from './useMobileOptimizations';
 
+// Keyboard Navigation & Accessibility
+export {
+  useKeyboardNavigation,
+  useEscapeKey,
+  useFocusOnMount,
+  useRestoreFocus,
+  useRovingTabIndex,
+} from './useKeyboardNavigation';
+
 // Re-export types
 export type { WindowSize } from './useWindowSize';
 export type { UseIntersectionObserverOptions } from './useIntersectionObserver';
@@ -71,3 +80,4 @@ export type {
   HapticFeedback,
   NetworkStatus,
 } from './useMobileOptimizations';
+export type { KeyboardNavigationOptions } from './useKeyboardNavigation';
