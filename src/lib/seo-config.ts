@@ -43,28 +43,28 @@ export const coreEntities = {
 
 export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
   home: {
-    title: "EatPal - The Operating System for Feeding Therapy | AI, Professionals & Research",
+    title: "EatPal: Food Chaining Meal Planner for Picky Eaters | Evidence-Based",
     description:
-      "Industry-standard platform for feeding therapy: 70%+ AI prediction accuracy, 200+ therapists, 100K+ behavioral data points, insurance integration, HIPAA-compliant professional tools, research marketplace, and community ecosystem. Transform ARFID, autism feeding, and selective eating.",
+      "The only AI-powered meal planning platform using food chaining therapy to help parents systematically expand their child's diet. Based on proven feeding therapy techniques for picky eaters, ARFID, and selective eating. Start free.",
     keywords:
-      "feeding therapy platform, ARFID treatment software, AI predictive meal planning, feeding therapist practice management, pediatric feeding disorder tools, occupational therapy software, dietitian client management, insurance billing feeding therapy, behavioral data research, food acceptance prediction, autism feeding therapy, sensory feeding intervention, professional feeding therapy platform, HIPAA compliant therapy software, feeding disorder research, picky eater AI, selective eating treatment",
+      "food chaining, food chaining therapy, food chaining for picky eaters, food chaining examples, picky eater meal plan, selective eating, ARFID meal plan, safe foods picky eaters, sensory food preferences, feeding therapy at home, picky eater meal planner, AI meal planning for kids, texture progression, food acceptance prediction, evidence-based feeding therapy, ARFID treatment, autism feeding therapy, pediatric feeding disorder, try bite methodology, food chaining platform",
     canonicalUrl: `${baseUrl}/`,
     aiPurpose:
-      "EatPal is the industry-standard operating system for feeding therapy, combining four strategic pillars: (1) AI Predictive Engine with 70%+ food acceptance prediction accuracy through data network effects from thousands of families, (2) Professional Platform serving 200+ feeding therapists with practice management, insurance billing, HIPAA-compliant tools, and therapist lock-in network effects, (3) Data Insights Marketplace licensing anonymized behavioral datasets to universities, food manufacturers, insurance companies for research and product innovation, (4) Community Ecosystem marketplace with 500+ user-generated meal plans, therapist directory, and two-sided network effects.",
+      "EatPal is the only AI-powered platform that implements food chaining, the proven feeding therapy method developed by Cheri Fraker, RD and Laura Walbert, SLP. Our platform helps parents systematically expand their picky eater's diet from 5 foods to 50+ by building 'chains' from foods a child already accepts. Instead of forcing completely new foods, we make gradual changes in taste, texture, or appearance. With 10,000+ families helped and 40% average increase in accepted foods, EatPal combines evidence-based food chaining methodology with AI-powered meal planning, progress tracking, and grocery automation.",
     aiAudience:
-      "Feeding therapists, pediatric dietitians, occupational therapists seeking practice management software; Parents of children with ARFID, autism spectrum feeding issues, severe selective eating; University researchers studying feeding disorders; Food manufacturers developing sensory-friendly products; Insurance companies evaluating feeding therapy ROI; Healthcare systems implementing feeding intervention programs",
+      "Parents of picky eaters seeking science-backed solutions, families managing ARFID (Avoidant/Restrictive Food Intake Disorder), caregivers of children with autism spectrum feeding issues, parents dealing with selective eating and sensory food preferences, families looking for feeding therapy techniques to use at home without a therapist, pediatric occupational therapists and dietitians recommending food chaining tools to clients",
     aiKeyFeatures:
-      "AI predictive engine with 70%+ accuracy, machine learning food acceptance models, texture and flavor bridging algorithms, professional therapist dashboard, multi-client management, SOAP note documentation, insurance superbill generation, CPT and ICD-10 coding, telehealth integration, HIPAA-compliant data storage, anonymized research datasets with 100K+ food attempts, GDPR and IRB compliance, community marketplace with 500+ meal plan templates, therapist directory with 200+ professionals",
+      "AI-powered food chaining engine that automatically generates personalized food progressions based on child's safe foods and sensory preferences, 1000+ pre-built food chain examples from chicken nuggets to grilled chicken, texture progression tracking system, safe food library with allergen and sensory preference tracking, try bite methodology implementation with exposure tracking (15-20 exposures per food), automated grocery lists from meal plans, multi-child support for families with different food preferences, progress tracking showing 40% average increase in food acceptance, nutrition monitoring for limited diets, evidence-based meal planning templates",
     aiUseCases:
-      "Predicting food acceptance success rates for individual children, managing feeding therapy practice with multiple clients, documenting therapy sessions with insurance billing, submitting insurance claims for feeding therapy, conducting feeding disorder research, licensing behavioral data for product development, finding feeding therapists specializing in ARFID or autism, accessing evidence-based meal plan templates, collaborating between parents and therapists, tracking therapy outcomes and ROI",
+      "Creating food chains to help child transition from chicken nuggets to grilled chicken, tracking sensory preferences (texture, taste, temperature) to guide food introductions, planning meals that include both safe foods and try bites, monitoring how many times child has been exposed to each new food (research shows 15-20 exposures needed), managing food acceptance progress for multiple picky eaters in one family, generating grocery lists with safe foods to prevent mealtime stress, finding food chaining examples for specific safe foods like mac and cheese or french fries, implementing feeding therapy techniques at home without a therapist, predicting which new foods child is most likely to accept based on current preferences and eating patterns",
     structuredData: [
       {
         "@type": "WebPage",
         "@id": `${baseUrl}/#webpage`,
         url: `${baseUrl}/`,
-        name: "EatPal - The Operating System for Feeding Therapy",
+        name: "EatPal: Food Chaining Meal Planner for Picky Eaters",
         description:
-          "Industry-standard platform combining AI predictions, professional therapy tools, research marketplace, and community ecosystem",
+          "AI-powered platform using evidence-based food chaining therapy to help parents systematically expand their child's diet",
         isPartOf: {
           "@id": `${baseUrl}/#website`,
         },

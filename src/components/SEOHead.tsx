@@ -95,6 +95,23 @@ export function SEOHead({
       <meta name="citation_name" content={`${fullTitle}`} />
       <meta name="citation_description" content={description} />
 
+      {/* Additional GEO Meta Tags for AI Crawlers */}
+      <meta name="subject" content={keywords || "picky eating, meal planning, food chaining therapy"} />
+      <meta name="abstract" content={description} />
+      <meta name="topic" content="Picky eating, feeding therapy, food chaining, selective eating, ARFID" />
+      <meta name="summary" content={description} />
+      <meta name="Classification" content="Health & Wellness, Parenting, Meal Planning" />
+      <meta name="author" content="EatPal Team - Feeding Therapy Specialists" />
+      <meta name="reply-to" content="Support@TryEatPal.com" />
+      <meta name="url" content={canonicalUrl} />
+      <meta name="identifier-URL" content={canonicalUrl} />
+
+      {/* Enhanced Robots directives for AI crawlers */}
+      <meta name="googlebot" content={robots} />
+      <meta name="bingbot" content={robots} />
+      <meta name="slurp" content={robots} />
+      <meta name="DuckDuckBot" content={robots} />
+
       {/* Structured Data (JSON-LD) */}
       {structuredData && (
         <script type="application/ld+json">
