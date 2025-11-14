@@ -27,12 +27,17 @@ import {
   AnimatedWelcomeBanner,
 } from "@/components/AnimatedDashboard";
 import { SubscriptionStatusBanner } from "@/components/SubscriptionStatusBanner";
+import { MotivationalMessage } from "@/components/MotivationalMessage";
+import { TodayMeals } from "@/components/TodayMeals";
+import { QuickLogModal } from "@/components/QuickLogModal";
 
 export default function Home() {
-  const { foods, planEntries, groceryItems, kids, recipes, activeKidId, exportData, importData, resetAllData } = useApp();
+  const { foods, planEntries, groceryItems, kids, recipes, activeKidId, exportData, importData, resetAllData, updatePlanEntry } = useApp();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [parentName, setParentName] = useState<string>("Parent");
+  const [quickLogOpen, setQuickLogOpen] = useState(false);
+  const [selectedMeal, setSelectedMeal] = useState<{ slot: string; entryId: string } | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -92,6 +97,29 @@ export default function Home() {
     toast.success("All data has been reset to defaults!");
   };
 
+  const handleLogMeal = (mealSlot: string, entryId: string) => {
+    setSelectedMeal({ slot: mealSlot, entryId });
+    setQuickLogOpen(true);
+  };
+
+  const handleQuickLog = async (result: 'ate' | 'tasted' | 'refused', notes?: string) => {
+    if (!selectedMeal || !updatePlanEntry) return;
+
+    try {
+      const entry = planEntries.find(p => p.id === selectedMeal.entryId);
+      if (entry) {
+        await updatePlanEntry(selectedMeal.entryId, {
+          ...entry,
+          result,
+          notes: notes || entry.notes,
+        });
+        toast.success(`Meal logged as ${result}!`);
+      }
+    } catch (error) {
+      toast.error("Failed to log meal. Please try again.");
+    }
+  };
+
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
       <AnimatedDashboard className="container mx-auto px-4 py-8 max-w-4xl">
@@ -103,6 +131,16 @@ export default function Home() {
           name={parentName}
           subtitle="Plan delicious meals with safe foods and daily try bites for your picky eater"
         />
+
+        {/* Motivational Message */}
+        <AnimatedPanel>
+          <MotivationalMessage type="greeting" className="mb-6" />
+        </AnimatedPanel>
+
+        {/* Today's Meals */}
+        <AnimatedPanel delay={0.05}>
+          <TodayMeals onLogMeal={handleLogMeal} />
+        </AnimatedPanel>
 
         {/* Stats Cards with Animations */}
         <AnimatedPanel>
@@ -255,6 +293,14 @@ export default function Home() {
           </CardContent>
         </Card>
       </AnimatedDashboard>
+
+      {/* Quick Log Modal */}
+      <QuickLogModal
+        open={quickLogOpen}
+        onOpenChange={setQuickLogOpen}
+        mealName={selectedMeal?.slot.replace('_', ' ')}
+        onLog={handleQuickLog}
+      />
     </div>
   );
 }
