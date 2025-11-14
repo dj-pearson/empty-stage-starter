@@ -5,6 +5,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { TrendingUp, Award, ThumbsDown, Sparkles } from "lucide-react";
 import { useMemo } from "react";
 import { ResultHistoryCard } from "@/components/ResultHistoryCard";
+import { SmartInsights } from "@/components/SmartInsights";
+import { WeeklyProgressReport } from "@/components/WeeklyProgressReport";
 
 const RESULT_COLORS = {
   ate: "hsl(var(--safe-food))",
@@ -325,36 +327,15 @@ export default function Analytics() {
           <ResultHistoryCard entries={kidEntries} foods={foods} />
         </div>
 
-        {/* Insights Card */}
-        <Card className="mt-6 bg-gradient-to-br from-primary/5 to-accent/5 border-primary/20">
-          <CardContent className="pt-6">
-            <div className="flex gap-4">
-              <div className="flex-shrink-0">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Sparkles className="h-5 w-5 text-primary" />
-                </div>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-2">Insights</h3>
-                {stats.successRate >= 70 && (
-                  <p className="text-sm text-muted-foreground mb-2">
-                    🎉 Great job! {activeKid.name} has a {stats.successRate}% success rate. Keep up the positive meal experiences!
-                  </p>
-                )}
-                {topFoods.length > 0 && (
-                  <p className="text-sm text-muted-foreground mb-2">
-                    ⭐ {topFoods[0].name} is {activeKid.name}'s favorite food with {topFoods[0].ate} successful meals.
-                  </p>
-                )}
-                {mostRefused.length > 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    💡 Try pairing {mostRefused[0].name} with favorite foods to increase acceptance.
-                  </p>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Smart Insights */}
+        <div className="mt-6">
+          <SmartInsights />
+        </div>
+
+        {/* Weekly Progress Report */}
+        <div className="mt-6">
+          <WeeklyProgressReport />
+        </div>
       </div>
     </div>
   );
