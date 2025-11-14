@@ -27,6 +27,7 @@ const Grocery = lazy(() => import("./pages/Grocery"));
 const Kids = lazy(() => import("./pages/Kids"));
 const InsightsDashboard = lazy(() => import("./pages/InsightsDashboard"));
 const Analytics = lazy(() => import("./pages/Analytics"));
+const Progress = lazy(() => import("./pages/Progress"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const FoodTracker = lazy(() => import("./pages/FoodTracker"));
@@ -108,6 +109,7 @@ const App = () => (
               <Route path="ai-planner" element={<AIPlanner />} />
               <Route path="insights" element={<InsightsDashboard />} />
               <Route path="analytics" element={<Analytics />} />
+              <Route path="progress" element={<Progress />} />
               <Route path="grocery" element={<Grocery />} />
               <Route path="food-tracker" element={<FoodTracker />} />
               <Route path="ai-coach" element={<AICoach />} />

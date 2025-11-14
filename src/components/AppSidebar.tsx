@@ -15,6 +15,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Globe,
+  Trophy,
 } from "lucide-react";
 import {
   Sidebar,
@@ -52,6 +53,7 @@ const toolsNavItems = [
 
 const insightsNavItems = [
   { to: "/dashboard/analytics", icon: BarChart3, label: "Analytics" },
+  { to: "/dashboard/progress", icon: Trophy, label: "Progress" },
 ];
 
 export function AppSidebar() {

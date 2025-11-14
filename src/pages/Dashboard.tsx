@@ -5,6 +5,8 @@ import { SupportWidget } from "@/components/SupportWidget";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { KidSelector } from "@/components/KidSelector";
+import { QuickActionMenu } from "@/components/ui/QuickActionMenu";
+import { QuickLogModal } from "@/components/QuickLogModal";
 import { Button } from "@/components/ui/button";
 import { Moon, Sun, LogOut, Menu } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -34,6 +36,8 @@ import {
   TrendingUp,
   Shield,
   MoreHorizontal,
+  ClipboardList,
+  Plus,
 } from "lucide-react";
 
 const mobileNavItems = [
@@ -55,6 +59,7 @@ const Dashboard = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [quickLogOpen, setQuickLogOpen] = useState(false);
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
@@ -116,6 +121,40 @@ const Dashboard = () => {
   const navItemsWithAdmin = isAdmin
     ? [...mobileNavItems, { to: "/admin", icon: Shield, label: "Admin" }]
     : mobileNavItems;
+
+  const quickActions = [
+    {
+      icon: ClipboardList,
+      label: "Log Meal Result",
+      onClick: () => setQuickLogOpen(true),
+      shortcut: "L",
+    },
+    {
+      icon: ShoppingCart,
+      label: "View Grocery List",
+      onClick: () => navigate("/dashboard/grocery"),
+      shortcut: "G",
+    },
+    {
+      icon: Sparkles,
+      label: "Suggest Foods",
+      onClick: () => navigate("/dashboard/pantry"),
+      shortcut: "S",
+    },
+    {
+      icon: Calendar,
+      label: "Today's Plan",
+      onClick: () => navigate("/dashboard"),
+      shortcut: "T",
+    },
+  ];
+
+  const handleQuickLog = async (result: 'ate' | 'tasted' | 'refused', notes?: string) => {
+    toast({
+      title: "Meal logged!",
+      description: `Meal marked as ${result}`,
+    });
+  };
 
   return (
     <>
@@ -423,7 +462,17 @@ const Dashboard = () => {
           </div>
         </nav>
       </div>
-      
+
+      {/* Quick Action Menu - Floating Action Button */}
+      <QuickActionMenu actions={quickActions} position="bottom-right" />
+
+      {/* Quick Log Modal */}
+      <QuickLogModal
+        open={quickLogOpen}
+        onOpenChange={setQuickLogOpen}
+        onLog={handleQuickLog}
+      />
+
       {/* Support Widget - Available on all pages */}
       <SupportWidget />
     </>
