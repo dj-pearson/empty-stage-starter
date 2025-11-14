@@ -40,10 +40,16 @@ import { AnimatedSection, AnimatedItem } from "@/components/AnimatedSection";
 import { CardNav } from "@/components/CardNav";
 import { ProductShowcase3D } from "@/components/ProductShowcase3D";
 import { FeatureCard3D } from "@/components/Card3DTilt";
+import { SEOHead } from "@/components/SEOHead";
+import { OrganizationSchema, SoftwareAppSchema, FAQSchema } from "@/components/schema";
+import { getPageSEO } from "@/lib/seo-config";
 
 const Landing = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme, setTheme } = useTheme();
+
+  // Get SEO configuration for homepage
+  const seoConfig = getPageSEO("home");
 
   const features = [
     {
@@ -86,10 +92,63 @@ const Landing = () => {
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
+  // FAQ data for schema markup and display
+  const faqs = [
+    {
+      question: "What is food chaining?",
+      answer: "Food chaining is an evidence-based feeding therapy technique that introduces new foods by building 'chains' from foods a child already accepts. Instead of forcing completely new foods, we make gradual changes in taste, texture, or appearance. For example, chicken nuggets → chicken strips → grilled chicken tenders. EatPal is the only platform that automates food chaining with AI-powered suggestions."
+    },
+    {
+      question: "How is EatPal different from other meal planning apps?",
+      answer: "Most apps assume kids will eat anything. EatPal is built specifically for picky eaters—it uses food chaining science to gradually introduce new foods while respecting your child's safe foods. Our AI predicts which new foods your child is most likely to accept based on their current preferences and eating patterns."
+    },
+    {
+      question: "What if my child only eats 5 foods?",
+      answer: "That's exactly who we built this for. Start with those 5 safe foods, and we'll suggest one similar food to try each day using food chaining methodology. Research shows children need 15-20 exposures to a new food before accepting it—EatPal tracks every exposure automatically. Small steps = big progress."
+    },
+    {
+      question: "Does EatPal work for ARFID (Avoidant/Restrictive Food Intake Disorder)?",
+      answer: "Yes! EatPal is designed for families managing ARFID, autism spectrum feeding challenges, and extreme selective eating. Our food chaining approach aligns with evidence-based ARFID treatment protocols. Many feeding therapists recommend EatPal to their clients. The platform tracks sensory preferences, safe foods, and progress over time."
+    },
+    {
+      question: "What ages does this work for?",
+      answer: "EatPal is most effective for ages 2-12, but we have parents successfully using it for teenagers and even adults with selective eating. The food chaining methodology works at any age—it's about respecting current food preferences while gradually expanding variety through small, predictable changes."
+    },
+    {
+      question: "Do I need to be tech-savvy?",
+      answer: "Nope! If you can text, you can use EatPal. Most parents build their first meal plan in under 5 minutes. The interface is designed for busy parents, not engineers. Everything syncs automatically across your phone, tablet, and computer."
+    }
+  ];
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">
+    <>
+      {/* SEO Head with comprehensive GEO optimization */}
+      {seoConfig && (
+        <SEOHead
+          title={seoConfig.title}
+          description={seoConfig.description}
+          keywords={seoConfig.keywords}
+          canonicalUrl={seoConfig.canonicalUrl}
+          aiPurpose={seoConfig.aiPurpose}
+          aiAudience={seoConfig.aiAudience}
+          aiKeyFeatures={seoConfig.aiKeyFeatures}
+          aiUseCases={seoConfig.aiUseCases}
+          structuredData={seoConfig.structuredData}
+        />
+      )}
+
+      {/* Organization Schema for brand identity */}
+      <OrganizationSchema />
+
+      {/* Software Application Schema */}
+      <SoftwareAppSchema />
+
+      {/* FAQ Schema for AI search optimization */}
+      <FAQSchema faqs={faqs} />
+
+      <div className="min-h-screen bg-background">
+        {/* Header */}
+        <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <img
@@ -471,41 +530,27 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* FAQ Section - Coming Soon, remove community sections for now */}
+      {/* FAQ Section with enhanced content for SEO */}
       <section className="py-24 px-4 bg-gradient-to-br from-secondary/5 to-background">
         <div className="container mx-auto max-w-4xl">
           <AnimatedSection className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
-              Common Questions from Parents
+              Frequently Asked Questions About Food Chaining & EatPal
             </h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Everything you need to know about using food chaining therapy for picky eaters
+            </p>
           </AnimatedSection>
 
           <AnimatedSection staggerChildren className="space-y-6">
-            {[
-              {
-                q: "How is EatPal different from other meal planning apps?",
-                a: "Most apps assume kids will eat anything. EatPal is built specifically for picky eaters—it uses food chaining science to gradually introduce new foods while respecting your child's safe foods."
-              },
-              {
-                q: "What if my child only eats 5 foods?",
-                a: "That's exactly who we built this for. Start with those 5 safe foods, and we'll suggest one similar food to try each day. Small steps = big progress."
-              },
-              {
-                q: "Do I need to be tech-savvy?",
-                a: "Nope! If you can text, you can use EatPal. Most parents build their first meal plan in under 5 minutes."
-              },
-              {
-                q: "What ages does this work for?",
-                a: "Best for ages 2-12, but we have parents using it for teenagers too."
-              }
-            ].map((faq, index) => (
+            {faqs.map((faq, index) => (
               <AnimatedItem key={index}>
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-xl">{faq.q}</CardTitle>
+                    <CardTitle className="text-xl">{faq.question}</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-muted-foreground">{faq.a}</p>
+                    <p className="text-muted-foreground leading-relaxed">{faq.answer}</p>
                   </CardContent>
                 </Card>
               </AnimatedItem>
@@ -842,7 +887,8 @@ const Landing = () => {
           </div>
         </div>
       </footer>
-    </div>
+      </div>
+    </>
   );
 };
 
