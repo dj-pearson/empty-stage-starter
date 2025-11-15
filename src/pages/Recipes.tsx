@@ -22,6 +22,7 @@ import {
   ShoppingCart,
   Folder,
   FileText,
+  Globe,
 } from "lucide-react";
 import { RecipeBuilder } from "@/components/RecipeBuilder";
 import { ImportRecipeDialog } from "@/components/ImportRecipeDialog";
@@ -550,22 +551,91 @@ export default function Recipes() {
             ))}
           </div>
         ) : recipes.length === 0 ? (
-          <Card className="p-12 text-center">
-            <div className="max-w-md mx-auto">
+          <div className="max-w-4xl mx-auto px-4 py-8">
+            <div className="text-center mb-8">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
                 <ChefHat className="h-8 w-8 text-primary" />
               </div>
-              <h3 className="text-xl font-semibold mb-2">No Recipes Yet</h3>
-              <p className="text-muted-foreground mb-6">
-                Create meal templates to quickly plan complete meals instead of
-                individual foods
+              <h3 className="text-2xl font-bold mb-2">Create Your Recipe Collection</h3>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
+                Recipes are meal templates that combine multiple foods. They make planning faster
+                and help you create balanced, kid-friendly meals.
               </p>
-              <Button onClick={() => setDialogOpen(true)} size="lg">
-                <Plus className="h-5 w-5 mr-2" />
-                Create Your First Recipe
-              </Button>
             </div>
-          </Card>
+
+            {/* Quick Action Cards */}
+            <div className="grid md:grid-cols-3 gap-4 mb-8">
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer group" onClick={() => setDialogOpen(true)}>
+                <CardContent className="pt-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors flex items-center justify-center mx-auto mb-3">
+                    <Plus className="h-6 w-6 text-primary" />
+                  </div>
+                  <h4 className="font-semibold mb-2">Create from Scratch</h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Build a custom recipe with your child's favorite foods
+                  </p>
+                  <Badge variant="secondary">Most Popular</Badge>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer group" onClick={() => {
+                setDialogOpen(true);
+                // Could set a flag to show import tab
+              }}>
+                <CardContent className="pt-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-accent/10 group-hover:bg-accent/20 transition-colors flex items-center justify-center mx-auto mb-3">
+                    <Globe className="h-6 w-6 text-accent" />
+                  </div>
+                  <h4 className="font-semibold mb-2">Import from URL</h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Paste a recipe link and we'll extract it for you
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer group" onClick={handleAIGenerate}>
+                <CardContent className="pt-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-purple-500/10 group-hover:bg-purple-500/20 transition-colors flex items-center justify-center mx-auto mb-3">
+                    <Sparkles className="h-6 w-6 text-purple-500" />
+                  </div>
+                  <h4 className="font-semibold mb-2">AI Recipe Generator</h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Generate kid-friendly recipes using AI
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Tips Section */}
+            <div className="bg-muted/50 rounded-lg p-6">
+              <h4 className="font-semibold mb-3 flex items-center gap-2">
+                <Lightbulb className="h-5 w-5 text-yellow-500" />
+                Recipe Tips
+              </h4>
+              <div className="grid md:grid-cols-2 gap-4 text-sm">
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <span className="text-primary">✓</span>
+                    <span><strong>Save time:</strong> Create recipes for meals you make often</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-primary">✓</span>
+                    <span><strong>Balance meals:</strong> Include protein, carbs, and veggies</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <span className="text-primary">✓</span>
+                    <span><strong>Organize:</strong> Use collections to group similar recipes</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-primary">✓</span>
+                    <span><strong>Track success:</strong> Rate recipes your kids actually eat</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         ) : (
           <>
             {selectedCollectionId && filteredRecipes.length === 0 ? (

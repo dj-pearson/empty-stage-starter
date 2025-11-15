@@ -10,13 +10,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FormField } from "@/components/ui/form-field";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { RecipeCollection } from "@/types";
-import { Folder, Star, Heart, Zap, Pizza, Clock, Users, Sparkles } from "lucide-react";
+import { Folder, Star, Heart, Zap, Pizza, Clock, Users, Sparkles, Loader2 } from "lucide-react";
 import { logger } from "@/lib/logger";
+import { useFormValidation, validationRules } from "@/hooks/useFormValidation";
 
 const COLLECTION_ICONS = [
   { value: "folder", icon: Folder, label: "Folder" },
@@ -73,25 +75,33 @@ export function CreateCollectionDialog({
   });
   const [saving, setSaving] = useState(false);
 
+  // Form validation
+  const { errors, validate, clearError, clearErrors } = useFormValidation({
+    name: validationRules.required("Collection name"),
+  });
+
   useEffect(() => {
-    if (editCollection) {
-      setFormData({
-        name: editCollection.name,
-        description: editCollection.description || "",
-        icon: editCollection.icon || "folder",
-        color: editCollection.color || "primary",
-        is_default: editCollection.is_default,
-      });
-    } else {
-      setFormData({
-        name: "",
-        description: "",
-        icon: "folder",
-        color: "primary",
-        is_default: false,
-      });
+    if (open) {
+      if (editCollection) {
+        setFormData({
+          name: editCollection.name,
+          description: editCollection.description || "",
+          icon: editCollection.icon || "folder",
+          color: editCollection.color || "primary",
+          is_default: editCollection.is_default,
+        });
+      } else {
+        setFormData({
+          name: "",
+          description: "",
+          icon: "folder",
+          color: "primary",
+          is_default: false,
+        });
+      }
+      clearErrors();
     }
-  }, [editCollection, open]);
+  }, [editCollection, open, clearErrors]);
 
   const handleTemplateSelect = (template: typeof COLLECTION_TEMPLATES[0]) => {
     setFormData({
@@ -103,9 +113,11 @@ export function CreateCollectionDialog({
     });
   };
 
-  const handleSave = async () => {
-    if (!formData.name.trim()) {
-      toast.error("Please enter a collection name");
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validate form
+    if (!validate(formData)) {
       return;
     }
 
@@ -160,17 +172,13 @@ export function CreateCollectionDialog({
         }
       }
 
-      handleClose();
+      onOpenChange(false);
     } catch (error) {
       logger.error('Error saving collection:', error);
-      toast.error(editCollection ? "Failed to update collection" : "Failed to create collection");
+      toast.error(editCollection ? "Failed to update collection. Please try again." : "Failed to create collection. Please try again.");
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleClose = () => {
-    onOpenChange(false);
   };
 
   const selectedIcon = COLLECTION_ICONS.find(i => i.value === formData.icon);
@@ -188,7 +196,7 @@ export function CreateCollectionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <form onSubmit={handleSave} className="space-y-4">
           {/* Quick Templates (only for new collections) */}
           {!editCollection && (
             <div className="space-y-2">
@@ -197,10 +205,11 @@ export function CreateCollectionDialog({
                 {COLLECTION_TEMPLATES.map((template) => {
                   const TemplateIcon = COLLECTION_ICONS.find(i => i.value === template.icon)?.icon || Folder;
                   const colorClass = COLLECTION_COLORS.find(c => c.value === template.color)?.class || "text-primary";
-                  
+
                   return (
                     <Button
                       key={template.name}
+                      type="button"
                       variant="outline"
                       onClick={() => handleTemplateSelect(template)}
                       className="justify-start h-auto py-3"
@@ -220,16 +229,22 @@ export function CreateCollectionDialog({
           )}
 
           {/* Name */}
-          <div className="space-y-2">
-            <Label htmlFor="name">Collection Name *</Label>
+          <FormField label="Collection Name" htmlFor="name" error={errors.name} required>
             <Input
               id="name"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) => {
+                setFormData({ ...formData, name: e.target.value });
+                if (errors.name && e.target.value.trim()) {
+                  clearError("name");
+                }
+              }}
               placeholder="e.g., Weeknight Dinners, Kid Favorites"
-              required
+              className={errors.name ? "border-red-500" : ""}
+              aria-invalid={!!errors.name}
+              aria-describedby={errors.name ? "name-error" : undefined}
             />
-          </div>
+          </FormField>
 
           {/* Icon Selection */}
           <div className="space-y-2">
@@ -242,6 +257,7 @@ export function CreateCollectionDialog({
                 return (
                   <Button
                     key={iconOption.value}
+                    type="button"
                     variant={formData.icon === iconOption.value ? "default" : "outline"}
                     size="sm"
                     onClick={() => setFormData({ ...formData, icon: iconOption.value })}
@@ -262,6 +278,7 @@ export function CreateCollectionDialog({
               {COLLECTION_COLORS.map((colorOption) => (
                 <Button
                   key={colorOption.value}
+                  type="button"
                   variant={formData.color === colorOption.value ? "default" : "outline"}
                   size="sm"
                   onClick={() => setFormData({ ...formData, color: colorOption.value })}
@@ -306,16 +323,28 @@ export function CreateCollectionDialog({
               Set as default collection
             </label>
           </div>
-        </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : editCollection ? "Update" : "Create Collection"}
-          </Button>
-        </DialogFooter>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {editCollection ? "Updating..." : "Creating..."}
+                </>
+              ) : (
+                editCollection ? "Update" : "Create Collection"
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
