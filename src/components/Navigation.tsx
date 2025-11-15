@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Home, Utensils, Calendar, ShoppingCart, Moon, Sun, Users, BarChart3, ChefHat, LogOut, Shield, Menu, X, Target, Bot, Sparkles, TrendingUp, MoreHorizontal } from "lucide-react";
+import { Home, Utensils, Calendar, ShoppingCart, Moon, Sun, Users, BarChart3, ChefHat, LogOut, Shield, Menu, X, Target, Bot, Sparkles, TrendingUp, MoreHorizontal, Search } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet";
@@ -127,6 +127,28 @@ export function Navigation() {
             {/* Right Side Actions */}
             <div className="flex items-center gap-2">
               <KidSelector />
+
+              {/* Command Palette Hint */}
+              <Button
+                variant="ghost"
+                className="gap-2 text-muted-foreground hover:text-foreground hidden lg:flex"
+                onClick={() => {
+                  // Trigger command palette
+                  const event = new KeyboardEvent('keydown', {
+                    key: 'k',
+                    metaKey: true,
+                    bubbles: true
+                  });
+                  document.dispatchEvent(event);
+                }}
+              >
+                <Search className="h-4 w-4" />
+                <span className="text-sm">Search</span>
+                <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+                  <span className="text-xs">⌘</span>K
+                </kbd>
+              </Button>
+
               <Button
                 variant="ghost"
                 size="icon"
@@ -188,6 +210,27 @@ export function Navigation() {
                 <div className="mb-4 pb-4 border-b">
                   <KidSelector />
                 </div>
+
+                {/* Search Hint */}
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-3 mb-4"
+                  onClick={() => {
+                    const event = new KeyboardEvent('keydown', {
+                      key: 'k',
+                      metaKey: true,
+                      bubbles: true
+                    });
+                    document.dispatchEvent(event);
+                    closeMobileMenu();
+                  }}
+                >
+                  <Search className="h-5 w-5" />
+                  <span>Quick Search</span>
+                  <kbd className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                    ⌘K
+                  </kbd>
+                </Button>
 
                 {/* Navigation Links */}
                 {navItems.map(({ to, icon: Icon, label }) => (
