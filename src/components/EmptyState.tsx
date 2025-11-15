@@ -190,7 +190,7 @@ export function EmptyChildren({ onAddChild }: { onAddChild: () => void }) {
       title="No child profiles yet"
       description="Create profiles for your children to track their preferences, allergens, and meal progress."
       action={{
-        label: "Add Child Profile",
+        label: "Add Child",
         onClick: onAddChild,
       }}
     />

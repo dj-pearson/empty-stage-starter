@@ -64,7 +64,7 @@ export default function Kids() {
                   </p>
                   <Button onClick={() => manageKidsRef.current?.openForEdit('')} size="lg" className="gap-2">
                     <UserPlus className="h-5 w-5" />
-                    Create Child Profile
+                    Add Child
                   </Button>
                 </div>
 
