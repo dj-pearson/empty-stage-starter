@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { FormField } from "@/components/ui/form-field";
 import {
   Select,
   SelectContent,
@@ -21,6 +22,7 @@ import { Food, FoodCategory } from "@/types";
 import { Loader2, Plus, Info } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { logger } from "@/lib/logger";
+import { useFormValidation, validationRules } from "@/hooks/useFormValidation";
 
 interface BulkAddFoodDialogProps {
   open: boolean;
@@ -38,8 +40,28 @@ export function BulkAddFoodDialog({
   const [isSafe, setIsSafe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async () => {
-    if (!foodText.trim()) return;
+  // Form validation
+  const { errors, validate, clearError, clearErrors } = useFormValidation({
+    foodText: (value: string) => !value.trim() ? "Please enter at least one food item" : undefined,
+  });
+
+  // Reset form when dialog opens/closes
+  useEffect(() => {
+    if (open) {
+      setFoodText("");
+      setDefaultCategory("snack");
+      setIsSafe(true);
+      clearErrors();
+    }
+  }, [open, clearErrors]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validate form
+    if (!validate({ foodText })) {
+      return;
+    }
 
     setIsLoading(true);
 
@@ -71,9 +93,6 @@ export function BulkAddFoodDialog({
       });
 
       await onSave(foods);
-
-      // Reset form
-      setFoodText("");
       onOpenChange(false);
     } catch (error) {
       logger.error("Error in bulk add", error);
@@ -96,7 +115,7 @@ export function BulkAddFoodDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <form onSubmit={handleSave} className="space-y-4">
           <Alert>
             <Info className="h-4 w-4" />
             <AlertDescription>
@@ -105,21 +124,28 @@ export function BulkAddFoodDialog({
             </AlertDescription>
           </Alert>
 
-          <div className="space-y-2">
-            <Label htmlFor="food-list">Food List (one per line)</Label>
+          <FormField
+            label="Food List (one per line)"
+            htmlFor="food-list"
+            error={errors.foodText}
+            required
+            hint={previewCount > 0 ? `${previewCount} food${previewCount !== 1 ? "s" : ""} ready to add` : undefined}
+          >
             <Textarea
               id="food-list"
               placeholder="Banana&#10;Apple x5&#10;Chicken Nuggets (2)&#10;Mac & Cheese"
               value={foodText}
-              onChange={(e) => setFoodText(e.target.value)}
-              className="min-h-[200px] font-mono"
+              onChange={(e) => {
+                setFoodText(e.target.value);
+                if (errors.foodText && e.target.value.trim()) {
+                  clearError("foodText");
+                }
+              }}
+              className={`min-h-[200px] font-mono ${errors.foodText ? "border-red-500" : ""}`}
+              aria-invalid={!!errors.foodText}
+              aria-describedby={errors.foodText ? "food-list-error" : undefined}
             />
-            {previewCount > 0 && (
-              <p className="text-sm text-muted-foreground">
-                {previewCount} food{previewCount !== 1 ? "s" : ""} ready to add
-              </p>
-            )}
-          </div>
+          </FormField>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -158,30 +184,31 @@ export function BulkAddFoodDialog({
               </Select>
             </div>
           </div>
-        </div>
 
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isLoading}
-          >
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={!foodText.trim() || isLoading}>
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Adding...
-              </>
-            ) : (
-              <>
-                <Plus className="mr-2 h-4 w-4" />
-                Add {previewCount} Food{previewCount !== 1 ? "s" : ""}
-              </>
-            )}
-          </Button>
-        </DialogFooter>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add {previewCount} Food{previewCount !== 1 ? "s" : ""}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

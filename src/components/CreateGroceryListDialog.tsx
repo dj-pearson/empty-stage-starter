@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,10 +12,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FormField } from "@/components/ui/form-field";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ShoppingCart, Store, Package } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { logger } from "@/lib/logger";
+import { useFormValidation, validationRules } from "@/hooks/useFormValidation";
 
 const LIST_ICONS = [
   { value: "🛒", label: "Shopping Cart" },
@@ -59,6 +61,25 @@ export function CreateGroceryListDialog({
   });
   const [creating, setCreating] = useState(false);
 
+  // Form validation
+  const { errors, validate, clearError, clearErrors } = useFormValidation({
+    name: validationRules.required("List name"),
+  });
+
+  // Reset form when dialog opens/closes
+  useEffect(() => {
+    if (open) {
+      setFormData({
+        name: "",
+        description: "",
+        icon: "🛒",
+        store_name: "",
+        is_default: false,
+      });
+      clearErrors();
+    }
+  }, [open, clearErrors]);
+
   const handleTemplateSelect = (template: typeof LIST_TEMPLATES[0]) => {
     setFormData({
       ...formData,
@@ -68,9 +89,11 @@ export function CreateGroceryListDialog({
     });
   };
 
-  const handleCreate = async () => {
-    if (!formData.name.trim()) {
-      toast.error("Please enter a list name");
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validate form
+    if (!validate(formData)) {
       return;
     }
 
@@ -97,24 +120,13 @@ export function CreateGroceryListDialog({
 
       toast.success(`List "${formData.name}" created!`);
       onListCreated(data.id);
-      handleClose();
+      onOpenChange(false);
     } catch (error) {
       logger.error('Error creating list:', error);
-      toast.error("Failed to create list");
+      toast.error("Failed to create list. Please try again.");
     } finally {
       setCreating(false);
     }
-  };
-
-  const handleClose = () => {
-    setFormData({
-      name: "",
-      description: "",
-      icon: "🛒",
-      store_name: "",
-      is_default: false,
-    });
-    onOpenChange(false);
   };
 
   return (
@@ -127,7 +139,7 @@ export function CreateGroceryListDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <form onSubmit={handleCreate} className="space-y-4">
           {/* Quick Templates */}
           <div className="space-y-2">
             <Label>Quick Templates</Label>
@@ -135,6 +147,7 @@ export function CreateGroceryListDialog({
               {LIST_TEMPLATES.map((template) => (
                 <Button
                   key={template.name}
+                  type="button"
                   variant="outline"
                   onClick={() => handleTemplateSelect(template)}
                   className="justify-start h-auto py-2"
@@ -152,16 +165,22 @@ export function CreateGroceryListDialog({
           </div>
 
           {/* Name */}
-          <div className="space-y-2">
-            <Label htmlFor="name">List Name *</Label>
+          <FormField label="List Name" htmlFor="name" error={errors.name} required>
             <Input
               id="name"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) => {
+                setFormData({ ...formData, name: e.target.value });
+                if (errors.name && e.target.value.trim()) {
+                  clearError("name");
+                }
+              }}
               placeholder="e.g., Weekly Groceries, Costco Run"
-              required
+              className={errors.name ? "border-red-500" : ""}
+              aria-invalid={!!errors.name}
+              aria-describedby={errors.name ? "name-error" : undefined}
             />
-          </div>
+          </FormField>
 
           {/* Icon */}
           <div className="space-y-2">
@@ -170,6 +189,7 @@ export function CreateGroceryListDialog({
               {LIST_ICONS.map((icon) => (
                 <Button
                   key={icon.value}
+                  type="button"
                   variant={formData.icon === icon.value ? "default" : "outline"}
                   size="sm"
                   onClick={() => setFormData({ ...formData, icon: icon.value })}
@@ -221,16 +241,28 @@ export function CreateGroceryListDialog({
               Set as default list
             </label>
           </div>
-        </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={creating}>
-            Cancel
-          </Button>
-          <Button onClick={handleCreate} disabled={creating}>
-            {creating ? "Creating..." : "Create List"}
-          </Button>
-        </DialogFooter>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={creating}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={creating}>
+              {creating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create List"
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
