@@ -47,8 +47,9 @@ export default defineConfig(({ mode }) => ({
         manualChunks: (id) => {
           // Vendor chunks
           if (id.includes('node_modules')) {
-            // DON'T separate React - keep in entry chunk to ensure synchronous initialization
-            // modulepreload causes parallel loading; vendor-ui needs React available immediately
+            // DON'T separate React or Radix UI - they must stay in vendor-misc
+            // modulepreload causes parallel chunk loading; vendor-ui executes before vendor-misc
+            // Keeping React and Radix together ensures React initializes before Radix uses it
             // React Router (separate chunk for route changes)
             if (id.includes('react-router')) {
               return 'vendor-router';
@@ -57,10 +58,7 @@ export default defineConfig(({ mode }) => ({
             if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform')) {
               return 'vendor-forms';
             }
-            // Radix UI (large UI library, separate chunk)
-            if (id.includes('@radix-ui')) {
-              return 'vendor-ui';
-            }
+            // DON'T separate Radix UI - needs React from vendor-misc to be initialized first
             // Supabase (database operations)
             if (id.includes('@supabase')) {
               return 'vendor-supabase';
