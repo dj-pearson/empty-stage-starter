@@ -47,8 +47,10 @@ export default defineConfig(({ mode }) => ({
         manualChunks: (id) => {
           // Vendor chunks
           if (id.includes('node_modules')) {
-            // React core (highest priority, loaded first)
-            if (id.includes('react') && !id.includes('react-router') && !id.includes('react-hook-form')) {
+            // React core - MUST be loaded first, exclude all react-* packages except core
+            if (id.includes('node_modules/react/') || 
+                id.includes('node_modules/react-dom/') ||
+                id.includes('node_modules/scheduler/')) {
               return 'vendor-react';
             }
             // React Router (separate chunk for route changes)
