@@ -45,7 +45,7 @@ export default defineConfig(({ mode }) => ({
       output: {
         // Manual chunking for better caching and smaller initial bundles
         manualChunks: (id) => {
-          // Vendor chunks
+          // Vendor chunks - ORDER MATTERS for load priority
           if (id.includes('node_modules')) {
             // React core - MUST be loaded first, exclude all react-* packages except core
             if (id.includes('node_modules/react/') || 
