@@ -45,14 +45,10 @@ export default defineConfig(({ mode }) => ({
       output: {
         // Manual chunking for better caching and smaller initial bundles
         manualChunks: (id) => {
-          // Vendor chunks - ORDER MATTERS for load priority
+          // Vendor chunks
           if (id.includes('node_modules')) {
-            // React core - MUST be loaded first, exclude all react-* packages except core
-            if (id.includes('node_modules/react/') || 
-                id.includes('node_modules/react-dom/') ||
-                id.includes('node_modules/scheduler/')) {
-              return 'vendor-react';
-            }
+            // DON'T separate React - keep in entry chunk to ensure synchronous initialization
+            // modulepreload causes parallel loading; vendor-ui needs React available immediately
             // React Router (separate chunk for route changes)
             if (id.includes('react-router')) {
               return 'vendor-router';
