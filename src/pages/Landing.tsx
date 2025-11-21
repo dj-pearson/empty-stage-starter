@@ -151,16 +151,22 @@ const Landing = () => {
         <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <img
-              src="/Logo-Green.png"
-              alt="EatPal"
-              className="h-8 block dark:hidden"
-            />
-            <img
-              src="/Logo-White.png"
-              alt="EatPal"
-              className="h-8 hidden dark:block"
-            />
+            <picture className="block dark:hidden">
+              <source srcSet="/Logo-Green.webp" type="image/webp" />
+              <img
+                src="/Logo-Green.png"
+                alt="EatPal"
+                className="h-8"
+              />
+            </picture>
+            <picture className="hidden dark:block">
+              <source srcSet="/Logo-White.webp" type="image/webp" />
+              <img
+                src="/Logo-White.png"
+                alt="EatPal"
+                className="h-8"
+              />
+            </picture>
           </div>
 
           {/* Desktop Navigation */}
@@ -210,16 +216,22 @@ const Landing = () => {
             <SheetContent side="right" className="w-[85vw] max-w-[360px] flex flex-col">
               <SheetHeader className="pb-4 border-b">
                 <SheetTitle className="flex items-center gap-2">
-                  <img
-                    src="/Logo-Green.png"
-                    alt="EatPal"
-                    className="h-7 block dark:hidden"
-                  />
-                  <img
-                    src="/Logo-White.png"
-                    alt="EatPal"
-                    className="h-7 hidden dark:block"
-                  />
+                  <picture className="block dark:hidden">
+                    <source srcSet="/Logo-Green.webp" type="image/webp" />
+                    <img
+                      src="/Logo-Green.png"
+                      alt="EatPal"
+                      className="h-7"
+                    />
+                  </picture>
+                  <picture className="hidden dark:block">
+                    <source srcSet="/Logo-White.webp" type="image/webp" />
+                    <img
+                      src="/Logo-White.png"
+                      alt="EatPal"
+                      className="h-7"
+                    />
+                  </picture>
                 </SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-2 mt-6 flex-1">
@@ -753,16 +765,22 @@ const Landing = () => {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <img
-                  src="/Logo-Green.png"
-                  alt="EatPal"
-                  className="h-8 block dark:hidden"
-                />
-                <img
-                  src="/Logo-White.png"
-                  alt="EatPal"
-                  className="h-8 hidden dark:block"
-                />
+                <picture className="block dark:hidden">
+                  <source srcSet="/Logo-Green.webp" type="image/webp" />
+                  <img
+                    src="/Logo-Green.png"
+                    alt="EatPal"
+                    className="h-8"
+                  />
+                </picture>
+                <picture className="hidden dark:block">
+                  <source srcSet="/Logo-White.webp" type="image/webp" />
+                  <img
+                    src="/Logo-White.png"
+                    alt="EatPal"
+                    className="h-8"
+                  />
+                </picture>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 Making meal planning simple and stress-free for families with
