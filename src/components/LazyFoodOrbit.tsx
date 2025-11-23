@@ -3,15 +3,15 @@ import { useIsDesktop } from '@/hooks/useIsDesktop';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 // Lazy load 3D components to avoid blocking initial render
-const VisibleFoodOrbit = lazy(() => 
-  import('@/components/VisibleFoodOrbit').then(module => ({ 
-    default: module.VisibleFoodOrbit 
+const VisibleFoodOrbit = lazy(() =>
+  import('@/components/ThreeDHeroScene').then(module => ({
+    default: module.ThreeDHeroScene
   }))
 );
 
-const VisibleFoodFallback = lazy(() => 
-  import('@/components/VisibleFoodOrbit').then(module => ({ 
-    default: module.VisibleFoodFallback 
+const VisibleFoodFallback = lazy(() =>
+  import('@/components/VisibleFoodOrbit').then(module => ({
+    default: module.VisibleFoodFallback
   }))
 );
 

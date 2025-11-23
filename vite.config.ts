@@ -10,6 +10,9 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
   },
+  optimizeDeps: {
+    exclude: ['react-native', 'expo', 'expo-router'],
+  },
   plugins: [
     react(),
     mode === "development" && componentTagger(),
