@@ -10,6 +10,8 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { SkipToContent } from "@/components/SkipToContent";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { CommandPalette } from "@/components/CommandPalette";
 import { Loader2 } from "lucide-react";
 
 // Lazy load all route components for better performance
@@ -70,10 +72,12 @@ const App = () => (
           <AppProvider>
             <Toaster />
             <Sonner />
+            <CommandPalette />
             <PWAInstallPrompt />
-            <BrowserRouter>
-              <SkipToContent />
-              <Suspense fallback={<LoadingFallback />}>
+            <ErrorBoundary>
+              <BrowserRouter>
+                <SkipToContent />
+                <Suspense fallback={<LoadingFallback />}>
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
@@ -148,6 +152,7 @@ const App = () => (
           </Routes>
           </Suspense>
           </BrowserRouter>
+            </ErrorBoundary>
         </AppProvider>
       </TooltipProvider>
     </ThemeProvider>

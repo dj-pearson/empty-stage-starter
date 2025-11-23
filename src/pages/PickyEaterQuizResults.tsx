@@ -92,6 +92,7 @@ export default function PickyEaterQuizResults() {
         });
       } catch (error) {
         console.error('Error saving quiz response:', error);
+        toast.error('Unable to save your results to our database. Your results are still displayed below.');
       }
     })();
   }, [location.state, navigate]);
