@@ -45,6 +45,14 @@ export default defineConfig(({ mode }) => ({
       },
     },
     rollupOptions: {
+      // Handle circular dependencies (common in Three.js)
+      onwarn(warning, warn) {
+        // Suppress circular dependency warnings for Three.js
+        if (warning.code === 'CIRCULAR_DEPENDENCY' && warning.ids?.some((id: string) => id.includes('three'))) {
+          return;
+        }
+        warn(warning);
+      },
       output: {
         // Manual chunking for better caching and smaller initial bundles
         manualChunks: (id) => {
@@ -70,18 +78,17 @@ export default defineConfig(({ mode }) => ({
             if (id.includes('@dnd-kit')) {
               return 'vendor-dnd';
             }
-            // Animation libraries (can be lazy loaded)
-            if (id.includes('framer-motion')) {
-              return 'vendor-animation';
-            }
-            // 3D graphics (large, should be lazy loaded)
-            if (id.includes('three') || id.includes('@react-three')) {
-              return 'vendor-3d';
-            }
-            // Charts (only on analytics pages)
-            if (id.includes('recharts')) {
-              return 'vendor-charts';
-            }
+          // Animation libraries (can be lazy loaded)
+          if (id.includes('framer-motion')) {
+            return 'vendor-animation';
+          }
+          // 3D graphics - Let Vite handle automatic chunking through lazy imports
+          // Manual chunking causes circular dependency issues with Three.js
+          // The lazy-loaded components will create their own chunks automatically
+          // Charts (only on analytics pages)
+          if (id.includes('recharts')) {
+            return 'vendor-charts';
+          }
             // Markdown (only on blog)
             if (id.includes('react-markdown') || id.includes('rehype') || id.includes('remark')) {
               return 'vendor-markdown';
