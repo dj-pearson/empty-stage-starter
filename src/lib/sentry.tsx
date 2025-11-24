@@ -4,9 +4,16 @@ import { logger } from "@/lib/logger";
 export function initializeSentry() {
   // Only initialize in production or if explicitly enabled
   if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {
-    Sentry.init({
-      dsn: import.meta.env.VITE_SENTRY_DSN,
-      environment: import.meta.env.MODE,
+    // Skip if no DSN is configured
+    if (!import.meta.env.VITE_SENTRY_DSN) {
+      console.warn('Sentry DSN not configured, skipping initialization');
+      return;
+    }
+
+    try {
+      Sentry.init({
+        dsn: import.meta.env.VITE_SENTRY_DSN,
+        environment: import.meta.env.MODE,
 
       // Performance Monitoring
       integrations: [
@@ -77,6 +84,9 @@ export function initializeSentry() {
         return transaction;
       },
     });
+    } catch (error) {
+      console.error('Failed to initialize Sentry:', error);
+    }
   }
 }
 

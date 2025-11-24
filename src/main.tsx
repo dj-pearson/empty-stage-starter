@@ -19,10 +19,27 @@ if (typeof window !== 'undefined') {
 }
 
 // Initialize Sentry before anything else
-initializeSentry();
+try {
+  initializeSentry();
+} catch (error) {
+  console.warn('Sentry initialization failed:', error);
+}
 
-createRoot(document.getElementById("root")!).render(
-  <Sentry.ErrorBoundary fallback={({ error, resetError }) => <ErrorFallback error={error as Error} resetError={resetError} />} showDialog>
+// Wrap in Sentry ErrorBoundary only if Sentry is configured
+const rootElement = document.getElementById("root");
+if (!rootElement) {
+  throw new Error('Root element not found');
+}
+
+const AppWithErrorBoundary = import.meta.env.VITE_SENTRY_DSN ? (
+  <Sentry.ErrorBoundary 
+    fallback={(errorData) => <ErrorFallback error={errorData.error} resetError={errorData.resetError} />}
+    showDialog={false}
+  >
     <App />
   </Sentry.ErrorBoundary>
+) : (
+  <App />
 );
+
+createRoot(rootElement).render(AppWithErrorBoundary);
