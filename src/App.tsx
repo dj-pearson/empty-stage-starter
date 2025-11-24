@@ -62,19 +62,26 @@ const LoadingFallback = () => (
   </div>
 );
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <HelmetProvider>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <TooltipProvider>
-          <AppProvider>
-            <Toaster />
-            <Sonner />
-            <CommandPalette />
-            <PWAInstallPrompt />
-            <ErrorBoundary>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <HelmetProvider>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <TooltipProvider>
+            <AppProvider>
+              <Toaster />
+              <Sonner />
+              <CommandPalette />
+              <PWAInstallPrompt />
               <BrowserRouter>
                 <SkipToContent />
                 <Suspense fallback={<LoadingFallback />}>
@@ -152,12 +159,12 @@ const App = () => (
           </Routes>
           </Suspense>
           </BrowserRouter>
-            </ErrorBoundary>
         </AppProvider>
       </TooltipProvider>
     </ThemeProvider>
     </HelmetProvider>
   </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;

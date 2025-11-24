@@ -31,15 +31,32 @@ if (!rootElement) {
   throw new Error('Root element not found');
 }
 
-const AppWithErrorBoundary = import.meta.env.VITE_SENTRY_DSN ? (
-  <Sentry.ErrorBoundary 
-    fallback={(errorData) => <ErrorFallback error={errorData.error} resetError={errorData.resetError} />}
-    showDialog={false}
-  >
+try {
+  const AppWithErrorBoundary = import.meta.env.VITE_SENTRY_DSN ? (
+    <Sentry.ErrorBoundary 
+      fallback={(errorData) => <ErrorFallback error={errorData.error} resetError={errorData.resetError} />}
+      showDialog={false}
+    >
+      <App />
+    </Sentry.ErrorBoundary>
+  ) : (
     <App />
-  </Sentry.ErrorBoundary>
-) : (
-  <App />
-);
+  );
 
-createRoot(rootElement).render(AppWithErrorBoundary);
+  createRoot(rootElement).render(AppWithErrorBoundary);
+} catch (error) {
+  console.error('Failed to render app:', error);
+  // Show a basic error message
+  rootElement.innerHTML = `
+    <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; font-family: system-ui, -apple-system, sans-serif;">
+      <div style="max-width: 500px; text-align: center;">
+        <h1 style="color: #dc2626; margin-bottom: 16px;">Unable to Load Application</h1>
+        <p style="color: #6b7280; margin-bottom: 24px;">We encountered an error while starting the app. Please try refreshing the page.</p>
+        <button onclick="window.location.reload()" style="background: #3b82f6; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;">
+          Refresh Page
+        </button>
+        ${import.meta.env.MODE === 'development' ? `<pre style="margin-top: 24px; padding: 12px; background: #f3f4f6; border-radius: 6px; text-align: left; overflow: auto; font-size: 12px;">${error}</pre>` : ''}
+      </div>
+    </div>
+  `;
+}
