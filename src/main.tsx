@@ -18,11 +18,18 @@ if (typeof window !== 'undefined') {
   (window as any).React = React;
 }
 
+// Log environment info for debugging
+console.log('[EatPal] Starting application...');
+console.log('[EatPal] Environment:', import.meta.env.MODE);
+console.log('[EatPal] Sentry DSN configured:', !!import.meta.env.VITE_SENTRY_DSN);
+console.log('[EatPal] Supabase URL configured:', !!import.meta.env.VITE_SUPABASE_URL);
+
 // Initialize Sentry before anything else
 try {
   initializeSentry();
+  console.log('[EatPal] Sentry initialized successfully');
 } catch (error) {
-  console.warn('Sentry initialization failed:', error);
+  console.warn('[EatPal] Sentry initialization failed:', error);
 }
 
 // Wrap in Sentry ErrorBoundary only if Sentry is configured
@@ -32,6 +39,7 @@ if (!rootElement) {
 }
 
 try {
+  console.log('[EatPal] Creating React root...');
   const AppWithErrorBoundary = import.meta.env.VITE_SENTRY_DSN ? (
     <Sentry.ErrorBoundary 
       fallback={(errorData) => <ErrorFallback error={errorData.error} resetError={errorData.resetError} />}
@@ -44,8 +52,9 @@ try {
   );
 
   createRoot(rootElement).render(AppWithErrorBoundary);
+  console.log('[EatPal] React root rendered successfully');
 } catch (error) {
-  console.error('Failed to render app:', error);
+  console.error('[EatPal] Failed to render app:', error);
   // Show a basic error message
   rootElement.innerHTML = `
     <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; font-family: system-ui, -apple-system, sans-serif;">
