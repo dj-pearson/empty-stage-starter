@@ -19,15 +19,31 @@ export function EnhancedHero() {
   useGSAP(() => {
     const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
 
-    tl.from(headlineRef.current, { y: 50, opacity: 0, duration: 1 })
-      .from(subheadlineRef.current, { y: 30, opacity: 0, duration: 0.8 }, "-=0.6")
-      .from(ctaRef.current, { y: 20, opacity: 0, duration: 0.8 }, "-=0.6")
-      .from(".stat-card", {
-        y: 30,
-        opacity: 0,
-        duration: 0.6,
-        stagger: 0.1
-      }, "-=0.4");
+    // Use fromTo to ensure consistent starting state
+    tl.fromTo(headlineRef.current,
+      { y: 50, opacity: 0 },
+      { y: 0, opacity: 1, duration: 1 }
+    )
+      .fromTo(subheadlineRef.current,
+        { y: 30, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.8 },
+        "-=0.6"
+      )
+      .fromTo(ctaRef.current,
+        { y: 20, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.8 },
+        "-=0.6"
+      )
+      .fromTo(".stat-card",
+        { y: 30, opacity: 0 },
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.6,
+          stagger: 0.1
+        },
+        "-=0.4"
+      );
 
     // Ambient background animation - optimized 2D
     gsap.to(".bg-blob-1", {
@@ -68,7 +84,7 @@ export function EnhancedHero() {
         {/* Main Headline */}
         <h1
           ref={headlineRef}
-          className="text-5xl md:text-7xl font-heading font-bold mb-8 leading-tight tracking-tight opacity-0"
+          className="text-5xl md:text-7xl font-heading font-bold mb-8 leading-tight tracking-tight"
         >
           <span className="text-foreground">
             Stop the Nightly
@@ -82,7 +98,7 @@ export function EnhancedHero() {
         {/* Subheadline */}
         <p
           ref={subheadlineRef}
-          className="text-xl md:text-2xl text-muted-foreground mb-10 max-w-3xl mx-auto leading-relaxed font-light opacity-0"
+          className="text-xl md:text-2xl text-muted-foreground mb-10 max-w-3xl mx-auto leading-relaxed font-light"
         >
           The meal planning app that turns picky eaters into adventurous eaters—one safe food at a time.
           Build weekly meal plans your kids will actually eat, auto-generate grocery lists, and track real progress.
@@ -91,7 +107,7 @@ export function EnhancedHero() {
         {/* CTA Buttons */}
         <div
           ref={ctaRef}
-          className="flex gap-6 justify-center flex-wrap opacity-0"
+          className="flex gap-6 justify-center flex-wrap"
         >
           <div className="hover:scale-105 transition-transform duration-300">
             <Button
@@ -141,7 +157,7 @@ export function EnhancedHero() {
           ].map((stat) => (
             <div
               key={stat.label}
-              className="stat-card group cursor-default bg-white/60 dark:bg-black/20 backdrop-blur-md rounded-2xl p-6 border border-white/20 shadow-sm hover:shadow-md transition-all opacity-0"
+              className="stat-card group cursor-default bg-white/60 dark:bg-black/20 backdrop-blur-md rounded-2xl p-6 border border-white/20 shadow-sm hover:shadow-md transition-all"
             >
               <div className="text-3xl mb-3">{stat.icon}</div>
               <div className="text-3xl md:text-4xl font-heading font-bold text-primary mb-2 transition-colors group-hover:text-primary/80">

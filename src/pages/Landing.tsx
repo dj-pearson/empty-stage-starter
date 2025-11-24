@@ -389,7 +389,7 @@ const Landing = () => {
                   <Card className="h-full hover:shadow-lg transition-all hover:-translate-y-1 duration-300 border-primary/10">
                     <CardHeader>
                       <div className="text-5xl mb-4 animate-bounce-dynamic" style={{ animationDelay: `${index * 0.2}s` }}>{pain.icon}</div>
-                      <CardTitle className="text-xl">{pain.title}</CardTitle>
+                      <CardTitle className="text-xl text-foreground">{pain.title}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <p className="text-muted-foreground">{pain.description}</p>
@@ -446,7 +446,7 @@ const Landing = () => {
                         </div>
                         <div className="text-4xl">{step.icon}</div>
                       </div>
-                      <CardTitle className="text-xl">{step.title}</CardTitle>
+                      <CardTitle className="text-xl text-foreground">{step.title}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <p className="text-muted-foreground">{step.description}</p>
@@ -512,7 +512,7 @@ const Landing = () => {
                         <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                           <Icon className="h-6 w-6 text-primary" />
                         </div>
-                        <CardTitle className="text-xl">{feature.title}</CardTitle>
+                        <CardTitle className="text-xl text-foreground">{feature.title}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <p className="text-muted-foreground">{feature.description}</p>

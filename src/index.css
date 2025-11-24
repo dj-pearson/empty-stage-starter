@@ -9,8 +9,10 @@ All colors MUST be HSL.
 @layer base {
   :root {
     /* EatPal Color Palette - Child Nutrition Theme - Light Mode */
-    --background: 36 33% 97%; /* Warm Oatmeal/Cream (HSL 36, 33%, 97%) */
-    --foreground: 222 47% 11%; /* Dark Slate/Navy (HSL 222, 47%, 11%) */
+    --background: 36 33% 97%;
+    /* Warm Oatmeal/Cream (HSL 36, 33%, 97%) */
+    --foreground: 222 47% 11%;
+    /* Dark Slate/Navy (HSL 222, 47%, 11%) */
 
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
@@ -18,16 +20,20 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 24 95% 53%; /* Vibrant Carrot Orange (HSL 24, 95%, 53%) */
+    --primary: 24 95% 53%;
+    /* Vibrant Carrot Orange (HSL 24, 95%, 53%) */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 142 76% 36%; /* Fresh Broccoli Green (HSL 142, 76%, 36%) */
+    --secondary: 142 76% 36%;
+    /* Fresh Broccoli Green (HSL 142, 76%, 36%) */
     --secondary-foreground: 0 0% 100%;
 
     --muted: 36 20% 90%;
-    --muted-foreground: 215 16% 47%;
+    --muted-foreground: 215 25% 40%;
+    /* Darker for better readability */
 
-    --accent: 340 82% 52%; /* Berry Pink (HSL 340, 82%, 52%) */
+    --accent: 340 82% 52%;
+    /* Berry Pink (HSL 340, 82%, 52%) */
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
@@ -35,27 +41,35 @@ All colors MUST be HSL.
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 24 95% 53%; /* Matches Primary */
+    --ring: 24 95% 53%;
+    /* Matches Primary */
 
-    --radius: 1rem; /* Slightly rounder for friendlier feel */
+    --radius: 1rem;
+    /* Slightly rounder for friendlier feel */
 
     /* Custom semantic colors */
-    --safe-food: 142 76% 36%; /* Broccoli Green */
-    --try-bite: 24 95% 53%; /* Carrot Orange */
-    --sky-blue: 199 84% 74%; /* Sky Blue */
+    --safe-food: 142 76% 36%;
+    /* Broccoli Green */
+    --try-bite: 24 95% 53%;
+    /* Carrot Orange */
+    --sky-blue: 199 84% 74%;
+    /* Sky Blue */
 
     /* Trust colors - Light Mode */
-    --trust-blue: 221 83% 53%; /* Friendly Blue */
-    --trust-green: 142 76% 36%; /* Broccoli Green */
-    --trust-warm-orange: 24 95% 53%; /* Carrot Orange */
-    --trust-soft-pink: 340 82% 52%; /* Berry Pink */
-    --trust-calm-purple: 262 52% 47%; /* Calm Purple */
+    --trust-blue: 221 83% 53%;
+    /* Friendly Blue */
+    --trust-green: 142 76% 36%;
+    /* Broccoli Green */
+    --trust-warm-orange: 24 95% 53%;
+    /* Carrot Orange */
+    --trust-soft-pink: 340 82% 52%;
+    /* Berry Pink */
+    --trust-calm-purple: 262 52% 47%;
+    /* Calm Purple */
 
-    --gradient-hero: linear-gradient(
-      135deg,
-      hsl(36 33% 97%),
-      hsl(24 95% 53% / 0.1)
-    );
+    --gradient-hero: linear-gradient(135deg,
+        hsl(36 33% 97%),
+        hsl(24 95% 53% / 0.1));
     --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(36 33% 97%));
     --shadow-soft: 0 4px 20px -4px hsl(222 47% 11% / 0.05);
     --shadow-medium: 0 8px 30px -6px hsl(222 47% 11% / 0.1);
@@ -73,8 +87,10 @@ All colors MUST be HSL.
 
   .dark {
     /* EatPal Color Palette - Child Nutrition Theme - Dark Mode */
-    --background: 222 47% 11%; /* Dark Slate Base */
-    --foreground: 36 33% 97%; /* Warm Cream Text */
+    --background: 222 47% 11%;
+    /* Dark Slate Base */
+    --foreground: 36 33% 97%;
+    /* Warm Cream Text */
 
     --card: 217 33% 17%;
     --card-foreground: 36 33% 97%;
@@ -82,16 +98,20 @@ All colors MUST be HSL.
     --popover: 217 33% 17%;
     --popover-foreground: 36 33% 97%;
 
-    --primary: 24 95% 60%; /* Lighter Carrot Orange */
+    --primary: 24 95% 60%;
+    /* Lighter Carrot Orange */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 142 70% 45%; /* Lighter Broccoli Green */
+    --secondary: 142 70% 45%;
+    /* Lighter Broccoli Green */
     --secondary-foreground: 0 0% 100%;
 
     --muted: 217 33% 25%;
-    --muted-foreground: 215 20% 65%;
+    --muted-foreground: 215 20% 75%;
+    /* Lighter for dark mode */
 
-    --accent: 340 82% 60%; /* Lighter Berry Pink */
+    --accent: 340 82% 60%;
+    /* Lighter Berry Pink */
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 62% 30%;
@@ -112,16 +132,12 @@ All colors MUST be HSL.
     --trust-soft-pink: 340 82% 60%;
     --trust-calm-purple: 262 52% 65%;
 
-    --gradient-hero: linear-gradient(
-      135deg,
-      hsl(222 47% 11%),
-      hsl(24 95% 60% / 0.1)
-    );
-    --gradient-card: linear-gradient(
-      180deg,
-      hsl(217 33% 17%),
-      hsl(222 47% 11%)
-    );
+    --gradient-hero: linear-gradient(135deg,
+        hsl(222 47% 11%),
+        hsl(24 95% 60% / 0.1));
+    --gradient-card: linear-gradient(180deg,
+        hsl(217 33% 17%),
+        hsl(222 47% 11%));
     --shadow-soft: 0 4px 20px -4px hsl(0 0% 0% / 0.3);
     --shadow-medium: 0 8px 30px -6px hsl(0 0% 0% / 0.5);
 
@@ -157,6 +173,7 @@ All colors MUST be HSL.
 }
 
 @layer utilities {
+
   /* Safe area insets for modern devices (iPhone X+) */
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
@@ -177,8 +194,10 @@ All colors MUST be HSL.
 
   /* Hide scrollbar for IE, Edge and Firefox */
   .scrollbar-hide {
-    -ms-overflow-style: none; /* IE and Edge */
-    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
   }
 
   /* Touch feedback */
@@ -193,9 +212,12 @@ All colors MUST be HSL.
 
   /* 3D Animation Keyframes */
   @keyframes float {
-    0%, 100% {
+
+    0%,
+    100% {
       transform: translateY(0px);
     }
+
     50% {
       transform: translateY(-20px);
     }
@@ -210,15 +232,19 @@ All colors MUST be HSL.
     0% {
       transform: translate(0, 0) rotate(0deg) scale(1);
     }
+
     25% {
       transform: translate(40px, -60px) rotate(15deg) scale(1.1);
     }
+
     50% {
       transform: translate(-30px, -80px) rotate(-12deg) scale(0.95);
     }
+
     75% {
       transform: translate(-50px, -40px) rotate(20deg) scale(1.05);
     }
+
     100% {
       transform: translate(0, 0) rotate(0deg) scale(1);
     }
@@ -233,15 +259,19 @@ All colors MUST be HSL.
     0% {
       transform: rotate(0deg) translateX(60px) rotate(0deg) scale(1);
     }
+
     25% {
       transform: rotate(90deg) translateX(60px) rotate(-90deg) scale(1.1);
     }
+
     50% {
       transform: rotate(180deg) translateX(60px) rotate(-180deg) scale(0.9);
     }
+
     75% {
       transform: rotate(270deg) translateX(60px) rotate(-270deg) scale(1.05);
     }
+
     100% {
       transform: rotate(360deg) translateX(60px) rotate(-360deg) scale(1);
     }
@@ -253,21 +283,28 @@ All colors MUST be HSL.
 
   /* Wiggle animation - much more dramatic */
   @keyframes wiggle {
-    0%, 100% {
+
+    0%,
+    100% {
       transform: translateX(0) translateY(0) rotate(0deg) scale(1);
     }
+
     15% {
       transform: translateX(-35px) translateY(-25px) rotate(-15deg) scale(1.1);
     }
+
     30% {
       transform: translateX(40px) translateY(-50px) rotate(18deg) scale(0.95);
     }
+
     45% {
       transform: translateX(-25px) translateY(-70px) rotate(-10deg) scale(1.05);
     }
+
     60% {
       transform: translateX(30px) translateY(-55px) rotate(12deg) scale(0.9);
     }
+
     75% {
       transform: translateX(-15px) translateY(-35px) rotate(-8deg) scale(1.08);
     }
@@ -279,17 +316,22 @@ All colors MUST be HSL.
 
   /* Bounce animation - vertical bounce with rotation */
   @keyframes bounce-dynamic {
-    0%, 100% {
+
+    0%,
+    100% {
       transform: translateY(0) rotate(0deg) scale(1);
     }
+
     25% {
-      transform: translateY(-80px) rotate(10deg) scale(1.15);
+      transform: translateY(-10px) rotate(5deg) scale(1.05);
     }
+
     50% {
-      transform: translateY(-120px) rotate(-5deg) scale(0.9);
+      transform: translateY(-15px) rotate(-3deg) scale(0.95);
     }
+
     75% {
-      transform: translateY(-60px) rotate(15deg) scale(1.1);
+      transform: translateY(-5px) rotate(3deg) scale(1.02);
     }
   }
 
@@ -306,5 +348,3 @@ All colors MUST be HSL.
     perspective: 1000px;
   }
 }
-
-
