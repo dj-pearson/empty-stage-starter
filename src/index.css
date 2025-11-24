@@ -8,131 +8,131 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* EatPal Color Palette - Light Mode */
-    --background: 60 100% 99%; /* Warm Beige as base */
-    --foreground: 142 50% 15%; /* Dark Forest Green for text */
+    /* EatPal Color Palette - Child Nutrition Theme - Light Mode */
+    --background: 36 33% 97%; /* Warm Oatmeal/Cream (HSL 36, 33%, 97%) */
+    --foreground: 222 47% 11%; /* Dark Slate/Navy (HSL 222, 47%, 11%) */
 
     --card: 0 0% 100%;
-    --card-foreground: 142 50% 15%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 142 50% 15%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 142 45% 30%; /* Forest Green RGB(47, 109, 60) */
+    --primary: 24 95% 53%; /* Vibrant Carrot Orange (HSL 24, 95%, 53%) */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 143 41% 74%; /* Mint Green RGB(165, 214, 167) */
-    --secondary-foreground: 142 50% 15%;
+    --secondary: 142 76% 36%; /* Fresh Broccoli Green (HSL 142, 76%, 36%) */
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 143 41% 90%;
-    --muted-foreground: 142 30% 40%;
+    --muted: 36 20% 90%;
+    --muted-foreground: 215 16% 47%;
 
-    --accent: 28 100% 68%; /* Soft Orange RGB(255, 164, 91) */
+    --accent: 340 82% 52%; /* Berry Pink (HSL 340, 82%, 52%) */
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 143 20% 85%;
-    --input: 143 20% 85%;
-    --ring: 142 45% 30%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 24 95% 53%; /* Matches Primary */
 
-    --radius: 0.75rem;
+    --radius: 1rem; /* Slightly rounder for friendlier feel */
 
     /* Custom semantic colors */
-    --safe-food: 142 45% 30%; /* Forest Green */
-    --try-bite: 28 100% 68%; /* Soft Orange */
-    --sky-blue: 199 84% 74%; /* Sky Blue RGB(129, 212, 250) */
+    --safe-food: 142 76% 36%; /* Broccoli Green */
+    --try-bite: 24 95% 53%; /* Carrot Orange */
+    --sky-blue: 199 84% 74%; /* Sky Blue */
 
-    /* Trust colors - Light Mode (darker for better contrast on light bg) */
-    --trust-blue: 211 58% 48%; /* Darker blue for contrast */
-    --trust-green: 142 45% 35%; /* Forest green, darker for readability */
-    --trust-warm-orange: 28 85% 50%; /* Darker orange for better contrast */
-    --trust-soft-pink: 345 70% 50%; /* Darker pink for visibility */
-    --trust-calm-purple: 262 35% 50%; /* Darker purple for text */
+    /* Trust colors - Light Mode */
+    --trust-blue: 221 83% 53%; /* Friendly Blue */
+    --trust-green: 142 76% 36%; /* Broccoli Green */
+    --trust-warm-orange: 24 95% 53%; /* Carrot Orange */
+    --trust-soft-pink: 340 82% 52%; /* Berry Pink */
+    --trust-calm-purple: 262 52% 47%; /* Calm Purple */
 
     --gradient-hero: linear-gradient(
       135deg,
-      hsl(142 45% 30%),
-      hsl(143 41% 74%)
+      hsl(36 33% 97%),
+      hsl(24 95% 53% / 0.1)
     );
-    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(60 100% 99%));
-    --shadow-soft: 0 4px 20px -4px hsl(142 45% 30% / 0.15);
-    --shadow-medium: 0 8px 30px -6px hsl(142 45% 30% / 0.25);
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(36 33% 97%));
+    --shadow-soft: 0 4px 20px -4px hsl(222 47% 11% / 0.05);
+    --shadow-medium: 0 8px 30px -6px hsl(222 47% 11% / 0.1);
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-    --sidebar-background: 60 100% 99%;
-    --sidebar-foreground: 142 50% 15%;
-    --sidebar-primary: 142 45% 30%;
+    --sidebar-background: 36 33% 97%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 24 95% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 143 41% 90%;
-    --sidebar-accent-foreground: 142 50% 15%;
-    --sidebar-border: 143 20% 85%;
-    --sidebar-ring: 142 45% 30%;
+    --sidebar-accent: 36 20% 90%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 214 32% 91%;
+    --sidebar-ring: 24 95% 53%;
   }
 
   .dark {
-    /* EatPal Color Palette - Dark Mode */
-    --background: 142 25% 10%;
-    --foreground: 60 100% 95%;
+    /* EatPal Color Palette - Child Nutrition Theme - Dark Mode */
+    --background: 222 47% 11%; /* Dark Slate Base */
+    --foreground: 36 33% 97%; /* Warm Cream Text */
 
-    --card: 142 20% 14%;
-    --card-foreground: 60 100% 95%;
+    --card: 217 33% 17%;
+    --card-foreground: 36 33% 97%;
 
-    --popover: 142 20% 14%;
-    --popover-foreground: 60 100% 95%;
+    --popover: 217 33% 17%;
+    --popover-foreground: 36 33% 97%;
 
-    --primary: 143 41% 74%; /* Mint Green for dark mode */
-    --primary-foreground: 142 50% 15%;
+    --primary: 24 95% 60%; /* Lighter Carrot Orange */
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 142 45% 35%; /* Darker Forest Green */
+    --secondary: 142 70% 45%; /* Lighter Broccoli Green */
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 142 15% 18%;
-    --muted-foreground: 143 20% 60%;
+    --muted: 217 33% 25%;
+    --muted-foreground: 215 20% 65%;
 
-    --accent: 28 100% 68%; /* Soft Orange */
-    --accent-foreground: 142 50% 15%;
+    --accent: 340 82% 60%; /* Lighter Berry Pink */
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 70% 50%;
+    --destructive: 0 62% 30%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 142 20% 22%;
-    --input: 142 20% 22%;
-    --ring: 143 41% 74%;
+    --border: 217 33% 25%;
+    --input: 217 33% 25%;
+    --ring: 24 95% 60%;
 
-    --safe-food: 143 41% 74%;
-    --try-bite: 28 100% 68%;
+    --safe-food: 142 70% 45%;
+    --try-bite: 24 95% 60%;
     --sky-blue: 199 84% 74%;
 
-    /* Trust colors - Dark Mode (lighter for better contrast on dark bg) */
-    --trust-blue: 211 70% 70%; /* Lighter blue for dark mode */
-    --trust-green: 142 50% 65%; /* Lighter green for dark mode */
-    --trust-warm-orange: 28 90% 75%; /* Lighter orange for dark mode */
-    --trust-soft-pink: 345 80% 75%; /* Lighter pink for dark mode */
-    --trust-calm-purple: 262 50% 75%; /* Lighter purple for dark mode */
+    /* Trust colors - Dark Mode */
+    --trust-blue: 221 83% 65%;
+    --trust-green: 142 70% 45%;
+    --trust-warm-orange: 24 95% 60%;
+    --trust-soft-pink: 340 82% 60%;
+    --trust-calm-purple: 262 52% 65%;
 
     --gradient-hero: linear-gradient(
       135deg,
-      hsl(143 41% 74%),
-      hsl(142 45% 35%)
+      hsl(222 47% 11%),
+      hsl(24 95% 60% / 0.1)
     );
     --gradient-card: linear-gradient(
       180deg,
-      hsl(142 20% 14%),
-      hsl(142 25% 10%)
+      hsl(217 33% 17%),
+      hsl(222 47% 11%)
     );
-    --shadow-soft: 0 4px 20px -4px hsl(143 41% 74% / 0.3);
-    --shadow-medium: 0 8px 30px -6px hsl(143 41% 74% / 0.4);
+    --shadow-soft: 0 4px 20px -4px hsl(0 0% 0% / 0.3);
+    --shadow-medium: 0 8px 30px -6px hsl(0 0% 0% / 0.5);
 
-    --sidebar-background: 142 25% 10%;
-    --sidebar-foreground: 60 100% 95%;
-    --sidebar-primary: 143 41% 74%;
-    --sidebar-primary-foreground: 142 50% 15%;
-    --sidebar-accent: 142 15% 18%;
-    --sidebar-accent-foreground: 60 100% 95%;
-    --sidebar-border: 142 20% 22%;
-    --sidebar-ring: 143 41% 74%;
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 36 33% 97%;
+    --sidebar-primary: 24 95% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217 33% 25%;
+    --sidebar-accent-foreground: 36 33% 97%;
+    --sidebar-border: 217 33% 25%;
+    --sidebar-ring: 24 95% 60%;
   }
 }
 
