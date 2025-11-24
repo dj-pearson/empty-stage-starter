@@ -51,7 +51,12 @@ try {
   console.log('[EatPal] Creating React root...');
   const AppWithErrorBoundary = import.meta.env.VITE_SENTRY_DSN ? (
     <Sentry.ErrorBoundary 
-      fallback={(errorData) => <ErrorFallback error={errorData.error} resetError={errorData.resetError} />}
+      fallback={(errorData) => (
+        <ErrorFallback 
+          error={(errorData.error as Error) ?? new Error('Unknown error')}
+          resetError={errorData.resetError}
+        />
+      )}
       showDialog={false}
     >
       <App />
