@@ -5,17 +5,26 @@
  */
 
 // Import React first to ensure it's available before any components load
+console.log('[EatPal] main.tsx loading...');
 import React from "react";
+console.log('[EatPal] React imported');
 import { createRoot } from "react-dom/client";
+console.log('[EatPal] createRoot imported');
 import * as Sentry from "@sentry/react";
+console.log('[EatPal] Sentry imported');
 import App from "./App.tsx";
+console.log('[EatPal] App imported');
 import "./index.css";
+console.log('[EatPal] index.css imported');
 import "./styles/mobile-first.css";
+console.log('[EatPal] mobile-first.css imported');
 import { initializeSentry, ErrorFallback } from "./lib/sentry";
+console.log('[EatPal] sentry utils imported');
 
 // Make React available globally for UMD modules (if any)
 if (typeof window !== 'undefined') {
   (window as any).React = React;
+  console.log('[EatPal] React made global');
 }
 
 // Log environment info for debugging
