@@ -14,8 +14,9 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Utensils, Eye, EyeOff, Apple } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
+import { FaApple } from "react-icons/fa";
 import { Link } from "react-router-dom";
 import { OnboardingDialog } from "@/components/OnboardingDialog";
 import { PasswordResetDialog } from "@/components/PasswordResetDialog";
@@ -326,7 +327,7 @@ const Auth = () => {
                         type="button"
                         variant="outline"
                         onClick={() => signInWithOAuth('google')}
-                        className="w-full"
+                        className="w-full h-11"
                       >
                         <FcGoogle className="h-5 w-5 mr-2" />
                         Google
@@ -335,9 +336,9 @@ const Auth = () => {
                         type="button"
                         variant="outline"
                         onClick={() => signInWithOAuth('apple')}
-                        className="w-full"
+                        className="w-full h-11"
                       >
-                        <Apple className="h-5 w-5 mr-2" />
+                        <FaApple className="h-5 w-5 mr-2" />
                         Apple
                       </Button>
                     </div>
@@ -421,7 +422,7 @@ const Auth = () => {
                         type="button"
                         variant="outline"
                         onClick={() => signInWithOAuth('google')}
-                        className="w-full"
+                        className="w-full h-11"
                       >
                         <FcGoogle className="h-5 w-5 mr-2" />
                         Google
@@ -430,9 +431,9 @@ const Auth = () => {
                         type="button"
                         variant="outline"
                         onClick={() => signInWithOAuth('apple')}
-                        className="w-full"
+                        className="w-full h-11"
                       >
-                        <Apple className="h-5 w-5 mr-2" />
+                        <FaApple className="h-5 w-5 mr-2" />
                         Apple
                       </Button>
                     </div>
