@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Utensils, Eye, EyeOff } from "lucide-react";
+import { Utensils, Eye, EyeOff, Apple } from "lucide-react";
+import { FcGoogle } from "react-icons/fc";
 import { Link } from "react-router-dom";
 import { OnboardingDialog } from "@/components/OnboardingDialog";
 import { PasswordResetDialog } from "@/components/PasswordResetDialog";
@@ -177,6 +178,23 @@ const Auth = () => {
     navigate(redirectTo, { replace: true });
   };
 
+  const signInWithOAuth = async (provider: 'google' | 'apple') => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}${redirectTo}`
+      }
+    });
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <>
       <OnboardingDialog
@@ -291,6 +309,38 @@ const Auth = () => {
                     >
                       Sign Up
                     </LoadingButton>
+
+                    <div className="relative my-4">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-background px-2 text-muted-foreground">
+                          Or continue with
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => signInWithOAuth('google')}
+                        className="w-full"
+                      >
+                        <FcGoogle className="h-5 w-5 mr-2" />
+                        Google
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => signInWithOAuth('apple')}
+                        className="w-full"
+                      >
+                        <Apple className="h-5 w-5 mr-2" />
+                        Apple
+                      </Button>
+                    </div>
                   </form>
                 </TabsContent>
 
@@ -354,6 +404,38 @@ const Auth = () => {
                     >
                       Sign In
                     </LoadingButton>
+
+                    <div className="relative my-4">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-background px-2 text-muted-foreground">
+                          Or continue with
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => signInWithOAuth('google')}
+                        className="w-full"
+                      >
+                        <FcGoogle className="h-5 w-5 mr-2" />
+                        Google
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => signInWithOAuth('apple')}
+                        className="w-full"
+                      >
+                        <Apple className="h-5 w-5 mr-2" />
+                        Apple
+                      </Button>
+                    </div>
                   </form>
                 </TabsContent>
               </Tabs>
