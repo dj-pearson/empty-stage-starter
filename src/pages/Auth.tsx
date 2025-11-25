@@ -19,6 +19,7 @@ import { Link } from "react-router-dom";
 import { OnboardingDialog } from "@/components/OnboardingDialog";
 import { PasswordResetDialog } from "@/components/PasswordResetDialog";
 import { PasswordSchema, EmailSchema } from "@/lib/validations";
+import { Footer } from "@/components/Footer";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
@@ -371,6 +372,7 @@ const Auth = () => {
           </p>
         </div>
       </div>
+      <Footer />
     </>
   );
 };

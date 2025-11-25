@@ -24,6 +24,7 @@ import type { User } from "@supabase/supabase-js";
 import { logger } from "@/lib/logger";
 import { SEOHead } from "@/components/SEOHead";
 import { getPageSEO } from "@/lib/seo-config";
+import { Footer } from "@/components/Footer";
 
 interface SubscriptionPlan {
   id: string;
@@ -1029,120 +1030,8 @@ export default function Pricing() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t py-12 px-4 bg-secondary/5">
-        <div className="container mx-auto">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
-              <Link to="/" className="flex items-center gap-2 mb-4">
-                <img
-                  src="/Logo-Green.png"
-                  alt="EatPal"
-                  className="h-8 block dark:hidden"
-                />
-                <img
-                  src="/Logo-White.png"
-                  alt="EatPal"
-                  className="h-8 hidden dark:block"
-                />
-              </Link>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Making meal planning simple and stress-free for families with
-                picky eaters.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-heading font-semibold mb-4 text-primary">
-                Product
-              </h3>
-              <ul className="space-y-3 text-sm text-muted-foreground">
-                <li>
-                  <Link
-                    to="/#features"
-                    className="hover:text-primary transition-colors"
-                  >
-                    Features
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/#how-it-works"
-                    className="hover:text-primary transition-colors"
-                  >
-                    How It Works
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/pricing"
-                    className="hover:text-primary transition-colors"
-                  >
-                    Pricing
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/auth"
-                    className="hover:text-primary transition-colors"
-                  >
-                    Get Started
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-heading font-semibold mb-4 text-primary">
-                Company
-              </h3>
-              <ul className="space-y-3 text-sm text-muted-foreground">
-                <li>
-                  <a href="#" className="hover:text-primary transition-colors">
-                    About Us
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-primary transition-colors">
-                    Contact
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-primary transition-colors">
-                    Privacy Policy
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-heading font-semibold mb-4 text-primary">
-                Support
-              </h3>
-              <ul className="space-y-3 text-sm text-muted-foreground">
-                <li>
-                  <a href="#" className="hover:text-primary transition-colors">
-                    Help Center
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-primary transition-colors">
-                    Terms of Service
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-primary transition-colors">
-                    FAQ
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div className="mt-12 pt-8 border-t text-center text-sm text-muted-foreground">
-            <p>
-              © 2025 EatPal. All rights reserved. Built with ❤️ for parents of
-              picky eaters.
-            </p>
-          </div>
-        </div>
-      </footer>
-    </div>
+      <Footer />
     </>
   );
 }
+
