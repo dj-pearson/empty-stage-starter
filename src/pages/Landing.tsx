@@ -35,6 +35,7 @@ import { ParallaxBackground } from "@/components/ParallaxBackground";
 import { SEOHead } from "@/components/SEOHead";
 import { OrganizationSchema, SoftwareAppSchema, FAQSchema } from "@/components/schema";
 import { getPageSEO } from "@/lib/seo-config";
+import { Footer } from "@/components/Footer";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -651,6 +652,7 @@ const Landing = () => {
             </div>
           </div>
         </section>
+        <Footer />
       </div>
     </>
   );
