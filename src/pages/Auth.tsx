@@ -180,11 +180,13 @@ const Auth = () => {
   };
 
   const signInWithOAuth = async (provider: 'google' | 'apple') => {
+    const callbackUrl = `${window.location.origin}/auth?redirect=${encodeURIComponent(redirectTo)}`;
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}${redirectTo}`
-      }
+        redirectTo: callbackUrl,
+      },
     });
 
     if (error) {
@@ -195,7 +197,6 @@ const Auth = () => {
       });
     }
   };
-
   return (
     <>
       <OnboardingDialog
