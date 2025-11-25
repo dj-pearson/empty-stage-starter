@@ -54,12 +54,12 @@ const Auth = () => {
             .select("onboarding_completed")
             .eq("id", session.user.id)
             .single()
-            .then(({ data: profile }) => {
-              if (profile?.onboarding_completed) {
-                // Restore user's previous location
+            .then(({ data: profile, error }) => {
+              // If no profile exists or onboarding is complete, go to dashboard
+              if (error || profile?.onboarding_completed) {
                 navigate(redirectTo, { replace: true });
               } else {
-                // First time login or incomplete onboarding - show setup
+                // First time login with profile but incomplete onboarding
                 setShowOnboarding(true);
               }
             });
@@ -75,9 +75,9 @@ const Auth = () => {
           .select("onboarding_completed")
           .eq("id", session.user.id)
           .single()
-          .then(({ data: profile }) => {
-            if (profile?.onboarding_completed) {
-              // Restore user's previous location
+          .then(({ data: profile, error }) => {
+            // If no profile exists or onboarding is complete, go to dashboard
+            if (error || profile?.onboarding_completed) {
               navigate(redirectTo, { replace: true });
             } else {
               setShowOnboarding(true);
