@@ -1031,6 +1031,7 @@ export default function Pricing() {
 
       {/* Footer */}
       <Footer />
+    </div>
     </>
   );
 }
