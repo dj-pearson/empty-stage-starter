@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
 import { LazyFoodOrbit } from '@/components/LazyFoodOrbit';
+import { Link } from 'react-router-dom';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 
@@ -110,17 +111,14 @@ export function EnhancedHero() {
           className="flex gap-6 justify-center flex-wrap"
         >
           <div className="hover:scale-105 transition-transform duration-300">
-            <Button
-              size="lg"
-              className="gap-2 text-lg px-10 py-7 shadow-xl hover:shadow-2xl transition-all bg-primary hover:bg-primary/90 text-white rounded-full"
-              onClick={() =>
-                document
-                  .getElementById('get-started')
-                  ?.scrollIntoView({ behavior: 'smooth' })
-              }
-            >
-              Try It Free <ArrowRight className="h-5 w-5" />
-            </Button>
+            <Link to="/auth?tab=signup">
+              <Button
+                size="lg"
+                className="gap-2 text-lg px-10 py-7 shadow-xl hover:shadow-2xl transition-all bg-primary hover:bg-primary/90 text-white rounded-full"
+              >
+                Try It Free <ArrowRight className="h-5 w-5" />
+              </Button>
+            </Link>
           </div>
           <div className="hover:scale-105 transition-transform duration-300">
             <Button

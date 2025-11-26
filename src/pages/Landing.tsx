@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -26,6 +26,8 @@ import {
   Menu,
   Moon,
   Sun,
+  ArrowRight,
+  CheckCircle,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Link } from "react-router-dom";
@@ -44,8 +46,18 @@ gsap.registerPlugin(ScrollTrigger);
 
 const Landing = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const { theme, setTheme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Track scroll position for sticky header CTA
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 400);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Get SEO configuration for homepage
   const seoConfig = getPageSEO("home");
@@ -247,6 +259,18 @@ const Landing = () => {
                   Sign In
                 </Button>
               </Link>
+              {/* Primary CTA - appears prominently after scroll */}
+              <Link to="/auth?tab=signup">
+                <Button
+                  className={`font-semibold shadow-md transition-all duration-300 ${
+                    scrolled
+                      ? 'bg-primary text-white scale-105'
+                      : 'bg-primary/90 text-white'
+                  }`}
+                >
+                  Get Started Free
+                </Button>
+              </Link>
             </nav>
 
             {/* Mobile Menu */}
@@ -322,8 +346,13 @@ const Landing = () => {
                         </>
                       )}
                     </Button>
+                    <Link to="/auth?tab=signup" onClick={closeMobileMenu}>
+                      <Button size="lg" className="w-full bg-primary text-white shadow-md">
+                        Get Started Free
+                      </Button>
+                    </Link>
                     <Link to="/auth?tab=signin" onClick={closeMobileMenu}>
-                      <Button size="lg" className="w-full">
+                      <Button size="lg" variant="outline" className="w-full">
                         Sign In
                       </Button>
                     </Link>
@@ -652,6 +681,82 @@ const Landing = () => {
             </div>
           </div>
         </section>
+
+        {/* Final CTA Section - Get Started */}
+        <section id="get-started" className="py-24 px-4 bg-gradient-to-br from-primary to-primary/80 relative overflow-hidden">
+          {/* Background decoration */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white/10 via-transparent to-transparent pointer-events-none" />
+          <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-white/5 rounded-full blur-3xl" />
+          <div className="absolute -top-20 -right-20 w-80 h-80 bg-white/5 rounded-full blur-3xl" />
+
+          <div className="container mx-auto max-w-4xl relative z-10">
+            <div className="animate-section text-center">
+              <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-white">
+                Ready to End Mealtime Battles?
+              </h2>
+              <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto leading-relaxed">
+                Join 2,000+ parents who've transformed chaotic dinners into peaceful family moments
+              </p>
+
+              {/* Benefits list */}
+              <div className="flex flex-wrap justify-center gap-4 mb-10">
+                {[
+                  "Personalized meal plans",
+                  "Auto grocery lists",
+                  "Food chaining science",
+                  "Progress tracking",
+                ].map((benefit, index) => (
+                  <div key={index} className="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full">
+                    <CheckCircle className="h-4 w-4 text-white" />
+                    <span className="text-sm text-white font-medium">{benefit}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* CTA Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                <Link to="/auth?tab=signup">
+                  <Button
+                    size="lg"
+                    className="bg-white text-primary hover:bg-white/90 shadow-xl hover:shadow-2xl transition-all text-lg px-10 py-7 rounded-full gap-2"
+                  >
+                    Start Free Trial <ArrowRight className="h-5 w-5" />
+                  </Button>
+                </Link>
+                <Link to="/pricing">
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="border-2 border-white/30 text-white hover:bg-white/10 text-lg px-10 py-7 rounded-full"
+                  >
+                    View Pricing
+                  </Button>
+                </Link>
+              </div>
+
+              {/* Trust badges */}
+              <p className="text-sm text-white/60 mt-8 font-medium">
+                <span className="text-white">Free forever plan available</span> • No credit card required • Cancel anytime
+              </p>
+
+              {/* Social proof */}
+              <div className="flex justify-center items-center gap-6 mt-8 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <div className="flex -space-x-2">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div key={i} className="w-8 h-8 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center text-xs text-white">
+                        {["👩", "👨", "👩", "👨"][i-1]}
+                      </div>
+                    ))}
+                  </div>
+                  <span className="text-white/80 text-sm ml-2">2,000+ happy parents</span>
+                </div>
+                <div className="text-white/80 text-sm">⭐⭐⭐⭐⭐ 4.8/5 rating</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <Footer />
       </div>
     </>

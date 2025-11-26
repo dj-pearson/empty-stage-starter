@@ -2,7 +2,7 @@ import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { Utensils, Calendar, ShoppingCart, Sparkles, Download, Upload, Trash2, Users, BarChart3, ChefHat, Target } from "lucide-react";
+import { Utensils, Calendar, ShoppingCart, Sparkles, Download, Upload, Trash2, Users, BarChart3, ChefHat, Target, ArrowRight, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useRef, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -62,6 +62,11 @@ export default function Home() {
   const tryBites = foods.filter(f => f.is_try_bite).length;
   const activeKid = kids.find(k => k.id === activeKidId);
   const kidPlanEntries = planEntries.filter(p => p.kid_id === activeKidId);
+
+  // Determine if user is new (has little to no data)
+  const isNewUser = safeFoods < 3 && kidPlanEntries.length === 0;
+  const needsMoreFoods = safeFoods < 5;
+  const needsMealPlan = kidPlanEntries.length === 0 && safeFoods >= 3;
 
   const handleExport = () => {
     const data = exportData();
@@ -136,6 +141,175 @@ export default function Home() {
         <AnimatedPanel>
           <MotivationalMessage type="greeting" className="mb-6" />
         </AnimatedPanel>
+
+        {/* Getting Started Section - Shows for new users */}
+        {isNewUser && (
+          <AnimatedPanel>
+            <Card className="mb-8 border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-accent/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-primary">
+                  <Sparkles className="h-5 w-5" />
+                  Let's Get You Started!
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground mb-6">
+                  Complete these steps to unlock the full power of EatPal and start planning stress-free meals.
+                </p>
+                <div className="space-y-4">
+                  {/* Step 1: Add Safe Foods */}
+                  <div
+                    className={`flex items-center gap-4 p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${
+                      safeFoods >= 3
+                        ? 'border-green-500/30 bg-green-50/50 dark:bg-green-950/20'
+                        : 'border-primary/30 bg-primary/5 hover:border-primary'
+                    }`}
+                    onClick={() => navigate("/dashboard/pantry")}
+                  >
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      safeFoods >= 3 ? 'bg-green-500 text-white' : 'bg-primary/10 text-primary'
+                    }`}>
+                      {safeFoods >= 3 ? '✓' : '1'}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold">Add Your Child's Safe Foods</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {safeFoods >= 3
+                          ? `Great! You've added ${safeFoods} safe foods`
+                          : `Add at least 3 foods your child enjoys (${safeFoods}/3 added)`
+                        }
+                      </p>
+                    </div>
+                    {safeFoods < 3 && (
+                      <Button size="sm" className="gap-1">
+                        <Plus className="h-4 w-4" /> Add Foods
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Step 2: Create Meal Plan */}
+                  <div
+                    className={`flex items-center gap-4 p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${
+                      kidPlanEntries.length > 0
+                        ? 'border-green-500/30 bg-green-50/50 dark:bg-green-950/20'
+                        : safeFoods >= 3
+                          ? 'border-primary/30 bg-primary/5 hover:border-primary'
+                          : 'border-muted bg-muted/30 opacity-60'
+                    }`}
+                    onClick={() => safeFoods >= 3 && navigate("/dashboard/planner")}
+                  >
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      kidPlanEntries.length > 0
+                        ? 'bg-green-500 text-white'
+                        : safeFoods >= 3
+                          ? 'bg-primary/10 text-primary'
+                          : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {kidPlanEntries.length > 0 ? '✓' : '2'}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold">Create Your First Meal Plan</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {kidPlanEntries.length > 0
+                          ? `Awesome! You have ${kidPlanEntries.length} meals planned`
+                          : safeFoods >= 3
+                            ? 'Generate a weekly meal plan with AI'
+                            : 'Complete step 1 first'
+                        }
+                      </p>
+                    </div>
+                    {kidPlanEntries.length === 0 && safeFoods >= 3 && (
+                      <Button size="sm" className="gap-1">
+                        <Calendar className="h-4 w-4" /> Plan Meals
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Step 3: Generate Grocery List */}
+                  <div
+                    className={`flex items-center gap-4 p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${
+                      groceryItems.length > 0
+                        ? 'border-green-500/30 bg-green-50/50 dark:bg-green-950/20'
+                        : kidPlanEntries.length > 0
+                          ? 'border-primary/30 bg-primary/5 hover:border-primary'
+                          : 'border-muted bg-muted/30 opacity-60'
+                    }`}
+                    onClick={() => kidPlanEntries.length > 0 && navigate("/dashboard/grocery")}
+                  >
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      groceryItems.length > 0
+                        ? 'bg-green-500 text-white'
+                        : kidPlanEntries.length > 0
+                          ? 'bg-primary/10 text-primary'
+                          : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {groceryItems.length > 0 ? '✓' : '3'}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold">Generate Grocery List</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {groceryItems.length > 0
+                          ? `Perfect! ${groceryItems.length} items on your list`
+                          : kidPlanEntries.length > 0
+                            ? 'Auto-create your shopping list from meal plans'
+                            : 'Complete step 2 first'
+                        }
+                      </p>
+                    </div>
+                    {groceryItems.length === 0 && kidPlanEntries.length > 0 && (
+                      <Button size="sm" className="gap-1">
+                        <ShoppingCart className="h-4 w-4" /> Create List
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </AnimatedPanel>
+        )}
+
+        {/* Quick Action Prompts for returning users */}
+        {!isNewUser && needsMoreFoods && (
+          <AnimatedPanel>
+            <Card className="mb-6 border-primary/20 bg-primary/5 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate("/dashboard/pantry")}>
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Plus className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold">Add More Safe Foods</h4>
+                      <p className="text-sm text-muted-foreground">The more foods you add, the better your meal plans will be</p>
+                    </div>
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-primary" />
+                </div>
+              </CardContent>
+            </Card>
+          </AnimatedPanel>
+        )}
+
+        {!isNewUser && needsMealPlan && (
+          <AnimatedPanel>
+            <Card className="mb-6 border-accent/20 bg-accent/5 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate("/dashboard/planner")}>
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center">
+                      <Calendar className="h-5 w-5 text-accent" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold">Create Your First Meal Plan</h4>
+                      <p className="text-sm text-muted-foreground">You have {safeFoods} foods ready - let's plan some meals!</p>
+                    </div>
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-accent" />
+                </div>
+              </CardContent>
+            </Card>
+          </AnimatedPanel>
+        )}
 
         {/* Today's Meals */}
         <AnimatedPanel delay={0.05}>
