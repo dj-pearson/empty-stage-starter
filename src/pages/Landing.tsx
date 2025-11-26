@@ -34,6 +34,7 @@ import { Link } from "react-router-dom";
 import { EnhancedHero } from "@/components/EnhancedHero";
 import { FeatureCard3D } from "@/components/Card3DTilt";
 import { ParallaxBackground } from "@/components/ParallaxBackground";
+import { ExitIntentPopup } from "@/components/ExitIntentPopup";
 import { SEOHead } from "@/components/SEOHead";
 import { OrganizationSchema, SoftwareAppSchema, FAQSchema } from "@/components/schema";
 import { getPageSEO } from "@/lib/seo-config";
@@ -432,7 +433,7 @@ const Landing = () => {
         </section>
 
         {/* Solution Section - Meet EatPal */}
-        <section className="py-24 px-4 bg-gradient-to-br from-primary/5 to-secondary/10 relative">
+        <section id="how-it-works" className="py-24 px-4 bg-gradient-to-br from-primary/5 to-secondary/10 relative">
           <ParallaxBackground className="opacity-50" />
           <div className="container mx-auto max-w-6xl relative z-10">
             <div className="animate-section text-center mb-16">
@@ -682,6 +683,106 @@ const Landing = () => {
           </div>
         </section>
 
+        {/* Pricing Preview Section */}
+        <section id="pricing" className="py-24 px-4 bg-gradient-to-br from-background to-secondary/10">
+          <div className="container mx-auto max-w-5xl">
+            <div className="animate-section text-center mb-12">
+              <Badge className="mb-4 bg-primary/10 text-primary border-primary px-4 py-1 text-sm">
+                Simple Pricing
+              </Badge>
+              <h2 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-primary">
+                Start Free, Upgrade Anytime
+              </h2>
+              <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+                No credit card required. Cancel anytime.
+              </p>
+            </div>
+
+            <div className="animate-grid grid md:grid-cols-3 gap-6">
+              {/* Free Plan */}
+              <Card className="relative hover:shadow-lg transition-all hover:-translate-y-1 duration-300">
+                <CardHeader className="text-center pb-2">
+                  <p className="text-sm font-medium text-muted-foreground mb-2">FREE</p>
+                  <CardTitle className="text-4xl font-bold">$0</CardTitle>
+                  <p className="text-sm text-muted-foreground">Forever free</p>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <ul className="space-y-3 mb-6">
+                    {['1 child profile', 'Basic meal planning', '10 safe foods', 'Weekly grocery list'].map((feature, i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm">
+                        <CheckCircle className="h-4 w-4 text-primary shrink-0" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to="/auth?tab=signup">
+                    <Button variant="outline" className="w-full">
+                      Get Started
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+
+              {/* Pro Plan - Most Popular */}
+              <Card className="relative border-2 border-primary shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 duration-300">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <Badge className="bg-primary text-white px-4">Most Popular</Badge>
+                </div>
+                <CardHeader className="text-center pb-2 pt-6">
+                  <p className="text-sm font-medium text-primary mb-2">PRO</p>
+                  <CardTitle className="text-4xl font-bold">$9.99</CardTitle>
+                  <p className="text-sm text-muted-foreground">per month</p>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <ul className="space-y-3 mb-6">
+                    {['3 child profiles', 'AI meal planning', 'Unlimited foods', 'Food chaining tools', 'Progress analytics'].map((feature, i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm">
+                        <CheckCircle className="h-4 w-4 text-primary shrink-0" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to="/auth?tab=signup">
+                    <Button className="w-full">
+                      Start Free Trial
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+
+              {/* Family Plan */}
+              <Card className="relative hover:shadow-lg transition-all hover:-translate-y-1 duration-300">
+                <CardHeader className="text-center pb-2">
+                  <p className="text-sm font-medium text-muted-foreground mb-2">FAMILY</p>
+                  <CardTitle className="text-4xl font-bold">$19.99</CardTitle>
+                  <p className="text-sm text-muted-foreground">per month</p>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <ul className="space-y-3 mb-6">
+                    {['Unlimited profiles', 'All Pro features', 'AI nutrition coach', 'Priority support', 'Family sharing'].map((feature, i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm">
+                        <CheckCircle className="h-4 w-4 text-primary shrink-0" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to="/auth?tab=signup">
+                    <Button variant="outline" className="w-full">
+                      Start Free Trial
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="text-center mt-8">
+              <Link to="/pricing" className="text-primary hover:underline font-medium inline-flex items-center gap-1">
+                View full feature comparison <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </section>
+
         {/* Final CTA Section - Get Started */}
         <section id="get-started" className="py-24 px-4 bg-gradient-to-br from-primary to-primary/80 relative overflow-hidden">
           {/* Background decoration */}
@@ -758,6 +859,9 @@ const Landing = () => {
         </section>
 
         <Footer />
+
+        {/* Exit Intent Popup - Captures leaving visitors */}
+        <ExitIntentPopup delay={5000} />
       </div>
     </>
   );
