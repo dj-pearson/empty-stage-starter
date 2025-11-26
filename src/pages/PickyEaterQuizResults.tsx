@@ -21,7 +21,7 @@ import { EmailCaptureModal } from '@/components/quiz/EmailCaptureModal';
 import { ShareButtons } from '@/components/quiz/ShareButtons';
 import { downloadPDFReport } from '@/lib/quiz/pdfGenerator';
 import { saveQuizResponse, trackQuizAnalytics, trackPDFDownload } from '@/lib/quiz/supabaseIntegration';
-import { Download, Share2, Sparkles, TrendingUp, Loader2 } from 'lucide-react';
+import { Download, Share2, Sparkles, TrendingUp, Loader2, Lock, Gift } from 'lucide-react';
 
 export default function PickyEaterQuizResults() {
   const location = useLocation();
@@ -33,6 +33,15 @@ export default function PickyEaterQuizResults() {
   const [childName, setChildName] = useState<string>('');
   const [parentName, setParentName] = useState<string>('');
   const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
+  const [showUnlockPrompt, setShowUnlockPrompt] = useState(false);
+
+  // Check if user has already provided email (stored in localStorage)
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('quiz_email_captured');
+    if (savedEmail) {
+      setEmailCaptured(true);
+    }
+  }, []);
 
   useEffect(() => {
     const state = location.state as {
@@ -139,7 +148,15 @@ export default function PickyEaterQuizResults() {
     setChildName(child);
     setParentName(parent);
     setShowEmailModal(false);
-    toast.success('Email saved! You can now download your full report.');
+    setShowUnlockPrompt(false);
+    // Save to localStorage so returning users don't see gate again
+    localStorage.setItem('quiz_email_captured', 'true');
+    toast.success('Email saved! Here are your full results.');
+  };
+
+  const handleUnlockResults = () => {
+    setShowEmailModal(true);
+    setShowUnlockPrompt(false);
   };
 
   if (!results) {
@@ -277,45 +294,138 @@ export default function PickyEaterQuizResults() {
             <PersonalityChart scores={results.profile.scores} />
           </motion.div>
 
-          {/* Food Recommendations */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="mb-8"
-          >
-            <FoodRecommendationsDisplay recommendations={results.recommendations} />
-          </motion.div>
+          {/* Gated Content Section */}
+          {emailCaptured ? (
+            <>
+              {/* Food Recommendations */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className="mb-8"
+              >
+                <FoodRecommendationsDisplay recommendations={results.recommendations} />
+              </motion.div>
 
-          {/* Strategies */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="mb-8"
-          >
-            <StrategyCards strategies={results.strategies} />
-          </motion.div>
+              {/* Strategies */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.4 }}
+                className="mb-8"
+              >
+                <StrategyCards strategies={results.strategies} />
+              </motion.div>
 
-          {/* Sample Meals */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.5 }}
-            className="mb-8"
-          >
-            <SampleMealsCarousel meals={results.sampleMeals} />
-          </motion.div>
+              {/* Sample Meals */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.5 }}
+                className="mb-8"
+              >
+                <SampleMealsCarousel meals={results.sampleMeals} />
+              </motion.div>
 
-          {/* Progress Pathway */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.6 }}
-            className="mb-8"
-          >
-            <ProgressPathway pathway={results.progressPathway} />
-          </motion.div>
+              {/* Progress Pathway */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.6 }}
+                className="mb-8"
+              >
+                <ProgressPathway pathway={results.progressPathway} />
+              </motion.div>
+            </>
+          ) : (
+            /* Email Gate - Show blurred preview with unlock prompt */
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="mb-8 relative"
+            >
+              {/* Blurred Preview */}
+              <div className="relative">
+                <div className="filter blur-sm pointer-events-none opacity-60">
+                  <div className="grid md:grid-cols-2 gap-4 mb-4">
+                    <Card className="p-6">
+                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-4" />
+                      <div className="space-y-2">
+                        <div className="h-3 bg-gray-100 rounded w-full" />
+                        <div className="h-3 bg-gray-100 rounded w-5/6" />
+                        <div className="h-3 bg-gray-100 rounded w-4/6" />
+                      </div>
+                    </Card>
+                    <Card className="p-6">
+                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-4" />
+                      <div className="space-y-2">
+                        <div className="h-3 bg-gray-100 rounded w-full" />
+                        <div className="h-3 bg-gray-100 rounded w-5/6" />
+                        <div className="h-3 bg-gray-100 rounded w-4/6" />
+                      </div>
+                    </Card>
+                  </div>
+                  <Card className="p-6">
+                    <div className="h-4 bg-gray-200 rounded w-1/2 mb-4" />
+                    <div className="grid grid-cols-3 gap-4">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="h-32 bg-gray-100 rounded" />
+                      ))}
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Unlock Overlay */}
+                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-background via-background/80 to-transparent">
+                  <Card className="max-w-md mx-4 shadow-2xl border-2 border-primary/20">
+                    <CardContent className="pt-6 text-center">
+                      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                        <Gift className="w-8 h-8 text-primary" />
+                      </div>
+                      <h3 className="text-2xl font-bold mb-2">
+                        Unlock Your Full Strategy Guide
+                      </h3>
+                      <p className="text-muted-foreground mb-6">
+                        Get personalized food recommendations, proven strategies,
+                        sample meal plans, and a 12-week progress pathway tailored
+                        to your {personalityDef.name} child.
+                      </p>
+
+                      <div className="space-y-3 text-left mb-6">
+                        {[
+                          '15+ personalized food recommendations',
+                          '5 proven strategies for ' + personalityDef.name + ' eaters',
+                          'Sample meals your child will love',
+                          '12-week progress pathway',
+                        ].map((item, i) => (
+                          <div key={i} className="flex items-center gap-2 text-sm">
+                            <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                              <span className="text-green-600 text-xs">✓</span>
+                            </div>
+                            <span>{item}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <Button
+                        size="lg"
+                        className="w-full gap-2"
+                        onClick={handleUnlockResults}
+                      >
+                        <Lock className="w-4 h-4" />
+                        Unlock Free Results
+                      </Button>
+
+                      <p className="text-xs text-muted-foreground mt-3">
+                        Just enter your email. No spam, unsubscribe anytime.
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
           <Separator className="my-12" />
 

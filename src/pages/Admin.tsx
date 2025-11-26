@@ -27,6 +27,7 @@ import { TicketQueue } from "@/components/admin/TicketQueue";
 import { UserIntelligenceDashboard } from "@/components/admin/UserIntelligenceDashboard";
 import { SupportPerformanceDashboard } from "@/components/admin/SupportPerformanceDashboard";
 import { RevenueOperationsCenter } from "@/components/admin/RevenueOperationsCenter";
+import { ConversionFunnelDashboard } from "@/components/admin/ConversionFunnelDashboard";
 import { logger } from "@/lib/logger";
 
 const Admin = () => {
@@ -222,6 +223,18 @@ const Admin = () => {
 
           <div className="p-4 md:p-6">
             {activeTab === "intelligence" && <UserIntelligenceDashboard />}
+
+            {activeTab === "funnel" && (
+              <div>
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold">Conversion Funnel</h2>
+                  <p className="text-muted-foreground">
+                    Track visitor journey and optimize conversion rates
+                  </p>
+                </div>
+                <ConversionFunnelDashboard />
+              </div>
+            )}
 
             {activeTab === "revenue-ops" && (
               <div>
