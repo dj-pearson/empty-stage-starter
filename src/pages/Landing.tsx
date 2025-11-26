@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -26,12 +26,15 @@ import {
   Menu,
   Moon,
   Sun,
+  ArrowRight,
+  CheckCircle,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Link } from "react-router-dom";
 import { EnhancedHero } from "@/components/EnhancedHero";
 import { FeatureCard3D } from "@/components/Card3DTilt";
 import { ParallaxBackground } from "@/components/ParallaxBackground";
+import { ExitIntentPopup } from "@/components/ExitIntentPopup";
 import { SEOHead } from "@/components/SEOHead";
 import { OrganizationSchema, SoftwareAppSchema, FAQSchema } from "@/components/schema";
 import { getPageSEO } from "@/lib/seo-config";
@@ -44,8 +47,18 @@ gsap.registerPlugin(ScrollTrigger);
 
 const Landing = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const { theme, setTheme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Track scroll position for sticky header CTA
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 400);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Get SEO configuration for homepage
   const seoConfig = getPageSEO("home");
@@ -247,6 +260,18 @@ const Landing = () => {
                   Sign In
                 </Button>
               </Link>
+              {/* Primary CTA - appears prominently after scroll */}
+              <Link to="/auth?tab=signup">
+                <Button
+                  className={`font-semibold shadow-md transition-all duration-300 ${
+                    scrolled
+                      ? 'bg-primary text-white scale-105'
+                      : 'bg-primary/90 text-white'
+                  }`}
+                >
+                  Get Started Free
+                </Button>
+              </Link>
             </nav>
 
             {/* Mobile Menu */}
@@ -322,8 +347,13 @@ const Landing = () => {
                         </>
                       )}
                     </Button>
+                    <Link to="/auth?tab=signup" onClick={closeMobileMenu}>
+                      <Button size="lg" className="w-full bg-primary text-white shadow-md">
+                        Get Started Free
+                      </Button>
+                    </Link>
                     <Link to="/auth?tab=signin" onClick={closeMobileMenu}>
-                      <Button size="lg" className="w-full">
+                      <Button size="lg" variant="outline" className="w-full">
                         Sign In
                       </Button>
                     </Link>
@@ -403,7 +433,7 @@ const Landing = () => {
         </section>
 
         {/* Solution Section - Meet EatPal */}
-        <section className="py-24 px-4 bg-gradient-to-br from-primary/5 to-secondary/10 relative">
+        <section id="how-it-works" className="py-24 px-4 bg-gradient-to-br from-primary/5 to-secondary/10 relative">
           <ParallaxBackground className="opacity-50" />
           <div className="container mx-auto max-w-6xl relative z-10">
             <div className="animate-section text-center mb-16">
@@ -652,7 +682,186 @@ const Landing = () => {
             </div>
           </div>
         </section>
+
+        {/* Pricing Preview Section */}
+        <section id="pricing" className="py-24 px-4 bg-gradient-to-br from-background to-secondary/10">
+          <div className="container mx-auto max-w-5xl">
+            <div className="animate-section text-center mb-12">
+              <Badge className="mb-4 bg-primary/10 text-primary border-primary px-4 py-1 text-sm">
+                Simple Pricing
+              </Badge>
+              <h2 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-primary">
+                Start Free, Upgrade Anytime
+              </h2>
+              <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+                No credit card required. Cancel anytime.
+              </p>
+            </div>
+
+            <div className="animate-grid grid md:grid-cols-3 gap-6">
+              {/* Free Plan */}
+              <Card className="relative hover:shadow-lg transition-all hover:-translate-y-1 duration-300">
+                <CardHeader className="text-center pb-2">
+                  <p className="text-sm font-medium text-muted-foreground mb-2">FREE</p>
+                  <CardTitle className="text-4xl font-bold">$0</CardTitle>
+                  <p className="text-sm text-muted-foreground">Forever free</p>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <ul className="space-y-3 mb-6">
+                    {['1 child profile', 'Basic meal planning', '10 safe foods', 'Weekly grocery list'].map((feature, i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm">
+                        <CheckCircle className="h-4 w-4 text-primary shrink-0" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to="/auth?tab=signup">
+                    <Button variant="outline" className="w-full">
+                      Get Started
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+
+              {/* Pro Plan - Most Popular */}
+              <Card className="relative border-2 border-primary shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 duration-300">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <Badge className="bg-primary text-white px-4">Most Popular</Badge>
+                </div>
+                <CardHeader className="text-center pb-2 pt-6">
+                  <p className="text-sm font-medium text-primary mb-2">PRO</p>
+                  <CardTitle className="text-4xl font-bold">$9.99</CardTitle>
+                  <p className="text-sm text-muted-foreground">per month</p>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <ul className="space-y-3 mb-6">
+                    {['3 child profiles', 'AI meal planning', 'Unlimited foods', 'Food chaining tools', 'Progress analytics'].map((feature, i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm">
+                        <CheckCircle className="h-4 w-4 text-primary shrink-0" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to="/auth?tab=signup">
+                    <Button className="w-full">
+                      Start Free Trial
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+
+              {/* Family Plan */}
+              <Card className="relative hover:shadow-lg transition-all hover:-translate-y-1 duration-300">
+                <CardHeader className="text-center pb-2">
+                  <p className="text-sm font-medium text-muted-foreground mb-2">FAMILY</p>
+                  <CardTitle className="text-4xl font-bold">$19.99</CardTitle>
+                  <p className="text-sm text-muted-foreground">per month</p>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <ul className="space-y-3 mb-6">
+                    {['Unlimited profiles', 'All Pro features', 'AI nutrition coach', 'Priority support', 'Family sharing'].map((feature, i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm">
+                        <CheckCircle className="h-4 w-4 text-primary shrink-0" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to="/auth?tab=signup">
+                    <Button variant="outline" className="w-full">
+                      Start Free Trial
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="text-center mt-8">
+              <Link to="/pricing" className="text-primary hover:underline font-medium inline-flex items-center gap-1">
+                View full feature comparison <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* Final CTA Section - Get Started */}
+        <section id="get-started" className="py-24 px-4 bg-gradient-to-br from-primary to-primary/80 relative overflow-hidden">
+          {/* Background decoration */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white/10 via-transparent to-transparent pointer-events-none" />
+          <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-white/5 rounded-full blur-3xl" />
+          <div className="absolute -top-20 -right-20 w-80 h-80 bg-white/5 rounded-full blur-3xl" />
+
+          <div className="container mx-auto max-w-4xl relative z-10">
+            <div className="animate-section text-center">
+              <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-white">
+                Ready to End Mealtime Battles?
+              </h2>
+              <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto leading-relaxed">
+                Join 2,000+ parents who've transformed chaotic dinners into peaceful family moments
+              </p>
+
+              {/* Benefits list */}
+              <div className="flex flex-wrap justify-center gap-4 mb-10">
+                {[
+                  "Personalized meal plans",
+                  "Auto grocery lists",
+                  "Food chaining science",
+                  "Progress tracking",
+                ].map((benefit, index) => (
+                  <div key={index} className="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full">
+                    <CheckCircle className="h-4 w-4 text-white" />
+                    <span className="text-sm text-white font-medium">{benefit}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* CTA Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                <Link to="/auth?tab=signup">
+                  <Button
+                    size="lg"
+                    className="bg-white text-primary hover:bg-white/90 shadow-xl hover:shadow-2xl transition-all text-lg px-10 py-7 rounded-full gap-2"
+                  >
+                    Start Free Trial <ArrowRight className="h-5 w-5" />
+                  </Button>
+                </Link>
+                <Link to="/pricing">
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="border-2 border-white/30 text-white hover:bg-white/10 text-lg px-10 py-7 rounded-full"
+                  >
+                    View Pricing
+                  </Button>
+                </Link>
+              </div>
+
+              {/* Trust badges */}
+              <p className="text-sm text-white/60 mt-8 font-medium">
+                <span className="text-white">Free forever plan available</span> • No credit card required • Cancel anytime
+              </p>
+
+              {/* Social proof */}
+              <div className="flex justify-center items-center gap-6 mt-8 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <div className="flex -space-x-2">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div key={i} className="w-8 h-8 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center text-xs text-white">
+                        {["👩", "👨", "👩", "👨"][i-1]}
+                      </div>
+                    ))}
+                  </div>
+                  <span className="text-white/80 text-sm ml-2">2,000+ happy parents</span>
+                </div>
+                <div className="text-white/80 text-sm">⭐⭐⭐⭐⭐ 4.8/5 rating</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <Footer />
+
+        {/* Exit Intent Popup - Captures leaving visitors */}
+        <ExitIntentPopup delay={5000} />
       </div>
     </>
   );
