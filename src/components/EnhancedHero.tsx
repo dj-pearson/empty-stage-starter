@@ -69,7 +69,7 @@ export function EnhancedHero() {
   }, { scope: containerRef });
 
   return (
-    <section ref={containerRef} className="relative py-20 px-4 bg-gradient-to-b from-background via-trust-softPink/5 to-secondary/10 overflow-hidden min-h-[85vh] flex items-center">
+    <section ref={containerRef} className="relative py-20 bg-gradient-to-b from-background via-trust-softPink/5 to-secondary/10 overflow-hidden min-h-[85vh] flex items-center">
       {/* 3D Food Orbit Background (Desktop Only) - Lazy Loaded */}
       <div className="absolute inset-0 z-0 opacity-80 hidden md:block">
         <LazyFoodOrbit className="w-full h-full" />
