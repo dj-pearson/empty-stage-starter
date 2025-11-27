@@ -92,8 +92,8 @@ export function ExitIntentPopup({
               Check your email for your free picky eater meal planning guide.
             </DialogDescription>
             <Link to="/auth?tab=signup">
-              <Button className="w-full" size="lg">
-                Start Planning Now <ArrowRight className="ml-2 h-4 w-4" />
+              <Button className="w-full" size="lg" aria-label="Start meal planning with EatPal">
+                Start Planning Now <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
               </Button>
             </Link>
           </div>
@@ -108,9 +108,10 @@ export function ExitIntentPopup({
         {/* Close button */}
         <button
           onClick={handleClose}
+          aria-label="Close popup"
           className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 z-10"
         >
-          <X className="h-4 w-4" />
+          <X className="h-4 w-4" aria-hidden="true" />
           <span className="sr-only">Close</span>
         </button>
 
@@ -151,7 +152,7 @@ export function ExitIntentPopup({
                   className="h-11"
                 />
               </div>
-              <Button type="submit" className="w-full h-11" size="lg">
+              <Button type="submit" className="w-full h-11" size="lg" aria-label="Submit email to receive the free guide">
                 Send Me The Free Guide
               </Button>
             </form>
@@ -176,6 +177,7 @@ export function ExitIntentPopup({
             <div className="mt-4 pt-4 border-t text-center">
               <button
                 onClick={handleClose}
+                aria-label="Dismiss popup and continue browsing"
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 No thanks, I'll figure it out myself

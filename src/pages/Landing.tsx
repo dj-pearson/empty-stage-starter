@@ -289,13 +289,14 @@ const Landing = () => {
                 <span className="sr-only">Toggle theme</span>
               </Button>
               <Link to="/auth?tab=signin">
-                <Button variant="ghost" className="font-medium">
+                <Button variant="ghost" className="font-medium" aria-label="Sign in to your EatPal account">
                   Sign In
                 </Button>
               </Link>
               {/* Primary CTA - appears prominently after scroll */}
               <Link to="/auth?tab=signup">
                 <Button
+                  aria-label="Get started with EatPal for free"
                   className={`font-semibold shadow-md transition-all duration-300 ${
                     scrolled
                       ? 'bg-primary text-white scale-105'
@@ -385,12 +386,12 @@ const Landing = () => {
                       )}
                     </Button>
                     <Link to="/auth?tab=signup" onClick={closeMobileMenu}>
-                      <Button size="lg" className="w-full bg-primary text-white shadow-md">
+                      <Button size="lg" className="w-full bg-primary text-white shadow-md" aria-label="Get started with EatPal for free">
                         Get Started Free
                       </Button>
                     </Link>
                     <Link to="/auth?tab=signin" onClick={closeMobileMenu}>
-                      <Button size="lg" variant="outline" className="w-full">
+                      <Button size="lg" variant="outline" className="w-full" aria-label="Sign in to your EatPal account">
                         Sign In
                       </Button>
                     </Link>
@@ -695,7 +696,7 @@ const Landing = () => {
         </section>
 
         {/* Features Section with Animations */}
-        <section id="features" className="py-24 px-4 relative">
+        <section id="complete-solution" className="py-24 px-4 relative">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent pointer-events-none" />
           <div className="container mx-auto relative z-10">
             <div className="animate-section text-center mb-16">
@@ -761,7 +762,7 @@ const Landing = () => {
                     ))}
                   </ul>
                   <Link to="/auth?tab=signup">
-                    <Button variant="outline" className="w-full">
+                    <Button variant="outline" className="w-full" aria-label="Get started with the free plan">
                       Get Started
                     </Button>
                   </Link>
@@ -788,7 +789,7 @@ const Landing = () => {
                     ))}
                   </ul>
                   <Link to="/auth?tab=signup">
-                    <Button className="w-full">
+                    <Button className="w-full" aria-label="Start free trial of the Pro plan">
                       Start Free Trial
                     </Button>
                   </Link>
@@ -812,7 +813,7 @@ const Landing = () => {
                     ))}
                   </ul>
                   <Link to="/auth?tab=signup">
-                    <Button variant="outline" className="w-full">
+                    <Button variant="outline" className="w-full" aria-label="Start free trial of the Family plan">
                       Start Free Trial
                     </Button>
                   </Link>
@@ -821,8 +822,8 @@ const Landing = () => {
             </div>
 
             <div className="text-center mt-8">
-              <Link to="/pricing" className="text-primary hover:underline font-medium inline-flex items-center gap-1">
-                View full feature comparison <ArrowRight className="h-4 w-4" />
+              <Link to="/pricing" className="text-primary hover:underline font-medium inline-flex items-center gap-1" aria-label="View full pricing feature comparison">
+                View full feature comparison <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             </div>
           </div>
@@ -864,15 +865,17 @@ const Landing = () => {
                 <Link to="/auth?tab=signup">
                   <Button
                     size="lg"
+                    aria-label="Start your free trial of EatPal meal planning"
                     className="bg-white text-primary hover:bg-white/90 shadow-xl hover:shadow-2xl transition-all text-lg px-10 py-7 rounded-full gap-2"
                   >
-                    Start Free Trial <ArrowRight className="h-5 w-5" />
+                    Start Free Trial <ArrowRight className="h-5 w-5" aria-hidden="true" />
                   </Button>
                 </Link>
                 <Link to="/pricing">
                   <Button
                     size="lg"
                     variant="outline"
+                    aria-label="View EatPal pricing plans"
                     className="border-2 border-white/30 text-white hover:bg-white/10 text-lg px-10 py-7 rounded-full"
                   >
                     View Pricing
