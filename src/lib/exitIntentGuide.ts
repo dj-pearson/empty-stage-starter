@@ -22,8 +22,8 @@ export async function captureEmailLead({ email, source }: CaptureEmailLeadParams
 
     // 2. Get the guide download URL from Supabase storage
     const { data: urlData } = supabase.storage
-      .from('public-assets')
-      .getPublicUrl('guides/picky-eater-food-chaining-guide.pdf');
+      .from('Assets')
+      .getPublicUrl('picky-eater-food-chaining-guide.pdf');
 
     const guideUrl = urlData.publicUrl;
 
