@@ -60,12 +60,18 @@ export function ExitIntentPopup({
     return () => document.removeEventListener('mouseleave', handleMouseLeave);
   }, [handleMouseLeave]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (email) {
-      // In a real implementation, this would send to your email service
-      console.log('Email captured:', email);
-      setSubmitted(true);
+      try {
+        const { captureEmailLead } = await import('@/lib/exitIntentGuide');
+        await captureEmailLead({ email, source: 'exit_intent' });
+        setSubmitted(true);
+      } catch (error) {
+        console.error('Error capturing email:', error);
+        // Still show success to user, but log the error
+        setSubmitted(true);
+      }
     }
   };
 
