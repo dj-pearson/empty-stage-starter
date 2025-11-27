@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -31,19 +31,33 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Link } from "react-router-dom";
-import { EnhancedHero } from "@/components/EnhancedHero";
-import { FeatureCard3D } from "@/components/Card3DTilt";
-import { ParallaxBackground } from "@/components/ParallaxBackground";
-import { ExitIntentPopup } from "@/components/ExitIntentPopup";
 import { SEOHead } from "@/components/SEOHead";
 import { OrganizationSchema, SoftwareAppSchema, FAQSchema } from "@/components/schema";
 import { getPageSEO } from "@/lib/seo-config";
 import { Footer } from "@/components/Footer";
-import gsap from "gsap";
-import { useGSAP } from "@gsap/react";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
 
-gsap.registerPlugin(ScrollTrigger);
+// Lazy load heavy components that use GSAP to reduce initial bundle size
+const EnhancedHero = lazy(() => import("@/components/EnhancedHero").then(m => ({ default: m.EnhancedHero })));
+const FeatureCard3D = lazy(() => import("@/components/Card3DTilt").then(m => ({ default: m.FeatureCard3D })));
+const ParallaxBackground = lazy(() => import("@/components/ParallaxBackground").then(m => ({ default: m.ParallaxBackground })));
+const ExitIntentPopup = lazy(() => import("@/components/ExitIntentPopup").then(m => ({ default: m.ExitIntentPopup })));
+
+// Dynamically import GSAP only when needed (deferred loading)
+let gsapModule: typeof import("gsap") | null = null;
+let ScrollTriggerModule: typeof import("gsap/ScrollTrigger").ScrollTrigger | null = null;
+
+const loadGSAP = async () => {
+  if (!gsapModule) {
+    const [gsapImport, scrollTriggerImport] = await Promise.all([
+      import("gsap"),
+      import("gsap/ScrollTrigger")
+    ]);
+    gsapModule = gsapImport;
+    ScrollTriggerModule = scrollTriggerImport.ScrollTrigger;
+    gsapModule.gsap.registerPlugin(ScrollTriggerModule);
+  }
+  return { gsap: gsapModule.gsap, ScrollTrigger: ScrollTriggerModule };
+};
 
 const Landing = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -63,50 +77,65 @@ const Landing = () => {
   // Get SEO configuration for homepage
   const seoConfig = getPageSEO("home");
 
-  useGSAP(() => {
-    // Animate sections on scroll
-    const sections = gsap.utils.toArray<HTMLElement>(".animate-section");
+  // Initialize GSAP animations after component mounts (deferred)
+  useEffect(() => {
+    let mounted = true;
 
-    sections.forEach((section) => {
-      gsap.fromTo(section,
-        { y: 50, opacity: 0 },
-        {
-          y: 0,
-          opacity: 1,
-          duration: 1,
-          ease: "power3.out",
-          scrollTrigger: {
-            trigger: section,
-            start: "top 80%", // Start animation when top of section hits 80% of viewport
-            toggleActions: "play none none reverse"
+    const initAnimations = async () => {
+      const { gsap, ScrollTrigger } = await loadGSAP();
+      if (!mounted || !containerRef.current) return;
+
+      // Animate sections on scroll
+      const sections = gsap.utils.toArray<HTMLElement>(".animate-section");
+
+      sections.forEach((section) => {
+        gsap.fromTo(section,
+          { y: 50, opacity: 0 },
+          {
+            y: 0,
+            opacity: 1,
+            duration: 1,
+            ease: "power3.out",
+            scrollTrigger: {
+              trigger: section,
+              start: "top 80%",
+              toggleActions: "play none none reverse"
+            }
           }
-        }
-      );
-    });
+        );
+      });
 
-    // Staggered animations for grids
-    const grids = gsap.utils.toArray<HTMLElement>(".animate-grid");
+      // Staggered animations for grids
+      const grids = gsap.utils.toArray<HTMLElement>(".animate-grid");
 
-    grids.forEach((grid) => {
-      const items = grid.querySelectorAll(".animate-item");
+      grids.forEach((grid) => {
+        const items = grid.querySelectorAll(".animate-item");
 
-      gsap.fromTo(items,
-        { y: 30, opacity: 0 },
-        {
-          y: 0,
-          opacity: 1,
-          duration: 0.8,
-          stagger: 0.1,
-          ease: "power2.out",
-          scrollTrigger: {
-            trigger: grid,
-            start: "top 85%",
+        gsap.fromTo(items,
+          { y: 30, opacity: 0 },
+          {
+            y: 0,
+            opacity: 1,
+            duration: 0.8,
+            stagger: 0.1,
+            ease: "power2.out",
+            scrollTrigger: {
+              trigger: grid,
+              start: "top 85%",
+            }
           }
-        }
-      );
-    });
+        );
+      });
+    };
 
-  }, { scope: containerRef });
+    // Delay animation initialization to not block initial render
+    const timer = setTimeout(initAnimations, 100);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+    };
+  }, []);
 
   const features = [
     {
@@ -214,6 +243,8 @@ const Landing = () => {
                   src="/Logo-Green.png"
                   alt="EatPal"
                   className="h-8"
+                  width="120"
+                  height="32"
                 />
               </picture>
               <picture className="hidden dark:block">
@@ -222,6 +253,8 @@ const Landing = () => {
                   src="/Logo-White.png"
                   alt="EatPal"
                   className="h-8"
+                  width="120"
+                  height="32"
                 />
               </picture>
             </div>
@@ -291,6 +324,8 @@ const Landing = () => {
                         src="/Logo-Green.png"
                         alt="EatPal"
                         className="h-7"
+                        width="105"
+                        height="28"
                       />
                     </picture>
                     <picture className="hidden dark:block">
@@ -299,6 +334,8 @@ const Landing = () => {
                         src="/Logo-White.png"
                         alt="EatPal"
                         className="h-7"
+                        width="105"
+                        height="28"
                       />
                     </picture>
                   </SheetTitle>
@@ -366,8 +403,12 @@ const Landing = () => {
 
         {/* Enhanced Hero Section with Trust Signals */}
         <div className="relative">
-          <ParallaxBackground />
-          <EnhancedHero />
+          <Suspense fallback={<div className="absolute inset-0" />}>
+            <ParallaxBackground />
+          </Suspense>
+          <Suspense fallback={<div className="min-h-[85vh] flex items-center justify-center"><div className="animate-pulse text-2xl">Loading...</div></div>}>
+            <EnhancedHero />
+          </Suspense>
         </div>
 
         {/* Pain Points Section - If Mealtime Feels Like a Battle */}
@@ -434,7 +475,9 @@ const Landing = () => {
 
         {/* Solution Section - Meet EatPal */}
         <section id="how-it-works" className="py-24 px-4 bg-gradient-to-br from-primary/5 to-secondary/10 relative">
-          <ParallaxBackground className="opacity-50" />
+          <Suspense fallback={null}>
+            <ParallaxBackground className="opacity-50" />
+          </Suspense>
           <div className="container mx-auto max-w-6xl relative z-10">
             <div className="animate-section text-center mb-16">
               <Badge className="mb-4 bg-primary/10 text-primary border-primary px-4 py-1 text-sm">The Solution</Badge>
@@ -666,19 +709,21 @@ const Landing = () => {
               </p>
             </div>
             <div className="animate-grid grid md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
-              {features.map((feature) => (
-                <div key={feature.title} className="animate-item h-full">
-                  <FeatureCard3D
-                    icon={feature.icon === Utensils ? '🍽️' :
-                      feature.icon === Calendar ? '📅' :
-                        feature.icon === Brain ? '🧠' :
-                          feature.icon === ShoppingCart ? '🛒' :
-                            feature.icon === Users ? '👨‍👩‍👧‍👦' : '📈'}
-                    title={feature.title}
-                    description={feature.description}
-                  />
-                </div>
-              ))}
+              <Suspense fallback={<div className="col-span-full flex justify-center py-8"><div className="animate-pulse">Loading features...</div></div>}>
+                {features.map((feature) => (
+                  <div key={feature.title} className="animate-item h-full">
+                    <FeatureCard3D
+                      icon={feature.icon === Utensils ? '🍽️' :
+                        feature.icon === Calendar ? '📅' :
+                          feature.icon === Brain ? '🧠' :
+                            feature.icon === ShoppingCart ? '🛒' :
+                              feature.icon === Users ? '👨‍👩‍👧‍👦' : '📈'}
+                      title={feature.title}
+                      description={feature.description}
+                    />
+                  </div>
+                ))}
+              </Suspense>
             </div>
           </div>
         </section>
@@ -860,8 +905,10 @@ const Landing = () => {
 
         <Footer />
 
-        {/* Exit Intent Popup - Captures leaving visitors */}
-        <ExitIntentPopup delay={5000} />
+        {/* Exit Intent Popup - Captures leaving visitors (lazy loaded) */}
+        <Suspense fallback={null}>
+          <ExitIntentPopup delay={5000} />
+        </Suspense>
       </div>
     </>
   );
