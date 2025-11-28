@@ -1,6 +1,6 @@
 # CLAUDE.md - AI Assistant Guide for Munch Maker Mate (EatPal)
 
-> **Last Updated**: 2025-11-16
+> **Last Updated**: 2025-11-28
 > **Project**: Meal Planning & Nutrition Tracking Application
 > **Stack**: Vite + React 19 + TypeScript + Supabase + Expo
 
@@ -15,6 +15,7 @@
 7. [Testing Guidelines](#testing-guidelines)
 8. [Common Tasks](#common-tasks)
 9. [Troubleshooting](#troubleshooting)
+10. [Changelog](#changelog)
 
 ---
 
@@ -32,15 +33,25 @@
 - Budget calculator with USDA data
 - Subscription-based SaaS model (Stripe integration)
 
+### Recent Additions (Nov 2025)
+- **3D Hero Scene**: Interactive Three.js powered landing page with floating food elements
+- **SEO Structured Data**: JSON-LD schema components for rich search results
+- **PWA Support**: App installation prompts and offline capabilities
+- **Optimized Images**: Lazy loading, WebP/AVIF support, LCP optimization
+- **Conversion Tracking**: User journey funnel analytics dashboard
+- **Accessibility Improvements**: ARIA labels, reduced motion support, keyboard navigation
+
 ### Tech Stack Summary
-- **Frontend**: Vite 7.1, React 19.1, TypeScript 5.8
-- **UI**: shadcn-ui (53 components), Tailwind CSS 3.4
-- **Routing**: React Router v6 (41 pages)
-- **Backend**: Supabase (PostgreSQL, Auth, Real-time, Edge Functions)
-- **Mobile**: Expo 54.0 + Expo Router v6
+- **Frontend**: Vite 7.1.12, React 19.1, TypeScript 5.8.3
+- **UI**: shadcn-ui (53 components), Tailwind CSS 3.4.17
+- **3D Graphics**: Three.js 0.159, @react-three/fiber 9.0, @react-three/drei 10.7
+- **Animation**: Framer Motion 12.23, GSAP 3.13, Lottie 3.6
+- **Routing**: React Router v6.30 (41 pages)
+- **Backend**: Supabase 2.74 (PostgreSQL, Auth, Real-time, Edge Functions)
+- **Mobile**: Expo 54.0 + Expo Router v6.0.12
 - **Deployment**: Cloudflare Pages (web), EAS Build (mobile)
 - **Testing**: Vitest 3.0 (unit), Playwright 1.56 (E2E)
-- **Monitoring**: Sentry 10.19 with session replay
+- **Monitoring**: Sentry 10.19 with session replay + Vite plugin for sourcemaps
 
 ---
 
@@ -51,20 +62,21 @@
 ```
 /
 ├── src/
-│   ├── components/          # 232 total components
+│   ├── components/          # 242 total components
 │   │   ├── ui/             # 53 shadcn-ui components (button, dialog, etc.)
 │   │   ├── admin/          # Admin dashboard components
 │   │   ├── blog/           # Blog-related components
 │   │   ├── budget/         # Budget calculator UI
 │   │   ├── quiz/           # Picky eater quiz
+│   │   ├── schema/         # SEO structured data (JSON-LD) components
 │   │   └── [feature]/      # Feature-specific components
 │   ├── contexts/           # React Context providers
-│   │   └── AppContext.tsx  # Main application state (950 lines)
-│   ├── hooks/              # 20+ custom React hooks
+│   │   └── AppContext.tsx  # Main application state (~960 lines)
+│   ├── hooks/              # 33 custom React hooks
 │   │   └── index.ts        # Centralized hook exports
 │   ├── integrations/       # External service integrations
 │   │   └── supabase/       # Supabase client & types
-│   ├── lib/                # Business logic & utilities
+│   ├── lib/                # Business logic & utilities (39 files)
 │   │   ├── budgetCalculator/
 │   │   ├── mealPlanGenerator/
 │   │   ├── quiz/
@@ -72,6 +84,9 @@
 │   │   ├── analytics.ts
 │   │   ├── sentry.tsx
 │   │   ├── platform.ts     # Platform detection (web/mobile)
+│   │   ├── seo-config.ts   # SEO configuration
+│   │   ├── seo-helpers.ts  # SEO utility functions
+│   │   ├── pwa.ts          # PWA utilities
 │   │   └── utils.ts
 │   ├── pages/              # 41 page components
 │   │   ├── dashboard/      # Protected dashboard routes
@@ -114,8 +129,11 @@
 | **Custom Hooks** | `src/hooks/` | Reusable hooks (storage, media queries, etc.) |
 | **UI Components** | `src/components/ui/` | shadcn-ui components (DO NOT modify directly) |
 | **Feature Components** | `src/components/` | Custom components (safe to modify) |
+| **SEO Schema Components** | `src/components/schema/` | JSON-LD structured data for SEO |
 | **Utilities** | `src/lib/utils.ts` | Helper functions (cn, date formatting, etc.) |
 | **Platform Utils** | `src/lib/platform.ts` | Web/mobile detection & storage abstraction |
+| **SEO Config** | `src/lib/seo-config.ts` | SEO configuration and metadata |
+| **PWA Utils** | `src/lib/pwa.ts` | Progressive Web App utilities |
 
 ---
 
@@ -154,10 +172,28 @@ VITE_SUPABASE_ANON_KEY=<your-anon-key>
 VITE_SENTRY_DSN=<your-sentry-dsn>
 VITE_SENTRY_ENABLED=true
 
+# Sentry Vite Plugin (for production sourcemaps)
+SENTRY_ORG=<your-sentry-org>
+SENTRY_PROJECT=<your-sentry-project>
+SENTRY_AUTH_TOKEN=<your-sentry-auth-token>
+
 # Optional: Email notifications
 EMAIL_PROVIDER=resend
 RESEND_API_KEY=<your-key>
 EMAIL_FROM=noreply@eatpal.com
+
+# Optional: SEO & Analytics APIs
+PAGESPEED_INSIGHTS_API_KEY=<your-google-pagespeed-api-key>  # Free
+
+# Optional: Backlink tracking (choose one)
+AHREFS_API_KEY=<your-ahrefs-api-key>
+MOZ_ACCESS_ID=<your-moz-access-id>
+MOZ_SECRET_KEY=<your-moz-secret-key>
+
+# Optional: Google Search Console OAuth
+GOOGLE_CLIENT_ID=<your-google-client-id>
+GOOGLE_CLIENT_SECRET=<your-google-client-secret>
+GOOGLE_REDIRECT_URI=https://your-domain.com/oauth/callback
 ```
 
 ### Development Commands
@@ -313,6 +349,121 @@ const MyNewPage = lazy(() => import('@/pages/MyNewPage'));
   </ProtectedRoute>
 } />
 ```
+
+### Using SEO Schema Components
+
+**Location**: `src/components/schema/`
+
+The schema components generate JSON-LD structured data for rich search results:
+
+```typescript
+import { ArticleSchema } from '@/components/schema/ArticleSchema';
+import { FAQSchema } from '@/components/schema/FAQSchema';
+import { BreadcrumbSchema } from '@/components/schema/BreadcrumbSchema';
+
+// In a blog post page:
+export default function BlogPost({ post }) {
+  return (
+    <>
+      <ArticleSchema
+        headline={post.title}
+        description={post.excerpt}
+        image={post.featuredImage}
+        datePublished={post.publishedAt}
+        dateModified={post.updatedAt}
+        author={post.author}
+      />
+      <BreadcrumbSchema
+        items={[
+          { name: 'Home', url: '/' },
+          { name: 'Blog', url: '/blog' },
+          { name: post.title, url: `/blog/${post.slug}` }
+        ]}
+      />
+      {/* Page content */}
+    </>
+  );
+}
+```
+
+Available schema components:
+- `ArticleSchema` - Blog posts and articles
+- `FAQSchema` - FAQ pages
+- `BreadcrumbSchema` - Navigation breadcrumbs
+- `HowToSchema` - How-to guides
+- `OrganizationSchema` - Company information
+- `SoftwareAppSchema` - App store listings
+
+### Using Optimized Images
+
+**Location**: `src/components/OptimizedImage.tsx`
+
+```typescript
+import { OptimizedImage } from '@/components/OptimizedImage';
+
+// Above-fold image (eager loading, high priority)
+<OptimizedImage
+  src="/hero-image.webp"
+  alt="Hero description"
+  width={1200}
+  height={600}
+  priority  // Loads immediately for LCP
+/>
+
+// Below-fold image (lazy loading)
+<OptimizedImage
+  src="/feature-image.webp"
+  alt="Feature description"
+  width={800}
+  height={400}
+  // Lazy loads automatically
+/>
+
+// Decorative image (hidden from screen readers)
+<OptimizedImage
+  src="/decoration.webp"
+  alt=""
+  decorative
+/>
+```
+
+### Using 3D Components
+
+**Location**: `src/components/ThreeDHeroScene.tsx`, `src/components/LazyFoodOrbit.tsx`
+
+```typescript
+import { lazy, Suspense } from 'react';
+
+const ThreeDHeroScene = lazy(() => import('@/components/ThreeDHeroScene'));
+
+// In your landing page:
+<Suspense fallback={<div className="h-screen bg-gradient-to-b from-primary/10" />}>
+  <ThreeDHeroScene />
+</Suspense>
+```
+
+The 3D scene:
+- Uses Three.js with @react-three/fiber
+- Includes floating food emojis and glass-effect shapes
+- Respects `prefers-reduced-motion` for accessibility
+- Lazy loads to minimize initial bundle size
+
+### Using PWA Components
+
+**Location**: `src/components/AppInstallPrompt.tsx`
+
+```typescript
+import { AppInstallPrompt } from '@/components/AppInstallPrompt';
+
+// Add to your layout or app root:
+<AppInstallPrompt />
+```
+
+The install prompt:
+- Detects Chrome/Edge `beforeinstallprompt` event
+- Shows iOS-specific instructions on Safari
+- Remembers dismissed state for 7 days
+- Checks if already installed via `display-mode: standalone`
 
 ### Adding Database Tables
 
@@ -711,7 +862,7 @@ Component Re-render
 
 ### Custom Hooks
 
-**Location**: `src/hooks/`
+**Location**: `src/hooks/` (33 hooks total)
 
 #### Storage Hooks
 ```typescript
@@ -722,10 +873,11 @@ const [value, setValue] = useLocalStorage('key', defaultValue);
 
 #### Media Query Hooks
 ```typescript
-import { useIsMobile, useIsTablet } from '@/hooks';
+import { useIsMobile, useIsTablet, useIsDesktop } from '@/hooks';
 
-const isMobile = useIsMobile();  // < 768px
-const isTablet = useIsTablet();  // 768px - 1024px
+const isMobile = useIsMobile();    // < 768px
+const isTablet = useIsTablet();    // 768px - 1024px
+const isDesktop = useIsDesktop();  // > 1024px
 ```
 
 #### Subscription Hook
@@ -742,6 +894,35 @@ const {
 } = useSubscription();
 
 // subscription = { status: 'active' | 'trialing' | 'past_due' | 'canceled', ... }
+```
+
+#### Accessibility Hooks
+```typescript
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
+
+const prefersReducedMotion = useReducedMotion();  // Respects prefers-reduced-motion
+```
+
+#### Viewport & Interaction Hooks
+```typescript
+import { useInView } from '@/hooks/useInView';
+import { useSwipeGesture } from '@/hooks/useSwipeGesture';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { useWindowSize } from '@/hooks/useWindowSize';
+
+const isInView = useInView(ref);  // Intersection observer
+const { width, height } = useWindowSize();
+```
+
+#### Utility Hooks
+```typescript
+import { useUndoRedo } from '@/hooks/useUndoRedo';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+import { useLazyComponent } from '@/hooks/useLazyComponent';
+
+const { state, undo, redo, canUndo, canRedo } = useUndoRedo(initialState);
+const isFeatureEnabled = useFeatureFlag('feature-name');
 ```
 
 ---
@@ -790,6 +971,19 @@ const { data, error } = await supabase
 | `grocery_items` | Grocery list items | id, name, quantity, unit, checked, category |
 | `grocery_lists` | Grocery list groups | id, name, icon, color, store_name |
 | `user_subscriptions` | Subscription status | id, user_id, plan_id, status, stripe_subscription_id |
+
+### Recent Database Tables (Nov 2025)
+
+| Table | Purpose | Key Columns |
+|-------|---------|-------------|
+| `meal_plan_templates` | Reusable meal plan templates | id, name, meals, user_id |
+| `push_notifications` | Push notification subscriptions | id, user_id, endpoint, keys |
+| `recipe_scaling` | Recipe serving adjustments | id, recipe_id, original_servings, scaled_servings |
+| `meal_voting` | Family meal preference voting | id, meal_id, user_id, vote |
+| `weekly_reports` | Weekly nutrition summaries | id, user_id, week_start, nutrition_data |
+| `meal_suggestions` | AI-generated meal suggestions | id, user_id, suggestion_data, status |
+| `grocery_delivery` | Delivery tracking | id, grocery_list_id, delivery_status, eta |
+| `custom_domains` | White-label custom domains | id, household_id, domain, verified |
 
 ### Real-time Subscriptions
 
@@ -1415,6 +1609,26 @@ const { register, handleSubmit } = useForm({
 
 ---
 
-**Last Updated**: 2025-11-16
+## Changelog
+
+### 2025-11-28
+- Updated component count (232 → 242)
+- Updated hooks count (20+ → 33)
+- Added `src/components/schema/` directory documentation
+- Added SEO structured data components (ArticleSchema, FAQSchema, etc.)
+- Added OptimizedImage component documentation
+- Added 3D graphics (Three.js) integration docs
+- Added PWA/AppInstallPrompt documentation
+- Updated tech stack with Three.js, animation libraries
+- Added new environment variables (Sentry plugin, SEO APIs, Google OAuth)
+- Added 8 new database tables documentation
+- Expanded custom hooks documentation with accessibility and utility hooks
+
+### 2025-11-16
+- Initial comprehensive documentation
+
+---
+
+**Last Updated**: 2025-11-28
 **Maintained by**: Development Team
 **Questions?**: Check the docs or existing code patterns first!
