@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CalendarMealPlanner } from "@/components/CalendarMealPlanner";
+import { GSAPCalendarMealPlanner } from "@/components/GSAPCalendarMealPlanner";
 import { FoodSelectorDialog } from "@/components/FoodSelectorDialog";
 import { DetailedTrackingDialog } from "@/components/DetailedTrackingDialog";
 import { buildWeekPlan, buildDayPlan } from "@/lib/mealPlanner";
@@ -73,6 +73,7 @@ export default function Planner() {
   const [selectedSlot, setSelectedSlot] = useState<{
     date: string;
     slot: MealSlot;
+    kidId: string;
   } | null>(null);
   const [detailedTrackingOpen, setDetailedTrackingOpen] = useState(false);
   const [trackingEntry, setTrackingEntry] = useState<PlanEntry | null>(null);
@@ -262,19 +263,46 @@ export default function Planner() {
     }
   };
 
-  const handleOpenFoodSelector = (date: string, slot: MealSlot) => {
-    setSelectedSlot({ date, slot });
+  const handleOpenFoodSelector = (date: string, slot: MealSlot, kidId?: string) => {
+    // Use provided kidId or fall back to activeKidId
+    const targetKidId = kidId || activeKidId;
+    if (!targetKidId) {
+      toast.error("Please select a child first");
+      return;
+    }
+    setSelectedSlot({ date, slot, kidId: targetKidId });
     setFoodSelectorOpen(true);
   };
 
   const handleSelectFood = (foodId: string) => {
-    if (!selectedSlot || !activeKid) return;
-    handleAddEntry(selectedSlot.date, selectedSlot.slot, foodId);
+    if (!selectedSlot) return;
+    
+    // Use the kidId from selectedSlot instead of activeKidId
+    const targetKid = kids.find((k) => k.id === selectedSlot.kidId);
+    if (!targetKid) {
+      toast.error("Could not find the selected child");
+      return;
+    }
+    
+    addPlanEntry({
+      kid_id: selectedSlot.kidId,
+      date: selectedSlot.date,
+      meal_slot: selectedSlot.slot,
+      food_id: foodId,
+      result: null,
+    });
     toast.success("Meal added to calendar");
   };
 
   const handleSelectRecipe = async (recipeId: string) => {
-    if (!selectedSlot || !activeKid) return;
+    if (!selectedSlot) return;
+
+    // Use the kidId from selectedSlot
+    const targetKid = kids.find((k) => k.id === selectedSlot.kidId);
+    if (!targetKid) {
+      toast.error("Could not find the selected child");
+      return;
+    }
 
     const recipe = recipes.find((r) => r.id === recipeId);
     if (!recipe || recipe.food_ids.length === 0) return;
@@ -282,7 +310,7 @@ export default function Planner() {
     try {
       // Use the database function to schedule the full recipe
       const { error } = await supabase.rpc("schedule_recipe_to_plan", {
-        p_kid_id: activeKid.id,
+        p_kid_id: selectedSlot.kidId,
         p_recipe_id: recipe.id,
         p_date: selectedSlot.date,
         p_meal_slot: selectedSlot.slot,
@@ -596,7 +624,7 @@ export default function Planner() {
                     View Details
                   </Button>
                 </div>
-                <CalendarMealPlanner
+                <GSAPCalendarMealPlanner
                   weekStart={currentWeekStart}
                   planEntries={planEntries}
                   foods={foods}
@@ -618,7 +646,7 @@ export default function Planner() {
           </div>
         ) : (
           // Single child mode
-          <CalendarMealPlanner
+          <GSAPCalendarMealPlanner
             weekStart={currentWeekStart}
             planEntries={planEntries}
             foods={foods}

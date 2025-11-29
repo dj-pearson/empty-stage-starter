@@ -192,72 +192,257 @@ export function Navigation() {
             </SheetTrigger>
             <SheetContent side="right" className="w-[280px]">
               <SheetHeader>
-                <SheetTitle className="flex items-center gap-2">
-                  <img 
-                    src="/Logo-Green.png" 
-                    alt="EatPal" 
-                    className="h-6 block dark:hidden"
-                  />
-                  <img 
-                    src="/Logo-White.png" 
-                    alt="EatPal" 
-                    className="h-6 hidden dark:block"
-                  />
+                <SheetTitle className="flex items-center gap-2 text-primary">
+                  <Utensils className="h-5 w-5" />
+                  <span>Navigation</span>
                 </SheetTitle>
               </SheetHeader>
-              <div className="flex flex-col gap-1 mt-6">
+              
+              <div className="flex flex-col mt-6">
                 {/* Kid Selector */}
                 <div className="mb-4 pb-4 border-b">
+                  <p className="text-xs font-semibold text-muted-foreground mb-2 px-1">ACTIVE PROFILE</p>
                   <KidSelector />
                 </div>
 
-                {/* Search Hint */}
-                <Button
-                  variant="outline"
-                  className="w-full justify-start gap-3 mb-4"
-                  onClick={() => {
-                    const event = new KeyboardEvent('keydown', {
-                      key: 'k',
-                      metaKey: true,
-                      bubbles: true
-                    });
-                    document.dispatchEvent(event);
-                    closeMobileMenu();
-                  }}
-                >
-                  <Search className="h-5 w-5" />
-                  <span>Quick Search</span>
-                  <kbd className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
-                    ⌘K
-                  </kbd>
-                </Button>
-
-                {/* Navigation Links */}
-                {navItems.map(({ to, icon: Icon, label }) => (
+                {/* Main Navigation */}
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground mb-2 px-1">MAIN</p>
                   <NavLink
-                    key={to}
-                    to={to}
-                    end={to === "/dashboard"}
+                    to="/dashboard"
+                    end
                     onClick={closeMobileMenu}
                     className={({ isActive }) =>
                       cn(
-                        "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
                         isActive
                           ? "bg-primary/10 text-primary font-medium"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                          : "text-foreground hover:bg-muted"
                       )
                     }
                   >
-                    <Icon className="h-5 w-5" />
-                    <span>{label}</span>
+                    <Home className="h-5 w-5 shrink-0" />
+                    <span>Home</span>
                   </NavLink>
-                ))}
+                  <NavLink
+                    to="/dashboard/kids"
+                    onClick={closeMobileMenu}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground hover:bg-muted"
+                      )
+                    }
+                  >
+                    <Users className="h-5 w-5 shrink-0" />
+                    <span>Kids</span>
+                  </NavLink>
+                  <NavLink
+                    to="/dashboard/pantry"
+                    onClick={closeMobileMenu}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground hover:bg-muted"
+                      )
+                    }
+                  >
+                    <Utensils className="h-5 w-5 shrink-0" />
+                    <span>Pantry</span>
+                  </NavLink>
+                  <NavLink
+                    to="/dashboard/recipes"
+                    onClick={closeMobileMenu}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground hover:bg-muted"
+                      )
+                    }
+                  >
+                    <ChefHat className="h-5 w-5 shrink-0" />
+                    <span>Recipes</span>
+                  </NavLink>
+                  <NavLink
+                    to="/dashboard/planner"
+                    onClick={closeMobileMenu}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground hover:bg-muted"
+                      )
+                    }
+                  >
+                    <Calendar className="h-5 w-5 shrink-0" />
+                    <span>Planner</span>
+                  </NavLink>
+                </div>
+
+                {/* Tools Section */}
+                <div className="space-y-1 mt-4">
+                  <p className="text-xs font-semibold text-muted-foreground mb-2 px-1">TOOLS</p>
+                  <NavLink
+                    to="/dashboard/grocery"
+                    onClick={closeMobileMenu}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground hover:bg-muted"
+                      )
+                    }
+                  >
+                    <ShoppingCart className="h-5 w-5 shrink-0" />
+                    <span>Grocery</span>
+                  </NavLink>
+                  <NavLink
+                    to="/dashboard/food-tracker"
+                    onClick={closeMobileMenu}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground hover:bg-muted"
+                      )
+                    }
+                  >
+                    <Target className="h-5 w-5 shrink-0" />
+                    <span>Food Tracker</span>
+                  </NavLink>
+                  <NavLink
+                    to="/dashboard/ai-coach"
+                    onClick={closeMobileMenu}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground hover:bg-muted"
+                      )
+                    }
+                  >
+                    <Bot className="h-5 w-5 shrink-0" />
+                    <span>AI Coach</span>
+                  </NavLink>
+                  <NavLink
+                    to="/dashboard/meal-builder"
+                    onClick={closeMobileMenu}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground hover:bg-muted"
+                      )
+                    }
+                  >
+                    <Sparkles className="h-5 w-5 shrink-0" />
+                    <span>Meal Builder</span>
+                  </NavLink>
+                  <NavLink
+                    to="/dashboard/food-chaining"
+                    onClick={closeMobileMenu}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground hover:bg-muted"
+                      )
+                    }
+                  >
+                    <TrendingUp className="h-5 w-5 shrink-0" />
+                    <span>Food Chaining</span>
+                  </NavLink>
+                  <NavLink
+                    to="/dashboard/analytics"
+                    onClick={closeMobileMenu}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground hover:bg-muted"
+                      )
+                    }
+                  >
+                    <BarChart3 className="h-5 w-5 shrink-0" />
+                    <span>Analytics</span>
+                  </NavLink>
+                </div>
+
+                {/* Insights Section */}
+                <div className="space-y-1 mt-4">
+                  <p className="text-xs font-semibold text-muted-foreground mb-2 px-1">INSIGHTS</p>
+                  <NavLink
+                    to="/dashboard/ai-planner"
+                    onClick={closeMobileMenu}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground hover:bg-muted"
+                      )
+                    }
+                  >
+                    <Sparkles className="h-5 w-5 shrink-0" />
+                    <span>AI Planner</span>
+                  </NavLink>
+                  <NavLink
+                    to="/dashboard/insights"
+                    onClick={closeMobileMenu}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground hover:bg-muted"
+                      )
+                    }
+                  >
+                    <TrendingUp className="h-5 w-5 shrink-0" />
+                    <span>Insights</span>
+                  </NavLink>
+                </div>
+
+                {/* Admin Section */}
+                {isAdmin && (
+                  <div className="space-y-1 mt-4">
+                    <p className="text-xs font-semibold text-muted-foreground mb-2 px-1">ADMIN</p>
+                    <NavLink
+                      to="/admin"
+                      onClick={closeMobileMenu}
+                      className={({ isActive }) =>
+                        cn(
+                          "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
+                          isActive
+                            ? "bg-primary/10 text-primary font-medium"
+                            : "text-foreground hover:bg-muted"
+                        )
+                      }
+                    >
+                      <Shield className="h-5 w-5 shrink-0" />
+                      <span>Admin</span>
+                    </NavLink>
+                  </div>
+                )}
 
                 {/* Actions */}
-                <div className="mt-6 pt-6 border-t space-y-2">
+                <div className="mt-6 pt-4 border-t space-y-1">
                   <Button
-                    variant="outline"
-                    className="w-full justify-start gap-3"
+                    variant="ghost"
+                    className="w-full justify-start gap-3 px-3"
                     onClick={() => {
                       setTheme(theme === "dark" ? "light" : "dark");
                       closeMobileMenu();
@@ -276,8 +461,8 @@ export function Navigation() {
                     )}
                   </Button>
                   <Button
-                    variant="outline"
-                    className="w-full justify-start gap-3"
+                    variant="ghost"
+                    className="w-full justify-start gap-3 px-3"
                     onClick={() => {
                       handleLogout();
                       closeMobileMenu();

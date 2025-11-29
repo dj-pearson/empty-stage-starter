@@ -11,6 +11,9 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { logger } from "@/lib/logger";
 import DOMPurify from "dompurify";
+import { SEOHead } from "@/components/SEOHead";
+import { ArticleSchema } from "@/components/schema/ArticleSchema";
+import { OptimizedImage } from "@/components/OptimizedImage";
 
 interface BlogPostData {
   id: string;
@@ -260,10 +263,54 @@ const BlogPost = () => {
     );
   }
 
+  const baseUrl = "https://tryeatpal.com";
+  const articleUrl = `${baseUrl}/blog/${post.slug}`;
+
+  // Calculate word count from content for schema
+  const wordCount = useMemo(() => {
+    if (!post.content) return undefined;
+    return post.content.split(/\s+/).filter(Boolean).length;
+  }, [post.content]);
+
+  // Extract keywords from category and content
+  const articleKeywords = useMemo(() => {
+    const keywords = ["picky eating", "meal planning", "nutrition"];
+    if (post.category?.name) {
+      keywords.unshift(post.category.name.toLowerCase());
+    }
+    return keywords;
+  }, [post.category]);
+
   return (
     <div className="min-h-screen bg-background">
-      {/* SEO Meta Tags - would need a helmet library in production */}
-      
+      {/* Dynamic SEO Meta Tags */}
+      <SEOHead
+        title={post.meta_title || post.title}
+        description={post.meta_description || post.excerpt || `Read ${post.title} on the EatPal blog - expert advice on picky eating and family nutrition.`}
+        canonicalUrl={articleUrl}
+        ogType="article"
+        ogImage={post.featured_image_url || "https://tryeatpal.com/Cover.png"}
+        ogImageAlt={post.title}
+        keywords={articleKeywords.join(", ")}
+        aiPurpose={`This article from EatPal discusses ${post.category?.name || "picky eating and nutrition"}. ${post.excerpt || ""}`}
+        aiAudience="Parents of picky eaters, families managing ARFID, caregivers seeking nutrition guidance"
+        aiKeyFeatures={`${post.category?.name || "Nutrition"} guidance, evidence-based strategies, practical tips for families`}
+        aiUseCases={`Learning about ${post.category?.name?.toLowerCase() || "picky eating"}, finding practical meal planning tips, understanding feeding therapy approaches`}
+      />
+
+      {/* Article Structured Data */}
+      <ArticleSchema
+        title={post.title}
+        description={post.meta_description || post.excerpt || `Read ${post.title} on the EatPal blog.`}
+        url={articleUrl}
+        imageUrl={post.featured_image_url || undefined}
+        datePublished={post.published_at}
+        category={post.category?.name}
+        keywords={articleKeywords}
+        wordCount={wordCount}
+        readingTimeMinutes={post.reading_time_minutes || undefined}
+      />
+
       {/* Header */}
       <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -288,15 +335,16 @@ const BlogPost = () => {
         </div>
       </header>
 
-      {/* Article Hero */}
+      {/* Article Hero - Priority loading for LCP optimization */}
       {post.featured_image_url && (
-        <div className="w-full h-[400px] md:h-[500px] overflow-hidden">
-          <img
-            src={post.featured_image_url}
-            alt={post.title}
-            className="w-full h-full object-cover"
-          />
-        </div>
+        <OptimizedImage
+          src={post.featured_image_url}
+          alt={`Featured image for ${post.title}`}
+          className="w-full h-[400px] md:h-[500px]"
+          priority={true}
+          width={1200}
+          height={630}
+        />
       )}
 
       {/* Article Content */}
@@ -352,13 +400,14 @@ const BlogPost = () => {
                 <Link key={relatedPost.id} to={`/blog/${relatedPost.slug}`}>
                   <div className="group cursor-pointer">
                     {relatedPost.featured_image_url && (
-                      <div className="aspect-video w-full overflow-hidden rounded-lg mb-4">
-                        <img
-                          src={relatedPost.featured_image_url}
-                          alt={relatedPost.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      </div>
+                      <OptimizedImage
+                        src={relatedPost.featured_image_url}
+                        alt={`Read more about ${relatedPost.title}`}
+                        className="aspect-video w-full rounded-lg mb-4 group-hover:scale-105 transition-transform duration-300"
+                        priority={false}
+                        width={400}
+                        height={225}
+                      />
                     )}
                     <h3 className="font-heading font-semibold text-lg mb-2 group-hover:text-primary transition-colors line-clamp-2">
                       {relatedPost.title}

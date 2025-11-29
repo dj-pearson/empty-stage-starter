@@ -80,10 +80,10 @@ const App = () => (
             <AppProvider>
               <Toaster />
               <Sonner />
-              <CommandPalette />
               <PWAInstallPrompt />
               <BrowserRouter>
                 <SkipToContent />
+                <CommandPalette />
                 <Suspense fallback={<LoadingFallback />}>
           <Routes>
             <Route path="/" element={<Landing />} />

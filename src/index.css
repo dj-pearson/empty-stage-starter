@@ -8,131 +8,147 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* EatPal Color Palette - Light Mode */
-    --background: 60 100% 99%; /* Warm Beige as base */
-    --foreground: 142 50% 15%; /* Dark Forest Green for text */
+    /* EatPal Color Palette - Child Nutrition Theme - Light Mode */
+    --background: 36 33% 97%;
+    /* Warm Oatmeal/Cream (HSL 36, 33%, 97%) */
+    --foreground: 222 47% 11%;
+    /* Dark Slate/Navy (HSL 222, 47%, 11%) */
 
     --card: 0 0% 100%;
-    --card-foreground: 142 50% 15%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 142 50% 15%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 142 45% 30%; /* Forest Green RGB(47, 109, 60) */
+    --primary: 24 95% 53%;
+    /* Vibrant Carrot Orange (HSL 24, 95%, 53%) */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 143 41% 74%; /* Mint Green RGB(165, 214, 167) */
-    --secondary-foreground: 142 50% 15%;
+    --secondary: 142 76% 36%;
+    /* Fresh Broccoli Green (HSL 142, 76%, 36%) */
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 143 41% 90%;
-    --muted-foreground: 142 30% 40%;
+    --muted: 36 20% 90%;
+    --muted-foreground: 215 25% 40%;
+    /* Darker for better readability */
 
-    --accent: 28 100% 68%; /* Soft Orange RGB(255, 164, 91) */
+    --accent: 340 82% 52%;
+    /* Berry Pink (HSL 340, 82%, 52%) */
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 143 20% 85%;
-    --input: 143 20% 85%;
-    --ring: 142 45% 30%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 24 95% 53%;
+    /* Matches Primary */
 
-    --radius: 0.75rem;
+    --radius: 1rem;
+    /* Slightly rounder for friendlier feel */
 
     /* Custom semantic colors */
-    --safe-food: 142 45% 30%; /* Forest Green */
-    --try-bite: 28 100% 68%; /* Soft Orange */
-    --sky-blue: 199 84% 74%; /* Sky Blue RGB(129, 212, 250) */
+    --safe-food: 142 76% 36%;
+    /* Broccoli Green */
+    --try-bite: 24 95% 53%;
+    /* Carrot Orange */
+    --sky-blue: 199 84% 74%;
+    /* Sky Blue */
 
-    /* Trust colors - Light Mode (darker for better contrast on light bg) */
-    --trust-blue: 211 58% 48%; /* Darker blue for contrast */
-    --trust-green: 142 45% 35%; /* Forest green, darker for readability */
-    --trust-warm-orange: 28 85% 50%; /* Darker orange for better contrast */
-    --trust-soft-pink: 345 70% 50%; /* Darker pink for visibility */
-    --trust-calm-purple: 262 35% 50%; /* Darker purple for text */
+    /* Trust colors - Light Mode */
+    --trust-blue: 221 83% 53%;
+    /* Friendly Blue */
+    --trust-green: 142 76% 36%;
+    /* Broccoli Green */
+    --trust-warm-orange: 24 95% 53%;
+    /* Carrot Orange */
+    --trust-soft-pink: 340 82% 52%;
+    /* Berry Pink */
+    --trust-calm-purple: 262 52% 47%;
+    /* Calm Purple */
 
-    --gradient-hero: linear-gradient(
-      135deg,
-      hsl(142 45% 30%),
-      hsl(143 41% 74%)
-    );
-    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(60 100% 99%));
-    --shadow-soft: 0 4px 20px -4px hsl(142 45% 30% / 0.15);
-    --shadow-medium: 0 8px 30px -6px hsl(142 45% 30% / 0.25);
+    --gradient-hero: linear-gradient(135deg,
+        hsl(36 33% 97%),
+        hsl(24 95% 53% / 0.1));
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(36 33% 97%));
+    --shadow-soft: 0 4px 20px -4px hsl(222 47% 11% / 0.05);
+    --shadow-medium: 0 8px 30px -6px hsl(222 47% 11% / 0.1);
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-    --sidebar-background: 60 100% 99%;
-    --sidebar-foreground: 142 50% 15%;
-    --sidebar-primary: 142 45% 30%;
+    --sidebar-background: 36 33% 97%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 24 95% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 143 41% 90%;
-    --sidebar-accent-foreground: 142 50% 15%;
-    --sidebar-border: 143 20% 85%;
-    --sidebar-ring: 142 45% 30%;
+    --sidebar-accent: 36 20% 90%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 214 32% 91%;
+    --sidebar-ring: 24 95% 53%;
   }
 
   .dark {
-    /* EatPal Color Palette - Dark Mode */
-    --background: 142 25% 10%;
-    --foreground: 60 100% 95%;
+    /* EatPal Color Palette - Child Nutrition Theme - Dark Mode */
+    --background: 222 47% 11%;
+    /* Dark Slate Base */
+    --foreground: 36 33% 97%;
+    /* Warm Cream Text */
 
-    --card: 142 20% 14%;
-    --card-foreground: 60 100% 95%;
+    --card: 217 33% 17%;
+    --card-foreground: 36 33% 97%;
 
-    --popover: 142 20% 14%;
-    --popover-foreground: 60 100% 95%;
+    --popover: 217 33% 17%;
+    --popover-foreground: 36 33% 97%;
 
-    --primary: 143 41% 74%; /* Mint Green for dark mode */
-    --primary-foreground: 142 50% 15%;
+    --primary: 24 95% 60%;
+    /* Lighter Carrot Orange */
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 142 45% 35%; /* Darker Forest Green */
+    --secondary: 142 70% 45%;
+    /* Lighter Broccoli Green */
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 142 15% 18%;
-    --muted-foreground: 143 20% 60%;
+    --muted: 217 33% 25%;
+    --muted-foreground: 215 20% 75%;
+    /* Lighter for dark mode */
 
-    --accent: 28 100% 68%; /* Soft Orange */
-    --accent-foreground: 142 50% 15%;
+    --accent: 340 82% 60%;
+    /* Lighter Berry Pink */
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 70% 50%;
+    --destructive: 0 62% 30%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 142 20% 22%;
-    --input: 142 20% 22%;
-    --ring: 143 41% 74%;
+    --border: 217 33% 25%;
+    --input: 217 33% 25%;
+    --ring: 24 95% 60%;
 
-    --safe-food: 143 41% 74%;
-    --try-bite: 28 100% 68%;
+    --safe-food: 142 70% 45%;
+    --try-bite: 24 95% 60%;
     --sky-blue: 199 84% 74%;
 
-    /* Trust colors - Dark Mode (lighter for better contrast on dark bg) */
-    --trust-blue: 211 70% 70%; /* Lighter blue for dark mode */
-    --trust-green: 142 50% 65%; /* Lighter green for dark mode */
-    --trust-warm-orange: 28 90% 75%; /* Lighter orange for dark mode */
-    --trust-soft-pink: 345 80% 75%; /* Lighter pink for dark mode */
-    --trust-calm-purple: 262 50% 75%; /* Lighter purple for dark mode */
+    /* Trust colors - Dark Mode */
+    --trust-blue: 221 83% 65%;
+    --trust-green: 142 70% 45%;
+    --trust-warm-orange: 24 95% 60%;
+    --trust-soft-pink: 340 82% 60%;
+    --trust-calm-purple: 262 52% 65%;
 
-    --gradient-hero: linear-gradient(
-      135deg,
-      hsl(143 41% 74%),
-      hsl(142 45% 35%)
-    );
-    --gradient-card: linear-gradient(
-      180deg,
-      hsl(142 20% 14%),
-      hsl(142 25% 10%)
-    );
-    --shadow-soft: 0 4px 20px -4px hsl(143 41% 74% / 0.3);
-    --shadow-medium: 0 8px 30px -6px hsl(143 41% 74% / 0.4);
+    --gradient-hero: linear-gradient(135deg,
+        hsl(222 47% 11%),
+        hsl(24 95% 60% / 0.1));
+    --gradient-card: linear-gradient(180deg,
+        hsl(217 33% 17%),
+        hsl(222 47% 11%));
+    --shadow-soft: 0 4px 20px -4px hsl(0 0% 0% / 0.3);
+    --shadow-medium: 0 8px 30px -6px hsl(0 0% 0% / 0.5);
 
-    --sidebar-background: 142 25% 10%;
-    --sidebar-foreground: 60 100% 95%;
-    --sidebar-primary: 143 41% 74%;
-    --sidebar-primary-foreground: 142 50% 15%;
-    --sidebar-accent: 142 15% 18%;
-    --sidebar-accent-foreground: 60 100% 95%;
-    --sidebar-border: 142 20% 22%;
-    --sidebar-ring: 143 41% 74%;
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 36 33% 97%;
+    --sidebar-primary: 24 95% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217 33% 25%;
+    --sidebar-accent-foreground: 36 33% 97%;
+    --sidebar-border: 217 33% 25%;
+    --sidebar-ring: 24 95% 60%;
   }
 }
 
@@ -157,6 +173,7 @@ All colors MUST be HSL.
 }
 
 @layer utilities {
+
   /* Safe area insets for modern devices (iPhone X+) */
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
@@ -177,8 +194,10 @@ All colors MUST be HSL.
 
   /* Hide scrollbar for IE, Edge and Firefox */
   .scrollbar-hide {
-    -ms-overflow-style: none; /* IE and Edge */
-    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
   }
 
   /* Touch feedback */
@@ -193,9 +212,12 @@ All colors MUST be HSL.
 
   /* 3D Animation Keyframes */
   @keyframes float {
-    0%, 100% {
+
+    0%,
+    100% {
       transform: translateY(0px);
     }
+
     50% {
       transform: translateY(-20px);
     }
@@ -210,15 +232,19 @@ All colors MUST be HSL.
     0% {
       transform: translate(0, 0) rotate(0deg) scale(1);
     }
+
     25% {
       transform: translate(40px, -60px) rotate(15deg) scale(1.1);
     }
+
     50% {
       transform: translate(-30px, -80px) rotate(-12deg) scale(0.95);
     }
+
     75% {
       transform: translate(-50px, -40px) rotate(20deg) scale(1.05);
     }
+
     100% {
       transform: translate(0, 0) rotate(0deg) scale(1);
     }
@@ -233,15 +259,19 @@ All colors MUST be HSL.
     0% {
       transform: rotate(0deg) translateX(60px) rotate(0deg) scale(1);
     }
+
     25% {
       transform: rotate(90deg) translateX(60px) rotate(-90deg) scale(1.1);
     }
+
     50% {
       transform: rotate(180deg) translateX(60px) rotate(-180deg) scale(0.9);
     }
+
     75% {
       transform: rotate(270deg) translateX(60px) rotate(-270deg) scale(1.05);
     }
+
     100% {
       transform: rotate(360deg) translateX(60px) rotate(-360deg) scale(1);
     }
@@ -253,21 +283,28 @@ All colors MUST be HSL.
 
   /* Wiggle animation - much more dramatic */
   @keyframes wiggle {
-    0%, 100% {
+
+    0%,
+    100% {
       transform: translateX(0) translateY(0) rotate(0deg) scale(1);
     }
+
     15% {
       transform: translateX(-35px) translateY(-25px) rotate(-15deg) scale(1.1);
     }
+
     30% {
       transform: translateX(40px) translateY(-50px) rotate(18deg) scale(0.95);
     }
+
     45% {
       transform: translateX(-25px) translateY(-70px) rotate(-10deg) scale(1.05);
     }
+
     60% {
       transform: translateX(30px) translateY(-55px) rotate(12deg) scale(0.9);
     }
+
     75% {
       transform: translateX(-15px) translateY(-35px) rotate(-8deg) scale(1.08);
     }
@@ -279,17 +316,22 @@ All colors MUST be HSL.
 
   /* Bounce animation - vertical bounce with rotation */
   @keyframes bounce-dynamic {
-    0%, 100% {
+
+    0%,
+    100% {
       transform: translateY(0) rotate(0deg) scale(1);
     }
+
     25% {
-      transform: translateY(-80px) rotate(10deg) scale(1.15);
+      transform: translateY(-10px) rotate(5deg) scale(1.05);
     }
+
     50% {
-      transform: translateY(-120px) rotate(-5deg) scale(0.9);
+      transform: translateY(-15px) rotate(-3deg) scale(0.95);
     }
+
     75% {
-      transform: translateY(-60px) rotate(15deg) scale(1.1);
+      transform: translateY(-5px) rotate(3deg) scale(1.02);
     }
   }
 
@@ -305,6 +347,60 @@ All colors MUST be HSL.
   .perspective-1000 {
     perspective: 1000px;
   }
+
+  /* GSAP Draggable Meal Planner Styles */
+  .gsap-calendar-planner {
+    position: relative;
+    overflow: visible;
+  }
+
+  .gsap-meal-item {
+    will-change: transform, box-shadow;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform: translateZ(0);
+  }
+
+  .gsap-meal-item:hover {
+    transform: translateY(-2px);
+  }
+
+  /* Fluid drag cursor states */
+  .gsap-meal-item[style*="cursor: grabbing"] {
+    cursor: grabbing !important;
+  }
+
+  /* Drop zone highlight animation */
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 0 0 hsl(var(--primary) / 0.3);
+    }
+    50% {
+      box-shadow: 0 0 20px 5px hsl(var(--primary) / 0.2);
+    }
+  }
+
+  .drop-zone-highlight {
+    animation: pulse-glow 1s ease-in-out infinite;
+  }
+
+  /* Smooth scrolling for the calendar */
+  .gsap-calendar-planner {
+    scroll-behavior: smooth;
+  }
+
+  /* High-performance animations */
+  @media (prefers-reduced-motion: no-preference) {
+    .gsap-meal-item {
+      transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+    }
+  }
+
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    .gsap-meal-item {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
 }
-
-
