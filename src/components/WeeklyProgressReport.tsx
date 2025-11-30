@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,10 +13,22 @@ import {
   Award,
   CheckCircle2,
   Circle,
-  XCircle
+  XCircle,
+  Loader2,
+  Check,
+  Copy
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isWithinInterval } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import {
+  generateProgressReportPDF,
+  downloadBlob,
+  shareReport,
+  blobToFile,
+  generateShareText,
+  type ReportData,
+} from '@/lib/reportGenerator';
 
 interface WeeklyProgressReportProps {
   weekStart?: Date;
@@ -25,6 +37,9 @@ interface WeeklyProgressReportProps {
 
 export function WeeklyProgressReport({ weekStart, kidId }: WeeklyProgressReportProps) {
   const { planEntries, foods, kids, activeKidId } = useApp();
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareSuccess, setShareSuccess] = useState(false);
 
   const targetKidId = kidId || activeKidId;
   const targetKid = kids.find(k => k.id === targetKidId);
@@ -155,14 +170,89 @@ export function WeeklyProgressReport({ weekStart, kidId }: WeeklyProgressReportP
     return messages;
   }, [stats, mealsByDay, targetKid, previousWeekRate]);
 
-  const handleShare = () => {
-    // TODO: Implement sharing functionality
-    console.log('Share report');
+  // Build report data object for PDF generation
+  const reportData: ReportData = useMemo(() => ({
+    kidName: targetKid?.name || 'Child',
+    weekStart: weekStartDate,
+    weekEnd: weekEndDate,
+    stats: {
+      ...stats,
+      newFoodsAccepted: stats.newFoodsAccepted.filter(Boolean).map(f => ({ name: f?.name || '' })),
+    },
+    insights: insights.map(i => ({ type: i.type, message: i.message })),
+    mealsByDay: mealsByDay.map(day => ({
+      date: day.date,
+      total: day.total,
+      ate: day.ate,
+      successRate: day.successRate,
+    })),
+  }), [targetKid, weekStartDate, weekEndDate, stats, insights, mealsByDay]);
+
+  const handleShare = async () => {
+    if (!targetKid) return;
+
+    setIsSharing(true);
+    setShareSuccess(false);
+
+    try {
+      // Generate PDF for sharing
+      const pdfBlob = await generateProgressReportPDF(reportData);
+      const pdfFile = blobToFile(
+        pdfBlob,
+        `${targetKid.name}-weekly-report-${format(weekStartDate, 'yyyy-MM-dd')}.pdf`
+      );
+
+      // Generate share text
+      const shareText = generateShareText(reportData);
+
+      // Try to share with file, fall back to text
+      const shared = await shareReport({
+        title: `${targetKid.name}'s Weekly Progress Report`,
+        text: shareText,
+        files: [pdfFile],
+      });
+
+      if (shared) {
+        setShareSuccess(true);
+        toast.success('Report shared successfully!');
+        // Reset success indicator after 2 seconds
+        setTimeout(() => setShareSuccess(false), 2000);
+      } else {
+        // If share was cancelled, try copying to clipboard
+        await navigator.clipboard.writeText(shareText);
+        toast.success('Report summary copied to clipboard!');
+      }
+    } catch (err) {
+      console.error('Share error:', err);
+      // Fallback: copy text to clipboard
+      try {
+        const shareText = generateShareText(reportData);
+        await navigator.clipboard.writeText(shareText);
+        toast.success('Report summary copied to clipboard!');
+      } catch {
+        toast.error('Failed to share report. Please try downloading instead.');
+      }
+    } finally {
+      setIsSharing(false);
+    }
   };
 
-  const handleDownload = () => {
-    // TODO: Implement PDF download
-    console.log('Download report');
+  const handleDownload = async () => {
+    if (!targetKid) return;
+
+    setIsDownloading(true);
+
+    try {
+      const pdfBlob = await generateProgressReportPDF(reportData);
+      const filename = `${targetKid.name}-weekly-report-${format(weekStartDate, 'yyyy-MM-dd')}.pdf`;
+      downloadBlob(pdfBlob, filename);
+      toast.success(`Downloaded ${filename}`);
+    } catch (err) {
+      console.error('Download error:', err);
+      toast.error('Failed to generate PDF. Please try again.');
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   if (!targetKid) {
@@ -183,13 +273,33 @@ export function WeeklyProgressReport({ weekStart, kidId }: WeeklyProgressReportP
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleShare}>
-              <Share2 className="h-4 w-4 mr-2" />
-              Share
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleShare}
+              disabled={isSharing}
+            >
+              {isSharing ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : shareSuccess ? (
+                <Check className="h-4 w-4 mr-2 text-green-500" />
+              ) : (
+                <Share2 className="h-4 w-4 mr-2" />
+              )}
+              {isSharing ? 'Sharing...' : shareSuccess ? 'Shared!' : 'Share'}
             </Button>
-            <Button variant="outline" size="sm" onClick={handleDownload}>
-              <Download className="h-4 w-4 mr-2" />
-              Download
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownload}
+              disabled={isDownloading}
+            >
+              {isDownloading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
+              {isDownloading ? 'Generating...' : 'Download PDF'}
             </Button>
           </div>
         </div>
