@@ -1,9 +1,10 @@
-import { useState, useRef } from "react";
+import { useState, useRef, lazy, Suspense } from "react";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
-
-// Note: Capacitor imports removed - using web scanner only
-// For mobile apps, this should be replaced with expo-camera
+import { isMobile, isWeb } from '@/lib/platform';
 import { Button } from "@/components/ui/button";
+
+// Lazy load the native scanner for mobile platforms
+const NativeBarcodeScanner = lazy(() => import('@/components/mobile/NativeBarcodeScanner'));
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -62,7 +63,8 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
   const [quantity, setQuantity] = useState(1);
   const [unit, setUnit] = useState<string>('packages');
   const [isProcessingScan, setIsProcessingScan] = useState(false);
-  const isNative = false; // Web-only for now - Expo camera integration needed for mobile
+  const [useNativeScanner, setUseNativeScanner] = useState(false);
+  const isNative = isMobile(); // Use native scanner on mobile platforms
   const isEmbedded = typeof window !== 'undefined' && window.self !== window.top;
   const webScannerRef = useRef<Html5Qrcode | null>(null);
 
@@ -185,9 +187,42 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
     }
   };
 
+  const startNativeScan = () => {
+    setIsScanning(true);
+    setError(null);
+    setScannedFood(null);
+    setUseNativeScanner(true);
+  };
+
+  const handleNativeBarcodeScanned = async (barcode: string) => {
+    setUseNativeScanner(false);
+    setIsScanning(false);
+    await lookupBarcode(barcode);
+  };
+
+  const handleNativeScanError = (errorMsg: string) => {
+    setUseNativeScanner(false);
+    setIsScanning(false);
+    setError(errorMsg);
+    toast({
+      title: 'Scan failed',
+      description: errorMsg,
+      variant: 'destructive',
+    });
+  };
+
+  const handleNativeScanCancel = () => {
+    setUseNativeScanner(false);
+    setIsScanning(false);
+  };
+
   const startScan = async () => {
-    // Always use web scanner (native/mobile scanning not yet implemented)
-    await startWebScan();
+    // Use native scanner on mobile, web scanner otherwise
+    if (isNative) {
+      startNativeScan();
+    } else {
+      await startWebScan();
+    }
   };
 
   const lookupBarcode = async (barcode: string) => {
@@ -411,7 +446,22 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
 
             {isScanning && (
               <>
-                {!isNative && (
+                {isNative && useNativeScanner ? (
+                  <Suspense fallback={
+                    <div className="flex items-center justify-center h-[60vh] bg-black/60 rounded-lg">
+                      <Loader2 className="h-8 w-8 animate-spin text-white" />
+                    </div>
+                  }>
+                    <div className="h-[60vh] rounded-lg overflow-hidden">
+                      <NativeBarcodeScanner
+                        isActive={useNativeScanner}
+                        onBarcodeScanned={handleNativeBarcodeScanned}
+                        onError={handleNativeScanError}
+                        onCancel={handleNativeScanCancel}
+                      />
+                    </div>
+                  </Suspense>
+                ) : !isNative && (
                   <div className="space-y-3">
                     <div id="web-scanner" className="w-full h-[56vh] md:h-[60vh] rounded-lg overflow-hidden bg-black/60" />
                     {isEmbedded && (
