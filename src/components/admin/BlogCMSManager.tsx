@@ -1,7 +1,9 @@
 // @ts-nocheck
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import BlogInternalLinker from "@/components/admin/BlogInternalLinker";
+import PromptTemplateManager from "@/components/admin/PromptTemplateManager";
+import ScheduledPublishing from "@/components/admin/ScheduledPublishing";
 import {
   Card,
   CardContent,
@@ -32,11 +34,16 @@ import {
   Upload,
   AlertTriangle,
   RefreshCw,
+  Clock,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import blogTitlesData from "../../../Blog_Titles.md?raw";
 import { logger } from "@/lib/logger";
+
+// Lazy load the WYSIWYG editor to reduce bundle size
+const RichTextEditor = lazy(() => import("@/components/admin/RichTextEditor"));
 
 interface BlogPost {
   id: string;
@@ -569,9 +576,18 @@ export function BlogCMSManager() {
 
   return (
     <Tabs defaultValue="posts" className="space-y-6">
-      <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="posts">Posts Management</TabsTrigger>
-        <TabsTrigger value="internal-links">Internal Linking</TabsTrigger>
+      <TabsList className="grid w-full grid-cols-5">
+        <TabsTrigger value="posts">Posts</TabsTrigger>
+        <TabsTrigger value="scheduling">
+          <Clock className="h-4 w-4 mr-1" />
+          Scheduling
+        </TabsTrigger>
+        <TabsTrigger value="prompts">
+          <FileText className="h-4 w-4 mr-1" />
+          Prompts
+        </TabsTrigger>
+        <TabsTrigger value="internal-links">Links</TabsTrigger>
+        <TabsTrigger value="settings">Settings</TabsTrigger>
       </TabsList>
 
       <TabsContent value="posts" className="space-y-6">
@@ -929,15 +945,22 @@ export function BlogCMSManager() {
 
               <div className="space-y-2">
                 <Label htmlFor="edit-content">Content</Label>
-                <Textarea
-                  id="edit-content"
-                  value={editingPost.content}
-                  onChange={(e) =>
-                    setEditingPost({ ...editingPost, content: e.target.value })
+                <Suspense
+                  fallback={
+                    <div className="h-[400px] border rounded-lg flex items-center justify-center bg-muted">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+                    </div>
                   }
-                  rows={15}
-                  className="font-mono text-sm"
-                />
+                >
+                  <RichTextEditor
+                    content={editingPost.content}
+                    onChange={(content) =>
+                      setEditingPost({ ...editingPost, content })
+                    }
+                    placeholder="Write your blog content here..."
+                    className="min-h-[400px]"
+                  />
+                </Suspense>
               </div>
             </div>
           )}
@@ -1367,8 +1390,90 @@ export function BlogCMSManager() {
       </Dialog>
       </TabsContent>
 
+      <TabsContent value="scheduling">
+        <ScheduledPublishing />
+      </TabsContent>
+
+      <TabsContent value="prompts">
+        <PromptTemplateManager />
+      </TabsContent>
+
       <TabsContent value="internal-links">
         <BlogInternalLinker />
+      </TabsContent>
+
+      <TabsContent value="settings" className="space-y-6">
+        {/* Webhook Configuration Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              Webhook Configuration
+            </CardTitle>
+            <CardDescription>
+              Configure webhook for social media automation when posts are published
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="settings-webhook-url">Webhook URL</Label>
+              <Input
+                id="settings-webhook-url"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://hook.us1.make.com/..."
+              />
+              <p className="text-xs text-muted-foreground">
+                Get this from Make.com or Zapier webhook trigger
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={handleTestWebhook}
+                disabled={testingWebhook || !webhookUrl}
+              >
+                {testingWebhook ? "Testing..." : "Test Webhook"}
+              </Button>
+              <Button onClick={saveWebhookUrl}>Save Webhook</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Title Bank Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              Title Bank
+            </CardTitle>
+            <CardDescription>
+              Manage your blog title inventory for AI generation
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {titleBankInsights && (
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="p-4 bg-muted rounded-lg text-center">
+                  <div className="text-2xl font-bold">{titleBankInsights.total_titles}</div>
+                  <div className="text-xs text-muted-foreground">Total Titles</div>
+                </div>
+                <div className="p-4 bg-muted rounded-lg text-center">
+                  <div className="text-2xl font-bold text-safe-food">{titleBankInsights.unused_titles}</div>
+                  <div className="text-xs text-muted-foreground">Unused</div>
+                </div>
+                <div className="p-4 bg-muted rounded-lg text-center">
+                  <div className="text-2xl font-bold">{titleBankInsights.total_titles - titleBankInsights.unused_titles}</div>
+                  <div className="text-xs text-muted-foreground">Used</div>
+                </div>
+              </div>
+            )}
+            <Button onClick={() => setShowTitleBankDialog(true)} variant="outline" className="w-full">
+              <Upload className="h-4 w-4 mr-2" />
+              Manage Title Bank
+            </Button>
+          </CardContent>
+        </Card>
       </TabsContent>
     </Tabs>
   );
