@@ -1,0 +1,62 @@
+# OWASP ZAP Baseline Scan Rules Configuration
+# Format: rule_id	action	name
+# Actions: IGNORE (skip), WARN (report as warning), FAIL (fail if found)
+# See: https://www.zaproxy.org/docs/docker/baseline-scan/
+
+# Content Security Policy violations (handled by our CSP headers)
+10038	WARN	Content Security Policy (CSP) Header Not Set
+
+# X-Frame-Options (we use CSP frame-ancestors instead)
+10020	WARN	Anti-clickjacking Header
+
+# Cookie flags (may be set by Supabase auth)
+10010	WARN	Cookie No HttpOnly Flag
+10011	WARN	Cookie Without Secure Flag
+
+# Information Disclosure - Debug Error Messages (dev mode only)
+10023	WARN	Information Disclosure - Debug Error Messages
+
+# CORS misconfiguration (we handle this in edge functions)
+10098	WARN	Cross-Domain Misconfiguration
+
+# Private IP addresses (local development)
+2	WARN	Private IP Disclosure
+
+# Modern security headers (informational)
+10096	WARN	Timestamp Disclosure
+10027	WARN	Information Disclosure - Suspicious Comments
+
+# Strict-Transport-Security (configured in Cloudflare)
+10035	WARN	Strict-Transport-Security Header Not Set
+
+# Application errors should fail in production
+90022	FAIL	Application Error Disclosure
+90033	FAIL	Loosely Scoped Cookie
+
+# SQL Injection must always fail
+40018	FAIL	SQL Injection
+40019	FAIL	SQL Injection - MySQL
+40020	FAIL	SQL Injection - Hypersonic SQL
+40021	FAIL	SQL Injection - Oracle
+40022	FAIL	SQL Injection - PostgreSQL
+40024	FAIL	SQL Injection - SQLite
+
+# XSS must always fail
+40012	FAIL	Cross Site Scripting (Reflected)
+40013	FAIL	Session ID in URL Rewrite
+40014	FAIL	Cross Site Scripting (Persistent)
+
+# Command injection must fail
+90020	FAIL	Remote OS Command Injection
+
+# Path traversal must fail
+6	FAIL	Path Traversal
+
+# Server side request forgery
+40046	FAIL	Server Side Request Forgery
+
+# External redirect
+10028	FAIL	Open Redirect
+
+# Log4Shell
+40043	FAIL	Log4Shell
