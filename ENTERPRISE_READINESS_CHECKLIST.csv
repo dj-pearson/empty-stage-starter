@@ -1,0 +1,197 @@
+Priority,Section,Item,Status,Description,Effort,Dependencies
+P0-Critical,CI/CD,GitHub Actions test workflow,Not Started,Run tests on every PR to catch regressions early,Medium,None
+P0-Critical,CI/CD,GitHub Actions lint workflow,Not Started,ESLint and Prettier checks on every PR,Low,None
+P0-Critical,CI/CD,GitHub Actions build workflow,Not Started,Production build verification on main branch,Low,None
+P0-Critical,CI/CD,GitHub Actions deploy workflow,Not Started,Automated deployment to Cloudflare Pages,Medium,Build workflow
+P0-Critical,CI/CD,Security scanning in CI,Not Started,OWASP ZAP or Snyk for vulnerability scanning,Medium,Build workflow
+P0-Critical,API Documentation,OpenAPI 3.0 specification,Not Started,Generate API spec from Supabase types and Edge Functions,High,None
+P0-Critical,API Documentation,Swagger UI deployment,Not Started,Interactive API docs at /api/docs,Medium,OpenAPI spec
+P0-Critical,API Documentation,Edge Function documentation,Not Started,Document all 65+ Edge Function contracts,High,None
+P0-Critical,Testing,Expand E2E test coverage,Partial,Increase from 3 to 20+ test suites covering all critical flows,High,None
+P0-Critical,Disaster Recovery,Disaster recovery plan document,Not Started,Document RTO/RPO targets and recovery procedures,Medium,None
+P0-Critical,Disaster Recovery,Backup restoration testing,Not Started,Regular testing of backup restoration procedures,Medium,Backup system
+P1-High,Core Auth,Two-factor authentication (2FA/MFA),Not Started,Add TOTP or SMS-based 2FA for enhanced security,High,Auth system
+P1-High,Core Auth,API key management system,Not Started,Allow users to generate and manage API keys for integrations,Medium,None
+P1-High,Core Auth,OAuth refresh token rotation,Not Started,Implement secure token rotation strategy,Medium,Auth system
+P1-High,Core Auth,Security audit logging,Partial,Comprehensive logging of all auth events and access,Medium,Logging system
+P1-High,Security,External security audit,Not Started,Third-party penetration testing and security review,High,None
+P1-High,Security,OWASP ZAP automated scanning,Not Started,Regular security scans in CI pipeline,Medium,CI/CD
+P1-High,Security,Secrets rotation documentation,Not Started,Document process for rotating API keys and secrets,Low,None
+P1-High,Billing,Invoice PDF generation,Not Started,Generate and email professional invoices for payments,Medium,Stripe integration
+P1-High,Billing,Payment method management UI,Not Started,Allow users to add/update/delete payment methods,Medium,Stripe integration
+P1-High,GDPR/Compliance,GDPR data request handling UI,Not Started,Self-service portal for data export/deletion requests,High,User management
+P1-High,GDPR/Compliance,Cookie consent banner,Not Started,GDPR-compliant cookie consent with preferences,Medium,None
+P1-High,GDPR/Compliance,Data deletion workflow,Not Started,Automated workflow for processing deletion requests,Medium,User management
+P1-High,Mobile,GitHub Actions mobile build workflow,Not Started,Automated EAS builds for iOS and Android,High,CI/CD
+P1-High,Mobile,Push notification certificate management,Not Started,Automated cert renewal and management,Medium,Push notifications
+P1-High,Testing,Accessibility testing (axe-core),Not Started,Automated a11y testing in CI pipeline,Medium,CI/CD
+P1-High,Testing,Performance testing framework,Not Started,Load testing with k6 or Artillery,High,None
+P1-High,Monitoring,Uptime monitoring and status page,Not Started,External monitoring with public status page,Medium,None
+P1-High,Monitoring,Real-time alerts (Slack/email),Not Started,Alert team on critical errors and outages,Medium,Sentry integration
+P2-Medium,Media,Centralized file upload management,Partial,Supabase Storage buckets with admin interface,High,None
+P2-Medium,Media,Signed URL generation,Not Started,Secure time-limited URLs for private assets,Medium,Supabase Storage
+P2-Medium,Media,CDN integration,Partial,Explicit CDN configuration for static assets,Medium,Cloudflare
+P2-Medium,Media,Video upload and streaming,Not Started,Support video content with HLS streaming,High,Supabase Storage
+P2-Medium,Media,Progressive image loading (LQIP),Not Started,Blur placeholder for better perceived performance,Medium,OptimizedImage
+P2-Medium,CRM,Customer health scoring,Not Started,Automated scoring based on engagement metrics,High,Analytics
+P2-Medium,CRM,Advanced user segmentation,Not Started,Cohort analysis and targeted segments,Medium,Analytics
+P2-Medium,CRM,Activity timeline/audit trail,Partial,Complete history of user actions for support,Medium,Logging
+P2-Medium,CRM,Bulk user management tools,Not Started,Admin tools for batch user operations,Medium,Admin dashboard
+P2-Medium,Templates,Email template builder UI,Not Started,Drag-and-drop visual email editor,High,Email system
+P2-Medium,Templates,Email A/B testing,Not Started,Split testing for email campaigns,Medium,Email system
+P2-Medium,Templates,Email analytics dashboard,Not Started,Open rates click rates bounce tracking,Medium,Email system
+P2-Medium,Storage,Multi-region backup replication,Not Started,Geo-redundant backup storage,High,Backup system
+P2-Medium,Storage,Encrypted backups,Not Started,AES-256 encryption for backup files,Medium,Backup system
+P2-Medium,Storage,Backup verification/integrity checks,Not Started,Automated backup validation,Medium,Backup system
+P2-Medium,Documents,Scheduled report delivery,Not Started,Automated email delivery of weekly/monthly reports,Medium,Report generator
+P2-Medium,Documents,DOCX/Excel export,Not Started,Export to Microsoft Office formats,Medium,Document generator
+P2-Medium,Documents,Document versioning,Not Started,Track changes and versions for exports,Medium,Document system
+P2-Medium,AI,LLM provider fallback,Not Started,Secondary AI provider for reliability,Medium,AI integrations
+P2-Medium,AI,AI response caching,Not Started,Cache common AI responses to reduce costs,Medium,AI integrations
+P2-Medium,AI,Cost budgeting and alerts,Partial,Alerts when AI costs approach budget limits,Low,AI cost tracking
+P2-Medium,AI,Prompt versioning system,Not Started,Track and manage prompt templates,Medium,AI integrations
+P2-Medium,Blog,WYSIWYG content editor,Not Started,Visual editor for blog content,High,Blog system
+P2-Medium,Blog,Scheduled publishing,Not Started,Set future publish dates for posts,Medium,Blog system
+P2-Medium,Blog,Post versioning/revisions,Not Started,Track changes and restore previous versions,Medium,Blog system
+P2-Medium,Blog,Comment moderation UI,Not Started,Admin tools for managing comments,Medium,Blog system
+P2-Medium,SEO,Keyword research integration,Not Started,Integrate Ahrefs/SEMrush for keyword data,Medium,SEO system
+P2-Medium,SEO,SERP position tracking,Partial,Track keyword rankings over time,Medium,SEO system
+P2-Medium,SEO,International SEO (hreflang),Not Started,Multi-language SEO support,Medium,i18n
+P2-Medium,Automation,Webhook triggers for external systems,Not Started,Outbound webhooks for integrations,Medium,Automation
+P2-Medium,Automation,Zapier/Make.com integration,Not Started,Connect to workflow automation platforms,Medium,Webhooks
+P2-Medium,Automation,Visual workflow builder,Not Started,UI for creating custom automation workflows,High,Automation
+P2-Medium,Feature Flags,useFeatureFlag React hook,Partial,Frontend hook for easy flag evaluation,Low,Feature flags DB
+P2-Medium,Feature Flags,A/B test analytics dashboard,Not Started,View test results and statistical significance,Medium,Feature flags
+P2-Medium,Lead Management,CRM integration (HubSpot/Salesforce),Not Started,Sync leads to external CRM systems,Medium,Leads table
+P2-Medium,Lead Management,Lead nurturing sequence UI,Partial,Visual interface for creating drip campaigns,Medium,Email automation
+P2-Medium,Lead Management,Sales pipeline visualization,Not Started,Kanban-style lead management view,Medium,Leads table
+P2-Medium,Support,Knowledge base/FAQ system,Not Started,Self-service help documentation,High,None
+P2-Medium,Support,Live chat integration,Not Started,Real-time customer support chat,High,None
+P2-Medium,Support,SLA tracking dashboard,Not Started,Monitor support response and resolution times,Medium,Support tickets
+P2-Medium,Support,Canned response templates,Not Started,Pre-written responses for common issues,Low,Support tickets
+P2-Medium,Accessibility,WCAG 2.1 AA compliance audit,Not Started,Full accessibility review and remediation,High,None
+P2-Medium,Accessibility,Screen reader testing,Not Started,Test with NVDA/VoiceOver/JAWS,Medium,None
+P2-Medium,Accessibility,Focus management review,Not Started,Ensure proper focus handling throughout app,Medium,None
+P2-Medium,Performance,Service worker caching,Partial,Offline support and cache-first strategies,Medium,PWA
+P2-Medium,Performance,Database query optimization,Partial,Review and optimize slow queries,Medium,Database
+P2-Medium,White Label,Custom email templates per customer,Not Started,Allow enterprise customers to brand emails,Medium,Email templates
+P2-Medium,White Label,Custom font support,Not Started,Upload and use custom fonts,Low,Branding
+P3-Low,GPS,Store locator feature,Not Started,Find nearby grocery stores and restaurants,High,Maps API
+P3-Low,GPS,Location-based meal suggestions,Not Started,Suggest meals based on user location,Medium,GPS data
+P3-Low,GPS,Distance-based search,Not Started,Filter recipes by ingredient availability nearby,Medium,GPS data
+P3-Low,Media,Image versioning/asset management,Not Started,Version control for uploaded images,Medium,Storage
+P3-Low,Media,Batch image operations,Not Started,Bulk resize/compress/convert images,Medium,Image processing
+P3-Low,CRM,Churn prediction model,Not Started,ML-based churn risk scoring,High,Analytics
+P3-Low,CRM,Net Promoter Score (NPS) integration,Not Started,Collect and track customer satisfaction,Medium,User management
+P3-Low,Templates,Dynamic content personalization,Not Started,Personalized email content based on user data,Medium,Email system
+P3-Low,Templates,Notification template editor,Not Started,Customize push notification templates,Medium,Push notifications
+P3-Low,Storage,Incremental backups,Not Started,Backup only changed data for efficiency,High,Backup system
+P3-Low,Storage,S3/Cloud Storage integration,Not Started,Alternative storage providers for redundancy,Medium,Storage
+P3-Low,Documents,Batch document generation,Not Started,Generate multiple documents at once,Medium,Document system
+P3-Low,Documents,Digital signature support,Not Started,Sign exported documents electronically,High,Document system
+P3-Low,Documents,Document encryption,Not Started,Encrypt sensitive exported documents,Medium,Document system
+P3-Low,AI,Fine-tuned models,Not Started,Custom-trained models for specific use cases,High,AI infrastructure
+P3-Low,AI,User feedback on AI quality,Not Started,Thumbs up/down on AI responses,Low,AI integrations
+P3-Low,Blog,Multi-language support,Not Started,Translate blog content to multiple languages,High,i18n
+P3-Low,Blog,Reader notifications,Not Started,Email subscribers when new posts published,Medium,Email system
+P3-Low,SEO,Local SEO schema,Partial,LocalBusiness and GeoCoordinates schema,Low,SEO schema
+P3-Low,SEO,Rich snippet validation tool,Not Started,Test structured data before publishing,Medium,SEO system
+P3-Low,Automation,Error handling and retry queue,Partial,Robust retry logic for failed automations,Medium,Automation
+P3-Low,Automation,Workflow monitoring analytics,Not Started,Track automation success/failure rates,Medium,Automation
+P3-Low,Testing,Visual regression testing,Not Started,Catch unintended UI changes,Medium,CI/CD
+P3-Low,Testing,Mobile app testing (Detox),Not Started,Automated testing for mobile apps,High,Mobile builds
+P3-Low,Testing,API contract testing,Not Started,Validate API responses match contracts,Medium,API docs
+P3-Low,Monitoring,Distributed tracing (APM),Not Started,End-to-end request tracing,High,None
+P3-Low,Monitoring,Custom metrics dashboards,Not Started,Build custom monitoring views,Medium,Monitoring
+P3-Low,Analytics,Mixpanel/Amplitude integration,Not Started,Advanced product analytics platform,Medium,Analytics
+P3-Low,Analytics,Funnel analysis UI,Not Started,Visualize user conversion funnels,Medium,Analytics
+P3-Low,Analytics,LTV calculation,Not Started,Calculate customer lifetime value,Medium,Billing data
+P3-Low,White Label,Reseller program infrastructure,Not Started,Multi-tenant admin for resellers,High,White label
+P3-Low,White Label,Feature hiding per customer,Not Started,Enable/disable features per enterprise account,Medium,Feature flags
+P3-Low,Database,Schema documentation (ERD),Not Started,Visual database schema diagram,Low,None
+P3-Low,Database,Migration testing framework,Not Started,Test migrations in isolated environment,Medium,CI/CD
+P3-Low,Database,Data archival strategy,Not Started,Archive old data to reduce database size,Medium,Database
+P3-Low,Disaster Recovery,Multi-region failover,Not Started,Automatic failover to secondary region,High,Infrastructure
+P3-Low,Disaster Recovery,DNS failover,Not Started,Route traffic away from failed services,Medium,DNS
+P3-Low,Rate Limiting,Rate limit response headers,Not Started,X-RateLimit-* headers for API clients,Low,Rate limiting
+P3-Low,Rate Limiting,IP-based rate limiting,Not Started,Limit by IP in addition to user,Medium,Rate limiting
+P3-Low,Rate Limiting,Global rate limits,Not Started,Service-wide limits for protection,Medium,Rate limiting
+Completed,Core Auth,Email/password authentication,Done,Basic auth via Supabase Auth,N/A,N/A
+Completed,Core Auth,OAuth (Google/Apple),Done,Social login providers configured,N/A,N/A
+Completed,Core Auth,JWT validation,Done,Token verification on protected endpoints,N/A,N/A
+Completed,Core Auth,Row-Level Security (RLS),Done,100+ security policies across tables,N/A,N/A
+Completed,Core Auth,Security headers (CSP HSTS etc),Done,All recommended security headers configured,N/A,N/A
+Completed,Core Auth,Session management,Done,Supabase session handling with listeners,N/A,N/A
+Completed,Core Auth,Secure token storage (mobile),Done,Expo SecureStore for credentials,N/A,N/A
+Completed,Billing,Stripe subscription integration,Done,Full subscription management,N/A,N/A
+Completed,Billing,Multiple pricing tiers,Done,Free Pro and Family plans,N/A,N/A
+Completed,Billing,Webhook handling,Done,All Stripe events processed,N/A,N/A
+Completed,Billing,Trial period support,Done,Trial tracking and management,N/A,N/A
+Completed,Billing,Dunning management,Done,Past-due status handling,N/A,N/A
+Completed,Billing,Payment history tracking,Done,All transactions logged,N/A,N/A
+Completed,Billing,Subscription events audit log,Done,Complete subscription change history,N/A,N/A
+Completed,Storage,Automated backup system,Done,Daily/weekly/monthly backups,N/A,N/A
+Completed,Storage,Backup retention policies,Done,30-day default configurable retention,N/A,N/A
+Completed,Storage,Data export (JSON),Done,User data extraction capability,N/A,N/A
+Completed,Templates,Email automation sequences,Done,Trigger-based email workflows,N/A,N/A
+Completed,Templates,Email preferences management,Done,User opt-in/out for email types,N/A,N/A
+Completed,Templates,Transactional emails,Done,Auth and notification emails,N/A,N/A
+Completed,AI,AI meal planning,Done,Edge Function for smart meal plans,N/A,N/A
+Completed,AI,Food similarity calculation,Done,AI-powered food chaining suggestions,N/A,N/A
+Completed,AI,AI content generation,Done,Blog and social post generation,N/A,N/A
+Completed,AI,AI cost tracking,Done,Monitor API usage and costs,N/A,N/A
+Completed,AI,Support ticket analysis,Done,AI-powered ticket categorization,N/A,N/A
+Completed,Blog,Blog CRUD operations,Done,Create read update delete posts,N/A,N/A
+Completed,Blog,Categories and tags,Done,Post organization system,N/A,N/A
+Completed,Blog,Author management,Done,Multi-author support,N/A,N/A
+Completed,Blog,Featured images,Done,Image management per post,N/A,N/A
+Completed,Blog,SEO meta tags,Done,Title description OG tags,N/A,N/A
+Completed,Blog,Blog analytics,Done,Page views and engagement tracking,N/A,N/A
+Completed,SEO,Structured data (JSON-LD),Done,Article FAQ Breadcrumb HowTo schemas,N/A,N/A
+Completed,SEO,Dynamic sitemap,Done,XML sitemap generation,N/A,N/A
+Completed,SEO,Technical SEO analysis,Done,Crawling and Core Web Vitals monitoring,N/A,N/A
+Completed,SEO,Google Search Console integration,Done,OAuth connection and data sync,N/A,N/A
+Completed,SEO,SEO monitoring dashboard,Done,Admin analytics for SEO metrics,N/A,N/A
+Completed,Automation,Rate limiting system,Done,Tier-based configurable limits,N/A,N/A
+Completed,Automation,Email sequences,Done,5 trigger types for automation,N/A,N/A
+Completed,Automation,Scheduled reminders,Done,Meal grocery and prep notifications,N/A,N/A
+Completed,Automation,Weekly report generation,Done,Automated nutrition summaries,N/A,N/A
+Completed,Automation,Push notifications,Done,Mobile notification delivery,N/A,N/A
+Completed,Automation,Feature flags,Done,Admin-managed progressive rollout,N/A,N/A
+Completed,Monitoring,Sentry error tracking,Done,With session replay and breadcrumbs,N/A,N/A
+Completed,Monitoring,Custom logging,Done,Dev/prod aware logging,N/A,N/A
+Completed,Monitoring,Error boundaries,Done,React error fallback UI,N/A,N/A
+Completed,Analytics,Google Analytics 4,Done,Event tracking and user identification,N/A,N/A
+Completed,Analytics,Admin analytics dashboard,Done,User engagement and retention metrics,N/A,N/A
+Completed,Analytics,Feature adoption tracking,Done,Monitor feature usage,N/A,N/A
+Completed,Mobile,Expo framework setup,Done,Full Expo 54.0 configuration,N/A,N/A
+Completed,Mobile,Native barcode scanning,Done,Camera integration for food items,N/A,N/A
+Completed,Mobile,Photo capture,Done,Profile and meal photos,N/A,N/A
+Completed,Mobile,EAS build configuration,Done,iOS and Android build setup,N/A,N/A
+Completed,Performance,Code splitting,Done,Manual chunks in Vite,N/A,N/A
+Completed,Performance,Lazy loading,Done,React.lazy and Suspense,N/A,N/A
+Completed,Performance,Image optimization,Done,WebP AVIF responsive sizes,N/A,N/A
+Completed,Performance,Bundle analysis,Done,npm script for size analysis,N/A,N/A
+Completed,Accessibility,ARIA labels,Done,Used throughout components,N/A,N/A
+Completed,Accessibility,Keyboard navigation,Done,Radix UI provides support,N/A,N/A
+Completed,Accessibility,Reduced motion support,Done,Hook for prefers-reduced-motion,N/A,N/A
+Completed,White Label,Custom domains,Done,For Professional tier customers,N/A,N/A
+Completed,White Label,Brand customization,Done,Logo colors tagline footer,N/A,N/A
+Completed,White Label,Domain verification,Done,DNS validation system,N/A,N/A
+Completed,Database,87 migrations,Done,Comprehensive schema evolution,N/A,N/A
+Completed,Database,Performance indexes,Done,40+ indexes for optimization,N/A,N/A
+Completed,Database,Database functions,Done,50+ business logic functions,N/A,N/A
+Completed,Support,Support ticket system,Done,Full CRUD with status/priority,N/A,N/A
+Completed,Support,AI ticket triage,Done,Smart categorization and routing,N/A,N/A
+Completed,Support,Ticket analytics,Done,Response and resolution metrics,N/A,N/A
+Completed,CRM,User profiles,Done,Supabase auth plus profiles table,N/A,N/A
+Completed,CRM,Household management,Done,Multi-child and member support,N/A,N/A
+Completed,CRM,User intelligence dashboard,Done,Engagement and retention tracking,N/A,N/A
+Completed,Lead Management,Lead capture,Done,Email capture modals and forms,N/A,N/A
+Completed,Lead Management,Lead scoring,Done,Automated qualification system,N/A,N/A
+Completed,Lead Management,Lead source tracking,Done,UTM parameter support,N/A,N/A
+Completed,Documents,PDF export,Done,Budget quiz and report exports,N/A,N/A
+Completed,Documents,CSV import,Done,Bulk food data import,N/A,N/A
+Completed,Documents,JSON export/import,Done,Data persistence format,N/A,N/A
+Completed,Media,OptimizedImage component,Done,Lazy loading WebP responsive,N/A,N/A
+Completed,Media,Image compression,Done,Sharp library optimization,N/A,N/A
