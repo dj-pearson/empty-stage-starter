@@ -16,6 +16,9 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
+    "test:a11y": "playwright test --project=chromium tests/accessibility/",
+    "test:perf": "k6 run tests/performance/load-test.js",
+    "test:perf:stress": "k6 run tests/performance/stress-test.js",
     "pages:dev": "wrangler pages dev dist --compatibility-date 2024-12-19",
     "expo:start": "npx expo start",
     "expo:android": "npx expo start --android",
@@ -143,6 +146,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.0",
     "@eslint/js": "^9.32.0",
     "@playwright/test": "^1.56.0",
     "@tailwindcss/typography": "^0.5.16",

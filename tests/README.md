@@ -1,34 +1,74 @@
-# EatPal E2E Test Suite
+# EatPal Test Suite
 
-Automated end-to-end tests for production readiness verification.
+Comprehensive testing suite including E2E, accessibility, and performance tests.
 
-## Setup
+## Quick Start
 
 ```bash
-# Install Playwright
-npm install -D @playwright/test
+# Install dependencies
+npm install
 
-# Install browsers
-npx playwright install
+# Install Playwright browsers
+npx playwright install --with-deps
+
+# Run all E2E tests
+npm run test:e2e
+
+# Run accessibility tests
+npm run test:a11y
+
+# Run performance tests (requires k6)
+npm run test:perf
 ```
 
-## Running Tests
+## Test Types
+
+### 1. E2E Tests (Playwright)
 
 ```bash
-# Run all tests
-npx playwright test
+# Run all E2E tests
+npm run test:e2e
 
-# Run tests in headed mode (see browser)
+# Run in headed mode (see browser)
 npx playwright test --headed
 
 # Run specific test file
 npx playwright test tests/auth.spec.ts
 
-# Run tests in UI mode (interactive)
-npx playwright test --ui
+# Run in UI mode (interactive)
+npm run test:e2e:ui
 
 # Debug tests
-npx playwright test --debug
+npm run test:e2e:debug
+```
+
+### 2. Accessibility Tests (axe-core + Playwright)
+
+```bash
+# Run accessibility tests
+npm run test:a11y
+
+# Run with HTML report
+npx playwright test tests/accessibility/ --reporter=html
+```
+
+Results are saved to `a11y-results/` directory.
+
+### 3. Performance Tests (k6)
+
+```bash
+# Install k6 first
+# macOS: brew install k6
+# Linux: https://k6.io/docs/get-started/installation/
+
+# Run load test
+npm run test:perf
+
+# Run stress test
+npm run test:perf:stress
+
+# Run with custom base URL
+BASE_URL=https://staging.eatpal.com k6 run tests/performance/load-test.js
 ```
 
 ## Test Coverage
@@ -54,6 +94,18 @@ npx playwright test --debug
 - Initiate checkout
 - Subscription status
 - Upgrade prompts
+
+### ✅ Accessibility (`accessibility/a11y.spec.ts`)
+- WCAG 2.1 AA compliance scanning
+- Keyboard navigation
+- Screen reader compatibility
+- Color contrast verification
+- Form accessibility
+- Mobile accessibility
+
+### ✅ Performance (`performance/*.js`)
+- **Load Test**: Normal traffic simulation (up to 50 users)
+- **Stress Test**: Breaking point identification (up to 300 users)
 
 ## Before Production Launch
 

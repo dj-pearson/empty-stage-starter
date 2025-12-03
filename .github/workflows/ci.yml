@@ -293,7 +293,7 @@ jobs:
   # ============================================================================
   # OWASP ZAP Dynamic Application Security Testing (DAST)
   # ============================================================================
-  zap-scan:
+  zap-baseline-scan:
     name: OWASP ZAP Baseline Scan
     runs-on: ubuntu-latest
     needs: build
@@ -333,13 +333,183 @@ jobs:
           cmd_options: '-a -j -l WARN'
         continue-on-error: true
 
-      - name: Upload ZAP report
+      - name: Upload ZAP baseline report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: zap-scan-report
+          name: zap-baseline-report
           path: report_html.html
           retention-days: 30
+
+  zap-full-scan:
+    name: OWASP ZAP Full Scan (Scheduled)
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Start preview server
+        run: |
+          npm run preview &
+          sleep 10
+        env:
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder-key
+
+      - name: Run OWASP ZAP Full Scan
+        uses: zaproxy/action-full-scan@v0.10.0
+        with:
+          target: 'http://localhost:3000'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a -j -l WARN -T 60'
+        continue-on-error: true
+
+      - name: Upload ZAP full scan report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-full-scan-report
+          path: report_html.html
+          retention-days: 30
+
+  # ============================================================================
+  # Accessibility Testing
+  # ============================================================================
+  accessibility-tests:
+    name: Accessibility Tests (axe-core)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Start preview server
+        run: |
+          npm run preview &
+          sleep 10
+        env:
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder-key
+
+      - name: Run accessibility tests
+        run: npm run test:a11y
+        continue-on-error: true
+
+      - name: Upload accessibility report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: accessibility-report
+          path: |
+            a11y-results/
+            playwright-report/
+          retention-days: 30
+
+  # ============================================================================
+  # Performance Testing
+  # ============================================================================
+  performance-tests:
+    name: Performance Tests (k6)
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'schedule'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Start preview server
+        run: |
+          npm run preview &
+          sleep 10
+        env:
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder-key
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Run k6 load tests
+        run: k6 run --out json=k6-results.json tests/performance/load-test.js
+        continue-on-error: true
+
+      - name: Run k6 stress tests
+        run: k6 run --out json=k6-stress-results.json tests/performance/stress-test.js
+        continue-on-error: true
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-results
+          path: |
+            k6-results.json
+            k6-stress-results.json
+          retention-days: 30
+
+      - name: Performance summary
+        if: always()
+        run: |
+          echo "## Performance Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f k6-results.json ]; then
+            echo "### Load Test Results" >> $GITHUB_STEP_SUMMARY
+            echo "See artifacts for detailed metrics" >> $GITHUB_STEP_SUMMARY
+          fi
 
   # ============================================================================
   # Security Summary
@@ -347,7 +517,7 @@ jobs:
   security-summary:
     name: Security Summary
     runs-on: ubuntu-latest
-    needs: [dependency-audit, snyk-security, codeql-analysis, secret-scanning, owasp-dependency-check]
+    needs: [dependency-audit, snyk-security, codeql-analysis, secret-scanning, owasp-dependency-check, zap-baseline-scan]
     if: always()
     steps:
       - name: Check security job results
@@ -361,6 +531,7 @@ jobs:
           echo "| CodeQL Analysis | ${{ needs.codeql-analysis.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Secret Scanning | ${{ needs.secret-scanning.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| OWASP Dependency Check | ${{ needs.owasp-dependency-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| OWASP ZAP Scan | ${{ needs.zap-baseline-scan.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "For detailed reports, check the job artifacts." >> $GITHUB_STEP_SUMMARY
 
@@ -373,12 +544,33 @@ jobs:
           exit 1
 
   # ============================================================================
+  # Quality Summary
+  # ============================================================================
+  quality-summary:
+    name: Quality Summary
+    runs-on: ubuntu-latest
+    needs: [accessibility-tests, unit-tests, e2e-tests]
+    if: always()
+    steps:
+      - name: Check quality job results
+        run: |
+          echo "## Quality Checks Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Unit Tests | ${{ needs.unit-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| E2E Tests | ${{ needs.e2e-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Accessibility Tests | ${{ needs.accessibility-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "For detailed reports, check the job artifacts." >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
   # All Checks Pass Gate
   # ============================================================================
   all-checks-pass:
     name: All Checks Pass
     runs-on: ubuntu-latest
-    needs: [lint, type-check, unit-tests, build, dependency-audit, codeql-analysis]
+    needs: [lint, type-check, unit-tests, build, dependency-audit, codeql-analysis, accessibility-tests]
     if: always()
     steps:
       - name: Check all job results
@@ -388,7 +580,8 @@ jobs:
              [[ "${{ needs.unit-tests.result }}" != "success" ]] ||
              [[ "${{ needs.build.result }}" != "success" ]] ||
              [[ "${{ needs.dependency-audit.result }}" != "success" ]] ||
-             [[ "${{ needs.codeql-analysis.result }}" != "success" ]]; then
+             [[ "${{ needs.codeql-analysis.result }}" != "success" ]] ||
+             [[ "${{ needs.accessibility-tests.result }}" != "success" ]]; then
             echo "::error::One or more required checks failed"
             exit 1
           fi
