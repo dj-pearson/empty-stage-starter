@@ -89,6 +89,10 @@ export {
   useIntervalUpdate,
 } from './useCommon';
 
+// Feature Flags & Limits
+export { useFeatureFlag, useFeatureFlags } from './useFeatureFlag';
+export { useFeatureLimit } from './useFeatureLimit';
+
 // Re-export types
 export type { WindowSize } from './useWindowSize';
 export type { UseIntersectionObserverOptions } from './useIntersectionObserver';
