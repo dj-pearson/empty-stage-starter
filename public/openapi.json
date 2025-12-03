@@ -1,0 +1,963 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "EatPal API",
+    "description": "Meal planning and nutrition tracking API for EatPal (Munch Maker Mate). This API powers meal planning, recipe management, grocery delivery, and AI-powered nutrition coaching.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "EatPal Support",
+      "email": "support@eatpal.com"
+    },
+    "license": {
+      "name": "Proprietary"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://tbuszxkevkpjcjapbrir.supabase.co/functions/v1",
+      "description": "Production Supabase Edge Functions"
+    },
+    {
+      "url": "http://localhost:54321/functions/v1",
+      "description": "Local Development"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Meal Planning",
+      "description": "AI-powered meal suggestions and plan templates"
+    },
+    {
+      "name": "Grocery & Delivery",
+      "description": "Grocery delivery integration and order management"
+    },
+    {
+      "name": "Reports & Analytics",
+      "description": "Weekly reports and nutrition analytics"
+    },
+    {
+      "name": "Recipes",
+      "description": "Recipe import and management"
+    },
+    {
+      "name": "Admin",
+      "description": "Admin and SEO tools"
+    },
+    {
+      "name": "Analytics",
+      "description": "User engagement tracking"
+    }
+  ],
+  "paths": {
+    "/generate-meal-suggestions": {
+      "post": {
+        "tags": ["Meal Planning"],
+        "summary": "Generate AI meal suggestions",
+        "description": "Generate AI-powered meal suggestions for a household based on preferences, allergens, and past meal history",
+        "operationId": "generateMealSuggestions",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["householdId", "count"],
+                "properties": {
+                  "householdId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Household ID to generate suggestions for"
+                  },
+                  "mealSlot": {
+                    "type": "string",
+                    "enum": ["breakfast", "lunch", "dinner", "snack"],
+                    "description": "Optional filter by meal slot"
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "default": 5,
+                    "description": "Number of suggestions to generate"
+                  }
+                }
+              },
+              "example": {
+                "householdId": "550e8400-e29b-41d4-a716-446655440000",
+                "mealSlot": "dinner",
+                "count": 5
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Meal suggestions generated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "suggestions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "suggestion_data": {
+                            "type": "object",
+                            "description": "Meal suggestion details"
+                          },
+                          "confidence_score": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "suggestions": [
+                    {
+                      "id": "123e4567-e89b-12d3-a456-426614174000",
+                      "suggestion_data": {
+                        "meal_name": "Grilled Chicken with Roasted Vegetables",
+                        "ingredients": ["chicken breast", "broccoli", "carrots"],
+                        "nutrition": {
+                          "calories": 450,
+                          "protein": 35,
+                          "carbs": 25,
+                          "fat": 15
+                        }
+                      },
+                      "confidence_score": 0.92
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/manage-meal-plan-templates": {
+      "post": {
+        "tags": ["Meal Planning"],
+        "summary": "Manage meal plan templates",
+        "description": "Save, list, or apply meal plan templates. Supports three actions: list, saveFromWeek, and apply",
+        "operationId": "manageMealPlanTemplates",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "required": ["action"],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": ["list"],
+                        "description": "List all available templates"
+                      },
+                      "templateData": {
+                        "type": "object",
+                        "properties": {}
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": ["action", "templateData"],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": ["saveFromWeek"]
+                      },
+                      "templateData": {
+                        "type": "object",
+                        "required": ["startDate", "endDate", "name"],
+                        "properties": {
+                          "startDate": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "Week start date (ISO 8601)"
+                          },
+                          "endDate": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "Week end date (ISO 8601)"
+                          },
+                          "kidId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Optional specific kid ID"
+                          },
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "description": {
+                            "type": "string",
+                            "maxLength": 500
+                          },
+                          "season": {
+                            "type": "string",
+                            "enum": ["spring", "summer", "fall", "winter", "year-round"]
+                          },
+                          "is_favorite": {
+                            "type": "boolean",
+                            "default": false
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": ["action", "templateId", "startDate", "kidIds"],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": ["apply"]
+                      },
+                      "templateId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "startDate": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Start date for applying template (yyyy-MM-dd)"
+                      },
+                      "kidIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "minItems": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              "examples": {
+                "list": {
+                  "summary": "List templates",
+                  "value": {
+                    "action": "list",
+                    "templateData": {}
+                  }
+                },
+                "saveFromWeek": {
+                  "summary": "Save template from week",
+                  "value": {
+                    "action": "saveFromWeek",
+                    "templateData": {
+                      "startDate": "2025-12-01",
+                      "endDate": "2025-12-07",
+                      "kidId": "550e8400-e29b-41d4-a716-446655440000",
+                      "name": "Healthy Winter Week",
+                      "description": "Balanced meals for cold weather",
+                      "season": "winter",
+                      "is_favorite": true
+                    }
+                  }
+                },
+                "apply": {
+                  "summary": "Apply template",
+                  "value": {
+                    "action": "apply",
+                    "templateId": "123e4567-e89b-12d3-a456-426614174000",
+                    "startDate": "2025-12-08",
+                    "kidIds": ["550e8400-e29b-41d4-a716-446655440000"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "templates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "season": {
+                                "type": "string"
+                              },
+                              "is_favorite": {
+                                "type": "boolean"
+                              },
+                              "is_admin_template": {
+                                "type": "boolean"
+                              },
+                              "is_starter_template": {
+                                "type": "boolean"
+                              },
+                              "times_used": {
+                                "type": "integer"
+                              },
+                              "success_rate": {
+                                "type": "number"
+                              },
+                              "meal_plan_template_entries": {
+                                "type": "array"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "entriesCount": {
+                          "type": "integer",
+                          "description": "Number of entries saved"
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "entriesCreated": {
+                          "type": "integer",
+                          "description": "Number of plan entries created"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/process-delivery-order": {
+      "post": {
+        "tags": ["Grocery & Delivery"],
+        "summary": "Process grocery delivery order",
+        "description": "Handle grocery delivery operations: estimate costs, create orders, and submit to delivery providers",
+        "operationId": "processDeliveryOrder",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "required": ["action", "providerId", "items"],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": ["estimate"]
+                      },
+                      "providerId": {
+                        "type": "string",
+                        "description": "Delivery provider ID (e.g., instacart, shipt)"
+                      },
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": ["food_id", "name", "quantity", "unit"],
+                          "properties": {
+                            "food_id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "quantity": {
+                              "type": "number"
+                            },
+                            "unit": {
+                              "type": "string"
+                            },
+                            "category": {
+                              "type": "string"
+                            },
+                            "estimated_price": {
+                              "type": "number"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": ["action", "householdId", "userId", "providerId"],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": ["create"]
+                      },
+                      "householdId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "userId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "providerId": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": ["action", "orderId"],
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": ["submit"]
+                      },
+                      "orderId": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  }
+                ]
+              },
+              "examples": {
+                "estimate": {
+                  "summary": "Estimate delivery cost",
+                  "value": {
+                    "action": "estimate",
+                    "providerId": "instacart",
+                    "items": [
+                      {
+                        "food_id": "123e4567-e89b-12d3-a456-426614174000",
+                        "name": "Organic Bananas",
+                        "quantity": 2,
+                        "unit": "lb",
+                        "category": "fruit",
+                        "estimated_price": 1.49
+                      }
+                    ]
+                  }
+                },
+                "create": {
+                  "summary": "Create order",
+                  "value": {
+                    "action": "create",
+                    "householdId": "550e8400-e29b-41d4-a716-446655440000",
+                    "userId": "660e8400-e29b-41d4-a716-446655440000",
+                    "providerId": "instacart"
+                  }
+                },
+                "submit": {
+                  "summary": "Submit order",
+                  "value": {
+                    "action": "submit",
+                    "orderId": "770e8400-e29b-41d4-a716-446655440000"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "description": "Cost estimate response"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "order": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "order_number": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": ["draft", "submitted", "processing", "delivered", "cancelled"]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "order_number": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/generate-weekly-report": {
+      "post": {
+        "tags": ["Reports & Analytics"],
+        "summary": "Generate weekly nutrition report",
+        "description": "Generate a comprehensive weekly report with meal planning statistics, nutrition scores, and voting participation",
+        "operationId": "generateWeeklyReport",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["householdId"],
+                "properties": {
+                  "householdId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              },
+              "example": {
+                "householdId": "550e8400-e29b-41d4-a716-446655440000"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Report generated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "report": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "week_start_date": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "week_end_date": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": ["generating", "completed", "failed"]
+                        },
+                        "meals_planned": {
+                          "type": "integer"
+                        },
+                        "planning_completion_rate": {
+                          "type": "number",
+                          "description": "Percentage of planned meals (0-100)"
+                        },
+                        "nutrition_score": {
+                          "type": "number",
+                          "description": "Overall nutrition score (0-100)"
+                        },
+                        "voting_participation_rate": {
+                          "type": "number",
+                          "description": "Percentage of votes cast (0-100)"
+                        },
+                        "avg_meal_approval_score": {
+                          "type": "number",
+                          "description": "Average meal approval rating"
+                        },
+                        "generated_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "report": {
+                    "id": "123e4567-e89b-12d3-a456-426614174000",
+                    "week_start_date": "2025-12-01",
+                    "week_end_date": "2025-12-07",
+                    "status": "completed",
+                    "meals_planned": 21,
+                    "planning_completion_rate": 95.2,
+                    "nutrition_score": 87.5,
+                    "voting_participation_rate": 78.3,
+                    "avg_meal_approval_score": 4.2,
+                    "generated_at": "2025-12-08T10:30:00Z"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/import-recipe": {
+      "post": {
+        "tags": ["Recipes"],
+        "summary": "Import recipe from URL",
+        "description": "Import and parse a recipe from a given URL using web scraping and structured data extraction",
+        "operationId": "importRecipe",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Recipe URL to import"
+                  }
+                }
+              },
+              "example": {
+                "url": "https://www.allrecipes.com/recipe/12345/chicken-parmesan/"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Recipe imported successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recipe": {
+                      "type": "object",
+                      "description": "Parsed recipe data"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid URL or unable to parse recipe",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/gsc-oauth": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Google Search Console OAuth callback",
+        "description": "Handle OAuth callback from Google Search Console authentication flow",
+        "operationId": "gscOAuthCallback",
+        "parameters": [
+          {
+            "name": "action",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["callback"]
+            }
+          },
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "OAuth authorization code"
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "CSRF protection state parameter"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OAuth callback processed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid OAuth parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/track-engagement": {
+      "post": {
+        "tags": ["Analytics"],
+        "summary": "Track user engagement",
+        "description": "Track blog post reading engagement events (scroll milestones)",
+        "operationId": "trackEngagement",
+        "security": [
+          {
+            "anonAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["post_id", "event_type", "session_id"],
+                "properties": {
+                  "post_id": {
+                    "type": "string",
+                    "description": "Blog post ID"
+                  },
+                  "event_type": {
+                    "type": "string",
+                    "enum": ["scroll_25", "scroll_50", "scroll_75", "scroll_100"],
+                    "description": "Scroll milestone event"
+                  },
+                  "session_id": {
+                    "type": "string",
+                    "description": "User session ID"
+                  },
+                  "user_agent": {
+                    "type": "string",
+                    "description": "Browser user agent"
+                  },
+                  "referrer": {
+                    "type": "string",
+                    "description": "Page referrer URL"
+                  }
+                }
+              },
+              "example": {
+                "post_id": "123",
+                "event_type": "scroll_50",
+                "session_id": "sess_abc123",
+                "user_agent": "Mozilla/5.0 ...",
+                "referrer": "https://google.com"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Event tracked successfully (no content)"
+          },
+          "400": {
+            "description": "Invalid event data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Supabase JWT token from auth.session.access_token"
+      },
+      "anonAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Supabase anonymous key (VITE_SUPABASE_ANON_KEY)"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error message"
+          },
+          "code": {
+            "type": "string",
+            "description": "Error code"
+          },
+          "details": {
+            "type": "object",
+            "description": "Additional error details"
+          }
+        }
+      }
+    },
+    "responses": {
+      "UnauthorizedError": {
+        "description": "Authentication required or invalid token",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Unauthorized",
+              "code": "UNAUTHORIZED"
+            }
+          }
+        }
+      },
+      "InternalServerError": {
+        "description": "Internal server error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Internal server error",
+              "code": "INTERNAL_ERROR"
+            }
+          }
+        }
+      }
+    }
+  }
+}

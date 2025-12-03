@@ -55,6 +55,7 @@ const MealPlanGenerator = lazy(() => import("./pages/MealPlanGenerator"));
 const MealPlanGeneratorResults = lazy(() => import("./pages/MealPlanGeneratorResults"));
 const ProfessionalSettings = lazy(() => import("./pages/dashboard/ProfessionalSettings"));
 const Billing = lazy(() => import("./pages/dashboard/Billing"));
+const ApiDocs = lazy(() => import("./pages/ApiDocs"));
 
 // Loading fallback component
 const LoadingFallback = () => (
@@ -105,6 +106,7 @@ const App = () => (
             <Route path="/budget-calculator/results" element={<BudgetCalculatorResults />} />
             <Route path="/meal-plan" element={<MealPlanGenerator />} />
             <Route path="/meal-plan/results" element={<MealPlanGeneratorResults />} />
+            <Route path="/api/docs" element={<ApiDocs />} />
             {/* Admin routes - Protected with role check */}
             <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
             <Route path="/admin-dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
