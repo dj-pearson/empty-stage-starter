@@ -44,3 +44,12 @@ supabase/.temp/project-ref
 supabase/.temp/rest-version
 supabase/.temp/storage-version
 generate-apple-secret.js
+Database_Backup/db_cluster-08-12-2025@06-22-46.backup.gz
+supabase/.temp/storage-migration
+coolify-migration/apply-migrations.sh
+coolify-migration/CHECKLIST.md
+coolify-migration/deploy-functions.sh
+coolify-migration/README.md
+coolify-migration/URL_ROUTING.md
+Database_Backup/db_cluster-08-12-2025@06-22-46.backup/db_cluster-08-12-2025@06-22-46.backup
+supabase/.temp/storage-migration
