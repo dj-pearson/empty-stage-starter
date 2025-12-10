@@ -1,0 +1,10 @@
+name = "eatpal-empty-stage"
+compatibility_date = "2024-12-19"
+pages_build_output_dir = "dist"
+
+[env.production]
+compatibility_date = "2024-12-19"
+
+[env.preview]
+compatibility_date = "2024-12-19"
+

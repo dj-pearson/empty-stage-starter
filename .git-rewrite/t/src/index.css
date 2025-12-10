@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* EatPal Color Palette - Light Mode */
+    --background: 60 100% 99%; /* Warm Beige as base */
+    --foreground: 142 50% 15%; /* Dark Forest Green for text */
+
+    --card: 0 0% 100%;
+    --card-foreground: 142 50% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 142 50% 15%;
+
+    --primary: 142 45% 30%; /* Forest Green RGB(47, 109, 60) */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 143 41% 74%; /* Mint Green RGB(165, 214, 167) */
+    --secondary-foreground: 142 50% 15%;
+
+    --muted: 143 41% 90%;
+    --muted-foreground: 142 30% 40%;
+
+    --accent: 28 100% 68%; /* Soft Orange RGB(255, 164, 91) */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 143 20% 85%;
+    --input: 143 20% 85%;
+    --ring: 142 45% 30%;
+
+    --radius: 0.75rem;
+    
+    /* Custom semantic colors */
+    --safe-food: 142 45% 30%; /* Forest Green */
+    --try-bite: 28 100% 68%; /* Soft Orange */
+    --sky-blue: 199 84% 74%; /* Sky Blue RGB(129, 212, 250) */
+    
+    --gradient-hero: linear-gradient(135deg, hsl(142 45% 30%), hsl(143 41% 74%));
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(60 100% 99%));
+    --shadow-soft: 0 4px 20px -4px hsl(142 45% 30% / 0.15);
+    --shadow-medium: 0 8px 30px -6px hsl(142 45% 30% / 0.25);
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    --sidebar-background: 60 100% 99%;
+    --sidebar-foreground: 142 50% 15%;
+    --sidebar-primary: 142 45% 30%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 143 41% 90%;
+    --sidebar-accent-foreground: 142 50% 15%;
+    --sidebar-border: 143 20% 85%;
+    --sidebar-ring: 142 45% 30%;
+  }
+
+  .dark {
+    /* EatPal Color Palette - Dark Mode */
+    --background: 142 25% 10%;
+    --foreground: 60 100% 95%;
+
+    --card: 142 20% 14%;
+    --card-foreground: 60 100% 95%;
+
+    --popover: 142 20% 14%;
+    --popover-foreground: 60 100% 95%;
+
+    --primary: 143 41% 74%; /* Mint Green for dark mode */
+    --primary-foreground: 142 50% 15%;
+
+    --secondary: 142 45% 35%; /* Darker Forest Green */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 142 15% 18%;
+    --muted-foreground: 143 20% 60%;
+
+    --accent: 28 100% 68%; /* Soft Orange */
+    --accent-foreground: 142 50% 15%;
+
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 142 20% 22%;
+    --input: 142 20% 22%;
+    --ring: 143 41% 74%;
+    
+    --safe-food: 143 41% 74%;
+    --try-bite: 28 100% 68%;
+    --sky-blue: 199 84% 74%;
+    --gradient-hero: linear-gradient(135deg, hsl(143 41% 74%), hsl(142 45% 35%));
+    --gradient-card: linear-gradient(180deg, hsl(142 20% 14%), hsl(142 25% 10%));
+    --shadow-soft: 0 4px 20px -4px hsl(143 41% 74% / 0.3);
+    --shadow-medium: 0 8px 30px -6px hsl(143 41% 74% / 0.4);
+    
+    --sidebar-background: 142 25% 10%;
+    --sidebar-foreground: 60 100% 95%;
+    --sidebar-primary: 143 41% 74%;
+    --sidebar-primary-foreground: 142 50% 15%;
+    --sidebar-accent: 142 15% 18%;
+    --sidebar-accent-foreground: 60 100% 95%;
+    --sidebar-border: 142 20% 22%;
+    --sidebar-ring: 143 41% 74%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Nunito Sans', system-ui, -apple-system, sans-serif;
+  }
+}

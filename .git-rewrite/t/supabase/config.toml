@@ -1,0 +1,28 @@
+project_id = "tbuszxkevkpjcjapbrir"
+
+[functions.suggest-foods]
+verify_jwt = true
+
+[functions.suggest-recipe]
+verify_jwt = true
+
+[functions.ai-meal-plan]
+verify_jwt = true
+
+[functions.test-ai-model]
+verify_jwt = true
+
+[functions.generate-blog-content]
+verify_jwt = false
+
+[functions.generate-social-content]
+verify_jwt = false
+
+[functions.test-blog-webhook]
+verify_jwt = false
+
+[functions.update-blog-image]
+verify_jwt = false
+
+[functions.parse-recipe]
+verify_jwt = false

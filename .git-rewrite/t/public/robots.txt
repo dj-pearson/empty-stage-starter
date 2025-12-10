@@ -1,0 +1,132 @@
+# EatPal - Kids Meal Planning for Picky Eaters
+# Optimized for Traditional & AI Search Engines
+
+# Google Crawlers
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 0
+
+User-agent: Googlebot-Image
+Allow: /
+Disallow: /admin/
+
+User-agent: Googlebot-Mobile
+Allow: /
+
+# Google AI Overview & Bard
+User-agent: Google-Extended
+Allow: /
+Crawl-delay: 1
+
+# Bing & Microsoft Copilot
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 0
+
+User-agent: BingPreview
+Allow: /
+
+# OpenAI ChatGPT & GPT Search
+User-agent: GPTBot
+Allow: /
+Crawl-delay: 1
+
+User-agent: ChatGPT-User
+Allow: /
+
+# Anthropic Claude
+User-agent: anthropic-ai
+Allow: /
+Crawl-delay: 1
+
+User-agent: Claude-Web
+Allow: /
+
+# Perplexity AI
+User-agent: PerplexityBot
+Allow: /
+Crawl-delay: 1
+
+# Meta AI (Facebook AI)
+User-agent: FacebookBot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+# Applebot (Apple Intelligence & Siri)
+User-agent: Applebot
+Allow: /
+Crawl-delay: 1
+
+User-agent: Applebot-Extended
+Allow: /
+
+# Common Crawl (used by AI training)
+User-agent: CCBot
+Allow: /
+Crawl-delay: 2
+
+# Social Media Crawlers
+User-agent: Twitterbot
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /
+
+User-agent: Pinterestbot
+Allow: /
+
+# WhatsApp & Telegram
+User-agent: WhatsApp
+Allow: /
+
+User-agent: TelegramBot
+Allow: /
+
+# Amazon Alexa
+User-agent: ia_archiver
+Allow: /
+
+# Yandex (Russia)
+User-agent: YandexBot
+Allow: /
+Crawl-delay: 2
+
+# Baidu (China)
+User-agent: Baiduspider
+Allow: /
+Crawl-delay: 2
+
+# DuckDuckGo
+User-agent: DuckDuckBot
+Allow: /
+
+# All other bots
+User-agent: *
+Allow: /
+Crawl-delay: 2
+
+# Block admin and private routes from all crawlers
+Disallow: /admin/
+Disallow: /api/
+Disallow: /dashboard/
+Disallow: /_next/
+Disallow: /auth/
+
+# Allow public pages
+Allow: /
+Allow: /pricing
+Allow: /about
+Allow: /blog/
+
+# Sitemap location
+Sitemap: https://tryeatpal.com/sitemap.xml
+Sitemap: https://tryeatpal.com/sitemap-index.xml
+
+# AI/LLM crawler information
+# For ChatGPT, Claude, Perplexity, and other AI systems
+# See https://tryeatpal.com/llms.txt for data usage guidelines
+
+# Host (preferred domain)
+Host: https://tryeatpal.com
