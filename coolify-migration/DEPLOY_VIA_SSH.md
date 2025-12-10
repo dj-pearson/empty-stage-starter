@@ -13,16 +13,16 @@ Since the MCP server's `deploy_migration` tool is encountering errors and direct
 
 ```powershell
 # Upload migration SQL
-scp coolify-migration/combined_eatpal_migrations_clean.sql root@209.145.59.219:/tmp/
+scp coolify-migration/combined_eatpal_migrations_clean.sql root@<your-server-ip>:/tmp/
 
 # Upload edge functions package
-scp coolify-migration/eatpal-functions-package.zip root@209.145.59.219:/tmp/
+scp coolify-migration/eatpal-functions-package.zip root@<your-server-ip>:/tmp/
 ```
 
 ## Step 2: SSH into Server
 
 ```powershell
-ssh root@209.145.59.219
+ssh root@<your-server-ip>
 ```
 
 ## Step 3: Find Supabase Database Container
@@ -78,7 +78,7 @@ cd eatpal-functions-package
 
 # Initialize Supabase if needed (in the project directory)
 cd /path/to/your/supabase/project
-supabase link --project-ref your-project-ref --password KMAGhTR3gsHnBMWMMkeczGYak8RqHI9V
+supabase link --project-ref your-project-ref --password <your-db-password>
 
 # Deploy all functions
 for dir in /tmp/eatpal-functions-package/*/; do

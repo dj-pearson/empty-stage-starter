@@ -119,11 +119,11 @@ git push origin main
 SUPABASE_URL=https://api.tryeatpal.com
 SUPABASE_ANON_KEY=<your-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
-SUPABASE_DB_HOST=209.145.59.219
+SUPABASE_DB_HOST=<your-server-ip>
 SUPABASE_DB_PORT=5434
 SUPABASE_DB_NAME=postgres
 SUPABASE_DB_USER=postgres
-SUPABASE_DB_PASSWORD=KMAGhTR3gsHnBMWMMkeczGYak8RqHI9V
+SUPABASE_DB_PASSWORD=<your-db-password>
 
 # External Service Keys
 OPENAI_API_KEY=<your-openai-key>

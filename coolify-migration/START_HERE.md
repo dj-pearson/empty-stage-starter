@@ -80,9 +80,9 @@ From your `.env` file, you'll need these for the Edge Functions service:
 SUPABASE_URL=https://api.tryeatpal.com
 SUPABASE_ANON_KEY=<your-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
-SUPABASE_DB_HOST=209.145.59.219
+SUPABASE_DB_HOST=<your-server-ip>
 SUPABASE_DB_PORT=5434
-SUPABASE_DB_PASSWORD=KMAGhTR3gsHnBMWMMkeczGYak8RqHI9V
+SUPABASE_DB_PASSWORD=<your-db-password>
 OPENAI_API_KEY=<your-openai-key>
 STRIPE_SECRET_KEY=<your-stripe-key>
 STRIPE_WEBHOOK_SECRET=<your-webhook-secret>

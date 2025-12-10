@@ -21,7 +21,7 @@ Since this is a new Coolify deployment, the cleanest approach is to start fresh:
 
 ```powershell
 # From your local machine
-scp coolify-migration/combined_eatpal_migrations_clean.sql root@209.145.59.219:/tmp/
+scp coolify-migration/combined_eatpal_migrations_clean.sql root@<your-server-ip>:/tmp/
 scp coolify-migration/eatpal-functions-package.zip root@209.145.59.219:/tmp/
 ```
 
