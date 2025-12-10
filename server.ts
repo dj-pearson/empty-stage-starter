@@ -1,7 +1,7 @@
 // Simple Edge Functions Server
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const PORT = parseInt(Deno.env.get("PORT") || "8000");
+const PORT = 8000;
 const FUNCTIONS_DIR = "/app/functions";
 
 console.log(`🚀 Starting Edge Functions Server on port ${PORT}`);
