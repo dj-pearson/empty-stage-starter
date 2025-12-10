@@ -1,4 +1,4 @@
-import { Users, Database, Brain, UserCog, CreditCard, Target, Share2, BookOpen, Mail, Search, Percent, Gift, Flag, Ticket, UserPlus, Sparkles, BarChart3, DollarSign, TrendingUp } from "lucide-react";
+import { Users, Database, Brain, UserCog, CreditCard, Target, Share2, BookOpen, Mail, Search, Percent, Gift, Flag, Ticket, UserPlus, Sparkles, BarChart3, DollarSign, TrendingUp, UsersIcon, Palette, FlaskConical, LineChart, Globe, FileSpreadsheet } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -18,6 +18,7 @@ const adminItems = [
   { title: "Support Performance", value: "support-performance", icon: BarChart3 },
   { title: "Support Tickets", value: "tickets", icon: Ticket },
   { title: "Users", value: "users", icon: UserCog },
+  { title: "Bulk Users", value: "bulk-users", icon: UsersIcon },
   { title: "Subscriptions", value: "subscriptions", icon: CreditCard },
   { title: "Complementary", value: "complementary", icon: Gift },
   { title: "Referrals", value: "referrals", icon: UserPlus },
@@ -26,11 +27,16 @@ const adminItems = [
   { title: "Social", value: "social", icon: Share2 },
   { title: "Blog", value: "blog", icon: BookOpen },
   { title: "Email", value: "email", icon: Mail },
+  { title: "Email Builder", value: "email-builder", icon: Palette },
+  { title: "Email A/B Test", value: "email-ab-test", icon: FlaskConical },
+  { title: "Email Analytics", value: "email-analytics", icon: LineChart },
   { title: "SEO", value: "seo", icon: Search },
   { title: "Feature Flags", value: "flags", icon: Flag },
   { title: "Nutrition", value: "nutrition", icon: Database },
   { title: "Roles", value: "roles", icon: Users },
   { title: "AI", value: "ai", icon: Brain },
+  { title: "Multi-Region Backup", value: "backup", icon: Globe },
+  { title: "Export", value: "export", icon: FileSpreadsheet },
 ];
 
 interface AdminSidebarProps {

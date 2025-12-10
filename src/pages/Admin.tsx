@@ -28,6 +28,12 @@ import { UserIntelligenceDashboard } from "@/components/admin/UserIntelligenceDa
 import { SupportPerformanceDashboard } from "@/components/admin/SupportPerformanceDashboard";
 import { RevenueOperationsCenter } from "@/components/admin/RevenueOperationsCenter";
 import { ConversionFunnelDashboard } from "@/components/admin/ConversionFunnelDashboard";
+import { BulkUserManagement } from "@/components/admin/BulkUserManagement";
+import { EmailTemplateBuilder } from "@/components/admin/EmailTemplateBuilder";
+import { EmailABTesting } from "@/components/admin/EmailABTesting";
+import { EmailAnalyticsDashboard } from "@/components/admin/EmailAnalyticsDashboard";
+import { MultiRegionBackup } from "@/components/admin/MultiRegionBackup";
+import { DocumentExportManager } from "@/components/admin/DocumentExportManager";
 import { logger } from "@/lib/logger";
 
 const Admin = () => {
@@ -422,6 +428,90 @@ const Admin = () => {
                 </CardHeader>
                 <CardContent>
                   <TicketQueue />
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === "bulk-users" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Bulk User Management</CardTitle>
+                  <CardDescription>
+                    Perform batch operations on multiple users at once
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <BulkUserManagement />
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === "email-builder" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Email Template Builder</CardTitle>
+                  <CardDescription>
+                    Create and design email templates with a drag-and-drop editor
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <EmailTemplateBuilder />
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === "email-ab-test" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Email A/B Testing</CardTitle>
+                  <CardDescription>
+                    Create and manage split tests for email campaigns
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <EmailABTesting />
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === "email-analytics" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Email Analytics</CardTitle>
+                  <CardDescription>
+                    Track open rates, click rates, and engagement metrics
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <EmailAnalyticsDashboard />
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === "backup" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Multi-Region Backup</CardTitle>
+                  <CardDescription>
+                    Manage geo-redundant backup replication across regions
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <MultiRegionBackup />
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === "export" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Document Export</CardTitle>
+                  <CardDescription>
+                    Export data to DOCX and Excel formats
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <DocumentExportManager />
                 </CardContent>
               </Card>
             )}
