@@ -42,6 +42,7 @@ import {
 import { toast } from "sonner";
 import { Recipe, RecipeCollection } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
@@ -285,7 +286,7 @@ export default function Recipes() {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke(
+      const { data, error } = await invokeEdgeFunction(
         "suggest-recipes-from-pantry",
         {
           body: {

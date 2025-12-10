@@ -66,6 +66,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ContentOptimizer } from "./ContentOptimizer";
 import { logger } from "@/lib/logger";
@@ -327,7 +328,7 @@ export function SEOManager() {
     setBlogPostsAnalysisResults(null);
 
     try {
-      const { data, error} = await supabase.functions.invoke("analyze-blog-posts-seo");
+      const { data, error} = await invokeEdgeFunction("analyze-blog-posts-seo");
 
       if (error) throw error;
 
@@ -362,7 +363,7 @@ export function SEOManager() {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) return;
 
-      const { data, error } = await supabase.functions.invoke("gsc-oauth", {
+      const { data, error } = await invokeEdgeFunction("gsc-oauth", {
         body: { action: "status", userId: user.id },
       });
 
@@ -389,7 +390,7 @@ export function SEOManager() {
       }
 
       // Get OAuth URL
-      const { data, error } = await supabase.functions.invoke("gsc-oauth", {
+      const { data, error } = await invokeEdgeFunction("gsc-oauth", {
         body: { action: "initiate", userId: user.id },
       });
 
@@ -415,7 +416,7 @@ export function SEOManager() {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) return;
 
-      const { data, error } = await supabase.functions.invoke("gsc-fetch-properties", {
+      const { data, error } = await invokeEdgeFunction("gsc-fetch-properties", {
         body: { userId: user.id },
       });
 
@@ -451,7 +452,7 @@ export function SEOManager() {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) throw new Error("Not logged in");
 
-      const { data, error } = await supabase.functions.invoke("gsc-sync-data", {
+      const { data, error } = await invokeEdgeFunction("gsc-sync-data", {
         body: {
           userId: user.id,
           propertyUrl: selectedProperty,
@@ -486,7 +487,7 @@ export function SEOManager() {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) return;
 
-      const { data, error } = await supabase.functions.invoke("gsc-oauth", {
+      const { data, error } = await invokeEdgeFunction("gsc-oauth", {
         body: { action: "disconnect", userId: user.id },
       });
 
@@ -1556,7 +1557,7 @@ export function SEOManager() {
 
     try {
       // Call the apply-seo-fixes edge function
-      const { data, error } = await supabase.functions.invoke("apply-seo-fixes", {
+      const { data, error } = await invokeEdgeFunction("apply-seo-fixes", {
         body: {
           auditResults: auditResults,
           auditId: currentAuditId,
@@ -1603,7 +1604,7 @@ export function SEOManager() {
     setFixesAppliedResults(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke("apply-seo-fixes", {
+      const { data, error } = await invokeEdgeFunction("apply-seo-fixes", {
         body: {
           auditResults: auditResults,
           auditId: currentAuditId,
@@ -1713,7 +1714,7 @@ export function SEOManager() {
     toast.info(`Analyzing competitor: ${competitorUrl}`);
 
     try {
-      const { data, error } = await supabase.functions.invoke("seo-audit", {
+      const { data, error } = await invokeEdgeFunction("seo-audit", {
         body: { url: competitorUrl },
       });
 
@@ -3531,7 +3532,7 @@ RESTful API available for integrations. Contact for API access.
                     setStructuredDataValidationResults(null);
 
                     try {
-                      const { data, error } = await supabase.functions.invoke('validate-structured-data', {
+                      const { data, error } = await invokeEdgeFunction('validate-structured-data', {
                         body: { url }
                       });
 
@@ -4204,7 +4205,7 @@ RESTful API available for integrations. Contact for API access.
                     setCoreWebVitalsResults(null);
 
                     try {
-                      const { data, error } = await supabase.functions.invoke('gsc-fetch-core-web-vitals', {
+                      const { data, error } = await invokeEdgeFunction('gsc-fetch-core-web-vitals', {
                         body: { siteUrl: url }
                       });
 
@@ -4358,7 +4359,7 @@ RESTful API available for integrations. Contact for API access.
                     setIsAddingBacklink(true);
 
                     try {
-                      const { data, error } = await supabase.functions.invoke('sync-backlinks', {
+                      const { data, error } = await invokeEdgeFunction('sync-backlinks', {
                         body: {
                           targetDomain: new URL(targetUrl).hostname,
                           source: 'manual',
@@ -4498,7 +4499,7 @@ RESTful API available for integrations. Contact for API access.
                     setBrokenLinksResults(null);
 
                     try {
-                      const { data, error } = await supabase.functions.invoke('check-broken-links', {
+                      const { data, error } = await invokeEdgeFunction('check-broken-links', {
                         body: {
                           url: url,
                           checkExternal: true,
@@ -4660,7 +4661,7 @@ RESTful API available for integrations. Contact for API access.
                     setContentAnalysisResults(null);
 
                     try {
-                      const { data, error } = await supabase.functions.invoke('analyze-content', {
+                      const { data, error } = await invokeEdgeFunction('analyze-content', {
                         body: {
                           url: url,
                           targetKeyword: keyword || undefined,
@@ -4890,7 +4891,7 @@ RESTful API available for integrations. Contact for API access.
                   const followExternal = followExternalInput?.checked || false;
 
                   try {
-                    const { data, error } = await supabase.functions.invoke('crawl-site', {
+                    const { data, error } = await invokeEdgeFunction('crawl-site', {
                       body: { startUrl, maxPages, followExternal }
                     });
 
@@ -4980,7 +4981,7 @@ RESTful API available for integrations. Contact for API access.
                   const maxFileSize = parseInt(maxSizeInput?.value || '200') * 1024;
 
                   try {
-                    const { data, error } = await supabase.functions.invoke('analyze-images', {
+                    const { data, error } = await invokeEdgeFunction('analyze-images', {
                       body: { url, maxFileSize }
                     });
 
@@ -5062,7 +5063,7 @@ RESTful API available for integrations. Contact for API access.
                   }
 
                   try {
-                    const { data, error } = await supabase.functions.invoke('detect-redirect-chains', {
+                    const { data, error } = await invokeEdgeFunction('detect-redirect-chains', {
                       body: { urls, maxRedirects: 10 }
                     });
 
@@ -5158,7 +5159,7 @@ RESTful API available for integrations. Contact for API access.
                   }
 
                   try {
-                    const { data, error } = await supabase.functions.invoke('detect-duplicate-content', {
+                    const { data, error } = await invokeEdgeFunction('detect-duplicate-content', {
                       body: { urls, similarityThreshold, thinContentThreshold: 300 }
                     });
 
@@ -5233,7 +5234,7 @@ RESTful API available for integrations. Contact for API access.
                   const url = urlInput?.value || `${window.location.origin}/`;
 
                   try {
-                    const { data, error } = await supabase.functions.invoke('check-security-headers', {
+                    const { data, error } = await invokeEdgeFunction('check-security-headers', {
                       body: { url }
                     });
 
@@ -5333,7 +5334,7 @@ RESTful API available for integrations. Contact for API access.
                   const maxPages = parseInt(maxPagesInput?.value || '100');
 
                   try {
-                    const { data, error } = await supabase.functions.invoke('analyze-internal-links', {
+                    const { data, error } = await invokeEdgeFunction('analyze-internal-links', {
                       body: { startUrl, maxPages }
                     });
 
@@ -5409,7 +5410,7 @@ RESTful API available for integrations. Contact for API access.
                   const url = urlInput?.value || `${window.location.origin}/`;
 
                   try {
-                    const { data, error } = await supabase.functions.invoke('check-mobile-first', {
+                    const { data, error } = await invokeEdgeFunction('check-mobile-first', {
                       body: { url }
                     });
 
@@ -5532,7 +5533,7 @@ RESTful API available for integrations. Contact for API access.
                   };
 
                   try {
-                    const { data, error } = await supabase.functions.invoke('monitor-performance-budget', {
+                    const { data, error } = await invokeEdgeFunction('monitor-performance-budget', {
                       body: { url, budget }
                     });
 

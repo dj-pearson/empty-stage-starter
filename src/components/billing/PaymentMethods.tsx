@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +50,7 @@ export function PaymentMethods() {
   const fetchPaymentMethods = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.functions.invoke("manage-payment-methods", {
+      const { data, error } = await invokeEdgeFunction("manage-payment-methods", {
         body: { action: "list" },
       });
 
@@ -68,7 +69,7 @@ export function PaymentMethods() {
     try {
       setActionLoading(paymentMethodId);
 
-      const { error } = await supabase.functions.invoke("manage-payment-methods", {
+      const { error } = await invokeEdgeFunction("manage-payment-methods", {
         body: { action: "set-default", paymentMethodId },
       });
 
@@ -88,7 +89,7 @@ export function PaymentMethods() {
     try {
       setActionLoading(paymentMethodId);
 
-      const { error } = await supabase.functions.invoke("manage-payment-methods", {
+      const { error } = await invokeEdgeFunction("manage-payment-methods", {
         body: { action: "detach", paymentMethodId },
       });
 
@@ -109,7 +110,7 @@ export function PaymentMethods() {
     try {
       setActionLoading("portal");
 
-      const { data, error } = await supabase.functions.invoke("manage-payment-methods", {
+      const { data, error } = await invokeEdgeFunction("manage-payment-methods", {
         body: { action: "get-portal-url" },
       });
 

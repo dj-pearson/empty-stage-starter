@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -433,7 +434,7 @@ export function SocialMediaManager() {
         webhookUrl = globalAccount.webhook_url;
       }
 
-      const { data, error } = await supabase.functions.invoke('generate-social-content', {
+      const { data, error } = await invokeEdgeFunction('generate-social-content', {
         body: {
           topic: aiForm.topic,
           contentGoal: aiForm.contentGoal,

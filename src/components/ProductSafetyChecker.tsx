@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ShieldCheck, Search, ScanBarcode, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "@/hooks/use-toast";
 import { logger } from "@/lib/logger";
 
@@ -62,7 +63,7 @@ export function ProductSafetyChecker({ kidName, kidAllergens }: ProductSafetyChe
 
     try {
       // Try barcode lookup first
-      const { data: barcodeData } = await supabase.functions.invoke('lookup-barcode', {
+      const { data: barcodeData } = await invokeEdgeFunction('lookup-barcode', {
         body: { barcode: query }
       });
 

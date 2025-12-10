@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -101,10 +102,19 @@ export function UserManagementDashboard() {
       setLoading(true);
 
       // Call edge function to get users with admin privileges
-      const { data, error } = await supabase.functions.invoke('list-users');
+      const response = await fetch(`${import.meta.env.VITE_FUNCTIONS_URL}/list-users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error(`Failed to fetch users: ${response.statusText}`);
+      }
 
+      const data = await response.json();
       const combinedUsers: UserProfile[] = data.users || [];
       setUsers(combinedUsers);
 
@@ -154,7 +164,7 @@ export function UserManagementDashboard() {
 
   const handleBanUser = async (userId: string, ban: boolean) => {
     try {
-      const { data, error } = await supabase.functions.invoke('update-user', {
+      const { data, error } = await invokeEdgeFunction('update-user', {
         body: { userId, action: ban ? 'ban' : 'unban' }
       });
 
@@ -171,7 +181,7 @@ export function UserManagementDashboard() {
 
   const handleMakeAdmin = async (userId: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke('update-user', {
+      const { data, error } = await invokeEdgeFunction('update-user', {
         body: { userId, action: 'make_admin' }
       });
 
@@ -187,7 +197,7 @@ export function UserManagementDashboard() {
 
   const handleRemoveAdmin = async (userId: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke('update-user', {
+      const { data, error } = await invokeEdgeFunction('update-user', {
         body: { userId, action: 'remove_admin' }
       });
 

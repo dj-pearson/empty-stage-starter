@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { MealSlot, PlanEntry } from "@/types";
 import { SwapMealDialog } from "@/components/SwapMealDialog";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import {
   DropdownMenu,
@@ -154,7 +155,7 @@ export default function Planner() {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke("ai-meal-plan", {
+      const { data, error } = await invokeEdgeFunction("ai-meal-plan", {
         body: {
           kid: activeKid,
           foods,

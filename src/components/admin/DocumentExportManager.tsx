@@ -147,7 +147,14 @@ export function DocumentExportManager() {
 
     switch (template.dataSource) {
       case "profiles":
-        const { data: users } = await supabase.functions.invoke("list-users");
+        const response = await fetch(`${import.meta.env.VITE_FUNCTIONS_URL}/list-users`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          },
+        });
+        const users = response.ok ? await response.json() : null;
         return users?.users || [];
 
       case "user_subscriptions":

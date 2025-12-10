@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import {
   Dialog,
   DialogContent,
@@ -93,7 +94,7 @@ export function AddPaymentMethodDialog({
         setStripe(stripeInstance);
 
         // Create SetupIntent
-        const { data, error: intentError } = await supabase.functions.invoke(
+        const { data, error: intentError } = await invokeEdgeFunction(
           "manage-payment-methods",
           {
             body: { action: "create-setup-intent" },

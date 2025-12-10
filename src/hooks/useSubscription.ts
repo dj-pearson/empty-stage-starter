@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
@@ -140,7 +141,7 @@ export function useSubscription() {
         return { success: false, error: "Complementary subscription cannot be upgraded directly" };
       }
 
-      const { data, error } = await supabase.functions.invoke(
+      const { data, error } = await invokeEdgeFunction(
         "manage-subscription",
         {
           body: {
@@ -176,7 +177,7 @@ export function useSubscription() {
     try {
       setActionLoading(true);
 
-      const { data, error } = await supabase.functions.invoke(
+      const { data, error } = await invokeEdgeFunction(
         "manage-subscription",
         {
           body: {
@@ -205,7 +206,7 @@ export function useSubscription() {
     try {
       setActionLoading(true);
 
-      const { data, error } = await supabase.functions.invoke(
+      const { data, error } = await invokeEdgeFunction(
         "manage-subscription",
         {
           body: {
@@ -234,7 +235,7 @@ export function useSubscription() {
     try {
       setActionLoading(true);
 
-      const { data, error } = await supabase.functions.invoke(
+      const { data, error } = await invokeEdgeFunction(
         "manage-subscription",
         {
           body: {

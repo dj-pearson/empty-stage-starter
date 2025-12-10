@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
 import { Chrome, Search, Globe, CheckCircle, XCircle, Loader2, Unplug } from "lucide-react";
 
@@ -122,7 +123,7 @@ export function PlatformConnectionManager({ open, onClose }: Props) {
           throw new Error("Unknown platform");
       }
 
-      const response = await supabase.functions.invoke(functionName, {
+      const response = await invokeEdgeFunction(functionName, {
         body: {
           action: "initiate",
           userId: user.id,
@@ -166,7 +167,7 @@ export function PlatformConnectionManager({ open, onClose }: Props) {
           throw new Error("Unknown platform");
       }
 
-      const response = await supabase.functions.invoke(functionName, {
+      const response = await invokeEdgeFunction(functionName, {
         body: {
           action: "disconnect",
           userId: user.id,

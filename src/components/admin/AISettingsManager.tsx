@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -117,7 +118,7 @@ export function AISettingsManager() {
 
     try {
       // Call edge function to test the AI model
-      const { data, error } = await supabase.functions.invoke('test-ai-model', {
+      const { data, error } = await invokeEdgeFunction('test-ai-model', {
         body: { prompt: 'Hello! Please respond with "Test successful" to confirm you are working.' }
       });
 

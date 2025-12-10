@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 
@@ -104,7 +105,7 @@ export async function callWithRateLimit<T = any>(
 
   try {
     // Make the actual function call
-    const { data, error } = await supabase.functions.invoke(functionName, { body });
+    const { data, error } = await invokeEdgeFunction(functionName, { body });
 
     if (error) {
       logger.error(`${functionName} error:`, error);

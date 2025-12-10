@@ -19,6 +19,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getTokenManager, OAuthTokenManager } from '@/lib/oauth-token-rotation';
 import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { logger } from '@/lib/logger';
 
 export interface UseOAuthTokenResult {
@@ -212,7 +213,7 @@ export function useOAuthConnect(provider: string) {
 
     try {
       // Call Edge Function to get OAuth URL
-      const { data, error: funcError } = await supabase.functions.invoke(`${provider}-oauth`, {
+      const { data, error: funcError } = await invokeEdgeFunction(`${provider}-oauth`, {
         body: { action: 'getAuthUrl', redirectUri },
       });
 
@@ -260,7 +261,7 @@ export function useOAuthCallback(provider: string) {
       }
 
       // Exchange code for tokens
-      const { data, error: funcError } = await supabase.functions.invoke(`${provider}-oauth`, {
+      const { data, error: funcError } = await invokeEdgeFunction(`${provider}-oauth`, {
         body: { action: 'exchangeCode', code, state },
       });
 

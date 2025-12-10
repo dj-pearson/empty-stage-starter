@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -125,9 +126,19 @@ export function BulkUserManagement() {
   const loadUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.functions.invoke("list-users");
+      const response = await fetch(`${import.meta.env.VITE_FUNCTIONS_URL}/list-users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error(`Failed to fetch users: ${response.statusText}`);
+      }
+
+      const data = await response.json();
 
       const combinedUsers: UserProfile[] = data.users || [];
       setUsers(combinedUsers);
@@ -258,7 +269,7 @@ export function BulkUserManagement() {
             continue;
         }
 
-        const { error } = await supabase.functions.invoke("update-user", {
+        const { error } = await invokeEdgeFunction("update-user", {
           body: { userId: user.id, action: actionName },
         });
 
