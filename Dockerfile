@@ -4,5 +4,6 @@ FROM supabase/edge-runtime:v1.67.4
 # Copy functions
 COPY supabase/functions /home/deno/functions
 
-# Use default Supabase edge-runtime entrypoint (no custom server needed)
+# Start edge-runtime
+CMD ["edge-runtime", "start", "--main-service", "/home/deno/functions", "-p", "9000"]
 
