@@ -1,5 +1,5 @@
 # Supabase Edge Functions Runtime for Coolify
-# Simple Deno-based approach
+# Simple Deno HTTP server
 
 FROM denoland/deno:1.40.0
 
@@ -11,7 +11,8 @@ USER root
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 USER deno
 
-# Copy function files
+# Copy server and function files
+COPY --chown=deno:deno server.ts ./
 COPY --chown=deno:deno supabase/functions ./functions
 
 # Set environment variables
@@ -27,12 +28,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:8000/_health || exit 1
 
-# Run Edge Runtime via deno
-CMD ["run", \
-     "--allow-all", \
-     "--unstable", \
-     "https://deno.land/x/edge_runtime@v1.24.0/cli/main.ts", \
-     "start", \
-     "--main-service", "/app/functions", \
-     "-p", "8000"]
+# Run our simple server
+CMD ["run", "--allow-all", "server.ts"]
 
