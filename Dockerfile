@@ -9,11 +9,16 @@ WORKDIR /app
 # Install curl for health checks
 USER root
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-USER deno
+
+# Create cache directory with correct permissions
+RUN mkdir -p /app/.deno_cache && chown -R deno:deno /app/.deno_cache
 
 # Copy server and function files
 COPY --chown=deno:deno server.ts ./
 COPY --chown=deno:deno supabase/functions ./functions
+
+# Switch to deno user
+USER deno
 
 # Set environment variables
 ENV SUPABASE_URL=${SUPABASE_URL}
