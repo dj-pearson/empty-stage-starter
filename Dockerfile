@@ -5,5 +5,5 @@ FROM supabase/edge-runtime:v1.67.4
 COPY supabase/functions /home/deno/functions
 
 # Start edge-runtime
-CMD ["edge-runtime", "start", "--main-service", "/home/deno/functions", "-p", "9000"]
+CMD ["start", "--main-service", "/home/deno/functions", "-p", "9000"]
 
