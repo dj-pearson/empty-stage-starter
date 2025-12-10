@@ -21,7 +21,7 @@ export function RecipeImporter({ onImported }: any) {
       const { data: session } = await supabase.auth.getSession();
       
       const response = await fetch(
-        "https://tbuszxkevkpjcjapbrir.supabase.co/functions/v1/import-recipe",
+        `${import.meta.env.VITE_FUNCTIONS_URL}/import-recipe`,
         {
           method: 'POST',
           headers: {

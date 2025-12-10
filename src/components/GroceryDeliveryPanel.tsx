@@ -177,7 +177,7 @@ export function GroceryDeliveryPanel({ householdId, className }: GroceryDelivery
 
       // Get estimate
       const response = await fetch(
-        `https://tbuszxkevkpjcjapbrir.supabase.co/functions/v1/process-delivery-order`,
+        `${import.meta.env.VITE_FUNCTIONS_URL}/process-delivery-order`,
         {
           method: 'POST',
           headers: {
@@ -219,7 +219,7 @@ export function GroceryDeliveryPanel({ householdId, className }: GroceryDelivery
       }
 
       const response = await fetch(
-        `https://tbuszxkevkpjcjapbrir.supabase.co/functions/v1/process-delivery-order`,
+        `${import.meta.env.VITE_FUNCTIONS_URL}/process-delivery-order`,
         {
           method: 'POST',
           headers: {
@@ -259,7 +259,7 @@ export function GroceryDeliveryPanel({ householdId, className }: GroceryDelivery
   const handleSubmitOrder = async (orderId: string) => {
     try {
       const response = await fetch(
-        `https://tbuszxkevkpjcjapbrir.supabase.co/functions/v1/process-delivery-order`,
+        `${import.meta.env.VITE_FUNCTIONS_URL}/process-delivery-order`,
         {
           method: 'POST',
           headers: {

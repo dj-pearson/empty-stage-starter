@@ -61,7 +61,7 @@ export function QuickSuggestionsPanel({
       setIsGenerating(true);
 
       const response = await fetch(
-        `https://tbuszxkevkpjcjapbrir.supabase.co/functions/v1/generate-meal-suggestions`,
+        `${import.meta.env.VITE_FUNCTIONS_URL}/generate-meal-suggestions`,
         {
           method: 'POST',
           headers: {

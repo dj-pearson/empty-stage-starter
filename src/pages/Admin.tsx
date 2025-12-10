@@ -123,10 +123,10 @@ const Admin = () => {
     try {
       logger.debug('Processing OAuth callback directly in Admin...');
 
-      const response = await fetch(`https://tbuszxkevkpjcjapbrir.supabase.co/functions/v1/gsc-oauth?action=callback&code=${code}&state=${state}`, {
+      const response = await fetch(`${import.meta.env.VITE_FUNCTIONS_URL}/gsc-oauth?action=callback&code=${code}&state=${state}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRidXN6eGtldmtwamNqYXBicmlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk4ODU5NDAsImV4cCI6MjA3NTQ2MTk0MH0.DlzY_3Fv2sXjNQNQPzCW4hh_WhC8o-_pqq6rQXGlfow`,
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         }
       });
 
