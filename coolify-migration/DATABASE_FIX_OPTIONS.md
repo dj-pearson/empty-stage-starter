@@ -107,7 +107,7 @@ If you have SSH access to your Contabo server:
 
 ```bash
 # SSH to Contabo
-ssh root@209.145.59.219
+ssh root@<your-server-ip>
 
 # Execute migrations in container
 docker exec -i supabase-db-ig8ow4o4okkogowggkog4cww psql -U postgres -d postgres < /path/to/migrations.sql

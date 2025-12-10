@@ -10,12 +10,12 @@ $envPath = ".env"
 $content = Get-Content $envPath
 
 # Find and update SUPABASE_DB_HOST
-$newContent = $content -replace '^SUPABASE_DB_HOST=localhost$', 'SUPABASE_DB_HOST=209.145.59.219'
+$newContent = $content -replace '^SUPABASE_DB_HOST=localhost$', 'SUPABASE_DB_HOST=<your-server-ip>'
 
 # Write back
 $newContent | Set-Content $envPath
 
-Write-Host "✓ Updated SUPABASE_DB_HOST to 209.145.59.219" -ForegroundColor Green
+Write-Host "✓ Updated SUPABASE_DB_HOST to <your-server-ip>" -ForegroundColor Green
 Write-Host ""
 Write-Host "Current Supabase-Coolify MCP configuration:" -ForegroundColor Cyan
 Write-Host ""

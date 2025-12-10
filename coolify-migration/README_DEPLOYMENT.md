@@ -44,17 +44,17 @@ Since external PostgreSQL connections are failing, use this fastest path:
 
 ```bash
 # Upload migrations
-scp coolify-migration/combined_eatpal_migrations.sql root@209.145.59.219:/tmp/
+scp coolify-migration/combined_eatpal_migrations.sql root@<your-server-ip>:/tmp/
 
 # Upload functions
-scp -r coolify-migration/eatpal-functions-package root@209.145.59.219:/tmp/
+scp -r coolify-migration/eatpal-functions-package root@<your-server-ip>:/tmp/
 ```
 
 ### Step 2: Apply Migrations (2 min)
 
 ```bash
 # SSH into server
-ssh root@209.145.59.219
+ssh root@<your-server-ip>
 
 # Apply migrations
 docker exec -i supabase-db-ig8ow4o4okkogowggkog4cww \

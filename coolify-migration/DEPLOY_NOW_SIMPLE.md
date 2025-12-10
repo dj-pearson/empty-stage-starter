@@ -3,7 +3,7 @@
 
 ## ✅ What We Know Works
 
-- ✅ SSH connection to 209.145.59.219
+- ✅ SSH connection to <your-server-ip>
 - ✅ Docker container access: `supabase-db-ig8ow4o4okkogowggkog4cww`
 - ✅ Migration file ready: `combined_eatpal_migrations_clean.sql` (0.78 MB)
 - ✅ Functions package ready: `eatpal-functions-package/` (0.77 MB)
@@ -16,13 +16,13 @@
 
 ```powershell
 # 1. Upload migration file (you're in coolify-migration directory)
-scp combined_eatpal_migrations_clean.sql root@209.145.59.219:/tmp/
+scp combined_eatpal_migrations_clean.sql root@<your-server-ip>:/tmp/
 
 # 2. SSH and apply migrations
-ssh root@209.145.59.219 "docker cp /tmp/combined_eatpal_migrations_clean.sql supabase-db-ig8ow4o4okkogowggkog4cww:/tmp/ && docker exec -i supabase-db-ig8ow4o4okkogowggkog4cww psql -U postgres -d postgres -f /tmp/combined_eatpal_migrations_clean.sql"
+ssh root@<your-server-ip> "docker cp /tmp/combined_eatpal_migrations_clean.sql supabase-db-ig8ow4o4okkogowggkog4cww:/tmp/ && docker exec -i supabase-db-ig8ow4o4okkogowggkog4cww psql -U postgres -d postgres -f /tmp/combined_eatpal_migrations_clean.sql"
 
 # 3. Verify migrations
-ssh root@209.145.59.219 "docker exec -i supabase-db-ig8ow4o4okkogowggkog4cww psql -U postgres -d postgres -c 'SELECT COUNT(*) as total_migrations FROM _migrations;'"
+ssh root@<your-server-ip> "docker exec -i supabase-db-ig8ow4o4okkogowggkog4cww psql -U postgres -d postgres -c 'SELECT COUNT(*) as total_migrations FROM _migrations;'"
 ```
 
 ---
@@ -32,10 +32,10 @@ ssh root@209.145.59.219 "docker exec -i supabase-db-ig8ow4o4okkogowggkog4cww psq
 ```powershell
 # 1. Upload file
 cd coolify-migration
-scp combined_eatpal_migrations_clean.sql root@209.145.59.219:/tmp/
+scp combined_eatpal_migrations_clean.sql root@<your-server-ip>:/tmp/
 
 # 2. Connect via SSH
-ssh root@209.145.59.219
+ssh root@<your-server-ip>
 
 # Then on the server:
 docker cp /tmp/combined_eatpal_migrations_clean.sql supabase-db-ig8ow4o4okkogowggkog4cww:/tmp/
@@ -94,7 +94,7 @@ supabase functions deploy create-checkout --project-ref api.tryeatpal.com
 Run the first command now:
 
 ```powershell
-scp combined_eatpal_migrations_clean.sql root@209.145.59.219:/tmp/
+scp combined_eatpal_migrations_clean.sql root@<your-server-ip>:/tmp/
 ```
 
 Then run the second command to apply migrations! 🚀

@@ -1,7 +1,7 @@
 # Deploy EatPal from Windows to Coolify Server
 # This script uploads files and provides SSH commands
 
-$Server = "root@209.145.59.219"
+$Server = "root@<your-server-ip>"
 $MigrationFile = "combined_eatpal_migrations_clean.sql"
 $DeployScript = "deploy-now.sh"
 

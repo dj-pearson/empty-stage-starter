@@ -13,13 +13,13 @@
 1. **Upload package to Coolify server:**
 
 ```bash
-scp -r eatpal-functions-package root@209.145.59.219:/tmp/
+scp -r eatpal-functions-package root@<your-server-ip>:/tmp/
 ```
 
 2. **SSH into server and deploy:**
 
 ```bash
-ssh root@209.145.59.219
+ssh root@<your-server-ip>
 cd /tmp/eatpal-functions-package
 chmod +x deploy.sh
 ./deploy.sh
