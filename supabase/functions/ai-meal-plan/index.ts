@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { getCorsHeaders, securityHeaders, privateCacheHeaders, noCacheHeaders, CACHE_DURATIONS } from "../_shared/headers.ts";
+import { getCorsHeaders, securityHeaders, privateCacheHeaders, noCacheHeaders, CACHE_DURATIONS } from "../common/headers.ts";
 
 serve(async (req) => {
   // Get secure CORS headers based on request origin
