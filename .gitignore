@@ -74,3 +74,4 @@ coolify-migration/deploy-now.sh
 ai_settings_rows.sql
 backup/db_cluster-10-12-2025@04-50-04.backup.gz
 backup/db_cluster-10-12-2025@04-50-04.backup/db_cluster-10-12-2025@04-50-04.backup
+MIGRATION_COMPLETE.md
