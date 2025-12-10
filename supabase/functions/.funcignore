@@ -1,0 +1,9 @@
+# Ignore shared utilities folder
+_shared/
+
+# Ignore common files
+*.md
+.env*
+.git*
+node_modules/
+
