@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  edge-functions:
+    build:
+      context: .
+      dockerfile: Dockerfile.functions
+    container_name: eatpal-edge-functions
+    ports:
+      - "8000:8000"
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_DB_HOST=${SUPABASE_DB_HOST}
+      - SUPABASE_DB_PORT=${SUPABASE_DB_PORT}
+      - SUPABASE_DB_PASSWORD=${SUPABASE_DB_PASSWORD}
+      # OpenAI for AI functions
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # Stripe for payment functions
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      # Email provider
+      - RESEND_API_KEY=${RESEND_API_KEY}
+    volumes:
+      - ./supabase/functions:/app/functions:ro
+      - deno-cache:/app/.deno_cache
+    restart: unless-stopped
+    networks:
+      - eatpal-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  deno-cache:
+    driver: local
+
+networks:
+  eatpal-network:
+    external: false
+

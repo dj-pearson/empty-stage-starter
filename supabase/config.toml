@@ -1,4 +1,7 @@
-project_id = "tbuszxkevkpjcjapbrir"
+# project_id = "tbuszxkevkpjcjapbrir"  # Old hosted Supabase
+# Self-hosted Coolify Supabase - use direct DB connection
+# API URL: https://api.tryeatpal.com
+# DB: 209.145.59.219:5434
 
 # Auth Configuration
 [auth]
