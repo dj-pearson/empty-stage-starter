@@ -93,9 +93,15 @@ export {
 export { useFeatureFlag, useFeatureFlags } from './useFeatureFlag';
 export { useFeatureLimit } from './useFeatureLimit';
 
+// OAuth & Security
+export { useOAuthToken, useOAuthConnect, useOAuthCallback } from './useOAuthToken';
+export { useSecurityAudit, useAdminSecurityAudit } from './useSecurityAudit';
+
 // Re-export types
 export type { WindowSize } from './useWindowSize';
 export type { UseIntersectionObserverOptions } from './useIntersectionObserver';
 export type { MobileInfo } from './useMobileOptimizations';
 export type { KeyboardNavigationOptions } from './useKeyboardNavigation';
 export type { AsyncState } from './useAsync';
+export type { UseOAuthTokenResult } from './useOAuthToken';
+export type { UseSecurityAuditResult, AuditLogFilters } from './useSecurityAudit';
