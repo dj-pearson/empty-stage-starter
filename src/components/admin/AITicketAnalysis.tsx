@@ -1,10 +1,16 @@
 // @ts-nocheck
 import { useState, useEffect } from "react";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Button } from "@/components/ui/button";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Badge } from "@/components/ui/badge";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Separator } from "@/components/ui/separator";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Textarea } from "@/components/ui/textarea";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import {
   Brain,
   Sparkles,
@@ -19,9 +25,13 @@ import {
   TrendingUp,
   Zap,
 } from "lucide-react";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { supabase } from "@/lib/supabase-platform";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { formatDistanceToNow } from "date-fns";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 
 interface AIAnalysis {
   id: string;
@@ -111,7 +121,7 @@ export function AITicketAnalysis({ ticketId }: { ticketId: string }) {
   const runAnalysis = async () => {
     setAnalyzing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('analyze-support-ticket', {
+      const { data, error } = await invokeEdgeFunction('analyze-support-ticket', {
         body: {
           ticketId,
           autoResolve: false,

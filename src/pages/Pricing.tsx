@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import {
   Card,
   CardContent,
@@ -179,7 +180,7 @@ export default function Pricing() {
     try {
       setLoading(true);
       
-      const { data, error } = await supabase.functions.invoke("create-checkout", {
+      const { data, error } = await invokeEdgeFunction("create-checkout", {
         body: {
           planId: plan.id,
           billingCycle,

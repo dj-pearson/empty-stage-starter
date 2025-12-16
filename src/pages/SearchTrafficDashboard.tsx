@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -102,7 +103,7 @@ export default function SearchTrafficDashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const response = await supabase.functions.invoke("sync-analytics-data", {
+      const response = await invokeEdgeFunction("sync-analytics-data", {
         body: {
           userId: user.id,
           startDate: format(dateRange.from, "yyyy-MM-dd"),

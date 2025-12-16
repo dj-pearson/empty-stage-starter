@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import {
   Dialog,
   DialogContent,
@@ -233,7 +234,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
     setUnit('packages'); // Reset to default
 
     try {
-      const { data, error } = await supabase.functions.invoke('lookup-barcode', {
+      const { data, error } = await invokeEdgeFunction('lookup-barcode', {
         body: { barcode }
       });
 

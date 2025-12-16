@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
 import { Loader2, Link2, FileJson, Sparkles, Upload, Camera, ChefHat, Users, User } from "lucide-react";
 import { Food, Kid } from "@/types";
@@ -119,7 +120,7 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
   const handlePhotoImport = async (imageBase64: string) => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('parse-recipe-grocery', {
+      const { data, error } = await invokeEdgeFunction('parse-recipe-grocery', {
         body: { imageBase64 }
       });
 
@@ -149,7 +150,7 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
 
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('parse-recipe-grocery', {
+      const { data, error } = await invokeEdgeFunction('parse-recipe-grocery', {
         body: { url }
       });
 
@@ -191,7 +192,7 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('parse-recipe', {
+      const { data, error } = await invokeEdgeFunction('parse-recipe', {
         body: {
           text: recipeText,
           aiModel: aiSettings,

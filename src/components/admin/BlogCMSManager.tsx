@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { useState, useEffect, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import BlogInternalLinker from "@/components/admin/BlogInternalLinker";
 import PromptTemplateManager from "@/components/admin/PromptTemplateManager";
 import ScheduledPublishing from "@/components/admin/ScheduledPublishing";
@@ -148,7 +149,7 @@ export function BlogCMSManager() {
         throw new Error("Invalid titles format in Blog_Titles.md");
       }
 
-      const { data, error } = await supabase.functions.invoke(
+      const { data, error } = await invokeEdgeFunction(
         "manage-blog-titles",
         {
           body: {
@@ -195,7 +196,7 @@ export function BlogCMSManager() {
 
     setTestingWebhook(true);
     try {
-      const { data, error } = await supabase.functions.invoke(
+      const { data, error } = await invokeEdgeFunction(
         "test-blog-webhook",
         {
           body: { webhookUrl },
@@ -233,7 +234,7 @@ export function BlogCMSManager() {
       const blogUrl = `https://tryeatpal.com/blog/${post.slug}`;
 
       const { data: socialData, error: socialError } =
-        await supabase.functions.invoke("generate-social-content", {
+        await invokeEdgeFunction("generate-social-content", {
           body: {
             topic: `New blog post: ${post.title}`,
             excerpt: post.excerpt,
@@ -307,7 +308,7 @@ export function BlogCMSManager() {
 
     setAiGenerating(true);
     try {
-      const { data, error } = await supabase.functions.invoke(
+      const { data, error } = await invokeEdgeFunction(
         "generate-blog-content",
         {
           body: {
@@ -453,7 +454,7 @@ export function BlogCMSManager() {
       const post = posts.find((p) => p.id === postId);
       if (!post) return;
 
-      const { data, error } = await supabase.functions.invoke(
+      const { data, error } = await invokeEdgeFunction(
         "generate-social-content",
         {
           body: {
@@ -506,7 +507,7 @@ export function BlogCMSManager() {
       const webhookUrl = localStorage.getItem("blog_webhook_url");
       
       const { data: socialData, error: socialError } =
-        await supabase.functions.invoke("generate-social-content", {
+        await invokeEdgeFunction("generate-social-content", {
           body: {
             // Provide both to be safe – function uses topic || title
             topic: `New blog post: ${post.title}`,

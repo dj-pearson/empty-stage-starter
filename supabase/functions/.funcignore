@@ -1,0 +1,13 @@
+# Ignore shared utilities folder
+_shared/
+common/
+
+# Ignore health check (handled by infrastructure)
+_health/
+
+# Ignore common files
+*.md
+.env*
+.git*
+node_modules/
+

@@ -28,6 +28,12 @@ import { UserIntelligenceDashboard } from "@/components/admin/UserIntelligenceDa
 import { SupportPerformanceDashboard } from "@/components/admin/SupportPerformanceDashboard";
 import { RevenueOperationsCenter } from "@/components/admin/RevenueOperationsCenter";
 import { ConversionFunnelDashboard } from "@/components/admin/ConversionFunnelDashboard";
+import { BulkUserManagement } from "@/components/admin/BulkUserManagement";
+import { EmailTemplateBuilder } from "@/components/admin/EmailTemplateBuilder";
+import { EmailABTesting } from "@/components/admin/EmailABTesting";
+import { EmailAnalyticsDashboard } from "@/components/admin/EmailAnalyticsDashboard";
+import { MultiRegionBackup } from "@/components/admin/MultiRegionBackup";
+import { DocumentExportManager } from "@/components/admin/DocumentExportManager";
 import { logger } from "@/lib/logger";
 
 const Admin = () => {
@@ -117,10 +123,10 @@ const Admin = () => {
     try {
       logger.debug('Processing OAuth callback directly in Admin...');
 
-      const response = await fetch(`https://tbuszxkevkpjcjapbrir.supabase.co/functions/v1/gsc-oauth?action=callback&code=${code}&state=${state}`, {
+      const response = await fetch(`${import.meta.env.VITE_FUNCTIONS_URL}/gsc-oauth?action=callback&code=${code}&state=${state}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRidXN6eGtldmtwamNqYXBicmlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk4ODU5NDAsImV4cCI6MjA3NTQ2MTk0MH0.DlzY_3Fv2sXjNQNQPzCW4hh_WhC8o-_pqq6rQXGlfow`,
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         }
       });
 
@@ -422,6 +428,90 @@ const Admin = () => {
                 </CardHeader>
                 <CardContent>
                   <TicketQueue />
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === "bulk-users" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Bulk User Management</CardTitle>
+                  <CardDescription>
+                    Perform batch operations on multiple users at once
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <BulkUserManagement />
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === "email-builder" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Email Template Builder</CardTitle>
+                  <CardDescription>
+                    Create and design email templates with a drag-and-drop editor
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <EmailTemplateBuilder />
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === "email-ab-test" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Email A/B Testing</CardTitle>
+                  <CardDescription>
+                    Create and manage split tests for email campaigns
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <EmailABTesting />
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === "email-analytics" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Email Analytics</CardTitle>
+                  <CardDescription>
+                    Track open rates, click rates, and engagement metrics
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <EmailAnalyticsDashboard />
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === "backup" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Multi-Region Backup</CardTitle>
+                  <CardDescription>
+                    Manage geo-redundant backup replication across regions
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <MultiRegionBackup />
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === "export" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Document Export</CardTitle>
+                  <CardDescription>
+                    Export data to DOCX and Excel formats
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <DocumentExportManager />
                 </CardContent>
               </Card>
             )}

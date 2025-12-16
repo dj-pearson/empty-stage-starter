@@ -14,8 +14,8 @@
   },
   "servers": [
     {
-      "url": "https://tbuszxkevkpjcjapbrir.supabase.co/functions/v1",
-      "description": "Production Supabase Edge Functions"
+      "url": "https://functions.tryeatpal.com",
+      "description": "Self-Hosted Supabase Edge Functions"
     },
     {
       "url": "http://localhost:54321/functions/v1",

@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { Food, FoodCategory } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { useToast } from "@/hooks/use-toast";
 import { starterFoods } from "@/lib/starterFoods";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
@@ -176,7 +177,7 @@ export default function Pantry() {
         ? kids.find((k) => k.id === activeKidId)
         : null;
 
-      const { data, error } = await supabase.functions.invoke("suggest-foods", {
+      const { data, error } = await invokeEdgeFunction("suggest-foods", {
         body: {
           foods,
           planEntries,

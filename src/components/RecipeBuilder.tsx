@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 
@@ -95,7 +96,7 @@ export function RecipeBuilder({ foods, editRecipe, onSave, onCancel, kids, activ
       // Get active child's profile for personalized recipe
       const activeKid = activeKidId && kids ? kids.find(k => k.id === activeKidId) : null;
 
-      const { data, error } = await supabase.functions.invoke('suggest-recipe', {
+      const { data, error } = await invokeEdgeFunction('suggest-recipe', {
         body: {
           selectedFoodNames,
           aiModel: aiSettings,

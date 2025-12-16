@@ -21,6 +21,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { logger } from './logger';
 
 // Token refresh buffer - refresh tokens 5 minutes before expiration
@@ -200,7 +201,7 @@ export class OAuthTokenManager {
       const refreshToken = await this.decryptToken(tokenRecord.refresh_token_encrypted);
 
       // Call Edge Function to refresh token (keeps client secret secure)
-      const { data, error } = await supabase.functions.invoke('oauth-token-refresh', {
+      const { data, error } = await invokeEdgeFunction('oauth-token-refresh', {
         body: {
           provider: this.provider,
           refreshToken,

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -52,7 +53,7 @@ export function InvoicesList() {
   const fetchInvoices = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.functions.invoke("generate-invoice", {
+      const { data, error } = await invokeEdgeFunction("generate-invoice", {
         body: { action: "list" },
       });
 
@@ -71,7 +72,7 @@ export function InvoicesList() {
     try {
       setActionLoading(invoice.id);
 
-      const { data, error } = await supabase.functions.invoke("generate-invoice", {
+      const { data, error } = await invokeEdgeFunction("generate-invoice", {
         body: { action: "generate", paymentId: invoice.id },
       });
 
@@ -98,7 +99,7 @@ export function InvoicesList() {
 
       if (invoice.hasStripeInvoice && invoice.stripeInvoiceId) {
         // Get Stripe-hosted PDF
-        const { data, error } = await supabase.functions.invoke("generate-invoice", {
+        const { data, error } = await invokeEdgeFunction("generate-invoice", {
           body: { action: "download-stripe", invoiceId: invoice.stripeInvoiceId },
         });
 
@@ -111,7 +112,7 @@ export function InvoicesList() {
         }
       } else {
         // Generate HTML invoice and trigger print dialog
-        const { data, error } = await supabase.functions.invoke("generate-invoice", {
+        const { data, error } = await invokeEdgeFunction("generate-invoice", {
           body: { action: "generate", paymentId: invoice.id },
         });
 
@@ -139,7 +140,7 @@ export function InvoicesList() {
     try {
       setActionLoading(invoice.id);
 
-      const { data, error } = await supabase.functions.invoke("generate-invoice", {
+      const { data, error } = await invokeEdgeFunction("generate-invoice", {
         body: { action: "send", paymentId: invoice.id },
       });
 

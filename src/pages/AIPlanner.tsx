@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, Calendar, AlertCircle, TrendingUp, Apple, Target, Leaf } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
 import { KidSelector } from "@/components/KidSelector";
 import { logger } from "@/lib/logger";
@@ -32,7 +33,7 @@ export default function AIPlanner() {
     setIsGenerating(true);
     setSelectedKidForPlan(targetKidId);
     try {
-      const { data, error } = await supabase.functions.invoke('ai-meal-plan', {
+      const { data, error } = await invokeEdgeFunction('ai-meal-plan', {
         body: { kidId: targetKidId, days: 7 }
       });
 

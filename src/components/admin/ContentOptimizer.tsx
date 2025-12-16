@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { logger } from "@/lib/logger";
 
 interface OptimizationResult {
@@ -147,7 +148,7 @@ export function ContentOptimizer() {
         .map((url) => url.trim())
         .filter((url) => url.length > 0);
 
-      const { data, error } = await supabase.functions.invoke("optimize-page-content", {
+      const { data, error } = await invokeEdgeFunction("optimize-page-content", {
         body: {
           url: targetUrl,
           targetKeyword: targetKeyword || undefined,
@@ -181,7 +182,7 @@ export function ContentOptimizer() {
 
     setIsAnalyzing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("analyze-semantic-keywords", {
+      const { data, error } = await invokeEdgeFunction("analyze-semantic-keywords", {
         body: {
           url: targetUrl,
           targetKeyword: targetKeyword || undefined,

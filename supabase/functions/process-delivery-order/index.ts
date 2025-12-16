@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { corsHeaders } from '../_shared/headers.ts';
+import { corsHeaders } from '../common/headers.ts';
 
 /**
  * Process Delivery Order

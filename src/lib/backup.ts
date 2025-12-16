@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 
@@ -57,7 +58,7 @@ export async function createBackup(download: boolean = true): Promise<{
 
     toast.info("Creating backup...", { description: "This may take a moment" });
 
-    const { data, error } = await supabase.functions.invoke("backup-user-data", {
+    const { data, error } = await invokeEdgeFunction("backup-user-data", {
       body: {
         backupType: download ? "export" : "manual",
       },

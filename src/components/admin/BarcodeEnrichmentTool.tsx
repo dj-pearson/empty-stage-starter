@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
 import { Loader2, Barcode, Package } from "lucide-react";
 import { logger } from "@/lib/logger";
@@ -17,7 +18,7 @@ export const BarcodeEnrichmentTool = () => {
     setLoading(true);
     
     try {
-      const { data, error } = await supabase.functions.invoke('enrich-barcodes', {
+      const { data, error } = await invokeEdgeFunction('enrich-barcodes', {
         body: { table }
       });
 

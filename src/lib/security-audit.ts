@@ -27,6 +27,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { logger } from './logger';
 
 /**
@@ -437,7 +438,7 @@ class SecurityAuditLogger {
    */
   private async sendAlertEmail(entry: AuditLogEntry): Promise<void> {
     try {
-      await supabase.functions.invoke('send-emails', {
+      await invokeEdgeFunction('send-emails', {
         body: {
           type: 'security_alert',
           userId: entry.userId,

@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Link2, Camera, Upload, Loader2, ShoppingCart, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { FoodCategory } from "@/types";
 import { Html5Qrcode } from "html5-qrcode";
 import { logger } from "@/lib/logger";
@@ -53,7 +54,7 @@ export function ImportRecipeToGroceryDialog({ open, onOpenChange, onImport }: Im
 
     setIsParsing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('parse-recipe-grocery', {
+      const { data, error } = await invokeEdgeFunction('parse-recipe-grocery', {
         body: { url: recipeUrl }
       });
 
@@ -80,7 +81,7 @@ export function ImportRecipeToGroceryDialog({ open, onOpenChange, onImport }: Im
   const handleParseImage = async (imageBase64: string) => {
     setIsParsing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('parse-recipe-grocery', {
+      const { data, error } = await invokeEdgeFunction('parse-recipe-grocery', {
         body: { imageBase64 }
       });
 
