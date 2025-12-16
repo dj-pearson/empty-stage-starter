@@ -1,0 +1,57 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+DEPLOYMENT.md
+*.md
+!functions/**/*.md
+
+# Docker files
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Node/NPM (if any)
+node_modules
+package.json
+package-lock.json
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test files
+*.test.ts
+*.spec.ts
+__tests__/
+tests/
+
+# Build artifacts
+dist/
+build/
+.cache/
+
+# Misc
+*.bak
+*.tmp
+.temp
+
