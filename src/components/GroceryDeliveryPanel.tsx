@@ -31,6 +31,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -176,27 +177,18 @@ export function GroceryDeliveryPanel({ householdId, className }: GroceryDelivery
       }));
 
       // Get estimate
-      const response = await fetch(
-        `${import.meta.env.VITE_FUNCTIONS_URL}/process-delivery-order`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-          },
-          body: JSON.stringify({
-            action: 'estimate',
-            providerId: selectedProvider,
-            items,
-          }),
-        }
-      );
+      const { data: estimateData, error } = await invokeEdgeFunction('process-delivery-order', {
+        body: {
+          action: 'estimate',
+          providerId: selectedProvider,
+          items,
+        },
+      });
 
-      if (!response.ok) {
-        throw new Error('Failed to get estimate');
+      if (error) {
+        throw error;
       }
 
-      const estimateData = await response.json();
       setEstimate(estimateData);
       setShowEstimate(true);
     } catch (error) {
@@ -218,36 +210,28 @@ export function GroceryDeliveryPanel({ householdId, className }: GroceryDelivery
         return;
       }
 
-      const response = await fetch(
-        `${import.meta.env.VITE_FUNCTIONS_URL}/process-delivery-order`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-          },
-          body: JSON.stringify({
-            action: 'create',
-            householdId,
-            userId: user.id,
-            providerId: selectedProvider,
-          }),
-        }
-      );
+      const { data, error } = await invokeEdgeFunction<{ order: Order }>('process-delivery-order', {
+        body: {
+          action: 'create',
+          householdId,
+          userId: user.id,
+          providerId: selectedProvider,
+        },
+      });
 
-      if (!response.ok) {
-        throw new Error('Failed to create order');
+      if (error) {
+        throw error;
       }
-
-      const { order } = await response.json();
 
       toast.success('Order created! Review and submit when ready.');
       setShowEstimate(false);
       await loadData();
 
       // Show the new order
-      setSelectedOrder(order);
-      setShowOrderDialog(true);
+      if (data?.order) {
+        setSelectedOrder(data.order);
+        setShowOrderDialog(true);
+      }
     } catch (error) {
       console.error('Error creating order:', error);
       toast.error('Failed to create order');
@@ -258,28 +242,18 @@ export function GroceryDeliveryPanel({ householdId, className }: GroceryDelivery
 
   const handleSubmitOrder = async (orderId: string) => {
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_FUNCTIONS_URL}/process-delivery-order`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-          },
-          body: JSON.stringify({
-            action: 'submit',
-            orderId,
-          }),
-        }
-      );
+      const { data: result, error } = await invokeEdgeFunction<{ order_number: string }>('process-delivery-order', {
+        body: {
+          action: 'submit',
+          orderId,
+        },
+      });
 
-      if (!response.ok) {
-        throw new Error('Failed to submit order');
+      if (error) {
+        throw error;
       }
 
-      const result = await response.json();
-
-      toast.success(`Order submitted! Order #${result.order_number}`);
+      toast.success(`Order submitted! Order #${result?.order_number}`);
       setShowOrderDialog(false);
       await loadData();
     } catch (error) {

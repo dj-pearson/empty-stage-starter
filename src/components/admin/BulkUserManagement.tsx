@@ -126,21 +126,14 @@ export function BulkUserManagement() {
   const loadUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${import.meta.env.VITE_FUNCTIONS_URL}/list-users`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-        },
-      });
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch users: ${response.statusText}`);
+      const { data, error } = await invokeEdgeFunction<{ users: UserProfile[] }>('list-users');
+
+      if (error) {
+        throw error;
       }
 
-      const data = await response.json();
-
-      const combinedUsers: UserProfile[] = data.users || [];
+      const combinedUsers: UserProfile[] = data?.users || [];
       setUsers(combinedUsers);
 
       const stats = {

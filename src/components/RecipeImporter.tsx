@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link, Loader2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { toast } from "sonner";
 
 export function RecipeImporter({ onImported }: any) {
@@ -18,26 +18,16 @@ export function RecipeImporter({ onImported }: any) {
 
     try {
       setIsImporting(true);
-      const { data: session } = await supabase.auth.getSession();
-      
-      const response = await fetch(
-        `${import.meta.env.VITE_FUNCTIONS_URL}/import-recipe`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + session.session?.access_token,
-          },
-          body: JSON.stringify({ url }),
-        }
-      );
 
-      if (!response.ok) throw new Error('Failed to import recipe');
+      const { data, error } = await invokeEdgeFunction<{ recipe: any }>('import-recipe', {
+        body: { url },
+      });
 
-      const { recipe } = await response.json();
+      if (error) throw error;
+
       toast.success("Recipe imported!");
       setUrl("");
-      onImported?.(recipe);
+      onImported?.(data?.recipe);
     } catch (error) {
       toast.error('Failed to import recipe');
     } finally {
