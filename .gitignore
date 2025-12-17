@@ -85,3 +85,5 @@ QUICK_SETUP_AUTH.md
 SELF_HOSTED_SUPABASE_SETUP.md
 setup-auth-config.sh
 test-supabase-connection.js
+READY_TO_DELETE_OLD_SUPABASE.md
+AUTH_FIXED_README.md
