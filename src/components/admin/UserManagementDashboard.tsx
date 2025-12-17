@@ -102,20 +102,13 @@ export function UserManagementDashboard() {
       setLoading(true);
 
       // Call edge function to get users with admin privileges
-      const response = await fetch(`${import.meta.env.VITE_FUNCTIONS_URL}/list-users`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-        },
-      });
+      const { data, error } = await invokeEdgeFunction<{ users: UserProfile[] }>('list-users');
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch users: ${response.statusText}`);
+      if (error) {
+        throw error;
       }
 
-      const data = await response.json();
-      const combinedUsers: UserProfile[] = data.users || [];
+      const combinedUsers: UserProfile[] = data?.users || [];
       setUsers(combinedUsers);
 
       // Calculate stats
