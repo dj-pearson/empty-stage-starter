@@ -80,3 +80,8 @@ backup/db_cluster-15-12-2025@04-54-09.backup.gz
 env.example.txt
 PRE_DELETION_AUDIT.md
 backup/db_cluster-15-12-2025.backup
+SUPABASE_CONNECTION_STATUS.md
+QUICK_SETUP_AUTH.md
+SELF_HOSTED_SUPABASE_SETUP.md
+setup-auth-config.sh
+test-supabase-connection.js
