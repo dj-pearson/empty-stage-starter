@@ -75,3 +75,8 @@ ai_settings_rows.sql
 backup/db_cluster-10-12-2025@04-50-04.backup.gz
 backup/db_cluster-10-12-2025@04-50-04.backup/db_cluster-10-12-2025@04-50-04.backup
 MIGRATION_COMPLETE.md
+env.example.txt
+backup/db_cluster-15-12-2025@04-54-09.backup.gz
+env.example.txt
+PRE_DELETION_AUDIT.md
+backup/db_cluster-15-12-2025.backup
