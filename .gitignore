@@ -75,3 +75,15 @@ ai_settings_rows.sql
 backup/db_cluster-10-12-2025@04-50-04.backup.gz
 backup/db_cluster-10-12-2025@04-50-04.backup/db_cluster-10-12-2025@04-50-04.backup
 MIGRATION_COMPLETE.md
+env.example.txt
+backup/db_cluster-15-12-2025@04-54-09.backup.gz
+env.example.txt
+PRE_DELETION_AUDIT.md
+backup/db_cluster-15-12-2025.backup
+SUPABASE_CONNECTION_STATUS.md
+QUICK_SETUP_AUTH.md
+SELF_HOSTED_SUPABASE_SETUP.md
+setup-auth-config.sh
+test-supabase-connection.js
+READY_TO_DELETE_OLD_SUPABASE.md
+AUTH_FIXED_README.md

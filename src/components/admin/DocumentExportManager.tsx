@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -147,15 +148,8 @@ export function DocumentExportManager() {
 
     switch (template.dataSource) {
       case "profiles":
-        const response = await fetch(`${import.meta.env.VITE_FUNCTIONS_URL}/list-users`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-          },
-        });
-        const users = response.ok ? await response.json() : null;
-        return users?.users || [];
+        const { data: usersData } = await invokeEdgeFunction<{ users: any[] }>('list-users');
+        return usersData?.users || [];
 
       case "user_subscriptions":
         const { data: subs } = await supabase

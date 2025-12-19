@@ -119,11 +119,19 @@ const Admin = () => {
 
   const handleOAuthCallback = async (code: string, state: string) => {
     logger.debug('Admin OAuth callback detected:', { code: code?.substring(0, 10) + '...', state: state?.substring(0, 10) + '...' });
-    
+
     try {
       logger.debug('Processing OAuth callback directly in Admin...');
 
-      const response = await fetch(`${import.meta.env.VITE_FUNCTIONS_URL}/gsc-oauth?action=callback&code=${code}&state=${state}`, {
+      // Get edge functions URL - prefer env var, fallback to deriving from API URL
+      const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL ||
+        (import.meta.env.VITE_SUPABASE_URL?.replace('api.', 'functions.') ?? '');
+
+      if (!functionsUrl) {
+        throw new Error('Edge functions URL not configured');
+      }
+
+      const response = await fetch(`${functionsUrl}/gsc-oauth?action=callback&code=${code}&state=${state}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
@@ -136,10 +144,10 @@ const Admin = () => {
       }
 
       const data = await response.json();
-      
+
       if (data.success) {
         toast.success("Successfully connected to Google Search Console!");
-        
+
         // Clear URL parameters and switch to SEO tab
         window.history.replaceState({}, document.title, '/admin?tab=seo');
         setActiveTab("seo");
@@ -150,7 +158,7 @@ const Admin = () => {
       logger.error('Admin OAuth callback error:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       toast.error(`Failed to complete OAuth: ${errorMessage}`);
-      
+
       // Clear URL parameters even on error and go to SEO tab
       window.history.replaceState({}, document.title, '/admin?tab=seo');
       setActiveTab("seo");

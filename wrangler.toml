@@ -2,9 +2,27 @@ name = "eatpal-empty-stage"
 compatibility_date = "2024-12-19"
 pages_build_output_dir = "dist"
 
+# Security: Force HTTPS redirects
+[[redirects]]
+from = "http://*"
+to = "https://:splat"
+status = 301
+force = true
+
+# Environment variables for production
 [env.production]
 compatibility_date = "2024-12-19"
 
+[env.production.vars]
+VITE_SUPABASE_URL = "https://api.tryeatpal.com"
+VITE_SUPABASE_ANON_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc2NTI1MzE2MCwiZXhwIjo0OTIwOTI2NzYwLCJyb2xlIjoiYW5vbiJ9.HBFEkJdBlHpZozkyUAcaV2IO-065599yClMPfsYt3Ug"
+VITE_FUNCTIONS_URL = "https://functions.tryeatpal.com"
+
+# Environment variables for preview
 [env.preview]
 compatibility_date = "2024-12-19"
 
+[env.preview.vars]
+VITE_SUPABASE_URL = "https://api.tryeatpal.com"
+VITE_SUPABASE_ANON_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc2NTI1MzE2MCwiZXhwIjo0OTIwOTI2NzYwLCJyb2xlIjoiYW5vbiJ9.HBFEkJdBlHpZozkyUAcaV2IO-065599yClMPfsYt3Ug"
+VITE_FUNCTIONS_URL = "https://functions.tryeatpal.com"

@@ -13,6 +13,7 @@ import {
 import { Calendar, RefreshCw, TrendingUp, Eye } from "lucide-react";
 import { WeeklyReportCard } from "@/components/WeeklyReportCard";
 import { supabase } from "@/lib/supabase";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -72,26 +73,21 @@ export function ReportHistory({ householdId, className }: ReportHistoryProps) {
     try {
       setIsGenerating(true);
 
-      const response = await fetch(`${import.meta.env.VITE_FUNCTIONS_URL}/generate-weekly-report`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-        },
-        body: JSON.stringify({ householdId }),
+      const { data, error } = await invokeEdgeFunction<{ report: Report }>('generate-weekly-report', {
+        body: { householdId },
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to generate report');
+      if (error) {
+        throw error;
       }
-
-      const { report } = await response.json();
 
       toast.success('Weekly report generated!');
       await loadReports();
 
       // Show the new report
-      await viewReport(report.id);
+      if (data?.report?.id) {
+        await viewReport(data.report.id);
+      }
     } catch (error) {
       console.error('Error generating report:', error);
       toast.error('Failed to generate report');

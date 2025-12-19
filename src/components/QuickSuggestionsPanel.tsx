@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCw, Sparkles, Settings } from "lucide-react";
 import { MealSuggestionCard } from "@/components/MealSuggestionCard";
 import { supabase } from "@/lib/supabase";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -60,28 +61,19 @@ export function QuickSuggestionsPanel({
     try {
       setIsGenerating(true);
 
-      const response = await fetch(
-        `${import.meta.env.VITE_FUNCTIONS_URL}/generate-meal-suggestions`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-          },
-          body: JSON.stringify({
-            householdId,
-            mealSlot: mealSlotFilter === 'all' ? undefined : mealSlotFilter,
-            count,
-          }),
-        }
-      );
+      const { data, error } = await invokeEdgeFunction<{ suggestions: any[] }>('generate-meal-suggestions', {
+        body: {
+          householdId,
+          mealSlot: mealSlotFilter === 'all' ? undefined : mealSlotFilter,
+          count,
+        },
+      });
 
-      if (!response.ok) {
-        throw new Error('Failed to generate suggestions');
+      if (error) {
+        throw error;
       }
 
-      const { suggestions: newSuggestions } = await response.json();
-
+      const newSuggestions = data?.suggestions || [];
       toast.success(`Generated ${newSuggestions.length} meal suggestions!`);
       await loadSuggestions();
     } catch (error) {
