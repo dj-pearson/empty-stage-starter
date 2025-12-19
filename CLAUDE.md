@@ -164,9 +164,10 @@ npm run expo:start
 ### Environment Variables Required
 
 ```env
-# Required for basic functionality
-VITE_SUPABASE_URL=https://tbuszxkevkpjcjapbrir.supabase.co
+# Required for basic functionality (Self-hosted Supabase)
+VITE_SUPABASE_URL=https://api.tryeatpal.com
 VITE_SUPABASE_ANON_KEY=<your-anon-key>
+VITE_FUNCTIONS_URL=https://functions.tryeatpal.com
 
 # Optional: Enable error monitoring
 VITE_SENTRY_DSN=<your-sentry-dsn>

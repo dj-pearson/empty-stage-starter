@@ -78,13 +78,14 @@ export const securityHeaders = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
 
   // Content Security Policy - restrict resource loading
+  // Self-hosted Supabase: api.tryeatpal.com, functions.tryeatpal.com
   'Content-Security-Policy': [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https: blob:",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.supabase.co https://api.stripe.com",
+    "connect-src 'self' https://*.supabase.co https://api.tryeatpal.com https://functions.tryeatpal.com wss://api.tryeatpal.com https://api.stripe.com",
     "frame-src 'self' https://js.stripe.com",
     "object-src 'none'",
     "base-uri 'self'",

@@ -73,9 +73,11 @@ export function ApplyTemplateDialog({
       // Format start date
       const startDateStr = format(startDate, 'yyyy-MM-dd');
 
-      // Call Edge Function to apply template
+      // Call Edge Function to apply template - use VITE_FUNCTIONS_URL for self-hosted Supabase
+      const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL ||
+        (import.meta.env.VITE_SUPABASE_URL?.replace('api.', 'functions.') ?? '');
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-meal-plan-templates`,
+        `${functionsUrl}/manage-meal-plan-templates`,
         {
           method: 'POST',
           headers: {

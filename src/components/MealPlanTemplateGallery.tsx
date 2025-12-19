@@ -71,8 +71,11 @@ export function MealPlanTemplateGallery({
         return;
       }
 
+      // Use VITE_FUNCTIONS_URL for self-hosted Supabase edge functions
+      const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL ||
+        (import.meta.env.VITE_SUPABASE_URL?.replace('api.', 'functions.') ?? '');
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-meal-plan-templates`,
+        `${functionsUrl}/manage-meal-plan-templates`,
         {
           method: 'POST',
           headers: {

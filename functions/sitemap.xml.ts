@@ -1,12 +1,20 @@
 // Cloudflare Pages Function to serve dynamic sitemap
-export async function onRequest() {
+export async function onRequest(context: { env: { VITE_SUPABASE_URL?: string; VITE_SUPABASE_ANON_KEY?: string; VITE_FUNCTIONS_URL?: string } }) {
   try {
-    const supabaseUrl = 'https://tbuszxkevkpjcjapbrir.supabase.co';
-    const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRidXN6eGtldmtwamNqYXBicmlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk4ODU5NDAsImV4cCI6MjA3NTQ2MTk0MH0.DlzY_3Fv2sXjNQNQPzCW4hh_WhC8o-_pqq6rQXGlfow';
+    // Get URLs from environment variables (set in wrangler.toml or Cloudflare dashboard)
+    const supabaseUrl = context.env.VITE_SUPABASE_URL || 'https://api.tryeatpal.com';
+    const supabaseAnonKey = context.env.VITE_SUPABASE_ANON_KEY || '';
+    // Edge functions are at a separate subdomain for self-hosted Supabase
+    const functionsUrl = context.env.VITE_FUNCTIONS_URL || supabaseUrl.replace('api.', 'functions.');
+
+    if (!supabaseAnonKey) {
+      console.error('Missing VITE_SUPABASE_ANON_KEY environment variable');
+      throw new Error('Supabase configuration missing');
+    }
 
     // Call the edge function to generate sitemap
     const response = await fetch(
-      `${supabaseUrl}/functions/v1/generate-sitemap`,
+      `${functionsUrl}/generate-sitemap`,
       {
         headers: {
           'Authorization': `Bearer ${supabaseAnonKey}`,

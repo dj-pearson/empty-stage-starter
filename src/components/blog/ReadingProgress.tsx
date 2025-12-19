@@ -53,8 +53,11 @@ export function ReadingProgress({ postId, onProgressChange }: ReadingProgressPro
       if (!postId) return;
 
       try {
-        await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/track-engagement`,
+        // Use VITE_FUNCTIONS_URL for edge functions, fallback to deriving from API URL
+      const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL ||
+        (import.meta.env.VITE_SUPABASE_URL?.replace('api.', 'functions.') ?? '');
+      await fetch(
+          `${functionsUrl}/track-engagement`,
           {
             method: "POST",
             headers: {
@@ -217,10 +220,12 @@ export function ShareButtons({ url, title, description }: ShareButtonsProps) {
   const handleShare = async (platform: string) => {
     setShareCount((prev) => prev + 1);
 
-    // Track share event
+    // Track share event - use VITE_FUNCTIONS_URL for edge functions
+    const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL ||
+      (import.meta.env.VITE_SUPABASE_URL?.replace('api.', 'functions.') ?? '');
     try {
       await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/track-engagement`,
+        `${functionsUrl}/track-engagement`,
         {
           method: "POST",
           headers: {
