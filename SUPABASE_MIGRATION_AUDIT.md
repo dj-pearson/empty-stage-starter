@@ -31,6 +31,10 @@ The following issues have been addressed in this update:
     - Client-side fallback: AES-GCM encryption with PBKDF2 key derivation from user ID
     - Tokens prefixed with `client:` for encryption type identification
 
+### Phase 4 - Final Cleanup
+15. **API Error Logging** - Integrated `logError()` function with Sentry for production error tracking
+16. **test-subscription-flow.md** - Updated webhook URLs to use `functions.tryeatpal.com`
+
 ---
 
 ## Executive Summary
@@ -329,7 +333,7 @@ Migration file: `20251220000000_admin_tables.sql`
 
 - [x] `src/lib/oauth-token-rotation.ts`: Proper AES-GCM encryption with Edge Function support
 - [x] `src/lib/url-utils.ts`: Real URL shortening via Bitly/TinyURL APIs
-- [ ] `src/lib/api-errors.ts`: Integrate Sentry (already configured, low priority)
+- [x] `src/lib/api-errors.ts`: Integrated with Sentry for error tracking
 - [x] `src/lib/domain-verification.ts`: Calls Edge Function for real DNS verification
 
 ### Phase 5: Remove LocalStorage Fallbacks ✅ COMPLETE
@@ -337,9 +341,10 @@ Migration file: `20251220000000_admin_tables.sql`
 - [x] `src/components/admin/CRMIntegration.tsx`: Database only, shows error when tables missing
 - [x] `src/components/admin/WorkflowBuilder.tsx`: Database only, shows error when tables missing
 
-### Phase 6: Documentation Cleanup (Low Priority)
+### Phase 6: Documentation Cleanup (Low Priority) - Partial
 
-- [ ] Update old URLs in documentation files (optional, for consistency)
+- [x] `test-subscription-flow.md`: Updated webhook URLs to `functions.tryeatpal.com`
+- [ ] Other documentation files contain historical references (intentionally preserved)
 
 ---
 
