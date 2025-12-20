@@ -257,14 +257,9 @@ export function SEOManager() {
         }));
         setTrackedKeywords(keywords);
       } else {
-        // Use fallback mock data if database is empty
-        const mockKeywords: KeywordData[] = [
-          { keyword: "picky eater meal planning", position: 3, volume: 1200, difficulty: 42, url: "/", trend: "up" },
-          { keyword: "kid meal planner", position: 7, volume: 890, difficulty: 38, url: "/planner", trend: "up" },
-          { keyword: "safe foods for picky eaters", position: 12, volume: 650, difficulty: 35, url: "/pantry", trend: "stable" },
-          { keyword: "meal planning app", position: 24, volume: 5400, difficulty: 68, url: "/", trend: "down" },
-        ];
-        setTrackedKeywords(mockKeywords);
+        // No keywords tracked yet - show empty state
+        // Users can add keywords via the "Add Keyword" form
+        setTrackedKeywords([]);
       }
     } catch (error) {
       logger.error('Error loading keywords:', error);

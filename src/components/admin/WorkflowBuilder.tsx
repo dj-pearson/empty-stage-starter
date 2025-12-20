@@ -160,6 +160,7 @@ const generateId = () => crypto.randomUUID();
 export function WorkflowBuilder() {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [databaseAvailable, setDatabaseAvailable] = useState(true);
   const [showBuilderDialog, setShowBuilderDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
@@ -194,21 +195,23 @@ export function WorkflowBuilder() {
         .order("created_at", { ascending: false });
 
       if (error) {
-        // Table doesn't exist - use mock data for demo
-        logger.warn("automation_workflows table not found, using local storage");
-        const storedWorkflows = localStorage.getItem("automation_workflows");
-        if (storedWorkflows) {
-          setWorkflows(JSON.parse(storedWorkflows));
-        } else {
+        // Check if error is due to missing table
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          logger.warn("automation_workflows table not yet created - feature requires database migration");
+          setDatabaseAvailable(false);
           setWorkflows([]);
+          return;
         }
+        logger.error("Error loading workflows:", error);
+        toast.error("Failed to load workflows");
         return;
       }
 
+      setDatabaseAvailable(true);
       setWorkflows(data || []);
     } catch (error) {
       logger.error("Error loading workflows:", error);
-      toast.error("Failed to load workflows");
+      setDatabaseAvailable(false);
     } finally {
       setLoading(false);
     }
@@ -234,21 +237,23 @@ export function WorkflowBuilder() {
     };
 
     try {
-      // Try to save to database
+      if (!databaseAvailable) {
+        toast.error("Workflow feature requires database setup. Please run the required migrations.");
+        return;
+      }
+
+      // Save to database
       const { error } = await supabase
         .from("automation_workflows")
         .upsert([workflow]);
 
       if (error) {
-        // Fallback to local storage
-        const existingWorkflows = workflows.filter((w) => w.id !== workflow.id);
-        const newWorkflows = [workflow, ...existingWorkflows];
-        localStorage.setItem("automation_workflows", JSON.stringify(newWorkflows));
-        setWorkflows(newWorkflows);
-      } else {
-        await loadWorkflows();
+        logger.error("Error saving workflow:", error);
+        toast.error("Failed to save workflow. Database may need migration.");
+        return;
       }
 
+      await loadWorkflows();
       toast.success(selectedWorkflow ? "Workflow updated" : "Workflow created");
       resetBuilder();
       setShowBuilderDialog(false);

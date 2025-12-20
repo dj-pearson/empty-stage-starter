@@ -645,12 +645,50 @@ export function createQRCodeUrl(url: string, size: number = 200): string {
 }
 
 /**
- * Shorten URL (placeholder - needs actual API)
+ * Shorten URL using external service
+ *
+ * Requires API key configuration:
+ * - Bitly: Set VITE_BITLY_API_KEY environment variable
+ * - TinyURL: No API key required for basic usage
+ *
+ * @throws Error if service is not configured
  */
-export async function shortenUrl(url: string, service: 'bitly' | 'tinyurl' = 'bitly'): Promise<string> {
-  // This is a placeholder - implement with actual URL shortening service
-  console.warn('URL shortening requires API implementation');
-  return url;
+export async function shortenUrl(url: string, service: 'bitly' | 'tinyurl' = 'tinyurl'): Promise<string> {
+  if (service === 'bitly') {
+    const apiKey = import.meta.env.VITE_BITLY_API_KEY;
+    if (!apiKey) {
+      throw new Error('Bitly API key not configured. Set VITE_BITLY_API_KEY environment variable.');
+    }
+
+    const response = await fetch('https://api-ssl.bitly.com/v4/shorten', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ long_url: url }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Bitly API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.link;
+  }
+
+  if (service === 'tinyurl') {
+    // TinyURL has a simple API that doesn't require authentication
+    const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`);
+
+    if (!response.ok) {
+      throw new Error(`TinyURL API error: ${response.status}`);
+    }
+
+    return await response.text();
+  }
+
+  throw new Error(`Unknown URL shortening service: ${service}`);
 }
 
 /**

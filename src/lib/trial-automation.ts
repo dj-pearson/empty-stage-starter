@@ -270,8 +270,32 @@ export async function handleTrialConversion(
       logger.error('Error updating lead on conversion:', leadError);
     }
 
-    // 2. Cancel trial-related email sequences (table doesn't exist, skip)
-    // Note: user_email_sequences table doesn't exist in current schema
+    // 2. Cancel trial-related email sequences
+    try {
+      // Get active trial sequences for this user
+      const { data: enrollments } = await supabase
+        .from('user_email_sequences')
+        .select('id, sequence:email_sequences!inner(trigger_event)')
+        .eq('user_id', userId)
+        .is('canceled_at', null)
+        .is('completed_at', null);
+
+      // Cancel trial-related sequences
+      if (enrollments && enrollments.length > 0) {
+        const trialEnrollmentIds = enrollments
+          .filter((e: any) => e.sequence?.trigger_event === 'trial_start' || e.sequence?.trigger_event === 'trial_ending')
+          .map((e: any) => e.id);
+
+        if (trialEnrollmentIds.length > 0) {
+          await supabase
+            .from('user_email_sequences')
+            .update({ canceled_at: new Date().toISOString() })
+            .in('id', trialEnrollmentIds);
+        }
+      }
+    } catch (error) {
+      logger.warn('Error canceling trial sequences:', error);
+    }
 
     // 3. Start customer welcome sequence
     await triggerEmailSequence({

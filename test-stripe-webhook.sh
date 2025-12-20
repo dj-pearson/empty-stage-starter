@@ -11,7 +11,8 @@ stripe login
 echo ""
 echo "Step 2: Forward webhooks to your Supabase function"
 echo "This will listen for events from Stripe..."
-stripe listen --forward-to https://nfabsryzwuobqpdzfzbf.supabase.co/functions/v1/stripe-webhook &
+# Using self-hosted Supabase Edge Functions at functions.tryeatpal.com
+stripe listen --forward-to https://functions.tryeatpal.com/stripe-webhook &
 LISTEN_PID=$!
 
 echo "Webhook listener started (PID: $LISTEN_PID)"
