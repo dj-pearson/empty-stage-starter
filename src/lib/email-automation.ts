@@ -74,10 +74,17 @@ export async function cancelEmailSequence(
   enrollmentId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Note: user_email_sequences table doesn't exist in current schema
-    // This would need to be created or use automation_email_queue
-    logger.warn('cancelEmailSequence: user_email_sequences table not available');
-    return { success: false, error: 'Feature not available - table does not exist' };
+    const { error } = await supabase
+      .from('user_email_sequences')
+      .update({ canceled_at: new Date().toISOString() })
+      .eq('id', enrollmentId);
+
+    if (error) {
+      logger.error('Error canceling email sequence:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
   } catch (error: unknown) {
     logger.error('Error in cancelEmailSequence:', error);
     return { success: false, error: error.message };
@@ -91,9 +98,45 @@ export async function getUserEmailSequences(
   userId: string
 ): Promise<{ sequences: EmailSequence[]; error?: string }> {
   try {
-    // Note: user_email_sequences table doesn't exist in current schema
-    logger.warn('getUserEmailSequences: user_email_sequences table not available');
-    return { sequences: [], error: 'Feature not available - table does not exist' };
+    // Get user's enrollments with sequence details
+    const { data: enrollments, error: enrollmentError } = await supabase
+      .from('user_email_sequences')
+      .select(`
+        id,
+        current_step,
+        enrolled_at,
+        completed_at,
+        canceled_at,
+        sequence:email_sequences(
+          id,
+          name,
+          description,
+          trigger_event,
+          trigger_conditions,
+          is_active
+        )
+      `)
+      .eq('user_id', userId)
+      .is('canceled_at', null);
+
+    if (enrollmentError) {
+      logger.error('Error fetching user email sequences:', enrollmentError);
+      return { sequences: [], error: enrollmentError.message };
+    }
+
+    // Map to EmailSequence format
+    const sequences: EmailSequence[] = (enrollments || [])
+      .filter((e: any) => e.sequence)
+      .map((e: any) => ({
+        id: e.sequence.id,
+        name: e.sequence.name,
+        description: e.sequence.description,
+        trigger_event: e.sequence.trigger_event,
+        trigger_conditions: e.sequence.trigger_conditions || {},
+        is_active: e.sequence.is_active,
+      }));
+
+    return { sequences };
   } catch (error: unknown) {
     logger.error('Error in getUserEmailSequences:', error);
     return { sequences: [], error: error.message };

@@ -1,7 +1,18 @@
 # Supabase Migration & Data Integrity Audit Report
 
 **Generated**: December 20, 2025
+**Last Updated**: December 20, 2025
 **Objective**: Ensure all connections route to self-hosted Supabase and all features use real database data
+
+## Recent Fixes Applied
+
+The following issues have been addressed in this update:
+
+1. **CI/CD Workflow** - Updated to use GitHub secrets instead of placeholder URLs
+2. **test-stripe-webhook.sh** - Updated to use `functions.tryeatpal.com`
+3. **Authors Page** - Now fetches from `blog_authors` database table with fallback
+4. **Email Automation** - Fixed `cancelEmailSequence()` and `getUserEmailSequences()` to use database
+5. **Trial Automation** - Fixed to properly cancel trial sequences on conversion
 
 ---
 
@@ -113,14 +124,14 @@ These admin components use `@ts-nocheck` or `@ts-ignore` because the database ta
 | `src/components/admin/BlogCMSManager.tsx` | Blog CMS tables | Blog management broken |
 | `src/components/admin/SEOManager.tsx` | SEO management tables | SEO management broken |
 
-### ❌ CRITICAL - Email Automation Tables Missing
+### ✅ FIXED - Email Automation Tables (Previously Missing)
 
-| File | Missing Table | Impact |
-|------|---------------|--------|
-| `src/lib/email-automation.ts` (lines 77-96) | `user_email_sequences` | Email sequences don't work |
-| `src/lib/trial-automation.ts` (lines 273-274) | `user_email_sequences` | Trial emails don't work |
+| File | Table | Status |
+|------|-------|--------|
+| `src/lib/email-automation.ts` | `user_email_sequences` | ✅ Fixed - now queries database |
+| `src/lib/trial-automation.ts` | `user_email_sequences` | ✅ Fixed - now cancels sequences on conversion |
 
-**Current Behavior**: Returns `{ success: false, error: 'Feature not available - table does not exist' }`
+**Note**: The `user_email_sequences` table exists in the database (migration `20251013160000_email_sequences.sql`). The code was incorrectly returning stub errors. This has been fixed.
 
 ### ❌ HIGH - LocalStorage Fallback (Data Loss Risk)
 
