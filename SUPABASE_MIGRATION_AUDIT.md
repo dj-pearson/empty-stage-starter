@@ -42,8 +42,8 @@ This audit identified **47+ issues** across the codebase. After remediation, **1
 | Priority | Original | Fixed | Remaining | Description |
 |----------|----------|-------|-----------|-------------|
 | CRITICAL | 8 | 8 | 0 | ✅ All connection/routing issues fixed |
-| HIGH | 12 | 11 | 1 | ✅ Mock data removed (1 low-priority analytics stub) |
-| MEDIUM | 15 | 4 | 11 | Database tables still need creation |
+| HIGH | 12 | 12 | 0 | ✅ Mock data removed, database tables created |
+| MEDIUM | 15 | 15 | 0 | ✅ All database tables created, stubs implemented |
 | LOW | 12+ | 0 | 12+ | Documentation updates (optional) |
 
 ### Key Accomplishments
@@ -54,6 +54,12 @@ This audit identified **47+ issues** across the codebase. After remediation, **1
 4. **localStorage fallbacks removed** (proper error handling for missing tables)
 5. **Real API integrations** implemented (Instacart, URL shortening, domain verification)
 6. **Proper token encryption** using AES-GCM with Edge Function support
+7. **Database tables created** via migration `20251220000000_admin_tables.sql`:
+   - Admin alerts & system health monitoring
+   - CRM integration (HubSpot/Salesforce)
+   - Automation workflows
+   - Revenue operations (MRR, churn predictions, interventions, cohort retention)
+   - Quiz responses & leads
 
 ---
 
@@ -293,21 +299,23 @@ VITE_FUNCTIONS_URL: ${{ secrets.VITE_FUNCTIONS_URL || 'https://functions.tryeatp
 - [x] **CI/CD**: Update `.github/workflows/ci.yml` to use GitHub secrets
 - [x] **Test Scripts**: Update `test-stripe-webhook.sh` to use `functions.tryeatpal.com`
 
-### Phase 2: Database Tables (Priority Order)
+### Phase 2: Database Tables ✅ COMPLETE
+
+Migration file: `20251220000000_admin_tables.sql`
 
 - [x] ~~Create migration for `user_email_sequences` table~~ (already exists - `20251013160000_email_sequences.sql`)
-- [ ] Create migration for `admin_alerts` table
-- [ ] Create migration for `admin_system_health` table
-- [ ] Create migration for `quiz_responses` table (if not exists)
-- [ ] Create migration for `crm_connections` table
-- [ ] Create migration for `crm_sync_logs` table
-- [ ] Create migration for `automation_workflows` table
-- [ ] Create migrations for revenue tables:
-  - [ ] `revenue_metrics_daily`
-  - [ ] `revenue_churn_predictions`
-  - [ ] `revenue_interventions`
-  - [ ] `revenue_cohort_retention`
-- [ ] Regenerate types: `supabase gen types typescript --local`
+- [x] Create migration for `admin_alerts` table
+- [x] Create migration for `admin_system_health` table
+- [x] Create migration for `quiz_responses` table (and `quiz_leads`)
+- [x] Create migration for `crm_connections` table
+- [x] Create migration for `crm_sync_logs` table
+- [x] Create migration for `automation_workflows` table (and `workflow_executions`)
+- [x] Create migrations for revenue tables:
+  - [x] `revenue_metrics_daily`
+  - [x] `revenue_churn_predictions`
+  - [x] `revenue_interventions`
+  - [x] `revenue_cohort_retention`
+- [ ] Regenerate types: `supabase gen types typescript --local` (run after applying migration)
 
 ### Phase 3: Remove Mock Data ✅ COMPLETE
 
