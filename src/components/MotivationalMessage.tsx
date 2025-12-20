@@ -8,15 +8,17 @@ interface MotivationalMessageProps {
   message?: string;
   event?: 'refusal' | 'success' | 'streak' | 'milestone';
   className?: string;
+  childName?: string;
 }
 
-const getTimeBasedGreeting = (time?: 'morning' | 'afternoon' | 'evening'): string => {
+const getTimeBasedGreeting = (time?: 'morning' | 'afternoon' | 'evening', childName?: string): string => {
   const now = new Date().getHours();
   const actualTime = time || (now < 12 ? 'morning' : now < 17 ? 'afternoon' : 'evening');
+  const name = childName || "your child";
 
   const greetings = {
     morning: [
-      "Good morning! Emma's breakfast is ready to go 🌅",
+      `Good morning! ${name}'s breakfast is ready to go 🌅`,
       "Rise and shine! Let's start the day deliciously ☀️",
       "Morning! Ready to make mealtime magical? ✨",
     ],
@@ -36,7 +38,9 @@ const getTimeBasedGreeting = (time?: 'morning' | 'afternoon' | 'evening'): strin
   return messages[Math.floor(Math.random() * messages.length)];
 };
 
-const getEncouragementMessage = (event?: string): string => {
+const getEncouragementMessage = (event?: string, childName?: string): string => {
+  const name = childName || "They";
+
   const messages = {
     refusal: [
       "That's okay! Some foods take 10+ tries. You're doing great ❤️",
@@ -44,7 +48,7 @@ const getEncouragementMessage = (event?: string): string => {
       "Perfectly normal! Keep offering without pressure 🌈",
     ],
     success: [
-      "Woohoo! Emma ate it all! Victory dance time 💃",
+      `Woohoo! ${name} ate it all! Victory dance time 💃`,
       "Amazing! That's huge progress! 🎉",
       "Fantastic job! Celebration mode activated! 🎊",
     ],
@@ -108,28 +112,29 @@ export function MotivationalMessage({
   message,
   event,
   className,
+  childName,
 }: MotivationalMessageProps) {
   let displayMessage = message;
 
   if (!displayMessage) {
     switch (type) {
       case 'greeting':
-        displayMessage = getTimeBasedGreeting(time);
+        displayMessage = getTimeBasedGreeting(time, childName);
         break;
       case 'encouragement':
-        displayMessage = getEncouragementMessage(event);
+        displayMessage = getEncouragementMessage(event, childName);
         break;
       case 'celebration':
-        displayMessage = getEncouragementMessage(event || 'success');
+        displayMessage = getEncouragementMessage(event || 'success', childName);
         break;
       case 'tip':
         displayMessage = getTipMessage();
         break;
       case 'progress':
-        displayMessage = getEncouragementMessage('streak');
+        displayMessage = getEncouragementMessage('streak', childName);
         break;
       default:
-        displayMessage = getEncouragementMessage();
+        displayMessage = getEncouragementMessage(undefined, childName);
     }
   }
 

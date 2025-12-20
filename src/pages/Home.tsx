@@ -39,6 +39,8 @@ export default function Home() {
   const [quickLogOpen, setQuickLogOpen] = useState(false);
   const [selectedMeal, setSelectedMeal] = useState<{ slot: string; entryId: string } | null>(null);
 
+  const activeKid = kids.find(k => k.id === activeKidId);
+
   useEffect(() => {
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -139,7 +141,7 @@ export default function Home() {
 
         {/* Motivational Message */}
         <AnimatedPanel>
-          <MotivationalMessage type="greeting" className="mb-6" />
+          <MotivationalMessage type="greeting" className="mb-6" childName={activeKid?.name} />
         </AnimatedPanel>
 
         {/* Getting Started Section - Shows for new users */}
