@@ -66,49 +66,61 @@ export async function verifyDomainDNS(
   verificationToken: string
 ): Promise<DomainVerificationResult> {
   try {
-    // In a real implementation, this would call a Supabase Edge Function
-    // or backend API that performs DNS lookups
-    // For now, we'll simulate the verification process
+    // Call the Edge Function to verify domain DNS records
+    const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL || 'https://functions.tryeatpal.com';
 
-    // Example of what the backend would do:
-    // 1. Query DNS for TXT record at _eatpal-verification.{domain}
-    // 2. Check if the value matches the verificationToken
-    // 3. Query DNS for CNAME records
-    // 4. Return verification result
+    // Get current session for authentication
+    const { data: { session } } = await supabase.auth.getSession();
 
-    // Simulated backend call
-    const response = await fetch('/api/verify-domain', {
+    const response = await fetch(`${functionsUrl}/verify-domain`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` }),
       },
       body: JSON.stringify({
         domain,
         verificationToken,
       }),
-    }).catch(() => {
-      // If backend endpoint doesn't exist, return mock result
-      return null;
     });
 
-    if (!response) {
-      // For development/demo purposes, return a mock success
-      // In production, this should fail or require actual verification
+    if (!response.ok) {
+      // Check if the Edge Function doesn't exist yet
+      if (response.status === 404) {
+        return {
+          success: false,
+          message: 'Domain verification service not available. The verify-domain Edge Function needs to be deployed.',
+          verified: false,
+        };
+      }
+
+      const errorText = await response.text();
       return {
-        success: true,
-        message: 'DNS verification check initiated. This is a simulated result for development.',
-        verified: true,
-        details: {
-          txtRecord: true,
-          cnameRecord: true,
-        },
+        success: false,
+        message: `Verification failed: ${errorText || response.statusText}`,
+        verified: false,
       };
     }
 
     const result = await response.json();
-    return result;
+    return {
+      success: result.success,
+      message: result.message || 'DNS verification completed.',
+      verified: result.verified,
+      details: result.details,
+    };
   } catch (error) {
     console.error('Domain verification error:', error);
+
+    // Network error or Edge Function not available
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      return {
+        success: false,
+        message: 'Unable to connect to domain verification service. Please check your network connection.',
+        verified: false,
+      };
+    }
+
     return {
       success: false,
       message: 'Failed to verify domain. Please ensure DNS records are correctly configured.',

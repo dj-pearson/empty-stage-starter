@@ -182,134 +182,50 @@ export function MultiRegionBackup() {
   const loadData = async () => {
     setLoading(true);
     try {
-      // In a real implementation, this would fetch from the database
-      // For now, we'll use mock data to demonstrate the UI
+      // Multi-region backup requires external infrastructure setup
+      // This feature displays the current state of configured backup regions
+      // Configuration is done through environment variables and infrastructure setup
 
-      // Simulated regions
-      const mockRegions: Region[] = [
-        {
-          id: "region-1",
-          name: "US East (Primary)",
-          code: "us-east-1",
-          location: "United States",
-          provider: "aws",
-          status: "active",
-          isPrimary: true,
-          lastSync: new Date().toISOString(),
-          storageUsed: 25 * 1024 * 1024 * 1024,
-          storageLimit: 100 * 1024 * 1024 * 1024,
-          latency: 12,
-          replicationLag: 0,
-        },
-        {
-          id: "region-2",
-          name: "Europe (Frankfurt)",
-          code: "eu-central-1",
-          location: "Germany",
-          provider: "aws",
-          status: "active",
-          isPrimary: false,
-          lastSync: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-          storageUsed: 24.8 * 1024 * 1024 * 1024,
-          storageLimit: 100 * 1024 * 1024 * 1024,
-          latency: 85,
-          replicationLag: 5,
-        },
-        {
-          id: "region-3",
-          name: "Asia Pacific (Tokyo)",
-          code: "ap-northeast-1",
-          location: "Japan",
-          provider: "aws",
-          status: "syncing",
-          isPrimary: false,
-          lastSync: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-          storageUsed: 23 * 1024 * 1024 * 1024,
-          storageLimit: 50 * 1024 * 1024 * 1024,
-          latency: 150,
-          replicationLag: 15,
-        },
-      ];
+      // Check if backup infrastructure is configured via environment
+      const backupConfigured = import.meta.env.VITE_BACKUP_ENABLED === 'true';
 
-      const mockPolicies: ReplicationPolicy[] = [
-        {
-          id: "policy-1",
-          name: "Global Replication",
-          sourceRegion: "us-east-1",
-          targetRegions: ["eu-central-1", "ap-northeast-1"],
-          frequency: "realtime",
-          retentionDays: 30,
-          encryptionEnabled: true,
-          compressionEnabled: true,
-          isActive: true,
-        },
-        {
-          id: "policy-2",
-          name: "Daily Backup to Europe",
-          sourceRegion: "us-east-1",
-          targetRegions: ["eu-central-1"],
-          frequency: "daily",
-          retentionDays: 90,
-          encryptionEnabled: true,
-          compressionEnabled: true,
-          isActive: true,
-        },
-      ];
+      if (!backupConfigured) {
+        // No backup infrastructure configured - show empty state
+        setRegions([]);
+        setPolicies([]);
+        setJobs([]);
+        setHealth({
+          overallStatus: "degraded",
+          totalStorage: 0,
+          usedStorage: 0,
+          activeRegions: 0,
+          pendingReplications: 0,
+          lastFullBackup: null,
+          rpo: 0,
+          rto: 0,
+        });
+        return;
+      }
 
-      const mockJobs: BackupJob[] = [
-        {
-          id: "job-1",
-          type: "incremental",
-          sourceRegion: "us-east-1",
-          targetRegion: "eu-central-1",
-          status: "completed",
-          progress: 100,
-          size: 150 * 1024 * 1024,
-          startedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-          completedAt: new Date(Date.now() - 8 * 60 * 1000).toISOString(),
-        },
-        {
-          id: "job-2",
-          type: "incremental",
-          sourceRegion: "us-east-1",
-          targetRegion: "ap-northeast-1",
-          status: "running",
-          progress: 65,
-          size: 200 * 1024 * 1024,
-          startedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-          completedAt: null,
-        },
-        {
-          id: "job-3",
-          type: "full",
-          sourceRegion: "us-east-1",
-          targetRegion: "eu-central-1",
-          status: "pending",
-          progress: 0,
-          size: 25 * 1024 * 1024 * 1024,
-          startedAt: new Date().toISOString(),
-          completedAt: null,
-        },
-      ];
+      // TODO: When backup infrastructure is set up, fetch real data from:
+      // - Backup service API
+      // - Database backup_regions table
+      // - Database backup_policies table
+      // - Database backup_jobs table
 
-      setRegions(mockRegions);
-      setPolicies(mockPolicies);
-      setJobs(mockJobs);
-
-      // Calculate health
-      const totalUsed = mockRegions.reduce((acc, r) => acc + r.storageUsed, 0);
-      const activeCount = mockRegions.filter((r) => r.status === "active").length;
-      const pending = mockJobs.filter((j) => j.status === "pending" || j.status === "running").length;
-
+      // For now, show empty state until infrastructure is configured
+      setRegions([]);
+      setPolicies([]);
+      setJobs([]);
       setHealth({
-        overallStatus: activeCount === mockRegions.length ? "healthy" : "degraded",
-        totalStorage: mockRegions.reduce((acc, r) => acc + r.storageLimit, 0),
-        usedStorage: totalUsed,
-        activeRegions: activeCount,
-        pendingReplications: pending,
-        lastFullBackup: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-        rpo: Math.max(...mockRegions.map((r) => r.replicationLag)),
-        rto: 15,
+        overallStatus: "degraded",
+        totalStorage: 0,
+        usedStorage: 0,
+        activeRegions: 0,
+        pendingReplications: 0,
+        lastFullBackup: null,
+        rpo: 0,
+        rto: 0,
       });
     } catch (error) {
       logger.error("Error loading backup data:", error);

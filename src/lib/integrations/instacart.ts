@@ -82,40 +82,49 @@ export class InstacartAPI {
     storeId?: string
   ): Promise<InstacartProduct[]> {
     if (!this.config.enabled) {
-      throw new Error('Instacart integration is not enabled');
+      throw new Error('Instacart integration is not enabled. Configure API key in Admin > Integrations.');
+    }
+
+    if (!this.config.apiKey) {
+      throw new Error('Instacart API key is not configured. Set up in Admin > Integrations.');
     }
 
     try {
-      // In production, call actual Instacart API
-      // const response = await fetch(`${this.config.baseUrl}/v1/products/search`, {
-      //   method: 'POST',
-      //   headers: {
-      //     'Authorization': `Bearer ${this.config.apiKey}`,
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify({
-      //     query: ingredient,
-      //     store_id: storeId,
-      //     limit: 10,
-      //   }),
-      // });
+      const baseUrl = this.config.baseUrl || 'https://connect.instacart.com';
 
-      // Mock implementation for development
-      logger.debug(`Searching Instacart for: ${ingredient}`);
-      
-      // Return mock products
-      return [
-        {
-          id: `mock_${Date.now()}`,
-          name: ingredient,
-          brand: 'Generic Brand',
-          size: '1 unit',
-          price: 3.99,
-          availability: 'in_stock',
-          storeId: storeId || 'default_store',
-          storeName: 'Local Grocery Store',
+      const response = await fetch(`${baseUrl}/v1/products/search`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.config.apiKey}`,
+          'Content-Type': 'application/json',
         },
-      ];
+        body: JSON.stringify({
+          query: ingredient,
+          store_id: storeId,
+          limit: 10,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.error('Instacart API error:', { status: response.status, error: errorText });
+        throw new Error(`Instacart API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+
+      // Map Instacart API response to our interface
+      return (data.products || []).map((product: any) => ({
+        id: product.id,
+        name: product.name,
+        brand: product.brand,
+        size: product.size,
+        price: product.price,
+        imageUrl: product.image_url,
+        availability: product.availability || 'in_stock',
+        storeId: storeId || product.store_id,
+        storeName: product.store_name,
+      }));
     } catch (error) {
       logger.error('Error searching Instacart products:', error);
       throw error;
@@ -127,40 +136,40 @@ export class InstacartAPI {
    */
   async getStores(zipCode: string): Promise<InstacartStore[]> {
     if (!this.config.enabled) {
-      throw new Error('Instacart integration is not enabled');
+      throw new Error('Instacart integration is not enabled. Configure API key in Admin > Integrations.');
+    }
+
+    if (!this.config.apiKey) {
+      throw new Error('Instacart API key is not configured. Set up in Admin > Integrations.');
     }
 
     try {
-      // In production, call actual Instacart API
-      // const response = await fetch(`${this.config.baseUrl}/v1/stores`, {
-      //   method: 'GET',
-      //   headers: {
-      //     'Authorization': `Bearer ${this.config.apiKey}`,
-      //   },
-      //   params: { zip_code: zipCode },
-      // });
+      const baseUrl = this.config.baseUrl || 'https://connect.instacart.com';
 
-      // Mock implementation
-      logger.debug(`Fetching stores near: ${zipCode}`);
-      
-      return [
-        {
-          id: 'store_1',
-          name: 'Whole Foods Market',
-          address: '123 Main St',
-          distance: 1.2,
-          deliveryAvailable: true,
-          pickupAvailable: true,
+      const response = await fetch(`${baseUrl}/v1/stores?zip_code=${encodeURIComponent(zipCode)}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.config.apiKey}`,
         },
-        {
-          id: 'store_2',
-          name: 'Safeway',
-          address: '456 Oak Ave',
-          distance: 2.5,
-          deliveryAvailable: true,
-          pickupAvailable: true,
-        },
-      ];
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.error('Instacart API error:', { status: response.status, error: errorText });
+        throw new Error(`Instacart API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+
+      // Map Instacart API response to our interface
+      return (data.stores || []).map((store: any) => ({
+        id: store.id,
+        name: store.name,
+        address: store.address,
+        distance: store.distance,
+        deliveryAvailable: store.delivery_available,
+        pickupAvailable: store.pickup_available,
+      }));
     } catch (error) {
       logger.error('Error fetching Instacart stores:', error);
       throw error;
@@ -175,41 +184,51 @@ export class InstacartAPI {
     items: CartItem[]
   ): Promise<InstacartOrder> {
     if (!this.config.enabled) {
-      throw new Error('Instacart integration is not enabled');
+      throw new Error('Instacart integration is not enabled. Configure API key in Admin > Integrations.');
+    }
+
+    if (!this.config.apiKey) {
+      throw new Error('Instacart API key is not configured. Set up in Admin > Integrations.');
     }
 
     try {
-      // In production, call actual Instacart API
-      // const response = await fetch(`${this.config.baseUrl}/v1/carts`, {
-      //   method: 'POST',
-      //   headers: {
-      //     'Authorization': `Bearer ${this.config.apiKey}`,
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify({
-      //     store_id: storeId,
-      //     items: items,
-      //   }),
-      // });
+      const baseUrl = this.config.baseUrl || 'https://connect.instacart.com';
 
-      // Mock implementation
-      logger.debug(`Creating Instacart cart for store: ${storeId}`);
-      
-      const subtotal = items.reduce((sum, item) => sum + (item.quantity * 3.99), 0);
-      const deliveryFee = 5.99;
-      const serviceFee = subtotal * 0.05;
-      const tax = subtotal * 0.08;
-      const total = subtotal + deliveryFee + serviceFee + tax;
+      const response = await fetch(`${baseUrl}/v1/carts`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.config.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          store_id: storeId,
+          items: items.map(item => ({
+            product_id: item.productId,
+            quantity: item.quantity,
+            notes: item.notes,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.error('Instacart API error:', { status: response.status, error: errorText });
+        throw new Error(`Instacart API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
 
       return {
-        cartId: `cart_${Date.now()}`,
-        storeId,
-        items,
-        subtotal,
-        deliveryFee,
-        serviceFee,
-        tax,
-        total,
+        cartId: data.cart_id,
+        storeId: data.store_id,
+        items: items,
+        subtotal: data.subtotal,
+        deliveryFee: data.delivery_fee,
+        serviceFee: data.service_fee,
+        tax: data.tax,
+        total: data.total,
+        deliveryTime: data.delivery_time,
+        pickupTime: data.pickup_time,
       };
     } catch (error) {
       logger.error('Error creating Instacart cart:', error);
