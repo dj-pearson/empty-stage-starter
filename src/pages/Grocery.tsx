@@ -19,9 +19,36 @@ import { ImportRecipeToGroceryDialog } from "@/components/ImportRecipeToGroceryD
 import { generateGroceryList } from "@/lib/mealPlanner";
 import { ShoppingCart, Copy, Trash2, Printer, Download, Plus, Share2, FileText, Sparkles, Store, Barcode, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { FoodCategory } from "@/types";
+import { FoodCategory, GroceryItem } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
+
+// Extended type for grocery items with additional database properties
+interface ExtendedGroceryItem extends GroceryItem {
+  is_manual?: boolean;
+  confidence_level?: 'low' | 'medium' | 'high';
+}
+
+// Type for aisle mapping records
+interface AisleMapping {
+  id: string;
+  store_layout_id: string;
+  food_name: string;
+  aisle_name: string;
+  confidence_level?: 'low' | 'medium' | 'high';
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Type for user contribution records
+interface UserContribution {
+  id: string;
+  user_id: string;
+  store_layout_id: string;
+  food_name: string;
+  aisle_name: string;
+  created_at?: string;
+}
 
 const categoryLabels: Record<FoodCategory, string> = {
   protein: "Protein",
@@ -94,10 +121,9 @@ export default function Grocery() {
     const generated = generateGroceryList(filteredEntries, foods);
 
     // Smart merge: preserve manual items and checked items
-    // @ts-ignore - is_manual property exists in database but not in type
-    const manual = groceryItems.filter(item => item.is_manual);
-    // @ts-ignore - is_manual property exists in database but not in type
-    const checked = groceryItems.filter(item => item.checked && !item.is_manual);
+    const extendedItems = groceryItems as ExtendedGroceryItem[];
+    const manual = extendedItems.filter(item => item.is_manual);
+    const checked = extendedItems.filter(item => item.checked && !item.is_manual);
 
     // Add generated items that don't conflict with manual/checked items
     const existingNames = new Set([
@@ -134,15 +160,13 @@ export default function Grocery() {
     if (!item.checked && selectedStoreLayoutId && userId) {
       try {
         // Check if user has already contributed for this item at this store
-        // @ts-ignore - user_store_contributions table exists but not in types
         const { data: existingContribution } = await supabase
-          // @ts-ignore - user_store_contributions table exists but not in types
           .from('user_store_contributions')
           .select('*')
           .eq('user_id', userId)
           .eq('store_layout_id', selectedStoreLayoutId)
           .eq('food_name', item.name)
-          .maybeSingle();
+          .maybeSingle() as { data: UserContribution | null };
 
         // Check if there's already a mapping
         const { data: existingMapping } = await supabase
@@ -150,15 +174,14 @@ export default function Grocery() {
           .select('*')
           .eq('store_layout_id', selectedStoreLayoutId)
           .eq('food_name', item.name)
-          .maybeSingle();
+          .maybeSingle() as { data: AisleMapping | null };
 
         // Only ask for contribution if:
         // 1. User hasn't contributed this item before, OR
         // 2. There's no mapping yet, OR
         // 3. Confidence is still low
-        const shouldAskContribution = !existingContribution || 
-          !existingMapping || 
-          // @ts-ignore - confidence_level property exists but not in type
+        const shouldAskContribution = !existingContribution ||
+          !existingMapping ||
           existingMapping?.confidence_level === 'low';
 
         if (shouldAskContribution && Math.random() < 0.5) { // Ask for ~50% of items to get more data

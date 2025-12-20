@@ -467,9 +467,42 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
                   {editingId ? "Update Child" : "Add Child"}
                 </Button>
                 {editingId && (
-                  <Button type="button" variant="outline" onClick={resetForm}>
-                    Cancel
-                  </Button>
+                  <>
+                    <Button type="button" variant="outline" onClick={resetForm}>
+                      Cancel
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button type="button" variant="destructive">
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete {formData.name}?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will permanently delete all meal plans, food tracking data, and settings for <strong>{formData.name}</strong>. This action cannot be undone.
+                            {kids.length === 1 && (
+                              <div className="mt-3 p-2 bg-destructive/10 text-destructive rounded-md text-sm">
+                                ⚠️ You must have at least one child profile.
+                              </div>
+                            )}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => editingId && handleDelete(editingId)}
+                            disabled={kids.length === 1}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Delete Profile
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
                 )}
               </div>
             </div>

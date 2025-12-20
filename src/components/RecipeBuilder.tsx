@@ -1,6 +1,5 @@
-// @ts-nocheck
 import { useState } from "react";
-import { Food, Recipe } from "@/types";
+import { Food, Recipe, Kid } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +18,8 @@ interface RecipeBuilderProps {
   editRecipe?: Recipe | null;
   onSave: (recipeData: any) => void;
   onCancel: () => void;
+  kids?: Kid[];
+  activeKidId?: string;
 }
 
 type AIRecipe = {
@@ -32,7 +33,7 @@ type AIRecipe = {
   tips: string;
 };
 
-export function RecipeBuilder({ foods, editRecipe, onSave, onCancel, kids, activeKidId }: RecipeBuilderProps & { kids?: Kid[], activeKidId?: string }) {
+export function RecipeBuilder({ foods, editRecipe, onSave, onCancel, kids, activeKidId }: RecipeBuilderProps) {
   const [formData, setFormData] = useState({
     name: editRecipe?.name || "",
     description: editRecipe?.description || "",
