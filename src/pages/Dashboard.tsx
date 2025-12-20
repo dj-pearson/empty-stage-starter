@@ -52,7 +52,10 @@ const mobileNavItems = [
   { to: "/dashboard/ai-coach", icon: Bot, label: "AI Coach" },
   { to: "/dashboard/meal-builder", icon: Sparkles, label: "Meal Builder" },
   { to: "/dashboard/food-chaining", icon: TrendingUp, label: "Food Chaining" },
+  { to: "/dashboard/ai-planner", icon: Sparkles, label: "AI Planner" },
+  { to: "/dashboard/insights", icon: TrendingUp, label: "Insights" },
   { to: "/dashboard/analytics", icon: BarChart3, label: "Analytics" },
+  { to: "/dashboard/progress", icon: Trophy, label: "Progress" },
 ];
 
 const Dashboard = () => {
