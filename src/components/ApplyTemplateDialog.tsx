@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { Kid } from "@/types";
 import { format, addDays, startOfWeek } from "date-fns";
+import { calculateAge } from "@/lib/utils";
 
 interface MealPlanTemplate {
   id: string;
@@ -209,41 +210,44 @@ export function ApplyTemplateDialog({
               </div>
 
               <div className="space-y-2 border rounded-lg p-3">
-                {kids.map((kid) => (
-                  <div
-                    key={kid.id}
-                    className="flex items-center space-x-2 cursor-pointer"
-                    onClick={() => toggleKid(kid.id)}
-                  >
-                    <Checkbox
-                      id={`kid-${kid.id}`}
-                      checked={selectedKidIds.includes(kid.id)}
-                      onCheckedChange={() => toggleKid(kid.id)}
-                    />
-                    <Label
-                      htmlFor={`kid-${kid.id}`}
-                      className="flex-1 cursor-pointer flex items-center gap-2"
+                {kids.map((kid) => {
+                  const age = calculateAge(kid.date_of_birth);
+                  return (
+                    <div
+                      key={kid.id}
+                      className="flex items-center space-x-2 cursor-pointer"
+                      onClick={() => toggleKid(kid.id)}
                     >
-                      {kid.profile_picture_url ? (
-                        <img
-                          src={kid.profile_picture_url}
-                          alt={kid.name}
-                          className="w-6 h-6 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold">
-                          {kid.name.charAt(0)}
-                        </div>
-                      )}
-                      <span>{kid.name}</span>
-                      {kid.age && (
-                        <Badge variant="secondary" className="text-xs">
-                          {kid.age}y
-                        </Badge>
-                      )}
-                    </Label>
-                  </div>
-                ))}
+                      <Checkbox
+                        id={`kid-${kid.id}`}
+                        checked={selectedKidIds.includes(kid.id)}
+                        onCheckedChange={() => toggleKid(kid.id)}
+                      />
+                      <Label
+                        htmlFor={`kid-${kid.id}`}
+                        className="flex-1 cursor-pointer flex items-center gap-2"
+                      >
+                        {kid.profile_picture_url ? (
+                          <img
+                            src={kid.profile_picture_url}
+                            alt={kid.name}
+                            className="w-6 h-6 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold">
+                            {kid.name.charAt(0)}
+                          </div>
+                        )}
+                        <span>{kid.name}</span>
+                        {age !== null && (
+                          <Badge variant="secondary" className="text-xs">
+                            {age}y
+                          </Badge>
+                        )}
+                      </Label>
+                    </div>
+                  );
+                })}
               </div>
 
               {selectedKidIds.length === 0 && (

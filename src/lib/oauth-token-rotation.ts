@@ -329,22 +329,138 @@ export class OAuthTokenManager {
   }
 
   /**
-   * Encrypt token for storage
-   * Note: In production, use proper encryption (e.g., Supabase Vault)
+   * Encrypt token for storage using Edge Function
+   *
+   * SECURITY NOTE: OAuth tokens should be encrypted at rest.
+   * This calls the encrypt-token Edge Function which uses server-side
+   * encryption with keys stored in Supabase Vault.
+   *
+   * If the Edge Function is not available, falls back to client-side
+   * encryption using Web Crypto API (less secure but better than plaintext).
    */
   private async encryptToken(token: string): Promise<string> {
-    // Simple base64 encoding for now
-    // TODO: Replace with proper encryption using Supabase Vault or similar
-    return btoa(token);
+    try {
+      const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL || 'https://functions.tryeatpal.com';
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const response = await fetch(`${functionsUrl}/encrypt-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` }),
+        },
+        body: JSON.stringify({ token }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.encrypted;
+      }
+
+      // Edge function not available - use client-side encryption
+      console.warn('Token encryption Edge Function not available. Using client-side encryption.');
+    } catch {
+      console.warn('Token encryption Edge Function failed. Using client-side encryption.');
+    }
+
+    // Fallback: Client-side encryption using Web Crypto API
+    const encoder = new TextEncoder();
+    const data = encoder.encode(token);
+    const key = await this.getClientEncryptionKey();
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      data
+    );
+
+    // Combine IV and encrypted data
+    const combined = new Uint8Array(iv.length + encrypted.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(encrypted), iv.length);
+
+    return `client:${btoa(String.fromCharCode(...combined))}`;
   }
 
   /**
    * Decrypt stored token
    */
   private async decryptToken(encryptedToken: string): Promise<string> {
-    // Simple base64 decoding for now
-    // TODO: Replace with proper decryption
-    return atob(encryptedToken);
+    // Check if it's client-side encrypted
+    if (encryptedToken.startsWith('client:')) {
+      const base64Data = encryptedToken.slice(7);
+      const combined = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+      const iv = combined.slice(0, 12);
+      const data = combined.slice(12);
+
+      const key = await this.getClientEncryptionKey();
+      const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        data
+      );
+
+      return new TextDecoder().decode(decrypted);
+    }
+
+    // Server-side encrypted - call Edge Function
+    try {
+      const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL || 'https://functions.tryeatpal.com';
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const response = await fetch(`${functionsUrl}/decrypt-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` }),
+        },
+        body: JSON.stringify({ encrypted: encryptedToken }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.token;
+      }
+
+      throw new Error('Failed to decrypt token');
+    } catch (error) {
+      console.error('Token decryption failed:', error);
+      throw new Error('Failed to decrypt OAuth token. The token may be corrupted or the encryption key may have changed.');
+    }
+  }
+
+  /**
+   * Get or create a client-side encryption key
+   * Key is derived from user session to ensure per-user encryption
+   */
+  private async getClientEncryptionKey(): Promise<CryptoKey> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) {
+      throw new Error('User must be authenticated for token encryption');
+    }
+
+    // Derive key from user ID (stable per user)
+    const encoder = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(session.user.id),
+      'PBKDF2',
+      false,
+      ['deriveKey']
+    );
+
+    return crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: encoder.encode('eatpal-oauth-token-encryption'),
+        iterations: 100000,
+        hash: 'SHA-256',
+      },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt']
+    );
   }
 
   /**

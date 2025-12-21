@@ -15,7 +15,7 @@
 ### Test 1: Verify Webhook Endpoint
 ```bash
 # Test that the webhook endpoint is accessible
-curl -X POST https://nfabsryzwuobqpdzfzbf.supabase.co/functions/v1/stripe-webhook \
+curl -X POST https://functions.tryeatpal.com/stripe-webhook \
   -H "Content-Type: application/json" \
   -d '{"test": true}'
 ```
@@ -34,8 +34,8 @@ Expected: Should return 403 Forbidden (because no Stripe signature)
 # Login to your Stripe account
 stripe login
 
-# Forward webhooks to your Supabase function
-stripe listen --forward-to https://nfabsryzwuobqpdzfzbf.supabase.co/functions/v1/stripe-webhook
+# Forward webhooks to your Edge Function
+stripe listen --forward-to https://functions.tryeatpal.com/stripe-webhook
 
 # In a new terminal, trigger test events
 stripe trigger checkout.session.completed
@@ -71,7 +71,7 @@ Once testing is complete, configure the webhook in Stripe Dashboard:
 
 1. Go to **Stripe Dashboard** → **Developers** → **Webhooks**
 2. Click **Add endpoint**
-3. Set URL: `https://nfabsryzwuobqpdzfzbf.supabase.co/functions/v1/stripe-webhook`
+3. Set URL: `https://functions.tryeatpal.com/stripe-webhook`
 4. Select these events:
    - `checkout.session.completed`
    - `customer.subscription.created`

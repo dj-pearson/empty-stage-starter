@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { calculateAge } from "@/lib/utils";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Button } from "@/components/ui/button";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
@@ -852,11 +853,14 @@ const ContextSidebar = ({ user }: { user: UserIntelligence }) => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
-            {user.kids.map((kid) => (
-              <div key={kid.id}>
-                • {kid.name} ({kid.age}yo)
-              </div>
-            ))}
+            {user.kids.map((kid) => {
+              const age = calculateAge(kid.date_of_birth);
+              return (
+                <div key={kid.id}>
+                  • {kid.name} ({age !== null ? `${age}yo` : 'age unknown'})
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       )}

@@ -167,6 +167,7 @@ export function CRMIntegration() {
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [databaseAvailable, setDatabaseAvailable] = useState(true);
 
   // Dialog states
   const [showConnectDialog, setShowConnectDialog] = useState(false);
@@ -206,17 +207,23 @@ export function CRMIntegration() {
         .order("created_at", { ascending: false });
 
       if (error) {
-        // Fallback to local storage
-        const stored = localStorage.getItem("crm_connections");
-        if (stored) {
-          setConnections(JSON.parse(stored));
+        // Check if error is due to missing table
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          logger.warn("CRM connections table not yet created - feature requires database migration");
+          setDatabaseAvailable(false);
+          setConnections([]);
+          return;
         }
+        logger.error("Error loading CRM connections:", error);
+        setConnections([]);
         return;
       }
 
+      setDatabaseAvailable(true);
       setConnections(data || []);
     } catch (error) {
       logger.error("Error loading CRM connections:", error);
+      setDatabaseAvailable(false);
     } finally {
       setLoading(false);
     }
@@ -231,11 +238,14 @@ export function CRMIntegration() {
         .limit(50);
 
       if (error) {
-        // Fallback to local storage
-        const stored = localStorage.getItem("crm_sync_logs");
-        if (stored) {
-          setSyncLogs(JSON.parse(stored));
+        // Check if error is due to missing table
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          logger.warn("CRM sync logs table not yet created");
+          setSyncLogs([]);
+          return;
         }
+        logger.error("Error loading sync logs:", error);
+        setSyncLogs([]);
         return;
       }
 
@@ -247,19 +257,22 @@ export function CRMIntegration() {
 
   const saveConnection = async (connection: CRMConnection) => {
     try {
+      if (!databaseAvailable) {
+        toast.error("CRM feature requires database setup. Please run the required migrations.");
+        throw new Error("Database not available");
+      }
+
       const { error } = await supabase
         .from("crm_connections")
         .upsert([connection]);
 
       if (error) {
-        // Fallback to local storage
-        const existing = connections.filter((c) => c.id !== connection.id);
-        const newConnections = [connection, ...existing];
-        localStorage.setItem("crm_connections", JSON.stringify(newConnections));
-        setConnections(newConnections);
-      } else {
-        await loadConnections();
+        logger.error("Error saving CRM connection:", error);
+        toast.error("Failed to save connection. Database may need migration.");
+        throw error;
       }
+
+      await loadConnections();
     } catch (error) {
       logger.error("Error saving connection:", error);
       throw error;

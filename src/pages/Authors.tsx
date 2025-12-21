@@ -1,8 +1,12 @@
+import { useEffect, useState } from "react";
 import { SEOHead } from "@/components/SEOHead";
 import { BreadcrumbSchema } from "@/components/schema";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { User, Mail, Linkedin, Twitter } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 
 /**
  * Authors Page - E-E-A-T Signals for SEO
@@ -12,6 +16,8 @@ import { User, Mail, Linkedin, Twitter } from "lucide-react";
  * - Professional experience (Experience)
  * - Authority indicators (Authoritativeness)
  * - Contact information (Trustworthiness)
+ *
+ * Authors are fetched from the blog_authors table in the database.
  */
 
 export interface Author {
@@ -29,8 +35,18 @@ export interface Author {
   articleCount?: number;
 }
 
-// Sample authors - replace with real data from database
-const authors: Author[] = [
+interface SocialLinks {
+  email?: string;
+  linkedin?: string;
+  twitter?: string;
+  credentials?: string;
+  title?: string;
+  experience?: string;
+}
+
+// Fallback authors for when database is empty or unavailable
+// These should be replaced with real author data in the database
+const fallbackAuthors: Author[] = [
   {
     id: "dr-sarah-johnson",
     name: "Dr. Sarah Johnson",
@@ -87,6 +103,66 @@ const authors: Author[] = [
 
 export default function Authors() {
   const canonicalUrl = "https://tryeatpal.com/authors";
+  const [authors, setAuthors] = useState<Author[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [usingFallback, setUsingFallback] = useState(false);
+
+  useEffect(() => {
+    async function fetchAuthors() {
+      try {
+        const { data, error } = await supabase
+          .from("blog_authors")
+          .select("*")
+          .order("post_count", { ascending: false, nullsFirst: false });
+
+        if (error) {
+          logger.error("Error fetching authors:", error);
+          setAuthors(fallbackAuthors);
+          setUsingFallback(true);
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          // No authors in database, use fallback
+          logger.info("No authors found in database, using fallback data");
+          setAuthors(fallbackAuthors);
+          setUsingFallback(true);
+          return;
+        }
+
+        // Map database authors to Author interface
+        const mappedAuthors: Author[] = data.map((dbAuthor) => {
+          const socialLinks = (dbAuthor.social_links as SocialLinks) || {};
+
+          return {
+            id: dbAuthor.id,
+            name: dbAuthor.display_name,
+            credentials: socialLinks.credentials || "",
+            title: socialLinks.title || "",
+            bio: dbAuthor.bio || "",
+            expertise: dbAuthor.expertise || [],
+            experience: socialLinks.experience || "",
+            avatarUrl: dbAuthor.avatar_url || undefined,
+            email: socialLinks.email,
+            linkedin: socialLinks.linkedin,
+            twitter: socialLinks.twitter,
+            articleCount: dbAuthor.post_count || undefined,
+          };
+        });
+
+        setAuthors(mappedAuthors);
+        setUsingFallback(false);
+      } catch (error) {
+        logger.error("Error in fetchAuthors:", error);
+        setAuthors(fallbackAuthors);
+        setUsingFallback(true);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchAuthors();
+  }, []);
 
   return (
     <>
@@ -121,107 +197,158 @@ export default function Authors() {
           </p>
         </header>
 
+        {/* Loading State */}
+        {isLoading && (
+          <div className="grid md:grid-cols-2 gap-8 mb-12">
+            {[1, 2, 3].map((i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <div className="flex items-start gap-4">
+                    <Skeleton className="w-20 h-20 rounded-full" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-6 w-48" />
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-4 w-40" />
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <div className="flex gap-2">
+                    <Skeleton className="h-6 w-20" />
+                    <Skeleton className="h-6 w-24" />
+                    <Skeleton className="h-6 w-16" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
         {/* Authors Grid */}
-        <div className="grid md:grid-cols-2 gap-8 mb-12">
-          {authors.map((author) => (
-            <Card key={author.id} id={author.id} className="scroll-mt-20">
-              <CardHeader>
-                <div className="flex items-start gap-4">
-                  {/* Avatar */}
-                  <div className="flex-shrink-0">
-                    {author.avatarUrl ? (
-                      <img
-                        src={author.avatarUrl}
-                        alt={author.name}
-                        className="w-20 h-20 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
-                        <User className="h-10 w-10 text-primary" />
+        {!isLoading && (
+          <>
+            {usingFallback && (
+              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-8 text-center">
+                <p className="text-amber-800 dark:text-amber-200 text-sm">
+                  Author profiles are being set up. Displaying sample data.
+                </p>
+              </div>
+            )}
+
+            <div className="grid md:grid-cols-2 gap-8 mb-12">
+              {authors.map((author) => (
+                <Card key={author.id} id={author.id} className="scroll-mt-20">
+                  <CardHeader>
+                    <div className="flex items-start gap-4">
+                      {/* Avatar */}
+                      <div className="flex-shrink-0">
+                        {author.avatarUrl ? (
+                          <img
+                            src={author.avatarUrl}
+                            alt={author.name}
+                            className="w-20 h-20 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+                            <User className="h-10 w-10 text-primary" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Name & Title */}
+                      <div className="flex-1">
+                        <h2 className="text-2xl font-bold mb-1">{author.name}</h2>
+                        {author.credentials && (
+                          <p className="text-primary font-semibold mb-1">
+                            {author.credentials}
+                          </p>
+                        )}
+                        {author.title && (
+                          <p className="text-sm text-muted-foreground">
+                            {author.title}
+                          </p>
+                        )}
+                        {author.articleCount && author.articleCount > 0 && (
+                          <p className="text-sm text-muted-foreground mt-2">
+                            {author.articleCount} articles published
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="space-y-4">
+                    {/* Bio */}
+                    {author.bio && (
+                      <p className="text-sm leading-relaxed">{author.bio}</p>
+                    )}
+
+                    {/* Experience */}
+                    {author.experience && (
+                      <div>
+                        <h3 className="font-semibold text-sm mb-2">Experience</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {author.experience}
+                        </p>
                       </div>
                     )}
-                  </div>
 
-                  {/* Name & Title */}
-                  <div className="flex-1">
-                    <h2 className="text-2xl font-bold mb-1">{author.name}</h2>
-                    <p className="text-primary font-semibold mb-1">
-                      {author.credentials}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {author.title}
-                    </p>
-                    {author.articleCount && (
-                      <p className="text-sm text-muted-foreground mt-2">
-                        {author.articleCount} articles published
-                      </p>
+                    {/* Expertise */}
+                    {author.expertise && author.expertise.length > 0 && (
+                      <div>
+                        <h3 className="font-semibold text-sm mb-2">Areas of Expertise</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {author.expertise.map((area) => (
+                            <Badge key={area} variant="secondary">
+                              {area}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
                     )}
-                  </div>
-                </div>
-              </CardHeader>
 
-              <CardContent className="space-y-4">
-                {/* Bio */}
-                <p className="text-sm leading-relaxed">{author.bio}</p>
-
-                {/* Experience */}
-                <div>
-                  <h3 className="font-semibold text-sm mb-2">Experience</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {author.experience}
-                  </p>
-                </div>
-
-                {/* Expertise */}
-                <div>
-                  <h3 className="font-semibold text-sm mb-2">Areas of Expertise</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {author.expertise.map((area) => (
-                      <Badge key={area} variant="secondary">
-                        {area}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Contact Links */}
-                <div className="flex gap-3 pt-2">
-                  {author.email && (
-                    <a
-                      href={`mailto:${author.email}`}
-                      className="text-muted-foreground hover:text-primary transition-colors"
-                      aria-label={`Email ${author.name}`}
-                    >
-                      <Mail className="h-5 w-5" />
-                    </a>
-                  )}
-                  {author.linkedin && (
-                    <a
-                      href={author.linkedin}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition-colors"
-                      aria-label={`${author.name} on LinkedIn`}
-                    >
-                      <Linkedin className="h-5 w-5" />
-                    </a>
-                  )}
-                  {author.twitter && (
-                    <a
-                      href={author.twitter}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition-colors"
-                      aria-label={`${author.name} on Twitter`}
-                    >
-                      <Twitter className="h-5 w-5" />
-                    </a>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                    {/* Contact Links */}
+                    <div className="flex gap-3 pt-2">
+                      {author.email && (
+                        <a
+                          href={`mailto:${author.email}`}
+                          className="text-muted-foreground hover:text-primary transition-colors"
+                          aria-label={`Email ${author.name}`}
+                        >
+                          <Mail className="h-5 w-5" />
+                        </a>
+                      )}
+                      {author.linkedin && (
+                        <a
+                          href={author.linkedin}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-primary transition-colors"
+                          aria-label={`${author.name} on LinkedIn`}
+                        >
+                          <Linkedin className="h-5 w-5" />
+                        </a>
+                      )}
+                      {author.twitter && (
+                        <a
+                          href={author.twitter}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-primary transition-colors"
+                          aria-label={`${author.name} on Twitter`}
+                        >
+                          <Twitter className="h-5 w-5" />
+                        </a>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Credibility Statement */}
         <section className="bg-muted/50 rounded-lg p-8 text-center">

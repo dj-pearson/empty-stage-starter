@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { logger } from "@/lib/logger";
+import { KidUpdateSchema, validateData } from "@/lib/validations";
 
 interface ChildIntakeQuestionnaireProps {
   open: boolean;
@@ -62,24 +63,28 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
     pickiness_level: "",
   });
 
-  // Helper functions for unit conversion
+  // Helper functions for unit conversion with proper precision
   const convertHeightToMetric = (feet: number, inches: number): number => {
-    return ((feet * 12 + inches) * 2.54);
+    // Convert to cm and round to 1 decimal place (sufficient precision for medical use)
+    return Math.round(((feet * 12 + inches) * 2.54) * 10) / 10;
   };
 
   const convertWeightToMetric = (pounds: number): number => {
-    return pounds * 0.453592;
+    // Convert to kg and round to 2 decimal places
+    return Math.round(pounds * 0.453592 * 100) / 100;
   };
 
   const convertHeightToImperial = (cm: number): { feet: number; inches: number } => {
     const totalInches = cm / 2.54;
     const feet = Math.floor(totalInches / 12);
-    const inches = Math.round(totalInches % 12);
+    // Round inches to nearest 0.5 inch to maintain reasonable precision
+    const inches = Math.round((totalInches % 12) * 2) / 2;
     return { feet, inches };
   };
 
   const convertWeightToImperial = (kg: number): number => {
-    return Math.round(kg / 0.453592);
+    // Round to 1 decimal place for better precision
+    return Math.round((kg / 0.453592) * 10) / 10;
   };
 
   const steps = [
@@ -158,29 +163,44 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
   const handleSubmit = async () => {
     setSaving(true);
     try {
+      // Prepare data for validation
+      const updateData = {
+        gender: formData.gender || null,
+        height_cm: formData.height_cm,
+        weight_kg: formData.weight_kg,
+        allergens: formData.allergens,
+        dietary_restrictions: formData.dietary_restrictions,
+        health_goals: formData.health_goals,
+        favorite_foods: formData.favorite_foods,
+        always_eats_foods: formData.always_eats_foods,
+        disliked_foods: formData.disliked_foods,
+        texture_preferences: formData.texture_preferences,
+        texture_dislikes: formData.texture_dislikes,
+        pickiness_level: formData.pickiness_level || null,
+      };
+
+      // Validate health metrics
+      const validation = validateData(KidUpdateSchema, updateData);
+      if (!validation.success) {
+        const errorMessage = validation.errors.join(', ');
+        toast.error(errorMessage);
+        logger.warn("Validation failed:", validation.errors);
+        setSaving(false);
+        return;
+      }
+
       const { error } = await supabase
         .from('kids')
         .update({
-          gender: formData.gender || null,
-          height_cm: formData.height_cm,
-          weight_kg: formData.weight_kg,
-          allergens: formData.allergens,
+          ...updateData,
           allergen_severity: formData.allergen_severity,
           cross_contamination_sensitive: formData.cross_contamination_sensitive,
-          dietary_restrictions: formData.dietary_restrictions,
-          health_goals: formData.health_goals,
           nutrition_concerns: formData.nutrition_concerns,
           eating_behavior: formData.eating_behavior || null,
           new_food_willingness: formData.new_food_willingness || null,
           behavioral_notes: formData.behavioral_notes || null,
           texture_sensitivity_level: formData.texture_sensitivity_level || null,
-          texture_dislikes: formData.texture_dislikes,
-          texture_preferences: formData.texture_preferences,
           preferred_preparations: formData.preferred_preparations,
-          favorite_foods: formData.favorite_foods,
-          always_eats_foods: formData.always_eats_foods,
-          disliked_foods: formData.disliked_foods,
-          pickiness_level: formData.pickiness_level || null,
           profile_completed: true,
           profile_last_reviewed: new Date().toISOString(),
         })
@@ -286,15 +306,16 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
                     </div>
                     <div>
                       <Label>Height (inches)</Label>
-                      <Input 
-                        type="number" 
+                      <Input
+                        type="number"
                         placeholder="e.g., 5"
                         min="0"
-                        max="11"
+                        max="11.5"
+                        step="0.5"
                         onChange={(e) => {
                           const inches = parseFloat(e.target.value) || 0;
-                          const feet = formData.height_cm 
-                            ? convertHeightToImperial(formData.height_cm).feet 
+                          const feet = formData.height_cm
+                            ? convertHeightToImperial(formData.height_cm).feet
                             : 0;
                           const cm = convertHeightToMetric(feet, inches);
                           setFormData({ ...formData, height_cm: cm });
@@ -304,9 +325,10 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
                     </div>
                     <div>
                       <Label>Weight (lbs)</Label>
-                      <Input 
-                        type="number" 
+                      <Input
+                        type="number"
                         placeholder="e.g., 55"
+                        step="0.1"
                         onChange={(e) => {
                           const lbs = parseFloat(e.target.value) || 0;
                           const kg = convertWeightToMetric(lbs);
@@ -320,17 +342,19 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label>Height (cm)</Label>
-                      <Input 
-                        type="number" 
+                      <Input
+                        type="number"
                         placeholder="e.g., 120"
+                        step="0.1"
                         value={formData.height_cm || ''}
                         onChange={(e) => setFormData({ ...formData, height_cm: e.target.value ? parseFloat(e.target.value) : null })}
                       />
                     </div>
                     <div>
                       <Label>Weight (kg)</Label>
-                      <Input 
-                        type="number" 
+                      <Input
+                        type="number"
+                        step="0.1" 
                         placeholder="e.g., 25"
                         value={formData.weight_kg || ''}
                         onChange={(e) => setFormData({ ...formData, weight_kg: e.target.value ? parseFloat(e.target.value) : null })}

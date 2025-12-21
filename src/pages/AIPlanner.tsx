@@ -11,6 +11,7 @@ import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
 import { KidSelector } from "@/components/KidSelector";
 import { logger } from "@/lib/logger";
+import { calculateAge } from "@/lib/utils";
 
 export default function AIPlanner() {
   const { kids, activeKidId, setActiveKidId, addPlanEntries } = useApp();
@@ -21,6 +22,7 @@ export default function AIPlanner() {
   const [selectedKidForPlan, setSelectedKidForPlan] = useState<string | null>(null);
 
   const activeKid = kids.find(k => k.id === activeKidId);
+  const activeKidAge = activeKid ? calculateAge(activeKid.date_of_birth) : null;
   const isFamilyMode = !activeKidId;
 
   const handleGeneratePlan = async (kidId?: string) => {
@@ -104,18 +106,20 @@ export default function AIPlanner() {
             </CardHeader>
             <CardContent>
               <div className="grid gap-3">
-                {kids.map(kid => (
-                  <Card key={kid.id} className="hover:border-primary transition-colors">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                          <p className="font-semibold">{kid.name}</p>
-                          <div className="flex gap-3 text-sm text-muted-foreground">
-                            <span>Age: {kid.age || 'N/A'}</span>
-                            <span>Allergens: {kid.allergens?.length || 0}</span>
-                            <span className="capitalize">Pickiness: {kid.pickiness_level || 'Moderate'}</span>
+                {kids.map(kid => {
+                  const age = calculateAge(kid.date_of_birth);
+                  return (
+                    <Card key={kid.id} className="hover:border-primary transition-colors">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <p className="font-semibold">{kid.name}</p>
+                            <div className="flex gap-3 text-sm text-muted-foreground">
+                              <span>Age: {age !== null ? age : 'N/A'}</span>
+                              <span>Allergens: {kid.allergens?.length || 0}</span>
+                              <span className="capitalize">Pickiness: {kid.pickiness_level || 'Moderate'}</span>
+                            </div>
                           </div>
-                        </div>
                         <Button 
                           onClick={() => handleGeneratePlan(kid.id)}
                           disabled={isGenerating}
@@ -135,7 +139,8 @@ export default function AIPlanner() {
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -154,7 +159,7 @@ export default function AIPlanner() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="text-center">
                     <p className="text-sm text-muted-foreground">Age</p>
-                    <p className="text-2xl font-bold">{activeKid.age || 'N/A'}</p>
+                    <p className="text-2xl font-bold">{activeKidAge !== null ? activeKidAge : 'N/A'}</p>
                   </div>
                   <div className="text-center">
                     <p className="text-sm text-muted-foreground">Allergens</p>

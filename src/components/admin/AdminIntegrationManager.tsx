@@ -145,25 +145,13 @@ export function AdminIntegrationManager() {
 
   const loadIntegrationMetrics = async () => {
     try {
-      // In production, load from analytics database
-      // Mock data for demonstration
-      const mockMetrics: IntegrationMetric[] = [
-        {
-          date: '2025-10-01',
-          integration: 'instacart',
-          requests: 0,
-          revenue: 0,
-          errors: 0,
-        },
-        {
-          date: '2025-10-01',
-          integration: 'mealme',
-          requests: 0,
-          revenue: 0,
-          errors: 0,
-        },
-      ];
-      setMetrics(mockMetrics);
+      // Integration metrics will be populated once integrations are configured
+      // and start receiving traffic. Data comes from:
+      // - integration_metrics table (requires migration)
+      // - Real-time API tracking
+
+      // Start with empty metrics until integrations are active
+      setMetrics([]);
     } catch (error) {
       logger.error('Error loading integration metrics:', error);
     }

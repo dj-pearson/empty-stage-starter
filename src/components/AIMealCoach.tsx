@@ -19,7 +19,7 @@ import {
 import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, calculateAge } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 
 interface Message {
@@ -207,12 +207,7 @@ export function AIMealCoach() {
         kid: activeKid
           ? {
               name: activeKid.name,
-              age: activeKid.date_of_birth
-                ? Math.floor(
-                    (new Date().getTime() - new Date(activeKid.date_of_birth).getTime()) /
-                      (365.25 * 24 * 60 * 60 * 1000)
-                  )
-                : activeKid.age || null,
+              age: calculateAge(activeKid.date_of_birth),
               allergens: activeKid.allergens,
             }
           : null,
@@ -237,11 +232,12 @@ export function AIMealCoach() {
       }
 
       // Create system prompt with context
+      const activeKidAge = activeKid ? calculateAge(activeKid.date_of_birth) : null;
       const systemPrompt = `You are a friendly, knowledgeable meal planning assistant specializing in helping parents of picky eaters.
 
 Current child context:
 ${activeKid ? `- Child's name: ${activeKid.name}` : "- No child selected"}
-${activeKid?.date_of_birth ? `- Age: ${Math.floor((new Date().getTime() - new Date(activeKid.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} years old` : activeKid?.age ? `- Age: ${activeKid.age} years old` : ""}
+${activeKidAge !== null ? `- Age: ${activeKidAge} years old` : ""}
 ${activeKid?.allergens && activeKid.allergens.length > 0 ? `- Allergens: ${activeKid.allergens.join(", ")}` : "- No allergens listed"}
 - Safe foods (${context.safe_foods.length}): ${context.safe_foods.slice(0, 10).join(", ")}${context.safe_foods.length > 10 ? "..." : ""}
 - Foods to try (${context.try_bites.length}): ${context.try_bites.slice(0, 5).join(", ")}${context.try_bites.length > 5 ? "..." : ""}

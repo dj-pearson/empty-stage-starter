@@ -143,15 +143,14 @@ export default function Pantry() {
   const { pullToRefreshRef, isRefreshing, pullDistance } = usePullToRefresh({
     onRefresh: async () => {
       haptic.light();
-      // Simulate refresh - in real app, this would refetch from server
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Fetch fresh data from server
       if (refreshFoods) {
         await refreshFoods();
       }
       haptic.success();
       toast({
         title: "Refreshed",
-        description: "Your pantry has been updated.",
+        description: "Pantry updated with latest data",
       });
     },
     enabled: isMobile,

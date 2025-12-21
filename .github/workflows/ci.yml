@@ -146,9 +146,10 @@ jobs:
       - name: Build application
         run: npm run build
         env:
-          # Use placeholder values for build (real values are injected at runtime)
-          VITE_SUPABASE_URL: https://placeholder.supabase.co
-          VITE_SUPABASE_ANON_KEY: placeholder-key
+          # Self-hosted Supabase configuration
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://api.tryeatpal.com' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_FUNCTIONS_URL: ${{ secrets.VITE_FUNCTIONS_URL || 'https://functions.tryeatpal.com' }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -322,8 +323,9 @@ jobs:
           npm run preview &
           sleep 10
         env:
-          VITE_SUPABASE_URL: https://placeholder.supabase.co
-          VITE_SUPABASE_ANON_KEY: placeholder-key
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://api.tryeatpal.com' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_FUNCTIONS_URL: ${{ secrets.VITE_FUNCTIONS_URL || 'https://functions.tryeatpal.com' }}
 
       - name: Run OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.12.0
@@ -370,8 +372,9 @@ jobs:
           npm run preview &
           sleep 10
         env:
-          VITE_SUPABASE_URL: https://placeholder.supabase.co
-          VITE_SUPABASE_ANON_KEY: placeholder-key
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://api.tryeatpal.com' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_FUNCTIONS_URL: ${{ secrets.VITE_FUNCTIONS_URL || 'https://functions.tryeatpal.com' }}
 
       - name: Run OWASP ZAP Full Scan
         uses: zaproxy/action-full-scan@v0.10.0
@@ -423,8 +426,9 @@ jobs:
           npm run preview &
           sleep 10
         env:
-          VITE_SUPABASE_URL: https://placeholder.supabase.co
-          VITE_SUPABASE_ANON_KEY: placeholder-key
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://api.tryeatpal.com' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_FUNCTIONS_URL: ${{ secrets.VITE_FUNCTIONS_URL || 'https://functions.tryeatpal.com' }}
 
       - name: Run accessibility tests
         run: npm run test:a11y
@@ -472,8 +476,9 @@ jobs:
           npm run preview &
           sleep 10
         env:
-          VITE_SUPABASE_URL: https://placeholder.supabase.co
-          VITE_SUPABASE_ANON_KEY: placeholder-key
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://api.tryeatpal.com' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_FUNCTIONS_URL: ${{ secrets.VITE_FUNCTIONS_URL || 'https://functions.tryeatpal.com' }}
 
       - name: Install k6
         run: |

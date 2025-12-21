@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { UserCircle, ChevronDown, Users } from "lucide-react";
+import { calculateAge } from "@/lib/utils";
 
 export function KidSelector() {
   const { kids, activeKidId, setActiveKid } = useApp();
@@ -46,17 +47,20 @@ export function KidSelector() {
           )}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        {kids.map(kid => (
-          <DropdownMenuItem
-            key={kid.id}
-            onClick={() => setActiveKid(kid.id)}
-            className={activeKid?.id === kid.id ? "bg-accent" : ""}
-          >
-            <UserCircle className="h-4 w-4 mr-2" />
-            {kid.name}
-            {kid.age && <span className="ml-auto text-xs text-muted-foreground">Age {kid.age}</span>}
-          </DropdownMenuItem>
-        ))}
+        {kids.map(kid => {
+          const age = calculateAge(kid.date_of_birth);
+          return (
+            <DropdownMenuItem
+              key={kid.id}
+              onClick={() => setActiveKid(kid.id)}
+              className={activeKid?.id === kid.id ? "bg-accent" : ""}
+            >
+              <UserCircle className="h-4 w-4 mr-2" />
+              {kid.name}
+              {age !== null && <span className="ml-auto text-xs text-muted-foreground">Age {age}</span>}
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

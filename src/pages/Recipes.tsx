@@ -594,7 +594,7 @@ export default function Recipes() {
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer group" onClick={handleAIGenerate}>
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer group" onClick={handleAISuggestions}>
                 <CardContent className="pt-6 text-center">
                   <div className="w-12 h-12 rounded-full bg-purple-500/10 group-hover:bg-purple-500/20 transition-colors flex items-center justify-center mx-auto mb-3">
                     <Sparkles className="h-6 w-6 text-purple-500" />

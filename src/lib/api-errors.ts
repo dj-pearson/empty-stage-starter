@@ -6,6 +6,7 @@
  */
 
 import { PostgrestError } from '@supabase/supabase-js';
+import * as Sentry from '@sentry/react';
 
 /**
  * API Error class for standardized error handling
@@ -381,16 +382,20 @@ export async function batchWithErrorHandling<T>(
 }
 
 /**
- * Log error (integrate with error tracking service)
+ * Log error to Sentry and console
  */
 export function logError(error: unknown, context?: Record<string, any>) {
-  // In production, send to error tracking service (Sentry, LogRocket, etc.)
-  if (process.env.NODE_ENV === 'production') {
-    // TODO: Integrate with error tracking service
-    console.error('Error:', error, 'Context:', context);
-  } else {
-    // Development: log to console
-    console.error('Error:', error, 'Context:', context);
+  // Always log to console for debugging
+  console.error('Error:', error, 'Context:', context);
+
+  // Send to Sentry in production (or if explicitly enabled)
+  if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {
+    Sentry.captureException(error, {
+      extra: context,
+      tags: {
+        source: 'api-errors',
+      },
+    });
   }
 }
 
