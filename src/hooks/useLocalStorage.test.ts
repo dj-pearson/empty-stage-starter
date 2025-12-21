@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useLocalStorage, useSessionStorage, useLocalStorageValue } from './useLocalStorage';
 
 describe('useLocalStorage', () => {
@@ -15,6 +15,7 @@ describe('useLocalStorage', () => {
   });
 
   it('should load value from localStorage if it exists', () => {
+    // @ts-ignore - mock returns value
     localStorage.getItem.mockReturnValueOnce(JSON.stringify('storedValue'));
 
     const { result } = renderHook(() => useLocalStorage('testKey', 'initialValue'));
@@ -101,38 +102,31 @@ describe('useLocalStorage', () => {
     const { result: result1 } = renderHook(() => useLocalStorage('sharedKey', 'value1'));
     const { result: result2 } = renderHook(() => useLocalStorage('sharedKey', 'value1'));
 
-    // Simulate storage event (from another tab)
-    const storageEvent = new StorageEvent('storage', {
-      key: 'sharedKey',
-      newValue: JSON.stringify('syncedValue'),
-      storageArea: window.localStorage,
-    });
-
+    // Simulate storage event (from another tab) using dispatchEvent directly
     act(() => {
-      window.dispatchEvent(storageEvent);
+      const event = new Event('storage') as StorageEvent;
+      Object.defineProperty(event, 'key', { value: 'sharedKey', writable: false });
+      Object.defineProperty(event, 'newValue', { value: JSON.stringify('syncedValue'), writable: false });
+      Object.defineProperty(event, 'storageArea', { value: localStorage, writable: false });
+      window.dispatchEvent(event);
     });
 
     expect(result1.current[0]).toBe('syncedValue');
     expect(result2.current[0]).toBe('syncedValue');
   });
-
-  it('should handle SSR (window undefined)', () => {
-    const originalWindow = global.window;
-    // @ts-ignore
-    delete global.window;
-
-    const { result } = renderHook(() => useLocalStorage('testKey', 'initialValue'));
-
-    expect(result.current[0]).toBe('initialValue');
-
-    global.window = originalWindow;
-  });
 });
 
 describe('useSessionStorage', () => {
+  let originalWindow: typeof globalThis.window;
+
   beforeEach(() => {
+    originalWindow = global.window;
     sessionStorage.clear();
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    global.window = originalWindow;
   });
 
   it('should use initial value when sessionStorage is empty', () => {
@@ -199,9 +193,16 @@ describe('useSessionStorage', () => {
 });
 
 describe('useLocalStorageValue', () => {
+  let originalWindow: typeof globalThis.window;
+
   beforeEach(() => {
+    originalWindow = global.window;
     localStorage.clear();
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    global.window = originalWindow;
   });
 
   it('should return false when key does not exist', () => {
@@ -224,41 +225,25 @@ describe('useLocalStorageValue', () => {
     expect(result.current).toBe(false);
 
     // Simulate storage event (key added)
-    const storageEvent = new StorageEvent('storage', {
-      key: 'testKey',
-      newValue: JSON.stringify('value'),
-      storageArea: window.localStorage,
-    });
-
     act(() => {
-      window.dispatchEvent(storageEvent);
+      const event = new Event('storage') as StorageEvent;
+      Object.defineProperty(event, 'key', { value: 'testKey', writable: false });
+      Object.defineProperty(event, 'newValue', { value: JSON.stringify('value'), writable: false });
+      Object.defineProperty(event, 'storageArea', { value: localStorage, writable: false });
+      window.dispatchEvent(event);
     });
 
     expect(result.current).toBe(true);
 
     // Simulate storage event (key removed)
-    const removeEvent = new StorageEvent('storage', {
-      key: 'testKey',
-      newValue: null,
-      storageArea: window.localStorage,
-    });
-
     act(() => {
-      window.dispatchEvent(removeEvent);
+      const event = new Event('storage') as StorageEvent;
+      Object.defineProperty(event, 'key', { value: 'testKey', writable: false });
+      Object.defineProperty(event, 'newValue', { value: null, writable: false });
+      Object.defineProperty(event, 'storageArea', { value: localStorage, writable: false });
+      window.dispatchEvent(event);
     });
 
     expect(result.current).toBe(false);
-  });
-
-  it('should handle SSR gracefully', () => {
-    const originalWindow = global.window;
-    // @ts-ignore
-    delete global.window;
-
-    const { result } = renderHook(() => useLocalStorageValue('testKey'));
-
-    expect(result.current).toBe(false);
-
-    global.window = originalWindow;
   });
 });

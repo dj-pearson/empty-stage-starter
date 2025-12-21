@@ -1,4 +1,4 @@
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useDebounce, useDebouncedCallback } from './useDebounce';
 
@@ -9,6 +9,7 @@ describe('useDebounce', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it('should return initial value immediately', () => {
@@ -16,7 +17,7 @@ describe('useDebounce', () => {
     expect(result.current).toBe('hello');
   });
 
-  it('should debounce value changes', { timeout: 10000 }, async () => {
+  it('should debounce value changes', () => {
     const { result, rerender } = renderHook(
       ({ value, delay }) => useDebounce(value, delay),
       {
@@ -34,16 +35,14 @@ describe('useDebounce', () => {
 
     // Fast-forward time
     act(() => {
-      vi.runOnlyPendingTimers();
+      vi.advanceTimersByTime(500);
     });
 
     // Now value should be updated
-    await waitFor(() => {
-      expect(result.current).toBe('updated');
-    });
-  }, { timeout: 10000 });
+    expect(result.current).toBe('updated');
+  });
 
-  it('should cancel previous timeout on rapid changes', { timeout: 10000 }, async () => {
+  it('should cancel previous timeout on rapid changes', () => {
     const { result, rerender } = renderHook(
       ({ value }) => useDebounce(value, 500),
       {
@@ -63,16 +62,14 @@ describe('useDebounce', () => {
 
     // Fast-forward full delay from last change
     act(() => {
-      vi.runOnlyPendingTimers();
+      vi.advanceTimersByTime(500);
     });
 
     // Should be the last value
-    await waitFor(() => {
-      expect(result.current).toBe('fourth');
-    });
-  }, { timeout: 10000 });
+    expect(result.current).toBe('fourth');
+  });
 
-  it('should work with different data types', { timeout: 10000 }, async () => {
+  it('should work with different data types', () => {
     // Test with number
     const { result: numberResult, rerender: numberRerender } = renderHook(
       ({ value }) => useDebounce(value, 100),
@@ -81,12 +78,10 @@ describe('useDebounce', () => {
 
     numberRerender({ value: 42 });
     act(() => {
-      vi.runOnlyPendingTimers();
+      vi.advanceTimersByTime(100);
     });
 
-    await waitFor(() => {
-      expect(numberResult.current).toBe(42);
-    });
+    expect(numberResult.current).toBe(42);
 
     // Test with object
     const { result: objectResult, rerender: objectRerender } = renderHook(
@@ -97,15 +92,13 @@ describe('useDebounce', () => {
     const newValue = { name: 'updated' };
     objectRerender({ value: newValue });
     act(() => {
-      vi.runOnlyPendingTimers();
+      vi.advanceTimersByTime(100);
     });
 
-    await waitFor(() => {
-      expect(objectResult.current).toEqual(newValue);
-    });
-  }, { timeout: 10000 });
+    expect(objectResult.current).toEqual(newValue);
+  });
 
-  it('should respect custom delay', async () => {
+  it('should respect custom delay', () => {
     const { result, rerender } = renderHook(
       ({ value, delay }) => useDebounce(value, delay),
       {
@@ -117,18 +110,16 @@ describe('useDebounce', () => {
 
     // Should not update after 500ms
     act(() => {
-      vi.runOnlyPendingTimers();
+      vi.advanceTimersByTime(500);
     });
     expect(result.current).toBe('initial');
 
-    // Should update after 1000ms
+    // Should update after another 500ms (total 1000ms)
     act(() => {
-      vi.runOnlyPendingTimers();
+      vi.advanceTimersByTime(500);
     });
 
-    await waitFor(() => {
-      expect(result.current).toBe('updated');
-    });
+    expect(result.current).toBe('updated');
   });
 });
 
@@ -139,6 +130,7 @@ describe('useDebouncedCallback', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it('should debounce callback execution', () => {
@@ -155,7 +147,7 @@ describe('useDebouncedCallback', () => {
 
     // Fast-forward time
     act(() => {
-      vi.runOnlyPendingTimers();
+      vi.advanceTimersByTime(500);
     });
 
     // Now callback should be called
@@ -167,10 +159,16 @@ describe('useDebouncedCallback', () => {
     const callback = vi.fn();
     const { result } = renderHook(() => useDebouncedCallback(callback, 500));
 
-    // Rapid calls
+    // Rapid calls - each call should cancel the previous timeout
     act(() => {
       result.current('first');
+    });
+    
+    act(() => {
       result.current('second');
+    });
+    
+    act(() => {
       result.current('third');
     });
 
@@ -179,7 +177,7 @@ describe('useDebouncedCallback', () => {
 
     // Fast-forward full delay
     act(() => {
-      vi.runOnlyPendingTimers();
+      vi.advanceTimersByTime(500);
     });
 
     // Should only be called once with last argument
@@ -198,7 +196,7 @@ describe('useDebouncedCallback', () => {
     });
 
     act(() => {
-      vi.runOnlyPendingTimers();
+      vi.advanceTimersByTime(500);
     });
 
     expect(callback).toHaveBeenCalledWith('test', 42, true);
@@ -217,7 +215,7 @@ describe('useDebouncedCallback', () => {
 
     // Fast-forward time
     act(() => {
-      vi.runOnlyPendingTimers();
+      vi.advanceTimersByTime(500);
     });
 
     // Callback should not be called after unmount

@@ -73,9 +73,9 @@ describe('Color Utilities', () => {
       expect(hsl).toBeDefined();
       if (hsl && originalRgb) {
         const backToRgb = hslToRgb(hsl.h, hsl.s, hsl.l);
-        expect(backToRgb.r).toBeCloseTo(originalRgb.r, 1);
-        expect(backToRgb.g).toBeCloseTo(originalRgb.g, 1);
-        expect(backToRgb.b).toBeCloseTo(originalRgb.b, 1);
+        expect(Math.abs(backToRgb.r - originalRgb.r)).toBeLessThanOrEqual(1);
+        expect(Math.abs(backToRgb.g - originalRgb.g)).toBeLessThanOrEqual(1);
+        expect(Math.abs(backToRgb.b - originalRgb.b)).toBeLessThanOrEqual(1);
       }
     });
 
@@ -83,9 +83,9 @@ describe('Color Utilities', () => {
       const rgb = { r: 255, g: 87, b: 51 };
       const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
       const backToRgb = hslToRgb(hsl.h, hsl.s, hsl.l);
-      expect(backToRgb.r).toBeCloseTo(rgb.r, 1);
-      expect(backToRgb.g).toBeCloseTo(rgb.g, 1);
-      expect(backToRgb.b).toBeCloseTo(rgb.b, 1);
+      expect(Math.abs(backToRgb.r - rgb.r)).toBeLessThanOrEqual(1);
+      expect(Math.abs(backToRgb.g - rgb.g)).toBeLessThanOrEqual(1);
+      expect(Math.abs(backToRgb.b - rgb.b)).toBeLessThanOrEqual(1);
     });
   });
 

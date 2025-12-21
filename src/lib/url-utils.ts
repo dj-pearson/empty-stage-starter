@@ -329,25 +329,17 @@ export function normalizeUrl(url: string): string {
     }
 
     // Sort query parameters alphabetically
-    const params = parseQueryString(parsed.search);
-    const sortedKeys = Object.keys(params).sort();
+    const params = new URLSearchParams(parsed.search);
+    params.sort();
     
-    if (sortedKeys.length > 0) {
-      const sortedParams = new URLSearchParams();
-      for (const key of sortedKeys) {
-        const value = params[key];
-        if (Array.isArray(value)) {
-          value.forEach(v => v !== null && v !== undefined && sortedParams.append(key, String(v)));
-        } else if (value !== null && value !== undefined) {
-          sortedParams.append(key, String(value));
-        }
-      }
-      parsed.search = sortedParams.toString();
-    } else {
-      parsed.search = '';
+    let result = `${parsed.origin}${parsed.pathname}`;
+    const search = params.toString();
+    if (search) {
+      result += `?${search}`;
     }
+    result += parsed.hash;
 
-    return parsed.toString();
+    return result;
   } catch {
     return url;
   }
