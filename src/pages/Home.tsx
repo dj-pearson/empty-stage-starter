@@ -62,7 +62,6 @@ export default function Home() {
 
   const safeFoods = foods.filter(f => f.is_safe).length;
   const tryBites = foods.filter(f => f.is_try_bite).length;
-  const activeKid = kids.find(k => k.id === activeKidId);
   const kidPlanEntries = planEntries.filter(p => p.kid_id === activeKidId);
 
   // Determine if user is new (has little to no data)

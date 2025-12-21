@@ -107,7 +107,7 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
     const kidData = {
       name: formData.name,
       date_of_birth: formData.date_of_birth ? format(formData.date_of_birth, 'yyyy-MM-dd') : undefined,
-      age: formData.date_of_birth ? calculateAge(formData.date_of_birth) : undefined,
+      // age is now calculated dynamically from date_of_birth, not stored
       notes: formData.notes || undefined,
       allergens: formData.allergens.length > 0 ? formData.allergens : undefined,
       profile_picture_url: formData.profile_picture_url || undefined,

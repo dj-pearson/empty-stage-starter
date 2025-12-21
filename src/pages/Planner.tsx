@@ -26,6 +26,7 @@ import { SwapMealDialog } from "@/components/SwapMealDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
+import { calculateAge } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -613,28 +614,30 @@ export default function Planner() {
         ) : activeKidId === null ? (
           // Family Mode - Show all children
           <div className="space-y-6">
-            {kids.map((kid) => (
-              <div key={kid.id} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold">{kid.name}'s Plan</h2>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setActiveKid(kid.id)}
-                  >
-                    View Details
-                  </Button>
-                </div>
-                <GSAPCalendarMealPlanner
-                  weekStart={currentWeekStart}
-                  planEntries={planEntries}
-                  foods={foods}
-                  recipes={recipes}
-                  kids={kids}
-                  kidId={kid.id}
-                  kidName={kid.name}
-                  kidAge={kid.age}
-                  kidWeight={kid.weight_kg ? Number(kid.weight_kg) : undefined}
+            {kids.map((kid) => {
+              const kidAge = calculateAge(kid.date_of_birth);
+              return (
+                <div key={kid.id} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-semibold">{kid.name}'s Plan</h2>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setActiveKid(kid.id)}
+                    >
+                      View Details
+                    </Button>
+                  </div>
+                  <GSAPCalendarMealPlanner
+                    weekStart={currentWeekStart}
+                    planEntries={planEntries}
+                    foods={foods}
+                    recipes={recipes}
+                    kids={kids}
+                    kidId={kid.id}
+                    kidName={kid.name}
+                    kidAge={kidAge !== null ? kidAge : undefined}
+                    kidWeight={kid.weight_kg ? Number(kid.weight_kg) : undefined}
                   onUpdateEntry={handleUpdateEntry}
                   onAddEntry={handleAddEntry}
                   onOpenFoodSelector={handleOpenFoodSelector}
@@ -643,7 +646,8 @@ export default function Planner() {
                   onClearWeek={handleClearWeek}
                 />
               </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           // Single child mode

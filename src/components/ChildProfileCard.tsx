@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  AlertTriangle, Heart, Target, TrendingUp, ChefHat, 
+import {
+  AlertTriangle, Heart, Target, TrendingUp, ChefHat,
   Sparkles, Edit, CheckCircle2, Calendar, Utensils,
   Scale, Ruler, ThumbsUp, ThumbsDown, Leaf
 } from "lucide-react";
 import { format } from "date-fns";
+import { calculateAge } from "@/lib/utils";
 
 interface ChildProfileCardProps {
   kid: {
@@ -50,16 +51,17 @@ interface ChildProfileCardProps {
   onCompleteProfile: () => void;
 }
 
-export function ChildProfileCard({ 
-  kid, 
-  safeFoodsCount, 
-  tryBitesCount, 
-  totalMeals, 
+export function ChildProfileCard({
+  kid,
+  safeFoodsCount,
+  tryBitesCount,
+  totalMeals,
   completedMeals,
   onEdit,
   onCompleteProfile
 }: ChildProfileCardProps) {
   const mealProgress = totalMeals > 0 ? (completedMeals / totalMeals) * 100 : 0;
+  const age = calculateAge(kid.date_of_birth);
   
   return (
     <Card className="overflow-hidden">
@@ -77,7 +79,7 @@ export function ChildProfileCard({
                   <CheckCircle2 className="h-4 w-4 text-primary" />
                 )}
               </CardTitle>
-              {kid.age && <p className="text-sm text-muted-foreground">{kid.age} years old</p>}
+              {age !== null && <p className="text-sm text-muted-foreground">{age} years old</p>}
               {kid.profile_last_reviewed && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                   <Calendar className="h-3 w-3" />
