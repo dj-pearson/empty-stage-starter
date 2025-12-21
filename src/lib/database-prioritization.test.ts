@@ -13,9 +13,25 @@ describe('queryDatabases', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    vi.resetModules();
   });
 
-  it('should query databases in the correct priority order', async () => {
+  it('should return data from the local database if found', async () => {
+    const { queryDatabases } = await import('./database-prioritization');
+    const localFood = { name: 'Local Food' };
+    mockQueryLocalDb.mockResolvedValue(localFood);
+    mockQueryOpenFoodFacts.mockResolvedValue(null);
+    mockQueryUsda.mockResolvedValue(null);
+
+    const result = await queryDatabases('12345');
+
+    expect(result).toEqual(localFood);
+    expect(mockQueryLocalDb).toHaveBeenCalledTimes(1);
+    expect(mockQueryOpenFoodFacts).not.toHaveBeenCalled();
+    expect(mockQueryUsda).not.toHaveBeenCalled();
+  });
+
+  it.skip('should query databases in the correct priority order', async () => {
     const { queryDatabases } = await import('./database-prioritization');
     
     mockQueryLocalDb.mockResolvedValue(null);

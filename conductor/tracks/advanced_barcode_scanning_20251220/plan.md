@@ -18,7 +18,7 @@ This plan details the steps to enhance the barcode scanning functionality and in
 
 ### [~] Task: Design and implement prioritized database querying.
 - [x] Sub-task: Write tests for database prioritization logic. (d6094e2)
-- [ ] Sub-task: Implement initial database querying (e.g., local + Open Food Facts).
+- [x] Sub-task: Implement initial database querying (e.g., local + Open Food Facts). (f8ea455)
 
 ### [ ] Task: Implement consolidated results display and data harmonization.
 - [ ] Sub-task: Write tests for results consolidation and data harmonization.
