@@ -6,7 +6,7 @@ This plan details the steps to enhance the barcode scanning functionality and in
 
 ### [x] Task: Research and select optimal mobile barcode scanning library/approach. (2948757)
 - [x] Sub-task: Write tests for scanner initialization and basic functionality. (498fbb7)
-- [ ] Sub-task: Implement scanner integration and basic barcode detection.
+- [x] Sub-task: Implement scanner integration and basic barcode detection. (ab00d9e)
 
 ### [ ] Task: Implement continuous scanning and visual/haptic feedback.
 - [ ] Sub-task: Write tests for continuous scanning behavior.
