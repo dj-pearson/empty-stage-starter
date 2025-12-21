@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Food } from "@/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,11 +35,13 @@ const categoryColors: Record<string, string> = {
 };
 
 export function FoodCard({ food, onEdit, onDelete, onQuantityChange, kidAllergens }: FoodCardProps) {
+  const [showZeroQuantityDialog, setShowZeroQuantityDialog] = useState(false);
+
   // Filter allergens to only show those that match family member allergens
-  const relevantAllergens = food.allergens?.filter(allergen => 
+  const relevantAllergens = food.allergens?.filter(allergen =>
     kidAllergens?.includes(allergen)
   ) || [];
-  
+
   const hasAllergen = relevantAllergens.length > 0;
 
   const handleIncrement = () => {
@@ -48,10 +51,27 @@ export function FoodCard({ food, onEdit, onDelete, onQuantityChange, kidAllergen
   };
 
   const handleDecrement = () => {
-    if (onQuantityChange) {
-      const newQuantity = Math.max(0, (food.quantity || 0) - 1);
-      onQuantityChange(food.id, newQuantity);
+    if (!onQuantityChange) return;
+
+    const currentQuantity = food.quantity || 0;
+    if (currentQuantity === 1) {
+      // Show confirmation dialog when going from 1 to 0
+      setShowZeroQuantityDialog(true);
+    } else if (currentQuantity > 1) {
+      onQuantityChange(food.id, currentQuantity - 1);
     }
+  };
+
+  const handleSetToZero = () => {
+    if (onQuantityChange) {
+      onQuantityChange(food.id, 0);
+    }
+    setShowZeroQuantityDialog(false);
+  };
+
+  const handleDeleteFromZero = () => {
+    onDelete(food.id);
+    setShowZeroQuantityDialog(false);
   };
 
   return (
@@ -168,6 +188,33 @@ export function FoodCard({ food, onEdit, onDelete, onQuantityChange, kidAllergen
           </AlertDialog>
         </div>
       </div>
+
+      {/* Zero Quantity Confirmation Dialog */}
+      <AlertDialog open={showZeroQuantityDialog} onOpenChange={setShowZeroQuantityDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Quantity reaching zero</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{food.name}</strong> quantity will be 0. Would you like to delete it from your pantry or keep it at quantity 0?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={handleSetToZero}
+            >
+              Keep at 0
+            </Button>
+            <AlertDialogAction
+              onClick={handleDeleteFromZero}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Food
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
