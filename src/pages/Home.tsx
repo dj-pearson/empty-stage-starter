@@ -6,6 +6,7 @@ import { Utensils, Calendar, ShoppingCart, Sparkles, Download, Upload, Trash2, U
 import { toast } from "sonner";
 import { useRef, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,20 +44,40 @@ export default function Home() {
 
   useEffect(() => {
     const fetchProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
+      try {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+        if (authError) {
+          logger.error("Error fetching user:", authError);
+          return;
+        }
+
+        if (!user) {
+          logger.warn("No authenticated user found");
+          return;
+        }
+
+        const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("full_name")
           .eq("id", user.id)
           .single();
-        
-        if (profile) {
+
+        if (profileError) {
+          logger.error("Error fetching profile:", profileError);
+          // Use default name if profile fetch fails
+          return;
+        }
+
+        if (profile?.full_name) {
           setParentName(profile.full_name);
         }
+      } catch (error) {
+        logger.error("Unexpected error fetching profile:", error);
+        // Silently fail - parentName defaults to "Parent"
       }
     };
-    
+
     fetchProfile();
   }, []);
 
