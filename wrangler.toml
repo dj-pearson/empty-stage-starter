@@ -17,6 +17,7 @@ compatibility_date = "2024-12-19"
 VITE_SUPABASE_URL = "https://api.tryeatpal.com"
 VITE_SUPABASE_ANON_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc2NTI1MzE2MCwiZXhwIjo0OTIwOTI2NzYwLCJyb2xlIjoiYW5vbiJ9.HBFEkJdBlHpZozkyUAcaV2IO-065599yClMPfsYt3Ug"
 VITE_FUNCTIONS_URL = "https://functions.tryeatpal.com"
+VITE_STRIPE_PUBLISHABLE_KEY = "pk_live_51SFmtlEQGPvinhrFu06bhMiTicheSKMvIwL5fUPTvoZBAyUQTSpFHWXVRxZwdmcLS82iBzA0qlgdNSww0tPmOI3y009iwWSlX2"
 
 # Environment variables for preview
 [env.preview]
