@@ -330,17 +330,24 @@ export function normalizeUrl(url: string): string {
 
     // Sort query parameters alphabetically
     const params = parseQueryString(parsed.search);
-    const sortedParams = Object.keys(params)
-      .sort()
-      .reduce((acc, key) => {
-        acc[key] = params[key];
-        return acc;
-      }, {} as QueryParams);
+    const sortedKeys = Object.keys(params).sort();
+    
+    if (sortedKeys.length > 0) {
+      const sortedParams = new URLSearchParams();
+      for (const key of sortedKeys) {
+        const value = params[key];
+        if (Array.isArray(value)) {
+          value.forEach(v => v !== null && v !== undefined && sortedParams.append(key, String(v)));
+        } else if (value !== null && value !== undefined) {
+          sortedParams.append(key, String(value));
+        }
+      }
+      parsed.search = sortedParams.toString();
+    } else {
+      parsed.search = '';
+    }
 
-    const queryString = buildQueryString(sortedParams);
-    parsed.search = queryString ? `?${queryString}` : '';
-
-    return parsed.href;
+    return parsed.toString();
   } catch {
     return url;
   }
@@ -409,8 +416,8 @@ export function getSubdomain(url: string): string | null {
  */
 export function isValidUrl(url: string): boolean {
   try {
-    new URL(url);
-    return true;
+    const newUrl = new URL(url);
+    return newUrl.protocol === 'http:' || newUrl.protocol === 'https:';
   } catch {
     return false;
   }
@@ -493,12 +500,16 @@ export function createDeepLink(scheme: string, path: string, params?: QueryParam
  */
 export function parseDeepLink(deepLink: string) {
   try {
-    const url = new URL(deepLink);
+    const match = deepLink.match(/^([^:]+):\/\/([^?#]+)(\?[^#]*)?(#.*)?$/);
+    if (!match) return null;
+
+    const [, scheme, path, search, hash] = match;
+
     return {
-      scheme: url.protocol.replace(':', ''),
-      path: url.pathname,
-      params: parseQueryString(url.search),
-      hash: url.hash,
+      scheme,
+      path: `/${path}`,
+      params: parseQueryString(search || ''),
+      hash: hash || '',
     };
   } catch {
     return null;

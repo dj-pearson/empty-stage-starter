@@ -36,26 +36,58 @@ global.IntersectionObserver = class IntersectionObserver {
   unobserve() {}
 } as any;
 
-// Mock localStorage
-const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-  length: 0,
-  key: vi.fn(),
+// Mock localStorage and sessionStorage with in-memory store
+const createStorageMock = () => {
+  let store: Record<string, string> = {};
+
+  return {
+    getItem: vi.fn((key: string) => store[key] || null),
+    setItem: vi.fn((key: string, value: string) => {
+      store[key] = value;
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete store[key];
+    }),
+    clear: vi.fn(() => {
+      store = {};
+    }),
+    length: vi.fn(() => Object.keys(store).length),
+    key: vi.fn((index: number) => Object.keys(store)[index] || null),
+  };
 };
 
-global.localStorage = localStorageMock as any;
+Object.defineProperty(global, 'localStorage', {
+  value: createStorageMock(),
+  writable: true,
+});
 
-// Mock sessionStorage
-const sessionStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-  length: 0,
-  key: vi.fn(),
-};
+Object.defineProperty(global, 'sessionStorage', {
+  value: createStorageMock(),
+  writable: true,
+});
 
-global.sessionStorage = sessionStorageMock as any;
+// Mock expo-camera
+vi.mock('expo-camera', () => ({
+  Camera: {
+    requestCameraPermissionsAsync: vi.fn(() => Promise.resolve({
+      status: 'granted',
+      expires: 'never',
+      granted: true,
+      canAskAgain: true,
+    })),
+    // Add other methods/properties used in tests if necessary
+  },
+}));
+
+// Mock react-native
+vi.mock('react-native', async (importActual) => {
+  const actual = await importActual<typeof import('react-native')>();
+  return {
+    ...actual,
+    // Add any specific mocks for components or APIs that cause issues
+    // For example, if Text or View components are used and cause issues in JSDOM:
+    // Text: ({ children }) => children,
+    // View: ({ children }) => children,
+  };
+});
+

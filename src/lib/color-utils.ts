@@ -30,6 +30,10 @@ export interface RGBA extends RGB {
  * ```
  */
 export function hexToRgb(hex: string): RGB | null {
+  // Add validation for hex characters
+  if (!/^#?[0-9a-fA-F]{3,6}$/.test(hex)) {
+    return null;
+  }
   // Remove # if present
   const cleanHex = hex.replace(/^#/, '');
 

@@ -83,6 +83,7 @@
     "@sentry/vite-plugin": "^4.4.0",
     "@supabase/supabase-js": "^2.74.0",
     "@tanstack/react-query": "^5.83.0",
+    "@testing-library/dom": "^10.4.1",
     "@tiptap/extension-bubble-menu": "^3.12.0",
     "@tiptap/extension-code-block-lowlight": "^3.12.0",
     "@tiptap/extension-floating-menu": "^3.12.0",

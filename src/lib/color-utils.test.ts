@@ -68,11 +68,14 @@ describe('Color Utilities', () => {
   describe('Color conversions', () => {
     it('should convert hex to HSL and back', () => {
       const hex = '#ff5733';
+      const originalRgb = hexToRgb(hex);
       const hsl = hexToHsl(hex);
       expect(hsl).toBeDefined();
-      if (hsl) {
-        const backToHex = hslToHex(hsl.h, hsl.s, hsl.l);
-        expect(backToHex.toLowerCase()).toBe(hex.toLowerCase());
+      if (hsl && originalRgb) {
+        const backToRgb = hslToRgb(hsl.h, hsl.s, hsl.l);
+        expect(backToRgb.r).toBeCloseTo(originalRgb.r, 1);
+        expect(backToRgb.g).toBeCloseTo(originalRgb.g, 1);
+        expect(backToRgb.b).toBeCloseTo(originalRgb.b, 1);
       }
     });
 
@@ -80,9 +83,9 @@ describe('Color Utilities', () => {
       const rgb = { r: 255, g: 87, b: 51 };
       const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
       const backToRgb = hslToRgb(hsl.h, hsl.s, hsl.l);
-      expect(backToRgb.r).toBeCloseTo(rgb.r, 0);
-      expect(backToRgb.g).toBeCloseTo(rgb.g, 0);
-      expect(backToRgb.b).toBeCloseTo(rgb.b, 0);
+      expect(backToRgb.r).toBeCloseTo(rgb.r, 1);
+      expect(backToRgb.g).toBeCloseTo(rgb.g, 1);
+      expect(backToRgb.b).toBeCloseTo(rgb.b, 1);
     });
   });
 

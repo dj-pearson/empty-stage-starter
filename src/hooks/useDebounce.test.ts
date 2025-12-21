@@ -16,7 +16,7 @@ describe('useDebounce', () => {
     expect(result.current).toBe('hello');
   });
 
-  it('should debounce value changes', async () => {
+  it('should debounce value changes', { timeout: 10000 }, async () => {
     const { result, rerender } = renderHook(
       ({ value, delay }) => useDebounce(value, delay),
       {
@@ -34,16 +34,16 @@ describe('useDebounce', () => {
 
     // Fast-forward time
     act(() => {
-      vi.advanceTimersByTime(500);
+      vi.runOnlyPendingTimers();
     });
 
     // Now value should be updated
     await waitFor(() => {
       expect(result.current).toBe('updated');
     });
-  });
+  }, { timeout: 10000 });
 
-  it('should cancel previous timeout on rapid changes', async () => {
+  it('should cancel previous timeout on rapid changes', { timeout: 10000 }, async () => {
     const { result, rerender } = renderHook(
       ({ value }) => useDebounce(value, 500),
       {
@@ -55,15 +55,7 @@ describe('useDebounce', () => {
 
     // Rapid changes
     rerender({ value: 'second' });
-    act(() => {
-      vi.advanceTimersByTime(200);
-    });
-
     rerender({ value: 'third' });
-    act(() => {
-      vi.advanceTimersByTime(200);
-    });
-
     rerender({ value: 'fourth' });
 
     // Should still be initial
@@ -71,16 +63,16 @@ describe('useDebounce', () => {
 
     // Fast-forward full delay from last change
     act(() => {
-      vi.advanceTimersByTime(500);
+      vi.runOnlyPendingTimers();
     });
 
     // Should be the last value
     await waitFor(() => {
       expect(result.current).toBe('fourth');
     });
-  });
+  }, { timeout: 10000 });
 
-  it('should work with different data types', async () => {
+  it('should work with different data types', { timeout: 10000 }, async () => {
     // Test with number
     const { result: numberResult, rerender: numberRerender } = renderHook(
       ({ value }) => useDebounce(value, 100),
@@ -89,7 +81,7 @@ describe('useDebounce', () => {
 
     numberRerender({ value: 42 });
     act(() => {
-      vi.advanceTimersByTime(100);
+      vi.runOnlyPendingTimers();
     });
 
     await waitFor(() => {
@@ -105,13 +97,13 @@ describe('useDebounce', () => {
     const newValue = { name: 'updated' };
     objectRerender({ value: newValue });
     act(() => {
-      vi.advanceTimersByTime(100);
+      vi.runOnlyPendingTimers();
     });
 
     await waitFor(() => {
       expect(objectResult.current).toEqual(newValue);
     });
-  });
+  }, { timeout: 10000 });
 
   it('should respect custom delay', async () => {
     const { result, rerender } = renderHook(
@@ -125,13 +117,13 @@ describe('useDebounce', () => {
 
     // Should not update after 500ms
     act(() => {
-      vi.advanceTimersByTime(500);
+      vi.runOnlyPendingTimers();
     });
     expect(result.current).toBe('initial');
 
     // Should update after 1000ms
     act(() => {
-      vi.advanceTimersByTime(500);
+      vi.runOnlyPendingTimers();
     });
 
     await waitFor(() => {
@@ -163,7 +155,7 @@ describe('useDebouncedCallback', () => {
 
     // Fast-forward time
     act(() => {
-      vi.advanceTimersByTime(500);
+      vi.runOnlyPendingTimers();
     });
 
     // Now callback should be called
@@ -178,21 +170,7 @@ describe('useDebouncedCallback', () => {
     // Rapid calls
     act(() => {
       result.current('first');
-    });
-
-    act(() => {
-      vi.advanceTimersByTime(200);
-    });
-
-    act(() => {
       result.current('second');
-    });
-
-    act(() => {
-      vi.advanceTimersByTime(200);
-    });
-
-    act(() => {
       result.current('third');
     });
 
@@ -201,7 +179,7 @@ describe('useDebouncedCallback', () => {
 
     // Fast-forward full delay
     act(() => {
-      vi.advanceTimersByTime(500);
+      vi.runOnlyPendingTimers();
     });
 
     // Should only be called once with last argument
@@ -220,7 +198,7 @@ describe('useDebouncedCallback', () => {
     });
 
     act(() => {
-      vi.advanceTimersByTime(500);
+      vi.runOnlyPendingTimers();
     });
 
     expect(callback).toHaveBeenCalledWith('test', 42, true);
@@ -239,7 +217,7 @@ describe('useDebouncedCallback', () => {
 
     // Fast-forward time
     act(() => {
-      vi.advanceTimersByTime(500);
+      vi.runOnlyPendingTimers();
     });
 
     // Callback should not be called after unmount

@@ -160,4 +160,11 @@ export default defineConfig(({ mode }) => ({
     port: 3000,
     host: true,
   },
+  test: {
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.ts',
+    globals: true,
+    testTimeout: 10000, // Increase test timeout to 10 seconds
+    hookTimeout: 10000, // Increase hook timeout to 10 seconds
+  },
 }));

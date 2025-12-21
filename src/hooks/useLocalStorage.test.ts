@@ -15,7 +15,7 @@ describe('useLocalStorage', () => {
   });
 
   it('should load value from localStorage if it exists', () => {
-    localStorage.setItem('testKey', JSON.stringify('storedValue'));
+    localStorage.getItem.mockReturnValueOnce(JSON.stringify('storedValue'));
 
     const { result } = renderHook(() => useLocalStorage('testKey', 'initialValue'));
 
@@ -105,7 +105,7 @@ describe('useLocalStorage', () => {
     const storageEvent = new StorageEvent('storage', {
       key: 'sharedKey',
       newValue: JSON.stringify('syncedValue'),
-      storageArea: localStorage,
+      storageArea: window.localStorage,
     });
 
     act(() => {
@@ -227,7 +227,7 @@ describe('useLocalStorageValue', () => {
     const storageEvent = new StorageEvent('storage', {
       key: 'testKey',
       newValue: JSON.stringify('value'),
-      storageArea: localStorage,
+      storageArea: window.localStorage,
     });
 
     act(() => {
@@ -240,7 +240,7 @@ describe('useLocalStorageValue', () => {
     const removeEvent = new StorageEvent('storage', {
       key: 'testKey',
       newValue: null,
-      storageArea: localStorage,
+      storageArea: window.localStorage,
     });
 
     act(() => {
