@@ -135,6 +135,16 @@ export const KidSchema = z.object({
   health_goals: z.array(z.string().max(100)).max(10).optional(),
   disliked_foods: z.array(z.string().max(100)).max(50).optional(),
   always_eats_foods: z.array(z.string().max(100)).max(50).optional(),
+  // Health metrics with reasonable ranges for children (ages 0-18)
+  height_cm: z.number()
+    .min(40, 'Height must be at least 40cm (newborn)')
+    .max(220, 'Height must not exceed 220cm')
+    .optional(),
+  weight_kg: z.number()
+    .min(1, 'Weight must be at least 1kg')
+    .max(200, 'Weight must not exceed 200kg')
+    .optional(),
+  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional(),
 });
 
 export const KidUpdateSchema = KidSchema.partial();

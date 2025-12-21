@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { logger } from "@/lib/logger";
+import { KidUpdateSchema, validateData } from "@/lib/validations";
 
 interface ChildIntakeQuestionnaireProps {
   open: boolean;
@@ -162,29 +163,44 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
   const handleSubmit = async () => {
     setSaving(true);
     try {
+      // Prepare data for validation
+      const updateData = {
+        gender: formData.gender || null,
+        height_cm: formData.height_cm,
+        weight_kg: formData.weight_kg,
+        allergens: formData.allergens,
+        dietary_restrictions: formData.dietary_restrictions,
+        health_goals: formData.health_goals,
+        favorite_foods: formData.favorite_foods,
+        always_eats_foods: formData.always_eats_foods,
+        disliked_foods: formData.disliked_foods,
+        texture_preferences: formData.texture_preferences,
+        texture_dislikes: formData.texture_dislikes,
+        pickiness_level: formData.pickiness_level || null,
+      };
+
+      // Validate health metrics
+      const validation = validateData(KidUpdateSchema, updateData);
+      if (!validation.success) {
+        const errorMessage = validation.errors.join(', ');
+        toast.error(errorMessage);
+        logger.warn("Validation failed:", validation.errors);
+        setSaving(false);
+        return;
+      }
+
       const { error } = await supabase
         .from('kids')
         .update({
-          gender: formData.gender || null,
-          height_cm: formData.height_cm,
-          weight_kg: formData.weight_kg,
-          allergens: formData.allergens,
+          ...updateData,
           allergen_severity: formData.allergen_severity,
           cross_contamination_sensitive: formData.cross_contamination_sensitive,
-          dietary_restrictions: formData.dietary_restrictions,
-          health_goals: formData.health_goals,
           nutrition_concerns: formData.nutrition_concerns,
           eating_behavior: formData.eating_behavior || null,
           new_food_willingness: formData.new_food_willingness || null,
           behavioral_notes: formData.behavioral_notes || null,
           texture_sensitivity_level: formData.texture_sensitivity_level || null,
-          texture_dislikes: formData.texture_dislikes,
-          texture_preferences: formData.texture_preferences,
           preferred_preparations: formData.preferred_preparations,
-          favorite_foods: formData.favorite_foods,
-          always_eats_foods: formData.always_eats_foods,
-          disliked_foods: formData.disliked_foods,
-          pickiness_level: formData.pickiness_level || null,
           profile_completed: true,
           profile_last_reviewed: new Date().toISOString(),
         })
