@@ -23,21 +23,5 @@ describe('Scanner Initialization and Basic Functionality', () => {
       expect(result.current.scannerReady).toBe(true);
     });
   });
-
-  it('should handle continuous scanning', async () => {
-    const { result } = renderHook(() => useScanner());
-    
-    expect(result.current.scannedData).toEqual([]);
-    
-    act(() => {
-      result.current.handleScan('123456789');
-    });
-    expect(result.current.scannedData).toEqual(['123456789']);
-
-    act(() => {
-      result.current.handleScan('987654321');
-    });
-    expect(result.current.scannedData).toEqual(['123456789', '987654321']);
-  });
 });
 

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 export function useScanner() {
   const [scannerReady, setScannerReady] = useState(false);
   const [scannedData, setScannedData] = useState<string[]>([]);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   // Placeholder for scanner initialization logic
   useEffect(() => {
@@ -17,7 +18,8 @@ export function useScanner() {
 
   const handleScan = (data: string) => {
     setScannedData((prev) => [...prev, data]);
+    setFeedback('Scan successful!');
   };
 
-  return { scannerReady, scannedData, handleScan };
+  return { scannerReady, scannedData, handleScan, feedback };
 }
