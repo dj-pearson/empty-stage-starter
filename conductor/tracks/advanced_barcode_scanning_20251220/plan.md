@@ -16,8 +16,8 @@ This plan details the steps to enhance the barcode scanning functionality and in
 
 ## Phase 2: Multi-Database Integration Logic
 
-### [ ] Task: Design and implement prioritized database querying.
-- [ ] Sub-task: Write tests for database prioritization logic.
+### [~] Task: Design and implement prioritized database querying.
+- [x] Sub-task: Write tests for database prioritization logic. (d6094e2)
 - [ ] Sub-task: Implement initial database querying (e.g., local + Open Food Facts).
 
 ### [ ] Task: Implement consolidated results display and data harmonization.
