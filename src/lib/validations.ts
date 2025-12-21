@@ -313,6 +313,23 @@ export const RateLimitConfigSchema = z.object({
 });
 
 // ============================================================================
+// DATA IMPORT/EXPORT SCHEMAS
+// ============================================================================
+
+/**
+ * Schema for validating imported backup JSON files
+ * Used when importing data from exported JSON backups
+ */
+export const BackupDataSchema = z.object({
+  foods: z.array(z.any()).max(1000, 'Too many foods (max 1000)').optional(),
+  kids: z.array(z.any()).max(50, 'Too many kids (max 50)').optional(),
+  recipes: z.array(z.any()).max(500, 'Too many recipes (max 500)').optional(),
+  planEntries: z.array(z.any()).max(5000, 'Too many plan entries (max 5000)').optional(),
+  groceryItems: z.array(z.any()).max(500, 'Too many grocery items (max 500)').optional(),
+  activeKidId: z.string().uuid().nullable().optional(),
+}).strict(); // Reject unknown properties
+
+// ============================================================================
 // VALIDATION HELPERS
 // ============================================================================
 
