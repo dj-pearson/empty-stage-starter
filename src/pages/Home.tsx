@@ -6,6 +6,8 @@ import { Utensils, Calendar, ShoppingCart, Sparkles, Download, Upload, Trash2, U
 import { toast } from "sonner";
 import { useRef, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
+import { BackupDataSchema } from "@/lib/validations";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,28 +41,49 @@ export default function Home() {
   const [quickLogOpen, setQuickLogOpen] = useState(false);
   const [selectedMeal, setSelectedMeal] = useState<{ slot: string; entryId: string } | null>(null);
 
+  const activeKid = kids.find(k => k.id === activeKidId);
+
   useEffect(() => {
     const fetchProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
+      try {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+        if (authError) {
+          logger.error("Error fetching user:", authError);
+          return;
+        }
+
+        if (!user) {
+          logger.warn("No authenticated user found");
+          return;
+        }
+
+        const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("full_name")
           .eq("id", user.id)
           .single();
-        
-        if (profile) {
+
+        if (profileError) {
+          logger.error("Error fetching profile:", profileError);
+          // Use default name if profile fetch fails
+          return;
+        }
+
+        if (profile?.full_name) {
           setParentName(profile.full_name);
         }
+      } catch (error) {
+        logger.error("Unexpected error fetching profile:", error);
+        // Silently fail - parentName defaults to "Parent"
       }
     };
-    
+
     fetchProfile();
   }, []);
 
   const safeFoods = foods.filter(f => f.is_safe).length;
   const tryBites = foods.filter(f => f.is_try_bite).length;
-  const activeKid = kids.find(k => k.id === activeKidId);
   const kidPlanEntries = planEntries.filter(p => p.kid_id === activeKidId);
 
   // Determine if user is new (has little to no data)
@@ -84,16 +107,54 @@ export default function Home() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Validate file type
+    if (!file.name.endsWith('.json')) {
+      toast.error("Please upload a JSON file");
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast.error("File too large. Maximum size is 10MB");
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const jsonData = e.target?.result as string;
+
+        // Parse JSON
+        const parsed = JSON.parse(jsonData);
+
+        // Validate schema
+        const validation = BackupDataSchema.safeParse(parsed);
+        if (!validation.success) {
+          const errorMessage = validation.error.errors[0]?.message || 'Invalid backup file structure';
+          toast.error(`Validation failed: ${errorMessage}`);
+          logger.warn("Import validation failed:", validation.error.errors);
+          return;
+        }
+
+        // Import validated data
         importData(jsonData);
         toast.success("Data imported successfully!");
       } catch (error) {
-        toast.error("Invalid file format. Please upload a valid backup file.");
+        logger.error("Import error:", error);
+        if (error instanceof SyntaxError) {
+          toast.error("Invalid JSON format. Please upload a valid backup file.");
+        } else {
+          toast.error("Failed to import data. Please check the file format.");
+        }
       }
     };
+
+    reader.onerror = () => {
+      toast.error("Failed to read file");
+      logger.error("FileReader error");
+    };
+
     reader.readAsText(file);
   };
 
@@ -139,7 +200,7 @@ export default function Home() {
 
         {/* Motivational Message */}
         <AnimatedPanel>
-          <MotivationalMessage type="greeting" className="mb-6" />
+          <MotivationalMessage type="greeting" className="mb-6" childName={activeKid?.name} />
         </AnimatedPanel>
 
         {/* Getting Started Section - Shows for new users */}

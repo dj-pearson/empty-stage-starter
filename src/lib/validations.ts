@@ -135,6 +135,16 @@ export const KidSchema = z.object({
   health_goals: z.array(z.string().max(100)).max(10).optional(),
   disliked_foods: z.array(z.string().max(100)).max(50).optional(),
   always_eats_foods: z.array(z.string().max(100)).max(50).optional(),
+  // Health metrics with reasonable ranges for children (ages 0-18)
+  height_cm: z.number()
+    .min(40, 'Height must be at least 40cm (newborn)')
+    .max(220, 'Height must not exceed 220cm')
+    .optional(),
+  weight_kg: z.number()
+    .min(1, 'Weight must be at least 1kg')
+    .max(200, 'Weight must not exceed 200kg')
+    .optional(),
+  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional(),
 });
 
 export const KidUpdateSchema = KidSchema.partial();
@@ -301,6 +311,23 @@ export const RateLimitConfigSchema = z.object({
   description: z.string().max(500).optional(),
   is_active: z.boolean().optional(),
 });
+
+// ============================================================================
+// DATA IMPORT/EXPORT SCHEMAS
+// ============================================================================
+
+/**
+ * Schema for validating imported backup JSON files
+ * Used when importing data from exported JSON backups
+ */
+export const BackupDataSchema = z.object({
+  foods: z.array(z.any()).max(1000, 'Too many foods (max 1000)').optional(),
+  kids: z.array(z.any()).max(50, 'Too many kids (max 50)').optional(),
+  recipes: z.array(z.any()).max(500, 'Too many recipes (max 500)').optional(),
+  planEntries: z.array(z.any()).max(5000, 'Too many plan entries (max 5000)').optional(),
+  groceryItems: z.array(z.any()).max(500, 'Too many grocery items (max 500)').optional(),
+  activeKidId: z.string().uuid().nullable().optional(),
+}).strict(); // Reject unknown properties
 
 // ============================================================================
 // VALIDATION HELPERS

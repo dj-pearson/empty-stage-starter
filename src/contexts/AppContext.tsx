@@ -360,6 +360,100 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [userId, householdId]);
 
+  // Real-time subscription for plan_entries
+  useEffect(() => {
+    if (!userId || !householdId) return;
+
+    // Performance: Debounce real-time updates to prevent render thrashing
+    const debouncedUpdate = debounce((payload: any) => {
+      logger.debug('Plan entry changed:', payload);
+
+      if (payload.eventType === 'INSERT') {
+        setPlanEntriesState(prev => {
+          // Avoid duplicates
+          const exists = prev.some(entry => entry.id === payload.new.id);
+          if (exists) return prev;
+          return [...prev, payload.new as PlanEntry];
+        });
+      } else if (payload.eventType === 'UPDATE') {
+        setPlanEntriesState(prev =>
+          prev.map(entry =>
+            entry.id === (payload.new as PlanEntry).id ? (payload.new as PlanEntry) : entry
+          )
+        );
+      } else if (payload.eventType === 'DELETE') {
+        setPlanEntriesState(prev =>
+          prev.filter(entry => entry.id !== (payload.old as PlanEntry).id)
+        );
+      }
+    }, 300); // 300ms debounce prevents excessive updates
+
+    const channel = supabase
+      .channel('plan_entries_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'plan_entries',
+          filter: `household_id=eq.${householdId}`
+        },
+        debouncedUpdate
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, householdId]);
+
+  // Real-time subscription for kids
+  useEffect(() => {
+    if (!userId || !householdId) return;
+
+    // Performance: Debounce real-time updates to prevent render thrashing
+    const debouncedUpdate = debounce((payload: any) => {
+      logger.debug('Kid profile changed:', payload);
+
+      if (payload.eventType === 'INSERT') {
+        setKidsState(prev => {
+          // Avoid duplicates
+          const exists = prev.some(kid => kid.id === payload.new.id);
+          if (exists) return prev;
+          return [...prev, payload.new as Kid];
+        });
+      } else if (payload.eventType === 'UPDATE') {
+        setKidsState(prev =>
+          prev.map(kid =>
+            kid.id === (payload.new as Kid).id ? (payload.new as Kid) : kid
+          )
+        );
+      } else if (payload.eventType === 'DELETE') {
+        setKidsState(prev =>
+          prev.filter(kid => kid.id !== (payload.old as Kid).id)
+        );
+      }
+    }, 300); // 300ms debounce prevents excessive updates
+
+    const channel = supabase
+      .channel('kids_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'kids',
+          filter: `household_id=eq.${householdId}`
+        },
+        debouncedUpdate
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, householdId]);
+
   const addFood = (food: Omit<Food, "id">) => {
     if (userId && householdId) {
       supabase

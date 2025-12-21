@@ -11,7 +11,21 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
   },
   optimizeDeps: {
-    exclude: ['react-native', 'expo', 'expo-router'],
+    exclude: [
+      'react-native',
+      'expo',
+      'expo-router',
+      'expo-camera',
+      'expo-image-picker',
+      'expo-secure-store',
+      'expo-file-system',
+      'expo-linking',
+      'expo-constants',
+      'expo-splash-screen',
+      'expo-status-bar',
+      'react-native-safe-area-context',
+      'react-native-screens',
+    ],
   },
   plugins: [
     react(),
