@@ -5,7 +5,7 @@ This plan details the steps to enhance the barcode scanning functionality and in
 ## Phase 1: Barcode Scanning Module Enhancement
 
 ### [x] Task: Research and select optimal mobile barcode scanning library/approach. (2948757)
-- [ ] Sub-task: Write tests for scanner initialization and basic functionality.
+- [x] Sub-task: Write tests for scanner initialization and basic functionality. (498fbb7)
 - [ ] Sub-task: Implement scanner integration and basic barcode detection.
 
 ### [ ] Task: Implement continuous scanning and visual/haptic feedback.
