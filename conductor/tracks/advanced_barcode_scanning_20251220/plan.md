@@ -12,7 +12,7 @@ This plan details the steps to enhance the barcode scanning functionality and in
 - [x] Sub-task: Write tests for continuous scanning behavior. (fb00fe5)
 - [x] Sub-task: Implement continuous scanning and feedback mechanisms. (56b2466)
 
-- [ ] Task: Conductor - User Manual Verification 'Barcode Scanning Module Enhancement' (Protocol in workflow.md)
+- [~] Task: Conductor - User Manual Verification 'Barcode Scanning Module Enhancement' (Protocol in workflow.md)
 
 ## Phase 2: Multi-Database Integration Logic
 
