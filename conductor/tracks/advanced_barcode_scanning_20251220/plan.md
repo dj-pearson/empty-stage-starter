@@ -14,7 +14,7 @@ This plan details the steps to enhance the barcode scanning functionality and in
 
 - [x] Task: Conductor - User Manual Verification 'Barcode Scanning Module Enhancement' (Protocol in workflow.md) (d198616)
 
-## Phase 2: Multi-Database Integration Logic
+## Phase 2: Multi-Database Integration Logic [checkpoint: 7da822a]
 
 ### [x] Task: Design and implement prioritized database querying. (7301a96)
 - [x] Sub-task: Write tests for database prioritization logic. (d6094e2)
@@ -28,7 +28,7 @@ This plan details the steps to enhance the barcode scanning functionality and in
 - [x] Sub-task: Write integration tests for USDA and FoodRepo APIs. (e3510b0)
 - [ ] Sub-task: Implement API calls and data mapping for new databases.
 
-- [~] Task: Conductor - User Manual Verification 'Multi-Database Integration Logic' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Multi-Database Integration Logic' (Protocol in workflow.md) (7da822a)
 
 ## Phase 3: User Interface and Workflow Integration
 
