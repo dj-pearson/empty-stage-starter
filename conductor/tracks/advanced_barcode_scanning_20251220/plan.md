@@ -28,7 +28,7 @@ This plan details the steps to enhance the barcode scanning functionality and in
 - [x] Sub-task: Write integration tests for USDA and FoodRepo APIs. (e3510b0)
 - [ ] Sub-task: Implement API calls and data mapping for new databases.
 
-- [ ] Task: Conductor - User Manual Verification 'Multi-Database Integration Logic' (Protocol in workflow.md)
+- [~] Task: Conductor - User Manual Verification 'Multi-Database Integration Logic' (Protocol in workflow.md)
 
 ## Phase 3: User Interface and Workflow Integration
 
