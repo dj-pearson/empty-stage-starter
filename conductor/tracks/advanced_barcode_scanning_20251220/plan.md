@@ -22,7 +22,7 @@ This plan details the steps to enhance the barcode scanning functionality and in
 
 ### [~] Task: Implement consolidated results display and data harmonization.
 - [x] Sub-task: Write tests for results consolidation and data harmonization. (01e9132)
-- [ ] Sub-task: Implement UI for displaying results and harmonizing data.
+- [x] Sub-task: Implement UI for displaying results and harmonizing data. (612068f)
 
 ### [ ] Task: Integrate USDA FoodData Central and FoodRepo APIs.
 - [ ] Sub-task: Write integration tests for USDA and FoodRepo APIs.
