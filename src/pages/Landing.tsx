@@ -43,6 +43,9 @@ const FeatureCard3D = lazy(() => import("@/components/Card3DTilt").then(m => ({ 
 const ParallaxBackground = lazy(() => import("@/components/ParallaxBackground").then(m => ({ default: m.ParallaxBackground })));
 const ExitIntentPopup = lazy(() => import("@/components/ExitIntentPopup").then(m => ({ default: m.ExitIntentPopup })));
 
+// Import branded skeleton for hero loading state
+import { HeroSkeleton } from "@/components/HeroSkeleton";
+
 // Dynamically import GSAP only when needed (deferred loading)
 let gsapModule: typeof import("gsap") | null = null;
 let ScrollTriggerModule: typeof import("gsap/ScrollTrigger").ScrollTrigger | null = null;
@@ -445,7 +448,7 @@ const Landing = () => {
           <Suspense fallback={<div className="absolute inset-0" />}>
             <ParallaxBackground />
           </Suspense>
-          <Suspense fallback={<div className="min-h-[85vh] flex items-center justify-center"><div className="animate-pulse text-2xl">Loading...</div></div>}>
+          <Suspense fallback={<HeroSkeleton />}>
             <EnhancedHero />
           </Suspense>
         </div>

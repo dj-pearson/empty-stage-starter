@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, CheckCircle, Sparkles, Calendar, ShoppingCart, TrendingUp } from "lucide-react";
+import { Eye, EyeOff, CheckCircle, Sparkles, Calendar, ShoppingCart, TrendingUp, XCircle, AlertCircle } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
 import { Link } from "react-router-dom";
@@ -22,6 +22,43 @@ import { OnboardingDialog } from "@/components/OnboardingDialog";
 import { PasswordResetDialog } from "@/components/PasswordResetDialog";
 import { PasswordSchema, EmailSchema } from "@/lib/validations";
 import { Footer } from "@/components/Footer";
+import { cn } from "@/lib/utils";
+
+// Password requirement checks for real-time validation feedback
+interface PasswordRequirements {
+  minLength: boolean;
+  hasUppercase: boolean;
+  hasLowercase: boolean;
+  hasNumber: boolean;
+  hasSpecial: boolean;
+}
+
+function checkPasswordRequirements(password: string): PasswordRequirements {
+  return {
+    minLength: password.length >= 12,
+    hasUppercase: /[A-Z]/.test(password),
+    hasLowercase: /[a-z]/.test(password),
+    hasNumber: /[0-9]/.test(password),
+    hasSpecial: /[^A-Za-z0-9]/.test(password),
+  };
+}
+
+// Requirement indicator component for password validation
+function RequirementIndicator({ met, label }: { met: boolean; label: string }) {
+  return (
+    <div className={cn(
+      "flex items-center gap-1.5 text-xs transition-colors",
+      met ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
+    )}>
+      {met ? (
+        <CheckCircle className="h-3 w-3" />
+      ) : (
+        <div className="h-3 w-3 rounded-full border border-current" />
+      )}
+      <span>{label}</span>
+    </div>
+  );
+}
 
 const Auth = () => {
   const [email, setEmail] = useState("");
@@ -31,9 +68,29 @@ const Auth = () => {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+
+  // Real-time email validation
+  const emailValidation = useMemo(() => {
+    if (!email || !emailTouched) return { isValid: null, error: null };
+    const result = EmailSchema.safeParse(email);
+    return {
+      isValid: result.success,
+      error: result.success ? null : result.error.errors[0].message,
+    };
+  }, [email, emailTouched]);
+
+  // Real-time password requirements check
+  const passwordRequirements = useMemo(() => checkPasswordRequirements(password), [password]);
+
+  // Check if all password requirements are met
+  const isPasswordValid = useMemo(() => {
+    return Object.values(passwordRequirements).every(Boolean);
+  }, [passwordRequirements]);
 
   // Get the redirect URL from query params (where user was trying to go)
   const redirectTo = searchParams.get("redirect") || "/dashboard";
@@ -346,15 +403,39 @@ const Auth = () => {
                   <form onSubmit={handleSignUp} className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="signup-email">Email</Label>
-                      <Input
-                        id="signup-email"
-                        type="email"
-                        placeholder="you@example.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                        className="h-11"
-                      />
+                      <div className="relative">
+                        <Input
+                          id="signup-email"
+                          type="email"
+                          placeholder="you@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          onBlur={() => setEmailTouched(true)}
+                          required
+                          aria-invalid={emailValidation.isValid === false}
+                          aria-describedby={emailValidation.error ? "email-error" : undefined}
+                          className={cn(
+                            "h-11 pr-10 transition-colors",
+                            emailValidation.isValid === true && "border-green-500 focus-visible:ring-green-500",
+                            emailValidation.isValid === false && "border-red-500 focus-visible:ring-red-500"
+                          )}
+                        />
+                        {emailTouched && email && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            {emailValidation.isValid ? (
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-red-500" />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {emailValidation.error && (
+                        <p id="email-error" className="text-xs text-red-500 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          {emailValidation.error}
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="signup-password">Password</Label>
@@ -363,10 +444,19 @@ const Auth = () => {
                           id="signup-password"
                           type={showPassword ? "text" : "password"}
                           value={password}
-                          onChange={(e) => setPassword(e.target.value)}
+                          onChange={(e) => {
+                            setPassword(e.target.value);
+                            setPasswordTouched(true);
+                          }}
                           required
                           minLength={12}
-                          className="h-11 pr-10"
+                          aria-invalid={passwordTouched && !isPasswordValid}
+                          aria-describedby="password-requirements"
+                          className={cn(
+                            "h-11 pr-10 transition-colors",
+                            passwordTouched && isPasswordValid && "border-green-500 focus-visible:ring-green-500",
+                            passwordTouched && password && !isPasswordValid && "border-amber-500 focus-visible:ring-amber-500"
+                          )}
                         />
                         <Button
                           type="button"
@@ -385,14 +475,20 @@ const Auth = () => {
                           </span>
                         </Button>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Must be 12+ characters with uppercase, lowercase, number, and special character
-                      </p>
+                      {/* Real-time password requirements */}
+                      <div id="password-requirements" className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
+                        <RequirementIndicator met={passwordRequirements.minLength} label="12+ characters" />
+                        <RequirementIndicator met={passwordRequirements.hasUppercase} label="Uppercase letter" />
+                        <RequirementIndicator met={passwordRequirements.hasLowercase} label="Lowercase letter" />
+                        <RequirementIndicator met={passwordRequirements.hasNumber} label="Number" />
+                        <RequirementIndicator met={passwordRequirements.hasSpecial} label="Special character" />
+                      </div>
                     </div>
                     <LoadingButton
                       type="submit"
                       className="w-full h-11"
                       isLoading={loading}
+                      disabled={!isPasswordValid || emailValidation.isValid === false}
                     >
                       Sign Up
                     </LoadingButton>
