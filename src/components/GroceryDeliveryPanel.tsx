@@ -1,4 +1,3 @@
-// @ts-nocheck - Database tables require migrations to be approved
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,7 +29,7 @@ import {
   Package,
   AlertCircle,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -94,7 +93,6 @@ export function GroceryDeliveryPanel({ householdId, className }: GroceryDelivery
       setIsLoading(true);
 
       // Load providers
-      // @ts-ignore - delivery_providers table exists but not in generated types yet
       const { data: providersData, error: providersError } = await supabase
         .from('delivery_providers')
         .select('*')
@@ -103,11 +101,9 @@ export function GroceryDeliveryPanel({ householdId, className }: GroceryDelivery
 
       if (providersError) throw providersError;
 
-      // @ts-ignore - type mismatch will resolve after types regenerate
       setProviders(providersData || []);
 
       // Load recent orders
-      // @ts-ignore - grocery_delivery_orders table exists but not in generated types yet
       const { data: ordersData, error: ordersError } = await supabase
         .from('grocery_delivery_orders')
         .select(`
@@ -152,7 +148,6 @@ export function GroceryDeliveryPanel({ householdId, className }: GroceryDelivery
       setIsCreating(true);
 
       // Get grocery list items
-      // @ts-ignore - grocery_list columns exist but not in generated types yet
       const { data: groceryItems } = await supabase
         .from('grocery_list')
         .select(`

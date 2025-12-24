@@ -1,4 +1,3 @@
-// @ts-nocheck - Database tables require migrations to be approved
 import { useState, useEffect } from "react";
 import {
   Dialog,
@@ -28,7 +27,7 @@ import {
   Loader2
 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
 
 interface NotificationPreferences {
   id?: string;
@@ -108,8 +107,6 @@ export function NotificationPreferencesDialog({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // @ts-ignore - notification_preferences table exists but not in generated types yet
-      // @ts-ignore - notification_preferences table exists but types not yet regenerated
       const { data, error } = await supabase
         .from('notification_preferences')
         .select('*')
@@ -121,7 +118,6 @@ export function NotificationPreferencesDialog({
       }
 
       if (data) {
-        // @ts-ignore - type mismatch will resolve after types regenerate
         setPrefs(data);
       }
     } catch (error) {
@@ -141,7 +137,6 @@ export function NotificationPreferencesDialog({
         return;
       }
 
-      // @ts-ignore - household_id column exists but types not yet regenerated
       const { data: profile } = await supabase
         .from('profiles')
         .select('household_id')
@@ -153,7 +148,6 @@ export function NotificationPreferencesDialog({
         return;
       }
 
-      // @ts-ignore - notification_preferences table exists but types not yet regenerated
       const { error } = await supabase
         .from('notification_preferences')
         .upsert({
