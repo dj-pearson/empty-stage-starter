@@ -69,17 +69,39 @@ try {
   console.log('[EatPal] React root rendered successfully');
 } catch (error) {
   console.error('[EatPal] Failed to render app:', error);
-  // Show a basic error message
-  rootElement.innerHTML = `
-    <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; font-family: system-ui, -apple-system, sans-serif;">
-      <div style="max-width: 500px; text-align: center;">
-        <h1 style="color: #dc2626; margin-bottom: 16px;">Unable to Load Application</h1>
-        <p style="color: #6b7280; margin-bottom: 24px;">We encountered an error while starting the app. Please try refreshing the page.</p>
-        <button onclick="window.location.reload()" style="background: #3b82f6; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;">
-          Refresh Page
-        </button>
-        ${import.meta.env.MODE === 'development' ? `<pre style="margin-top: 24px; padding: 12px; background: #f3f4f6; border-radius: 6px; text-align: left; overflow: auto; font-size: 12px;">${error}</pre>` : ''}
-      </div>
-    </div>
-  `;
+  // Show a basic error message - use safe DOM methods to prevent XSS
+  const container = document.createElement('div');
+  container.style.cssText = 'display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; font-family: system-ui, -apple-system, sans-serif;';
+
+  const content = document.createElement('div');
+  content.style.cssText = 'max-width: 500px; text-align: center;';
+
+  const heading = document.createElement('h1');
+  heading.style.cssText = 'color: #dc2626; margin-bottom: 16px;';
+  heading.textContent = 'Unable to Load Application';
+
+  const message = document.createElement('p');
+  message.style.cssText = 'color: #6b7280; margin-bottom: 24px;';
+  message.textContent = 'We encountered an error while starting the app. Please try refreshing the page.';
+
+  const button = document.createElement('button');
+  button.style.cssText = 'background: #3b82f6; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;';
+  button.textContent = 'Refresh Page';
+  button.onclick = () => window.location.reload();
+
+  content.appendChild(heading);
+  content.appendChild(message);
+  content.appendChild(button);
+
+  // In development mode, show error details safely using textContent
+  if (import.meta.env.MODE === 'development') {
+    const errorPre = document.createElement('pre');
+    errorPre.style.cssText = 'margin-top: 24px; padding: 12px; background: #f3f4f6; border-radius: 6px; text-align: left; overflow: auto; font-size: 12px;';
+    errorPre.textContent = error instanceof Error ? error.message : String(error);
+    content.appendChild(errorPre);
+  }
+
+  container.appendChild(content);
+  rootElement.innerHTML = '';
+  rootElement.appendChild(container);
 }
