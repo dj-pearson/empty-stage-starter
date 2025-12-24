@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import DOMPurify from "dompurify";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -490,10 +491,16 @@ export function EmailTemplateBuilder() {
             </div>
           );
         case "html":
+          // Sanitize HTML to prevent XSS attacks
+          const sanitizedHtml = DOMPurify.sanitize(block.content.html || "", {
+            ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'img', 'blockquote', 'code', 'pre', 'div', 'span', 'table', 'tr', 'td', 'th', 'thead', 'tbody'],
+            ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'style', 'target', 'rel'],
+            ALLOW_DATA_ATTR: false,
+          });
           return (
             <div
               className="bg-muted/50 p-2 rounded text-sm font-mono"
-              dangerouslySetInnerHTML={{ __html: block.content.html }}
+              dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
             />
           );
         default:
