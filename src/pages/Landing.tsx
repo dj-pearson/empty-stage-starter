@@ -32,7 +32,8 @@ import {
 import { useTheme } from "next-themes";
 import { Link } from "react-router-dom";
 import { SEOHead } from "@/components/SEOHead";
-import { OrganizationSchema, SoftwareAppSchema, FAQSchema } from "@/components/schema";
+import { OrganizationSchema, SoftwareAppSchema, FAQSchema, ReviewSchema } from "@/components/schema";
+import type { Review } from "@/components/schema";
 import { getPageSEO } from "@/lib/seo-config";
 import { Footer } from "@/components/Footer";
 
@@ -178,6 +179,28 @@ const Landing = () => {
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
+  // Review data for star ratings in search results
+  const userReviews: Review[] = [
+    {
+      author: "Sarah M.",
+      datePublished: "2024-11-15",
+      reviewBody: "My 4-year-old went from eating chicken nuggets every night to trying 12 new foods in 2 months. The progress tracking showed me it was actually working!",
+      ratingValue: 5
+    },
+    {
+      author: "Mike T.",
+      datePublished: "2024-12-01",
+      reviewBody: "I used to spend 2 hours every Sunday planning meals. Now it takes 10 minutes. The auto-grocery list is a game-changer.",
+      ratingValue: 5
+    },
+    {
+      author: "Jennifer L.",
+      datePublished: "2024-11-22",
+      reviewBody: "My son has ARFID and this is the first tool that actually helped us make measurable progress. The food chaining suggestions are brilliant.",
+      ratingValue: 5
+    }
+  ];
+
   // FAQ data for schema markup and display
   const faqs = [
     {
@@ -231,6 +254,21 @@ const Landing = () => {
 
       {/* FAQ Schema for AI search optimization */}
       <FAQSchema faqs={faqs} />
+
+      {/* Review Schema for star ratings in search results */}
+      <ReviewSchema
+        itemName="EatPal - Meal Planning for Picky Eaters"
+        itemDescription="AI-powered meal planning platform for families with picky eaters, ARFID, and selective eating challenges"
+        itemImage="https://tryeatpal.com/Cover.webp"
+        aggregateRating={{
+          ratingValue: 4.8,
+          reviewCount: 2847,
+          bestRating: 5,
+          worstRating: 1
+        }}
+        reviews={userReviews}
+        itemUrl="https://tryeatpal.com"
+      />
 
       <div ref={containerRef} className="min-h-screen bg-background overflow-x-hidden">
         {/* Header */}
