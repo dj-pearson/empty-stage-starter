@@ -416,20 +416,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       logger.debug('Kid profile changed:', payload);
 
       if (payload.eventType === 'INSERT') {
-        setKidsState(prev => {
+        setKids(prev => {
           // Avoid duplicates
           const exists = prev.some(kid => kid.id === payload.new.id);
           if (exists) return prev;
           return [...prev, payload.new as Kid];
         });
       } else if (payload.eventType === 'UPDATE') {
-        setKidsState(prev =>
+        setKids(prev =>
           prev.map(kid =>
             kid.id === (payload.new as Kid).id ? (payload.new as Kid) : kid
           )
         );
       } else if (payload.eventType === 'DELETE') {
-        setKidsState(prev =>
+        setKids(prev =>
           prev.filter(kid => kid.id !== (payload.old as Kid).id)
         );
       }

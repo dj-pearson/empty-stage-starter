@@ -36,6 +36,7 @@ web-build/
 # Environment variables
 .env
 .env.local
+.dev.vars
 supabase/.temp/cli-latest
 supabase/.temp/gotrue-version
 supabase/.temp/pooler-url
