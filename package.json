@@ -103,7 +103,7 @@
     "date-fns": "^3.6.0",
     "dompurify": "^3.3.0",
     "embla-carousel-react": "^8.6.0",
-    "expo": "~54.0.0",
+    "expo": "^54.0.30",
     "expo-camera": "~17.0.8",
     "expo-constants": "~18.0.9",
     "expo-file-system": "~19.0.17",

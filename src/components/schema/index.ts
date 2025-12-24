@@ -22,3 +22,9 @@ export type { SoftwareAppSchemaProps } from './SoftwareAppSchema';
 
 export { BreadcrumbSchema } from './BreadcrumbSchema';
 export type { BreadcrumbItem, BreadcrumbSchemaProps } from './BreadcrumbSchema';
+
+export { ReviewSchema } from './ReviewSchema';
+export type { Review, ReviewSchemaProps } from './ReviewSchema';
+
+export { ArticleSchema } from './ArticleSchema';
+export type { ArticleSchemaProps } from './ArticleSchema';

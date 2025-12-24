@@ -26,6 +26,7 @@ import { logger } from "@/lib/logger";
 import { SEOHead } from "@/components/SEOHead";
 import { getPageSEO } from "@/lib/seo-config";
 import { Footer } from "@/components/Footer";
+import { BreadcrumbNavigation } from "@/components/BreadcrumbNavigation";
 
 interface SubscriptionPlan {
   id: string;
@@ -398,6 +399,13 @@ export default function Pricing() {
       </header>
 
       <div className="container mx-auto px-4 py-16">
+        <BreadcrumbNavigation
+          items={[
+            { name: 'Home', url: 'https://tryeatpal.com/' },
+            { name: 'Pricing', url: 'https://tryeatpal.com/pricing' }
+          ]}
+        />
+
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             EatPal Pricing - Meal Planning Plans for Picky Eaters
