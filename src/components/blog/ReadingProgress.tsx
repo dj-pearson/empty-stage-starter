@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import DOMPurify from "dompurify";
 
 interface ReadingProgressProps {
   postId?: string;
@@ -116,10 +117,14 @@ export function TableOfContents({ content }: TOCProps) {
   const [activeId, setActiveId] = useState<string>("");
 
   useEffect(() => {
-    // Extract headings from content (safe - only parsing for heading extraction, not rendering)
+    // Extract headings from content - sanitize to prevent XSS during DOM parsing
     const tempDiv = document.createElement("div");
-    // Note: This is safe as we're only extracting text content, not rendering the HTML
-    tempDiv.innerHTML = content;
+    // Sanitize HTML before parsing to prevent script execution
+    const sanitizedContent = DOMPurify.sanitize(content, {
+      ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+      ALLOWED_ATTR: ['id']
+    });
+    tempDiv.innerHTML = sanitizedContent;
 
     const headingElements = tempDiv.querySelectorAll("h2, h3");
     const extractedHeadings = Array.from(headingElements).map((heading, index) => {

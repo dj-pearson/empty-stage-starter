@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import DOMPurify from "dompurify";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1145,7 +1146,12 @@ export function EmailSequenceBuilder() {
                   {stepForm.html_body ? (
                     <div
                       className="p-4 prose max-w-none"
-                      dangerouslySetInnerHTML={{ __html: stepForm.html_body }}
+                      dangerouslySetInnerHTML={{
+                        __html: DOMPurify.sanitize(stepForm.html_body, {
+                          ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'img', 'blockquote', 'code', 'pre', 'div', 'span', 'table', 'thead', 'tbody', 'tr', 'td', 'th'],
+                          ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id', 'style', 'target', 'width', 'height']
+                        })
+                      }}
                     />
                   ) : (
                     <div className="p-8 text-center text-muted-foreground">
@@ -1186,7 +1192,12 @@ export function EmailSequenceBuilder() {
               <div className="border rounded-lg">
                 <div
                   className="p-4"
-                  dangerouslySetInnerHTML={{ __html: previewContent.html }}
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(previewContent.html, {
+                      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'img', 'blockquote', 'code', 'pre', 'div', 'span', 'table', 'thead', 'tbody', 'tr', 'td', 'th'],
+                      ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id', 'style', 'target', 'width', 'height']
+                    })
+                  }}
                 />
               </div>
             </div>
