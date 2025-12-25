@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.5.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
+import { getCorsHeaders, securityHeaders } from "../_shared/headers.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
   apiVersion: "2023-10-16",
@@ -10,13 +11,10 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
-
 serve(async (req) => {
+  // Get secure CORS headers based on request origin
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -95,7 +93,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("Subscription management error:", error);
     return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders, ...securityHeaders, "Content-Type": "application/json" },
       status: 400,
     });
   }
@@ -170,7 +168,7 @@ async function handleUpgradeOrChange(
           subscription: updatedSubscription,
         }),
         {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...corsHeaders, ...securityHeaders, "Content-Type": "application/json" },
           status: 200,
         }
       );
@@ -193,7 +191,7 @@ async function handleUpgradeOrChange(
         message: "Redirecting to checkout",
       }),
       {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, ...securityHeaders, "Content-Type": "application/json" },
         status: 200,
       }
     );
@@ -248,7 +246,7 @@ async function handleCancel(supabase: any, currentSub: any) {
         cancel_at: canceledSubscription.cancel_at,
       }),
       {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, ...securityHeaders, "Content-Type": "application/json" },
         status: 200,
       }
     );
@@ -304,7 +302,7 @@ async function handleReactivate(supabase: any, currentSub: any) {
         message: "Subscription reactivated successfully",
       }),
       {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, ...securityHeaders, "Content-Type": "application/json" },
         status: 200,
       }
     );
@@ -376,7 +374,7 @@ async function handleChangeBillingCycle(
         message: `Billing cycle changed to ${newBillingCycle}`,
       }),
       {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, ...securityHeaders, "Content-Type": "application/json" },
         status: 200,
       }
     );
@@ -385,4 +383,3 @@ async function handleChangeBillingCycle(
     throw new Error("Failed to change billing cycle");
   }
 }
-
