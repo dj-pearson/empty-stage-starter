@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:content="http://purl.org/rss/1.0/modules/content/"
+     xmlns:dc="http://purl.org/dc/elements/1.1/"
+     xmlns:atom="http://www.w3.org/2005/Atom"
+     xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title><![CDATA[EatPal Blog - Tips for Picky Eaters & ARFID]]></title>
+    <description><![CDATA[Expert advice on managing picky eating, ARFID strategies, food chaining techniques, and family meal planning. Evidence-based guidance from feeding specialists.]]></description>
+    <link>https://tryeatpal.com</link>
+    <atom:link href="https://tryeatpal.com/rss.xml" rel="self" type="application/rss+xml" />
+    <language>en-US</language>
+    <copyright><![CDATA[Copyright 2025 EatPal. All rights reserved.]]></copyright>
+    <managingEditor>support@tryeatpal.com (EatPal Team)</managingEditor>
+    <webMaster>support@tryeatpal.com (EatPal Support)</webMaster>
+    <generator>EatPal RSS Generator</generator>
+    <lastBuildDate>Wed, 15 Jan 2025 10:00:00 GMT</lastBuildDate>
+    <image>
+      <url>https://tryeatpal.com/Logo-Green.png</url>
+      <title><![CDATA[EatPal - Kids Meal Planning for Picky Eaters]]></title>
+      <link>https://tryeatpal.com</link>
+    </image>
+
+    <!-- Blog Post 1: Food Chaining Therapy -->
+    <item>
+      <title><![CDATA[Understanding Food Chaining Therapy for Picky Eaters]]></title>
+      <description><![CDATA[Learn how food chaining therapy helps children systematically expand their diet from 5 foods to 50+ by building chains from safe foods. Discover evidence-based techniques developed by feeding therapy specialists.]]></description>
+      <link>https://tryeatpal.com/blog/understanding-food-chaining-therapy</link>
+      <guid isPermaLink="true">https://tryeatpal.com/blog/understanding-food-chaining-therapy</guid>
+      <pubDate>Wed, 15 Jan 2025 10:00:00 GMT</pubDate>
+      <category><![CDATA[Feeding Therapy]]></category>
+      <category><![CDATA[Food Chaining]]></category>
+      <category><![CDATA[Picky Eating]]></category>
+      <author>support@tryeatpal.com (EatPal Team)</author>
+      <enclosure url="https://tryeatpal.com/Cover.png" type="image/png" />
+    </item>
+
+    <!-- Blog Post 2: ARFID Management -->
+    <item>
+      <title><![CDATA[10 Evidence-Based Strategies for ARFID Management]]></title>
+      <description><![CDATA[Expert tips on managing Avoidant/Restrictive Food Intake Disorder (ARFID) with proven feeding therapy techniques. Learn how to support children with ARFID through structured meal planning and exposure therapy.]]></description>
+      <link>https://tryeatpal.com/blog/arfid-management-strategies</link>
+      <guid isPermaLink="true">https://tryeatpal.com/blog/arfid-management-strategies</guid>
+      <pubDate>Fri, 10 Jan 2025 10:00:00 GMT</pubDate>
+      <category><![CDATA[ARFID]]></category>
+      <category><![CDATA[Feeding Disorders]]></category>
+      <category><![CDATA[Treatment]]></category>
+      <author>support@tryeatpal.com (EatPal Team)</author>
+      <enclosure url="https://tryeatpal.com/Cover.png" type="image/png" />
+    </item>
+
+    <!-- Blog Post 3: Try Bites Science -->
+    <item>
+      <title><![CDATA[The Science Behind Try Bites: Why 15-20 Exposures Matter]]></title>
+      <description><![CDATA[Research shows children need 15-20 exposures to a new food before acceptance. Learn the science behind try bites and how to implement them effectively in your family's meal routine.]]></description>
+      <link>https://tryeatpal.com/blog/science-of-try-bites</link>
+      <guid isPermaLink="true">https://tryeatpal.com/blog/science-of-try-bites</guid>
+      <pubDate>Sun, 05 Jan 2025 10:00:00 GMT</pubDate>
+      <category><![CDATA[Try Bites]]></category>
+      <category><![CDATA[Research]]></category>
+      <category><![CDATA[Food Introduction]]></category>
+      <author>support@tryeatpal.com (EatPal Team)</author>
+      <enclosure url="https://tryeatpal.com/Cover.png" type="image/png" />
+    </item>
+
+    <!-- Blog Post 4: Sensory Issues -->
+    <item>
+      <title><![CDATA[Helping Kids with Sensory Food Preferences]]></title>
+      <description><![CDATA[Understanding sensory processing challenges and how they affect eating. Practical strategies for introducing new textures and flavors to sensory-sensitive children.]]></description>
+      <link>https://tryeatpal.com/blog/sensory-food-preferences</link>
+      <guid isPermaLink="true">https://tryeatpal.com/blog/sensory-food-preferences</guid>
+      <pubDate>Wed, 01 Jan 2025 10:00:00 GMT</pubDate>
+      <category><![CDATA[Sensory Issues]]></category>
+      <category><![CDATA[Picky Eating]]></category>
+      <category><![CDATA[Autism]]></category>
+      <author>support@tryeatpal.com (EatPal Team)</author>
+      <enclosure url="https://tryeatpal.com/Cover.png" type="image/png" />
+    </item>
+
+    <!-- Blog Post 5: Meal Planning Tips -->
+    <item>
+      <title><![CDATA[Weekly Meal Planning for Multiple Picky Eaters]]></title>
+      <description><![CDATA[Master the art of meal planning when each child has different food preferences. Tips for creating balanced, stress-free family meals that everyone can enjoy.]]></description>
+      <link>https://tryeatpal.com/blog/meal-planning-multiple-kids</link>
+      <guid isPermaLink="true">https://tryeatpal.com/blog/meal-planning-multiple-kids</guid>
+      <pubDate>Sat, 28 Dec 2024 10:00:00 GMT</pubDate>
+      <category><![CDATA[Meal Planning]]></category>
+      <category><![CDATA[Family Meals]]></category>
+      <category><![CDATA[Organization]]></category>
+      <author>support@tryeatpal.com (EatPal Team)</author>
+      <enclosure url="https://tryeatpal.com/Cover.png" type="image/png" />
+    </item>
+
+    <!-- Blog Post 6: Nutrition Tracking -->
+    <item>
+      <title><![CDATA[Ensuring Adequate Nutrition with a Limited Diet]]></title>
+      <description><![CDATA[How to monitor nutrition when your child eats only 5-10 foods. Learn about nutrient gaps, supplementation, and working with healthcare providers for picky eaters.]]></description>
+      <link>https://tryeatpal.com/blog/nutrition-limited-diet</link>
+      <guid isPermaLink="true">https://tryeatpal.com/blog/nutrition-limited-diet</guid>
+      <pubDate>Tue, 24 Dec 2024 10:00:00 GMT</pubDate>
+      <category><![CDATA[Nutrition]]></category>
+      <category><![CDATA[Health]]></category>
+      <category><![CDATA[Supplements]]></category>
+      <author>support@tryeatpal.com (EatPal Team)</author>
+      <enclosure url="https://tryeatpal.com/Cover.png" type="image/png" />
+    </item>
+
+  </channel>
+</rss>
