@@ -28,3 +28,14 @@ export type { Review, ReviewSchemaProps } from './ReviewSchema';
 
 export { ArticleSchema } from './ArticleSchema';
 export type { ArticleSchemaProps } from './ArticleSchema';
+
+export { VideoSchema, formatVideoDuration, validateVideoSchema } from './VideoSchema';
+export type { VideoSchemaProps } from './VideoSchema';
+
+export { RecipeSchema, formatRecipeTime, validateRecipeSchema, DIET_TYPES } from './RecipeSchema';
+export type {
+  RecipeSchemaProps,
+  RecipeInstruction,
+  RecipeNutrition,
+  RecipeRating,
+} from './RecipeSchema';
