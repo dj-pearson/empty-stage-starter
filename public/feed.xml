@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title><![CDATA[EatPal Blog - Tips for Picky Eaters & ARFID]]></title>
+  <subtitle><![CDATA[Expert advice on managing picky eating, ARFID strategies, food chaining techniques, and family meal planning. Evidence-based guidance from feeding specialists.]]></subtitle>
+  <link href="https://tryeatpal.com" />
+  <link href="https://tryeatpal.com/feed.xml" rel="self" />
+  <id>https://tryeatpal.com/</id>
+  <updated>2025-01-15T10:00:00Z</updated>
+  <rights><![CDATA[Copyright 2025 EatPal. All rights reserved.]]></rights>
+  <generator uri="https://tryeatpal.com">EatPal RSS Generator</generator>
+  <logo>https://tryeatpal.com/Logo-Green.png</logo>
+  <icon>https://tryeatpal.com/Icon.jpg</icon>
+
+  <!-- Blog Post 1: Food Chaining Therapy -->
+  <entry>
+    <title><![CDATA[Understanding Food Chaining Therapy for Picky Eaters]]></title>
+    <link href="https://tryeatpal.com/blog/understanding-food-chaining-therapy" />
+    <id>https://tryeatpal.com/blog/understanding-food-chaining-therapy</id>
+    <published>2025-01-15T10:00:00Z</published>
+    <updated>2025-01-15T10:00:00Z</updated>
+    <summary><![CDATA[Learn how food chaining therapy helps children systematically expand their diet from 5 foods to 50+ by building chains from safe foods. Discover evidence-based techniques developed by feeding therapy specialists.]]></summary>
+    <author><name>EatPal Team</name></author>
+    <category term="Feeding Therapy" />
+    <category term="Food Chaining" />
+    <category term="Picky Eating" />
+    <link rel="enclosure" type="image/png" href="https://tryeatpal.com/Cover.png" />
+  </entry>
+
+  <!-- Blog Post 2: ARFID Management -->
+  <entry>
+    <title><![CDATA[10 Evidence-Based Strategies for ARFID Management]]></title>
+    <link href="https://tryeatpal.com/blog/arfid-management-strategies" />
+    <id>https://tryeatpal.com/blog/arfid-management-strategies</id>
+    <published>2025-01-10T10:00:00Z</published>
+    <updated>2025-01-10T10:00:00Z</updated>
+    <summary><![CDATA[Expert tips on managing Avoidant/Restrictive Food Intake Disorder (ARFID) with proven feeding therapy techniques. Learn how to support children with ARFID through structured meal planning and exposure therapy.]]></summary>
+    <author><name>EatPal Team</name></author>
+    <category term="ARFID" />
+    <category term="Feeding Disorders" />
+    <category term="Treatment" />
+    <link rel="enclosure" type="image/png" href="https://tryeatpal.com/Cover.png" />
+  </entry>
+
+  <!-- Blog Post 3: Try Bites Science -->
+  <entry>
+    <title><![CDATA[The Science Behind Try Bites: Why 15-20 Exposures Matter]]></title>
+    <link href="https://tryeatpal.com/blog/science-of-try-bites" />
+    <id>https://tryeatpal.com/blog/science-of-try-bites</id>
+    <published>2025-01-05T10:00:00Z</published>
+    <updated>2025-01-05T10:00:00Z</updated>
+    <summary><![CDATA[Research shows children need 15-20 exposures to a new food before acceptance. Learn the science behind try bites and how to implement them effectively in your family's meal routine.]]></summary>
+    <author><name>EatPal Team</name></author>
+    <category term="Try Bites" />
+    <category term="Research" />
+    <category term="Food Introduction" />
+    <link rel="enclosure" type="image/png" href="https://tryeatpal.com/Cover.png" />
+  </entry>
+
+  <!-- Blog Post 4: Sensory Issues -->
+  <entry>
+    <title><![CDATA[Helping Kids with Sensory Food Preferences]]></title>
+    <link href="https://tryeatpal.com/blog/sensory-food-preferences" />
+    <id>https://tryeatpal.com/blog/sensory-food-preferences</id>
+    <published>2025-01-01T10:00:00Z</published>
+    <updated>2025-01-01T10:00:00Z</updated>
+    <summary><![CDATA[Understanding sensory processing challenges and how they affect eating. Practical strategies for introducing new textures and flavors to sensory-sensitive children.]]></summary>
+    <author><name>EatPal Team</name></author>
+    <category term="Sensory Issues" />
+    <category term="Picky Eating" />
+    <category term="Autism" />
+    <link rel="enclosure" type="image/png" href="https://tryeatpal.com/Cover.png" />
+  </entry>
+
+  <!-- Blog Post 5: Meal Planning Tips -->
+  <entry>
+    <title><![CDATA[Weekly Meal Planning for Multiple Picky Eaters]]></title>
+    <link href="https://tryeatpal.com/blog/meal-planning-multiple-kids" />
+    <id>https://tryeatpal.com/blog/meal-planning-multiple-kids</id>
+    <published>2024-12-28T10:00:00Z</published>
+    <updated>2024-12-28T10:00:00Z</updated>
+    <summary><![CDATA[Master the art of meal planning when each child has different food preferences. Tips for creating balanced, stress-free family meals that everyone can enjoy.]]></summary>
+    <author><name>EatPal Team</name></author>
+    <category term="Meal Planning" />
+    <category term="Family Meals" />
+    <category term="Organization" />
+    <link rel="enclosure" type="image/png" href="https://tryeatpal.com/Cover.png" />
+  </entry>
+
+  <!-- Blog Post 6: Nutrition Tracking -->
+  <entry>
+    <title><![CDATA[Ensuring Adequate Nutrition with a Limited Diet]]></title>
+    <link href="https://tryeatpal.com/blog/nutrition-limited-diet" />
+    <id>https://tryeatpal.com/blog/nutrition-limited-diet</id>
+    <published>2024-12-24T10:00:00Z</published>
+    <updated>2024-12-24T10:00:00Z</updated>
+    <summary><![CDATA[How to monitor nutrition when your child eats only 5-10 foods. Learn about nutrient gaps, supplementation, and working with healthcare providers for picky eaters.]]></summary>
+    <author><name>EatPal Team</name></author>
+    <category term="Nutrition" />
+    <category term="Health" />
+    <category term="Supplements" />
+    <link rel="enclosure" type="image/png" href="https://tryeatpal.com/Cover.png" />
+  </entry>
+
+</feed>

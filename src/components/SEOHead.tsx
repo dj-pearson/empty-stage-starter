@@ -64,6 +64,20 @@ export function SEOHead({
       <meta name="robots" content={robots} />
       <link rel="canonical" href={canonicalUrl} />
 
+      {/* RSS and Atom Feeds - Important for SEO and content syndication */}
+      <link
+        rel="alternate"
+        type="application/rss+xml"
+        title="EatPal Blog RSS Feed"
+        href="https://tryeatpal.com/rss.xml"
+      />
+      <link
+        rel="alternate"
+        type="application/atom+xml"
+        title="EatPal Blog Atom Feed"
+        href="https://tryeatpal.com/feed.xml"
+      />
+
       {/* Open Graph / Facebook */}
       <meta property="og:type" content={ogType} />
       <meta property="og:url" content={canonicalUrl} />
