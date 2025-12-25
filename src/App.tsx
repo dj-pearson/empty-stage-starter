@@ -56,6 +56,8 @@ const MealPlanGeneratorResults = lazy(() => import("./pages/MealPlanGeneratorRes
 const ProfessionalSettings = lazy(() => import("./pages/dashboard/ProfessionalSettings"));
 const Billing = lazy(() => import("./pages/dashboard/Billing"));
 const ApiDocs = lazy(() => import("./pages/ApiDocs"));
+const FeaturePage = lazy(() => import("./pages/FeaturePage"));
+const SolutionPage = lazy(() => import("./pages/SolutionPage"));
 
 // Loading fallback component
 const LoadingFallback = () => (
@@ -107,6 +109,9 @@ const App = () => (
             <Route path="/meal-plan" element={<MealPlanGenerator />} />
             <Route path="/meal-plan/results" element={<MealPlanGeneratorResults />} />
             <Route path="/api/docs" element={<ApiDocs />} />
+            {/* Programmatic SEO Pages */}
+            <Route path="/features/:slug" element={<FeaturePage />} />
+            <Route path="/solutions/:slug" element={<SolutionPage />} />
             {/* Admin routes - Protected with role check */}
             <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
             <Route path="/admin-dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />

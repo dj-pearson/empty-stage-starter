@@ -327,6 +327,139 @@ export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
       },
     ],
   },
+
+  "picky-eater-quiz": {
+    title: "Picky Eater Quiz - Assess Your Child's Eating Patterns | EatPal",
+    description:
+      "Take our free picky eater assessment quiz to understand your child's eating challenges. Get personalized recommendations for expanding their diet based on feeding therapy research.",
+    keywords:
+      "picky eater quiz, picky eating assessment, selective eating test, child feeding evaluation, ARFID screening, picky eater score, eating disorder quiz, feeding therapy assessment",
+    canonicalUrl: `${baseUrl}/picky-eater-quiz`,
+    aiPurpose:
+      "This free interactive quiz helps parents assess the severity of their child's picky eating and identify whether professional help might be needed. Based on feeding therapy research, it provides personalized recommendations for next steps.",
+    aiAudience:
+      "Parents concerned about their child's eating habits, caregivers wondering if picky eating is normal, families considering feeding therapy, pediatricians looking for assessment tools to recommend",
+    aiKeyFeatures:
+      "Research-based assessment questions, severity scoring system, personalized recommendations, ARFID vs typical picky eating differentiation, professional referral guidance",
+    aiUseCases:
+      "Evaluating picky eating severity, determining if feeding therapy is needed, understanding eating pattern concerns, preparing for pediatrician discussions about feeding issues",
+    structuredData: [
+      {
+        "@type": "Quiz",
+        "@id": `${baseUrl}/picky-eater-quiz#quiz`,
+        name: "Picky Eater Assessment Quiz",
+        description: "Assess your child's picky eating patterns and get personalized recommendations",
+        about: {
+          "@type": "Thing",
+          name: "Picky Eating in Children",
+        },
+        educationalLevel: "Parent/Caregiver",
+        assesses: "Picky eating severity and patterns",
+      },
+    ],
+  },
+
+  "budget-calculator": {
+    title: "Family Meal Budget Calculator - Plan Healthy Meals Affordably | EatPal",
+    description:
+      "Calculate your family's food budget with our free meal planning calculator. Get USDA-based cost estimates for balanced nutrition that works with picky eaters and tight budgets.",
+    keywords:
+      "meal budget calculator, family food budget, grocery budget planner, meal planning cost, affordable meal planning, USDA food costs, weekly food budget, healthy eating on a budget",
+    canonicalUrl: `${baseUrl}/budget-calculator`,
+    aiPurpose:
+      "This free budget calculator helps families plan nutritious meals within their budget. Using USDA food cost data, it provides realistic estimates for weekly and monthly food costs based on family size, dietary needs, and picky eating accommodations.",
+    aiAudience:
+      "Budget-conscious families, parents planning meal costs, caregivers managing household food expenses, families with picky eaters who worry about food waste",
+    aiKeyFeatures:
+      "USDA cost data integration, family size adjustments, picky eater waste factor calculations, nutrition-per-dollar optimization, weekly and monthly projections, shopping list cost estimates",
+    aiUseCases:
+      "Planning weekly grocery budgets, reducing food waste costs with picky eaters, comparing meal plan affordability, setting realistic food spending goals, optimizing nutrition within budget constraints",
+    structuredData: [
+      {
+        "@type": "WebApplication",
+        "@id": `${baseUrl}/budget-calculator#calculator`,
+        name: "Family Meal Budget Calculator",
+        description: "Calculate food costs for your family with USDA-based estimates",
+        applicationCategory: "FinanceApplication",
+        operatingSystem: "Web",
+        offers: {
+          "@type": "Offer",
+          price: "0",
+          priceCurrency: "USD",
+        },
+      },
+    ],
+  },
+
+  "meal-plan": {
+    title: "Free Meal Plan Generator for Kids - Custom Weekly Plans | EatPal",
+    description:
+      "Generate a free personalized meal plan for your picky eater. Our AI creates kid-friendly weekly meal plans based on your child's preferences, allergies, and nutritional needs.",
+    keywords:
+      "meal plan generator, kids meal plan, picky eater meal plan, weekly meal plan, free meal planning, child nutrition plan, toddler meal plan, personalized meal plan",
+    canonicalUrl: `${baseUrl}/meal-plan`,
+    aiPurpose:
+      "This free meal plan generator creates personalized weekly meal plans for children, including picky eaters. Input your child's safe foods, allergies, and preferences to receive a balanced, achievable meal plan with recipes and grocery lists.",
+    aiAudience:
+      "Parents seeking meal planning help, families with picky eaters, caregivers managing food allergies, busy parents wanting organized meal schedules, first-time parents learning about toddler nutrition",
+    aiKeyFeatures:
+      "AI-powered meal suggestions, allergen filtering, safe food integration, balanced nutrition targeting, grocery list generation, recipe recommendations, customizable preferences",
+    aiUseCases:
+      "Creating weekly meal plans for picky eaters, generating allergy-safe meal schedules, finding kid-friendly recipes, planning balanced nutrition for limited diets, preparing grocery lists from meal plans",
+    structuredData: [
+      {
+        "@type": "WebApplication",
+        "@id": `${baseUrl}/meal-plan#generator`,
+        name: "Kids Meal Plan Generator",
+        description: "Generate personalized meal plans for children and picky eaters",
+        applicationCategory: "HealthApplication",
+        operatingSystem: "Web",
+        offers: {
+          "@type": "Offer",
+          price: "0",
+          priceCurrency: "USD",
+        },
+      },
+    ],
+  },
+
+  privacy: {
+    title: "Privacy Policy | EatPal - Kids Meal Planning App",
+    description:
+      "Learn how EatPal protects your family's data. Our privacy policy explains data collection, usage, and security measures for our kids meal planning and nutrition tracking platform.",
+    keywords:
+      "eatpal privacy policy, data protection, family data security, kids app privacy, COPPA compliance, meal planning data privacy",
+    canonicalUrl: `${baseUrl}/privacy`,
+    noindex: false,
+    structuredData: [
+      {
+        "@type": "WebPage",
+        "@id": `${baseUrl}/privacy#webpage`,
+        url: `${baseUrl}/privacy`,
+        name: "Privacy Policy",
+        description: "EatPal's commitment to protecting your family's data",
+      },
+    ],
+  },
+
+  terms: {
+    title: "Terms of Service | EatPal - Kids Meal Planning App",
+    description:
+      "Read EatPal's terms of service. Understand the rules and guidelines for using our kids meal planning and nutrition tracking platform.",
+    keywords:
+      "eatpal terms of service, user agreement, terms and conditions, meal planning app terms",
+    canonicalUrl: `${baseUrl}/terms`,
+    noindex: false,
+    structuredData: [
+      {
+        "@type": "WebPage",
+        "@id": `${baseUrl}/terms#webpage`,
+        url: `${baseUrl}/terms`,
+        name: "Terms of Service",
+        description: "Terms and conditions for using EatPal",
+      },
+    ],
+  },
 };
 
 /**
@@ -335,3 +468,31 @@ export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
 export function getPageSEO(page: string): Omit<SEOProps, "children"> | null {
   return seoConfig[page] || null;
 }
+
+/**
+ * Generate dynamic SEO props with defaults
+ */
+export function generateSEOProps(
+  overrides: Partial<Omit<SEOProps, "children">> & { title: string; description: string }
+): Omit<SEOProps, "children"> {
+  return {
+    title: overrides.title,
+    description: overrides.description,
+    canonicalUrl: overrides.canonicalUrl || baseUrl,
+    keywords: overrides.keywords,
+    aiPurpose: overrides.aiPurpose,
+    aiAudience: overrides.aiAudience,
+    aiKeyFeatures: overrides.aiKeyFeatures,
+    aiUseCases: overrides.aiUseCases,
+    ogImage: overrides.ogImage,
+    ogImageAlt: overrides.ogImageAlt,
+    ogType: overrides.ogType,
+    structuredData: overrides.structuredData,
+    noindex: overrides.noindex,
+  };
+}
+
+/**
+ * Get base URL for SEO
+ */
+export { baseUrl };
