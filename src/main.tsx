@@ -5,39 +5,41 @@
  */
 
 // Import React first to ensure it's available before any components load
-console.log('[EatPal] main.tsx loading...');
 import React from "react";
-console.log('[EatPal] React imported');
 import { createRoot } from "react-dom/client";
-console.log('[EatPal] createRoot imported');
 import * as Sentry from "@sentry/react";
-console.log('[EatPal] Sentry imported');
 import App from "./App.tsx";
-console.log('[EatPal] App imported');
 import "./index.css";
-console.log('[EatPal] index.css imported');
 import "./styles/mobile-first.css";
-console.log('[EatPal] mobile-first.css imported');
 import { initializeSentry, ErrorFallback } from "./lib/sentry";
-console.log('[EatPal] sentry utils imported');
+
+// Debug logging helper - only logs in development
+const debugLog = (message: string, ...args: unknown[]) => {
+  if (import.meta.env.DEV) {
+    console.log(`[EatPal] ${message}`, ...args);
+  }
+};
+
+debugLog('main.tsx loading...');
 
 // Make React available globally for UMD modules (if any)
 if (typeof window !== 'undefined') {
   (window as any).React = React;
-  console.log('[EatPal] React made global');
+  debugLog('React made global');
 }
 
-// Log environment info for debugging
-console.log('[EatPal] Starting application...');
-console.log('[EatPal] Environment:', import.meta.env.MODE);
-console.log('[EatPal] Sentry DSN configured:', !!import.meta.env.VITE_SENTRY_DSN);
-console.log('[EatPal] Supabase URL configured:', !!import.meta.env.VITE_SUPABASE_URL);
+// Log environment info for debugging (only in development)
+debugLog('Starting application...');
+debugLog('Environment:', import.meta.env.MODE);
+debugLog('Sentry DSN configured:', !!import.meta.env.VITE_SENTRY_DSN);
+debugLog('Supabase URL configured:', !!import.meta.env.VITE_SUPABASE_URL);
 
 // Initialize Sentry before anything else
 try {
   initializeSentry();
-  console.log('[EatPal] Sentry initialized successfully');
+  debugLog('Sentry initialized successfully');
 } catch (error) {
+  // Always log Sentry init errors - important for production debugging
   console.warn('[EatPal] Sentry initialization failed:', error);
 }
 
@@ -48,11 +50,11 @@ if (!rootElement) {
 }
 
 try {
-  console.log('[EatPal] Creating React root...');
+  debugLog('Creating React root...');
   const AppWithErrorBoundary = import.meta.env.VITE_SENTRY_DSN ? (
-    <Sentry.ErrorBoundary 
+    <Sentry.ErrorBoundary
       fallback={(errorData) => (
-        <ErrorFallback 
+        <ErrorFallback
           error={(errorData.error as Error) ?? new Error('Unknown error')}
           resetError={errorData.resetError}
         />
@@ -66,8 +68,9 @@ try {
   );
 
   createRoot(rootElement).render(AppWithErrorBoundary);
-  console.log('[EatPal] React root rendered successfully');
+  debugLog('React root rendered successfully');
 } catch (error) {
+  // Always log render errors - critical for production debugging
   console.error('[EatPal] Failed to render app:', error);
   // Show a basic error message - use safe DOM methods to prevent XSS
   const container = document.createElement('div');

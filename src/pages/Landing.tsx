@@ -751,7 +751,25 @@ const Landing = () => {
               </p>
             </div>
             <div className="animate-grid grid md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
-              <Suspense fallback={<div className="col-span-full flex justify-center py-8"><div className="animate-pulse">Loading features...</div></div>}>
+              <Suspense fallback={
+                <div className="contents" role="status" aria-busy="true" aria-label="Loading features">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <div
+                      key={i}
+                      className="bg-card rounded-xl p-6 border shadow-sm animate-pulse h-full"
+                      style={{ animationDelay: `${i * 100}ms` }}
+                    >
+                      <div className="w-12 h-12 rounded-full bg-muted mb-4" />
+                      <div className="h-6 bg-muted rounded w-3/4 mb-3" />
+                      <div className="space-y-2">
+                        <div className="h-4 bg-muted rounded w-full" />
+                        <div className="h-4 bg-muted rounded w-5/6" />
+                      </div>
+                    </div>
+                  ))}
+                  <span className="sr-only">Loading feature cards, please wait...</span>
+                </div>
+              }>
                 {features.map((feature) => (
                   <div key={feature.title} className="animate-item h-full">
                     <FeatureCard3D

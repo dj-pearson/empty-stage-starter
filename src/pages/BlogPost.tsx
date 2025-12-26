@@ -219,8 +219,53 @@ const BlogPost = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Loading article...</p>
+      <div className="min-h-screen bg-background" role="status" aria-busy="true" aria-label="Loading article">
+        {/* Header skeleton */}
+        <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">
+          <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div className="h-8 w-24 bg-muted rounded animate-pulse" />
+            <div className="h-9 w-32 bg-muted rounded animate-pulse" />
+          </div>
+        </header>
+
+        {/* Featured image skeleton */}
+        <div className="w-full h-[400px] md:h-[500px] bg-muted animate-pulse" />
+
+        {/* Content skeleton */}
+        <article className="container mx-auto px-4 py-12 max-w-4xl">
+          {/* Category badge skeleton */}
+          <div className="h-6 w-24 bg-muted rounded-full mb-4 animate-pulse" />
+
+          {/* Title skeleton */}
+          <div className="space-y-3 mb-6">
+            <div className="h-10 md:h-14 bg-muted rounded w-full animate-pulse" />
+            <div className="h-10 md:h-14 bg-muted rounded w-3/4 animate-pulse" />
+          </div>
+
+          {/* Meta info skeleton */}
+          <div className="flex gap-4 mb-8 pb-8 border-b">
+            <div className="h-5 w-32 bg-muted rounded animate-pulse" />
+            <div className="h-5 w-24 bg-muted rounded animate-pulse" />
+          </div>
+
+          {/* Excerpt skeleton */}
+          <div className="h-6 bg-muted/60 rounded w-full mb-2 animate-pulse" />
+          <div className="h-6 bg-muted/60 rounded w-5/6 mb-8 animate-pulse" />
+
+          {/* Content skeleton */}
+          <div className="space-y-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="space-y-2" style={{ animationDelay: `${i * 100}ms` }}>
+                <div className="h-4 bg-muted rounded w-full animate-pulse" />
+                <div className="h-4 bg-muted rounded w-11/12 animate-pulse" />
+                <div className="h-4 bg-muted rounded w-4/5 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </article>
+
+        {/* Screen reader announcement */}
+        <span className="sr-only">Loading article content, please wait...</span>
       </div>
     );
   }
