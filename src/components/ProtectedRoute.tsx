@@ -77,8 +77,15 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   // This prevents the flash of redirect before session loads
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div
+        className="flex flex-col items-center justify-center min-h-screen gap-3"
+        role="status"
+        aria-busy="true"
+        aria-label="Verifying authentication"
+      >
+        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+        <p className="text-sm text-muted-foreground animate-pulse">Verifying access...</p>
+        <span className="sr-only">Please wait while we verify your authentication</span>
       </div>
     );
   }

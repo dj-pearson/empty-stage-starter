@@ -2,18 +2,25 @@ import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface LoadingFallbackProps {
+  /** Optional loading message to display */
   message?: string;
+  /** Additional CSS classes */
   className?: string;
+  /** Whether to take full screen height */
   fullScreen?: boolean;
+  /** Size of the spinner */
   size?: 'sm' | 'md' | 'lg';
+  /** Screen reader label for accessibility */
+  ariaLabel?: string;
 }
 
 /**
  * Loading fallback component for lazy-loaded components
+ * Includes proper accessibility attributes for screen readers
  *
  * Usage:
  * ```tsx
- * <Suspense fallback={<LoadingFallback />}>
+ * <Suspense fallback={<LoadingFallback message="Loading page..." />}>
  *   <LazyComponent />
  * </Suspense>
  * ```
@@ -23,6 +30,7 @@ export function LoadingFallback({
   className,
   fullScreen = true,
   size = 'md',
+  ariaLabel = 'Loading content',
 }: LoadingFallbackProps) {
   const sizeClasses = {
     sm: 'w-4 h-4',
@@ -38,11 +46,20 @@ export function LoadingFallback({
         !fullScreen && 'min-h-[200px]',
         className
       )}
+      role="status"
+      aria-busy="true"
+      aria-label={ariaLabel}
     >
-      <Loader2 className={cn('animate-spin text-primary', sizeClasses[size])} />
+      <Loader2
+        className={cn('animate-spin text-primary', sizeClasses[size])}
+        aria-hidden="true"
+      />
       {message && (
-        <p className="text-sm text-muted-foreground animate-pulse">{message}</p>
+        <p className="text-sm text-muted-foreground animate-pulse" aria-live="polite">
+          {message}
+        </p>
       )}
+      <span className="sr-only">{ariaLabel}, please wait...</span>
     </div>
   );
 }
@@ -77,28 +94,5 @@ export function CardSkeleton() {
   );
 }
 
-/**
- * Table skeleton for loading tables
- */
-export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
-  return (
-    <div className="border rounded-lg overflow-hidden">
-      <div className="bg-muted p-4">
-        <div className="flex gap-4">
-          {Array.from({ length: cols }).map((_, i) => (
-            <div key={i} className="h-4 bg-muted-foreground/20 rounded flex-1" />
-          ))}
-        </div>
-      </div>
-      <div className="divide-y">
-        {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="p-4 flex gap-4">
-            {Array.from({ length: cols }).map((_, j) => (
-              <div key={j} className="h-4 bg-muted rounded flex-1 animate-pulse" />
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// Re-export skeletons from LoadingSkeletons for convenience
+export { TableSkeleton, ListSkeleton, CalendarSkeleton, GroceryListSkeleton, RecipeCardSkeleton, Skeleton } from './LoadingSkeletons';
