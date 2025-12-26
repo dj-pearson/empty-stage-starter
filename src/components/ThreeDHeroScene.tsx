@@ -1,7 +1,31 @@
 import { Canvas } from '@react-three/fiber';
-import { Float, Html, PerspectiveCamera, Environment, Lightformer } from '@react-three/drei';
-import { Suspense } from 'react';
+import { Float, Html, PerspectiveCamera } from '@react-three/drei';
+import { Suspense, Component, ReactNode } from 'react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+
+// Error boundary for 3D canvas - prevents crashes from breaking the page
+class Canvas3DErrorBoundary extends Component<{ children: ReactNode; fallback?: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode; fallback?: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    // Log error but don't crash the page
+    console.warn('[ThreeDHeroScene] 3D rendering failed, falling back to static view:', error.message);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || null;
+    }
+    return this.props.children;
+  }
+}
 
 function FloatingEmoji({ emoji, position, delay = 0, speed = 1 }: { emoji: string; position: [number, number, number]; delay?: number; speed?: number }) {
   return (
@@ -48,8 +72,9 @@ function SceneContent() {
       <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={2} castShadow />
       <pointLight position={[-10, -10, -10]} intensity={1} color="#ffcccc" />
       
-      {/* Environment for reflections */}
-      <Environment preset="city" />
+      {/* Additional lighting for glass effect reflections - no external HDR dependency */}
+      <directionalLight position={[5, 5, 5]} intensity={0.5} color="#ffffff" />
+      <directionalLight position={[-5, 5, -5]} intensity={0.3} color="#ffeecc" />
 
       {/* Floating Glass Shapes - Modern Abstract Background */}
       <GlassShape position={[-4, 2, -2]} scale={1.5} type="torus" color="#ff9999" />
@@ -77,11 +102,13 @@ export function ThreeDHeroScene({ className = '' }: { className?: string }) {
 
   return (
     <div className={className}>
-      <Canvas dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
-        <Suspense fallback={null}>
-          <SceneContent />
-        </Suspense>
-      </Canvas>
+      <Canvas3DErrorBoundary fallback={null}>
+        <Canvas dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
+          <Suspense fallback={null}>
+            <SceneContent />
+          </Suspense>
+        </Canvas>
+      </Canvas3DErrorBoundary>
     </div>
   );
 }
