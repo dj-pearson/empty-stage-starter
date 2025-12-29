@@ -479,7 +479,7 @@ export function Navigation() {
       </nav>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-area-inset-bottom">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 pb-safe">
         <div className="flex justify-around items-center h-16 px-2">
           {/* Priority Navigation Items */}
           {mobileBottomNavItems.map(({ to, icon: Icon, label }) => (

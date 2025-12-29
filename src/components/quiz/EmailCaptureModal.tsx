@@ -110,6 +110,10 @@ export function EmailCaptureModal({
             <Input
               id="email"
               type="email"
+              inputMode="email"
+              autoComplete="email"
+              autoCapitalize="none"
+              autoCorrect="off"
               placeholder="your@email.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -122,6 +126,8 @@ export function EmailCaptureModal({
             <Input
               id="childName"
               type="text"
+              autoComplete="off"
+              autoCapitalize="words"
               placeholder="Alex"
               value={childName}
               onChange={(e) => setChildName(e.target.value)}
@@ -134,6 +140,8 @@ export function EmailCaptureModal({
             <Input
               id="parentName"
               type="text"
+              autoComplete="name"
+              autoCapitalize="words"
               placeholder="Sam"
               value={parentName}
               onChange={(e) => setParentName(e.target.value)}

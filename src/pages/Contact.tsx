@@ -132,6 +132,8 @@ const Contact = () => {
                   <Input
                     id="name"
                     name="name"
+                    autoComplete="name"
+                    autoCapitalize="words"
                     placeholder="Your name"
                     value={formData.name}
                     onChange={handleChange}
@@ -145,6 +147,10 @@ const Contact = () => {
                     id="email"
                     name="email"
                     type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
                     placeholder="you@example.com"
                     value={formData.email}
                     onChange={handleChange}

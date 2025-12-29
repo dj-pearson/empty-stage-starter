@@ -412,6 +412,10 @@ const Auth = () => {
                         <Input
                           id="signup-email"
                           type="email"
+                          inputMode="email"
+                          autoComplete="email"
+                          autoCapitalize="none"
+                          autoCorrect="off"
                           placeholder="you@example.com"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
@@ -448,6 +452,9 @@ const Auth = () => {
                         <Input
                           id="signup-password"
                           type={showPassword ? "text" : "password"}
+                          autoComplete="new-password"
+                          autoCapitalize="none"
+                          autoCorrect="off"
                           value={password}
                           onChange={(e) => {
                             setPassword(e.target.value);
@@ -539,6 +546,10 @@ const Auth = () => {
                       <Input
                         id="signin-email"
                         type="email"
+                        inputMode="email"
+                        autoComplete="email"
+                        autoCapitalize="none"
+                        autoCorrect="off"
                         placeholder="you@example.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -552,6 +563,9 @@ const Auth = () => {
                         <Input
                           id="signin-password"
                           type={showPassword ? "text" : "password"}
+                          autoComplete="current-password"
+                          autoCapitalize="none"
+                          autoCorrect="off"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           required

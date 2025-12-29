@@ -250,6 +250,10 @@ export function ManageHouseholdDialog() {
               <div className="flex gap-2">
                 <Input
                   type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
                   placeholder="parent@example.com"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
