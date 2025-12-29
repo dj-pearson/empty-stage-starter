@@ -621,6 +621,85 @@ html {
 }
 
 /* ==========================================================================
+   Touch Action Optimizations
+   ========================================================================== */
+
+/* Prevent scroll when interacting with specific elements */
+.touch-action-none {
+  touch-action: none;
+}
+
+/* Allow only horizontal panning (useful for carousels/sliders) */
+.touch-action-pan-x {
+  touch-action: pan-x;
+}
+
+/* Allow only vertical panning (useful for vertical scrolling containers) */
+.touch-action-pan-y {
+  touch-action: pan-y;
+}
+
+/* Allow both panning directions but no pinch zoom */
+.touch-action-pan {
+  touch-action: pan-x pan-y;
+}
+
+/* Allow pinch zoom only */
+.touch-action-pinch-zoom {
+  touch-action: pinch-zoom;
+}
+
+/* Default manipulation - pan and pinch zoom */
+.touch-action-manipulation {
+  touch-action: manipulation;
+}
+
+/* Prevent double-tap zoom on interactive elements */
+button,
+a,
+input,
+select,
+textarea,
+[role="button"],
+.btn {
+  touch-action: manipulation;
+}
+
+/* Draggable elements should have no touch action */
+[draggable="true"],
+.draggable {
+  touch-action: none;
+  -webkit-user-drag: element;
+}
+
+/* Slider/carousel containers - horizontal only */
+.slider,
+.carousel,
+[data-carousel],
+.horizontal-scroll {
+  touch-action: pan-x;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Modal/dialog overlays - prevent background scroll */
+[role="dialog"],
+.modal-overlay,
+.sheet-overlay,
+.dialog-overlay {
+  touch-action: none;
+}
+
+/* Allow scrolling within modal content */
+.modal-content,
+.sheet-content,
+.dialog-content {
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+
+/* ==========================================================================
    Swipe & Gesture Support
    ========================================================================== */
 
