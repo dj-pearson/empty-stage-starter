@@ -20,7 +20,7 @@ import { FaApple } from "react-icons/fa";
 import { Link } from "react-router-dom";
 import { OnboardingDialog } from "@/components/OnboardingDialog";
 import { PasswordResetDialog } from "@/components/PasswordResetDialog";
-import { PasswordSchema, EmailSchema } from "@/lib/validations";
+import { PasswordSchema, EmailSchema, sanitizeURL } from "@/lib/validations";
 import { Footer } from "@/components/Footer";
 import { cn } from "@/lib/utils";
 
@@ -93,7 +93,12 @@ const Auth = () => {
   }, [passwordRequirements]);
 
   // Get the redirect URL from query params (where user was trying to go)
-  const redirectTo = searchParams.get("redirect") || "/dashboard";
+  // Validate redirect URL to prevent open redirect attacks
+  const rawRedirect = searchParams.get("redirect") || "/dashboard";
+  const sanitizedRedirect = sanitizeURL(rawRedirect);
+  // Only allow internal redirects (relative paths starting with /)
+  // Fall back to dashboard if the URL is invalid or external
+  const redirectTo = sanitizedRedirect.startsWith("/") ? sanitizedRedirect : "/dashboard";
   
   // Get the default tab from query params (signin or signup)
   const defaultTab = searchParams.get("tab") || "signup";
