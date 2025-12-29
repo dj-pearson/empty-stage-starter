@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { FoodCard } from "@/components/FoodCard";
 import { AddFoodDialog } from "@/components/AddFoodDialog";
@@ -156,15 +156,29 @@ export default function Pantry() {
     enabled: isMobile,
   });
 
-  const filteredFoods = foods.filter((food) => {
-    if (!food || !food.name) return false;
-    const matchesSearch = food.name
-      .toLowerCase()
-      .includes(debouncedSearchQuery.toLowerCase());
-    const matchesCategory =
-      categoryFilter === "all" || food.category === categoryFilter;
-    return matchesSearch && matchesCategory;
-  });
+  // Memoize filtered foods to avoid recalculating on every render
+  const filteredFoods = useMemo(() => {
+    return foods.filter((food) => {
+      if (!food || !food.name) return false;
+      const matchesSearch = food.name
+        .toLowerCase()
+        .includes(debouncedSearchQuery.toLowerCase());
+      const matchesCategory =
+        categoryFilter === "all" || food.category === categoryFilter;
+      return matchesSearch && matchesCategory;
+    });
+  }, [foods, debouncedSearchQuery, categoryFilter]);
+
+  // Memoize allergens calculation to avoid recalculating for each food card
+  const uniqueKidAllergens = useMemo(() => {
+    const allKidAllergens = kids.reduce<string[]>((acc, kid) => {
+      if (kid.allergens) {
+        return [...acc, ...kid.allergens];
+      }
+      return acc;
+    }, []);
+    return [...new Set(allKidAllergens)];
+  }, [kids]);
 
   const handleGetSuggestions = async () => {
     setIsLoadingSuggestions(true);
@@ -234,12 +248,12 @@ export default function Pantry() {
     });
   };
 
-  const handleEdit = (food: Food) => {
+  const handleEdit = useCallback((food: Food) => {
     setEditFood(food);
     setDialogOpen(true);
-  };
+  }, []);
 
-  const handleQuantityChange = (foodId: string, newQuantity: number) => {
+  const handleQuantityChange = useCallback((foodId: string, newQuantity: number) => {
     const food = foods.find((f) => f.id === foodId);
     if (food) {
       updateFood(foodId, {
@@ -247,23 +261,23 @@ export default function Pantry() {
         quantity: newQuantity,
       });
     }
-  };
+  }, [foods, updateFood]);
 
-  const handleSave = (foodData: Omit<Food, "id">) => {
+  const handleSave = useCallback((foodData: Omit<Food, "id">) => {
     if (editFood) {
       updateFood(editFood.id, foodData);
     } else {
       addFood(foodData);
     }
     setEditFood(null);
-  };
+  }, [editFood, updateFood, addFood]);
 
-  const handleDialogClose = (open: boolean) => {
+  const handleDialogClose = useCallback((open: boolean) => {
     setDialogOpen(open);
     if (!open) {
       setEditFood(null);
     }
-  };
+  }, []);
 
   const handleLoadStarterList = () => {
     let addedCount = 0;
@@ -681,28 +695,16 @@ export default function Pantry() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredFoods.map((food) => {
-                // Collect allergens from all kids in the family
-                const allKidAllergens = kids.reduce<string[]>((acc, kid) => {
-                  if (kid.allergens) {
-                    return [...acc, ...kid.allergens];
-                  }
-                  return acc;
-                }, []);
-                // Remove duplicates
-                const uniqueAllergens = [...new Set(allKidAllergens)];
-
-                return (
-                  <FoodCard
-                    key={food.id}
-                    food={food}
-                    onEdit={handleEdit}
-                    onDelete={deleteFood}
-                    onQuantityChange={handleQuantityChange}
-                    kidAllergens={uniqueAllergens}
-                  />
-                );
-              })}
+              {filteredFoods.map((food) => (
+                <FoodCard
+                  key={food.id}
+                  food={food}
+                  onEdit={handleEdit}
+                  onDelete={deleteFood}
+                  onQuantityChange={handleQuantityChange}
+                  kidAllergens={uniqueKidAllergens}
+                />
+              ))}
             </div>
           )}
         </div>

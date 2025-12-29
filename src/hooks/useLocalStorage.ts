@@ -34,19 +34,21 @@ export function useLocalStorage<T>(
   const setValue: Dispatch<SetStateAction<T>> = useCallback(
     (value) => {
       try {
-        // Allow value to be a function (like useState)
-        const valueToStore = value instanceof Function ? value(storedValue) : value;
+        // Use functional update to avoid stale closure issues
+        setStoredValue((prev) => {
+          const valueToStore = value instanceof Function ? value(prev) : value;
 
-        setStoredValue(valueToStore);
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem(key, JSON.stringify(valueToStore));
+          }
 
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem(key, JSON.stringify(valueToStore));
-        }
+          return valueToStore;
+        });
       } catch (error) {
         console.error(`Error setting localStorage key "${key}":`, error);
       }
     },
-    [key, storedValue]
+    [key]
   );
 
   // Remove value from localStorage
@@ -116,17 +118,21 @@ export function useSessionStorage<T>(
   const setValue: Dispatch<SetStateAction<T>> = useCallback(
     (value) => {
       try {
-        const valueToStore = value instanceof Function ? value(storedValue) : value;
-        setStoredValue(valueToStore);
+        // Use functional update to avoid stale closure issues
+        setStoredValue((prev) => {
+          const valueToStore = value instanceof Function ? value(prev) : value;
 
-        if (typeof window !== 'undefined') {
-          window.sessionStorage.setItem(key, JSON.stringify(valueToStore));
-        }
+          if (typeof window !== 'undefined') {
+            window.sessionStorage.setItem(key, JSON.stringify(valueToStore));
+          }
+
+          return valueToStore;
+        });
       } catch (error) {
         console.error(`Error setting sessionStorage key "${key}":`, error);
       }
     },
-    [key, storedValue]
+    [key]
   );
 
   const removeValue = useCallback(() => {
