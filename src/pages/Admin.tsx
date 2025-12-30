@@ -118,10 +118,16 @@ const Admin = () => {
   }, [isAdmin, location]);
 
   const handleOAuthCallback = async (code: string, state: string) => {
-    logger.debug('Admin OAuth callback detected:', { code: code?.substring(0, 10) + '...', state: state?.substring(0, 10) + '...' });
+    logger.debug('Admin OAuth callback detected');
 
     try {
       logger.debug('Processing OAuth callback directly in Admin...');
+
+      // Get user session for authenticated request
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('User session not found - please log in again');
+      }
 
       // Get edge functions URL - prefer env var, fallback to deriving from API URL
       const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL ||
@@ -131,11 +137,19 @@ const Admin = () => {
         throw new Error('Edge functions URL not configured');
       }
 
-      const response = await fetch(`${functionsUrl}/gsc-oauth?action=callback&code=${code}&state=${state}`, {
-        method: 'GET',
+      // Security: Send OAuth code/state in POST body, not URL query params
+      // Query params are logged in server logs, browser history, and referrer headers
+      const response = await fetch(`${functionsUrl}/gsc-oauth`, {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        }
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: 'callback',
+          code,
+          state,
+        }),
       });
 
       if (!response.ok) {

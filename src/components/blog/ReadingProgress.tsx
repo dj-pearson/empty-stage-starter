@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import DOMPurify from "dompurify";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ReadingProgressProps {
   postId?: string;
@@ -55,22 +56,25 @@ export function ReadingProgress({ postId, onProgressChange }: ReadingProgressPro
 
       try {
         // Use VITE_FUNCTIONS_URL for edge functions, fallback to deriving from API URL
-      const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL ||
-        (import.meta.env.VITE_SUPABASE_URL?.replace('api.', 'functions.') ?? '');
-      await fetch(
+        const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL ||
+          (import.meta.env.VITE_SUPABASE_URL?.replace('api.', 'functions.') ?? '');
+
+        // Security: Use session token when available for authenticated tracking
+        const { data: { session } } = await supabase.auth.getSession();
+        const authToken = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+        await fetch(
           `${functionsUrl}/track-engagement`,
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              Authorization: `Bearer ${authToken}`,
             },
             body: JSON.stringify({
               post_id: postId,
               event_type: eventType,
               session_id: getSessionId(),
-              user_agent: navigator.userAgent,
-              referrer: document.referrer,
             }),
           }
         );
@@ -229,13 +233,17 @@ export function ShareButtons({ url, title, description }: ShareButtonsProps) {
     const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL ||
       (import.meta.env.VITE_SUPABASE_URL?.replace('api.', 'functions.') ?? '');
     try {
+      // Security: Use session token when available for authenticated tracking
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+
       await fetch(
         `${functionsUrl}/track-engagement`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            Authorization: `Bearer ${authToken}`,
           },
           body: JSON.stringify({
             post_id: url.split("/").pop(),
