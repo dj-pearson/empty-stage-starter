@@ -1,0 +1,27 @@
+﻿{
+    "generated_at":  "2025-12-30T11:41:53.2188947-06:00",
+    "prices":  [
+
+               ],
+    "products":  [
+                     {
+                         "ProductId":  "prod_ThVx2lcELU0LRi",
+                         "Name":  "EatPal Pro",
+                         "DatabasePlanName":  "Pro"
+                     },
+                     {
+                         "ProductId":  "prod_ThVxol4AScov3n",
+                         "Name":  "EatPal Family Plus",
+                         "DatabasePlanName":  "Family Plus"
+                     },
+                     {
+                         "ProductId":  "prod_ThVx4c44EHCBM1",
+                         "Name":  "EatPal Professional",
+                         "DatabasePlanName":  "Professional"
+                     }
+                 ],
+    "payment_links":  [
+
+                      ],
+    "mode":  "test"
+}

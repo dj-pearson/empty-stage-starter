@@ -171,7 +171,9 @@ foreach ($product in $Products) {
     try {
         # Create product
         $productCmd = "stripe products create $modeFlag --name `"$($product.Name)`" --description `"$($product.Description)`" $metadataStr"
-        $productResult = Invoke-Expression $productCmd 2>&1 | ConvertFrom-Json
+        $productOutput = Invoke-Expression $productCmd 2>&1
+        $productJson = ($productOutput | Out-String).Trim()
+        $productResult = $productJson | ConvertFrom-Json
 
         if ($productResult.id) {
             $productId = $productResult.id
@@ -185,8 +187,10 @@ foreach ($product in $Products) {
 
             # Create Monthly Price
             Write-Step "  Creating monthly price: `$$($product.MonthlyPrice / 100)/month"
-            $monthlyPriceCmd = "stripe prices create $modeFlag --product $productId --unit-amount $($product.MonthlyPrice) --currency usd --recurring[interval]=month -d `"nickname=$($product.DatabasePlanName) Monthly`""
-            $monthlyPriceResult = Invoke-Expression $monthlyPriceCmd 2>&1 | ConvertFrom-Json
+            $monthlyPriceCmd = "stripe prices create $modeFlag --product $productId --unit-amount $($product.MonthlyPrice) --currency usd -d `"recurring[interval]=month`" -d `"nickname=$($product.DatabasePlanName) Monthly`""
+            $monthlyPriceOutput = Invoke-Expression $monthlyPriceCmd 2>&1
+            $monthlyPriceJson = ($monthlyPriceOutput | Out-String).Trim()
+            $monthlyPriceResult = $monthlyPriceJson | ConvertFrom-Json
 
             if ($monthlyPriceResult.id) {
                 Write-Success "  Created monthly price: $($monthlyPriceResult.id)"
@@ -200,8 +204,10 @@ foreach ($product in $Products) {
 
             # Create Yearly Price
             Write-Step "  Creating yearly price: `$$($product.YearlyPrice / 100)/year"
-            $yearlyPriceCmd = "stripe prices create $modeFlag --product $productId --unit-amount $($product.YearlyPrice) --currency usd --recurring[interval]=year -d `"nickname=$($product.DatabasePlanName) Yearly`""
-            $yearlyPriceResult = Invoke-Expression $yearlyPriceCmd 2>&1 | ConvertFrom-Json
+            $yearlyPriceCmd = "stripe prices create $modeFlag --product $productId --unit-amount $($product.YearlyPrice) --currency usd -d `"recurring[interval]=year`" -d `"nickname=$($product.DatabasePlanName) Yearly`""
+            $yearlyPriceOutput = Invoke-Expression $yearlyPriceCmd 2>&1
+            $yearlyPriceJson = ($yearlyPriceOutput | Out-String).Trim()
+            $yearlyPriceResult = $yearlyPriceJson | ConvertFrom-Json
 
             if ($yearlyPriceResult.id) {
                 Write-Success "  Created yearly price: $($yearlyPriceResult.id)"
@@ -218,8 +224,10 @@ foreach ($product in $Products) {
                 Write-Step "  Creating payment links..."
 
                 # Monthly payment link
-                $monthlyLinkCmd = "stripe payment_links create $modeFlag --line-items[0][price]=$($monthlyPriceResult.id) --line-items[0][quantity]=1"
-                $monthlyLinkResult = Invoke-Expression $monthlyLinkCmd 2>&1 | ConvertFrom-Json
+                $monthlyLinkCmd = "stripe payment_links create $modeFlag -d `"line_items[0][price]=$($monthlyPriceResult.id)`" -d `"line_items[0][quantity]=1`""
+                $monthlyLinkOutput = Invoke-Expression $monthlyLinkCmd 2>&1
+                $monthlyLinkJson = ($monthlyLinkOutput | Out-String).Trim()
+                $monthlyLinkResult = $monthlyLinkJson | ConvertFrom-Json
 
                 if ($monthlyLinkResult.url) {
                     Write-Success "  Monthly link: $($monthlyLinkResult.url)"
@@ -232,8 +240,10 @@ foreach ($product in $Products) {
                 }
 
                 # Yearly payment link
-                $yearlyLinkCmd = "stripe payment_links create $modeFlag --line-items[0][price]=$($yearlyPriceResult.id) --line-items[0][quantity]=1"
-                $yearlyLinkResult = Invoke-Expression $yearlyLinkCmd 2>&1 | ConvertFrom-Json
+                $yearlyLinkCmd = "stripe payment_links create $modeFlag -d `"line_items[0][price]=$($yearlyPriceResult.id)`" -d `"line_items[0][quantity]=1`""
+                $yearlyLinkOutput = Invoke-Expression $yearlyLinkCmd 2>&1
+                $yearlyLinkJson = ($yearlyLinkOutput | Out-String).Trim()
+                $yearlyLinkResult = $yearlyLinkJson | ConvertFrom-Json
 
                 if ($yearlyLinkResult.url) {
                     Write-Success "  Yearly link: $($yearlyLinkResult.url)"
