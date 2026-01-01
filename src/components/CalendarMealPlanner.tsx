@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo, memo } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -66,7 +66,7 @@ const MEAL_SLOTS: { slot: MealSlot; label: string; color: string }[] = [
 
 const DAYS_IN_WEEK = 7;
 
-export function CalendarMealPlanner({
+export const CalendarMealPlanner = memo(function CalendarMealPlanner({
   weekStart,
   planEntries,
   foods,
@@ -207,38 +207,51 @@ export function CalendarMealPlanner({
     setDraggedFood(null);
   };
 
-  const getFood = (foodId: string) => foods.find(f => f.id === foodId);
-  const getRecipe = (recipeId: string) => recipes.find(r => r.id === recipeId);
+  // Memoize food and recipe lookups to prevent recreating functions on every render
+  const getFood = useCallback((foodId: string) => foods.find(f => f.id === foodId), [foods]);
+  const getRecipe = useCallback((recipeId: string) => recipes.find(r => r.id === recipeId), [recipes]);
 
-  const getEntriesForSlot = (date: string, slot: MealSlot) => {
-    const kidFilter = showAllKids ? kids.map(k => k.id) : [kidId];
-    
-    const allEntries = planEntries.filter(
-      e => e.date === date && e.meal_slot === slot && kidFilter.includes(e.kid_id)
-    );
-    
-    // Group by recipe_id - show recipes as single items
-    const grouped: PlanEntry[] = [];
-    const recipeIds = new Set<string>();
-    
-    allEntries.forEach(entry => {
+  // Memoize kid filter set for O(1) lookup instead of O(n) includes()
+  const kidFilterSet = useMemo(() => {
+    return new Set(showAllKids ? kids.map(k => k.id) : [kidId]);
+  }, [showAllKids, kids, kidId]);
+
+  // Memoize entries grouped by slot for efficient lookups
+  const entriesBySlot = useMemo(() => {
+    const map = new Map<string, PlanEntry[]>();
+
+    planEntries.forEach(entry => {
+      if (!kidFilterSet.has(entry.kid_id)) return;
+
+      const key = `${entry.date}-${entry.meal_slot}`;
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
+
+      const entries = map.get(key)!;
+
+      // Group by recipe_id - show recipes as single items
       if (entry.recipe_id) {
-        // Only add first entry of each recipe per kid
         const recipeKey = `${entry.recipe_id}-${entry.kid_id}`;
-        if (!recipeIds.has(recipeKey)) {
-          recipeIds.add(recipeKey);
-          grouped.push(entry);
+        const alreadyHasRecipe = entries.some(
+          e => e.recipe_id && `${e.recipe_id}-${e.kid_id}` === recipeKey
+        );
+        if (!alreadyHasRecipe) {
+          entries.push(entry);
         }
       } else {
-        // Regular food entries
-        grouped.push(entry);
+        entries.push(entry);
       }
     });
-    
-    return grouped;
-  };
 
-  const toggleRecipeExpand = (recipeId: string, e: React.MouseEvent) => {
+    return map;
+  }, [planEntries, kidFilterSet]);
+
+  const getEntriesForSlot = useCallback((date: string, slot: MealSlot) => {
+    return entriesBySlot.get(`${date}-${slot}`) || [];
+  }, [entriesBySlot]);
+
+  const toggleRecipeExpand = useCallback((recipeId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setExpandedRecipes(prev => {
       const newSet = new Set(prev);
@@ -249,7 +262,7 @@ export function CalendarMealPlanner({
       }
       return newSet;
     });
-  };
+  }, []);
 
   // Template handlers
   const handleSelectTemplate = (template: any) => {
@@ -797,4 +810,4 @@ export function CalendarMealPlanner({
       />
     </DndContext>
   );
-}
+});
