@@ -94,8 +94,9 @@ export function FoodCard({ food, onEdit, onDelete, onQuantityChange, kidAllergen
                 onClick={handleDecrement}
                 className="h-8 w-8"
                 disabled={(food.quantity || 0) === 0}
+                aria-label={`Decrease quantity of ${food.name}`}
               >
-                <Minus className="h-4 w-4" />
+                <Minus className="h-4 w-4" aria-hidden="true" />
               </Button>
               <div className="flex items-center gap-2 min-w-[100px] justify-center">
                 <Package className="h-4 w-4 text-muted-foreground" />
@@ -111,8 +112,9 @@ export function FoodCard({ food, onEdit, onDelete, onQuantityChange, kidAllergen
                 variant="outline"
                 onClick={handleIncrement}
                 className="h-8 w-8"
+                aria-label={`Increase quantity of ${food.name}`}
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
           )}
@@ -155,8 +157,9 @@ export function FoodCard({ food, onEdit, onDelete, onQuantityChange, kidAllergen
             variant="ghost"
             onClick={() => onEdit(food)}
             className="h-8 w-8"
+            aria-label={`Edit ${food.name}`}
           >
-            <Pencil className="h-4 w-4" />
+            <Pencil className="h-4 w-4" aria-hidden="true" />
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
@@ -164,8 +167,9 @@ export function FoodCard({ food, onEdit, onDelete, onQuantityChange, kidAllergen
                 size="icon"
                 variant="ghost"
                 className="h-8 w-8 text-destructive hover:text-destructive"
+                aria-label={`Delete ${food.name}`}
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
