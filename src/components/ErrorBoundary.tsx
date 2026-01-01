@@ -21,17 +21,13 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    console.error('[ErrorBoundary] getDerivedStateFromError:', error);
-    console.error('[ErrorBoundary] Error message:', error.message);
-    console.error('[ErrorBoundary] Error name:', error.name);
+    // Use logger instead of direct console.error to respect production sanitization
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('[ErrorBoundary] Error caught:', error);
-    console.error('[ErrorBoundary] Error info:', errorInfo);
-    console.error('[ErrorBoundary] Error stack:', error.stack);
-    logger.error('Error caught by boundary:', error, errorInfo);
+    // Use logger which sanitizes output in production
+    logger.error('Error caught by boundary:', error, { componentStack: errorInfo.componentStack });
   }
 
   handleReset = () => {
@@ -56,10 +52,10 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             <p className="text-sm text-muted-foreground">
               We encountered an error while loading this component.
             </p>
-            {this.state.error && (
+            {this.state.error && import.meta.env.DEV && (
               <details className="text-xs text-muted-foreground">
                 <summary className="cursor-pointer hover:text-foreground">
-                  Error details
+                  Error details (dev only)
                 </summary>
                 <pre className="mt-2 p-2 bg-muted rounded overflow-auto">
                   {this.state.error.toString()}

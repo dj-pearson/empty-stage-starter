@@ -3,6 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
+import { logger } from "@/lib/logger";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -39,13 +40,13 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         if (!mounted) return;
 
         if (error) {
-          console.error("Error checking session:", error);
+          logger.error("Error checking session:", error);
           setSession(null);
         } else {
           setSession(currentSession);
         }
       } catch (error) {
-        console.error("Unexpected error during session check:", error);
+        logger.error("Unexpected error during session check:", error);
         if (mounted) {
           setSession(null);
         }

@@ -86,15 +86,38 @@ export default function Grocery() {
   const [showImportRecipeDialog, setShowImportRecipeDialog] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      setUserId(user?.id || null);
-      
-      if (user) {
-        // Get household ID
-        const { data: hh } = await supabase.rpc('get_user_household_id', { _user_id: user.id });
-        setHouseholdId((hh as string) ?? null);
+    const loadUserData = async () => {
+      try {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+        if (authError) {
+          logger.error('Error getting user in Grocery:', authError);
+          return;
+        }
+
+        setUserId(user?.id || null);
+
+        if (user) {
+          // Get household ID
+          const { data: hh, error: hhError } = await supabase.rpc('get_user_household_id', { _user_id: user.id });
+
+          if (hhError) {
+            logger.error('Error getting household ID in Grocery:', hhError);
+            toast.error('Failed to load household data', {
+              description: 'Some features may be unavailable'
+            });
+            return;
+          }
+
+          setHouseholdId((hh as string) ?? null);
+        }
+      } catch (error) {
+        logger.error('Unexpected error loading user data in Grocery:', error);
+        toast.error('Failed to load user data');
       }
-    });
+    };
+
+    loadUserData();
   }, []);
 
   const isFamilyMode = !activeKidId;
