@@ -158,8 +158,8 @@ export function Navigation() {
                 <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
                 <span className="sr-only">Toggle theme</span>
               </Button>
-              <Button variant="ghost" size="icon" onClick={handleLogout} title="Sign out">
-                <LogOut className="h-5 w-5" />
+              <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Sign out of your account">
+                <LogOut className="h-5 w-5" aria-hidden="true" />
               </Button>
             </div>
           </div>
@@ -186,8 +186,8 @@ export function Navigation() {
           {/* Mobile Menu Button */}
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <Menu className="h-5 w-5" />
+              <Button variant="ghost" size="icon" aria-label="Open navigation menu">
+                <Menu className="h-5 w-5" aria-hidden="true" />
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-[280px]">
