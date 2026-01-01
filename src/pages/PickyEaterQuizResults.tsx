@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
@@ -21,6 +21,7 @@ import { EmailCaptureModal } from '@/components/quiz/EmailCaptureModal';
 import { ShareButtons } from '@/components/quiz/ShareButtons';
 import { downloadPDFReport } from '@/lib/quiz/pdfGenerator';
 import { saveQuizResponse, trackQuizAnalytics, trackPDFDownload } from '@/lib/quiz/supabaseIntegration';
+import { getSyncStorage } from '@/lib/platform';
 import { Download, Share2, Sparkles, TrendingUp, Loader2, Lock, Gift } from 'lucide-react';
 
 export default function PickyEaterQuizResults() {
@@ -35,13 +36,16 @@ export default function PickyEaterQuizResults() {
   const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
   const [showUnlockPrompt, setShowUnlockPrompt] = useState(false);
 
-  // Check if user has already provided email (stored in localStorage)
+  // Use platform-safe storage for cross-platform compatibility
+  const storage = useMemo(() => getSyncStorage(), []);
+
+  // Check if user has already provided email (stored in storage)
   useEffect(() => {
-    const savedEmail = localStorage.getItem('quiz_email_captured');
+    const savedEmail = storage.getItem('quiz_email_captured');
     if (savedEmail) {
       setEmailCaptured(true);
     }
-  }, []);
+  }, [storage]);
 
   useEffect(() => {
     const state = location.state as {
@@ -149,8 +153,8 @@ export default function PickyEaterQuizResults() {
     setParentName(parent);
     setShowEmailModal(false);
     setShowUnlockPrompt(false);
-    // Save to localStorage so returning users don't see gate again
-    localStorage.setItem('quiz_email_captured', 'true');
+    // Save to storage so returning users don't see gate again
+    storage.setItem('quiz_email_captured', 'true');
     toast.success('Email saved! Here are your full results.');
   };
 
