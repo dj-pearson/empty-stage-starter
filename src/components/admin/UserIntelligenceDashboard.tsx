@@ -1,20 +1,12 @@
 import { useState, useEffect } from "react";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { calculateAge } from "@/lib/utils";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Button } from "@/components/ui/button";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Input } from "@/components/ui/input";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Badge } from "@/components/ui/badge";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Separator } from "@/components/ui/separator";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import {
   Search,
   User,
@@ -44,13 +36,10 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { supabase } from "@/lib/supabase-platform";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { formatDistanceToNow, format } from "date-fns";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import {
   Dialog,
   DialogContent,
@@ -60,11 +49,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Label } from "@/components/ui/label";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Textarea } from "@/components/ui/textarea";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import {
   Select,
   SelectContent,
@@ -72,7 +58,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 
 interface UserIntelligence {
   id: string;

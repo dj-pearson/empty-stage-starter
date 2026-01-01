@@ -300,7 +300,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               if (planRes.data) setPlanEntriesState(planRes.data as unknown as PlanEntry[]);
               if (groceryRes.data) setGroceryItemsState(groceryRes.data as unknown as GroceryItem[]);
             }
+          }).catch((error) => {
+            logger.error('Failed to load user data after auth state change:', error);
           });
+        }).catch((error) => {
+          logger.error('Failed to get household ID after auth state change:', error);
         });
       } else {
         if (mounted) setHouseholdId(null);

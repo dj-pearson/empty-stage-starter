@@ -1,6 +1,6 @@
 # CLAUDE.md - AI Assistant Guide for Munch Maker Mate (EatPal)
 
-> **Last Updated**: 2025-11-28
+> **Last Updated**: 2026-01-01
 > **Project**: Meal Planning & Nutrition Tracking Application
 > **Stack**: Vite + React 19 + TypeScript + Supabase + Expo
 
@@ -33,25 +33,34 @@
 - Budget calculator with USDA data
 - Subscription-based SaaS model (Stripe integration)
 
-### Recent Additions (Nov 2025)
+### Recent Additions (Nov 2025 - Jan 2026)
 - **3D Hero Scene**: Interactive Three.js powered landing page with floating food elements
-- **SEO Structured Data**: JSON-LD schema components for rich search results
+- **SEO Structured Data**: JSON-LD schema components for rich search results (9 schema types)
 - **PWA Support**: App installation prompts and offline capabilities
 - **Optimized Images**: Lazy loading, WebP/AVIF support, LCP optimization
 - **Conversion Tracking**: User journey funnel analytics dashboard
 - **Accessibility Improvements**: ARIA labels, reduced motion support, keyboard navigation
+- **Lead Magnets**: Picky eater personality quiz and grocery budget calculator
+- **Family Meal Voting**: Collaborative meal planning with emoji reactions
+- **Admin Dashboard**: System health monitoring, alerts, workflow automation, revenue ops
+- **Blog CMS**: Rich text editor with TipTap, scheduled publishing, version history
+- **Grocery Delivery Integration**: Instacart, Amazon Fresh, Walmart, Shipt, Target
+- **AI Prompt Versioning**: Template management with cost tracking
+- **Performance Testing**: K6 load and stress testing infrastructure
+- **Security Enhancements**: OAuth token exposure fixes, audit logging, open redirect fixes
 
 ### Tech Stack Summary
 - **Frontend**: Vite 7.1.12, React 19.1, TypeScript 5.8.3
-- **UI**: shadcn-ui (53 components), Tailwind CSS 3.4.17
+- **UI**: shadcn-ui (54 components), Tailwind CSS 3.4.17
 - **3D Graphics**: Three.js 0.159, @react-three/fiber 9.0, @react-three/drei 10.7
 - **Animation**: Framer Motion 12.23, GSAP 3.13, Lottie 3.6
-- **Routing**: React Router v6.30 (41 pages)
+- **Routing**: React Router v6.30 (43 pages)
 - **Backend**: Supabase 2.74 (PostgreSQL, Auth, Real-time, Edge Functions)
 - **Mobile**: Expo 54.0 + Expo Router v6.0.12
 - **Deployment**: Cloudflare Pages (web), EAS Build (mobile)
-- **Testing**: Vitest 3.0 (unit), Playwright 1.56 (E2E)
+- **Testing**: Vitest 3.0 (unit), Playwright 1.56 (E2E), K6 (performance)
 - **Monitoring**: Sentry 10.19 with session replay + Vite plugin for sourcemaps
+- **Rich Text**: TipTap 3.12 (blog editor with extensions)
 
 ---
 
@@ -62,16 +71,18 @@
 ```
 /
 ├── src/
-│   ├── components/          # 242 total components
-│   │   ├── ui/             # 53 shadcn-ui components (button, dialog, etc.)
-│   │   ├── admin/          # Admin dashboard components
+│   ├── components/          # 264 total components
+│   │   ├── ui/             # 54 shadcn-ui components (button, dialog, etc.)
+│   │   ├── admin/          # 46 admin dashboard components
 │   │   ├── blog/           # Blog-related components
 │   │   ├── budget/         # Budget calculator UI
-│   │   ├── quiz/           # Picky eater quiz
-│   │   ├── schema/         # SEO structured data (JSON-LD) components
+│   │   ├── quiz/           # 8 picky eater quiz components
+│   │   ├── schema/         # 9 SEO structured data (JSON-LD) components
+│   │   ├── billing/        # 4 billing/subscription components
+│   │   ├── subscription/   # 5 subscription management components
 │   │   └── [feature]/      # Feature-specific components
 │   ├── contexts/           # React Context providers
-│   │   └── AppContext.tsx  # Main application state (~960 lines)
+│   │   └── AppContext.tsx  # Main application state (~1052 lines)
 │   ├── hooks/              # 33 custom React hooks
 │   │   └── index.ts        # Centralized hook exports
 │   ├── integrations/       # External service integrations
@@ -88,7 +99,7 @@
 │   │   ├── seo-helpers.ts  # SEO utility functions
 │   │   ├── pwa.ts          # PWA utilities
 │   │   └── utils.ts
-│   ├── pages/              # 41 page components
+│   ├── pages/              # 43 page components
 │   │   ├── dashboard/      # Protected dashboard routes
 │   │   ├── Landing.tsx
 │   │   ├── Auth.tsx
@@ -122,7 +133,7 @@
 |---------|----------|-------|
 | **App Entry (Web)** | `src/main.tsx` | Renders React app, sets up providers |
 | **App Entry (Mobile)** | `index.mobile.js` | Expo Router entry |
-| **Routing** | `src/App.tsx` | React Router configuration, 41 routes |
+| **Routing** | `src/App.tsx` | React Router configuration, 43 routes |
 | **Global State** | `src/contexts/AppContext.tsx` | Context provider for app-wide state |
 | **Supabase Client** | `src/integrations/supabase/client.ts` | Singleton Supabase client instance |
 | **Database Types** | `src/integrations/supabase/types.ts` | Auto-generated from Supabase schema |
@@ -195,6 +206,12 @@ MOZ_SECRET_KEY=<your-moz-secret-key>
 GOOGLE_CLIENT_ID=<your-google-client-id>
 GOOGLE_CLIENT_SECRET=<your-google-client-secret>
 GOOGLE_REDIRECT_URI=https://your-domain.com/oauth/callback
+
+# Optional: Stripe (payments)
+VITE_STRIPE_PUBLISHABLE_KEY=<your-stripe-publishable-key>
+
+# Optional: Google Analytics
+VITE_GA_MEASUREMENT_ID=<your-ga-measurement-id>
 ```
 
 ### Development Commands
@@ -221,6 +238,9 @@ npm run test:coverage    # Generate coverage report
 npm run test:e2e         # Run Playwright E2E tests
 npm run test:e2e:ui      # Playwright UI mode
 npm run test:e2e:debug   # Playwright debug mode
+npm run test:a11y        # Run accessibility tests
+npm run test:perf        # K6 load testing
+npm run test:perf:stress # K6 stress testing
 
 # Code Quality
 npm run lint             # Run ESLint
@@ -387,13 +407,16 @@ export default function BlogPost({ post }) {
 }
 ```
 
-Available schema components:
+Available schema components (9 total):
 - `ArticleSchema` - Blog posts and articles
 - `FAQSchema` - FAQ pages
 - `BreadcrumbSchema` - Navigation breadcrumbs
 - `HowToSchema` - How-to guides
 - `OrganizationSchema` - Company information
 - `SoftwareAppSchema` - App store listings
+- `RecipeSchema` - Recipe structured data
+- `ReviewSchema` - Product/service reviews
+- `VideoSchema` - Video content metadata
 
 ### Using Optimized Images
 
@@ -973,7 +996,7 @@ const { data, error } = await supabase
 | `grocery_lists` | Grocery list groups | id, name, icon, color, store_name |
 | `user_subscriptions` | Subscription status | id, user_id, plan_id, status, stripe_subscription_id |
 
-### Recent Database Tables (Nov 2025)
+### Recent Database Tables (Nov 2025 - Jan 2026)
 
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
@@ -981,10 +1004,21 @@ const { data, error } = await supabase
 | `push_notifications` | Push notification subscriptions | id, user_id, endpoint, keys |
 | `recipe_scaling` | Recipe serving adjustments | id, recipe_id, original_servings, scaled_servings |
 | `meal_voting` | Family meal preference voting | id, meal_id, user_id, vote |
+| `voting_sessions` | Voting session management | id, household_id, status, deadline |
 | `weekly_reports` | Weekly nutrition summaries | id, user_id, week_start, nutrition_data |
 | `meal_suggestions` | AI-generated meal suggestions | id, user_id, suggestion_data, status |
 | `grocery_delivery` | Delivery tracking | id, grocery_list_id, delivery_status, eta |
+| `delivery_providers` | Grocery delivery providers | id, name, api_endpoint, enabled |
+| `user_delivery_accounts` | User delivery service accounts | id, user_id, provider_id, credentials |
 | `custom_domains` | White-label custom domains | id, household_id, domain, verified |
+| `quiz_responses` | Picky eater quiz results | id, user_id, responses, personality_type |
+| `budget_calculations` | Budget calculator results | id, user_id, family_size, budget_data |
+| `prompt_templates` | AI prompt templates | id, name, template, model, cost_per_use |
+| `prompt_template_versions` | Prompt version history | id, template_id, version, content |
+| `admin_alerts` | System alert definitions | id, type, threshold, notification_channel |
+| `system_health` | System health metrics | id, metric_name, value, timestamp |
+| `workflow_automations` | Automated workflow definitions | id, name, trigger, actions |
+| `revenue_operations_data` | Revenue analytics data | id, metric, value, period |
 
 ### Real-time Subscriptions
 
@@ -1612,6 +1646,23 @@ const { register, handleSubmit } = useForm({
 
 ## Changelog
 
+### 2026-01-01
+- Updated component count (242 → 264)
+- Updated page count (41 → 43)
+- Updated AppContext lines (960 → 1052)
+- Added lead magnet features (picky eater quiz, budget calculator)
+- Added family meal voting system documentation
+- Added admin dashboard features (system health, alerts, workflows, revenue ops)
+- Added blog CMS with TipTap rich text editor
+- Added grocery delivery integration (5 providers)
+- Added AI prompt versioning and cost tracking
+- Added K6 performance testing documentation
+- Added security enhancements (OAuth fixes, audit logging)
+- Added 11 new database tables documentation
+- Added 3 new schema components (Recipe, Review, Video)
+- Added Stripe and Google Analytics environment variables
+- Added accessibility and performance testing commands
+
 ### 2025-11-28
 - Updated component count (232 → 242)
 - Updated hooks count (20+ → 33)
@@ -1630,6 +1681,6 @@ const { register, handleSubmit } = useForm({
 
 ---
 
-**Last Updated**: 2025-11-28
+**Last Updated**: 2026-01-01
 **Maintained by**: Development Team
 **Questions?**: Check the docs or existing code patterns first!
