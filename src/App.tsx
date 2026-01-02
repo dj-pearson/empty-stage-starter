@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,12 +7,14 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { AppProvider } from "@/contexts/AppContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { SkipToContent } from "@/components/SkipToContent";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { CommandPalette } from "@/components/CommandPalette";
 import { LoadingFallback } from "@/components/LoadingFallback";
+
+// Lazy load non-critical components to improve initial bundle size and LCP
+const PWAInstallPrompt = lazy(() => import("@/components/PWAInstallPrompt").then(m => ({ default: m.PWAInstallPrompt })));
+const CommandPalette = lazy(() => import("@/components/CommandPalette").then(m => ({ default: m.CommandPalette })));
 
 // Lazy load all route components for better performance
 const Landing = lazy(() => import("./pages/Landing"));
@@ -68,6 +70,33 @@ const queryClient = new QueryClient({
   },
 });
 
+// Deferred loading wrapper for non-critical components
+function DeferredComponents() {
+  const [shouldLoad, setShouldLoad] = useState(false);
+
+  useEffect(() => {
+    // Defer loading until after initial render and idle time
+    const timeoutId = setTimeout(() => {
+      if ('requestIdleCallback' in window) {
+        (window as any).requestIdleCallback(() => setShouldLoad(true), { timeout: 2000 });
+      } else {
+        setShouldLoad(true);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  if (!shouldLoad) return null;
+
+  return (
+    <Suspense fallback={null}>
+      <PWAInstallPrompt />
+      <CommandPalette />
+    </Suspense>
+  );
+}
+
 const App = () => (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
@@ -77,10 +106,9 @@ const App = () => (
             <AppProvider>
               <Toaster />
               <Sonner />
-              <PWAInstallPrompt />
               <BrowserRouter>
                 <SkipToContent />
-                <CommandPalette />
+                <DeferredComponents />
                 <Suspense fallback={<LoadingFallback message="Loading..." />}>
           <Routes>
             <Route path="/" element={<Landing />} />

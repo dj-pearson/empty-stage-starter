@@ -1,14 +1,22 @@
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
 import { LazyFoodOrbit } from '@/components/LazyFoodOrbit';
 import { Link } from 'react-router-dom';
-import gsap from 'gsap';
-import { useGSAP } from '@gsap/react';
+
+// Dynamically import GSAP only when needed (deferred loading)
+let gsapModule: typeof import("gsap") | null = null;
+
+const loadGSAP = async () => {
+  if (!gsapModule) {
+    gsapModule = await import("gsap");
+  }
+  return gsapModule.gsap;
+};
 
 /**
  * Enhanced Hero Section with Trust Signals and 3D Elements
- * Optimized with GSAP for performance
+ * Optimized with deferred GSAP loading for better performance
  */
 export function EnhancedHero() {
   const containerRef = useRef<HTMLElement>(null);
@@ -17,56 +25,70 @@ export function EnhancedHero() {
   const ctaRef = useRef<HTMLDivElement>(null);
   const statsRef = useRef<HTMLDivElement>(null);
 
-  useGSAP(() => {
-    const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
+  useEffect(() => {
+    let mounted = true;
 
-    // Use fromTo to ensure consistent starting state
-    tl.fromTo(headlineRef.current,
-      { y: 50, opacity: 0 },
-      { y: 0, opacity: 1, duration: 1 }
-    )
-      .fromTo(subheadlineRef.current,
-        { y: 30, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.8 },
-        "-=0.6"
+    const initAnimations = async () => {
+      const gsap = await loadGSAP();
+      if (!mounted || !containerRef.current) return;
+
+      const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
+
+      // Use fromTo to ensure consistent starting state
+      tl.fromTo(headlineRef.current,
+        { y: 50, opacity: 0 },
+        { y: 0, opacity: 1, duration: 1 }
       )
-      .fromTo(ctaRef.current,
-        { y: 20, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.8 },
-        "-=0.6"
-      )
-      .fromTo(".stat-card",
-        { y: 30, opacity: 0 },
-        {
-          y: 0,
-          opacity: 1,
-          duration: 0.6,
-          stagger: 0.1
-        },
-        "-=0.4"
-      );
+        .fromTo(subheadlineRef.current,
+          { y: 30, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.8 },
+          "-=0.6"
+        )
+        .fromTo(ctaRef.current,
+          { y: 20, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.8 },
+          "-=0.6"
+        )
+        .fromTo(".stat-card",
+          { y: 30, opacity: 0 },
+          {
+            y: 0,
+            opacity: 1,
+            duration: 0.6,
+            stagger: 0.1
+          },
+          "-=0.4"
+        );
 
-    // Ambient background animation - optimized 2D
-    gsap.to(".bg-blob-1", {
-      scale: 1.1,
-      rotation: 10,
-      duration: 15,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut"
-    });
+      // Ambient background animation - optimized 2D
+      gsap.to(".bg-blob-1", {
+        scale: 1.1,
+        rotation: 10,
+        duration: 15,
+        repeat: -1,
+        yoyo: true,
+        ease: "sine.inOut"
+      });
 
-    gsap.to(".bg-blob-2", {
-      scale: 1.2,
-      rotation: -10,
-      duration: 18,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut",
-      delay: 2
-    });
+      gsap.to(".bg-blob-2", {
+        scale: 1.2,
+        rotation: -10,
+        duration: 18,
+        repeat: -1,
+        yoyo: true,
+        ease: "sine.inOut",
+        delay: 2
+      });
+    };
 
-  }, { scope: containerRef });
+    // Delay animation initialization to not block initial render
+    const timer = setTimeout(initAnimations, 100);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+    };
+  }, []);
 
   return (
     <section ref={containerRef} className="relative py-20 bg-gradient-to-b from-background via-trust-softPink/5 to-secondary/10 overflow-hidden min-h-[85vh] flex items-center">
