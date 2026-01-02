@@ -96,6 +96,17 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('framer-motion')) {
             return 'vendor-animation';
           }
+          // GSAP (lazy loaded on pages with scroll animations)
+          if (id.includes('gsap')) {
+            return 'vendor-gsap';
+          }
+          // Sentry (error tracking - core vs replay)
+          if (id.includes('@sentry') && (id.includes('rrweb') || id.includes('replay'))) {
+            return 'vendor-sentry-replay'; // Large replay module loaded only on error
+          }
+          if (id.includes('@sentry')) {
+            return 'vendor-sentry';
+          }
           // 3D graphics - Let Vite handle automatic chunking through lazy imports
           // Manual chunking causes circular dependency issues with Three.js
           // The lazy-loaded components will create their own chunks automatically
