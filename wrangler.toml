@@ -9,47 +9,36 @@ to = "https://:splat"
 status = 301
 force = true
 
-# Environment variables for production
-[env.production]
-compatibility_date = "2024-12-19"
-
-# Supabase Configuration
-VITE_SUPABASE_URL = "https://api.tryeatpal.com"
-VITE_SUPABASE_ANON_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc2NTI1MzE2MCwiZXhwIjo0OTIwOTI2NzYwLCJyb2xlIjoiYW5vbiJ9.HBFEkJdBlHpZozkyUAcaV2IO-065599yClMPfsYt3Ug"
-VITE_FUNCTIONS_URL = "https://functions.tryeatpal.com"
-
-# Stripe Configuration
-VITE_STRIPE_PUBLISHABLE_KEY = "pk_live_51SFmtlEQGPvinhrFu06bhMiTicheSKMvIwL5fUPTvoZBAyUQTSpFHWXVRxZwdmcLS82iBzA0qlgdNSww0tPmOI3y009iwWSlX2"
-
-# App Configuration
-VITE_APP_NAME = "EatPal"
-VITE_APP_VERSION = "1.0.0"
-VITE_APP_URL = "https://tryeatpal.com"
-
-# Sentry Configuration (optional - add via Cloudflare dashboard for security)
-# VITE_SENTRY_DSN = "your-sentry-dsn"
-# VITE_SENTRY_ENABLED = "true"
-
-# Analytics (optional - add via Cloudflare dashboard)
-# VITE_GA_MEASUREMENT_ID = "your-ga-id"
-
-# Feature Flags (optional)
-# VITE_FEATURE_AI_PLANNER = "true"
-# VITE_FEATURE_BARCODE_SCANNER = "true"
-
-# Environment variables for preview (testing/staging)
-[env.preview]
-compatibility_date = "2024-12-19"
-
-# Supabase Configuration (same as production)
-VITE_SUPABASE_URL = "https://api.tryeatpal.com"
-VITE_SUPABASE_ANON_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc2NTI1MzE2MCwiZXhwIjo0OTIwOTI2NzYwLCJyb2xlIjoiYW5vbiJ9.HBFEkJdBlHpZozkyUAcaV2IO-065599yClMPfsYt3Ug"
-VITE_FUNCTIONS_URL = "https://functions.tryeatpal.com"
-
-# Stripe Configuration (use test keys for preview)
-VITE_STRIPE_PUBLISHABLE_KEY = "pk_live_51SFmtlEQGPvinhrFu06bhMiTicheSKMvIwL5fUPTvoZBAyUQTSpFHWXVRxZwdmcLS82iBzA0qlgdNSww0tPmOI3y009iwWSlX2"
-
-# App Configuration
-VITE_APP_NAME = "EatPal Preview"
-VITE_APP_VERSION = "1.0.0-preview"
-VITE_APP_URL = "https://preview.tryeatpal.com"
+# ============================================================================
+# IMPORTANT: Environment Variables for Cloudflare Pages
+# ============================================================================
+# 
+# Cloudflare Pages build-time environment variables MUST be set in the
+# Cloudflare Dashboard, NOT in wrangler.toml!
+#
+# Why? The [env.production] format is for Cloudflare Workers, not Pages.
+# Having variables here prevents the dashboard from allowing you to add them.
+#
+# To add environment variables:
+# 1. Go to: Cloudflare Dashboard → Workers & Pages → empty-stage-starter
+# 2. Navigate to: Settings → Environment variables
+# 3. Select environment: "Production" or "Preview"
+# 4. Click "Add variable" and add these as PLAIN TEXT (not encrypted):
+#
+# Required Variables (copy these values):
+# ----------------------------------------
+# VITE_SUPABASE_URL = https://api.tryeatpal.com
+# VITE_SUPABASE_ANON_KEY = eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc2NTI1MzE2MCwiZXhwIjo0OTIwOTI2NzYwLCJyb2xlIjoiYW5vbiJ9.HBFEkJdBlHpZozkyUAcaV2IO-065599yClMPfsYt3Ug
+# VITE_FUNCTIONS_URL = https://functions.tryeatpal.com
+# VITE_STRIPE_PUBLISHABLE_KEY = pk_live_51SFmtlEQGPvinhrFu06bhMiTicheSKMvIwL5fUPTvoZBAyUQTSpFHWXVRxZwdmcLS82iBzA0qlgdNSww0tPmOI3y009iwWSlX2
+# VITE_APP_NAME = EatPal
+# VITE_APP_VERSION = 1.0.0
+# VITE_APP_URL = https://tryeatpal.com
+#
+# Optional Variables:
+# ----------------------------------------
+# VITE_SENTRY_DSN = your-sentry-dsn (if using Sentry)
+# VITE_SENTRY_ENABLED = true
+# VITE_GA_MEASUREMENT_ID = G-XXXXXXXXXX (if using Google Analytics)
+#
+# ============================================================================
