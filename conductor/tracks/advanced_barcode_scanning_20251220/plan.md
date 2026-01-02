@@ -22,7 +22,7 @@ This plan details the steps to enhance the barcode scanning functionality and in
 
 ### [x] Task: Implement consolidated results display and data harmonization. (b7916bd)
 - [x] Sub-task: Write tests for results consolidation and data harmonization. (01e9132)
-- [x] Sub-task: Implement UI for displaying results and harmonizing data. (612068f)
+- [x] Sub-task: Implement UI for displaying results and harmonizing data. (b7916bd)
 
 ### [x] Task: Integrate USDA FoodData Central and FoodRepo APIs. (8be589a)
 - [x] Sub-task: Write integration tests for USDA and FoodRepo APIs. (e3510b0)
@@ -32,8 +32,8 @@ This plan details the steps to enhance the barcode scanning functionality and in
 
 ## Phase 3: User Interface and Workflow Integration
 
-### [ ] Task: Develop dedicated barcode scan screen and scan history.
-- [ ] Sub-task: Write UI tests for scan screen and history.
+### [~] Task: Develop dedicated barcode scan screen and scan history.
+- [~] Sub-task: Write UI tests for scan screen and history.
 - [ ] Sub-task: Implement scan screen and history feature.
 
 ### [ ] Task: Implement manual entry fallback and quantity adjustment.

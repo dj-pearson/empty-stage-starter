@@ -249,7 +249,8 @@ describe('URL Utilities', () => {
 
     it('should sort query parameters', () => {
       const result = normalizeUrl('https://example.com?z=1&a=2&m=3');
-      expect(result).toBe('https://example.com?a=2&m=3&z=1');
+      // When there's no path, URL adds a trailing slash
+      expect(result).toBe('https://example.com/?a=2&m=3&z=1');
     });
   });
 

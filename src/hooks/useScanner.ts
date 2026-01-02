@@ -9,8 +9,10 @@ export function useScanner() {
   useEffect(() => {
     const initializeScanner = async () => {
       // Simulate async initialization
-      await new Promise(resolve => setTimeout(resolve, 100));
-      setScannerReady(true);
+      const timer = setTimeout(() => {
+        setScannerReady(true);
+      }, 100);
+      return () => clearTimeout(timer); // Cleanup function
     };
 
     initializeScanner();
