@@ -1,0 +1,97 @@
+﻿{
+    "generated_at":  "2025-12-30T11:56:13.9053873-06:00",
+    "prices":  [
+                   {
+                       "Amount":  1499,
+                       "PlanName":  "Pro",
+                       "Interval":  "monthly",
+                       "PriceId":  "price_1Sk79MEQGPvinhrFca44B9YY"
+                   },
+                   {
+                       "Amount":  14390,
+                       "PlanName":  "Pro",
+                       "Interval":  "yearly",
+                       "PriceId":  "price_1Sk79NEQGPvinhrFmvriMWGy"
+                   },
+                   {
+                       "Amount":  2499,
+                       "PlanName":  "Family Plus",
+                       "Interval":  "monthly",
+                       "PriceId":  "price_1Sk79QEQGPvinhrFuBcfG2HC"
+                   },
+                   {
+                       "Amount":  23990,
+                       "PlanName":  "Family Plus",
+                       "Interval":  "yearly",
+                       "PriceId":  "price_1Sk79QEQGPvinhrFfrQlu0Hd"
+                   },
+                   {
+                       "Amount":  9900,
+                       "PlanName":  "Professional",
+                       "Interval":  "monthly",
+                       "PriceId":  "price_1Sk79TEQGPvinhrFgQUSzPuu"
+                   },
+                   {
+                       "Amount":  95000,
+                       "PlanName":  "Professional",
+                       "Interval":  "yearly",
+                       "PriceId":  "price_1Sk79TEQGPvinhrFIipmIQ9f"
+                   }
+               ],
+    "products":  [
+                     {
+                         "ProductId":  "prod_ThWBJX53VadQpg",
+                         "Name":  "EatPal Pro",
+                         "DatabasePlanName":  "Pro"
+                     },
+                     {
+                         "ProductId":  "prod_ThWBTqGbTpxApb",
+                         "Name":  "EatPal Family Plus",
+                         "DatabasePlanName":  "Family Plus"
+                     },
+                     {
+                         "ProductId":  "prod_ThWBw8KZQOyXKw",
+                         "Name":  "EatPal Professional",
+                         "DatabasePlanName":  "Professional"
+                     }
+                 ],
+    "payment_links":  [
+                          {
+                              "Url":  "https://buy.stripe.com/dRmeVdgke3AP7uY4Sf4c800",
+                              "PlanName":  "Pro",
+                              "Interval":  "monthly",
+                              "LinkId":  "plink_1Sk79OEQGPvinhrFQUDgyUGf"
+                          },
+                          {
+                              "Url":  "https://buy.stripe.com/00w14ngkedbpeXqbgD4c801",
+                              "PlanName":  "Pro",
+                              "Interval":  "yearly",
+                              "LinkId":  "plink_1Sk79PEQGPvinhrFUXgHUWEg"
+                          },
+                          {
+                              "Url":  "https://buy.stripe.com/aFafZhec62wL5mQ0BZ4c802",
+                              "PlanName":  "Family Plus",
+                              "Interval":  "monthly",
+                              "LinkId":  "plink_1Sk79REQGPvinhrF1HzSmWoP"
+                          },
+                          {
+                              "Url":  "https://buy.stripe.com/aFabJ15FA8V9eXqesP4c803",
+                              "PlanName":  "Family Plus",
+                              "Interval":  "yearly",
+                              "LinkId":  "plink_1Sk79SEQGPvinhrFNgvm8Vhb"
+                          },
+                          {
+                              "Url":  "https://buy.stripe.com/eVq9AT1pk6N16qUdoL4c804",
+                              "PlanName":  "Professional",
+                              "Interval":  "monthly",
+                              "LinkId":  "plink_1Sk79UEQGPvinhrF3EnyLaLt"
+                          },
+                          {
+                              "Url":  "https://buy.stripe.com/4gM5kDfga2wLaHa4Sf4c805",
+                              "PlanName":  "Professional",
+                              "Interval":  "yearly",
+                              "LinkId":  "plink_1Sk79VEQGPvinhrFN1nVMgO2"
+                          }
+                      ],
+    "mode":  "live"
+}

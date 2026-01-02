@@ -5,39 +5,41 @@
  */
 
 // Import React first to ensure it's available before any components load
-console.log('[EatPal] main.tsx loading...');
 import React from "react";
-console.log('[EatPal] React imported');
 import { createRoot } from "react-dom/client";
-console.log('[EatPal] createRoot imported');
 import * as Sentry from "@sentry/react";
-console.log('[EatPal] Sentry imported');
 import App from "./App.tsx";
-console.log('[EatPal] App imported');
 import "./index.css";
-console.log('[EatPal] index.css imported');
 import "./styles/mobile-first.css";
-console.log('[EatPal] mobile-first.css imported');
 import { initializeSentry, ErrorFallback } from "./lib/sentry";
-console.log('[EatPal] sentry utils imported');
+
+// Debug logging helper - only logs in development
+const debugLog = (message: string, ...args: unknown[]) => {
+  if (import.meta.env.DEV) {
+    console.log(`[EatPal] ${message}`, ...args);
+  }
+};
+
+debugLog('main.tsx loading...');
 
 // Make React available globally for UMD modules (if any)
 if (typeof window !== 'undefined') {
   (window as any).React = React;
-  console.log('[EatPal] React made global');
+  debugLog('React made global');
 }
 
-// Log environment info for debugging
-console.log('[EatPal] Starting application...');
-console.log('[EatPal] Environment:', import.meta.env.MODE);
-console.log('[EatPal] Sentry DSN configured:', !!import.meta.env.VITE_SENTRY_DSN);
-console.log('[EatPal] Supabase URL configured:', !!import.meta.env.VITE_SUPABASE_URL);
+// Log environment info for debugging (only in development)
+debugLog('Starting application...');
+debugLog('Environment:', import.meta.env.MODE);
+debugLog('Sentry DSN configured:', !!import.meta.env.VITE_SENTRY_DSN);
+debugLog('Supabase URL configured:', !!import.meta.env.VITE_SUPABASE_URL);
 
 // Initialize Sentry before anything else
 try {
   initializeSentry();
-  console.log('[EatPal] Sentry initialized successfully');
+  debugLog('Sentry initialized successfully');
 } catch (error) {
+  // Always log Sentry init errors - important for production debugging
   console.warn('[EatPal] Sentry initialization failed:', error);
 }
 
@@ -48,11 +50,11 @@ if (!rootElement) {
 }
 
 try {
-  console.log('[EatPal] Creating React root...');
+  debugLog('Creating React root...');
   const AppWithErrorBoundary = import.meta.env.VITE_SENTRY_DSN ? (
-    <Sentry.ErrorBoundary 
+    <Sentry.ErrorBoundary
       fallback={(errorData) => (
-        <ErrorFallback 
+        <ErrorFallback
           error={(errorData.error as Error) ?? new Error('Unknown error')}
           resetError={errorData.resetError}
         />
@@ -66,20 +68,43 @@ try {
   );
 
   createRoot(rootElement).render(AppWithErrorBoundary);
-  console.log('[EatPal] React root rendered successfully');
+  debugLog('React root rendered successfully');
 } catch (error) {
+  // Always log render errors - critical for production debugging
   console.error('[EatPal] Failed to render app:', error);
-  // Show a basic error message
-  rootElement.innerHTML = `
-    <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; font-family: system-ui, -apple-system, sans-serif;">
-      <div style="max-width: 500px; text-align: center;">
-        <h1 style="color: #dc2626; margin-bottom: 16px;">Unable to Load Application</h1>
-        <p style="color: #6b7280; margin-bottom: 24px;">We encountered an error while starting the app. Please try refreshing the page.</p>
-        <button onclick="window.location.reload()" style="background: #3b82f6; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;">
-          Refresh Page
-        </button>
-        ${import.meta.env.MODE === 'development' ? `<pre style="margin-top: 24px; padding: 12px; background: #f3f4f6; border-radius: 6px; text-align: left; overflow: auto; font-size: 12px;">${error}</pre>` : ''}
-      </div>
-    </div>
-  `;
+  // Show a basic error message - use safe DOM methods to prevent XSS
+  const container = document.createElement('div');
+  container.style.cssText = 'display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; font-family: system-ui, -apple-system, sans-serif;';
+
+  const content = document.createElement('div');
+  content.style.cssText = 'max-width: 500px; text-align: center;';
+
+  const heading = document.createElement('h1');
+  heading.style.cssText = 'color: #dc2626; margin-bottom: 16px;';
+  heading.textContent = 'Unable to Load Application';
+
+  const message = document.createElement('p');
+  message.style.cssText = 'color: #6b7280; margin-bottom: 24px;';
+  message.textContent = 'We encountered an error while starting the app. Please try refreshing the page.';
+
+  const button = document.createElement('button');
+  button.style.cssText = 'background: #3b82f6; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;';
+  button.textContent = 'Refresh Page';
+  button.onclick = () => window.location.reload();
+
+  content.appendChild(heading);
+  content.appendChild(message);
+  content.appendChild(button);
+
+  // In development mode, show error details safely using textContent
+  if (import.meta.env.MODE === 'development') {
+    const errorPre = document.createElement('pre');
+    errorPre.style.cssText = 'margin-top: 24px; padding: 12px; background: #f3f4f6; border-radius: 6px; text-align: left; overflow: auto; font-size: 12px;';
+    errorPre.textContent = error instanceof Error ? error.message : String(error);
+    content.appendChild(errorPre);
+  }
+
+  container.appendChild(content);
+  rootElement.innerHTML = '';
+  rootElement.appendChild(container);
 }

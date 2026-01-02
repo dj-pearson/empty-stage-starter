@@ -22,3 +22,20 @@ export type { SoftwareAppSchemaProps } from './SoftwareAppSchema';
 
 export { BreadcrumbSchema } from './BreadcrumbSchema';
 export type { BreadcrumbItem, BreadcrumbSchemaProps } from './BreadcrumbSchema';
+
+export { ReviewSchema } from './ReviewSchema';
+export type { Review, ReviewSchemaProps } from './ReviewSchema';
+
+export { ArticleSchema } from './ArticleSchema';
+export type { ArticleSchemaProps } from './ArticleSchema';
+
+export { VideoSchema, formatVideoDuration, validateVideoSchema } from './VideoSchema';
+export type { VideoSchemaProps } from './VideoSchema';
+
+export { RecipeSchema, formatRecipeTime, validateRecipeSchema, DIET_TYPES } from './RecipeSchema';
+export type {
+  RecipeSchemaProps,
+  RecipeInstruction,
+  RecipeNutrition,
+  RecipeRating,
+} from './RecipeSchema';

@@ -1,0 +1,62 @@
+﻿{
+    "generated_at":  "2025-12-30T11:43:44.8526560-06:00",
+    "prices":  [
+                   {
+                       "Amount":  1499,
+                       "PlanName":  "Pro",
+                       "Interval":  "monthly",
+                       "PriceId":  "price_1Sk6xMEQGPvinhrF1nd5Y2XP"
+                   },
+                   {
+                       "Amount":  14390,
+                       "PlanName":  "Pro",
+                       "Interval":  "yearly",
+                       "PriceId":  "price_1Sk6xMEQGPvinhrFZKoByA0o"
+                   },
+                   {
+                       "Amount":  2499,
+                       "PlanName":  "Family Plus",
+                       "Interval":  "monthly",
+                       "PriceId":  "price_1Sk6xNEQGPvinhrFwcx0ECD3"
+                   },
+                   {
+                       "Amount":  23990,
+                       "PlanName":  "Family Plus",
+                       "Interval":  "yearly",
+                       "PriceId":  "price_1Sk6xOEQGPvinhrFmQFLEsUr"
+                   },
+                   {
+                       "Amount":  9900,
+                       "PlanName":  "Professional",
+                       "Interval":  "monthly",
+                       "PriceId":  "price_1Sk6xPEQGPvinhrFHXlvNsTI"
+                   },
+                   {
+                       "Amount":  95000,
+                       "PlanName":  "Professional",
+                       "Interval":  "yearly",
+                       "PriceId":  "price_1Sk6xQEQGPvinhrFstvt8P52"
+                   }
+               ],
+    "products":  [
+                     {
+                         "ProductId":  "prod_ThVzJI81Nwo29e",
+                         "Name":  "EatPal Pro",
+                         "DatabasePlanName":  "Pro"
+                     },
+                     {
+                         "ProductId":  "prod_ThVz4xstrj5fGL",
+                         "Name":  "EatPal Family Plus",
+                         "DatabasePlanName":  "Family Plus"
+                     },
+                     {
+                         "ProductId":  "prod_ThVz8x7ciByi4L",
+                         "Name":  "EatPal Professional",
+                         "DatabasePlanName":  "Professional"
+                     }
+                 ],
+    "payment_links":  [
+
+                      ],
+    "mode":  "test"
+}

@@ -32,7 +32,8 @@ import {
 import { useTheme } from "next-themes";
 import { Link } from "react-router-dom";
 import { SEOHead } from "@/components/SEOHead";
-import { OrganizationSchema, SoftwareAppSchema, FAQSchema } from "@/components/schema";
+import { OrganizationSchema, SoftwareAppSchema, FAQSchema, ReviewSchema } from "@/components/schema";
+import type { Review } from "@/components/schema";
 import { getPageSEO } from "@/lib/seo-config";
 import { Footer } from "@/components/Footer";
 
@@ -41,6 +42,9 @@ const EnhancedHero = lazy(() => import("@/components/EnhancedHero").then(m => ({
 const FeatureCard3D = lazy(() => import("@/components/Card3DTilt").then(m => ({ default: m.FeatureCard3D })));
 const ParallaxBackground = lazy(() => import("@/components/ParallaxBackground").then(m => ({ default: m.ParallaxBackground })));
 const ExitIntentPopup = lazy(() => import("@/components/ExitIntentPopup").then(m => ({ default: m.ExitIntentPopup })));
+
+// Import branded skeleton for hero loading state
+import { HeroSkeleton } from "@/components/HeroSkeleton";
 
 // Dynamically import GSAP only when needed (deferred loading)
 let gsapModule: typeof import("gsap") | null = null;
@@ -178,6 +182,28 @@ const Landing = () => {
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
+  // Review data for star ratings in search results
+  const userReviews: Review[] = [
+    {
+      author: "Sarah M.",
+      datePublished: "2024-11-15",
+      reviewBody: "My 4-year-old went from eating chicken nuggets every night to trying 12 new foods in 2 months. The progress tracking showed me it was actually working!",
+      ratingValue: 5
+    },
+    {
+      author: "Mike T.",
+      datePublished: "2024-12-01",
+      reviewBody: "I used to spend 2 hours every Sunday planning meals. Now it takes 10 minutes. The auto-grocery list is a game-changer.",
+      ratingValue: 5
+    },
+    {
+      author: "Jennifer L.",
+      datePublished: "2024-11-22",
+      reviewBody: "My son has ARFID and this is the first tool that actually helped us make measurable progress. The food chaining suggestions are brilliant.",
+      ratingValue: 5
+    }
+  ];
+
   // FAQ data for schema markup and display
   const faqs = [
     {
@@ -231,6 +257,21 @@ const Landing = () => {
 
       {/* FAQ Schema for AI search optimization */}
       <FAQSchema faqs={faqs} />
+
+      {/* Review Schema for star ratings in search results */}
+      <ReviewSchema
+        itemName="EatPal - Meal Planning for Picky Eaters"
+        itemDescription="AI-powered meal planning platform for families with picky eaters, ARFID, and selective eating challenges"
+        itemImage="https://tryeatpal.com/Cover.webp"
+        aggregateRating={{
+          ratingValue: 4.8,
+          reviewCount: 2847,
+          bestRating: 5,
+          worstRating: 1
+        }}
+        reviews={userReviews}
+        itemUrl="https://tryeatpal.com"
+      />
 
       <div ref={containerRef} className="min-h-screen bg-background overflow-x-hidden">
         {/* Header */}
@@ -407,7 +448,7 @@ const Landing = () => {
           <Suspense fallback={<div className="absolute inset-0" />}>
             <ParallaxBackground />
           </Suspense>
-          <Suspense fallback={<div className="min-h-[85vh] flex items-center justify-center"><div className="animate-pulse text-2xl">Loading...</div></div>}>
+          <Suspense fallback={<HeroSkeleton />}>
             <EnhancedHero />
           </Suspense>
         </div>
@@ -710,7 +751,25 @@ const Landing = () => {
               </p>
             </div>
             <div className="animate-grid grid md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
-              <Suspense fallback={<div className="col-span-full flex justify-center py-8"><div className="animate-pulse">Loading features...</div></div>}>
+              <Suspense fallback={
+                <div className="contents" role="status" aria-busy="true" aria-label="Loading features">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <div
+                      key={i}
+                      className="bg-card rounded-xl p-6 border shadow-sm animate-pulse h-full"
+                      style={{ animationDelay: `${i * 100}ms` }}
+                    >
+                      <div className="w-12 h-12 rounded-full bg-muted mb-4" />
+                      <div className="h-6 bg-muted rounded w-3/4 mb-3" />
+                      <div className="space-y-2">
+                        <div className="h-4 bg-muted rounded w-full" />
+                        <div className="h-4 bg-muted rounded w-5/6" />
+                      </div>
+                    </div>
+                  ))}
+                  <span className="sr-only">Loading feature cards, please wait...</span>
+                </div>
+              }>
                 {features.map((feature) => (
                   <div key={feature.title} className="animate-item h-full">
                     <FeatureCard3D

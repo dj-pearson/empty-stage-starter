@@ -1,0 +1,40 @@
+name = "eatpal-empty-stage"
+compatibility_date = "2024-12-19"
+pages_build_output_dir = "dist"
+
+# Security: Force HTTPS redirects
+[[redirects]]
+from = "http://*"
+to = "https://:splat"
+status = 301
+force = true
+
+# Environment variables for production
+[env.production]
+compatibility_date = "2024-12-19"
+
+# ⚠️ IMPORTANT: DO NOT add [env.production.vars] or [env.preview.vars] sections here!
+#
+# Environment variables should be configured in Cloudflare dashboard:
+# 1. Go to Cloudflare Pages > Your Project > Settings > Environment variables
+# 2. Add the following variables:
+#    - VITE_SUPABASE_URL (e.g., https://api.tryeatpal.com)
+#    - VITE_SUPABASE_ANON_KEY (your Supabase anonymous key)
+#    - VITE_FUNCTIONS_URL (e.g., https://functions.tryeatpal.com)
+#    - VITE_STRIPE_PUBLISHABLE_KEY (your Stripe publishable key)
+#
+# For local development:
+# 1. Create a `.dev.vars` file in the project root (automatically ignored by git)
+# 2. Add your environment variables in KEY=value format:
+#    VITE_SUPABASE_URL=https://api.tryeatpal.com
+#    VITE_SUPABASE_ANON_KEY=your_key_here
+#    VITE_FUNCTIONS_URL=https://functions.tryeatpal.com
+#    VITE_STRIPE_PUBLISHABLE_KEY=your_key_here
+#
+# The .dev.vars file is loaded automatically by wrangler during local development
+
+# Environment variables for preview
+[env.preview]
+compatibility_date = "2024-12-19"
+
+# Configure preview environment variables in Cloudflare dashboard as well

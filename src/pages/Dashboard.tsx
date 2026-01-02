@@ -9,7 +9,7 @@ import { KidSelector } from "@/components/KidSelector";
 import { QuickActionMenu } from "@/components/ui/QuickActionMenu";
 import { QuickLogModal } from "@/components/QuickLogModal";
 import { Button } from "@/components/ui/button";
-import { Moon, Sun, LogOut, Menu } from "lucide-react";
+import { Moon, Sun, LogOut, Menu, Trophy } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useToast } from "@/hooks/use-toast";
 import { useWhiteLabelTheme } from "@/hooks/useWhiteLabelTheme";

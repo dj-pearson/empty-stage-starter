@@ -3,6 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
+import { logger } from "@/lib/logger";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -39,13 +40,13 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         if (!mounted) return;
 
         if (error) {
-          console.error("Error checking session:", error);
+          logger.error("Error checking session:", error);
           setSession(null);
         } else {
           setSession(currentSession);
         }
       } catch (error) {
-        console.error("Unexpected error during session check:", error);
+        logger.error("Unexpected error during session check:", error);
         if (mounted) {
           setSession(null);
         }
@@ -77,8 +78,15 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   // This prevents the flash of redirect before session loads
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div
+        className="flex flex-col items-center justify-center min-h-screen gap-3"
+        role="status"
+        aria-busy="true"
+        aria-label="Verifying authentication"
+      >
+        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+        <p className="text-sm text-muted-foreground animate-pulse">Verifying access...</p>
+        <span className="sr-only">Please wait while we verify your authentication</span>
       </div>
     );
   }

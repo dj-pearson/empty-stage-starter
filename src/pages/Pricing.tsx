@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import {
@@ -26,6 +26,12 @@ import { logger } from "@/lib/logger";
 import { SEOHead } from "@/components/SEOHead";
 import { getPageSEO } from "@/lib/seo-config";
 import { Footer } from "@/components/Footer";
+import { BreadcrumbNavigation } from "@/components/BreadcrumbNavigation";
+
+// Lazy load the feature comparison table (below the fold)
+const FeatureComparisonTable = lazy(() =>
+  import("@/components/pricing/FeatureComparisonTable").then(m => ({ default: m.FeatureComparisonTable }))
+);
 
 interface SubscriptionPlan {
   id: string;
@@ -398,6 +404,13 @@ export default function Pricing() {
       </header>
 
       <div className="container mx-auto px-4 py-16">
+        <BreadcrumbNavigation
+          items={[
+            { name: 'Home', url: 'https://tryeatpal.com/' },
+            { name: 'Pricing', url: 'https://tryeatpal.com/pricing' }
+          ]}
+        />
+
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             EatPal Pricing - Meal Planning Plans for Picky Eaters
@@ -424,11 +437,13 @@ export default function Pricing() {
           </div>
 
           {/* Billing Toggle */}
-          <div className="inline-flex items-center gap-3 p-1 bg-muted rounded-lg">
+          <div className="inline-flex items-center gap-3 p-1 bg-muted rounded-lg" role="radiogroup" aria-label="Billing cycle">
             <Button
               variant={billingCycle === "monthly" ? "default" : "ghost"}
               size="sm"
               onClick={() => setBillingCycle("monthly")}
+              aria-pressed={billingCycle === "monthly"}
+              aria-label="Monthly billing"
             >
               Monthly
             </Button>
@@ -436,6 +451,8 @@ export default function Pricing() {
               variant={billingCycle === "yearly" ? "default" : "ghost"}
               size="sm"
               onClick={() => setBillingCycle("yearly")}
+              aria-pressed={billingCycle === "yearly"}
+              aria-label="Yearly billing, save 20%"
             >
               Yearly
               <Badge variant="secondary" className="ml-2">
@@ -645,6 +662,7 @@ export default function Pricing() {
                     variant={isPopular ? "default" : "outline"}
                     onClick={() => handleSelectPlan(plan)}
                     disabled={user && currentPlanId === plan.id}
+                    aria-label={`${getButtonText(plan)} - ${plan.name} plan at ${formatPrice(plan)}${plan.price_monthly > 0 ? ' per ' + billingCycle.slice(0, -2) : ''}`}
                   >
                     {getButtonText(plan)}
                   </Button>
@@ -854,6 +872,7 @@ export default function Pricing() {
                     variant={isPopular ? "default" : "outline"}
                     onClick={() => handleSelectPlan(plan)}
                     disabled={user && currentPlanId === plan.id}
+                    aria-label={`${getButtonText(plan)} - ${plan.name} plan at ${formatPrice(plan)}${plan.price_monthly > 0 ? ' per ' + billingCycle.slice(0, -2) : ''}`}
                   >
                     {getButtonText(plan)}
                   </Button>
@@ -863,171 +882,19 @@ export default function Pricing() {
           })}
         </div>
 
-        {/* Feature Comparison Table */}
-        <div className="mt-16 max-w-7xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-4">
-            Detailed Feature Comparison
-          </h2>
-          <p className="text-center text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Compare all features across EatPal plans to find the best fit for managing picky eating, ARFID, and family meal planning needs.
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-4 font-semibold">Feature</th>
-                  {plans.map((plan) => (
-                    <th key={plan.id} className="text-center p-4 font-semibold">
-                      {plan.name}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b">
-                  <td className="p-4">Price</td>
-                  {plans.map((plan) => (
-                    <td key={plan.id} className="text-center p-4">
-                      {plan.price_monthly === 0
-                        ? "$0"
-                        : `$${plan.price_monthly}/mo`}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="p-4">Children</td>
-                  {plans.map((plan) => (
-                    <td key={plan.id} className="text-center p-4">
-                      {plan.max_children === null
-                        ? "Unlimited"
-                        : plan.max_children}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="p-4">Pantry Foods</td>
-                  {plans.map((plan) => (
-                    <td key={plan.id} className="text-center p-4">
-                      {plan.max_pantry_foods === null
-                        ? "Unlimited"
-                        : plan.max_pantry_foods}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="p-4">AI Coach</td>
-                  {plans.map((plan) => (
-                    <td key={plan.id} className="text-center p-4">
-                      {plan.ai_coach_daily_limit === null ? (
-                        <Check className="w-5 h-5 mx-auto text-primary" />
-                      ) : plan.ai_coach_daily_limit === 0 ? (
-                        <X className="w-5 h-5 mx-auto text-muted-foreground" />
-                      ) : (
-                        `${plan.ai_coach_daily_limit}/day`
-                      )}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="p-4">Food Tracker</td>
-                  {plans.map((plan) => (
-                    <td key={plan.id} className="text-center p-4">
-                      {plan.food_tracker_monthly_limit === null
-                        ? "Unlimited"
-                        : `${plan.food_tracker_monthly_limit}/mo`}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="p-4">Food Chaining</td>
-                  {plans.map((plan) => (
-                    <td key={plan.id} className="text-center p-4">
-                      {plan.has_food_chaining ? (
-                        <Check className="w-5 h-5 mx-auto text-primary" />
-                      ) : (
-                        <X className="w-5 h-5 mx-auto text-muted-foreground" />
-                      )}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="p-4">Meal Builder</td>
-                  {plans.map((plan) => (
-                    <td key={plan.id} className="text-center p-4">
-                      {plan.has_meal_builder ? (
-                        <Check className="w-5 h-5 mx-auto text-primary" />
-                      ) : (
-                        <X className="w-5 h-5 mx-auto text-muted-foreground" />
-                      )}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="p-4">Nutrition Tracking</td>
-                  {plans.map((plan) => (
-                    <td key={plan.id} className="text-center p-4">
-                      {plan.has_nutrition_tracking ? (
-                        <Check className="w-5 h-5 mx-auto text-primary" />
-                      ) : (
-                        <X className="w-5 h-5 mx-auto text-muted-foreground" />
-                      )}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="p-4">Multi-Household</td>
-                  {plans.map((plan) => (
-                    <td key={plan.id} className="text-center p-4">
-                      {plan.has_multi_household ? (
-                        <Check className="w-5 h-5 mx-auto text-primary" />
-                      ) : (
-                        <X className="w-5 h-5 mx-auto text-muted-foreground" />
-                      )}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="p-4">Professional Portal</td>
-                  {plans.map((plan) => (
-                    <td key={plan.id} className="text-center p-4">
-                      {plan.max_therapists === null ? (
-                        "Full access"
-                      ) : plan.max_therapists === 1 ? (
-                        "1 therapist"
-                      ) : plan.max_therapists === 0 ? (
-                        <X className="w-5 h-5 mx-auto text-muted-foreground" />
-                      ) : (
-                        plan.max_therapists
-                      )}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b">
-                  <td className="p-4">White Label</td>
-                  {plans.map((plan) => (
-                    <td key={plan.id} className="text-center p-4">
-                      {plan.has_white_label ? (
-                        <Check className="w-5 h-5 mx-auto text-primary" />
-                      ) : (
-                        <X className="w-5 h-5 mx-auto text-muted-foreground" />
-                      )}
-                    </td>
-                  ))}
-                </tr>
-                <tr>
-                  <td className="p-4">Support</td>
-                  {plans.map((plan) => (
-                    <td key={plan.id} className="text-center p-4 capitalize">
-                      {plan.support_level === "phone"
-                        ? "Phone+Email"
-                        : plan.support_level}
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {/* Feature Comparison Table - Lazy loaded */}
+        <Suspense
+          fallback={
+            <div className="mt-16 max-w-7xl mx-auto" role="status" aria-busy="true">
+              <div className="h-8 bg-muted rounded w-64 mx-auto mb-4 animate-pulse" />
+              <div className="h-4 bg-muted rounded w-96 mx-auto mb-8 animate-pulse" />
+              <div className="h-64 bg-muted rounded animate-pulse" />
+              <span className="sr-only">Loading feature comparison table...</span>
+            </div>
+          }
+        >
+          <FeatureComparisonTable plans={plans} />
+        </Suspense>
       </div>
 
       {/* Footer */}

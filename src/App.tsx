@@ -12,7 +12,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { SkipToContent } from "@/components/SkipToContent";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { CommandPalette } from "@/components/CommandPalette";
-import { Loader2 } from "lucide-react";
+import { LoadingFallback } from "@/components/LoadingFallback";
 
 // Lazy load all route components for better performance
 const Landing = lazy(() => import("./pages/Landing"));
@@ -57,18 +57,13 @@ const ProfessionalSettings = lazy(() => import("./pages/dashboard/ProfessionalSe
 const Billing = lazy(() => import("./pages/dashboard/Billing"));
 const ApiDocs = lazy(() => import("./pages/ApiDocs"));
 
-// Loading fallback component
-const LoadingFallback = () => (
-  <div className="flex items-center justify-center min-h-screen">
-    <Loader2 className="w-8 h-8 animate-spin text-primary" />
-  </div>
-);
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
+      staleTime: 1000 * 60 * 5, // 5 minutes - reduces refetches for better performance
+      gcTime: 1000 * 60 * 30, // 30 minutes - keep data in cache longer
     },
   },
 });
@@ -86,7 +81,7 @@ const App = () => (
               <BrowserRouter>
                 <SkipToContent />
                 <CommandPalette />
-                <Suspense fallback={<LoadingFallback />}>
+                <Suspense fallback={<LoadingFallback message="Loading..." />}>
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />

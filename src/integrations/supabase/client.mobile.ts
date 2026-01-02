@@ -2,8 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 import type { Database } from './types';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
+// Use import.meta.env for Vite/Expo compatibility
+// Note: VITE_SUPABASE_ANON_KEY matches the web client for consistency
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');

@@ -62,7 +62,6 @@ export function RecipeViewWithScaling({
   };
 
   // Get structured ingredients from recipe
-  // @ts-ignore - recipe_attempts table exists but types not yet regenerated
   const ingredients = recipe.recipe_ingredients || [];
 
   // Calculate total time

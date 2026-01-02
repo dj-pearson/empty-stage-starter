@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -133,17 +133,9 @@ export default function Recipes() {
     }
   }, [recipes, foods]);
 
-  // Load collections and their items
-  useEffect(() => {
+  const loadCollections = useCallback(async () => {
     if (!userId) return;
 
-    loadCollections();
-    loadCollectionItems();
-  }, [userId, householdId]);
-  
-  const loadCollections = async () => {
-    if (!userId) return;
-    
     try {
       const { data, error } = await supabase
         .from('recipe_collections')
@@ -151,25 +143,25 @@ export default function Recipes() {
         .or(`user_id.eq.${userId}${householdId ? `,household_id.eq.${householdId}` : ''}`)
         .order('sort_order', { ascending: true })
         .order('name', { ascending: true });
-      
+
       if (error) throw error;
-      
+
       setCollections(data as unknown as RecipeCollection[] || []);
     } catch (error) {
       logger.error('Error loading collections:', error);
     }
-  };
-  
-  const loadCollectionItems = async () => {
+  }, [userId, householdId]);
+
+  const loadCollectionItems = useCallback(async () => {
     if (!userId) return;
-    
+
     try {
       const { data, error } = await supabase
         .from('recipe_collection_items')
         .select('collection_id, recipe_id');
-      
+
       if (error) throw error;
-      
+
       // Group by collection_id
       const itemsByCollection: Record<string, string[]> = {};
       // @ts-ignore - Type mismatch with unknown data structure
@@ -179,19 +171,32 @@ export default function Recipes() {
         }
         itemsByCollection[item.collection_id].push(item.recipe_id);
       });
-      
+
       setCollectionItems(itemsByCollection);
     } catch (error) {
       logger.error('Error loading collection items:', error);
     }
-  };
+  }, [userId]);
 
-  const handleEdit = (recipe: Recipe) => {
+  // Load collections and their items
+  useEffect(() => {
+    if (!userId) return;
+
+    loadCollections();
+    loadCollectionItems();
+  }, [userId, householdId, loadCollections, loadCollectionItems]);
+
+  const handleEdit = useCallback((recipe: Recipe) => {
     setEditRecipe(recipe);
     setDialogOpen(true);
-  };
+  }, []);
 
-  const handleSave = async (recipeData: any) => {
+  const handleClose = useCallback(() => {
+    setDialogOpen(false);
+    setEditRecipe(null);
+  }, []);
+
+  const handleSave = useCallback(async (recipeData: any) => {
     try {
       if (editRecipe) {
         await updateRecipe(editRecipe.id, recipeData);
@@ -205,9 +210,9 @@ export default function Recipes() {
       logger.error("Error saving recipe:", error);
       toast.error("Failed to save recipe");
     }
-  };
+  }, [editRecipe, updateRecipe, addRecipe, handleClose]);
 
-  const handleImport = async (recipeData: any) => {
+  const handleImport = useCallback(async (recipeData: any) => {
     try {
       await addRecipe(recipeData);
       toast.success("Recipe imported successfully!");
@@ -215,18 +220,13 @@ export default function Recipes() {
       logger.error("Error importing recipe:", error);
       toast.error("Failed to import recipe");
     }
-  };
+  }, [addRecipe]);
 
-  const handleClose = () => {
-    setDialogOpen(false);
-    setEditRecipe(null);
-  };
-
-  const handleDelete = (id: string) => {
+  const handleDelete = useCallback((id: string) => {
     deleteRecipe(id);
     setDeleteId(null);
     toast.success("Recipe deleted");
-  };
+  }, [deleteRecipe]);
 
   const addRecipeToGroceryList = async (recipe: Recipe, servingsMultiplier = 1) => {
     if (!recipe.food_ids || recipe.food_ids.length === 0) {
@@ -346,13 +346,24 @@ export default function Recipes() {
     }
   };
 
-  const getRecipeFoods = (recipe: Recipe) => {
+  // Memoize helper function to avoid recreation on each render
+  const getRecipeFoods = useCallback((recipe: Recipe) => {
     return recipe.food_ids
       .map((id) => foods.find((f) => f.id === id))
       .filter(Boolean);
-  };
+  }, [foods]);
 
-  const getStockStatus = (recipe: Recipe) => {
+  // Memoize allergens from all kids
+  const allKidAllergens = useMemo(() => {
+    return kids.reduce<string[]>((acc, kid) => {
+      if (kid.allergens) {
+        return [...acc, ...kid.allergens];
+      }
+      return acc;
+    }, []);
+  }, [kids]);
+
+  const getStockStatus = useCallback((recipe: Recipe) => {
     const recipeFoods = getRecipeFoods(recipe);
     const outOfStock = recipeFoods.filter(
       (food) => food && (food.quantity || 0) === 0
@@ -366,18 +377,10 @@ export default function Recipes() {
       lowStock,
       hasIssues: outOfStock.length > 0 || lowStock.length > 0,
     };
-  };
+  }, [getRecipeFoods]);
 
-  const getAllergenStatus = (recipe: Recipe) => {
+  const getAllergenStatus = useCallback((recipe: Recipe) => {
     const recipeFoods = getRecipeFoods(recipe);
-
-    // Collect allergens from all kids in the family
-    const allKidAllergens = kids.reduce<string[]>((acc, kid) => {
-      if (kid.allergens) {
-        return [...acc, ...kid.allergens];
-      }
-      return acc;
-    }, []);
 
     // Find allergens in recipe foods that match family allergens
     const matchingAllergens = new Set<string>();
@@ -395,18 +398,18 @@ export default function Recipes() {
       allergens: Array.from(matchingAllergens),
       hasAllergens: matchingAllergens.size > 0,
     };
-  };
+  }, [getRecipeFoods, allKidAllergens]);
 
   const isFamilyMode = activeKidId === null;
   
   // Handle adding recipe to collections
-  const handleAddToCollections = (recipe: Recipe) => {
+  const handleAddToCollections = useCallback((recipe: Recipe) => {
     setRecipeForCollections(recipe);
     setShowAddToCollectionsDialog(true);
-  };
-  
+  }, []);
+
   // Get current collection IDs for a recipe
-  const getRecipeCollectionIds = (recipeId: string): string[] => {
+  const getRecipeCollectionIds = useCallback((recipeId: string): string[] => {
     const collectionIds: string[] = [];
     Object.entries(collectionItems).forEach(([collectionId, recipeIds]) => {
       if (recipeIds.includes(recipeId)) {
@@ -414,37 +417,41 @@ export default function Recipes() {
       }
     });
     return collectionIds;
-  };
+  }, [collectionItems]);
   
-  // Calculate recipe counts per collection
-  const recipeCountsByCollection = Object.entries(collectionItems).reduce((acc, [collectionId, recipeIds]) => {
-    acc[collectionId] = recipeIds.length;
-    return acc;
-  }, {} as Record<string, number>);
-  
-  // Filter recipes by selected collection
-  const filteredRecipes = selectedCollectionId
-    ? recipes.filter(recipe => collectionItems[selectedCollectionId]?.includes(recipe.id))
-    : recipes;
+  // Memoize recipe counts per collection
+  const recipeCountsByCollection = useMemo(() => {
+    return Object.entries(collectionItems).reduce((acc, [collectionId, recipeIds]) => {
+      acc[collectionId] = recipeIds.length;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [collectionItems]);
+
+  // Memoize filtered recipes by selected collection
+  const filteredRecipes = useMemo(() => {
+    return selectedCollectionId
+      ? recipes.filter(recipe => collectionItems[selectedCollectionId]?.includes(recipe.id))
+      : recipes;
+  }, [selectedCollectionId, recipes, collectionItems]);
   
   // Handle collection created or updated
-  const handleCollectionSaved = (collection: RecipeCollection) => {
+  const handleCollectionSaved = useCallback((collection: RecipeCollection) => {
     loadCollections();
     setEditingCollection(null);
-  };
-  
+  }, [loadCollections]);
+
   // Handle edit collection
-  const handleEditCollection = (collection: RecipeCollection) => {
+  const handleEditCollection = useCallback((collection: RecipeCollection) => {
     setEditingCollection(collection);
     setShowManageCollectionsDialog(false);
     setShowCreateCollectionDialog(true);
-  };
-  
+  }, []);
+
   // Handle order ingredients
-  const handleOrderIngredients = (recipe: Recipe) => {
+  const handleOrderIngredients = useCallback((recipe: Recipe) => {
     setRecipeForOrder(recipe);
     setShowOrderDialog(true);
-  };
+  }, []);
 
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">

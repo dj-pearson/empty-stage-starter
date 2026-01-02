@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useLocation } from "react-router-dom";
+import { getSyncStorage } from "@/lib/platform";
 
 interface SmartDefaultsOptions {
   storageKey: string;
@@ -10,6 +11,7 @@ interface SmartDefaultsOptions {
 /**
  * Hook for managing smart defaults based on user behavior
  * Learns from user's previous inputs and suggests defaults
+ * Uses platform-safe storage that works on both web and mobile
  */
 export function useSmartDefaults<T>({
   storageKey,
@@ -17,9 +19,10 @@ export function useSmartDefaults<T>({
   ttl = 30 * 24 * 60 * 60 * 1000, // 30 days default
 }: SmartDefaultsOptions) {
   const [smartDefault, setSmartDefault] = useState<T>(defaultValue);
+  const storage = useMemo(() => getSyncStorage(), []);
 
   useEffect(() => {
-    const stored = localStorage.getItem(`smart-default-${storageKey}`);
+    const stored = storage.getItem(`smart-default-${storageKey}`);
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
@@ -30,17 +33,17 @@ export function useSmartDefaults<T>({
           setSmartDefault(parsed.value);
         } else {
           // Expired, remove it
-          localStorage.removeItem(`smart-default-${storageKey}`);
+          storage.removeItem(`smart-default-${storageKey}`);
         }
       } catch (error) {
         console.error("Error parsing smart default:", error);
       }
     }
-  }, [storageKey]);
+  }, [storageKey, storage]);
 
   const updateDefault = (value: T) => {
     const expiresAt = Date.now() + ttl;
-    localStorage.setItem(
+    storage.setItem(
       `smart-default-${storageKey}`,
       JSON.stringify({ value, expiresAt })
     );
@@ -48,7 +51,7 @@ export function useSmartDefaults<T>({
   };
 
   const clearDefault = () => {
-    localStorage.removeItem(`smart-default-${storageKey}`);
+    storage.removeItem(`smart-default-${storageKey}`);
     setSmartDefault(defaultValue);
   };
 
@@ -61,12 +64,14 @@ export function useSmartDefaults<T>({
 
 /**
  * Hook for tracking frequency of selections to suggest most common choices
+ * Uses platform-safe storage that works on both web and mobile
  */
 export function useFrequencyTracker(storageKey: string) {
   const [frequencies, setFrequencies] = useState<Record<string, number>>({});
+  const storage = useMemo(() => getSyncStorage(), []);
 
   useEffect(() => {
-    const stored = localStorage.getItem(`frequency-${storageKey}`);
+    const stored = storage.getItem(`frequency-${storageKey}`);
     if (stored) {
       try {
         setFrequencies(JSON.parse(stored));
@@ -74,7 +79,7 @@ export function useFrequencyTracker(storageKey: string) {
         console.error("Error parsing frequency data:", error);
       }
     }
-  }, [storageKey]);
+  }, [storageKey, storage]);
 
   const track = (item: string) => {
     setFrequencies((prev) => {
@@ -82,7 +87,7 @@ export function useFrequencyTracker(storageKey: string) {
         ...prev,
         [item]: (prev[item] || 0) + 1,
       };
-      localStorage.setItem(`frequency-${storageKey}`, JSON.stringify(updated));
+      storage.setItem(`frequency-${storageKey}`, JSON.stringify(updated));
       return updated;
     });
   };
@@ -95,7 +100,7 @@ export function useFrequencyTracker(storageKey: string) {
   };
 
   const clear = () => {
-    localStorage.removeItem(`frequency-${storageKey}`);
+    storage.removeItem(`frequency-${storageKey}`);
     setFrequencies({});
   };
 
@@ -142,12 +147,14 @@ export function useContextAwareDefaults() {
 
 /**
  * Hook for auto-filling forms based on recent entries
+ * Uses platform-safe storage that works on both web and mobile
  */
 export function useRecentEntries<T>(storageKey: string, maxEntries: number = 10) {
   const [recentEntries, setRecentEntries] = useState<T[]>([]);
+  const storage = useMemo(() => getSyncStorage(), []);
 
   useEffect(() => {
-    const stored = localStorage.getItem(`recent-${storageKey}`);
+    const stored = storage.getItem(`recent-${storageKey}`);
     if (stored) {
       try {
         setRecentEntries(JSON.parse(stored));
@@ -155,7 +162,7 @@ export function useRecentEntries<T>(storageKey: string, maxEntries: number = 10)
         console.error("Error parsing recent entries:", error);
       }
     }
-  }, [storageKey]);
+  }, [storageKey, storage]);
 
   const addEntry = (entry: T) => {
     setRecentEntries((prev) => {
@@ -164,13 +171,13 @@ export function useRecentEntries<T>(storageKey: string, maxEntries: number = 10)
         (e) => JSON.stringify(e) !== JSON.stringify(entry)
       );
       const updated = [entry, ...filtered].slice(0, maxEntries);
-      localStorage.setItem(`recent-${storageKey}`, JSON.stringify(updated));
+      storage.setItem(`recent-${storageKey}`, JSON.stringify(updated));
       return updated;
     });
   };
 
   const clear = () => {
-    localStorage.removeItem(`recent-${storageKey}`);
+    storage.removeItem(`recent-${storageKey}`);
     setRecentEntries([]);
   };
 
@@ -183,12 +190,14 @@ export function useRecentEntries<T>(storageKey: string, maxEntries: number = 10)
 
 /**
  * Hook for learning user preferences over time
+ * Uses platform-safe storage that works on both web and mobile
  */
 export function usePreferenceLearning(storageKey: string) {
   const [preferences, setPreferences] = useState<Record<string, any>>({});
+  const storage = useMemo(() => getSyncStorage(), []);
 
   useEffect(() => {
-    const stored = localStorage.getItem(`prefs-${storageKey}`);
+    const stored = storage.getItem(`prefs-${storageKey}`);
     if (stored) {
       try {
         setPreferences(JSON.parse(stored));
@@ -196,12 +205,12 @@ export function usePreferenceLearning(storageKey: string) {
         console.error("Error parsing preferences:", error);
       }
     }
-  }, [storageKey]);
+  }, [storageKey, storage]);
 
   const learnPreference = (key: string, value: any) => {
     setPreferences((prev) => {
       const updated = { ...prev, [key]: value };
-      localStorage.setItem(`prefs-${storageKey}`, JSON.stringify(updated));
+      storage.setItem(`prefs-${storageKey}`, JSON.stringify(updated));
       return updated;
     });
   };
@@ -211,7 +220,7 @@ export function usePreferenceLearning(storageKey: string) {
   };
 
   const clearPreferences = () => {
-    localStorage.removeItem(`prefs-${storageKey}`);
+    storage.removeItem(`prefs-${storageKey}`);
     setPreferences({});
   };
 

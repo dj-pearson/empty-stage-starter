@@ -1,4 +1,3 @@
-// @ts-nocheck - Database tables require migrations to be approved
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,7 @@ import {
   ThumbsUp
 } from "lucide-react";
 import { MealVotingCard, VoteType } from "@/components/MealVotingCard";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Kid, Recipe } from "@/types";
 
@@ -63,7 +62,6 @@ export function KidMealVoting({
 
   const loadExistingVotes = async () => {
     try {
-      // @ts-ignore - meal_votes table exists but types not yet regenerated
       const { data, error } = await supabase
         .from('meal_votes')
         .select('*')
@@ -73,7 +71,6 @@ export function KidMealVoting({
       if (error) throw error;
 
       const existingVotes = new Map<string, VoteType>();
-      // @ts-ignore - meal_votes columns exist but types not yet regenerated
       data?.forEach(vote => {
         const key = `${vote.meal_date}-${vote.meal_slot}`;
         existingVotes.set(key, vote.vote);
@@ -112,7 +109,6 @@ export function KidMealVoting({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // @ts-ignore - household_id column exists but types not yet regenerated
       const { data: profile } = await supabase
         .from('profiles')
         .select('household_id')
@@ -123,7 +119,6 @@ export function KidMealVoting({
 
       const voteEmoji = vote === 'love_it' ? '😍' : vote === 'okay' ? '🙂' : '😭';
 
-      // @ts-ignore - meal_votes table and columns exist but types not yet regenerated
       const { error } = await supabase
         .from('meal_votes')
         .upsert({
@@ -150,7 +145,6 @@ export function KidMealVoting({
 
   const checkAchievements = async () => {
     try {
-      // @ts-ignore - voting_achievements table exists but types not yet regenerated
       const { data, error } = await supabase
         .from('voting_achievements')
         .select('*')
@@ -162,7 +156,6 @@ export function KidMealVoting({
       if (data && data.length > 0) {
         setAchievements(data);
         // Show achievement toast
-        // @ts-ignore - achievement columns exist but types not yet regenerated
         data.forEach(achievement => {
           toast.success(
             <div className="flex items-center gap-2">

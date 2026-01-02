@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import gsap from "gsap";
 import { Draggable } from "gsap/Draggable";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -555,7 +555,7 @@ function DraggableMealItem({
   );
 }
 
-export function GSAPCalendarMealPlanner({
+export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
   weekStart,
   planEntries,
   foods,
@@ -625,7 +625,7 @@ export function GSAPCalendarMealPlanner({
     return grouped;
   }, [planEntries, showAllKids, kids, kidId]);
 
-  const toggleRecipeExpand = (recipeId: string, e: React.MouseEvent) => {
+  const toggleRecipeExpand = useCallback((recipeId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setExpandedRecipes((prev) => {
       const newSet = new Set(prev);
@@ -636,7 +636,7 @@ export function GSAPCalendarMealPlanner({
       }
       return newSet;
     });
-  };
+  }, []);
 
   const handleMoveEntry = useCallback((entryId: string, targetDate: string, targetSlot: MealSlot) => {
     const entry = planEntries.find((e) => e.id === entryId);
@@ -1035,5 +1035,5 @@ export function GSAPCalendarMealPlanner({
       />
     </div>
   );
-}
+});
 

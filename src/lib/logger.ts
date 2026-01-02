@@ -2,8 +2,8 @@
  * Application Logger
  *
  * Provides consistent logging throughout the application with environment-aware behavior.
- * - Development: All log levels active
- * - Production: Only errors and warnings are logged
+ * - Development: All log levels active with full details
+ * - Production: Errors and warnings are sanitized, sensitive data is filtered
  *
  * Usage:
  * ```typescript
@@ -51,19 +51,30 @@ class Logger {
   }
 
   /**
-   * Warning logging - all environments
+   * Warning logging - development only for console, production uses Sentry
    * Use for non-critical issues that should be investigated
    */
   warn(message: string, ...args: unknown[]): void {
-    console.warn(`[WARN] ${message}`, ...args);
+    if (this.isDev) {
+      console.warn(`[WARN] ${message}`, ...args);
+    }
+    // In production, warnings should be captured by Sentry if needed
   }
 
   /**
-   * Error logging - all environments
+   * Error logging - sanitized in production
    * Use for errors that need immediate attention
+   * In production: Only logs a generic message, detailed errors go to Sentry
    */
   error(message: string, error?: unknown, ...args: unknown[]): void {
-    console.error(`[ERROR] ${message}`, error, ...args);
+    if (this.isDev) {
+      // Full error details in development
+      console.error(`[ERROR] ${message}`, error, ...args);
+    } else {
+      // Sanitized output in production - no stack traces or sensitive data
+      console.error(`[ERROR] ${message}`);
+      // Sentry captures the full error via logError() in sentry.tsx
+    }
   }
 
   /**
