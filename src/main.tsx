@@ -7,11 +7,12 @@
 // Import React first to ensure it's available before any components load
 import React from "react";
 import { createRoot } from "react-dom/client";
-import * as Sentry from "@sentry/react";
+// Import only ErrorBoundary from Sentry to avoid bundling replay (~770KB savings)
+import { ErrorBoundary as SentryErrorBoundary } from "@sentry/react";
 import App from "./App.tsx";
 import "./index.css";
 import "./styles/mobile-first.css";
-import { initializeSentry, ErrorFallback } from "./lib/sentry";
+import { initializeSentry, ErrorFallback, lazyLoadReplay } from "./lib/sentry";
 
 // Debug logging helper - only logs in development
 const debugLog = (message: string, ...args: unknown[]) => {
@@ -52,17 +53,21 @@ if (!rootElement) {
 try {
   debugLog('Creating React root...');
   const AppWithErrorBoundary = import.meta.env.VITE_SENTRY_DSN ? (
-    <Sentry.ErrorBoundary
-      fallback={(errorData) => (
-        <ErrorFallback
-          error={(errorData.error as Error) ?? new Error('Unknown error')}
-          resetError={errorData.resetError}
-        />
-      )}
+    <SentryErrorBoundary
+      fallback={(errorData) => {
+        // Lazy load replay when an error occurs for better debugging
+        lazyLoadReplay();
+        return (
+          <ErrorFallback
+            error={(errorData.error as Error) ?? new Error('Unknown error')}
+            resetError={errorData.resetError}
+          />
+        );
+      }}
       showDialog={false}
     >
       <App />
-    </Sentry.ErrorBoundary>
+    </SentryErrorBoundary>
   ) : (
     <App />
   );

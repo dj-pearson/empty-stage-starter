@@ -274,6 +274,11 @@ const Landing = () => {
       />
 
       <div ref={containerRef} className="min-h-screen bg-background overflow-x-hidden">
+        {/* Skip to main content link target */}
+        <a id="main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-primary focus:text-white" href="#main">
+          Skip to main content
+        </a>
+
         {/* Header */}
         <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm transition-all duration-300">
           <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -443,15 +448,17 @@ const Landing = () => {
           </div>
         </header>
 
-        {/* Enhanced Hero Section with Trust Signals */}
-        <div className="relative">
-          <Suspense fallback={<div className="absolute inset-0" />}>
-            <ParallaxBackground />
-          </Suspense>
-          <Suspense fallback={<HeroSkeleton />}>
-            <EnhancedHero />
-          </Suspense>
-        </div>
+        {/* Main content area - required for accessibility */}
+        <main id="main" role="main">
+          {/* Enhanced Hero Section with Trust Signals */}
+          <div className="relative">
+            <Suspense fallback={<div className="absolute inset-0" />}>
+              <ParallaxBackground />
+            </Suspense>
+            <Suspense fallback={<HeroSkeleton />}>
+              <EnhancedHero />
+            </Suspense>
+          </div>
 
         {/* Pain Points Section - If Mealtime Feels Like a Battle */}
         <section className="py-24 px-4 bg-gradient-to-b from-background to-secondary/5 relative overflow-hidden">
@@ -964,6 +971,8 @@ const Landing = () => {
             </div>
           </div>
         </section>
+
+        </main>
 
         <Footer />
 
