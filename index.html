@@ -4,16 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-H6792J1CQT"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-
-      gtag('config', 'G-H6792J1CQT');
-    </script>
-
     <!-- Primary Meta Tags - Optimized for Feeding Therapy Platform & Strategic Positioning -->
     <title>EatPal - The Operating System for Feeding Therapy | AI, Professionals & Research</title>
     <meta name="title" content="EatPal - The Operating System for Feeding Therapy | AI, Professionals & Research" />
@@ -235,12 +225,14 @@
     <meta name="format-detection" content="telephone=no" />
 
     <!-- Fonts with Preloading for Performance -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-    <!-- Preload critical fonts for faster LCP -->
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap">
-    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Google Fonts with display=swap for better LCP (prevents invisible text) -->
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    </noscript>
 
     <!-- Preconnect to Supabase API for faster data fetching -->
     <link rel="preconnect" href="https://api.tryeatpal.com" crossorigin>
@@ -295,5 +287,28 @@
       </div>
     </noscript>
     <script type="module" src="/src/main.tsx"></script>
+
+    <!-- Google Analytics - Deferred loading to not block initial render -->
+    <script>
+      // Load Google Analytics after page becomes interactive
+      if (typeof window !== 'undefined') {
+        window.addEventListener('load', function() {
+          setTimeout(function() {
+            var script = document.createElement('script');
+            script.src = 'https://www.googletagmanager.com/gtag/js?id=G-H6792J1CQT';
+            script.async = true;
+            document.head.appendChild(script);
+
+            script.onload = function() {
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              window.gtag = gtag;
+              gtag('js', new Date());
+              gtag('config', 'G-H6792J1CQT');
+            };
+          }, 2000); // Delay 2 seconds after load
+        });
+      }
+    </script>
   </body>
 </html>
