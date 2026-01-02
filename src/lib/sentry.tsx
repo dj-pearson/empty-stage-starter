@@ -11,24 +11,29 @@ export function initializeSentry() {
     }
 
     try {
-      // Start with minimal integrations - replay is loaded lazily on error
+      // Initialize with both tracing and replay integrations
+      // Keeping them together prevents circular dependency issues
       const integrations: Sentry.Integration[] = [
         Sentry.browserTracingIntegration(),
+        Sentry.replayIntegration({
+          maskAllText: true,
+          blockAllMedia: true,
+        }),
       ];
 
       Sentry.init({
         dsn: import.meta.env.VITE_SENTRY_DSN,
         environment: import.meta.env.MODE,
 
-      // Performance Monitoring - replay loaded lazily via lazyLoadIntegration
+      // Performance Monitoring with replay
       integrations,
 
       // Performance Monitoring sample rates
       tracesSampleRate: import.meta.env.MODE === 'production' ? 0.1 : 1.0,
 
-      // Session Replay is lazy loaded - these are applied when replay loads
-      // replaysSessionSampleRate: 0.1 (10% of sessions)
-      // replaysOnErrorSampleRate: 1.0 (100% of sessions with errors)
+      // Session Replay sample rates
+      replaysSessionSampleRate: 0.1, // 10% of sessions
+      replaysOnErrorSampleRate: 1.0, // 100% of sessions with errors
 
       // Ignore certain errors
       ignoreErrors: [
@@ -86,33 +91,6 @@ export function initializeSentry() {
     } catch (error) {
       console.error('Failed to initialize Sentry:', error);
     }
-  }
-}
-
-// Lazy load replay integration only when needed (on error)
-// This saves ~770KB from the initial bundle by not importing replay at startup
-let replayLoaded = false;
-export async function lazyLoadReplay() {
-  if (replayLoaded) return;
-  if (import.meta.env.MODE !== 'production' && import.meta.env.VITE_SENTRY_ENABLED !== 'true') return;
-
-  try {
-    replayLoaded = true;
-    const client = Sentry.getClient();
-    if (!client) return;
-
-    // Dynamically import the replay module - this creates a separate chunk
-    const { replayIntegration } = await import('@sentry/react');
-
-    const replay = replayIntegration({
-      maskAllText: true,
-      blockAllMedia: true,
-    });
-
-    client.addIntegration(replay);
-    console.log('[Sentry] Replay integration loaded');
-  } catch (error) {
-    console.warn('[Sentry] Failed to load replay:', error);
   }
 }
 

@@ -100,10 +100,8 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('gsap')) {
             return 'vendor-gsap';
           }
-          // Sentry (error tracking - core vs replay)
-          if (id.includes('@sentry') && (id.includes('rrweb') || id.includes('replay'))) {
-            return 'vendor-sentry-replay'; // Large replay module loaded only on error
-          }
+          // Sentry (error tracking - keep together to avoid circular dependencies)
+          // DO NOT split sentry and sentry-replay - causes TDZ errors in production
           if (id.includes('@sentry')) {
             return 'vendor-sentry';
           }
