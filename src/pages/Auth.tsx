@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, isSupabaseConfigured, configurationErrors, checkSupabaseHealth } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { Input } from "@/components/ui/input";
@@ -13,8 +13,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, CheckCircle, Sparkles, Calendar, ShoppingCart, TrendingUp, XCircle, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, CheckCircle, Sparkles, Calendar, ShoppingCart, TrendingUp, XCircle, AlertCircle, AlertTriangle, RefreshCw } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
 import { Link } from "react-router-dom";
@@ -23,6 +24,88 @@ import { PasswordResetDialog } from "@/components/PasswordResetDialog";
 import { PasswordSchema, EmailSchema, sanitizeURL } from "@/lib/validations";
 import { Footer } from "@/components/Footer";
 import { cn } from "@/lib/utils";
+
+/**
+ * Categorize auth errors for better user messaging
+ */
+function categorizeAuthError(error: { message: string; status?: number }): {
+  title: string;
+  description: string;
+  isRetryable: boolean;
+} {
+  const message = error.message.toLowerCase();
+  const status = error.status;
+
+  // Network/connectivity issues
+  if (message.includes('failed to fetch') || message.includes('networkerror') || message.includes('network')) {
+    return {
+      title: 'Connection Error',
+      description: 'Unable to reach the authentication server. Please check your internet connection and try again.',
+      isRetryable: true,
+    };
+  }
+
+  // Server errors (500s)
+  if (status && status >= 500) {
+    return {
+      title: 'Server Error',
+      description: 'The authentication service is temporarily unavailable. Please try again in a few moments.',
+      isRetryable: true,
+    };
+  }
+
+  // Rate limiting
+  if (status === 429 || message.includes('rate limit') || message.includes('too many requests')) {
+    return {
+      title: 'Too Many Attempts',
+      description: 'Please wait a moment before trying again.',
+      isRetryable: true,
+    };
+  }
+
+  // Invalid credentials
+  if (message.includes('invalid login credentials') || message.includes('invalid email or password')) {
+    return {
+      title: 'Invalid Credentials',
+      description: 'The email or password you entered is incorrect. Please try again.',
+      isRetryable: false,
+    };
+  }
+
+  // Email not confirmed
+  if (message.includes('email not confirmed')) {
+    return {
+      title: 'Email Not Verified',
+      description: 'Please check your email and click the confirmation link before signing in.',
+      isRetryable: false,
+    };
+  }
+
+  // User already exists
+  if (message.includes('user already registered') || message.includes('already exists')) {
+    return {
+      title: 'Account Exists',
+      description: 'An account with this email already exists. Try signing in instead.',
+      isRetryable: false,
+    };
+  }
+
+  // Weak password (from Supabase policy)
+  if (message.includes('password')) {
+    return {
+      title: 'Password Issue',
+      description: error.message,
+      isRetryable: false,
+    };
+  }
+
+  // Default fallback
+  return {
+    title: 'Authentication Error',
+    description: error.message || 'An unexpected error occurred. Please try again.',
+    isRetryable: true,
+  };
+}
 
 // Password requirement checks for real-time validation feedback
 interface PasswordRequirements {
@@ -70,9 +153,50 @@ const Auth = () => {
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [emailTouched, setEmailTouched] = useState(false);
   const [passwordTouched, setPasswordTouched] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+
+  // Check connection health on mount if there are config issues
+  useEffect(() => {
+    if (!isSupabaseConfigured && import.meta.env.DEV) {
+      setConnectionError(
+        'Supabase is not properly configured. ' +
+        configurationErrors.join(' ')
+      );
+    }
+  }, []);
+
+  // Function to test connection
+  const testConnection = async () => {
+    setIsCheckingConnection(true);
+    setConnectionError(null);
+
+    try {
+      const health = await checkSupabaseHealth();
+
+      if (!health.isConfigured) {
+        setConnectionError(
+          'Configuration Error: ' + health.configErrors.join(' ')
+        );
+      } else if (!health.isConnected) {
+        setConnectionError(health.connectionError || 'Unable to connect to authentication server');
+      } else if (!health.authServiceAvailable) {
+        setConnectionError(health.authError || 'Authentication service is unavailable');
+      } else {
+        toast({
+          title: "Connection Successful",
+          description: `Connected to server (${health.latencyMs}ms)`,
+        });
+      }
+    } catch (error) {
+      setConnectionError('Failed to check connection status');
+    } finally {
+      setIsCheckingConnection(false);
+    }
+  };
 
   // Real-time email validation
   const emailValidation = useMemo(() => {
@@ -154,12 +278,21 @@ const Auth = () => {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Check if Supabase is configured
+    if (!isSupabaseConfigured) {
+      setConnectionError('Cannot sign up: Authentication service is not configured.');
+      return;
+    }
+
+    // Clear any previous connection errors
+    setConnectionError(null);
+
     // Validate email format
-    const emailValidation = EmailSchema.safeParse(email);
-    if (!emailValidation.success) {
+    const emailValidationResult = EmailSchema.safeParse(email);
+    if (!emailValidationResult.success) {
       toast({
         title: "Invalid Email",
-        description: emailValidation.error.errors[0].message,
+        description: emailValidationResult.error.errors[0].message,
         variant: "destructive",
       });
       return;
@@ -178,48 +311,91 @@ const Auth = () => {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-        emailRedirectTo: `${window.location.origin}/dashboard`,
-      },
-    });
-
-    setLoading(false);
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
+    try {
+      const { error, data } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName },
+          emailRedirectTo: `${window.location.origin}/dashboard`,
+        },
       });
-    } else {
-      toast({
-        title: "Check your email!",
-        description: "Please confirm your email address to complete registration. Then sign in to set up your profile.",
-      });
+
+      setLoading(false);
+
+      if (error) {
+        const categorized = categorizeAuthError(error);
+
+        // If it's a connection/server error, show in the connection error area
+        if (categorized.isRetryable && (categorized.title === 'Connection Error' || categorized.title === 'Server Error')) {
+          setConnectionError(categorized.description);
+        } else {
+          toast({
+            title: categorized.title,
+            description: categorized.description,
+            variant: "destructive",
+          });
+        }
+      } else if (data.user && !data.session) {
+        // User created but needs to confirm email
+        toast({
+          title: "Check your email!",
+          description: "Please confirm your email address to complete registration. Then sign in to set up your profile.",
+        });
+      } else if (data.session) {
+        // Auto-confirmed (shouldn't happen in production but possible in dev)
+        toast({
+          title: "Account Created",
+          description: "Welcome! Setting up your profile...",
+        });
+      }
+    } catch (error) {
+      setLoading(false);
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      setConnectionError(`Sign up failed: ${errorMessage}`);
     }
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Check if Supabase is configured
+    if (!isSupabaseConfigured) {
+      setConnectionError('Cannot sign in: Authentication service is not configured.');
+      return;
+    }
+
+    // Clear any previous connection errors
+    setConnectionError(null);
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    setLoading(false);
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
+
+      setLoading(false);
+
+      if (error) {
+        const categorized = categorizeAuthError(error);
+
+        // If it's a connection/server error, show in the connection error area
+        if (categorized.isRetryable && (categorized.title === 'Connection Error' || categorized.title === 'Server Error')) {
+          setConnectionError(categorized.description);
+        } else {
+          toast({
+            title: categorized.title,
+            description: categorized.description,
+            variant: "destructive",
+          });
+        }
+      }
+      // Success is handled by onAuthStateChange listener
+    } catch (error) {
+      setLoading(false);
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      setConnectionError(`Sign in failed: ${errorMessage}`);
     }
   };
 
@@ -242,21 +418,41 @@ const Auth = () => {
   };
 
   const signInWithOAuth = async (provider: 'google' | 'apple') => {
+    // Check if Supabase is configured
+    if (!isSupabaseConfigured) {
+      setConnectionError('Cannot sign in: Authentication service is not configured.');
+      return;
+    }
+
+    // Clear any previous connection errors
+    setConnectionError(null);
+
     const callbackUrl = `${window.location.origin}/auth?redirect=${encodeURIComponent(redirectTo)}`;
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: callbackUrl,
-      },
-    });
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: callbackUrl,
+        },
       });
+
+      if (error) {
+        const categorized = categorizeAuthError(error);
+
+        if (categorized.isRetryable) {
+          setConnectionError(categorized.description);
+        } else {
+          toast({
+            title: categorized.title,
+            description: categorized.description,
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      setConnectionError(`OAuth sign in failed: ${errorMessage}`);
     }
   };
   return (
@@ -390,6 +586,36 @@ const Auth = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                {/* Connection/Configuration Error Alert */}
+                {connectionError && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Connection Issue</AlertTitle>
+                    <AlertDescription className="mt-2">
+                      <p className="mb-2">{connectionError}</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={testConnection}
+                        disabled={isCheckingConnection}
+                        className="mt-2"
+                      >
+                        {isCheckingConnection ? (
+                          <>
+                            <RefreshCw className="mr-2 h-3 w-3 animate-spin" />
+                            Checking...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="mr-2 h-3 w-3" />
+                            Test Connection
+                          </>
+                        )}
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <div className="mb-6 p-4 bg-primary/10 border border-primary/20 rounded-lg text-center">
                   <p className="text-sm font-semibold text-primary mb-1">
                     🎉 Now Live! Start Your Free Trial
