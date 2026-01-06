@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to EatPal!</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f3f4f6;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 480px; background-color: #ffffff; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); overflow: hidden;">
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 32px; text-align: center;">
+              <img src="https://tryeatpal.com/Logo-White.png" alt="EatPal" height="40" style="height: 40px; margin-bottom: 16px;">
+              <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #ffffff;">Welcome to EatPal!</h1>
+            </td>
+          </tr>
+
+          <!-- Content -->
+          <tr>
+            <td style="padding: 32px; text-align: center;">
+              <p style="color: #4b5563; font-size: 16px; margin: 0 0 16px 0;">Hi there!</p>
+              <p style="color: #4b5563; font-size: 16px; margin: 0 0 24px 0;">Enter this code to verify your email address:</p>
+
+              <!-- OTP Code -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td align="center">
+                    <div style="display: inline-block; font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #10b981; background-color: #ecfdf5; padding: 16px 32px; border-radius: 12px; border: 2px dashed #10b981;">
+                      {{ .Token }}
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="color: #6b7280; font-size: 14px; margin: 24px 0 0 0;">This code expires in 1 hour.</p>
+
+              <!-- Features -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top: 24px; text-align: left;">
+                <tr>
+                  <td style="padding: 16px; background-color: #f9fafb; border-radius: 8px;">
+                    <p style="color: #374151; font-size: 14px; font-weight: 600; margin: 0 0 8px 0;">What you'll get:</p>
+                    <p style="color: #6b7280; font-size: 13px; margin: 0; line-height: 1.6;">
+                      &#10003; AI-powered meal planning<br>
+                      &#10003; Science-backed food chaining<br>
+                      &#10003; Auto-generated grocery lists<br>
+                      &#10003; Progress tracking for picky eaters
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f9fafb; padding: 24px; text-align: center; border-top: 1px solid #e5e7eb;">
+              <p style="color: #6b7280; font-size: 12px; margin: 0;">
+                EatPal - Making Meal Planning Easy for Picky Eaters<br>
+                <a href="https://tryeatpal.com" style="color: #10b981; text-decoration: none;">tryeatpal.com</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
