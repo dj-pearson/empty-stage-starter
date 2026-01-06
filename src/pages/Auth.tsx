@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, CheckCircle, Sparkles, Calendar, ShoppingCart, TrendingUp, XCircle, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, CheckCircle, Sparkles, Calendar, ShoppingCart, TrendingUp, XCircle, AlertCircle, Mail, ArrowLeft } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
 import { Link } from "react-router-dom";
@@ -23,6 +23,11 @@ import { PasswordResetDialog } from "@/components/PasswordResetDialog";
 import { PasswordSchema, EmailSchema, sanitizeURL } from "@/lib/validations";
 import { Footer } from "@/components/Footer";
 import { cn } from "@/lib/utils";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
 
 // Password requirement checks for real-time validation feedback
 interface PasswordRequirements {
@@ -70,6 +75,11 @@ const Auth = () => {
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [emailTouched, setEmailTouched] = useState(false);
   const [passwordTouched, setPasswordTouched] = useState(false);
+  // OTP verification state
+  const [showOtpVerification, setShowOtpVerification] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
@@ -151,6 +161,14 @@ const Auth = () => {
     return () => subscription.unsubscribe();
   }, [navigate, redirectTo]);
 
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -183,7 +201,6 @@ const Auth = () => {
       password,
       options: {
         data: { full_name: fullName },
-        emailRedirectTo: `${window.location.origin}/dashboard`,
       },
     });
 
@@ -196,11 +213,85 @@ const Auth = () => {
         variant: "destructive",
       });
     } else {
+      // Show OTP verification screen
+      setPendingEmail(email);
+      setShowOtpVerification(true);
+      setResendCooldown(60);
       toast({
         title: "Check your email!",
-        description: "Please confirm your email address to complete registration. Then sign in to set up your profile.",
+        description: "We've sent a 6-digit verification code to your email.",
       });
     }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (otpCode.length !== 6) {
+      toast({
+        title: "Invalid Code",
+        description: "Please enter the 6-digit code from your email.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    const { error } = await supabase.auth.verifyOtp({
+      email: pendingEmail,
+      token: otpCode,
+      type: "signup",
+    });
+
+    setLoading(false);
+
+    if (error) {
+      toast({
+        title: "Verification Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Email Verified!",
+        description: "Your account has been confirmed. Welcome to EatPal!",
+      });
+      // The onAuthStateChange listener will handle the redirect
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (resendCooldown > 0) return;
+
+    setLoading(true);
+
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: pendingEmail,
+    });
+
+    setLoading(false);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      setResendCooldown(60);
+      toast({
+        title: "Code Resent",
+        description: "A new verification code has been sent to your email.",
+      });
+    }
+  };
+
+  const handleBackToSignup = () => {
+    setShowOtpVerification(false);
+    setOtpCode("");
+    setPendingEmail("");
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -383,6 +474,78 @@ const Auth = () => {
             </div>
 
             <Card>
+              {showOtpVerification ? (
+                <>
+                  <CardHeader>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-fit -ml-2 mb-2"
+                      onClick={handleBackToSignup}
+                    >
+                      <ArrowLeft className="h-4 w-4 mr-1" />
+                      Back
+                    </Button>
+                    <div className="flex items-center justify-center mb-4">
+                      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Mail className="h-8 w-8 text-primary" />
+                      </div>
+                    </div>
+                    <CardTitle className="text-center">Check Your Email</CardTitle>
+                    <CardDescription className="text-center">
+                      We sent a 6-digit code to<br />
+                      <span className="font-medium text-foreground">{pendingEmail}</span>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={handleVerifyOtp} className="space-y-6">
+                      <div className="flex justify-center">
+                        <InputOTP
+                          maxLength={6}
+                          value={otpCode}
+                          onChange={(value) => setOtpCode(value)}
+                        >
+                          <InputOTPGroup>
+                            <InputOTPSlot index={0} />
+                            <InputOTPSlot index={1} />
+                            <InputOTPSlot index={2} />
+                            <InputOTPSlot index={3} />
+                            <InputOTPSlot index={4} />
+                            <InputOTPSlot index={5} />
+                          </InputOTPGroup>
+                        </InputOTP>
+                      </div>
+
+                      <LoadingButton
+                        type="submit"
+                        className="w-full h-11"
+                        isLoading={loading}
+                        disabled={otpCode.length !== 6}
+                      >
+                        Verify Email
+                      </LoadingButton>
+
+                      <div className="text-center text-sm text-muted-foreground">
+                        Didn't receive the code?{" "}
+                        {resendCooldown > 0 ? (
+                          <span>Resend in {resendCooldown}s</span>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="link"
+                            className="p-0 h-auto text-primary"
+                            onClick={handleResendCode}
+                            disabled={loading}
+                          >
+                            Resend code
+                          </Button>
+                        )}
+                      </div>
+                    </form>
+                  </CardContent>
+                </>
+              ) : (
+                <>
               <CardHeader>
                 <CardTitle>Welcome</CardTitle>
                 <CardDescription>
@@ -628,6 +791,8 @@ const Auth = () => {
                 </TabsContent>
               </Tabs>
               </CardContent>
+                </>
+              )}
             </Card>
 
             <p className="text-center text-sm text-muted-foreground mt-4">
