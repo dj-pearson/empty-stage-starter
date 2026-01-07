@@ -170,6 +170,23 @@ All colors MUST be HSL.
   h6 {
     font-family: "Nunito Sans", system-ui, -apple-system, sans-serif;
   }
+
+  /* Global focus styles for accessibility - ensures all interactive elements have visible focus */
+  a:focus-visible,
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  [tabindex]:focus-visible:not([tabindex="-1"]),
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring));
+  }
+
+  /* Ensure focus is visible for Radix UI components */
+  [data-radix-collection-item]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring));
+  }
 }
 
 @layer utilities {

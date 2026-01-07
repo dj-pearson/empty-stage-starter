@@ -217,10 +217,10 @@ const Dashboard = () => {
                   variant="ghost"
                   size="icon"
                   onClick={handleLogout}
-                  title="Sign out"
+                  aria-label="Sign out"
                   className="touch-target"
                 >
-                  <LogOut className="h-5 w-5" />
+                  <LogOut className="h-5 w-5" aria-hidden="true" />
                 </Button>
               </header>
 
@@ -425,8 +425,9 @@ const Dashboard = () => {
                     "flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors active:scale-95 min-w-[64px]",
                     "text-muted-foreground hover:text-foreground"
                   )}
+                  aria-label="More navigation options"
                 >
-                  <MoreHorizontal className="h-5 w-5" />
+                  <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
                   <span className="text-[11px] sm:text-xs leading-tight text-center">More</span>
                 </button>
               </SheetTrigger>
