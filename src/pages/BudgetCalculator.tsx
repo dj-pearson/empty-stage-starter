@@ -313,7 +313,7 @@ export default function BudgetCalculator() {
                         value={formData.state}
                         onValueChange={(value) => setFormData({ ...formData, state: value })}
                       >
-                        <SelectTrigger className={errors.state ? 'border-red-500' : ''}>
+                        <SelectTrigger id="state" className={errors.state ? 'border-red-500' : ''} aria-label="Select your state">
                           <SelectValue placeholder="Select your state" />
                         </SelectTrigger>
                         <SelectContent className="max-h-[300px]">

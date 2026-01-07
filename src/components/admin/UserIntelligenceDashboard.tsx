@@ -994,9 +994,10 @@ export function UserIntelligenceDashboard() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              aria-label="Search users by email, name, or user ID"
             />
-            <Button onClick={() => handleSearch()} disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            <Button onClick={() => handleSearch()} disabled={loading} aria-label="Search users">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" aria-hidden="true" />}
             </Button>
           </div>
 

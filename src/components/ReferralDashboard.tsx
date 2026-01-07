@@ -230,12 +230,12 @@ export function ReferralDashboard() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-2">
-            <Input value={getReferralUrl()} readOnly />
-            <Button onClick={copyReferralLink} variant="outline" size="icon">
-              <Copy className="h-4 w-4" />
+            <Input value={getReferralUrl()} readOnly aria-label="Your referral URL" />
+            <Button onClick={copyReferralLink} variant="outline" size="icon" aria-label="Copy referral link">
+              <Copy className="h-4 w-4" aria-hidden="true" />
             </Button>
-            <Button onClick={shareReferralLink} variant="outline" size="icon">
-              <Share2 className="h-4 w-4" />
+            <Button onClick={shareReferralLink} variant="outline" size="icon" aria-label="Share referral link">
+              <Share2 className="h-4 w-4" aria-hidden="true" />
             </Button>
           </div>
 
