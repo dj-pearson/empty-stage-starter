@@ -1,8 +1,59 @@
 # CLAUDE.md - AI Assistant Guide for Munch Maker Mate (EatPal)
 
-> **Last Updated**: 2026-01-01
+> **Last Updated**: 2026-01-07
 > **Project**: Meal Planning & Nutrition Tracking Application
 > **Stack**: Vite + React 19 + TypeScript + Supabase + Expo
+
+---
+
+## ⚠️ CRITICAL RULES - READ FIRST
+
+### 🔒 SECURITY - ABSOLUTE REQUIREMENTS
+
+**❌ NEVER INCLUDE REAL SECRETS IN ANY FILE:**
+- ❌ No real API keys (Stripe, OpenAI, Resend, etc.)
+- ❌ No real JWT tokens or Supabase anon keys  
+- ❌ No real database passwords
+- ❌ No real OAuth client secrets
+
+**✅ ALWAYS USE PLACEHOLDERS IN EXAMPLES:**
+```bash
+STRIPE_SECRET_KEY=sk_live_XXXXXXXXXXXXXXXX
+OPENAI_API_KEY=sk-proj-XXXXXXXXXXXXXXXX
+JWT_SECRET=REPLACE_WITH_64_CHAR_RANDOM_STRING
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.XXXXXXXX
+```
+
+**If you accidentally include a real secret:**
+1. STOP immediately and tell the user
+2. Do NOT commit or push
+3. Replace with placeholder immediately
+
+---
+
+### 📝 Documentation & Token Usage
+
+**BEFORE creating documentation:**
+1. **ASK about scope** - If user asks for "documentation", ask:
+   - One document or multiple?
+   - How detailed? (Quick reference vs comprehensive)
+   - Specific sections needed?
+2. **Default to CONCISE** - Create SHORT, focused documents
+3. **ONE document at a time** - Create one, get feedback, then ask if more needed
+4. **Token awareness** - Every token costs the user money. Be efficient.
+
+**❌ NEVER:**
+- Create 5+ documents when user asks for "documentation"
+- Write 1000+ line documents without checking first
+- Assume "comprehensive" means "exhaustive"
+- Include real secrets in example code
+
+**✅ ALWAYS:**
+- Start with concise summary (1-2 pages max)
+- Ask "Would you like more detail on any section?"
+- Use placeholder values for ALL sensitive data
+
+---
 
 ## Table of Contents
 
