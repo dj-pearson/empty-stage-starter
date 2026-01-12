@@ -421,3 +421,453 @@ All colors MUST be HSL.
     }
   }
 }
+
+/* =================================================================
+   ACCESSIBILITY STYLES
+   WCAG 2.1 AA Compliance CSS
+   ================================================================= */
+
+@layer utilities {
+  /* Screen reader only content */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  /* Show on focus for skip links */
+  .sr-only-focusable:focus,
+  .sr-only-focusable:focus-within {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: inherit;
+    margin: inherit;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+}
+
+/* =================================================================
+   REDUCED MOTION - User Preference
+   ================================================================= */
+.reduce-motion,
+.reduce-motion * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* System reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* =================================================================
+   HIGH CONTRAST MODE
+   ================================================================= */
+.high-contrast {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 0%;
+  --primary: 220 100% 30%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 142 100% 25%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 0 0% 90%;
+  --muted-foreground: 0 0% 20%;
+  --border: 0 0% 0%;
+  --ring: 220 100% 30%;
+}
+
+.high-contrast.dark {
+  --background: 0 0% 0%;
+  --foreground: 0 0% 100%;
+  --primary: 220 100% 70%;
+  --primary-foreground: 0 0% 0%;
+  --secondary: 142 100% 60%;
+  --secondary-foreground: 0 0% 0%;
+  --muted: 0 0% 20%;
+  --muted-foreground: 0 0% 85%;
+  --border: 0 0% 100%;
+}
+
+/* System high contrast / forced colors */
+@media (prefers-contrast: high) {
+  :root {
+    --border: 0 0% 0%;
+  }
+
+  .dark {
+    --border: 0 0% 100%;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    border-width: 2px !important;
+  }
+}
+
+@media (forced-colors: active) {
+  /* Use system colors in forced colors mode */
+  button,
+  a {
+    forced-color-adjust: none;
+  }
+
+  .focus-ring {
+    outline: 3px solid CanvasText !important;
+  }
+}
+
+/* =================================================================
+   FONT SIZE PREFERENCES
+   ================================================================= */
+.text-size-default {
+  font-size: 100%;
+}
+
+.text-size-large {
+  font-size: 112.5%; /* 18px base */
+}
+
+.text-size-large body {
+  line-height: 1.6;
+}
+
+.text-size-x-large {
+  font-size: 125%; /* 20px base */
+}
+
+.text-size-x-large body {
+  line-height: 1.7;
+}
+
+/* =================================================================
+   ENHANCED FOCUS INDICATORS
+   ================================================================= */
+.enhanced-focus *:focus-visible {
+  outline: 3px solid hsl(var(--ring)) !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 6px hsl(var(--ring) / 0.3) !important;
+}
+
+.enhanced-focus button:focus-visible,
+.enhanced-focus a:focus-visible,
+.enhanced-focus [role="button"]:focus-visible {
+  outline-width: 4px !important;
+  outline-offset: 4px !important;
+}
+
+/* =================================================================
+   DYSLEXIA-FRIENDLY FONT
+   ================================================================= */
+.dyslexia-font,
+.dyslexia-font * {
+  font-family: "OpenDyslexic", "Comic Sans MS", "Arial", sans-serif !important;
+  letter-spacing: 0.05em !important;
+  word-spacing: 0.1em !important;
+  line-height: 1.8 !important;
+}
+
+/* =================================================================
+   SCREEN READER OPTIMIZED MODE
+   ================================================================= */
+.screen-reader-optimized {
+  /* Ensure all decorative elements are hidden */
+}
+
+.screen-reader-optimized [aria-hidden="true"] {
+  display: none !important;
+}
+
+.screen-reader-optimized .decorative {
+  display: none !important;
+}
+
+/* =================================================================
+   SKIP LINK STYLES
+   ================================================================= */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  padding: 0.75rem 1.5rem;
+  text-decoration: none;
+  font-weight: 600;
+  border-radius: var(--radius);
+  z-index: 9999;
+  transition: top 0.2s ease;
+}
+
+.skip-link:focus {
+  top: 1rem;
+  outline: 3px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* =================================================================
+   FOCUS TRAP INDICATOR
+   ================================================================= */
+[data-focus-trap="active"] {
+  outline: 2px dashed hsl(var(--ring) / 0.5);
+  outline-offset: 4px;
+}
+
+/* =================================================================
+   LOADING STATES WITH ARIA-BUSY
+   ================================================================= */
+[aria-busy="true"] {
+  cursor: wait;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+[aria-busy="true"]::after {
+  content: "";
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-left: 0.5em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Don't animate spinner in reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  [aria-busy="true"]::after {
+    animation: none;
+    content: "Loading...";
+    border: none;
+    width: auto;
+    height: auto;
+  }
+}
+
+/* =================================================================
+   FORM ACCESSIBILITY
+   ================================================================= */
+/* Required field indicator */
+.required-indicator::after {
+  content: " *";
+  color: hsl(var(--destructive));
+}
+
+/* Error states */
+[aria-invalid="true"],
+.input-error {
+  border-color: hsl(var(--destructive)) !important;
+  box-shadow: 0 0 0 1px hsl(var(--destructive));
+}
+
+[aria-invalid="true"]:focus,
+.input-error:focus {
+  box-shadow: 0 0 0 3px hsl(var(--destructive) / 0.3);
+}
+
+/* Error messages */
+.error-message,
+[role="alert"] {
+  color: hsl(var(--destructive));
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+/* Success states */
+[aria-invalid="false"].touched,
+.input-success {
+  border-color: hsl(var(--secondary)) !important;
+}
+
+/* =================================================================
+   TABLE ACCESSIBILITY
+   ================================================================= */
+table[role="grid"] th,
+table th[scope] {
+  font-weight: 600;
+  text-align: left;
+  background: hsl(var(--muted));
+}
+
+table[role="grid"] [aria-selected="true"] {
+  background: hsl(var(--primary) / 0.1);
+  outline: 2px solid hsl(var(--primary));
+}
+
+/* =================================================================
+   LINK STYLES FOR ACCESSIBILITY
+   ================================================================= */
+/* Ensure links are distinguishable (not just by color) */
+a:not([class*="button"]):not([role="button"]) {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+a:not([class*="button"]):not([role="button"]):hover {
+  text-decoration-thickness: 2px;
+}
+
+/* External link indicator */
+a[target="_blank"]::after {
+  content: " ↗";
+  font-size: 0.75em;
+  vertical-align: super;
+}
+
+a[target="_blank"][aria-label]::after {
+  content: none;
+}
+
+/* =================================================================
+   TOUCH TARGET SIZE (WCAG 2.5.5 Level AAA - 44x44px minimum)
+   ================================================================= */
+@media (pointer: coarse) {
+  button,
+  a,
+  [role="button"],
+  input[type="checkbox"],
+  input[type="radio"],
+  select {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Spacing for adjacent touch targets */
+  .touch-spacing > * + * {
+    margin-top: 8px;
+  }
+}
+
+/* =================================================================
+   KEYBOARD NAVIGATION UTILITIES
+   ================================================================= */
+/* Visible focus for keyboard users only */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Arrow key navigation indicator */
+[data-keyboard-nav="true"] {
+  background: hsl(var(--accent) / 0.1);
+}
+
+/* =================================================================
+   LIVE REGIONS
+   ================================================================= */
+[aria-live] {
+  /* Ensure live regions are rendered but hidden if needed */
+}
+
+[aria-live="assertive"] {
+  /* High priority announcements */
+}
+
+[aria-live="polite"] {
+  /* Normal priority announcements */
+}
+
+/* =================================================================
+   COLOR CONTRAST HELPERS
+   ================================================================= */
+/* Ensure text over images has sufficient contrast */
+.text-over-image {
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.8),
+    0 0 4px rgba(0, 0, 0, 0.5);
+}
+
+.text-over-image-light {
+  text-shadow:
+    0 1px 2px rgba(255, 255, 255, 0.8),
+    0 0 4px rgba(255, 255, 255, 0.5);
+}
+
+/* Overlay for text readability */
+.overlay-for-text::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.4),
+    rgba(0, 0, 0, 0.7)
+  );
+  z-index: 1;
+}
+
+.overlay-for-text > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* =================================================================
+   MOTION-SAFE ANIMATIONS
+   Animations that only run when user hasn't requested reduced motion
+   ================================================================= */
+@media (prefers-reduced-motion: no-preference) {
+  .motion-safe\:animate-fade-in {
+    animation: fade-in 0.3s ease-out;
+  }
+
+  .motion-safe\:animate-slide-up {
+    animation: slide-up 0.3s ease-out;
+  }
+
+  .motion-safe\:animate-scale {
+    animation: scale 0.2s ease-out;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scale {
+    from { transform: scale(0.95); }
+    to { transform: scale(1); }
+  }
+}
