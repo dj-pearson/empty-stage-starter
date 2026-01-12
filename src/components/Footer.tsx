@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 export const Footer = () => {
   return (
-    <footer className="border-t py-12 px-4 bg-secondary/5">
+    <footer className="border-t py-12 px-4 bg-secondary/5" role="contentinfo">
       <div className="container mx-auto">
         <div className="grid md:grid-cols-4 gap-8">
           <div>
@@ -63,6 +63,11 @@ export const Footer = () => {
               <li>
                 <Link to="/terms" className="hover:text-primary transition-colors">
                   Terms of Service
+                </Link>
+              </li>
+              <li>
+                <Link to="/accessibility" className="hover:text-primary transition-colors">
+                  Accessibility
                 </Link>
               </li>
             </ul>
