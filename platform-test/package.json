@@ -13,7 +13,9 @@
     "full": "npx ts-node index.ts full",
     "test": "npx ts-node index.ts full",
     "test:headful": "npx ts-node index.ts full --no-headless",
-    "test:slow": "npx ts-node index.ts full --no-headless --slow"
+    "test:slow": "npx ts-node index.ts full --no-headless --slow",
+    "visual:update": "npx ts-node index.ts discover --update-baselines",
+    "clean": "rm -rf reports/discovery-* reports/report-* generated/*"
   },
   "keywords": [
     "testing",
@@ -27,6 +29,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@axe-core/playwright": "^4.8.0",
     "playwright": "^1.40.0",
     "dotenv": "^16.3.1"
   },
