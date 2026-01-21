@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, CheckCircle2, Mail, Phone, MessageSquare } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Mail, Phone, MessageSquare, FileText, ExternalLink } from "lucide-react";
 
 const Accessibility = () => {
   const currentDate = new Date().toLocaleDateString('en-US', {
@@ -74,15 +74,33 @@ const Accessibility = () => {
               Conformance Status
             </h2>
             <p className="text-muted-foreground leading-relaxed mb-4">
-              EatPal strives to conform to the <strong>Web Content Accessibility Guidelines (WCAG) 2.1
+              EatPal substantially conforms to the <strong>Web Content Accessibility Guidelines (WCAG) 2.1
               Level AA</strong>. These guidelines explain how to make web content more accessible for
               people with disabilities and more user-friendly for everyone.
             </p>
-            <p className="text-muted-foreground leading-relaxed">
+            <p className="text-muted-foreground leading-relaxed mb-4">
               We also comply with the <strong>Americans with Disabilities Act (ADA)</strong> and
               <strong> Section 508 of the Rehabilitation Act</strong> to ensure our digital services
               are accessible to users with disabilities.
             </p>
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mt-4">
+              <div className="flex items-start gap-3">
+                <FileText className="h-5 w-5 text-primary mt-0.5 shrink-0" aria-hidden="true" />
+                <div>
+                  <strong className="text-foreground">Detailed Conformance Report (VPAT)</strong>
+                  <p className="text-muted-foreground text-sm mt-1">
+                    For a detailed breakdown of our WCAG 2.1 Level AA conformance, including specific
+                    success criteria evaluations, view our Voluntary Product Accessibility Template.
+                  </p>
+                  <Link
+                    to="/accessibility/vpat"
+                    className="inline-flex items-center gap-1 text-primary hover:underline mt-2 text-sm font-medium"
+                  >
+                    View VPAT Document <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                  </Link>
+                </div>
+              </div>
+            </div>
           </section>
 
           {/* Accessibility Features */}
