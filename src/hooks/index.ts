@@ -97,6 +97,23 @@ export { useFeatureLimit } from './useFeatureLimit';
 export { useOAuthToken, useOAuthConnect, useOAuthCallback } from './useOAuthToken';
 export { useSecurityAudit, useAdminSecurityAudit } from './useSecurityAudit';
 
+// Security Layers (Defense-in-Depth)
+export {
+  SecurityProvider,
+  useSecurityContext,
+  useRequireAuth,
+  useCurrentUser,
+  useRequirePermission,
+  useRequireRoleLevel,
+  useRequireAdmin,
+  useRequireModerator,
+  useResourceOwnership,
+  useRequireOwnership,
+  useSecureAccess,
+  usePermissions,
+  useSecurityErrorHandler,
+} from './useSecurityLayers';
+
 // Re-export types
 export type { WindowSize } from './useWindowSize';
 export type { UseIntersectionObserverOptions } from './useIntersectionObserver';
@@ -105,3 +122,4 @@ export type { KeyboardNavigationOptions } from './useKeyboardNavigation';
 export type { AsyncState } from './useAsync';
 export type { UseOAuthTokenResult } from './useOAuthToken';
 export type { UseSecurityAuditResult, AuditLogFilters } from './useSecurityAudit';
+export type { SecurityContext, SecurityCheckResult, Permission } from './useSecurityLayers';
