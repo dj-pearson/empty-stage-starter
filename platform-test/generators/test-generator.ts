@@ -48,7 +48,12 @@ export class TestGenerator {
     }
 
     const content = await fs.promises.readFile(filePath, 'utf-8');
-    this.report = JSON.parse(content);
+    this.report = JSON.parse(content) as DiscoveryReport;
+    
+    if (!this.report) {
+      throw new Error('Failed to parse discovery report');
+    }
+    
     return this.report;
   }
 
@@ -765,6 +770,8 @@ ${testBody}
       tests: this.generatedTests.map(t => ({
         id: t.id,
         name: t.name,
+        description: t.description,
+        flow: t.flow,
         filePath: t.filePath,
         dependencies: t.dependencies,
         estimatedDuration: t.estimatedDuration,

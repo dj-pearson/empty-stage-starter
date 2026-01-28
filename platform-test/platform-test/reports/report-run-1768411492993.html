@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Report - Platform</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .header h1 { margin: 0 0 10px; }
+    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-top: 15px; }
+    .stat { text-align: center; padding: 15px; background: #f8f9fa; border-radius: 6px; }
+    .stat .value { font-size: 2em; font-weight: bold; }
+    .stat.passed .value { color: #22c55e; }
+    .stat.failed .value { color: #ef4444; }
+    .stat.flaky .value { color: #f59e0b; }
+    .stat.skipped .value { color: #6b7280; }
+    .tests { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden; }
+    .test { padding: 15px 20px; border-bottom: 1px solid #eee; }
+    .test:last-child { border-bottom: none; }
+    .test-header { display: flex; justify-content: space-between; align-items: center; }
+    .test-name { font-weight: 500; }
+    .test-status { padding: 4px 12px; border-radius: 20px; font-size: 0.85em; font-weight: 500; }
+    .test-status.passed { background: #dcfce7; color: #166534; }
+    .test-status.failed { background: #fee2e2; color: #991b1b; }
+    .test-status.flaky { background: #fef3c7; color: #92400e; }
+    .test-status.skipped { background: #f3f4f6; color: #374151; }
+    .test-duration { color: #6b7280; font-size: 0.9em; margin-top: 5px; }
+    .test-error { background: #fef2f2; color: #991b1b; padding: 10px; border-radius: 4px; margin-top: 10px; font-family: monospace; font-size: 0.85em; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Platform Test Report</h1>
+      <p>Run ID: run-1768411492993 | Duration: 64.41s</p>
+      <div class="summary">
+        <div class="stat"><div class="value">34</div><div>Total</div></div>
+        <div class="stat passed"><div class="value">0</div><div>Passed</div></div>
+        <div class="stat failed"><div class="value">34</div><div>Failed</div></div>
+        <div class="stat flaky"><div class="value">0</div><div>Flaky</div></div>
+        <div class="stat skipped"><div class="value">0</div><div>Skipped</div></div>
+      </div>
+    </div>
+    <div class="tests">
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">form-0 Form - happy path</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">803ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">form-0 Form - validation path</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">861ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">form-0 Form - empty path</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">1172ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">form-0 Form - happy path</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">1101ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">form-0 Form - validation path</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">479ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">form-0 Form - empty path</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">560ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">form-0 Form - happy path</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">468ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">form-0 Form - validation path</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">420ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">form-0 Form - empty path</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">441ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">form-0 Form - happy path</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">453ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">form-0 Form - validation path</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">467ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">form-0 Form - empty path</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">528ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Buttons - /</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">552ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Buttons - /</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">552ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Buttons - /</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">706ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Buttons - /</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">564ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Buttons - /</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">757ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Buttons - /pricing</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">553ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Buttons - /auth</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">554ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Buttons - /auth</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">621ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Buttons - /</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">541ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Buttons - /auth</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">593ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Buttons - /contact</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">583ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Buttons - /privacy</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">513ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Buttons - /terms</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">518ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Buttons - /accessibility</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">557ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Buttons - /faq</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">520ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Main Navigation</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">518ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Submit form-0 Form</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">525ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Submit form-0 Form</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">499ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Submit form-0 Form</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">549ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Submit form-0 Form</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">748ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">User Sign In Flow</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">639ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+        <div class="test">
+          <div class="test-header">
+            <span class="test-name">Smoke Test - Public Pages</span>
+            <span class="test-status failed">FAILED</span>
+          </div>
+          <div class="test-duration">529ms | 0 steps | 0 retries</div>
+          <div class="test-error">TypeError: Cannot read properties of undefined (reading 'steps')</div>
+        </div>
+      
+    </div>
+  </div>
+</body>
+</html>

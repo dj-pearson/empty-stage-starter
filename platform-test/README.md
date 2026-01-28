@@ -2,6 +2,8 @@
 
 A comprehensive, universal testing framework that automatically discovers all testable elements in your application and generates executable test scripts.
 
+> **🚀 New here?** Check out the [QUICKSTART.md](./QUICKSTART.md) guide to get up and running in 5 minutes!
+
 ## Features
 
 - **Automatic Element Discovery**: Crawls your application to find all forms, buttons, links, modals, and interactive elements

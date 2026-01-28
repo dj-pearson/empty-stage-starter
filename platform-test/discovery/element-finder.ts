@@ -238,7 +238,8 @@ export class ElementFinder {
       if (this.config.browser.screenshotOnFail) {
         const screenshotPath = path.replace(/\//g, '_') || 'index';
         const screenshotFile = `${this.config.reporting.outputDir}/screenshots/${screenshotPath}.png`;
-        await fs.promises.mkdir(path.dirname(screenshotFile), { recursive: true }).catch(() => {});
+        const screenshotDir = screenshotFile.substring(0, screenshotFile.lastIndexOf('/'));
+        await fs.promises.mkdir(screenshotDir, { recursive: true }).catch(() => {});
         await this.page.screenshot({ path: screenshotFile, fullPage: true });
         pageData.screenshot = screenshotFile;
       }
@@ -460,7 +461,8 @@ export class ElementFinder {
       try {
         const button = form.locator(selector).first();
         if (await button.isVisible({ timeout: 500 }).catch(() => false)) {
-          return await this.extractElementData(button, 'button');
+          const result = await this.extractElementData(button, 'button');
+          return result || undefined;
         }
       } catch {
         continue;
@@ -485,7 +487,8 @@ export class ElementFinder {
       try {
         const button = form.locator(selector).first();
         if (await button.isVisible({ timeout: 500 }).catch(() => false)) {
-          return await this.extractElementData(button, 'button');
+          const result = await this.extractElementData(button, 'button');
+          return result || undefined;
         }
       } catch {
         continue;
@@ -731,8 +734,11 @@ export class ElementFinder {
     try {
       return await element.evaluate((el) => {
         const attrs: Record<string, string> = {};
-        for (const attr of el.attributes) {
-          attrs[attr.name] = attr.value;
+        const elementWithAttrs = el as HTMLElement;
+        if (elementWithAttrs.attributes) {
+          for (const attr of elementWithAttrs.attributes) {
+            attrs[attr.name] = attr.value;
+          }
         }
         return attrs;
       });

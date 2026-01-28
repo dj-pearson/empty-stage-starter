@@ -1,0 +1,5106 @@
+{
+  "generatedAt": "2026-01-14T18:58:14.732Z",
+  "totalTests": 34,
+  "tests": [
+    {
+      "id": "test-form-form-0-happy",
+      "name": "form-0 Form - happy path",
+      "description": "Submit form with valid data and verify success",
+      "flow": {
+        "id": "form-form-0-happy",
+        "name": "Form: form-0 (happy)",
+        "description": "Submit form with valid data and verify success",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth?tab=signin",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/auth?tab=signin",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#signin-email",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{email}}",
+            "description": "Fill you@example.com"
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#signin-password",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{password}}",
+            "description": "Fill field"
+          },
+          {
+            "stepNumber": 0,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Sign In\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Submit form"
+          },
+          {
+            "stepNumber": 5,
+            "action": "assert",
+            "target": {
+              "primary": "body",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Page body"
+            },
+            "description": "Verify success state",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "Form submitted successfully",
+        "priority": "high",
+        "tags": [
+          "form",
+          "happy",
+          "/auth"
+        ]
+      },
+      "filePath": "generated/forms/auth-form-0.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 10000,
+      "tags": [
+        "form",
+        "happy",
+        "/auth"
+      ]
+    },
+    {
+      "id": "test-form-form-0-validation",
+      "name": "form-0 Form - validation path",
+      "description": "Submit form with invalid data and verify validation errors",
+      "flow": {
+        "id": "form-form-0-validation",
+        "name": "Form: form-0 (validation)",
+        "description": "Submit form with invalid data and verify validation errors",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth?tab=signin",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/auth?tab=signin",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#signin-email",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "invalid-email",
+            "description": "Fill you@example.com with invalid data"
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#signin-password",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "x",
+            "description": "Fill field with invalid data"
+          },
+          {
+            "stepNumber": 0,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Sign In\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Submit form"
+          },
+          {
+            "stepNumber": 5,
+            "action": "assert",
+            "target": {
+              "primary": "[class*=\"error\"], [role=\"alert\"], .text-red, .text-destructive",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 0.7,
+              "description": "Error message"
+            },
+            "description": "Verify error message appears",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "Validation errors shown",
+        "priority": "medium",
+        "tags": [
+          "form",
+          "validation",
+          "/auth"
+        ]
+      },
+      "filePath": "generated/forms/auth-form-0.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 10000,
+      "tags": [
+        "form",
+        "validation",
+        "/auth"
+      ]
+    },
+    {
+      "id": "test-form-form-0-empty",
+      "name": "form-0 Form - empty path",
+      "description": "Submit form empty and verify required field validation",
+      "flow": {
+        "id": "form-form-0-empty",
+        "name": "Form: form-0 (empty)",
+        "description": "Submit form empty and verify required field validation",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth?tab=signin",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/auth?tab=signin",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 0,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Sign In\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Submit form"
+          },
+          {
+            "stepNumber": 3,
+            "action": "assert",
+            "target": {
+              "primary": "[class*=\"error\"], [role=\"alert\"], .text-red, .text-destructive",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 0.7,
+              "description": "Error message"
+            },
+            "description": "Verify error message appears",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "Validation errors shown",
+        "priority": "medium",
+        "tags": [
+          "form",
+          "empty",
+          "/auth"
+        ]
+      },
+      "filePath": "generated/forms/auth-form-0.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 6000,
+      "tags": [
+        "form",
+        "empty",
+        "/auth"
+      ]
+    },
+    {
+      "id": "test-form-form-0-happy",
+      "name": "form-0 Form - happy path",
+      "description": "Submit form with valid data and verify success",
+      "flow": {
+        "id": "form-form-0-happy",
+        "name": "Form: form-0 (happy)",
+        "description": "Submit form with valid data and verify success",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth?tab=signup",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/auth?tab=signup",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#signup-email",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{email}}",
+            "description": "Fill you@example.com"
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#signup-password",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{password}}",
+            "description": "Fill field"
+          },
+          {
+            "stepNumber": 0,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Sign Up\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Submit form"
+          },
+          {
+            "stepNumber": 5,
+            "action": "assert",
+            "target": {
+              "primary": "body",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Page body"
+            },
+            "description": "Verify success state",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "Form submitted successfully",
+        "priority": "high",
+        "tags": [
+          "form",
+          "happy",
+          "/auth"
+        ]
+      },
+      "filePath": "generated/forms/auth-form-0.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 10000,
+      "tags": [
+        "form",
+        "happy",
+        "/auth"
+      ]
+    },
+    {
+      "id": "test-form-form-0-validation",
+      "name": "form-0 Form - validation path",
+      "description": "Submit form with invalid data and verify validation errors",
+      "flow": {
+        "id": "form-form-0-validation",
+        "name": "Form: form-0 (validation)",
+        "description": "Submit form with invalid data and verify validation errors",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth?tab=signup",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/auth?tab=signup",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#signup-email",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "invalid-email",
+            "description": "Fill you@example.com with invalid data"
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#signup-password",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "x",
+            "description": "Fill field with invalid data"
+          },
+          {
+            "stepNumber": 0,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Sign Up\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Submit form"
+          },
+          {
+            "stepNumber": 5,
+            "action": "assert",
+            "target": {
+              "primary": "[class*=\"error\"], [role=\"alert\"], .text-red, .text-destructive",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 0.7,
+              "description": "Error message"
+            },
+            "description": "Verify error message appears",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "Validation errors shown",
+        "priority": "medium",
+        "tags": [
+          "form",
+          "validation",
+          "/auth"
+        ]
+      },
+      "filePath": "generated/forms/auth-form-0.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 10000,
+      "tags": [
+        "form",
+        "validation",
+        "/auth"
+      ]
+    },
+    {
+      "id": "test-form-form-0-empty",
+      "name": "form-0 Form - empty path",
+      "description": "Submit form empty and verify required field validation",
+      "flow": {
+        "id": "form-form-0-empty",
+        "name": "Form: form-0 (empty)",
+        "description": "Submit form empty and verify required field validation",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth?tab=signup",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/auth?tab=signup",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 0,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Sign Up\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Submit form"
+          },
+          {
+            "stepNumber": 3,
+            "action": "assert",
+            "target": {
+              "primary": "[class*=\"error\"], [role=\"alert\"], .text-red, .text-destructive",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 0.7,
+              "description": "Error message"
+            },
+            "description": "Verify error message appears",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "Validation errors shown",
+        "priority": "medium",
+        "tags": [
+          "form",
+          "empty",
+          "/auth"
+        ]
+      },
+      "filePath": "generated/forms/auth-form-0.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 6000,
+      "tags": [
+        "form",
+        "empty",
+        "/auth"
+      ]
+    },
+    {
+      "id": "test-form-form-0-happy",
+      "name": "form-0 Form - happy path",
+      "description": "Submit form with valid data and verify success",
+      "flow": {
+        "id": "form-form-0-happy",
+        "name": "Form: form-0 (happy)",
+        "description": "Submit form with valid data and verify success",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/auth",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#signup-email",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{email}}",
+            "description": "Fill you@example.com"
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#signup-password",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{password}}",
+            "description": "Fill field"
+          },
+          {
+            "stepNumber": 0,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Sign Up\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Submit form"
+          },
+          {
+            "stepNumber": 5,
+            "action": "assert",
+            "target": {
+              "primary": "body",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Page body"
+            },
+            "description": "Verify success state",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "Form submitted successfully",
+        "priority": "high",
+        "tags": [
+          "form",
+          "happy",
+          "/auth"
+        ]
+      },
+      "filePath": "generated/forms/auth-form-0.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 10000,
+      "tags": [
+        "form",
+        "happy",
+        "/auth"
+      ]
+    },
+    {
+      "id": "test-form-form-0-validation",
+      "name": "form-0 Form - validation path",
+      "description": "Submit form with invalid data and verify validation errors",
+      "flow": {
+        "id": "form-form-0-validation",
+        "name": "Form: form-0 (validation)",
+        "description": "Submit form with invalid data and verify validation errors",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/auth",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#signup-email",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "invalid-email",
+            "description": "Fill you@example.com with invalid data"
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#signup-password",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "x",
+            "description": "Fill field with invalid data"
+          },
+          {
+            "stepNumber": 0,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Sign Up\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Submit form"
+          },
+          {
+            "stepNumber": 5,
+            "action": "assert",
+            "target": {
+              "primary": "[class*=\"error\"], [role=\"alert\"], .text-red, .text-destructive",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 0.7,
+              "description": "Error message"
+            },
+            "description": "Verify error message appears",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "Validation errors shown",
+        "priority": "medium",
+        "tags": [
+          "form",
+          "validation",
+          "/auth"
+        ]
+      },
+      "filePath": "generated/forms/auth-form-0.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 10000,
+      "tags": [
+        "form",
+        "validation",
+        "/auth"
+      ]
+    },
+    {
+      "id": "test-form-form-0-empty",
+      "name": "form-0 Form - empty path",
+      "description": "Submit form empty and verify required field validation",
+      "flow": {
+        "id": "form-form-0-empty",
+        "name": "Form: form-0 (empty)",
+        "description": "Submit form empty and verify required field validation",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/auth",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 0,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Sign Up\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Submit form"
+          },
+          {
+            "stepNumber": 3,
+            "action": "assert",
+            "target": {
+              "primary": "[class*=\"error\"], [role=\"alert\"], .text-red, .text-destructive",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 0.7,
+              "description": "Error message"
+            },
+            "description": "Verify error message appears",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "Validation errors shown",
+        "priority": "medium",
+        "tags": [
+          "form",
+          "empty",
+          "/auth"
+        ]
+      },
+      "filePath": "generated/forms/auth-form-0.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 6000,
+      "tags": [
+        "form",
+        "empty",
+        "/auth"
+      ]
+    },
+    {
+      "id": "test-form-form-0-happy",
+      "name": "form-0 Form - happy path",
+      "description": "Submit form with valid data and verify success",
+      "flow": {
+        "id": "form-form-0-happy",
+        "name": "Form: form-0 (happy)",
+        "description": "Submit form with valid data and verify success",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/contact",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/contact",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#name",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{full-name}}",
+            "description": "Fill name"
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#email",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{email}}",
+            "description": "Fill email"
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#subject",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{text}}",
+            "description": "Fill subject"
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#message",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{phone}}",
+            "description": "Fill message"
+          },
+          {
+            "stepNumber": 0,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Send Message\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Submit form"
+          },
+          {
+            "stepNumber": 7,
+            "action": "assert",
+            "target": {
+              "primary": "body",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Page body"
+            },
+            "description": "Verify success state",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "Form submitted successfully",
+        "priority": "high",
+        "tags": [
+          "form",
+          "happy",
+          "/contact"
+        ]
+      },
+      "filePath": "generated/forms/contact-form-0.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 14000,
+      "tags": [
+        "form",
+        "happy",
+        "/contact"
+      ]
+    },
+    {
+      "id": "test-form-form-0-validation",
+      "name": "form-0 Form - validation path",
+      "description": "Submit form with invalid data and verify validation errors",
+      "flow": {
+        "id": "form-form-0-validation",
+        "name": "Form: form-0 (validation)",
+        "description": "Submit form with invalid data and verify validation errors",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/contact",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/contact",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#name",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "",
+            "description": "Fill name with invalid data"
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#email",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "invalid-email",
+            "description": "Fill email with invalid data"
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#subject",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "",
+            "description": "Fill subject with invalid data"
+          },
+          {
+            "stepNumber": 0,
+            "action": "fill",
+            "target": {
+              "primary": "#message",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "abc",
+            "description": "Fill message with invalid data"
+          },
+          {
+            "stepNumber": 0,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Send Message\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Submit form"
+          },
+          {
+            "stepNumber": 7,
+            "action": "assert",
+            "target": {
+              "primary": "[class*=\"error\"], [role=\"alert\"], .text-red, .text-destructive",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 0.7,
+              "description": "Error message"
+            },
+            "description": "Verify error message appears",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "Validation errors shown",
+        "priority": "medium",
+        "tags": [
+          "form",
+          "validation",
+          "/contact"
+        ]
+      },
+      "filePath": "generated/forms/contact-form-0.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 14000,
+      "tags": [
+        "form",
+        "validation",
+        "/contact"
+      ]
+    },
+    {
+      "id": "test-form-form-0-empty",
+      "name": "form-0 Form - empty path",
+      "description": "Submit form empty and verify required field validation",
+      "flow": {
+        "id": "form-form-0-empty",
+        "name": "Form: form-0 (empty)",
+        "description": "Submit form empty and verify required field validation",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/contact",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/contact",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 0,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Send Message\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Submit form"
+          },
+          {
+            "stepNumber": 3,
+            "action": "assert",
+            "target": {
+              "primary": "[class*=\"error\"], [role=\"alert\"], .text-red, .text-destructive",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 0.7,
+              "description": "Error message"
+            },
+            "description": "Verify error message appears",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "Validation errors shown",
+        "priority": "medium",
+        "tags": [
+          "form",
+          "empty",
+          "/contact"
+        ]
+      },
+      "filePath": "generated/forms/contact-form-0.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 6000,
+      "tags": [
+        "form",
+        "empty",
+        "/contact"
+      ]
+    },
+    {
+      "id": "test-buttons-index",
+      "name": "Buttons - /",
+      "description": "Test all interactive buttons on /",
+      "flow": {
+        "id": "buttons-/",
+        "name": "Button Interactions: /",
+        "description": "Test all interactive buttons on /",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Toggle theme\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Toggle theme",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 3,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Get started with EatPal for free\"]",
+              "fallbacks": [
+                "text=\"Get Started Free\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Get Started Free",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Try It Free\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Try It Free",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 5,
+            "action": "click",
+            "target": {
+              "primary": "text=\"See How It Works\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click See How It Works",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 6,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Get started with the free plan\"]",
+              "fallbacks": [
+                "text=\"Get Started\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Get Started",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 7,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start free trial of the Pro plan\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 8,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start free trial of the Family plan\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 9,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start your free trial of EatPal meal planning\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 10,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"View EatPal pricing plans\"]",
+              "fallbacks": [
+                "text=\"View Pricing\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click View Pricing",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All buttons are clickable and respond appropriately",
+        "priority": "medium",
+        "tags": [
+          "buttons",
+          "/"
+        ]
+      },
+      "filePath": "generated/buttons/index.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 10000,
+      "tags": [
+        "buttons",
+        "/"
+      ]
+    },
+    {
+      "id": "test-buttons-index",
+      "name": "Buttons - /",
+      "description": "Test all interactive buttons on /",
+      "flow": {
+        "id": "buttons-/",
+        "name": "Button Interactions: /",
+        "description": "Test all interactive buttons on /",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/#main-content",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/#main-content",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Toggle theme\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Toggle theme",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 3,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Get started with EatPal for free\"]",
+              "fallbacks": [
+                "text=\"Get Started Free\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Get Started Free",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Try It Free\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Try It Free",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 5,
+            "action": "click",
+            "target": {
+              "primary": "text=\"See How It Works\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click See How It Works",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 6,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Get started with the free plan\"]",
+              "fallbacks": [
+                "text=\"Get Started\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Get Started",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 7,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start free trial of the Pro plan\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 8,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start free trial of the Family plan\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 9,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start your free trial of EatPal meal planning\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 10,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"View EatPal pricing plans\"]",
+              "fallbacks": [
+                "text=\"View Pricing\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click View Pricing",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All buttons are clickable and respond appropriately",
+        "priority": "medium",
+        "tags": [
+          "buttons",
+          "/"
+        ]
+      },
+      "filePath": "generated/buttons/index.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 10000,
+      "tags": [
+        "buttons",
+        "/"
+      ]
+    },
+    {
+      "id": "test-buttons-index",
+      "name": "Buttons - /",
+      "description": "Test all interactive buttons on /",
+      "flow": {
+        "id": "buttons-/",
+        "name": "Button Interactions: /",
+        "description": "Test all interactive buttons on /",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/#main",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/#main",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Toggle theme\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Toggle theme",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 3,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Get started with EatPal for free\"]",
+              "fallbacks": [
+                "text=\"Get Started Free\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Get Started Free",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Try It Free\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Try It Free",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 5,
+            "action": "click",
+            "target": {
+              "primary": "text=\"See How It Works\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click See How It Works",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 6,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Get started with the free plan\"]",
+              "fallbacks": [
+                "text=\"Get Started\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Get Started",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 7,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start free trial of the Pro plan\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 8,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start free trial of the Family plan\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 9,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start your free trial of EatPal meal planning\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 10,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"View EatPal pricing plans\"]",
+              "fallbacks": [
+                "text=\"View Pricing\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click View Pricing",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All buttons are clickable and respond appropriately",
+        "priority": "medium",
+        "tags": [
+          "buttons",
+          "/"
+        ]
+      },
+      "filePath": "generated/buttons/index.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 10000,
+      "tags": [
+        "buttons",
+        "/"
+      ]
+    },
+    {
+      "id": "test-buttons-index",
+      "name": "Buttons - /",
+      "description": "Test all interactive buttons on /",
+      "flow": {
+        "id": "buttons-/",
+        "name": "Button Interactions: /",
+        "description": "Test all interactive buttons on /",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/#features",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/#features",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Toggle theme\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Toggle theme",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 3,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Get started with EatPal for free\"]",
+              "fallbacks": [
+                "text=\"Get Started Free\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Get Started Free",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Try It Free\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Try It Free",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 5,
+            "action": "click",
+            "target": {
+              "primary": "text=\"See How It Works\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click See How It Works",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 6,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Get started with the free plan\"]",
+              "fallbacks": [
+                "text=\"Get Started\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Get Started",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 7,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start free trial of the Pro plan\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 8,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start free trial of the Family plan\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 9,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start your free trial of EatPal meal planning\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 10,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"View EatPal pricing plans\"]",
+              "fallbacks": [
+                "text=\"View Pricing\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click View Pricing",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All buttons are clickable and respond appropriately",
+        "priority": "medium",
+        "tags": [
+          "buttons",
+          "/"
+        ]
+      },
+      "filePath": "generated/buttons/index.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 10000,
+      "tags": [
+        "buttons",
+        "/"
+      ]
+    },
+    {
+      "id": "test-buttons-index",
+      "name": "Buttons - /",
+      "description": "Test all interactive buttons on /",
+      "flow": {
+        "id": "buttons-/",
+        "name": "Button Interactions: /",
+        "description": "Test all interactive buttons on /",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/#how-it-works",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/#how-it-works",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Toggle theme\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Toggle theme",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 3,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Get started with EatPal for free\"]",
+              "fallbacks": [
+                "text=\"Get Started Free\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Get Started Free",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Try It Free\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Try It Free",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 5,
+            "action": "click",
+            "target": {
+              "primary": "text=\"See How It Works\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click See How It Works",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 6,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Get started with the free plan\"]",
+              "fallbacks": [
+                "text=\"Get Started\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Get Started",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 7,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start free trial of the Pro plan\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 8,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start free trial of the Family plan\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 9,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start your free trial of EatPal meal planning\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 10,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"View EatPal pricing plans\"]",
+              "fallbacks": [
+                "text=\"View Pricing\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click View Pricing",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All buttons are clickable and respond appropriately",
+        "priority": "medium",
+        "tags": [
+          "buttons",
+          "/"
+        ]
+      },
+      "filePath": "generated/buttons/index.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 10000,
+      "tags": [
+        "buttons",
+        "/"
+      ]
+    },
+    {
+      "id": "test-buttons-pricing",
+      "name": "Buttons - /pricing",
+      "description": "Test all interactive buttons on /pricing",
+      "flow": {
+        "id": "buttons-/pricing",
+        "name": "Button Interactions: /pricing",
+        "description": "Test all interactive buttons on /pricing",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/pricing",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/pricing",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Get Started Free\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Get Started Free",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 3,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Monthly billing\"]",
+              "fallbacks": [
+                "text=\"Monthly\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Monthly",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Yearly billing, save 20%\"]",
+              "fallbacks": [
+                "text=\"YearlySave 20%\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click YearlySave 20%",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 5,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Get Started Now - Free plan at Free\"]",
+              "fallbacks": [
+                "text=\"Get Started Now\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Get Started Now",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 6,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Get Started Now - Pro plan at $14.99 per month\"]",
+              "fallbacks": [
+                "text=\"Get Started Now\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Get Started Now",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 7,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Get Started Now - Family Plus plan at $24.99 per month\"]",
+              "fallbacks": [
+                "text=\"Get Started Now\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Get Started Now",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 8,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Get Started Now - Professional plan at $99 per month\"]",
+              "fallbacks": [
+                "text=\"Get Started Now\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Get Started Now",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All buttons are clickable and respond appropriately",
+        "priority": "medium",
+        "tags": [
+          "buttons",
+          "/pricing"
+        ]
+      },
+      "filePath": "generated/buttons/pricing.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 8000,
+      "tags": [
+        "buttons",
+        "/pricing"
+      ]
+    },
+    {
+      "id": "test-buttons-auth",
+      "name": "Buttons - /auth",
+      "description": "Test all interactive buttons on /auth",
+      "flow": {
+        "id": "buttons-/auth",
+        "name": "Button Interactions: /auth",
+        "description": "Test all interactive buttons on /auth",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth?tab=signin",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/auth?tab=signin",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "click",
+            "target": {
+              "primary": "text=\"← Back to Home\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click ← Back to Home",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 3,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Show password\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Show password",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Forgot Password?\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Forgot Password?",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 5,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Google\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Google",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 6,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Apple\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Apple",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All buttons are clickable and respond appropriately",
+        "priority": "medium",
+        "tags": [
+          "buttons",
+          "/auth"
+        ]
+      },
+      "filePath": "generated/buttons/auth.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 6000,
+      "tags": [
+        "buttons",
+        "/auth"
+      ]
+    },
+    {
+      "id": "test-buttons-auth",
+      "name": "Buttons - /auth",
+      "description": "Test all interactive buttons on /auth",
+      "flow": {
+        "id": "buttons-/auth",
+        "name": "Button Interactions: /auth",
+        "description": "Test all interactive buttons on /auth",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth?tab=signup",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/auth?tab=signup",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "click",
+            "target": {
+              "primary": "text=\"← Back to Home\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click ← Back to Home",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 3,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Show password\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Show password",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Google\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Google",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 5,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Apple\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Apple",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All buttons are clickable and respond appropriately",
+        "priority": "medium",
+        "tags": [
+          "buttons",
+          "/auth"
+        ]
+      },
+      "filePath": "generated/buttons/auth.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 5000,
+      "tags": [
+        "buttons",
+        "/auth"
+      ]
+    },
+    {
+      "id": "test-buttons-index",
+      "name": "Buttons - /",
+      "description": "Test all interactive buttons on /",
+      "flow": {
+        "id": "buttons-/",
+        "name": "Button Interactions: /",
+        "description": "Test all interactive buttons on /",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Toggle theme\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Toggle theme",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 3,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Get started with EatPal for free\"]",
+              "fallbacks": [
+                "text=\"Get Started Free\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Get Started Free",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Try It Free\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Try It Free",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 5,
+            "action": "click",
+            "target": {
+              "primary": "text=\"See How It Works\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click See How It Works",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 6,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Get started with the free plan\"]",
+              "fallbacks": [
+                "text=\"Get Started\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Get Started",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 7,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start free trial of the Pro plan\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 8,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start free trial of the Family plan\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 9,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"Start your free trial of EatPal meal planning\"]",
+              "fallbacks": [
+                "text=\"Start Free Trial\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click Start Free Trial",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 10,
+            "action": "click",
+            "target": {
+              "primary": "[aria-label=\"View EatPal pricing plans\"]",
+              "fallbacks": [
+                "text=\"View Pricing\"",
+                ".inline-flex"
+              ],
+              "type": "label",
+              "confidence": 0.85,
+              "description": "button element"
+            },
+            "description": "Click View Pricing",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All buttons are clickable and respond appropriately",
+        "priority": "medium",
+        "tags": [
+          "buttons",
+          "/"
+        ]
+      },
+      "filePath": "generated/buttons/index.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 10000,
+      "tags": [
+        "buttons",
+        "/"
+      ]
+    },
+    {
+      "id": "test-buttons-auth",
+      "name": "Buttons - /auth",
+      "description": "Test all interactive buttons on /auth",
+      "flow": {
+        "id": "buttons-/auth",
+        "name": "Button Interactions: /auth",
+        "description": "Test all interactive buttons on /auth",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/auth",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "click",
+            "target": {
+              "primary": "text=\"← Back to Home\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click ← Back to Home",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 3,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Show password\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Show password",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Google\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Google",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 5,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Apple\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Apple",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All buttons are clickable and respond appropriately",
+        "priority": "medium",
+        "tags": [
+          "buttons",
+          "/auth"
+        ]
+      },
+      "filePath": "generated/buttons/auth.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 5000,
+      "tags": [
+        "buttons",
+        "/auth"
+      ]
+    },
+    {
+      "id": "test-buttons-contact",
+      "name": "Buttons - /contact",
+      "description": "Test all interactive buttons on /contact",
+      "flow": {
+        "id": "buttons-/contact",
+        "name": "Button Interactions: /contact",
+        "description": "Test all interactive buttons on /contact",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/contact",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/contact",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Back to Home\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Back to Home",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 3,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Send Message\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Send Message",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "text=\"View FAQ\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click View FAQ",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All buttons are clickable and respond appropriately",
+        "priority": "medium",
+        "tags": [
+          "buttons",
+          "/contact"
+        ]
+      },
+      "filePath": "generated/buttons/contact.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 4000,
+      "tags": [
+        "buttons",
+        "/contact"
+      ]
+    },
+    {
+      "id": "test-buttons-privacy",
+      "name": "Buttons - /privacy",
+      "description": "Test all interactive buttons on /privacy",
+      "flow": {
+        "id": "buttons-/privacy",
+        "name": "Button Interactions: /privacy",
+        "description": "Test all interactive buttons on /privacy",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/privacy",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/privacy",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Back to Home\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Back to Home",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All buttons are clickable and respond appropriately",
+        "priority": "medium",
+        "tags": [
+          "buttons",
+          "/privacy"
+        ]
+      },
+      "filePath": "generated/buttons/privacy.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 2000,
+      "tags": [
+        "buttons",
+        "/privacy"
+      ]
+    },
+    {
+      "id": "test-buttons-terms",
+      "name": "Buttons - /terms",
+      "description": "Test all interactive buttons on /terms",
+      "flow": {
+        "id": "buttons-/terms",
+        "name": "Button Interactions: /terms",
+        "description": "Test all interactive buttons on /terms",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/terms",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/terms",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Back to Home\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Back to Home",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All buttons are clickable and respond appropriately",
+        "priority": "medium",
+        "tags": [
+          "buttons",
+          "/terms"
+        ]
+      },
+      "filePath": "generated/buttons/terms.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 2000,
+      "tags": [
+        "buttons",
+        "/terms"
+      ]
+    },
+    {
+      "id": "test-buttons-accessibility",
+      "name": "Buttons - /accessibility",
+      "description": "Test all interactive buttons on /accessibility",
+      "flow": {
+        "id": "buttons-/accessibility",
+        "name": "Button Interactions: /accessibility",
+        "description": "Test all interactive buttons on /accessibility",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/accessibility",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/accessibility",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Back to Home\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Back to Home",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All buttons are clickable and respond appropriately",
+        "priority": "medium",
+        "tags": [
+          "buttons",
+          "/accessibility"
+        ]
+      },
+      "filePath": "generated/buttons/accessibility.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 2000,
+      "tags": [
+        "buttons",
+        "/accessibility"
+      ]
+    },
+    {
+      "id": "test-buttons-faq",
+      "name": "Buttons - /faq",
+      "description": "Test all interactive buttons on /faq",
+      "flow": {
+        "id": "buttons-/faq",
+        "name": "Button Interactions: /faq",
+        "description": "Test all interactive buttons on /faq",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/faq",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080/faq",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Back to Home\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Click Back to Home",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 3,
+            "action": "click",
+            "target": {
+              "primary": "#radix-«r0»",
+              "fallbacks": [
+                "text=\"What is EatPal and how does it work?\"",
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "button element"
+            },
+            "description": "Click What is EatPal and how does it work?",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "#radix-«r2»",
+              "fallbacks": [
+                "text=\"Is EatPal available now?\"",
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "button element"
+            },
+            "description": "Click Is EatPal available now?",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 5,
+            "action": "click",
+            "target": {
+              "primary": "#radix-«r4»",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "button element"
+            },
+            "description": "Click Is EatPal suitable for children with ARFID or autism?",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 6,
+            "action": "click",
+            "target": {
+              "primary": "#radix-«r6»",
+              "fallbacks": [
+                "text=\"What are \"try bites\" and how do they work?\"",
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "button element"
+            },
+            "description": "Click What are \"try bites\" and how do they work?",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 7,
+            "action": "click",
+            "target": {
+              "primary": "#radix-«r8»",
+              "fallbacks": [
+                "text=\"Can I manage meal plans for multiple children?\"",
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "button element"
+            },
+            "description": "Click Can I manage meal plans for multiple children?",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 8,
+            "action": "click",
+            "target": {
+              "primary": "#radix-«ra»",
+              "fallbacks": [
+                "text=\"How does the AI meal planning work?\"",
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "button element"
+            },
+            "description": "Click How does the AI meal planning work?",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 9,
+            "action": "click",
+            "target": {
+              "primary": "#radix-«rc»",
+              "fallbacks": [
+                "text=\"What's included in the Free plan?\"",
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "button element"
+            },
+            "description": "Click What's included in the Free plan?",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 10,
+            "action": "click",
+            "target": {
+              "primary": "#radix-«re»",
+              "fallbacks": [
+                "text=\"Can I cancel my subscription anytime?\"",
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "button element"
+            },
+            "description": "Click Can I cancel my subscription anytime?",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          },
+          {
+            "stepNumber": 11,
+            "action": "click",
+            "target": {
+              "primary": "#radix-«rg»",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "button element"
+            },
+            "description": "Click How do I track allergens and dietary restrictions?",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true,
+                "timeout": 5000
+              }
+            ],
+            "waitFor": {
+              "type": "timeout",
+              "value": 500
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All buttons are clickable and respond appropriately",
+        "priority": "medium",
+        "tags": [
+          "buttons",
+          "/faq"
+        ]
+      },
+      "filePath": "generated/buttons/faq.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 11000,
+      "tags": [
+        "buttons",
+        "/faq"
+      ]
+    },
+    {
+      "id": "test-navigation-main",
+      "name": "Main Navigation",
+      "description": "Test all main navigation links",
+      "flow": {
+        "id": "navigation-main",
+        "name": "Main Navigation Test",
+        "description": "Test all main navigation links",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to URL"
+            },
+            "description": "Navigate to http://localhost:8080",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Features\"",
+              "fallbacks": [
+                ".text-foreground"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "link element"
+            },
+            "description": "Navigate to Features",
+            "assertions": [
+              {
+                "type": "url",
+                "expected": "http://localhost:8080/#features",
+                "timeout": 10000
+              }
+            ],
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 3,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Base URL"
+            },
+            "description": "Navigate back to home",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "text=\"How It Works\"",
+              "fallbacks": [
+                ".text-foreground"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "link element"
+            },
+            "description": "Navigate to How It Works",
+            "assertions": [
+              {
+                "type": "url",
+                "expected": "http://localhost:8080/#how-it-works",
+                "timeout": 10000
+              }
+            ],
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 5,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Base URL"
+            },
+            "description": "Navigate back to home",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 6,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Pricing\"",
+              "fallbacks": [
+                ".text-foreground"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "link element"
+            },
+            "description": "Navigate to Pricing",
+            "assertions": [
+              {
+                "type": "url",
+                "expected": "http://localhost:8080/pricing",
+                "timeout": 10000
+              }
+            ],
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 7,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Base URL"
+            },
+            "description": "Navigate back to home",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 8,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Sign In\"",
+              "fallbacks": [],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "link element"
+            },
+            "description": "Navigate to Sign In",
+            "assertions": [
+              {
+                "type": "url",
+                "expected": "http://localhost:8080/auth?tab=signin",
+                "timeout": 10000
+              }
+            ],
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 9,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Base URL"
+            },
+            "description": "Navigate back to home",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 10,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Get Started Free\"",
+              "fallbacks": [],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "link element"
+            },
+            "description": "Navigate to Get Started Free",
+            "assertions": [
+              {
+                "type": "url",
+                "expected": "http://localhost:8080/auth?tab=signup",
+                "timeout": 10000
+              }
+            ],
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 11,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Base URL"
+            },
+            "description": "Navigate back to home",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 12,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Home\"",
+              "fallbacks": [
+                ".hover:text-primary"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "link element"
+            },
+            "description": "Navigate to Home",
+            "assertions": [
+              {
+                "type": "url",
+                "expected": "https://tryeatpal.com/",
+                "timeout": 10000
+              }
+            ],
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 13,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Base URL"
+            },
+            "description": "Navigate back to home",
+            "waitFor": {
+              "type": "networkidle"
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All navigation links work correctly",
+        "priority": "high",
+        "tags": [
+          "navigation"
+        ]
+      },
+      "filePath": "generated/navigation/main-navigation.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 26000,
+      "tags": [
+        "navigation"
+      ]
+    },
+    {
+      "id": "test-flow-form-form-0",
+      "name": "Submit form-0 Form",
+      "description": "Complete and submit the form on /auth",
+      "flow": {
+        "id": "form-form-0",
+        "name": "Submit form-0 Form",
+        "description": "Complete and submit the form on /auth",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth?tab=signin",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to page"
+            },
+            "description": "Navigate to /auth"
+          },
+          {
+            "stepNumber": 2,
+            "action": "fill",
+            "target": {
+              "primary": "#signin-email",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{email}}",
+            "description": "Fill you@example.com"
+          },
+          {
+            "stepNumber": 3,
+            "action": "fill",
+            "target": {
+              "primary": "#signin-password",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{password}}",
+            "description": "Fill field"
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Sign In\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Submit form",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "Form submitted successfully",
+        "priority": "high",
+        "tags": [
+          "form",
+          "/auth"
+        ]
+      },
+      "filePath": "generated/flows/form-form-0.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 12000,
+      "tags": [
+        "form",
+        "/auth"
+      ]
+    },
+    {
+      "id": "test-flow-form-form-0",
+      "name": "Submit form-0 Form",
+      "description": "Complete and submit the form on /auth",
+      "flow": {
+        "id": "form-form-0",
+        "name": "Submit form-0 Form",
+        "description": "Complete and submit the form on /auth",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth?tab=signup",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to page"
+            },
+            "description": "Navigate to /auth"
+          },
+          {
+            "stepNumber": 2,
+            "action": "fill",
+            "target": {
+              "primary": "#signup-email",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{email}}",
+            "description": "Fill you@example.com"
+          },
+          {
+            "stepNumber": 3,
+            "action": "fill",
+            "target": {
+              "primary": "#signup-password",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{password}}",
+            "description": "Fill field"
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Sign Up\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Submit form",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "Form submitted successfully",
+        "priority": "high",
+        "tags": [
+          "form",
+          "/auth"
+        ]
+      },
+      "filePath": "generated/flows/form-form-0.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 12000,
+      "tags": [
+        "form",
+        "/auth"
+      ]
+    },
+    {
+      "id": "test-flow-form-form-0",
+      "name": "Submit form-0 Form",
+      "description": "Complete and submit the form on /auth",
+      "flow": {
+        "id": "form-form-0",
+        "name": "Submit form-0 Form",
+        "description": "Complete and submit the form on /auth",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to page"
+            },
+            "description": "Navigate to /auth"
+          },
+          {
+            "stepNumber": 2,
+            "action": "fill",
+            "target": {
+              "primary": "#signup-email",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{email}}",
+            "description": "Fill you@example.com"
+          },
+          {
+            "stepNumber": 3,
+            "action": "fill",
+            "target": {
+              "primary": "#signup-password",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{password}}",
+            "description": "Fill field"
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Sign Up\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Submit form",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "Form submitted successfully",
+        "priority": "high",
+        "tags": [
+          "form",
+          "/auth"
+        ]
+      },
+      "filePath": "generated/flows/form-form-0.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 12000,
+      "tags": [
+        "form",
+        "/auth"
+      ]
+    },
+    {
+      "id": "test-flow-form-form-0",
+      "name": "Submit form-0 Form",
+      "description": "Complete and submit the form on /contact",
+      "flow": {
+        "id": "form-form-0",
+        "name": "Submit form-0 Form",
+        "description": "Complete and submit the form on /contact",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/contact",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Navigate to page"
+            },
+            "description": "Navigate to /contact"
+          },
+          {
+            "stepNumber": 2,
+            "action": "fill",
+            "target": {
+              "primary": "#name",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{full-name}}",
+            "description": "Fill name"
+          },
+          {
+            "stepNumber": 3,
+            "action": "fill",
+            "target": {
+              "primary": "#email",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{email}}",
+            "description": "Fill email"
+          },
+          {
+            "stepNumber": 4,
+            "action": "fill",
+            "target": {
+              "primary": "#subject",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{text}}",
+            "description": "Fill subject"
+          },
+          {
+            "stepNumber": 5,
+            "action": "fill",
+            "target": {
+              "primary": "#message",
+              "fallbacks": [
+                ".flex"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "input element"
+            },
+            "value": "{{phone}}",
+            "description": "Fill message"
+          },
+          {
+            "stepNumber": 6,
+            "action": "click",
+            "target": {
+              "primary": "text=\"Send Message\"",
+              "fallbacks": [
+                ".inline-flex"
+              ],
+              "type": "text",
+              "confidence": 0.7,
+              "description": "button element"
+            },
+            "description": "Submit form",
+            "assertions": [
+              {
+                "type": "visible",
+                "expected": true
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "Form submitted successfully",
+        "priority": "high",
+        "tags": [
+          "form",
+          "/contact"
+        ]
+      },
+      "filePath": "generated/flows/form-form-0.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 18000,
+      "tags": [
+        "form",
+        "/contact"
+      ]
+    },
+    {
+      "id": "test-flow-auth-signin",
+      "name": "User Sign In Flow",
+      "description": "Complete user authentication",
+      "flow": {
+        "id": "auth-signin",
+        "name": "User Sign In Flow",
+        "description": "Complete user authentication",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "Auth page"
+            },
+            "description": "Navigate to auth page"
+          },
+          {
+            "stepNumber": 2,
+            "action": "fill",
+            "target": {
+              "primary": "input[type=\"email\"]",
+              "fallbacks": [
+                "input[name=\"email\"]"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "Email input"
+            },
+            "value": "{{email}}",
+            "description": "Enter email"
+          },
+          {
+            "stepNumber": 3,
+            "action": "fill",
+            "target": {
+              "primary": "input[type=\"password\"]",
+              "fallbacks": [
+                "input[name=\"password\"]"
+              ],
+              "type": "css",
+              "confidence": 0.9,
+              "description": "Password input"
+            },
+            "value": "{{password}}",
+            "description": "Enter password"
+          },
+          {
+            "stepNumber": 4,
+            "action": "click",
+            "target": {
+              "primary": "button[type=\"submit\"]",
+              "fallbacks": [
+                "button:has-text(\"Sign In\")"
+              ],
+              "type": "css",
+              "confidence": 0.8,
+              "description": "Submit button"
+            },
+            "description": "Click sign in",
+            "assertions": [
+              {
+                "type": "url",
+                "expected": "/dashboard",
+                "timeout": 10000
+              }
+            ]
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "User is authenticated and redirected to dashboard",
+        "priority": "critical",
+        "tags": [
+          "auth",
+          "signin"
+        ]
+      },
+      "filePath": "generated/flows/auth-signin.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 12000,
+      "tags": [
+        "auth",
+        "signin"
+      ]
+    },
+    {
+      "id": "test-smoke-public",
+      "name": "Smoke Test - Public Pages",
+      "description": "Verify all public pages load successfully",
+      "flow": {
+        "id": "smoke-public",
+        "name": "Public Pages Smoke Test",
+        "description": "Verify all public pages load successfully",
+        "steps": [
+          {
+            "stepNumber": 1,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "/"
+            },
+            "description": "Load /",
+            "assertions": [
+              {
+                "type": "title",
+                "expected": "EatPal: Food Chaining Meal Planner for Picky Eaters | Evidence-Based",
+                "timeout": 10000
+              }
+            ],
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 2,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/#main-content",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "/"
+            },
+            "description": "Load /",
+            "assertions": [
+              {
+                "type": "title",
+                "expected": "EatPal: Food Chaining Meal Planner for Picky Eaters | Evidence-Based",
+                "timeout": 10000
+              }
+            ],
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 3,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/#main",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "/"
+            },
+            "description": "Load /",
+            "assertions": [
+              {
+                "type": "title",
+                "expected": "EatPal: Food Chaining Meal Planner for Picky Eaters | Evidence-Based",
+                "timeout": 10000
+              }
+            ],
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 4,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/#features",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "/"
+            },
+            "description": "Load /",
+            "assertions": [
+              {
+                "type": "title",
+                "expected": "EatPal: Food Chaining Meal Planner for Picky Eaters | Evidence-Based",
+                "timeout": 10000
+              }
+            ],
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 5,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/#how-it-works",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "/"
+            },
+            "description": "Load /",
+            "assertions": [
+              {
+                "type": "title",
+                "expected": "EatPal: Food Chaining Meal Planner for Picky Eaters | Evidence-Based",
+                "timeout": 10000
+              }
+            ],
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 6,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/pricing",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "/pricing"
+            },
+            "description": "Load /pricing",
+            "assertions": [
+              {
+                "type": "title",
+                "expected": "Pricing Plans for Picky Eater Meal Planning | EatPal",
+                "timeout": 10000
+              }
+            ],
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 7,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth?tab=signin",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "/auth"
+            },
+            "description": "Load /auth",
+            "assertions": [
+              {
+                "type": "title",
+                "expected": "EatPal - The Operating System for Feeding Therapy | AI, Professionals & Research",
+                "timeout": 10000
+              }
+            ],
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 8,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth?tab=signup",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "/auth"
+            },
+            "description": "Load /auth",
+            "assertions": [
+              {
+                "type": "title",
+                "expected": "EatPal - The Operating System for Feeding Therapy | AI, Professionals & Research",
+                "timeout": 10000
+              }
+            ],
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 9,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "/"
+            },
+            "description": "Load /",
+            "assertions": [
+              {
+                "type": "title",
+                "expected": "EatPal: Food Chaining Meal Planner for Picky Eaters | Evidence-Based",
+                "timeout": 10000
+              }
+            ],
+            "waitFor": {
+              "type": "networkidle"
+            }
+          },
+          {
+            "stepNumber": 10,
+            "action": "navigate",
+            "target": {
+              "primary": "http://localhost:8080/auth",
+              "fallbacks": [],
+              "type": "css",
+              "confidence": 1,
+              "description": "/auth"
+            },
+            "description": "Load /auth",
+            "assertions": [
+              {
+                "type": "title",
+                "expected": "EatPal - The Operating System for Feeding Therapy | AI, Professionals & Research",
+                "timeout": 10000
+              }
+            ],
+            "waitFor": {
+              "type": "networkidle"
+            }
+          }
+        ],
+        "preconditions": [],
+        "expectedOutcome": "All public pages load with correct titles",
+        "priority": "critical",
+        "tags": [
+          "smoke",
+          "public"
+        ]
+      },
+      "filePath": "generated/smoke/public-pages.spec.ts",
+      "dependencies": [],
+      "estimatedDuration": 30000,
+      "tags": [
+        "smoke",
+        "public"
+      ]
+    }
+  ]
+}
