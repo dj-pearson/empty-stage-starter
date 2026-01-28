@@ -13,6 +13,8 @@ import { SkipToContent } from "@/components/SkipToContent";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RouteAnnouncer } from "@/components/RouteAnnouncer";
 import { LoadingFallback } from "@/components/LoadingFallback";
+import { SecurityProvider } from "@/hooks/useSecurityLayers";
+import { AdminRoute } from "@/components/security";
 
 // Lazy load non-critical components to improve initial bundle size and LCP
 const PWAInstallPrompt = lazy(() => import("@/components/PWAInstallPrompt").then(m => ({ default: m.PWAInstallPrompt })));
@@ -113,6 +115,8 @@ const App = () => (
               <Toaster />
               <Sonner />
               <BrowserRouter>
+                {/* SecurityProvider for defense-in-depth security layers */}
+                <SecurityProvider>
                 <SkipToContent />
                 <RouteAnnouncer />
                 <DeferredComponents />
@@ -139,11 +143,11 @@ const App = () => (
             <Route path="/meal-plan" element={<MealPlanGenerator />} />
             <Route path="/meal-plan/results" element={<MealPlanGeneratorResults />} />
             <Route path="/api/docs" element={<ApiDocs />} />
-            {/* Admin routes - Protected with role check */}
-            <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
-            <Route path="/admin-dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-            <Route path="/seo-dashboard" element={<ProtectedRoute><SEODashboard /></ProtectedRoute>} />
-            <Route path="/search-traffic" element={<ProtectedRoute><SearchTrafficDashboard /></ProtectedRoute>} />
+            {/* Admin routes - Protected with role check (Layer 1 + Layer 2) */}
+            <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+            <Route path="/admin-dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+            <Route path="/seo-dashboard" element={<AdminRoute><SEODashboard /></AdminRoute>} />
+            <Route path="/search-traffic" element={<AdminRoute><SearchTrafficDashboard /></AdminRoute>} />
 
             {/* Main Dashboard with nested routes - Protected */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
@@ -195,6 +199,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
+                </SecurityProvider>
           </BrowserRouter>
         </AppProvider>
       </TooltipProvider>
