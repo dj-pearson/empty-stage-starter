@@ -70,12 +70,29 @@ export default async (req: Request) => {
       throw new Error('No recipe data extracted');
     }
 
-    // Parse JSON response
-    const jsonMatch = aiResponse.content.match(/\{[\s\S]*\}/);
+    console.log('AI Response:', aiResponse.content.substring(0, 500));
+
+    // Parse JSON response - handle markdown code blocks and other formatting
+    let jsonText = aiResponse.content;
+    
+    // Remove markdown code blocks if present
+    jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+    
+    // Try to find JSON object
+    const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
+      console.error('Could not find JSON in response:', aiResponse.content);
       throw new Error('No valid JSON in AI response');
     }
-    const recipe = JSON.parse(jsonMatch[0]);
+    
+    let recipe;
+    try {
+      recipe = JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
+      console.error('Attempted to parse:', jsonMatch[0].substring(0, 500));
+      throw new Error(`Failed to parse JSON: ${parseError.message}`);
+    }
     
     return new Response(
       JSON.stringify({ recipe }),
