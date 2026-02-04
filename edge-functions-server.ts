@@ -76,6 +76,7 @@ const FUNCTIONS_MAP: { [key: string]: string } = {
   "suggest-recipes-from-pantry": "./functions/suggest-recipes-from-pantry/index.ts",
   "sync-analytics-data": "./functions/sync-analytics-data/index.ts",
   "sync-backlinks": "./functions/sync-backlinks/index.ts",
+  "test-ai-configuration": "./functions/test-ai-configuration/index.ts",
   "test-ai-model": "./functions/test-ai-model/index.ts",
   "test-blog-webhook": "./functions/test-blog-webhook/index.ts",
   "track-engagement": "./functions/track-engagement/index.ts",
