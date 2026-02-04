@@ -171,7 +171,6 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
           const { data, error } = await supabase
             .from('user_accessibility_preferences')
             .select('*')
-            .eq('user_id', session.user.id)
             .single();
 
           if (data && !error) {

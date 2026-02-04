@@ -112,15 +112,22 @@ export function ConversionFunnelDashboard() {
 
       if (subsError) throw subsError;
 
-      // Fetch email leads
-      const { data: emailLeads, error: leadsError } = await supabase
-        .from('email_leads')
-        .select('id, email, source, created_at')
-        .gte('created_at', startDate.toISOString())
-        .order('created_at', { ascending: false })
-        .limit(10);
+      // Fetch email leads (table may not exist)
+      let emailLeads: any[] = [];
+      try {
+        const { data, error } = await supabase
+          .from('email_leads')
+          .select('id, email, source, created_at')
+          .gte('created_at', startDate.toISOString())
+          .order('created_at', { ascending: false })
+          .limit(10);
 
-      if (leadsError) throw leadsError;
+        if (!error) {
+          emailLeads = data || [];
+        }
+      } catch (error) {
+        logger.warn('email_leads table not found', error);
+      }
 
       // Calculate metrics
       const quizStarts = quizData?.filter(q => q.event_type === 'quiz_started').length || 0;
