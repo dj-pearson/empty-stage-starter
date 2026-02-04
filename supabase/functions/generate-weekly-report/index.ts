@@ -56,7 +56,7 @@ interface Insight {
   priority: number;
 }
 
-Deno.serve(async (req) => {
+export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -147,7 +147,7 @@ Deno.serve(async (req) => {
       status: 400,
     });
   }
-});
+};
 
 function getMonday(date: Date): Date {
   const day = date.getDay();
