@@ -57,7 +57,7 @@ COMMENT ON COLUMN ai_model_configurations.task_type IS 'Model task type: standar
 COMMENT ON COLUMN ai_model_configurations.env_var_model_override IS 'Environment variable name that can override this model selection';
 COMMENT ON COLUMN ai_model_configurations.usage_category IS 'Specialized category for automatic model selection';
 
--- Insert Claude Haiku models for lightweight tasks
+-- Insert Claude models (standard and lightweight)
 INSERT INTO ai_model_configurations (
   provider,
   model_name,
@@ -66,13 +66,27 @@ INSERT INTO ai_model_configurations (
   is_active,
   speed_rating,
   quality_rating,
-  cost_rating
+  cost_rating,
+  usage_category
 ) VALUES
-  ('claude', 'claude-3-5-haiku-20241022', 'Claude 3.5 Haiku', 'lightweight', true, 10, 8, 10),
-  ('claude', 'claude-3-haiku-20240307', 'Claude 3 Haiku (Legacy)', 'lightweight', false, 9, 7, 10)
+  -- Standard models (complex tasks)
+  ('claude', 'claude-sonnet-4-5-20250929', 'Claude Sonnet 4.5', 'standard', true, 8, 10, 7, 'general'),
+  ('claude', 'claude-3-5-sonnet-20241022', 'Claude 3.5 Sonnet', 'standard', false, 8, 9, 7, 'general'),
+  ('claude', 'claude-3-opus-20240229', 'Claude 3 Opus', 'standard', false, 6, 10, 5, 'general'),
+  -- Lightweight models (simple tasks)
+  ('claude', 'claude-3-5-haiku-20241022', 'Claude 3.5 Haiku', 'lightweight', true, 10, 8, 10, 'general'),
+  ('claude', 'claude-3-haiku-20240307', 'Claude 3 Haiku (Legacy)', 'lightweight', false, 9, 7, 10, 'general'),
+  -- OpenAI models (optional, for multi-provider support)
+  ('openai', 'gpt-4-turbo', 'GPT-4 Turbo', 'standard', false, 8, 9, 6, 'general'),
+  ('openai', 'gpt-4', 'GPT-4', 'standard', false, 6, 9, 5, 'general'),
+  ('openai', 'gpt-3.5-turbo', 'GPT-3.5 Turbo', 'lightweight', false, 10, 7, 9, 'general')
 ON CONFLICT (provider, model_name) DO UPDATE SET
   task_type = EXCLUDED.task_type,
-  is_active = EXCLUDED.is_active;
+  is_active = EXCLUDED.is_active,
+  speed_rating = EXCLUDED.speed_rating,
+  quality_rating = EXCLUDED.quality_rating,
+  cost_rating = EXCLUDED.cost_rating,
+  usage_category = EXCLUDED.usage_category;
 
 -- Update existing models to be 'standard' type if not set
 UPDATE ai_model_configurations
@@ -142,6 +156,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS ai_environment_config_updated_at ON ai_environment_config;
 CREATE TRIGGER ai_environment_config_updated_at
   BEFORE UPDATE ON ai_environment_config
   FOR EACH ROW
