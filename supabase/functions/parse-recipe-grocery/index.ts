@@ -53,17 +53,25 @@ export default async (req: Request) => {
       ? `Parse this recipe text and extract structured data:\n\n${recipeContent}\n\nProvide JSON with: {"title": "Recipe Title", "servings": 4, "ingredients": [{"name": "flour", "quantity": 2, "unit": "cups", "category": "carb", "notes": "all-purpose"}]}`
       : `Parse this recipe HTML and extract ingredients:\n\n${recipeContent}\n\nProvide JSON with: {"title": "Recipe Title", "servings": 4, "ingredients": [{"name": "flour", "quantity": 2, "unit": "cups", "category": "carb", "notes": "all-purpose"}]}`;
     
-    const recipeJson = await aiService.generateContent(parsePrompt, {
-      systemPrompt: 'You are a recipe parser that extracts structured ingredient information. Always respond with valid JSON only.',
-      taskType: 'lightweight', // Fast parsing
-    });
+    const aiResponse = await aiService.generateContent({
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a recipe parser that extracts structured ingredient information. Always respond with valid JSON only.'
+        },
+        {
+          role: 'user',
+          content: parsePrompt
+        }
+      ]
+    }, 'lightweight'); // Fast parsing
     
-    if (!recipeJson) {
+    if (!aiResponse || !aiResponse.content) {
       throw new Error('No recipe data extracted');
     }
 
     // Parse JSON response
-    const jsonMatch = recipeJson.match(/\{[\s\S]*\}/);
+    const jsonMatch = aiResponse.content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('No valid JSON in AI response');
     }
