@@ -746,9 +746,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (userId && householdId) {
       const newItem = { 
         name: item.name,
-        quantity: item.quantity,
-        unit: item.unit,
-        category: item.category,
+        quantity: item.quantity || 1,
+        unit: item.unit || '',
+        category: item.category || 'other',
         notes: item.notes || null,
         aisle: item.aisle || null,
         grocery_list_id: item.grocery_list_id || null,
