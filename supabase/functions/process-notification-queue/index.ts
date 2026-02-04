@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { getCorsHeaders, securityHeaders, noCacheHeaders } from "../common/headers.ts";
 
@@ -6,7 +5,7 @@ const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const BATCH_SIZE = 100; // Process 100 notifications per run
 const MAX_RETRY_ATTEMPTS = 3;
 
-serve(async (req) => {
+export default async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
 
   if (req.method === 'OPTIONS') {

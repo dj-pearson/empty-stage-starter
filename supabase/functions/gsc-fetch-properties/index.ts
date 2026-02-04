@@ -5,7 +5,6 @@
 // and saves them to the database
 // =====================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
 
 const corsHeaders = {
@@ -16,7 +15,7 @@ const corsHeaders = {
 
 const GSC_API_BASE = "https://www.googleapis.com/webmasters/v3";
 
-serve(async (req) => {
+export default async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -143,4 +142,4 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
-});
+}

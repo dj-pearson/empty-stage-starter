@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.5.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
 import { getCorsHeaders, noCacheHeaders } from "../common/headers.ts";
@@ -44,7 +43,7 @@ interface InvoiceData {
  * - list: List all invoices for the user
  * - download-stripe: Get Stripe-hosted invoice PDF URL
  */
-serve(async (req) => {
+export default async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
 
   if (req.method === "OPTIONS") {
