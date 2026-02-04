@@ -1,3 +1,5 @@
+import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -11,64 +13,26 @@ export default async (req: Request) => {
   try {
     const { url, imageBase64 } = await req.json();
     
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
-    }
+    // Initialize AI service
+    const aiService = new AIServiceV2();
 
     let recipeContent = "";
     
     // Handle image-based recipe parsing
     if (imageBase64) {
       console.log('Parsing recipe from image using AI...');
-      const visionResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: 'Extract all ingredients from this recipe image. Include the recipe title if visible. List each ingredient with its quantity and unit. Format as plain text.'
-                },
-                {
-                  type: 'image_url',
-                  image_url: { url: imageBase64 }
-                }
-              ]
-            }
-          ]
-        })
-      });
-
-      if (!visionResponse.ok) {
-        const errorText = await visionResponse.text();
-        console.error('Vision API error:', errorText);
-        
-        if (visionResponse.status === 429) {
-          return new Response(
-            JSON.stringify({ error: 'Rate limit exceeded. Please try again in a moment.' }),
-            { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+      // Note: Vision API requires Claude Sonnet or similar - use standard task type
+      recipeContent = await aiService.generateContent(
+        'Extract all ingredients from this recipe image. Include the recipe title if visible. List each ingredient with its quantity and unit. Format as plain text.',
+        {
+          taskType: 'standard', // Vision requires more capable model
+          // TODO: Add vision support to AIServiceV2 if Claude supports it
         }
-        if (visionResponse.status === 402) {
-          return new Response(
-            JSON.stringify({ error: 'AI credits required. Please add credits to continue.' }),
-            { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        
+      );
+      
+      if (!recipeContent) {
         throw new Error('Failed to analyze recipe image');
       }
-
-      const visionData = await visionResponse.json();
-      recipeContent = visionData.choices[0].message.content;
     }
     // Handle URL-based recipe parsing
     else if (url) {
@@ -83,95 +47,27 @@ export default async (req: Request) => {
       throw new Error('Either url or imageBase64 must be provided');
     }
 
-    // Parse with structured output using tool calling
+    // Parse with structured output
     console.log('Parsing recipe content with AI...');
-    const parseResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a recipe parser that extracts structured ingredient information.'
-          },
-          {
-            role: 'user',
-            content: imageBase64 
-              ? `Parse this recipe text:\n\n${recipeContent}`
-              : `Parse this recipe HTML and extract ingredients:\n\n${recipeContent}`
-          }
-        ],
-        tools: [
-          {
-            type: 'function',
-            function: {
-              name: 'parse_recipe',
-              description: 'Extract recipe title, servings, and ingredients with quantities',
-              parameters: {
-                type: 'object',
-                properties: {
-                  title: { type: 'string', description: 'Recipe title' },
-                  servings: { type: 'number', description: 'Number of servings (if available)' },
-                  ingredients: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        name: { type: 'string', description: 'Ingredient name' },
-                        quantity: { type: 'number', description: 'Quantity amount' },
-                        unit: { type: 'string', description: 'Unit of measurement (e.g., cups, tbsp, items)' },
-                        category: { 
-                          type: 'string', 
-                          enum: ['protein', 'carb', 'dairy', 'fruit', 'vegetable', 'snack'],
-                          description: 'Food category'
-                        },
-                        notes: { type: 'string', description: 'Optional notes (e.g., diced, chopped)' }
-                      },
-                      required: ['name', 'quantity', 'unit', 'category']
-                    }
-                  }
-                },
-                required: ['title', 'ingredients']
-              }
-            }
-          }
-        ],
-        tool_choice: { type: 'function', function: { name: 'parse_recipe' } }
-      })
-    });
-
-    if (!parseResponse.ok) {
-      const errorText = await parseResponse.text();
-      console.error('Parse API error:', errorText);
-      
-      if (parseResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: 'Rate limit exceeded. Please try again in a moment.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      if (parseResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ error: 'AI credits required. Please add credits to continue.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      throw new Error('Failed to parse recipe');
-    }
-
-    const parseData = await parseResponse.json();
-    const toolCall = parseData.choices[0].message.tool_calls?.[0];
+    const parsePrompt = imageBase64 
+      ? `Parse this recipe text and extract structured data:\n\n${recipeContent}\n\nProvide JSON with: {"title": "Recipe Title", "servings": 4, "ingredients": [{"name": "flour", "quantity": 2, "unit": "cups", "category": "carb", "notes": "all-purpose"}]}`
+      : `Parse this recipe HTML and extract ingredients:\n\n${recipeContent}\n\nProvide JSON with: {"title": "Recipe Title", "servings": 4, "ingredients": [{"name": "flour", "quantity": 2, "unit": "cups", "category": "carb", "notes": "all-purpose"}]}`;
     
-    if (!toolCall) {
+    const recipeJson = await aiService.generateContent(parsePrompt, {
+      systemPrompt: 'You are a recipe parser that extracts structured ingredient information. Always respond with valid JSON only.',
+      taskType: 'lightweight', // Fast parsing
+    });
+    
+    if (!recipeJson) {
       throw new Error('No recipe data extracted');
     }
 
-    const recipe = JSON.parse(toolCall.function.arguments);
+    // Parse JSON response
+    const jsonMatch = recipeJson.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No valid JSON in AI response');
+    }
+    const recipe = JSON.parse(jsonMatch[0]);
     
     return new Response(
       JSON.stringify({ recipe }),

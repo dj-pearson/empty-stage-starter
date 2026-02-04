@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,8 +21,10 @@ export default async (req: Request) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
     const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Initialize AI service
+    const aiService = new AIServiceV2();
 
     console.log('Calculating food similarity for:', sourceFoodId);
 
@@ -75,7 +78,7 @@ export default async (req: Request) => {
 
     // Use AI to enhance recommendations if available
     let aiEnhancedChains = [];
-    if (lovableApiKey && kidProfile) {
+    if (kidProfile) {
       try {
         const kidContext = `Child Profile:
 - Age: ${kidProfile.age || 'unknown'}
@@ -84,18 +87,7 @@ export default async (req: Request) => {
 - Flavor preferences: ${kidProfile.flavor_preferences?.join(', ') || 'none specified'}
 - Pickiness level: ${kidProfile.pickiness_level || 'moderate'}`;
 
-        const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${lovableApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash',
-            messages: [
-              { 
-                role: 'system', 
-                content: `You are a pediatric feeding therapist specializing in food chaining - the gradual introduction of new foods based on similarity to accepted foods.
+        const systemPrompt = `You are a pediatric feeding therapist specializing in food chaining - the gradual introduction of new foods based on similarity to accepted foods.
 
 Your goal is to create progressive food chains that help picky eaters expand their diet safely and comfortably.
 
@@ -104,11 +96,9 @@ Consider:
 - Texture progression (smooth → slightly chunky → chunky)
 - Visual familiarity (color, shape, appearance)
 - Temperature and preparation methods
-- Sensory sensitivities and preferences`
-              },
-              { 
-                role: 'user', 
-                content: `${kidContext}
+- Sensory sensitivities and preferences`;
+
+        const userPrompt = `${kidContext}
 
 Source food: ${sourceFood.name} (${sourceFood.category})
 
@@ -123,43 +113,18 @@ Format as JSON with this structure:
       "rationale": "Similar sweetness and crunch, gradually introducing new flavors"
     }
   ]
-}`
-              }
-            ],
-            tools: [{
-              type: 'function',
-              function: {
-                name: 'create_food_chains',
-                description: 'Create progressive food introduction chains',
-                parameters: {
-                  type: 'object',
-                  properties: {
-                    chains: {
-                      type: 'array',
-                      items: {
-                        type: 'object',
-                        properties: {
-                          chain_name: { type: 'string' },
-                          steps: { type: 'array', items: { type: 'string' } },
-                          rationale: { type: 'string' }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }],
-            tool_choice: { type: 'function', function: { name: 'create_food_chains' } }
-          }),
+}`;
+
+        const aiContent = await aiService.generateContent(userPrompt, {
+          systemPrompt,
+          taskType: 'standard', // Food chain analysis is complex
         });
 
-        if (aiResponse.ok) {
-          const aiData = await aiResponse.json();
-          const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-          if (toolCall) {
-            const result = JSON.parse(toolCall.function.arguments);
-            aiEnhancedChains = result.chains || [];
-          }
+        // Parse JSON response
+        const jsonMatch = aiContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const result = JSON.parse(jsonMatch[0]);
+          aiEnhancedChains = result.chains || [];
         }
       } catch (aiError) {
         console.error('AI chain generation failed:', aiError);
