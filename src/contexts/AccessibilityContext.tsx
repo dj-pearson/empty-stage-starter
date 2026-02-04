@@ -220,6 +220,8 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
               user_id: userId,
               preferences,
               updated_at: new Date().toISOString(),
+            }, {
+              onConflict: 'user_id'
             });
         }
       } catch (error) {
