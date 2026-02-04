@@ -111,29 +111,8 @@ export default async (req: Request) => {
       .eq("is_active", true)
       .single();
 
-    // Use configured AI model or fall back to OpenAI default
-    const modelConfig = aiModel || {
-      model_name: "gpt-4o-mini",
-      endpoint_url: "https://api.openai.com/v1/chat/completions",
-      api_key_env_var: "OPENAI_API_KEY",
-      auth_type: "bearer",
-      temperature: 0.7,
-      max_tokens: 4000,
-      additional_params: null
-    };
-
-    const apiKey = Deno.env.get(modelConfig.api_key_env_var);
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({
-          error: `API key not configured. Please set ${modelConfig.api_key_env_var} in your edge function secrets.`,
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
+    // Initialize AI service (centralized configuration)
+    const aiService = new AIServiceV2();
 
     // Generate AI title if needed (after modelConfig is defined)
     if (needsAITitleGeneration) {
@@ -142,42 +121,18 @@ export default async (req: Request) => {
         : `Generate ONE unique blog post title about helping parents with picky eaters. Focus on practical advice. Return ONLY the title, no quotes or extra text.`;
       
       try {
-        const authHeaders: Record<string, string> = {
-          "Content-Type": "application/json",
-        };
-
-        if (modelConfig.auth_type === "x-api-key") {
-          authHeaders["x-api-key"] = apiKey;
-        } else if (modelConfig.auth_type === "bearer") {
-          authHeaders["Authorization"] = `Bearer ${apiKey}`;
-        } else if (modelConfig.auth_type === "api-key") {
-          authHeaders["api-key"] = apiKey;
-        }
-
-        const titleResponse = await fetch(modelConfig.endpoint_url, {
-          method: "POST",
-          headers: authHeaders,
-          body: JSON.stringify({
-            model: modelConfig.model_name,
-            messages: [{ role: "user", content: titlePrompt }],
-            max_tokens: 100,
-            temperature: 0.9,
-          }),
+        const generatedTitle = await aiService.generateContent(titlePrompt, {
+          taskType: 'lightweight',
+          temperature: 0.9,
         });
         
-        if (titleResponse.ok) {
-          const titleData = await titleResponse.json();
-          const generatedTitle = titleData.choices?.[0]?.message?.content?.trim() || 
-                                titleData.content?.[0]?.text?.trim();
+        if (generatedTitle) {
+          suggestedTitle = generatedTitle.trim().replace(/^["']|["']$/g, "");
+          console.log("AI-generated new title:", suggestedTitle);
           
-          if (generatedTitle) {
-            suggestedTitle = generatedTitle.replace(/^["']|["']$/g, "");
-            console.log("AI-generated new title:", suggestedTitle);
-            
-            // Add the new title to the bank for future use
-            await supabase.from("blog_title_bank").insert({ title: suggestedTitle });
-            titleFromBank = true;
-          }
+          // Add the new title to the bank for future use
+          await supabase.from("blog_title_bank").insert({ title: suggestedTitle });
+          titleFromBank = true;
         }
       } catch (error) {
         console.error("Error generating title with AI:", error);
@@ -356,53 +311,12 @@ Format your response as JSON with EXACT keys only:
       }
     }
 
-    console.log("Calling AI API:", modelConfig.endpoint_url);
+    console.log("Calling AI API...");
 
-    const aiResponse = await fetch(modelConfig.endpoint_url, {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify(requestBody),
+    const content = await aiService.generateContent(contentPrompt, {
+      systemPrompt,
+      taskType: 'standard', // Blog content generation is complex
     });
-
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error("AI API error:", aiResponse.status, errorText);
-
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({
-            error: "Rate limit exceeded. Please try again later.",
-          }),
-          {
-            status: 429,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      return new Response(
-        JSON.stringify({ error: `AI API error: ${errorText}` }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    const aiData = await aiResponse.json();
-    console.log("AI response received");
-
-    let content = "";
-    if (aiData.content && Array.isArray(aiData.content)) {
-      content = aiData.content.find((c: any) => c.type === "text")?.text || "";
-    } else if (aiData.choices && aiData.choices[0]?.message?.content) {
-      content = aiData.choices[0].message.content;
-    }
-
-    const stopReason = aiData.stop_reason || aiData.choices?.[0]?.finish_reason;
-    if (stopReason) {
-      console.log("AI stop reason:", stopReason);
-    }
 
     if (!content) {
       return new Response(

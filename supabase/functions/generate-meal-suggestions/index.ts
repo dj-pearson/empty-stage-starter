@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { corsHeaders } from '../common/headers.ts';
+import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 
 interface SuggestionRequest {
   householdId: string;
@@ -234,23 +235,22 @@ async function generateAISuggestions(
   mealSlot?: string,
   date?: string
 ): Promise<any[]> {
-  // Use Claude or fallback to smart ranking algorithm
-  const useAI = Deno.env.get('ANTHROPIC_API_KEY');
-
-  if (useAI) {
-    return await generateAIWithClaude(recipes, context, count, mealSlot);
-  } else {
+  // Use AI service or fallback to smart ranking algorithm
+  try {
+    return await generateAIWithService(recipes, context, count, mealSlot);
+  } catch (error) {
+    console.warn('AI service unavailable, falling back to smart ranking:', error);
     return await generateSmartRanking(recipes, context, count, mealSlot, date);
   }
 }
 
-async function generateAIWithClaude(
+async function generateAIWithService(
   recipes: Recipe[],
   context: HouseholdContext,
   count: number,
   mealSlot?: string
 ): Promise<any[]> {
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
+  const aiService = new AIServiceV2();
 
   // Prepare context for AI
   const contextPrompt = `
@@ -306,31 +306,11 @@ Respond in JSON format:
 `;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey!,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 2000,
-        messages: [
-          {
-            role: 'user',
-            content: contextPrompt,
-          },
-        ],
-      }),
+    const content = await aiService.generateContent(contextPrompt, {
+      taskType: 'standard', // Meal planning requires smart analysis
     });
 
-    if (!response.ok) {
-      throw new Error(`Claude API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    const content = data.content[0].text;
+    console.log('AI response:', content);
 
     // Parse JSON from response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
