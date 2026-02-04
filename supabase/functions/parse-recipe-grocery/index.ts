@@ -42,7 +42,48 @@ export default async (req: Request) => {
         throw new Error('Failed to fetch recipe from URL');
       }
       const html = await response.text();
-      recipeContent = html.slice(0, 10000); // Limit HTML size
+      
+      // Try to extract JSON-LD recipe schema first (most reliable)
+      const jsonLdMatch = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+      let recipeSchema = null;
+      
+      if (jsonLdMatch) {
+        for (const script of jsonLdMatch) {
+          const jsonText = script.replace(/<script[^>]*>|<\/script>/gi, '');
+          try {
+            const json = JSON.parse(jsonText);
+            // Handle both single objects and arrays (JSON-LD can have @graph)
+            const schemas = Array.isArray(json) ? json : (json['@graph'] || [json]);
+            recipeSchema = schemas.find(s => s['@type'] === 'Recipe' || s['@type']?.includes('Recipe'));
+            if (recipeSchema) {
+              console.log('Found Recipe JSON-LD schema');
+              recipeContent = JSON.stringify(recipeSchema, null, 2);
+              break;
+            }
+          } catch (e) {
+            // Continue to next script tag
+          }
+        }
+      }
+      
+      // Fallback to HTML parsing (look for common recipe content areas)
+      if (!recipeSchema) {
+        console.log('No JSON-LD found, parsing HTML content');
+        // Look for recipe content sections
+        const recipeSection = html.match(/<div[^>]*class="[^"]*recipe[^"]*"[^>]*>[\s\S]*?<\/div>/i);
+        const ingredientsSection = html.match(/<ul[^>]*class="[^"]*ingredients[^"]*"[^>]*>[\s\S]*?<\/ul>/gi);
+        
+        if (ingredientsSection || recipeSection) {
+          const relevantContent = [
+            recipeSection ? recipeSection[0] : '',
+            ...(ingredientsSection || [])
+          ].join('\n');
+          recipeContent = relevantContent.slice(0, 20000); // Increased limit
+        } else {
+          // Last resort: take a larger chunk focusing on middle content
+          recipeContent = html.slice(5000, 25000);
+        }
+      }
     } else {
       throw new Error('Either url or imageBase64 must be provided');
     }
