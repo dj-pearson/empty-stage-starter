@@ -14,7 +14,7 @@ import { corsHeaders } from '../_shared/headers.ts';
  *   '0 9 * * 1',  -- Every Monday at 9 AM
  *   $$
  *   SELECT net.http_post(
- *     url := 'https://your-project.supabase.co/functions/v1/schedule-weekly-reports',
+ *     url := 'https://functions.tryeatpal.com/schedule-weekly-reports',
  *     headers := '{"Content-Type": "application/json", "Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb,
  *     body := '{}'::jsonb
  *   ) as request_id;
@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
     console.log(`Current day: ${dayOfWeek}`);
 
     // Find households that have auto-generation enabled for today
-    const { data: preferences, error: prefError } = await supabase
+    const { data: preferences, error: prefError } = await supabaseClient
       .from('report_preferences')
       .select('household_id, auto_generate, generation_day, email_delivery, push_notification')
       .eq('auto_generate', true)
