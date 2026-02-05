@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { Separator } from "@/components/ui/separator";
+import { loginHistory } from "@/lib/login-history";
 
 const baseNavItems = [
   { to: "/dashboard", icon: Home, label: "Home" },
@@ -53,6 +54,12 @@ export function Navigation() {
   }, []);
 
   const handleLogout = async () => {
+    // Log the logout event for session tracking
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await loginHistory.logLogout(user.id);
+    }
+
     await supabase.auth.signOut();
     toast({
       title: "Signed out",
