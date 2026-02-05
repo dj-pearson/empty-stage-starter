@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/hooks/useSubscription";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { formatSubscriptionStatus } from "@/lib/subscription-helpers";
@@ -51,11 +52,13 @@ import {
   Download,
   LogOut,
   Settings,
+  ExternalLink,
 } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 export default function AccountSettings() {
   const [activeTab, setActiveTab] = useState("profile");
+  const [portalLoading, setPortalLoading] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [displayName, setDisplayName] = useState("");
@@ -160,6 +163,31 @@ export default function AccountSettings() {
 
   const handleReactivate = async () => {
     await reactivate();
+  };
+
+  const handleOpenStripePortal = async () => {
+    try {
+      setPortalLoading(true);
+      const { data, error } = await invokeEdgeFunction("manage-payment-methods", {
+        body: { action: "get-portal-url" },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.open(data.url, "_blank");
+      } else {
+        toast.error("Unable to open billing portal.");
+      }
+    } catch (err) {
+      console.error("Error opening Stripe portal:", err);
+      if (err instanceof Error && err.message.includes("No subscription")) {
+        toast.info("Subscribe to a plan first to access the billing portal.");
+        navigate("/pricing");
+      } else {
+        toast.error("Failed to open billing portal.");
+      }
+    } finally {
+      setPortalLoading(false);
+    }
   };
 
   const handleExportData = async () => {
@@ -591,8 +619,14 @@ export default function AccountSettings() {
                             variant="outline"
                             size="sm"
                             className="mt-2"
-                            onClick={() => navigate("/dashboard/billing?tab=payment-methods")}
+                            onClick={handleOpenStripePortal}
+                            disabled={portalLoading}
                           >
+                            {portalLoading ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <ExternalLink className="h-4 w-4 mr-2" />
+                            )}
                             Update Payment Method
                           </Button>
                         </div>
@@ -671,38 +705,25 @@ export default function AccountSettings() {
                       </Button>
                     </div>
 
-                    {/* Payment Methods */}
+                    {/* Payment Methods & Invoices - via Stripe Portal */}
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 border rounded-lg">
                       <div>
-                        <p className="font-medium">Payment Methods</p>
+                        <p className="font-medium">Billing Portal</p>
                         <p className="text-sm text-muted-foreground">
-                          Update your card or payment method on file.
+                          Manage payment methods, view invoices, and update billing info.
                         </p>
                       </div>
                       <Button
                         variant="outline"
-                        onClick={() => navigate("/dashboard/billing")}
+                        onClick={handleOpenStripePortal}
+                        disabled={portalLoading}
                       >
-                        <CreditCard className="h-4 w-4 mr-2" />
-                        Manage
-                      </Button>
-                    </div>
-
-                    {/* Invoices */}
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 border rounded-lg">
-                      <div>
-                        <p className="font-medium">Billing History</p>
-                        <p className="text-sm text-muted-foreground">
-                          View and download past invoices.
-                        </p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          navigate("/dashboard/billing?tab=invoices")
-                        }
-                      >
-                        View Invoices
+                        {portalLoading ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                        )}
+                        Open Portal
                       </Button>
                     </div>
 
