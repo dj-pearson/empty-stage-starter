@@ -8,16 +8,21 @@ const corsHeaders = {
 /**
  * Email Sender Edge Function
  *
- * Processes pending emails from the queue and sends them via email provider.
+ * Processes pending emails from the automation_email_queue table and sends them.
  * Intended to be called by a cron job (e.g., every 5 minutes).
  *
- * Supported email providers:
- * - Resend (recommended)
- * - SendGrid
- * - AWS SES
- * - Custom SMTP
+ * Supported email providers (set EMAIL_PROVIDER env var):
+ * - "resend" - Resend API (requires RESEND_API_KEY, EMAIL_FROM)
+ * - "smtp" - Custom SMTP (for self-hosted Supabase)
+ * - "console" - Development mode (logs to console)
  *
- * Set EMAIL_PROVIDER environment variable to choose provider.
+ * SMTP Environment Variables (for self-hosted Supabase):
+ * - SMTP_HOST - SMTP server hostname
+ * - SMTP_PORT - SMTP server port (default: 587)
+ * - SMTP_ADMIN_EMAIL - SMTP username and from email
+ * - SMTP_PASS - SMTP password
+ * - SMTP_SENDER_NAME - Display name for sender (default: EatPal)
+ * - SMTP_RELAY_URL - Optional HTTP relay endpoint for email sending
  */
 
 interface EmailProvider {
@@ -79,6 +84,159 @@ class ResendProvider implements EmailProvider {
 }
 
 // ============================================================================
+// SMTP PROVIDER (for self-hosted Supabase)
+// ============================================================================
+
+class SmtpProvider implements EmailProvider {
+  private host: string;
+  private port: number;
+  private user: string;
+  private pass: string;
+  private fromEmail: string;
+  private fromName: string;
+
+  constructor() {
+    this.host = Deno.env.get("SMTP_HOST") ?? "localhost";
+    this.port = parseInt(Deno.env.get("SMTP_PORT") ?? "587");
+    this.user = Deno.env.get("SMTP_ADMIN_EMAIL") ?? "";
+    this.pass = Deno.env.get("SMTP_PASS") ?? "";
+    this.fromEmail = Deno.env.get("SMTP_ADMIN_EMAIL") ?? "noreply@example.com";
+    this.fromName = Deno.env.get("SMTP_SENDER_NAME") ?? "EatPal";
+  }
+
+  async send(email: EmailData): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    try {
+      // Use Deno's native SMTP client via fetch to a local mail server
+      // or use the smtp module from deno.land
+      const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+
+      // Build multipart MIME message
+      const mimeMessage = this.buildMimeMessage(email, boundary);
+
+      // For self-hosted Supabase, we'll use the built-in SMTP relay
+      // This sends via HTTP to a local SMTP relay service
+      const smtpEndpoint = Deno.env.get("SMTP_RELAY_URL");
+
+      if (smtpEndpoint) {
+        // Use HTTP relay endpoint if available
+        const response = await fetch(smtpEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SMTP_API_KEY") || this.pass}`,
+          },
+          body: JSON.stringify({
+            from: `${this.fromName} <${this.fromEmail}>`,
+            to: email.to,
+            subject: email.subject,
+            html: email.html,
+            text: email.text,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.text();
+          return { success: false, error: `SMTP relay error: ${errorData}` };
+        }
+
+        const data = await response.json();
+        return { success: true, messageId: data.messageId || `smtp-${Date.now()}` };
+      } else {
+        // Direct SMTP connection using Deno SMTPClient
+        // Import dynamically to avoid issues if module not available
+        try {
+          const { SmtpClient } = await import("https://deno.land/x/smtp@v0.7.0/mod.ts");
+
+          const client = new SmtpClient();
+
+          await client.connectTLS({
+            hostname: this.host,
+            port: this.port,
+            username: this.user,
+            password: this.pass,
+          });
+
+          await client.send({
+            from: this.fromEmail,
+            to: email.to,
+            subject: email.subject,
+            content: email.text || "",
+            html: email.html,
+          });
+
+          await client.close();
+
+          return { success: true, messageId: `smtp-${Date.now()}` };
+        } catch (smtpError) {
+          console.error("Direct SMTP connection failed:", smtpError);
+
+          // Fallback: Try using fetch to local sendmail endpoint
+          // This works with many self-hosted setups
+          const mailhogEndpoint = `http://${this.host}:8025/api/v1/messages`;
+
+          try {
+            // Attempt via MailHog API (common in dev/self-hosted setups)
+            const response = await fetch(mailhogEndpoint.replace('/api/v1/messages', '/api/v2/outgoing'), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                From: { Email: this.fromEmail, Name: this.fromName },
+                To: [{ Email: email.to }],
+                Subject: email.subject,
+                HTMLBody: email.html,
+                TextBody: email.text,
+              }),
+            });
+
+            if (response.ok) {
+              return { success: true, messageId: `mailhog-${Date.now()}` };
+            }
+          } catch {
+            // Ignore MailHog fallback errors
+          }
+
+          return {
+            success: false,
+            error: smtpError instanceof Error ? smtpError.message : "SMTP connection failed"
+          };
+        }
+      }
+    } catch (error) {
+      console.error("SMTP error:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown SMTP error",
+      };
+    }
+  }
+
+  private buildMimeMessage(email: EmailData, boundary: string): string {
+    let message = "";
+    message += `From: ${this.fromName} <${this.fromEmail}>\r\n`;
+    message += `To: ${email.to}\r\n`;
+    message += `Subject: ${email.subject}\r\n`;
+    message += `MIME-Version: 1.0\r\n`;
+    message += `Content-Type: multipart/alternative; boundary="${boundary}"\r\n`;
+    message += `\r\n`;
+
+    if (email.text) {
+      message += `--${boundary}\r\n`;
+      message += `Content-Type: text/plain; charset=utf-8\r\n`;
+      message += `\r\n`;
+      message += `${email.text}\r\n`;
+    }
+
+    message += `--${boundary}\r\n`;
+    message += `Content-Type: text/html; charset=utf-8\r\n`;
+    message += `\r\n`;
+    message += `${email.html}\r\n`;
+    message += `--${boundary}--\r\n`;
+
+    return message;
+  }
+}
+
+// ============================================================================
 // CONSOLE PROVIDER (for development)
 // ============================================================================
 
@@ -128,9 +286,12 @@ export default async (req: Request) => {
     switch (emailProvider) {
       case "resend":
         provider = new ResendProvider(
-          Deno.env.get("RESEND_API") ?? "",
+          Deno.env.get("RESEND_API_KEY") ?? Deno.env.get("RESEND_API") ?? "",
           Deno.env.get("EMAIL_FROM") ?? "noreply@eatpal.com"
         );
+        break;
+      case "smtp":
+        provider = new SmtpProvider();
         break;
       case "console":
       default:
@@ -140,7 +301,7 @@ export default async (req: Request) => {
 
     // Get pending emails (limit to 50 per run to avoid timeouts)
     const { data: pendingEmails, error: fetchError } = await supabaseClient
-      .from("email_queue")
+      .from("automation_email_queue")
       .select("*")
       .eq("status", "pending")
       .lte("scheduled_for", new Date().toISOString())
@@ -189,7 +350,7 @@ export default async (req: Request) => {
         if (result.success) {
           // Update email status to sent
           await supabaseClient
-            .from("email_queue")
+            .from("automation_email_queue")
             .update({
               status: "sent",
               sent_at: new Date().toISOString(),
@@ -197,7 +358,7 @@ export default async (req: Request) => {
             .eq("id", email.id);
 
           // Log event
-          await supabaseClient.from("email_events").insert({
+          await supabaseClient.from("automation_email_events").insert({
             email_id: email.id,
             event_type: "sent",
             event_data: { message_id: result.messageId },
@@ -218,7 +379,7 @@ export default async (req: Request) => {
         if (newRetryCount >= maxRetries) {
           // Max retries reached, mark as failed
           await supabaseClient
-            .from("email_queue")
+            .from("automation_email_queue")
             .update({
               status: "failed",
               error_message: errorMessage,
@@ -232,7 +393,7 @@ export default async (req: Request) => {
           const retryDelayMinutes = Math.pow(2, newRetryCount) * 5; // 5, 10, 20, 40 minutes
 
           await supabaseClient
-            .from("email_queue")
+            .from("automation_email_queue")
             .update({
               error_message: errorMessage,
               retry_count: newRetryCount,

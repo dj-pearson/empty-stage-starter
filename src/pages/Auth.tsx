@@ -29,6 +29,7 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { loginHistory, type LoginMethod } from "@/lib/login-history";
+import { trackSignup, trackPageView } from "@/lib/conversion-tracking";
 
 // Password requirement checks for real-time validation feedback
 interface PasswordRequirements {
@@ -135,6 +136,13 @@ const Auth = () => {
               provider as LoginMethod,
               { provider, isOAuth: true }
             );
+
+            // Check if this is a new signup (user created in the last 5 minutes)
+            const createdAt = new Date(session.user.created_at);
+            const isNewUser = Date.now() - createdAt.getTime() < 5 * 60 * 1000;
+            if (isNewUser) {
+              trackSignup(provider);
+            }
           }
         }
 
@@ -277,6 +285,8 @@ const Auth = () => {
       // Log successful OTP login
       if (data.user) {
         loginHistory.logLogin(data.user.id, pendingEmail, 'otp', { isSignup: true });
+        // Track signup in conversion funnel
+        trackSignup('email');
       }
       toast({
         title: "Email Verified!",
