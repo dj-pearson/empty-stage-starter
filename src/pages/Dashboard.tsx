@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, Outlet } from "react-router-dom";
+import { useNavigate, Outlet, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { SupportWidget } from "@/components/SupportWidget";
 import { AppInstallPrompt } from "@/components/AppInstallPrompt";
@@ -65,11 +65,25 @@ const Dashboard = () => {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [quickLogOpen, setQuickLogOpen] = useState(false);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
 
   // Apply white-label theme for Professional subscribers
   useWhiteLabelTheme();
+
+  // Handle checkout=success query param (fallback for legacy redirect)
+  useEffect(() => {
+    if (searchParams.get("checkout") === "success") {
+      toast({
+        title: "🎉 Subscription activated!",
+        description: "Your plan is now active. Enjoy your premium features!",
+      });
+      // Clean up the query param
+      searchParams.delete("checkout");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams, toast]);
 
   useEffect(() => {
     // Set up listener for auth state changes

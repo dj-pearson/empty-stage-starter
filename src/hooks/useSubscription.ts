@@ -265,6 +265,7 @@ export function useSubscription() {
   const isTrialing = subscription?.status === "trialing";
   const isPastDue = subscription?.status === "past_due";
   const isCanceled = subscription?.status === "canceled";
+  const isPaused = subscription?.status === "paused";
   const willCancelAtPeriodEnd = subscription?.cancel_at_period_end || false;
 
   return {
@@ -281,6 +282,7 @@ export function useSubscription() {
     isTrialing,
     isPastDue,
     isCanceled,
+    isPaused,
     willCancelAtPeriodEnd,
   };
 }

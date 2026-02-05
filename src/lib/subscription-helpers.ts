@@ -172,6 +172,11 @@ export function getSubscriptionUrgency(subscription: SubscriptionData | null): {
     return { level: 'critical', message: 'Payment failed - update payment method' };
   }
 
+  // Paused = high
+  if (subscription.status === 'paused') {
+    return { level: 'high', message: 'Subscription paused - resume to regain access' };
+  }
+
   // Canceled = high
   if (subscription.status === 'canceled') {
     return { level: 'high', message: 'Subscription canceled - reactivate to regain access' };
@@ -236,6 +241,12 @@ export function formatSubscriptionStatus(subscription: SubscriptionData | null):
       return 'Canceled';
     case 'past_due':
       return 'Payment Issue';
+    case 'paused':
+      return 'Paused';
+    case 'incomplete':
+      return 'Incomplete';
+    case 'incomplete_expired':
+      return 'Expired';
     default:
       return subscription.status;
   }

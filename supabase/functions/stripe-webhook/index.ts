@@ -65,6 +65,18 @@ export default async (req: Request) => {
         break;
       }
 
+      case "customer.subscription.paused": {
+        const subscription = event.data.object as Stripe.Subscription;
+        await handleSubscriptionPaused(supabase, subscription);
+        break;
+      }
+
+      case "customer.subscription.resumed": {
+        const subscription = event.data.object as Stripe.Subscription;
+        await handleSubscriptionChange(supabase, subscription);
+        break;
+      }
+
       default:
         console.log(`Unhandled event type: ${event.type}`);
     }
@@ -176,22 +188,48 @@ async function handleSubscriptionDeleted(supabase: any, subscription: Stripe.Sub
     .single();
 
   if (existingSub) {
-    // Mark subscription as canceled
-    await supabase
+    // Get the Free plan to downgrade the user
+    const { data: freePlan } = await supabase
+      .from("subscription_plans")
+      .select("id")
+      .eq("name", "Free")
+      .single();
+
+    // Downgrade to Free plan, clear Stripe subscription fields, and mark as canceled
+    const { error: updateError } = await supabase
       .from("user_subscriptions")
       .update({
         status: "canceled",
+        plan_id: freePlan?.id || existingSub.plan_id,
+        stripe_subscription_id: null,
+        cancel_at_period_end: false,
+        current_period_start: null,
+        current_period_end: null,
+        trial_end: null,
         updated_at: new Date().toISOString(),
       })
       .eq("stripe_subscription_id", subscription.id);
 
-    // Log event
+    if (updateError) {
+      console.error("Error updating subscription on deletion:", updateError);
+    } else {
+      console.log(`Subscription ${subscription.id} deleted — user ${existingSub.user_id} downgraded to Free`);
+    }
+
+    // Log cancellation event
     await supabase.from("subscription_events").insert({
       user_id: existingSub.user_id,
       event_type: "canceled",
       old_plan_id: existingSub.plan_id,
-      metadata: { stripe_subscription_id: subscription.id },
+      new_plan_id: freePlan?.id || null,
+      metadata: {
+        stripe_subscription_id: subscription.id,
+        canceled_at: new Date().toISOString(),
+        reason: subscription.cancellation_details?.reason || "unknown",
+      },
     });
+  } else {
+    console.warn(`No subscription record found for Stripe subscription ${subscription.id} on deletion`);
   }
 }
 
@@ -291,5 +329,41 @@ async function handlePaymentFailed(supabase: any, invoice: Stripe.Invoice) {
     console.warn(`Payment failed for user ${sub.user_id}: $${invoice.amount_due / 100}`);
   } else {
     console.warn(`No subscription found for customer ${customerId} on payment failure`);
+  }
+}
+
+async function handleSubscriptionPaused(supabase: any, subscription: Stripe.Subscription) {
+  const customerId = subscription.customer as string;
+
+  const { data: existingSub } = await supabase
+    .from("user_subscriptions")
+    .select("user_id, plan_id")
+    .eq("stripe_customer_id", customerId)
+    .single();
+
+  if (existingSub) {
+    const { error } = await supabase
+      .from("user_subscriptions")
+      .update({
+        status: "paused",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("stripe_customer_id", customerId);
+
+    if (error) {
+      console.error("Error pausing subscription:", error);
+    }
+
+    await supabase.from("subscription_events").insert({
+      user_id: existingSub.user_id,
+      event_type: "paused",
+      old_plan_id: existingSub.plan_id,
+      metadata: {
+        stripe_subscription_id: subscription.id,
+        paused_at: new Date().toISOString(),
+      },
+    });
+
+    console.log(`Subscription paused for user ${existingSub.user_id}`);
   }
 }

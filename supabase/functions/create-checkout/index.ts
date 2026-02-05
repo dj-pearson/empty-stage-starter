@@ -34,7 +34,7 @@ export default async (req: Request) => {
       throw new Error("Unauthorized");
     }
 
-    const { planId, billingCycle } = await req.json();
+    const { planId, billingCycle, successUrl, cancelUrl } = await req.json();
 
     if (!planId || !billingCycle) {
       throw new Error("Missing required fields");
@@ -78,12 +78,12 @@ export default async (req: Request) => {
       customerId = customer.id;
     }
 
-    // Try multiple possible field names for Stripe price ID
+    // Resolve Stripe price ID - prioritize billing-cycle-specific fields
     const priceId = 
+      (billingCycle === "yearly" ? (plan.stripe_price_id_yearly || plan.stripe_yearly_price_id) : null) ||
+      (billingCycle === "monthly" ? (plan.stripe_price_id_monthly || plan.stripe_monthly_price_id) : null) ||
       plan.stripe_price_id ||
-      plan.stripePriceId ||
-      (billingCycle === "yearly" ? plan.stripe_price_id_yearly || plan.stripe_yearly_price_id : null) ||
-      (billingCycle === "monthly" ? plan.stripe_price_id_monthly || plan.stripe_monthly_price_id : null);
+      plan.stripePriceId;
 
     console.log("Resolved price ID:", priceId);
 
@@ -105,8 +105,8 @@ export default async (req: Request) => {
           quantity: 1,
         },
       ],
-      success_url: `${req.headers.get("origin") || "https://tryeatpal.com"}/dashboard?checkout=success`,
-      cancel_url: `${req.headers.get("origin") || "https://tryeatpal.com"}/pricing?checkout=cancelled`,
+      success_url: successUrl || `${req.headers.get("origin") || "https://tryeatpal.com"}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${req.headers.get("origin") || "https://tryeatpal.com"}/pricing?checkout=cancelled`,
       metadata: {
         user_id: user.id,
         plan_id: planId,
