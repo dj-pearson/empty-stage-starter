@@ -97,6 +97,9 @@ export { useFeatureLimit } from './useFeatureLimit';
 export { useOAuthToken, useOAuthConnect, useOAuthCallback } from './useOAuthToken';
 export { useSecurityAudit, useAdminSecurityAudit } from './useSecurityAudit';
 
+// Login History
+export { useLoginHistory, useAdminLoginHistory } from './useLoginHistory';
+
 // Re-export types
 export type { WindowSize } from './useWindowSize';
 export type { UseIntersectionObserverOptions } from './useIntersectionObserver';
@@ -105,3 +108,4 @@ export type { KeyboardNavigationOptions } from './useKeyboardNavigation';
 export type { AsyncState } from './useAsync';
 export type { UseOAuthTokenResult } from './useOAuthToken';
 export type { UseSecurityAuditResult, AuditLogFilters } from './useSecurityAudit';
+export type { UseLoginHistoryResult, UseAdminLoginHistoryResult, LoginHistoryEntry, LoginSummary, LoginMethod } from './useLoginHistory';

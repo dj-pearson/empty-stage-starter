@@ -28,6 +28,7 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+import { loginHistory, type LoginMethod } from "@/lib/login-history";
 
 // Password requirement checks for real-time validation feedback
 interface PasswordRequirements {
@@ -113,12 +114,30 @@ const Auth = () => {
   // Get the default tab from query params (signin or signup)
   const defaultTab = searchParams.get("tab") || "signup";
 
+  // Track if we've already logged an OAuth login to prevent duplicates
+  const oauthLoggedRef = useRef(false);
+
   useEffect(() => {
     // Set up listener first
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
+        // Log OAuth logins (SIGNED_IN event from OAuth redirect)
+        // Only log if this is an OAuth callback (check URL params or provider)
+        if (event === 'SIGNED_IN' && !oauthLoggedRef.current) {
+          const provider = session.user.app_metadata?.provider;
+          if (provider === 'google' || provider === 'apple') {
+            oauthLoggedRef.current = true;
+            loginHistory.logLogin(
+              session.user.id,
+              session.user.email || '',
+              provider as LoginMethod,
+              { provider, isOAuth: true }
+            );
+          }
+        }
+
         // Defer profile check to avoid deadlock
         setTimeout(() => {
           supabase
@@ -238,7 +257,7 @@ const Auth = () => {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       email: pendingEmail,
       token: otpCode,
       type: "signup",
@@ -247,12 +266,18 @@ const Auth = () => {
     setLoading(false);
 
     if (error) {
+      // Log failed OTP verification
+      loginHistory.logFailedLogin(pendingEmail, 'otp', error.message);
       toast({
         title: "Verification Failed",
         description: error.message,
         variant: "destructive",
       });
     } else {
+      // Log successful OTP login
+      if (data.user) {
+        loginHistory.logLogin(data.user.id, pendingEmail, 'otp', { isSignup: true });
+      }
       toast({
         title: "Email Verified!",
         description: "Your account has been confirmed. Welcome to EatPal!",
@@ -298,7 +323,7 @@ const Auth = () => {
     e.preventDefault();
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -306,11 +331,16 @@ const Auth = () => {
     setLoading(false);
 
     if (error) {
+      // Log failed login attempt
+      loginHistory.logFailedLogin(email, 'password', error.message);
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
       });
+    } else if (data.user) {
+      // Log successful login
+      loginHistory.logLogin(data.user.id, email, 'password');
     }
   };
 

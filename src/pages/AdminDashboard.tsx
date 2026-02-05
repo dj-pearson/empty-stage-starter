@@ -14,6 +14,8 @@ import {
   Calendar,
   RefreshCw,
   Monitor,
+  History,
+  Shield,
 } from "lucide-react";
 import {
   getPlatformHealth,
@@ -42,6 +44,8 @@ import { LiveActivityFeed } from "@/components/admin/LiveActivityFeed";
 import { SystemHealthDashboard } from "@/components/admin/SystemHealthDashboard";
 import { AlertManager } from "@/components/admin/AlertManager";
 import { AdminIntegrationManager } from "@/components/admin/AdminIntegrationManager";
+import { LoginHistoryDashboard } from "@/components/admin/LoginHistoryDashboard";
+import { LoginAnalyticsDashboard } from "@/components/admin/LoginAnalyticsDashboard";
 
 export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
@@ -232,7 +236,7 @@ export default function AdminDashboard() {
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList>
+        <TabsList className="flex-wrap">
           <TabsTrigger value="overview">
             <BarChart3 className="w-4 h-4 mr-2" />
             Overview
@@ -244,6 +248,14 @@ export default function AdminDashboard() {
           <TabsTrigger value="health">
             <Monitor className="w-4 h-4 mr-2" />
             System Health
+          </TabsTrigger>
+          <TabsTrigger value="login-history">
+            <History className="w-4 h-4 mr-2" />
+            Login History
+          </TabsTrigger>
+          <TabsTrigger value="login-analytics">
+            <Shield className="w-4 h-4 mr-2" />
+            Login Analytics
           </TabsTrigger>
           <TabsTrigger value="alerts">
             <Bell className="w-4 h-4 mr-2" />
@@ -283,6 +295,16 @@ export default function AdminDashboard() {
         {/* Alerts Tab */}
         <TabsContent value="alerts">
           <AlertManager />
+        </TabsContent>
+
+        {/* Login History Tab */}
+        <TabsContent value="login-history">
+          <LoginHistoryDashboard />
+        </TabsContent>
+
+        {/* Login Analytics Tab */}
+        <TabsContent value="login-analytics">
+          <LoginAnalyticsDashboard />
         </TabsContent>
           {/* Daily Activity Chart */}
           <Card className="p-6">
