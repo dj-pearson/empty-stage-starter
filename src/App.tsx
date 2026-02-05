@@ -61,6 +61,7 @@ const MealPlanGenerator = lazy(() => import("./pages/MealPlanGenerator"));
 const MealPlanGeneratorResults = lazy(() => import("./pages/MealPlanGeneratorResults"));
 const ProfessionalSettings = lazy(() => import("./pages/dashboard/ProfessionalSettings"));
 const Billing = lazy(() => import("./pages/dashboard/Billing"));
+const AccountSettings = lazy(() => import("./pages/dashboard/AccountSettings"));
 const AccessibilitySettingsPage = lazy(() => import("./pages/dashboard/AccessibilitySettings"));
 const ApiDocs = lazy(() => import("./pages/ApiDocs"));
 
@@ -163,6 +164,7 @@ const App = () => (
               <Route path="food-chaining" element={<FoodChaining />} />
               <Route path="professional-settings" element={<ProfessionalSettings />} />
               <Route path="billing" element={<Billing />} />
+              <Route path="settings" element={<AccountSettings />} />
               <Route path="accessibility-settings" element={<AccessibilitySettingsPage />} />
             </Route>
 

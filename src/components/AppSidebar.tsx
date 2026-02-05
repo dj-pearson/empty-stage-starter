@@ -16,6 +16,7 @@ import {
   ChevronsRight,
   Globe,
   Trophy,
+  Settings,
 } from "lucide-react";
 import {
   Sidebar,
@@ -261,6 +262,30 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
+        {/* Account */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Account</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Account Settings">
+                  <NavLink
+                    to="/dashboard/settings"
+                    className={({ isActive }) =>
+                      `flex items-center gap-2 ${isActive
+                        ? "bg-primary/10 text-primary font-medium no-underline visited:no-underline"
+                        : "text-sidebar-foreground visited:text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline visited:no-underline"
+                      }`
+                    }
+                  >
+                    <Settings className="h-4 w-4 shrink-0" />
+                    {!isCollapsed && <span>Account Settings</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
       {/* Footer with collapse toggle */}

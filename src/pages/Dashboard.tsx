@@ -39,6 +39,7 @@ import {
   MoreHorizontal,
   ClipboardList,
   Plus,
+  Settings,
 } from "lucide-react";
 
 const mobileNavItems = [
@@ -56,6 +57,7 @@ const mobileNavItems = [
   { to: "/dashboard/insights", icon: TrendingUp, label: "Insights" },
   { to: "/dashboard/analytics", icon: BarChart3, label: "Analytics" },
   { to: "/dashboard/progress", icon: Trophy, label: "Progress" },
+  { to: "/dashboard/settings", icon: Settings, label: "Account Settings" },
 ];
 
 const Dashboard = () => {
@@ -363,6 +365,21 @@ const Dashboard = () => {
                     {/* Settings Section */}
                     <div className="mt-6 pt-6 border-t space-y-2">
                       <p className="text-xs font-medium text-muted-foreground mb-2 px-2">SETTINGS</p>
+                      <NavLink
+                        to="/dashboard/settings"
+                        onClick={closeMobileMenu}
+                        className={({ isActive }) =>
+                          cn(
+                            "flex items-center gap-3 px-4 py-3 rounded-lg transition-all active:scale-[0.98]",
+                            isActive
+                              ? "bg-primary/10 text-primary font-medium shadow-sm"
+                              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                          )
+                        }
+                      >
+                        <Settings className="h-5 w-5 shrink-0" />
+                        <span className="text-base">Account Settings</span>
+                      </NavLink>
                       <Button
                         variant="outline"
                         size="lg"
