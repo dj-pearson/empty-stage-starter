@@ -52,11 +52,11 @@ export default async (req: Request) => {
     console.log(`Payment method action for user ${user.id}: ${action}`);
 
     // Get user's Stripe customer ID
-    const { data: subscription, error: subError } = await supabase
+    const { data: subscription } = await supabase
       .from("user_subscriptions")
       .select("stripe_customer_id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     // For some actions, we need a customer ID
     let customerId = subscription?.stripe_customer_id;
@@ -119,10 +119,11 @@ export default async (req: Request) => {
       default:
         throw new Error(`Unknown action: ${action}`);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Payment method management error:", error);
     const corsHeaders = getCorsHeaders(req);
-    return new Response(JSON.stringify({ error: error.message }), {
+    const message = error instanceof Error ? error.message : String(error);
+    return new Response(JSON.stringify({ error: message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 400,
     });
@@ -154,15 +155,20 @@ async function ensureCustomer(
   });
 
   // Update or create subscription record with customer ID
-  await supabase
+  const { error: upsertError } = await supabase
     .from("user_subscriptions")
     .upsert({
       user_id: user.id,
       stripe_customer_id: customer.id,
+      status: "inactive",
       updated_at: new Date().toISOString(),
     }, {
       onConflict: 'user_id',
     });
+
+  if (upsertError) {
+    console.error("Error upserting subscription record:", upsertError);
+  }
 
   return customer.id;
 }
