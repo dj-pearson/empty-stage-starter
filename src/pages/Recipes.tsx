@@ -541,7 +541,7 @@ export default function Recipes() {
 
         {isInitialLoading ? (
           /* Loading Skeletons */
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
             {[...Array(6)].map((_, i) => (
               <Card key={i} className="overflow-hidden">
                 <CardHeader>
@@ -580,7 +580,7 @@ export default function Recipes() {
             </div>
 
             {/* Quick Action Cards */}
-            <div className="grid md:grid-cols-3 gap-4 mb-8">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
               <Card className="hover:shadow-lg transition-shadow cursor-pointer group" onClick={() => setDialogOpen(true)}>
                 <CardContent className="pt-6 text-center">
                   <div className="w-12 h-12 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors flex items-center justify-center mx-auto mb-3">
@@ -628,7 +628,7 @@ export default function Recipes() {
                 <Lightbulb className="h-5 w-5 text-yellow-500" />
                 Recipe Tips
               </h4>
-              <div className="grid md:grid-cols-2 gap-4 text-sm">
+              <div className="grid sm:grid-cols-2 gap-4 text-sm">
                 <div className="space-y-2">
                   <div className="flex gap-2">
                     <span className="text-primary">✓</span>
@@ -670,7 +670,7 @@ export default function Recipes() {
                 </div>
               </Card>
             ) : (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
                 {filteredRecipes.map((recipe) => (
                   <EnhancedRecipeCard
                     key={recipe.id}
