@@ -1,0 +1,15 @@
+# Generated tests
+generated/
+
+# Test results
+results/
+
+# Discovery results (regenerated each run)
+discovery/discovered-functions.json
+
+# Node modules (if any local dependencies)
+node_modules/
+
+# Temporary files
+*.tmp
+*.log

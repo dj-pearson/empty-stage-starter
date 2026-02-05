@@ -2,9 +2,9 @@ import { Link } from "react-router-dom";
 
 export const Footer = () => {
   return (
-    <footer className="border-t py-12 px-4 bg-secondary/5">
+    <footer className="border-t py-12 px-4 bg-secondary/5" role="contentinfo" aria-label="Site footer">
       <div className="container mx-auto">
-        <div className="grid md:grid-cols-4 gap-8">
+        <nav className="grid md:grid-cols-4 gap-8" aria-label="Footer navigation">
           <div>
             <Link to="/" className="flex items-center gap-2 mb-4">
               <img
@@ -65,6 +65,11 @@ export const Footer = () => {
                   Terms of Service
                 </Link>
               </li>
+              <li>
+                <Link to="/accessibility" className="hover:text-primary transition-colors">
+                  Accessibility
+                </Link>
+              </li>
             </ul>
           </div>
           <div>
@@ -90,10 +95,10 @@ export const Footer = () => {
               </li>
             </ul>
           </div>
-        </div>
+        </nav>
         <div className="mt-12 pt-8 border-t text-center text-sm text-muted-foreground">
           <p>
-            © 2025 EatPal. All rights reserved. Built with ❤️ for parents of picky eaters.
+            © {new Date().getFullYear()} EatPal. All rights reserved. Built with <span aria-label="love">❤️</span> for parents of picky eaters.
           </p>
         </div>
       </div>

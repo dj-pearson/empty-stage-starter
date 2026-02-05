@@ -1,7 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, securityHeaders, privateCacheHeaders, noCacheHeaders, CACHE_DURATIONS } from "../common/headers.ts";
 
-serve(async (req) => {
+export default async (req: Request) => {
   // Get secure CORS headers based on request origin
   const corsHeaders = getCorsHeaders(req);
 
@@ -257,4 +256,4 @@ Return a JSON array of meal entries in this exact format:
       { status: 500, headers: noCacheHeaders() }
     );
   }
-});
+}

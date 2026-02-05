@@ -1,0 +1,346 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Platform" tests="34" failures="34" time="64.407">
+  <testsuite name="Platform Tests" tests="34" failures="34" time="64.407">
+    
+    <testcase name="form-0 Form - happy path" classname="PlatformTest" time="0.803">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="form-0 Form - validation path" classname="PlatformTest" time="0.861">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="form-0 Form - empty path" classname="PlatformTest" time="1.172">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="form-0 Form - happy path" classname="PlatformTest" time="1.101">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="form-0 Form - validation path" classname="PlatformTest" time="0.479">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="form-0 Form - empty path" classname="PlatformTest" time="0.56">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="form-0 Form - happy path" classname="PlatformTest" time="0.468">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="form-0 Form - validation path" classname="PlatformTest" time="0.42">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="form-0 Form - empty path" classname="PlatformTest" time="0.441">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="form-0 Form - happy path" classname="PlatformTest" time="0.453">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="form-0 Form - validation path" classname="PlatformTest" time="0.467">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="form-0 Form - empty path" classname="PlatformTest" time="0.528">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /" classname="PlatformTest" time="0.552">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /" classname="PlatformTest" time="0.552">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /" classname="PlatformTest" time="0.706">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /" classname="PlatformTest" time="0.564">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /" classname="PlatformTest" time="0.757">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /pricing" classname="PlatformTest" time="0.553">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /auth" classname="PlatformTest" time="0.554">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /auth" classname="PlatformTest" time="0.621">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /" classname="PlatformTest" time="0.541">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /auth" classname="PlatformTest" time="0.593">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /contact" classname="PlatformTest" time="0.583">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /privacy" classname="PlatformTest" time="0.513">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /terms" classname="PlatformTest" time="0.518">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /accessibility" classname="PlatformTest" time="0.557">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /faq" classname="PlatformTest" time="0.52">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Main Navigation" classname="PlatformTest" time="0.518">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Submit form-0 Form" classname="PlatformTest" time="0.525">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Submit form-0 Form" classname="PlatformTest" time="0.499">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Submit form-0 Form" classname="PlatformTest" time="0.549">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Submit form-0 Form" classname="PlatformTest" time="0.748">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="User Sign In Flow" classname="PlatformTest" time="0.639">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+    <testcase name="Smoke Test - Public Pages" classname="PlatformTest" time="0.529">
+      <failure message="TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)">TypeError: Cannot read properties of undefined (reading &apos;steps&apos;)
+    at TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:191:31)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async runFull (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:195:3)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:271:9)</failure>
+      
+    </testcase>
+  </testsuite>
+</testsuites>

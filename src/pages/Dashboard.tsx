@@ -236,7 +236,7 @@ const Dashboard = () => {
       {/* Mobile Layout */}
       <div className="md:hidden min-h-screen bg-background">
         {/* Mobile Top Header */}
-        <nav className="fixed top-0 left-0 right-0 bg-card border-b border-border z-50">
+        <nav className="fixed top-0 left-0 right-0 bg-card border-b border-border z-50" aria-label="Mobile header navigation">
           <div className="flex justify-between items-center h-14 px-4">
             <div className="flex items-center gap-2">
               <img
@@ -396,7 +396,7 @@ const Dashboard = () => {
         </div>
 
         {/* Mobile Bottom Navigation */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-bottom">
+        <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-bottom" aria-label="Primary mobile navigation">
           <div className="flex justify-around items-center h-16 pb-[env(safe-area-inset-bottom)]">
             {mobileNavItems.slice(0, 4).map(({ to, icon: Icon, label }) => (
               <NavLink

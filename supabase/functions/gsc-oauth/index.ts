@@ -7,7 +7,6 @@
 // - Stores and refreshes tokens
 // =====================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
 
 const corsHeaders = {
@@ -57,7 +56,7 @@ const GSC_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly";
 const OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
-serve(async (req) => {
+export default async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -390,4 +389,4 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
-});
+}

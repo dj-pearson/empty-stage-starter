@@ -170,8 +170,14 @@ export function SubscriptionManagement() {
         .select("id, full_name")
         .in("id", userIds);
 
-      // Get auth users for emails
-      const { data: { users: authUsers } } = await supabase.auth.admin.listUsers();
+      // Get auth users for emails (requires service_role key)
+      let authUsers: any[] = [];
+      try {
+        const { data } = await supabase.auth.admin.listUsers();
+        authUsers = data.users || [];
+      } catch (error) {
+        logger.warn('Could not list auth users (requires service_role key):', error);
+      }
 
       // Combine data
       const combined: UserSubscription[] = subs?.map((sub) => {

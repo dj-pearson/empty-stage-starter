@@ -96,7 +96,10 @@ export function BlogCMSManager() {
       const { data, error } = await supabase.rpc(
         "get_blog_generation_insights" as any
       );
-      if (error) throw error;
+      if (error) {
+        logger.warn('get_blog_generation_insights RPC not found:', error);
+        return;
+      }
       if (data && Array.isArray(data) && data.length > 0) {
         const insights = data[0];
         setTitleBankInsights(insights);

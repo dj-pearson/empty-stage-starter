@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.5.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
 import { getCorsHeaders, securityHeaders } from "../common/headers.ts";
@@ -11,7 +10,7 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-serve(async (req) => {
+export default async (req: Request) => {
   // Get secure CORS headers based on request origin
   const corsHeaders = getCorsHeaders(req);
 
@@ -159,4 +158,4 @@ serve(async (req) => {
       }
     );
   }
-});
+}

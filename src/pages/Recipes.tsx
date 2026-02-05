@@ -214,11 +214,15 @@ export default function Recipes() {
 
   const handleImport = useCallback(async (recipeData: any) => {
     try {
-      await addRecipe(recipeData);
+      console.log('Importing recipe with data:', recipeData);
+      const result = await addRecipe(recipeData);
+      console.log('Recipe added successfully:', result);
       toast.success("Recipe imported successfully!");
+      setImportDialogOpen(false);
     } catch (error) {
       logger.error("Error importing recipe:", error);
-      toast.error("Failed to import recipe");
+      console.error("Recipe import failed:", error, "Data:", recipeData);
+      toast.error(`Failed to import recipe: ${error.message}`);
     }
   }, [addRecipe]);
 

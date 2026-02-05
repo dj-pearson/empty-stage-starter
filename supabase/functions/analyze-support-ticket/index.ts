@@ -1,12 +1,10 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
 interface TicketAnalysisRequest {
   ticketId: string;
@@ -26,7 +24,7 @@ interface AIAnalysisResult {
   reasoning: string;
 }
 
-serve(async (req) => {
+export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -183,10 +181,7 @@ async function analyzeTicketWithAI(
   userContext: any,
   similarTickets: any[]
 ): Promise<AIAnalysisResult> {
-  if (!OPENAI_API_KEY) {
-    // Fallback to rule-based analysis if no API key
-    return ruleBasedAnalysis(ticket, userContext);
-  }
+  const aiService = new AIServiceV2();
 
   const systemPrompt = `You are an expert support ticket analyzer. Analyze the support ticket and provide structured output.
 
@@ -238,31 +233,13 @@ Provide your analysis in JSON format:
 }`;
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.3,
-        response_format: { type: 'json_object' },
-      }),
+    const content = await aiService.generateContent(userPrompt, {
+      systemPrompt,
+      taskType: 'standard', // Support ticket analysis is complex
+      temperature: 0.3,
     });
 
-    if (!response.ok) {
-      console.error('OpenAI API error:', await response.text());
-      return ruleBasedAnalysis(ticket, userContext);
-    }
-
-    const data = await response.json();
-    const analysisText = data.choices[0].message.content;
-    const analysis = JSON.parse(analysisText);
+    const analysis = JSON.parse(content);
 
     return {
       issueType: analysis.issueType || 'question',

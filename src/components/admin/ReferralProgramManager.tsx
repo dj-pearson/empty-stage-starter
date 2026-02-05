@@ -84,13 +84,17 @@ export function ReferralProgramManager() {
         .from("referral_rewards")
         .select("*");
 
-      const { data: topReferrers } = await supabase
+      const { data: topReferrers, error: referrersError } = await supabase
         .from("referrals")
         .select(`
           referrer_id,
           profiles!referrals_referrer_id_fkey(full_name)
         `)
         .not("referrer_id", "is", null);
+
+      if (referrersError) {
+        logger.warn('Could not load referrers:', referrersError);
+      }
 
       const referrerCounts = new Map<string, { name: string; count: number }>();
       topReferrers?.forEach((ref) => {

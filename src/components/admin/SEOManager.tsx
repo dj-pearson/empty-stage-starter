@@ -415,7 +415,10 @@ export function SEOManager() {
         body: { userId: user.id },
       });
 
-      if (error) throw error;
+      if (error) {
+        logger.warn("Could not fetch GSC properties (may require OAuth setup):", error);
+        return;
+      }
 
       if (data.properties && data.properties.length > 0) {
         setGscProperties(data.properties);

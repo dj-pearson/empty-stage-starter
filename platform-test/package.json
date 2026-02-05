@@ -1,0 +1,41 @@
+{
+  "name": "platform-test",
+  "version": "1.0.0",
+  "description": "Universal Platform Testing Framework - Automated element discovery and test generation",
+  "main": "index.ts",
+  "bin": {
+    "platform-test": "./index.ts"
+  },
+  "scripts": {
+    "discover": "npx ts-node index.ts discover",
+    "generate": "npx ts-node index.ts generate",
+    "run": "npx ts-node index.ts run",
+    "full": "npx ts-node index.ts full",
+    "test": "npx ts-node index.ts full",
+    "test:headful": "npx ts-node index.ts full --no-headless",
+    "test:slow": "npx ts-node index.ts full --no-headless --slow",
+    "visual:update": "npx ts-node index.ts discover --update-baselines",
+    "clean": "rm -rf reports/discovery-* reports/report-* generated/*"
+  },
+  "keywords": [
+    "testing",
+    "playwright",
+    "e2e",
+    "automation",
+    "element-discovery",
+    "test-generation",
+    "self-healing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@axe-core/playwright": "^4.8.0",
+    "playwright": "^1.40.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "ts-node": "^10.9.0"
+  }
+}

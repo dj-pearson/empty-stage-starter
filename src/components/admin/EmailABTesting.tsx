@@ -146,14 +146,18 @@ export function EmailABTesting() {
   const loadTests = async () => {
     try {
       setLoading(true);
-      // Load from email_campaigns with ab_test metadata
+      // Load from email_campaigns with ab_test metadata (table may not exist)
       const { data, error } = await supabase
         .from("email_campaigns")
         .select("*")
         .not("metadata->ab_test", "is", null)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        logger.warn('Could not load email_campaigns:', error);
+        setTests([]);
+        return;
+      }
 
       // Transform campaigns to AB tests
       const abTests: ABTest[] = (data || []).map((campaign: any) => ({

@@ -744,9 +744,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addGroceryItem = (item: Omit<GroceryItem, "id" | "checked">) => {
     if (userId && householdId) {
+      const newItem = { 
+        name: item.name,
+        quantity: item.quantity || 1,
+        unit: item.unit || '',
+        category: item.category || 'other',
+        notes: item.notes || null,
+        aisle: item.aisle || null,
+        grocery_list_id: item.grocery_list_id || null,
+        user_id: userId, 
+        household_id: householdId, 
+        checked: false 
+      };
+      
       supabase
         .from('grocery_items')
-        .insert([{ ...item, user_id: userId, household_id: householdId, checked: false }])
+        .insert(newItem)
         .select()
         .single()
         .then(({ data, error }) => {

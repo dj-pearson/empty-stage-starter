@@ -1,0 +1,382 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Platform" tests="34" failures="18" time="965.092">
+  <testsuite name="Platform Tests" tests="34" failures="18" time="965.092">
+    
+    <testcase name="form-0 Form - happy path" classname="PlatformTest" time="9.101">
+      
+      
+    </testcase>
+    <testcase name="form-0 Form - validation path" classname="PlatformTest" time="6.731">
+      
+      
+    </testcase>
+    <testcase name="form-0 Form - empty path" classname="PlatformTest" time="5.633">
+      
+      
+    </testcase>
+    <testcase name="form-0 Form - happy path" classname="PlatformTest" time="3.883">
+      
+      
+    </testcase>
+    <testcase name="form-0 Form - validation path" classname="PlatformTest" time="4.365">
+      
+      
+    </testcase>
+    <testcase name="form-0 Form - empty path" classname="PlatformTest" time="6.9">
+      
+      
+    </testcase>
+    <testcase name="form-0 Form - happy path" classname="PlatformTest" time="20.089">
+      
+      
+    </testcase>
+    <testcase name="form-0 Form - validation path" classname="PlatformTest" time="10.431">
+      
+      
+    </testcase>
+    <testcase name="form-0 Form - empty path" classname="PlatformTest" time="12.784">
+      
+      
+    </testcase>
+    <testcase name="form-0 Form - happy path" classname="PlatformTest" time="7.617">
+      
+      
+    </testcase>
+    <testcase name="form-0 Form - validation path" classname="PlatformTest" time="7.036">
+      
+      
+    </testcase>
+    <testcase name="form-0 Form - empty path" classname="PlatformTest" time="5.428">
+      
+      
+    </testcase>
+    <testcase name="Buttons - /" classname="PlatformTest" time="6.087">
+      <failure message="Error: Could not find element with locator: text=&quot;Toggle theme&quot;
+Fallbacks tried: .inline-flex
+Description: button element">Error: Could not find element with locator: text=&quot;Toggle theme&quot;
+Fallbacks tried: .inline-flex
+Description: button element
+    at SmartLocator.find (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:80:11)
+    at async SmartLocator.click (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:91:21)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:273:9)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /" classname="PlatformTest" time="30.856">
+      <failure message="Error: Could not find element with locator: [aria-label=&quot;Get started with EatPal for free&quot;]
+Fallbacks tried: text=&quot;Get Started Free&quot;, .inline-flex
+Description: button element">Error: Could not find element with locator: [aria-label=&quot;Get started with EatPal for free&quot;]
+Fallbacks tried: text=&quot;Get Started Free&quot;, .inline-flex
+Description: button element
+    at SmartLocator.find (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:80:11)
+    at async TestRunner.executeAssertions (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:344:29)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:331:7)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /" classname="PlatformTest" time="13.79">
+      <failure message="Error: Could not find element with locator: text=&quot;Toggle theme&quot;
+Fallbacks tried: .inline-flex
+Description: button element">Error: Could not find element with locator: text=&quot;Toggle theme&quot;
+Fallbacks tried: .inline-flex
+Description: button element
+    at SmartLocator.find (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:80:11)
+    at async SmartLocator.click (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:91:21)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:273:9)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /" classname="PlatformTest" time="31.337">
+      <failure message="Error: Could not find element with locator: [aria-label=&quot;Get started with EatPal for free&quot;]
+Fallbacks tried: text=&quot;Get Started Free&quot;, .inline-flex
+Description: button element">Error: Could not find element with locator: [aria-label=&quot;Get started with EatPal for free&quot;]
+Fallbacks tried: text=&quot;Get Started Free&quot;, .inline-flex
+Description: button element
+    at SmartLocator.find (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:80:11)
+    at async TestRunner.executeAssertions (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:344:29)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:331:7)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /" classname="PlatformTest" time="37.78">
+      <failure message="Error: Could not find element with locator: [aria-label=&quot;Get started with EatPal for free&quot;]
+Fallbacks tried: text=&quot;Get Started Free&quot;, .inline-flex
+Description: button element">Error: Could not find element with locator: [aria-label=&quot;Get started with EatPal for free&quot;]
+Fallbacks tried: text=&quot;Get Started Free&quot;, .inline-flex
+Description: button element
+    at SmartLocator.find (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:80:11)
+    at async TestRunner.executeAssertions (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:344:29)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:331:7)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /pricing" classname="PlatformTest" time="9.114">
+      <failure message="Error: Could not find element with locator: text=&quot;Get Started Free&quot;
+Fallbacks tried: .inline-flex
+Description: button element">Error: Could not find element with locator: text=&quot;Get Started Free&quot;
+Fallbacks tried: .inline-flex
+Description: button element
+    at SmartLocator.find (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:80:11)
+    at async SmartLocator.click (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:91:21)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:273:9)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /auth" classname="PlatformTest" time="5.508">
+      <failure message="Error: Could not find element with locator: text=&quot;← Back to Home&quot;
+Fallbacks tried: .inline-flex
+Description: button element">Error: Could not find element with locator: text=&quot;← Back to Home&quot;
+Fallbacks tried: .inline-flex
+Description: button element
+    at SmartLocator.find (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:80:11)
+    at async SmartLocator.click (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:91:21)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:273:9)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /auth" classname="PlatformTest" time="14.967">
+      <failure message="Error: Element not visible: text=&quot;← Back to Home&quot;">Error: Element not visible: text=&quot;← Back to Home&quot;
+    at TestRunner.executeAssertions (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:346:19)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:331:7)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /" classname="PlatformTest" time="11.391">
+      <failure message="Error: Could not find element with locator: [aria-label=&quot;Get started with EatPal for free&quot;]
+Fallbacks tried: text=&quot;Get Started Free&quot;, .inline-flex
+Description: button element">Error: Could not find element with locator: [aria-label=&quot;Get started with EatPal for free&quot;]
+Fallbacks tried: text=&quot;Get Started Free&quot;, .inline-flex
+Description: button element
+    at SmartLocator.find (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:80:11)
+    at async TestRunner.executeAssertions (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:344:29)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:331:7)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /auth" classname="PlatformTest" time="9.747">
+      <failure message="Error: Could not find element with locator: text=&quot;← Back to Home&quot;
+Fallbacks tried: .inline-flex
+Description: button element">Error: Could not find element with locator: text=&quot;← Back to Home&quot;
+Fallbacks tried: .inline-flex
+Description: button element
+    at SmartLocator.find (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:80:11)
+    at async TestRunner.executeAssertions (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:344:29)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:331:7)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /contact" classname="PlatformTest" time="10.415">
+      <failure message="Error: Could not find element with locator: text=&quot;Back to Home&quot;
+Fallbacks tried: .inline-flex
+Description: button element">Error: Could not find element with locator: text=&quot;Back to Home&quot;
+Fallbacks tried: .inline-flex
+Description: button element
+    at SmartLocator.find (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:80:11)
+    at async TestRunner.executeAssertions (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:344:29)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:331:7)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /privacy" classname="PlatformTest" time="9.866">
+      <failure message="Error: Could not find element with locator: text=&quot;Back to Home&quot;
+Fallbacks tried: .inline-flex
+Description: button element">Error: Could not find element with locator: text=&quot;Back to Home&quot;
+Fallbacks tried: .inline-flex
+Description: button element
+    at SmartLocator.find (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:80:11)
+    at async TestRunner.executeAssertions (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:344:29)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:331:7)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /terms" classname="PlatformTest" time="10.41">
+      <failure message="Error: Could not find element with locator: text=&quot;Back to Home&quot;
+Fallbacks tried: .inline-flex
+Description: button element">Error: Could not find element with locator: text=&quot;Back to Home&quot;
+Fallbacks tried: .inline-flex
+Description: button element
+    at SmartLocator.find (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:80:11)
+    at async TestRunner.executeAssertions (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:344:29)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:331:7)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /accessibility" classname="PlatformTest" time="8.943">
+      <failure message="Error: Could not find element with locator: text=&quot;Back to Home&quot;
+Fallbacks tried: .inline-flex
+Description: button element">Error: Could not find element with locator: text=&quot;Back to Home&quot;
+Fallbacks tried: .inline-flex
+Description: button element
+    at SmartLocator.find (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:80:11)
+    at async TestRunner.executeAssertions (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:344:29)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:331:7)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Buttons - /faq" classname="PlatformTest" time="10.113">
+      <failure message="Error: Could not find element with locator: text=&quot;Back to Home&quot;
+Fallbacks tried: .inline-flex
+Description: button element">Error: Could not find element with locator: text=&quot;Back to Home&quot;
+Fallbacks tried: .inline-flex
+Description: button element
+    at SmartLocator.find (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:80:11)
+    at async TestRunner.executeAssertions (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:344:29)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:331:7)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Main Navigation" classname="PlatformTest" time="35.721">
+      <failure message="Error: Could not find element with locator: text=&quot;Home&quot;
+Fallbacks tried: .hover:text-primary
+Description: link element">Error: Could not find element with locator: text=&quot;Home&quot;
+Fallbacks tried: .hover:text-primary
+Description: link element
+    at SmartLocator.find (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:80:11)
+    at async SmartLocator.click (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:91:21)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:273:9)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Submit form-0 Form" classname="PlatformTest" time="3.192">
+      
+      
+    </testcase>
+    <testcase name="Submit form-0 Form" classname="PlatformTest" time="2.661">
+      
+      
+    </testcase>
+    <testcase name="Submit form-0 Form" classname="PlatformTest" time="2.56">
+      
+      
+    </testcase>
+    <testcase name="Submit form-0 Form" classname="PlatformTest" time="2.899">
+      <failure message="Error: Could not find element with locator: text=&quot;Send Message&quot;
+Fallbacks tried: .inline-flex
+Description: button element">Error: Could not find element with locator: text=&quot;Send Message&quot;
+Fallbacks tried: .inline-flex
+Description: button element
+    at SmartLocator.find (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:80:11)
+    at async TestRunner.executeAssertions (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:344:29)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:331:7)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="User Sign In Flow" classname="PlatformTest" time="33.037">
+      <failure message="TimeoutError: locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator(&apos;button[type=&quot;submit&quot;]&apos;)[22m
+[2m    - locator resolved to &lt;button disabled type=&quot;submit&quot; data-component-line=&quot;655&quot; data-lov-name=&quot;LoadingButton&quot; data-component-file=&quot;Auth.tsx&quot; data-component-name=&quot;LoadingButton&quot; data-lov-id=&quot;src\pages\Auth.tsx:655:20&quot; data-component-path=&quot;src\pages\Auth.tsx&quot; data-component-content=&quot;%7B%22text%22%3A%22Sign%20Up%22%2C%22className%22%3A%22w-full%20h-11%22%7D&quot; class=&quot;inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium ring-offset-background transition-all focus-visible:outline-none focus-visibl…&gt;Sign Up&lt;/button&gt;[22m
+[2m  - attempting click action[22m
+[2m    2 × waiting for element to be visible, enabled and stable[22m
+[2m      - element is not enabled[22m
+[2m    - retrying click action[22m
+[2m    - waiting 20ms[22m
+[2m    2 × waiting for element to be visible, enabled and stable[22m
+[2m      - element is not enabled[22m
+[2m    - retrying click action[22m
+[2m      - waiting 100ms[22m
+[2m    57 × waiting for element to be visible, enabled and stable[22m
+[2m       - element is not enabled[22m
+[2m     - retrying click action[22m
+[2m       - waiting 500ms[22m
+">locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator(&apos;button[type=&quot;submit&quot;]&apos;)[22m
+[2m    - locator resolved to &lt;button disabled type=&quot;submit&quot; data-component-line=&quot;655&quot; data-lov-name=&quot;LoadingButton&quot; data-component-file=&quot;Auth.tsx&quot; data-component-name=&quot;LoadingButton&quot; data-lov-id=&quot;src\pages\Auth.tsx:655:20&quot; data-component-path=&quot;src\pages\Auth.tsx&quot; data-component-content=&quot;%7B%22text%22%3A%22Sign%20Up%22%2C%22className%22%3A%22w-full%20h-11%22%7D&quot; class=&quot;inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium ring-offset-background transition-all focus-visible:outline-none focus-visibl…&gt;Sign Up&lt;/button&gt;[22m
+[2m  - attempting click action[22m
+[2m    2 × waiting for element to be visible, enabled and stable[22m
+[2m      - element is not enabled[22m
+[2m    - retrying click action[22m
+[2m    - waiting 20ms[22m
+[2m    2 × waiting for element to be visible, enabled and stable[22m
+[2m      - element is not enabled[22m
+[2m    - retrying click action[22m
+[2m      - waiting 100ms[22m
+[2m    57 × waiting for element to be visible, enabled and stable[22m
+[2m       - element is not enabled[22m
+[2m     - retrying click action[22m
+[2m       - waiting 500ms[22m
+
+    at SmartLocator.click (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\utils\smart-locator.ts:92:19)
+    at async TestRunner.executeStep (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:273:9)
+    at async TestRunner.executeTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:195:11)
+    at async TestRunner.runTest (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:117:24)
+    at async TestRunner.runAll (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\runners\test-runner.ts:68:7)
+    at async runTests (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:165:19)
+    at async main (C:\Users\dpearson\Documents\EatPal\empty-stage-starter\platform-test\index.ts:267:9)</failure>
+      
+    </testcase>
+    <testcase name="Smoke Test - Public Pages" classname="PlatformTest" time="11.63">
+      
+      
+    </testcase>
+  </testsuite>
+</testsuites>

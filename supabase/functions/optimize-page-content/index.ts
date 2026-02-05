@@ -1,5 +1,4 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -53,7 +52,7 @@ function extractMetaTag(html: string, property: string): string {
   return match ? match[1] : "";
 }
 
-serve(async (req) => {
+export default async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -102,21 +101,8 @@ serve(async (req) => {
       .eq("is_active", true)
       .single();
 
-    const modelConfig = aiModel || {
-      model_name: "gpt-4o-mini",
-      endpoint_url: "https://api.openai.com/v1/chat/completions",
-      api_key_env_var: "OPENAI_API_KEY",
-      auth_type: "bearer",
-      temperature: 0.7,
-      max_tokens: 4000,
-    };
-
-    const apiKey = Deno.env.get(modelConfig.api_key_env_var);
-    if (!apiKey) {
-      throw new Error(
-        `API key not configured. Please set ${modelConfig.api_key_env_var}`
-      );
-    }
+    // Initialize AI service (centralized configuration)
+    const aiService = new AIServiceV2();
 
     // Prepare competitor analysis data (if requested)
     let competitorData = "";
@@ -297,26 +283,11 @@ Provide optimization suggestions in strict JSON format:
 
     console.log("Calling AI API for content optimization...");
 
-    const aiResponse = await fetch(modelConfig.endpoint_url, {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify(requestBody),
+    const content = await aiService.generateContent(userPrompt, {
+      systemPrompt,
+      taskType: 'standard', // Content optimization is complex
+      temperature: 0.7,
     });
-
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error("AI API error:", aiResponse.status, errorText);
-      throw new Error(`AI API error: ${errorText}`);
-    }
-
-    const aiData = await aiResponse.json();
-
-    let content = "";
-    if (aiData.content && Array.isArray(aiData.content)) {
-      content = aiData.content.find((c: any) => c.type === "text")?.text || "";
-    } else if (aiData.choices && aiData.choices[0]?.message?.content) {
-      content = aiData.choices[0].message.content;
-    }
 
     if (!content) {
       throw new Error("No content received from AI");
@@ -413,4 +384,4 @@ Provide optimization suggestions in strict JSON format:
       }
     );
   }
-});
+}

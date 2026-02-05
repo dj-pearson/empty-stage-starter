@@ -41,6 +41,12 @@ export function FoodChainingRecommendations() {
 
   useEffect(() => {
     const loadSuccessfulFoods = async () => {
+      if (!activeKidId) {
+        setSuccessfulFoods([]);
+        setLoading(false);
+        return;
+      }
+      
       try {
         setLoading(true);
 

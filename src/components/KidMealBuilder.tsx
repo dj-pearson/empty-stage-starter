@@ -95,6 +95,8 @@ export function KidMealBuilder() {
   }, [activeKidId, kids]);
 
   const loadCreations = async () => {
+    if (!activeKidId) return;
+    
     try {
       setLoading(true);
 
@@ -118,6 +120,8 @@ export function KidMealBuilder() {
   };
 
   const loadRecentAchievements = async () => {
+    if (!activeKidId) return;
+    
     try {
       const { data, error } = await supabase
         .from("kid_achievements")

@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
@@ -17,7 +16,7 @@ interface RecipeSuggestion {
   cookTime: string;
 }
 
-serve(async (req) => {
+export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -134,83 +133,24 @@ Return your response as a JSON array with this structure:
 
     const userPrompt = `Suggest ${count} recipe ideas using available pantry items.`;
 
-    // Prepare AI request (handle Anthropic vs OpenAI-compatible)
-    const isAnthropic = aiSettings.endpoint_url?.includes('anthropic.com');
-
-    const requestBody: any = isAnthropic
-      ? {
-          model: aiSettings.model_name,
-          max_tokens: aiSettings.max_tokens || 1024,
-          system: systemPrompt,
-          messages: [
-            { role: 'user', content: userPrompt }
-          ]
-        }
-      : {
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
-          ]
-        };
-
-    if (aiSettings.temperature != null) requestBody.temperature = aiSettings.temperature;
-    if (aiSettings.additional_params) Object.assign(requestBody, aiSettings.additional_params);
-    const authHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (aiSettings.auth_type === 'bearer') {
-      authHeaders['Authorization'] = `Bearer ${apiKey}`;
-    } else if (aiSettings.auth_type === 'api_key' || aiSettings.auth_type === 'x-api-key') {
-      authHeaders['x-api-key'] = apiKey;
-    }
-
-    if (isAnthropic) {
-      authHeaders['anthropic-version'] = '2023-06-01';
-    }
+    // Use centralized AI service
+    const aiService = new AIServiceV2();
 
     console.log('Calling AI for recipe suggestions...');
 
-    const response = await fetch(aiSettings.endpoint_url, {
-      method: 'POST',
-      headers: authHeaders,
-      body: JSON.stringify(requestBody),
+    const content = await aiService.generateContent(userPrompt, {
+      systemPrompt,
+      taskType: 'lightweight', // Recipe suggestions are fast
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('AI API error:', response.status, errorText);
-
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
+    if (!content) {
       return new Response(
-        JSON.stringify({ error: 'AI service error', details: errorText }),
+        JSON.stringify({ error: 'AI service error' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const data = await response.json();
-    let responseText = '';
-
-    if (isAnthropic) {
-      const parts = data?.content;
-      if (Array.isArray(parts)) {
-        responseText = parts.map((p: any) => p?.text || '').join('').trim();
-      } else if (typeof data?.content === 'string') {
-        responseText = data.content;
-      }
-    } else if (data.choices && data.choices[0]?.message?.content) {
-      responseText = data.choices[0].message.content;
-    } else if (data.content) {
-      responseText = data.content;
-    } else {
-      throw new Error('Unexpected AI response format');
-    }
+    let responseText = content;
 
     // Parse AI response
     let suggestions: RecipeSuggestion[];
@@ -256,4 +196,4 @@ Return your response as a JSON array with this structure:
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+}

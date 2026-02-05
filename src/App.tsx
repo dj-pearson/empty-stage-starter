@@ -6,10 +6,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { AppProvider } from "@/contexts/AppContext";
+import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { SkipToContent } from "@/components/SkipToContent";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { RouteAnnouncer } from "@/components/RouteAnnouncer";
 import { LoadingFallback } from "@/components/LoadingFallback";
 
 // Lazy load non-critical components to improve initial bundle size and LCP
@@ -41,6 +43,8 @@ const FoodChaining = lazy(() => import("./pages/FoodChaining"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
+const Accessibility = lazy(() => import("./pages/Accessibility"));
+const VPAT = lazy(() => import("./pages/VPAT"));
 const FAQ = lazy(() => import("./pages/FAQ"));
 const Contact = lazy(() => import("./pages/Contact"));
 const Blog = lazy(() => import("./pages/Blog"));
@@ -57,6 +61,7 @@ const MealPlanGenerator = lazy(() => import("./pages/MealPlanGenerator"));
 const MealPlanGeneratorResults = lazy(() => import("./pages/MealPlanGeneratorResults"));
 const ProfessionalSettings = lazy(() => import("./pages/dashboard/ProfessionalSettings"));
 const Billing = lazy(() => import("./pages/dashboard/Billing"));
+const AccessibilitySettingsPage = lazy(() => import("./pages/dashboard/AccessibilitySettings"));
 const ApiDocs = lazy(() => import("./pages/ApiDocs"));
 
 const queryClient = new QueryClient({
@@ -102,12 +107,14 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <HelmetProvider>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <AccessibilityProvider>
           <TooltipProvider>
             <AppProvider>
               <Toaster />
               <Sonner />
               <BrowserRouter>
                 <SkipToContent />
+                <RouteAnnouncer />
                 <DeferredComponents />
                 <Suspense fallback={<LoadingFallback message="Loading..." />}>
           <Routes>
@@ -118,6 +125,8 @@ const App = () => (
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/accessibility" element={<Accessibility />} />
+            <Route path="/accessibility/vpat" element={<VPAT />} />
             <Route path="/faq" element={<FAQ />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/blog" element={<Blog />} />
@@ -154,6 +163,7 @@ const App = () => (
               <Route path="food-chaining" element={<FoodChaining />} />
               <Route path="professional-settings" element={<ProfessionalSettings />} />
               <Route path="billing" element={<Billing />} />
+              <Route path="accessibility-settings" element={<AccessibilitySettingsPage />} />
             </Route>
 
             {/* Convenience aliases - redirect to dashboard nested routes - Protected */}
@@ -188,6 +198,7 @@ const App = () => (
           </BrowserRouter>
         </AppProvider>
       </TooltipProvider>
+          </AccessibilityProvider>
     </ThemeProvider>
     </HelmetProvider>
   </QueryClientProvider>
