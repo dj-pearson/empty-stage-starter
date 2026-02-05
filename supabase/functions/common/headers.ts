@@ -85,7 +85,7 @@ export const securityHeaders = {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https: blob:",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.supabase.co https://api.tryeatpal.com https://functions.tryeatpal.com wss://api.tryeatpal.com https://api.stripe.com",
+    "connect-src 'self' https://api.tryeatpal.com https://functions.tryeatpal.com wss://api.tryeatpal.com https://api.stripe.com",
     "frame-src 'self' https://js.stripe.com",
     "object-src 'none'",
     "base-uri 'self'",
