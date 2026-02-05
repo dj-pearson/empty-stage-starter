@@ -517,9 +517,13 @@ export default function Recipes() {
               AI Suggest from Pantry
             </Button>
             <Button
-              onClick={() => setImportDialogOpen(true)}
+              onClick={(e) => {
+                e.preventDefault();
+                setImportDialogOpen(true);
+              }}
               variant="outline"
               size="lg"
+              type="button"
             >
               <Upload className="h-5 w-5 mr-2" />
               Import

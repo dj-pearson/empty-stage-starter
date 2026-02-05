@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,13 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
   const [isFamily, setIsFamily] = useState(false);
   const [selectedKidId, setSelectedKidId] = useState<string>("");
   const [preferredMealSlot, setPreferredMealSlot] = useState<string>("");
+
+  // Clean up camera when dialog closes
+  useEffect(() => {
+    if (!open) {
+      stopCamera();
+    }
+  }, [open]);
 
   const startCamera = async () => {
     try {
