@@ -36,6 +36,7 @@ import { OrganizationSchema, SoftwareAppSchema, FAQSchema, ReviewSchema } from "
 import type { Review } from "@/components/schema";
 import { getPageSEO } from "@/lib/seo-config";
 import { Footer } from "@/components/Footer";
+import { trackLandingView, trackPageView } from "@/lib/conversion-tracking";
 
 // Lazy load heavy components that use GSAP to reduce initial bundle size
 const EnhancedHero = lazy(() => import("@/components/EnhancedHero").then(m => ({ default: m.EnhancedHero })));
@@ -68,6 +69,12 @@ const Landing = () => {
   const [scrolled, setScrolled] = useState(false);
   const { theme, setTheme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Track landing page view for conversion funnel
+  useEffect(() => {
+    trackLandingView();
+    trackPageView('/', 'EatPal - Smart Meal Planning');
+  }, []);
 
   // Track scroll position for sticky header CTA
   useEffect(() => {

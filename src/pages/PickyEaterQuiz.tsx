@@ -11,6 +11,7 @@ import { calculateCompletionPercentage } from '@/lib/quiz/scoring';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { QuizQuestion } from '@/components/quiz/QuizQuestion';
 import { v4 as uuidv4 } from 'uuid';
+import { trackQuizStart, trackQuizComplete, trackPageView } from '@/lib/conversion-tracking';
 
 export default function PickyEaterQuiz() {
   const navigate = useNavigate();
@@ -27,12 +28,13 @@ export default function PickyEaterQuiz() {
 
   // Track quiz start
   useEffect(() => {
-    // Track analytics event: quiz_started
+    trackQuizStart('picky_eater');
+    trackPageView('/picky-eater-quiz', 'Picky Eater Quiz - EatPal');
     trackAnalyticsEvent('quiz_started');
   }, []);
 
   const trackAnalyticsEvent = (eventType: string, data?: Record<string, unknown>) => {
-    // Analytics tracking would go here
+    // Legacy analytics tracking (for backward compatibility)
     console.log('Analytics:', eventType, data);
   };
 
@@ -67,6 +69,9 @@ export default function PickyEaterQuiz() {
           completionTime,
         },
       });
+
+      // Track completion in new funnel tracking system
+      trackQuizComplete('picky_eater', 'completed');
 
       trackAnalyticsEvent('quiz_completed', {
         completionTime,

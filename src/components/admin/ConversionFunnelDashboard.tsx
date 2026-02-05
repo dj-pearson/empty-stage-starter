@@ -33,6 +33,7 @@ import {
 import { supabase } from '@/lib/supabase-platform';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 
 interface FunnelStep {
   name: string;
@@ -80,7 +81,39 @@ export function ConversionFunnelDashboard() {
       const days = dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90;
       const startDate = subDays(new Date(), days);
 
-      // Fetch quiz analytics
+      // Try to fetch from new funnel_events table first (for accurate page views)
+      let funnelMetrics: {
+        pageViews: number;
+        quizStarts: number;
+        quizCompletes: number;
+        emailCaptures: number;
+        signups: number;
+        trialStarts: number;
+        paidConversions: number;
+      } | null = null;
+
+      try {
+        const { data: funnelEvents, error: funnelError } = await supabase
+          .from('funnel_events')
+          .select('event_type')
+          .gte('created_at', startDate.toISOString());
+
+        if (!funnelError && funnelEvents && funnelEvents.length > 0) {
+          funnelMetrics = {
+            pageViews: funnelEvents.filter(e => e.event_type === 'landing_view').length,
+            quizStarts: funnelEvents.filter(e => e.event_type === 'quiz_start').length,
+            quizCompletes: funnelEvents.filter(e => e.event_type === 'quiz_complete').length,
+            emailCaptures: funnelEvents.filter(e => e.event_type === 'email_capture').length,
+            signups: funnelEvents.filter(e => e.event_type === 'signup').length,
+            trialStarts: funnelEvents.filter(e => e.event_type === 'trial_start').length,
+            paidConversions: funnelEvents.filter(e => e.event_type === 'paid_conversion').length,
+          };
+        }
+      } catch {
+        // funnel_events table may not exist yet, fall through to legacy data
+      }
+
+      // Fetch quiz analytics (legacy data source)
       const { data: quizData, error: quizError } = await supabase
         .from('quiz_analytics')
         .select('event_type, created_at')
@@ -112,36 +145,69 @@ export function ConversionFunnelDashboard() {
 
       if (subsError) throw subsError;
 
-      // Fetch email leads (table may not exist)
+      // Fetch leads from leads table and quiz_leads table
       let emailLeads: any[] = [];
       try {
-        const { data, error } = await supabase
-          .from('email_leads')
+        // First try the main leads table
+        const { data: leadsData, error: leadsError } = await supabase
+          .from('leads')
           .select('id, email, source, created_at')
           .gte('created_at', startDate.toISOString())
           .order('created_at', { ascending: false })
           .limit(10);
 
-        if (!error) {
-          emailLeads = data || [];
+        if (!leadsError && leadsData) {
+          emailLeads = leadsData.map(lead => ({
+            ...lead,
+            source: lead.source || 'landing_page',
+          }));
+        }
+
+        // Also get quiz leads if available
+        const { data: quizLeadsData, error: quizError } = await supabase
+          .from('quiz_leads')
+          .select('id, email, created_at')
+          .gte('created_at', startDate.toISOString())
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (!quizError && quizLeadsData) {
+          const quizLeads = quizLeadsData.map(lead => ({
+            id: lead.id,
+            email: lead.email,
+            source: 'quiz',
+            created_at: lead.created_at,
+          }));
+          // Merge and sort by created_at
+          emailLeads = [...emailLeads, ...quizLeads]
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+            .slice(0, 10);
         }
       } catch (error) {
-        logger.warn('email_leads table not found', error);
+        logger.warn('Error fetching leads', error);
       }
 
-      // Calculate metrics
-      const quizStarts = quizData?.filter(q => q.event_type === 'quiz_started').length || 0;
-      const quizCompletes = quizResponses?.length || 0;
-      const emailCaptures = quizResponses?.filter(r => r.email_captured).length || 0;
-      const signups = profiles?.length || 0;
-      const paidConversions = subscriptions?.filter(s => s.status === 'active').length || 0;
-      const trialStarts = subscriptions?.filter(s => s.status === 'trialing').length || 0;
+      // Calculate metrics from legacy data sources
+      const legacyQuizStarts = quizData?.filter(q => q.event_type === 'quiz_started').length || 0;
+      const legacyQuizCompletes = quizResponses?.length || 0;
+      const legacyEmailCaptures = quizResponses?.filter(r => r.email_captured).length || 0;
+      const legacySignups = profiles?.length || 0;
+      const legacyPaidConversions = subscriptions?.filter(s => s.status === 'active').length || 0;
+      const legacyTrialStarts = subscriptions?.filter(s => s.status === 'trialing').length || 0;
 
-      // Estimate page views (typically 3-5x quiz starts for this type of funnel)
-      const estimatedPageViews = quizStarts * 4;
+      // Use funnel_events data if available (more accurate), otherwise fall back to legacy + estimates
+      const quizStarts = funnelMetrics?.quizStarts || legacyQuizStarts;
+      const quizCompletes = funnelMetrics?.quizCompletes || legacyQuizCompletes;
+      const emailCaptures = funnelMetrics?.emailCaptures || legacyEmailCaptures;
+      const signups = funnelMetrics?.signups || legacySignups;
+      const paidConversions = funnelMetrics?.paidConversions || legacyPaidConversions;
+      const trialStarts = funnelMetrics?.trialStarts || legacyTrialStarts;
+
+      // Use actual page views if available, otherwise estimate (typically 3-5x quiz starts)
+      const pageViews = funnelMetrics?.pageViews || Math.max(quizStarts * 4, legacyQuizStarts * 4);
 
       setMetrics({
-        pageViews: estimatedPageViews,
+        pageViews,
         quizStarts,
         quizCompletes,
         emailCaptures,
