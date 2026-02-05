@@ -71,6 +71,7 @@ export default function Pricing() {
   );
   const [user, setUser] = useState<User | null>(null);
   const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
+  const [currentPlanSortOrder, setCurrentPlanSortOrder] = useState<number | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const seoConfig = getPageSEO("pricing");
@@ -87,16 +88,21 @@ export default function Pricing() {
     setUser(user);
 
     if (user) {
-      // Get user's current subscription
+      // Get user's current subscription with plan sort_order
       const { data: subscription } = await supabase
         .from("user_subscriptions")
-        .select("plan_id")
+        .select("plan_id, subscription_plans(sort_order)")
         .eq("user_id", user.id)
         .eq("status", "active")
         .maybeSingle();
 
       if (subscription) {
         setCurrentPlanId(subscription.plan_id);
+        // Get sort_order from the joined subscription_plans
+        const planData = subscription.subscription_plans as { sort_order: number } | null;
+        if (planData?.sort_order) {
+          setCurrentPlanSortOrder(planData.sort_order);
+        }
       }
     }
   };
@@ -178,8 +184,30 @@ export default function Pricing() {
       return;
     }
 
+    // Handle Free plan (downgrade = cancel subscription via Stripe Portal)
     if (plan.price_monthly === 0) {
-      toast.info("Cannot downgrade to Free plan from here");
+      try {
+        setLoading(true);
+        const { data, error } = await invokeEdgeFunction("stripe-portal", {
+          body: {
+            returnUrl: `${window.location.origin}/pricing`,
+          },
+        });
+
+        if (error) throw error;
+
+        if (data?.url) {
+          // Redirect to Stripe portal where user can cancel
+          toast.info("Redirecting to manage your subscription...");
+          window.location.href = data.url;
+        } else {
+          throw new Error("No portal URL returned");
+        }
+      } catch (error: unknown) {
+        logger.error("Portal redirect error:", error);
+        toast.error("Failed to open subscription management. Please try again.");
+        setLoading(false);
+      }
       return;
     }
 
@@ -224,6 +252,11 @@ export default function Pricing() {
 
     if (currentPlanId === plan.id) {
       return "Current Plan";
+    }
+
+    // Compare plan levels using sort_order (lower = lower tier)
+    if (currentPlanSortOrder !== null && plan.sort_order < currentPlanSortOrder) {
+      return "Downgrade";
     }
 
     return "Upgrade Now";
