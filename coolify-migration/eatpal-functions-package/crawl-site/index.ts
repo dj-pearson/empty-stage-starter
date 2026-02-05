@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
@@ -28,7 +27,7 @@ interface CrawlResult {
   issues: Array<{ type: string; severity: string; message: string }>;
 }
 
-serve(async (req) => {
+export default async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -323,7 +322,7 @@ serve(async (req) => {
         };
 
         results.push(result);
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Error crawling ${normalizedUrl}:`, error);
         results.push({
           url: normalizedUrl,
@@ -441,7 +440,7 @@ serve(async (req) => {
         status: 200,
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error in crawl-site:", error);
     return new Response(
       JSON.stringify({

@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
@@ -18,7 +17,7 @@ const corsHeaders = {
  * Intended to be called weekly (e.g., Sunday evenings)
  */
 
-serve(async (req) => {
+export default async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -167,7 +166,7 @@ serve(async (req) => {
           .eq("status", "pending");
 
         results.successful++;
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Failed to generate summary for user ${user_id}:`, error);
         results.failed++;
       }
@@ -185,7 +184,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Weekly summary generator error:", error);
     return new Response(
       JSON.stringify({

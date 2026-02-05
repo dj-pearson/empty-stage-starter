@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.5.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
 import { getCorsHeaders, noCacheHeaders } from "../_shared/headers.ts";
@@ -22,7 +21,7 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
  * - set-default: Set a payment method as default
  * - get-portal-url: Get Stripe Customer Portal URL for self-service
  */
-serve(async (req) => {
+export default async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
 
   if (req.method === "OPTIONS") {
@@ -129,7 +128,7 @@ serve(async (req) => {
       status: 400,
     });
   }
-});
+};
 
 async function ensureCustomer(
   supabase: any,

@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
@@ -17,7 +16,7 @@ const corsHeaders = {
  * Should be called by a cron job every hour.
  */
 
-serve(async (req) => {
+export default async (req: Request) => {
   // Handle CORS
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -121,7 +120,7 @@ serve(async (req) => {
             console.log(`Email scheduled for enrollment ${enrollment.id}`);
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Failed to process enrollment ${enrollment.id}:`, error);
         results.errors.push(
           `Enrollment ${enrollment.id}: ${error instanceof Error ? error.message : String(error)}`
@@ -146,7 +145,7 @@ serve(async (req) => {
         },
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Email sequence processor error:", error);
     return new Response(
       JSON.stringify({

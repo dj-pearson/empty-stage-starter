@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -6,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -139,7 +138,7 @@ serve(async (req) => {
         'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error generating sitemap:', error);
     return new Response(
       JSON.stringify({ error: error.message }),

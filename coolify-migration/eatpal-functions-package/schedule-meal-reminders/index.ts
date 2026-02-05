@@ -1,8 +1,7 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { getCorsHeaders, securityHeaders, noCacheHeaders } from "../_shared/headers.ts";
 
-serve(async (req) => {
+export default async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
 
   if (req.method === 'OPTIONS') {
@@ -159,7 +158,7 @@ serve(async (req) => {
 
             scheduledCount++;
 
-          } catch (error) {
+          } catch (error: any) {
             console.error(`Error scheduling reminder for meal ${meal.id}:`, error);
           }
         }
@@ -176,7 +175,7 @@ serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in schedule-meal-reminders:', error);
     return new Response(
       JSON.stringify({ error: error.message || 'Internal server error' }),
@@ -279,7 +278,7 @@ export async function scheduleGroceryReminders(supabaseAdmin: any) {
 
       scheduled++;
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error scheduling grocery reminder for user ${user.user_id}:`, error);
     }
   }

@@ -6,7 +6,6 @@
 // and track changes over time.
 // =====================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
 
 const corsHeaders = {
@@ -50,7 +49,7 @@ interface FixSuggestion {
   priority: number;
 }
 
-serve(async (req) => {
+export default async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -121,7 +120,7 @@ serve(async (req) => {
               appliedAt: new Date().toISOString(),
               result,
             });
-          } catch (error) {
+          } catch (error: any) {
             console.error(`Failed to apply fix for ${suggestion.item}:`, error);
             failedFixes.push({
               ...suggestion,
@@ -147,7 +146,7 @@ serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error in apply-seo-fixes:", error);
     return new Response(
       JSON.stringify({ error: error.message }),

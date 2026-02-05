@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.5.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
 import { getCorsHeaders, noCacheHeaders } from "../_shared/headers.ts";
@@ -44,7 +43,7 @@ interface InvoiceData {
  * - list: List all invoices for the user
  * - download-stripe: Get Stripe-hosted invoice PDF URL
  */
-serve(async (req) => {
+export default async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
 
   if (req.method === "OPTIONS") {
@@ -103,15 +102,16 @@ serve(async (req) => {
       default:
         throw new Error(`Unknown action: ${action}`);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Invoice generation error:", error);
     const corsHeaders = getCorsHeaders(req);
-    return new Response(JSON.stringify({ error: error.message }), {
+    const message = error instanceof Error ? error.message : String(error);
+    return new Response(JSON.stringify({ error: message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 400,
     });
   }
-});
+};
 
 async function handleListInvoices(supabase: any, userId: string, corsHeaders: any) {
   // Get all payments for the user

@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { getCorsHeaders, securityHeaders, noCacheHeaders } from "../_shared/headers.ts";
 
@@ -6,7 +5,7 @@ const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const BATCH_SIZE = 100; // Process 100 notifications per run
 const MAX_RETRY_ATTEMPTS = 3;
 
-serve(async (req) => {
+export default async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
 
   if (req.method === 'OPTIONS') {
@@ -141,7 +140,7 @@ serve(async (req) => {
 
         processed++;
 
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Error processing notification ${notification.id}:`, error);
 
         // Increment retry count
@@ -193,7 +192,7 @@ serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in process-notification-queue:', error);
     return new Response(
       JSON.stringify({ error: error.message || 'Internal server error' }),
@@ -262,7 +261,7 @@ async function sendPushNotification(supabaseAdmin: any, notification: any) {
 
     return { success: true };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending push notification:', error);
     return { success: false, error: error.message };
   }
@@ -277,7 +276,7 @@ async function sendEmailNotification(supabaseAdmin: any, notification: any) {
 
     return { success: true };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending email notification:', error);
     return { success: false, error: error.message };
   }
@@ -291,7 +290,7 @@ async function sendSMSNotification(supabaseAdmin: any, notification: any) {
 
     return { success: true };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending SMS notification:', error);
     return { success: false, error: error.message };
   }
@@ -304,7 +303,7 @@ async function saveInAppNotification(supabaseAdmin: any, notification: any) {
     // The frontend will fetch and display them
     return { success: true };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error saving in-app notification:', error);
     return { success: false, error: error.message };
   }

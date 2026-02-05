@@ -56,7 +56,7 @@ interface Insight {
   priority: number;
 }
 
-Deno.serve(async (req) => {
+export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -140,14 +140,14 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 201,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error generating report:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
     });
   }
-});
+};
 
 function getMonday(date: Date): Date {
   const day = date.getDay();

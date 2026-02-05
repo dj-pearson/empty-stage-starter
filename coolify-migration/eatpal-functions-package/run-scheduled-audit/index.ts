@@ -5,7 +5,6 @@
 // results with previous audits to detect changes
 // =====================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
 
 const corsHeaders = {
@@ -244,7 +243,7 @@ async function runSEOAudit(url: string) {
       priority: "low",
     });
 
-  } catch (error) {
+  } catch (error: any) {
     results.push({
       check: "Page Accessibility",
       status: "failed",
@@ -270,7 +269,7 @@ async function runSEOAudit(url: string) {
   };
 }
 
-serve(async (req) => {
+export default async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -423,7 +422,7 @@ serve(async (req) => {
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error in run-scheduled-audit:", error);
 
     // Update schedule with failure

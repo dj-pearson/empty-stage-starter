@@ -154,13 +154,15 @@ async function handler(req: Request): Promise<Response> {
       statusText: response.statusText,
       headers,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Error executing function ${functionName}:`, error);
+    const message = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
     return new Response(JSON.stringify({
       error: "Function execution failed",
       function: functionName,
-      message: error.message,
-      stack: error.stack
+      message,
+      stack
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

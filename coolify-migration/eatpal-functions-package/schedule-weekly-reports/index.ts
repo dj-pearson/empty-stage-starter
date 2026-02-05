@@ -31,7 +31,7 @@ interface HouseholdPreferences {
   push_notification: boolean;
 }
 
-Deno.serve(async (req) => {
+export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
         }
 
         results.successful++;
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Error processing household ${pref.household_id}:`, error);
         results.failed++;
         results.errors.push(`Household ${pref.household_id}: ${error.message}`);
@@ -140,7 +140,7 @@ Deno.serve(async (req) => {
         status: 200,
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in scheduled report generation:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
       }
     );
   }
-});
+};
 
 async function sendReportNotifications(
   supabase: any,

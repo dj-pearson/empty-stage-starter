@@ -8,7 +8,6 @@
 // - Yandex Webmaster
 // =====================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
 
 const corsHeaders = {
@@ -704,7 +703,7 @@ async function syncYandexData(
 // MAIN HANDLER
 // =====================================================
 
-serve(async (req) => {
+export default async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -806,7 +805,7 @@ serve(async (req) => {
           status: "success",
           recordCount,
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Error syncing ${connection.platform}:`, error);
 
         // Update sync status to error
@@ -839,7 +838,7 @@ serve(async (req) => {
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error in sync-analytics-data:", error);
     return new Response(
       JSON.stringify({ error: error.message }),

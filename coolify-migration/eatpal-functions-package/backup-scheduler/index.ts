@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
@@ -18,7 +17,7 @@ const corsHeaders = {
  * - Individual backups are then processed by backup-user-data function
  */
 
-serve(async (req) => {
+export default async (req: Request) => {
   // Handle CORS
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -108,7 +107,7 @@ serve(async (req) => {
         }
 
         results.successful++;
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Backup failed for user ${backup.user_id}:`, error);
         results.failed++;
         results.errors.push(
@@ -161,7 +160,7 @@ serve(async (req) => {
         },
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Backup scheduler error:", error);
     return new Response(
       JSON.stringify({

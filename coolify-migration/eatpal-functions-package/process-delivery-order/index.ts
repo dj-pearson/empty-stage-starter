@@ -32,7 +32,7 @@ interface ProcessOrderRequest {
   deliveryWindow?: { start: string; end: string };
 }
 
-Deno.serve(async (req) => {
+export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error processing delivery order:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
       }
     );
   }
-});
+};
 
 async function estimateCosts(supabase: any, request: ProcessOrderRequest) {
   const { items, providerId } = request;

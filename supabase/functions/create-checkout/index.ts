@@ -58,6 +58,7 @@ export default async (req: Request) => {
 
     // Get or create Stripe customer
     let customerId: string;
+    let customerWasRecreated = false;
     
     const { data: existingSub } = await supabase
       .from("user_subscriptions")
@@ -66,7 +67,28 @@ export default async (req: Request) => {
       .maybeSingle();
 
     if (existingSub?.stripe_customer_id) {
-      customerId = existingSub.stripe_customer_id;
+      // Verify the customer still exists in Stripe (may have been deleted)
+      try {
+        const existingCustomer = await stripe.customers.retrieve(existingSub.stripe_customer_id);
+        if (existingCustomer.deleted) {
+          throw new Error("Customer was deleted");
+        }
+        customerId = existingSub.stripe_customer_id;
+      } catch (custError: any) {
+        console.warn(`Stale Stripe customer ${existingSub.stripe_customer_id}, creating new one:`, custError.message);
+        const newCustomer = await stripe.customers.create({
+          email: user.email,
+          metadata: { supabase_user_id: user.id },
+        });
+        customerId = newCustomer.id;
+        customerWasRecreated = true;
+
+        // Update the DB with the new customer ID immediately
+        await supabase
+          .from("user_subscriptions")
+          .update({ stripe_customer_id: customerId })
+          .eq("user_id", user.id);
+      }
     } else {
       // Create new Stripe customer
       const customer = await stripe.customers.create({
@@ -119,8 +141,8 @@ export default async (req: Request) => {
       },
     });
 
-    // Store customer ID if it's new
-    if (!existingSub?.stripe_customer_id) {
+    // Store customer ID if it's new (or skip if already updated during recreation)
+    if (!existingSub?.stripe_customer_id && !customerWasRecreated) {
       await supabase
         .from("user_subscriptions")
         .upsert({

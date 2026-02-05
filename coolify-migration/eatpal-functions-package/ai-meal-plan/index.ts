@@ -1,7 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, securityHeaders, privateCacheHeaders, noCacheHeaders, CACHE_DURATIONS } from "../_shared/headers.ts";
 
-serve(async (req) => {
+export default async (req: Request) => {
   // Get secure CORS headers based on request origin
   const corsHeaders = getCorsHeaders(req);
 
@@ -250,7 +249,7 @@ Return a JSON array of meal entries in this exact format:
       }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in ai-meal-plan function:', error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),

@@ -1,12 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -32,7 +31,7 @@ serve(async (req) => {
           throw new Error(`Failed to fetch URL: ${response.statusText}`);
         }
         content = await response.text();
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching URL:', error);
         return new Response(
           JSON.stringify({ error: 'Failed to fetch content from URL' }),

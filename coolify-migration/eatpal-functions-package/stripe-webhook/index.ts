@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.5.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
 
@@ -10,7 +9,7 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-serve(async (req) => {
+export default async (req: Request) => {
   // Validate webhook secret is configured
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
   if (!webhookSecret) {
@@ -91,7 +90,7 @@ serve(async (req) => {
     const errorMessage = err instanceof Error ? err.message : "Unknown error";
     return new Response(`Webhook Error: ${errorMessage}`, { status: 400 });
   }
-});
+};
 
 async function handleCheckoutCompleted(supabase: any, session: Stripe.Checkout.Session) {
   const customerId = session.customer as string;

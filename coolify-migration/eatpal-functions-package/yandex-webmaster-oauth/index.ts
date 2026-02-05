@@ -7,7 +7,6 @@
 // - Stores and refreshes tokens
 // =====================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
 
 const corsHeaders = {
@@ -55,7 +54,7 @@ const OAUTH_TOKEN_URL = "https://oauth.yandex.com/token";
 // Yandex Webmaster API endpoints
 const YANDEX_API_BASE = "https://api.webmaster.yandex.net/v4";
 
-serve(async (req) => {
+export default async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -547,7 +546,7 @@ serve(async (req) => {
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error in yandex-webmaster-oauth:", error);
     return new Response(
       JSON.stringify({ error: error.message }),

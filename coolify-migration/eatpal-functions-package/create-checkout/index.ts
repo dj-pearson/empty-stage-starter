@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.5.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
 import { getCorsHeaders, securityHeaders } from "../_shared/headers.ts";
@@ -11,7 +10,7 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-serve(async (req) => {
+export default async (req: Request) => {
   // Get secure CORS headers based on request origin
   const corsHeaders = getCorsHeaders(req);
 
@@ -59,6 +58,7 @@ serve(async (req) => {
 
     // Get or create Stripe customer
     let customerId: string;
+    let customerWasRecreated = false;
     
     const { data: existingSub } = await supabase
       .from("user_subscriptions")
@@ -67,7 +67,28 @@ serve(async (req) => {
       .maybeSingle();
 
     if (existingSub?.stripe_customer_id) {
-      customerId = existingSub.stripe_customer_id;
+      // Verify the customer still exists in Stripe (may have been deleted)
+      try {
+        const existingCustomer = await stripe.customers.retrieve(existingSub.stripe_customer_id);
+        if (existingCustomer.deleted) {
+          throw new Error("Customer was deleted");
+        }
+        customerId = existingSub.stripe_customer_id;
+      } catch (custError: any) {
+        console.warn(`Stale Stripe customer ${existingSub.stripe_customer_id}, creating new one:`, custError.message);
+        const newCustomer = await stripe.customers.create({
+          email: user.email,
+          metadata: { supabase_user_id: user.id },
+        });
+        customerId = newCustomer.id;
+        customerWasRecreated = true;
+
+        // Update the DB with the new customer ID immediately
+        await supabase
+          .from("user_subscriptions")
+          .update({ stripe_customer_id: customerId })
+          .eq("user_id", user.id);
+      }
     } else {
       // Create new Stripe customer
       const customer = await stripe.customers.create({
@@ -120,8 +141,8 @@ serve(async (req) => {
       },
     });
 
-    // Store customer ID if it's new
-    if (!existingSub?.stripe_customer_id) {
+    // Store customer ID if it's new (or skip if already updated during recreation)
+    if (!existingSub?.stripe_customer_id && !customerWasRecreated) {
       await supabase
         .from("user_subscriptions")
         .upsert({
@@ -145,10 +166,11 @@ serve(async (req) => {
         status: 200,
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Checkout error:", error);
+    const message = error instanceof Error ? error.message : String(error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       {
         headers: {
           ...corsHeaders,
@@ -159,4 +181,4 @@ serve(async (req) => {
       }
     );
   }
-});
+};

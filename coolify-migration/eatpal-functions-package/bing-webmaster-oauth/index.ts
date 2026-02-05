@@ -7,7 +7,6 @@
 // - Stores and refreshes tokens
 // =====================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
 
 const corsHeaders = {
@@ -58,7 +57,7 @@ const BING_SCOPE = "https://api.bing.microsoft.com/.default offline_access";
 // Bing Webmaster API endpoint
 const BING_API_BASE = "https://ssl.bing.com/webmaster/api.svc/json";
 
-serve(async (req) => {
+export default async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -538,7 +537,7 @@ serve(async (req) => {
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error in bing-webmaster-oauth:", error);
     return new Response(
       JSON.stringify({ error: error.message }),

@@ -5,7 +5,6 @@
 // or other position tracking methods
 // =====================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
 
 const corsHeaders = {
@@ -85,7 +84,7 @@ async function checkGSCPositions(
   return results;
 }
 
-serve(async (req) => {
+export default async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -224,7 +223,7 @@ serve(async (req) => {
           );
 
           console.log(`Got ${positionResults.length} results from GSC`);
-        } catch (error) {
+        } catch (error: any) {
           console.error("GSC position check error:", error);
           // Fall through to manual/estimated positions
         }
@@ -350,7 +349,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error in check-keyword-positions:", error);
 
     // Update schedule with failure if provided

@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -26,7 +25,7 @@ interface AIAnalysisResult {
   reasoning: string;
 }
 
-serve(async (req) => {
+export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -276,7 +275,7 @@ Provide your analysis in JSON format:
       urgencyScore: analysis.urgencyScore || 50,
       reasoning: analysis.reasoning || '',
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error calling OpenAI:', error);
     return ruleBasedAnalysis(ticket, userContext);
   }
