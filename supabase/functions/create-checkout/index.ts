@@ -116,6 +116,18 @@ export default async (req: Request) => {
       );
     }
 
+    // Verify the price exists in Stripe before creating checkout
+    try {
+      await stripe.prices.retrieve(priceId);
+    } catch (priceError: any) {
+      console.error(`Stripe price ${priceId} not found:`, priceError.message);
+      throw new Error(
+        `The Stripe price ID '${priceId}' for this plan does not exist. ` +
+        `Please update the subscription_plans table in Supabase with valid Stripe price IDs. ` +
+        `You can create prices in the Stripe Dashboard under Products.`
+      );
+    }
+
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -166,10 +178,11 @@ export default async (req: Request) => {
         status: 200,
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Checkout error:", error);
+    const message = error instanceof Error ? error.message : String(error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       {
         headers: {
           ...corsHeaders,

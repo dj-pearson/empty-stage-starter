@@ -128,7 +128,7 @@ export default async (req: Request) => {
       status: 400,
     });
   }
-});
+};
 
 async function ensureCustomer(
   supabase: any,
@@ -361,7 +361,7 @@ async function handleSetDefaultPaymentMethod(
 
 async function handleGetPortalUrl(customerId: string, corsHeaders: any) {
   try {
-    const returnUrl = `${Deno.env.get("SITE_URL") || "https://eatpal.com"}/dashboard/billing`;
+    const returnUrl = `${Deno.env.get("SITE_URL") || "https://tryeatpal.com"}/dashboard/billing`;
 
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: customerId,

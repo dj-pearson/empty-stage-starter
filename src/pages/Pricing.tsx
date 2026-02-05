@@ -205,7 +205,14 @@ export default function Pricing() {
       }
     } catch (error: unknown) {
       logger.error("Checkout error:", error);
-      toast.error("Failed to start checkout. Please try again.");
+      const message = error instanceof Error ? error.message : "Unknown error";
+      if (message.includes("price") || message.includes("Price")) {
+        toast.error("This plan is not yet configured for checkout. Please contact support.");
+      } else if (message.includes("customer") || message.includes("Customer")) {
+        toast.error("Account setup issue. Please try again or contact support.");
+      } else {
+        toast.error("Failed to start checkout. Please try again.");
+      }
       setLoading(false);
     }
   };
