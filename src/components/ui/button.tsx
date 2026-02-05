@@ -47,12 +47,16 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       onClick?.(e);
     };
 
+    // Only pass type prop when not using asChild (Slot doesn't accept type)
+    const componentProps = asChild
+      ? { onClick }
+      : { type, onClick: handleClick };
+
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
-        type={type}
-        onClick={asChild ? onClick : handleClick}
+        {...componentProps}
         {...props}
       />
     );
