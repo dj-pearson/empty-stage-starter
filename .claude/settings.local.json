@@ -19,7 +19,8 @@
       "Bash(supabase db diff:*)",
       "Bash(supabase functions list:*)",
       "Bash(supabase functions deploy:*)",
-      "Bash(npx shadcn@latest:*)"
+      "Bash(npx shadcn@latest:*)",
+      "Bash(node -e:*)"
     ],
     "deny": [],
     "ask": []

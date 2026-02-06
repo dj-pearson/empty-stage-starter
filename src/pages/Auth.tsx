@@ -148,6 +148,13 @@ const Auth = () => {
 
         // Defer profile check to avoid deadlock
         setTimeout(() => {
+          // Check for stored OAuth redirect destination
+          const oauthRedirect = sessionStorage.getItem('oauth_redirect');
+          if (oauthRedirect) {
+            sessionStorage.removeItem('oauth_redirect');
+          }
+          const finalRedirect = oauthRedirect || redirectTo;
+
           supabase
             .from("profiles")
             .select("onboarding_completed")
@@ -156,7 +163,7 @@ const Auth = () => {
             .then(({ data: profile, error }) => {
               // If no profile exists or onboarding is complete, go to dashboard
               if (error || profile?.onboarding_completed) {
-                navigate(redirectTo, { replace: true });
+                navigate(finalRedirect, { replace: true });
               } else {
                 // First time login with profile but incomplete onboarding
                 setShowOnboarding(true);
@@ -373,12 +380,16 @@ const Auth = () => {
   };
 
   const signInWithOAuth = async (provider: 'google' | 'apple') => {
-    const callbackUrl = `${window.location.origin}/auth?redirect=${encodeURIComponent(redirectTo)}`;
+    // Use simple redirect URL - GoTrue validates against GOTRUE_URI_ALLOW_LIST
+    // Store the intended destination so we can redirect after OAuth completes
+    if (redirectTo !== '/dashboard') {
+      sessionStorage.setItem('oauth_redirect', redirectTo);
+    }
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: callbackUrl,
+        redirectTo: `${window.location.origin}/auth`,
       },
     });
 
