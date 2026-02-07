@@ -36,7 +36,8 @@ const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET') || '';
 const APPLE_CLIENT_ID = Deno.env.get('APPLE_CLIENT_ID') || '';
 const APPLE_CLIENT_SECRET = Deno.env.get('APPLE_CLIENT_SECRET') || '';
 
-Deno.serve(async (req) => {
+// Export handler for edge-functions-server
+export default async function handler(req: Request): Promise<Response> {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -48,8 +49,8 @@ Deno.serve(async (req) => {
     const provider = url.searchParams.get('provider') || 'google';
     const redirectTo = url.searchParams.get('redirect_to') || '/dashboard';
 
-    // Get the function URL for callbacks
-    const functionUrl = `${url.origin}${url.pathname}`;
+    // Get the function URL for callbacks - use oauth-proxy path
+    const functionUrl = `${url.origin}/oauth-proxy`;
 
     if (action === 'authorize') {
       // Step 1: Generate OAuth URL and redirect to provider
@@ -316,12 +317,12 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('OAuth proxy error:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}
 
 // PKCE helpers
 function generateCodeVerifier(): string {
