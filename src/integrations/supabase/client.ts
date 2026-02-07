@@ -128,6 +128,10 @@ function createSupabaseClient(): SupabaseClient<Database> {
         storage: typeof localStorage !== 'undefined' ? localStorage : undefined,
         persistSession: true,
         autoRefreshToken: true,
+        // Use PKCE flow for OAuth - more secure and works better with self-hosted
+        flowType: 'pkce',
+        // Detect session from URL for OAuth callbacks
+        detectSessionInUrl: true,
       },
       global: {
         headers: {

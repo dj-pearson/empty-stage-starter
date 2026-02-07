@@ -22,6 +22,7 @@ const CommandPalette = lazy(() => import("@/components/CommandPalette").then(m =
 const Landing = lazy(() => import("./pages/Landing"));
 const Auth = lazy(() => import("./pages/Auth"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const CheckoutSuccess = lazy(() => import("./pages/CheckoutSuccess"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Home = lazy(() => import("./pages/Home"));
@@ -121,6 +122,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/auth/reset-password" element={<ResetPassword />} />
             <Route path="/checkout/success" element={<CheckoutSuccess />} />
             <Route path="/pricing" element={<Pricing />} />

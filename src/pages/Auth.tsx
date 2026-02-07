@@ -380,16 +380,21 @@ const Auth = () => {
   };
 
   const signInWithOAuth = async (provider: 'google' | 'apple') => {
-    // Use simple redirect URL - GoTrue validates against GOTRUE_URI_ALLOW_LIST
     // Store the intended destination so we can redirect after OAuth completes
     if (redirectTo !== '/dashboard') {
       sessionStorage.setItem('oauth_redirect', redirectTo);
     }
 
+    // Use /auth/callback as the redirect URL
+    // This works because GOTRUE_URI_ALLOW_LIST includes this URL
+    // Even though GOTRUE_SITE_URL is locked to api.tryeatpal.com,
+    // the redirectTo parameter overrides it when the URL is in the allow list
+    const callbackUrl = `${window.location.origin}/auth/callback`;
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth`,
+        redirectTo: callbackUrl,
       },
     });
 
