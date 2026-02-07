@@ -436,9 +436,6 @@ const Auth = () => {
     // Log expected URL format for debugging
     console.log('[OAuth] Expected URL format: https://api.tryeatpal.com/auth/v1/authorize?provider=' + provider + '&...');
 
-    // Alert the user with the URL for debugging (temporary)
-    alert('OAuth URL (check console for full URL):\n\n' + data.url.substring(0, 100) + '...');
-
     // Open OAuth in a centered popup
     const width = 500;
     const height = 700;
