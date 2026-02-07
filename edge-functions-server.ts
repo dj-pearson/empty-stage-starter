@@ -54,6 +54,7 @@ const FUNCTIONS_MAP: { [key: string]: string } = {
   "manage-subscription": "./functions/manage-subscription/index.ts",
   "monitor-performance-budget": "./functions/monitor-performance-budget/index.ts",
   "oauth-token-refresh": "./functions/oauth-token-refresh/index.ts",
+  "oauth-proxy": "./functions/oauth-proxy/index.ts",
   "optimize-page-content": "./functions/optimize-page-content/index.ts",
   "parse-recipe": "./functions/parse-recipe/index.ts",
   "parse-recipe-grocery": "./functions/parse-recipe-grocery/index.ts",
