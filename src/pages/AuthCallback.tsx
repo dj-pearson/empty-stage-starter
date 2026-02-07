@@ -42,6 +42,44 @@ export default function AuthCallback() {
           return;
         }
 
+        // Check for magic link token from our OAuth proxy edge function
+        const token = searchParams.get('token');
+        const type = searchParams.get('type');
+        const redirectToParam = searchParams.get('redirect_to');
+        const isNewUser = searchParams.get('new_user') === 'true';
+
+        if (token && type) {
+          console.log('Magic link token detected, verifying...');
+
+          // Verify the magic link token
+          const { data, error: verifyError } = await supabase.auth.verifyOtp({
+            token_hash: token,
+            type: type as any,
+          });
+
+          if (verifyError) {
+            console.error('Token verification error:', verifyError);
+            setStatus('error');
+            setErrorMessage(verifyError.message);
+            return;
+          }
+
+          if (data.session) {
+            console.log('Session created successfully via magic link');
+
+            // Track new signups
+            if (isNewUser) {
+              const provider = data.session.user.app_metadata?.provider;
+              if (provider) {
+                trackSignup(provider);
+              }
+            }
+
+            await handleSuccessfulAuth(data.session, redirectToParam || undefined);
+            return;
+          }
+        }
+
         // PKCE Flow: Check for authorization code in URL params
         // When using PKCE, Supabase returns a code that needs to be exchanged
         const code = searchParams.get('code');
@@ -122,7 +160,7 @@ export default function AuthCallback() {
     };
 
     // Helper function to handle successful authentication
-    const handleSuccessfulAuth = async (session: any) => {
+    const handleSuccessfulAuth = async (session: any, overrideRedirect?: string) => {
       // Log the OAuth login
       const provider = session.user.app_metadata?.provider as LoginMethod;
       if (provider === 'google' || provider === 'apple') {
@@ -143,8 +181,8 @@ export default function AuthCallback() {
 
       setStatus('success');
 
-      // Get the stored redirect destination
-      const storedRedirect = sessionStorage.getItem('oauth_redirect');
+      // Get the stored redirect destination (or use override from URL param)
+      const storedRedirect = overrideRedirect || sessionStorage.getItem('oauth_redirect');
       sessionStorage.removeItem('oauth_redirect');
 
       // Check if onboarding is complete
