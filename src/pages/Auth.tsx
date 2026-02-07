@@ -390,6 +390,23 @@ const Auth = () => {
 
     console.log('[OAuth] Using edge function:', oauthUrl);
 
+    // Check if the edge function is available before redirecting
+    try {
+      const checkResponse = await fetch(`${functionsUrl}/oauth-proxy`, { method: 'HEAD' });
+      if (!checkResponse.ok && checkResponse.status === 404) {
+        // Edge function not deployed yet - show helpful error
+        toast({
+          title: "OAuth Not Available",
+          description: "The OAuth service is being set up. Please try email/password sign-in for now, or try again later.",
+          variant: "destructive",
+        });
+        return;
+      }
+    } catch (e) {
+      // Network error or CORS - try anyway, the redirect will show an error if it fails
+      console.log('[OAuth] Could not check function availability, proceeding anyway');
+    }
+
     // Redirect to the OAuth proxy (full page redirect, not popup)
     // The edge function will handle the OAuth flow and redirect back to /auth/callback
     window.location.href = oauthUrl;
