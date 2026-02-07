@@ -132,6 +132,9 @@ function createSupabaseClient(): SupabaseClient<Database> {
         flowType: 'pkce',
         // Detect session from URL for OAuth callbacks
         detectSessionInUrl: true,
+        // Use cookies for cross-subdomain session sharing
+        // Works with GOTRUE_COOKIE_DOMAIN=.tryeatpal.com
+        storageKey: 'sb-auth-token',
       },
       global: {
         headers: {

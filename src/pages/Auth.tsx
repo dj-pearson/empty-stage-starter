@@ -385,16 +385,13 @@ const Auth = () => {
       sessionStorage.setItem('oauth_redirect', redirectTo);
     }
 
-    // Use /auth/callback as the redirect URL
-    // This works because GOTRUE_URI_ALLOW_LIST includes this URL
-    // Even though GOTRUE_SITE_URL is locked to api.tryeatpal.com,
-    // the redirectTo parameter overrides it when the URL is in the allow list
-    const callbackUrl = `${window.location.origin}/auth/callback`;
-
-    const { error } = await supabase.auth.signInWithOAuth({
+    // Use popup-based OAuth flow
+    // This works around GOTRUE_SITE_URL being locked to api.tryeatpal.com
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: callbackUrl,
+        skipBrowserRedirect: true,
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
 
@@ -404,7 +401,174 @@ const Auth = () => {
         description: error.message,
         variant: "destructive",
       });
+      return;
     }
+
+    if (!data?.url) {
+      toast({
+        title: "Error",
+        description: "Failed to get OAuth URL",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Open OAuth in a centered popup
+    const width = 500;
+    const height = 700;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    const popup = window.open(
+      data.url,
+      'oauth-popup',
+      `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes,resizable=yes`
+    );
+
+    if (!popup) {
+      toast({
+        title: "Popup Blocked",
+        description: "Please allow popups for this site and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Show loading state
+    setLoading(true);
+
+    // Poll for session - OAuth flow will complete and session will be available
+    const checkSession = async (): Promise<boolean> => {
+      const { data: { session } } = await supabase.auth.getSession();
+      return !!session;
+    };
+
+    // Poll for session completion
+    // We check both the popup URL (when accessible) and the Supabase session API
+    let sessionCheckCount = 0;
+    const maxSessionChecks = 60; // 30 seconds of checking
+
+    const pollInterval = setInterval(async () => {
+      sessionCheckCount++;
+
+      // Check if popup is closed
+      if (popup.closed) {
+        clearInterval(pollInterval);
+
+        // Give a moment for session to propagate, then check
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const hasSession = await checkSession();
+
+        setLoading(false);
+
+        if (hasSession) {
+          toast({
+            title: "Success",
+            description: "Signed in successfully!",
+          });
+          // onAuthStateChange will handle the redirect
+        }
+        return;
+      }
+
+      // Periodically check if session was created (every 2 seconds)
+      // This works because Supabase sets the session via API after OAuth completes
+      if (sessionCheckCount % 4 === 0) {
+        const hasSession = await checkSession();
+        if (hasSession) {
+          clearInterval(pollInterval);
+          popup.close();
+          setLoading(false);
+          toast({
+            title: "Success",
+            description: "Signed in successfully!",
+          });
+          // onAuthStateChange will handle the redirect
+          return;
+        }
+      }
+
+      // Try to detect if popup landed on our domain with tokens
+      try {
+        const popupUrl = popup.location.href;
+
+        // Check if popup is on our frontend domain
+        if (popupUrl.startsWith(window.location.origin)) {
+          clearInterval(pollInterval);
+
+          // Parse URL for tokens or code
+          const url = new URL(popupUrl);
+          const code = url.searchParams.get('code');
+          const hashParams = new URLSearchParams(url.hash.substring(1));
+          const accessToken = hashParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token');
+          const errorParam = url.searchParams.get('error') || hashParams.get('error');
+
+          popup.close();
+
+          if (errorParam) {
+            setLoading(false);
+            toast({
+              title: "Authentication Failed",
+              description: url.searchParams.get('error_description') || hashParams.get('error_description') || errorParam,
+              variant: "destructive",
+            });
+            return;
+          }
+
+          // Handle PKCE code exchange
+          if (code) {
+            const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+            if (exchangeError) {
+              setLoading(false);
+              toast({
+                title: "Error",
+                description: exchangeError.message,
+                variant: "destructive",
+              });
+              return;
+            }
+          }
+          // Handle implicit flow tokens
+          else if (accessToken && refreshToken) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            if (sessionError) {
+              setLoading(false);
+              toast({
+                title: "Error",
+                description: sessionError.message,
+                variant: "destructive",
+              });
+              return;
+            }
+          }
+
+          setLoading(false);
+          // onAuthStateChange will handle the redirect
+          return;
+        }
+      } catch {
+        // Cross-origin error - popup is on OAuth provider or API domain
+        // This is expected, continue polling for session via API
+      }
+    }, 500);
+
+    // Timeout after 5 minutes
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      setLoading(false);
+      if (popup && !popup.closed) {
+        popup.close();
+        toast({
+          title: "Timeout",
+          description: "Authentication timed out. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }, 5 * 60 * 1000);
   };
   return (
     <>

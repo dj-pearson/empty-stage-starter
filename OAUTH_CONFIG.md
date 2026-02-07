@@ -12,15 +12,24 @@ While `GOTRUE_SITE_URL` is locked, **`GOTRUE_URI_ALLOW_LIST` can be set manually
 
 ## Required Configuration in Coolify
 
-### Step 1: Add GOTRUE_URI_ALLOW_LIST
+### Step 1: Add Required Environment Variables
 
-In Coolify, go to your Supabase GoTrue/Auth service and add this environment variable:
+In Coolify, go to your Supabase GoTrue/Auth service and add these environment variables:
 
 ```bash
+# CRITICAL: Share cookies between api.tryeatpal.com and tryeatpal.com
+# Note the leading dot - this makes cookies accessible from all subdomains
+GOTRUE_COOKIE_DOMAIN=.tryeatpal.com
+
+# Allow redirects to frontend URLs
 GOTRUE_URI_ALLOW_LIST=https://tryeatpal.com,https://tryeatpal.com/auth,https://tryeatpal.com/auth/callback,https://tryeatpal.com/dashboard
 ```
 
-**Important:** Include ALL possible redirect destinations, comma-separated, NO spaces.
+**Why GOTRUE_COOKIE_DOMAIN is critical:**
+- When OAuth completes, GoTrue sets session cookies
+- By default, cookies are set for `api.tryeatpal.com` only
+- With `.tryeatpal.com`, cookies work on BOTH `api.tryeatpal.com` AND `tryeatpal.com`
+- This allows the frontend to access the session after OAuth redirects to the API domain
 
 ### Step 2: Verify Google/Apple OAuth Configuration
 
