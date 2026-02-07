@@ -413,6 +413,32 @@ const Auth = () => {
       return;
     }
 
+    // Debug: Log the OAuth URL to verify it's correct
+    console.log('[OAuth] Generated URL:', data.url);
+    console.log('[OAuth] Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
+
+    // Verify the URL is pointing to auth endpoint, not Studio
+    if (data.url.includes('/project/') || data.url.includes('studio')) {
+      console.error('[OAuth] ERROR: URL points to Supabase Studio, not auth endpoint');
+      toast({
+        title: "Configuration Error",
+        description: "OAuth is misconfigured. Please check Supabase setup.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // The URL should contain /auth/v1/authorize
+    if (!data.url.includes('/auth/v1/authorize')) {
+      console.warn('[OAuth] WARNING: URL does not contain expected auth path:', data.url);
+    }
+
+    // Log expected URL format for debugging
+    console.log('[OAuth] Expected URL format: https://api.tryeatpal.com/auth/v1/authorize?provider=' + provider + '&...');
+
+    // Alert the user with the URL for debugging (temporary)
+    alert('OAuth URL (check console for full URL):\n\n' + data.url.substring(0, 100) + '...');
+
     // Open OAuth in a centered popup
     const width = 500;
     const height = 700;
