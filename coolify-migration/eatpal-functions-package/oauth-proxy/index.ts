@@ -23,6 +23,9 @@ const corsHeaders = {
 // Frontend URL - where to redirect after OAuth
 const FRONTEND_URL = Deno.env.get('FRONTEND_URL') || 'https://tryeatpal.com';
 
+// Functions URL - public URL of this edge function server
+const FUNCTIONS_URL = Deno.env.get('FUNCTIONS_URL') || 'https://functions.tryeatpal.com';
+
 // Supabase config
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || 'https://api.tryeatpal.com';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
@@ -49,8 +52,8 @@ export default async function handler(req: Request): Promise<Response> {
     const provider = url.searchParams.get('provider') || 'google';
     const redirectTo = url.searchParams.get('redirect_to') || '/dashboard';
 
-    // Get the function URL for callbacks - use oauth-proxy path
-    const functionUrl = `${url.origin}/oauth-proxy`;
+    // Get the function URL for callbacks - use public FUNCTIONS_URL
+    const functionUrl = `${FUNCTIONS_URL}/oauth-proxy`;
 
     if (action === 'authorize') {
       // Step 1: Generate OAuth URL and redirect to provider
