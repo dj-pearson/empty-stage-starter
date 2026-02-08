@@ -11,6 +11,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { SkipToContent } from "@/components/SkipToContent";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
 import { RouteAnnouncer } from "@/components/RouteAnnouncer";
 import { LoadingFallback } from "@/components/LoadingFallback";
 
@@ -120,80 +121,80 @@ const App = () => (
                 <DeferredComponents />
                 <Suspense fallback={<LoadingFallback message="Loading..." />}>
           <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
-            <Route path="/auth/reset-password" element={<ResetPassword />} />
-            <Route path="/checkout/success" element={<CheckoutSuccess />} />
-            <Route path="/pricing" element={<Pricing />} />
-            <Route path="/privacy" element={<PrivacyPolicy />} />
-            <Route path="/terms" element={<TermsOfService />} />
-            <Route path="/accessibility" element={<Accessibility />} />
-            <Route path="/accessibility/vpat" element={<VPAT />} />
-            <Route path="/faq" element={<FAQ />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/blog" element={<Blog />} />
-            <Route path="/blog/:slug" element={<BlogPost />} />
-            <Route path="/oauth/callback" element={<OAuthCallback />} />
-            <Route path="/picky-eater-quiz" element={<PickyEaterQuiz />} />
-            <Route path="/picky-eater-quiz/results" element={<PickyEaterQuizResults />} />
-            <Route path="/budget-calculator" element={<BudgetCalculator />} />
-            <Route path="/budget-calculator/results" element={<BudgetCalculatorResults />} />
-            <Route path="/meal-plan" element={<MealPlanGenerator />} />
-            <Route path="/meal-plan/results" element={<MealPlanGeneratorResults />} />
-            <Route path="/api/docs" element={<ApiDocs />} />
+            <Route path="/" element={<RouteErrorBoundary><Landing /></RouteErrorBoundary>} />
+            <Route path="/auth" element={<RouteErrorBoundary><Auth /></RouteErrorBoundary>} />
+            <Route path="/auth/callback" element={<RouteErrorBoundary><AuthCallback /></RouteErrorBoundary>} />
+            <Route path="/auth/reset-password" element={<RouteErrorBoundary><ResetPassword /></RouteErrorBoundary>} />
+            <Route path="/checkout/success" element={<RouteErrorBoundary><CheckoutSuccess /></RouteErrorBoundary>} />
+            <Route path="/pricing" element={<RouteErrorBoundary><Pricing /></RouteErrorBoundary>} />
+            <Route path="/privacy" element={<RouteErrorBoundary><PrivacyPolicy /></RouteErrorBoundary>} />
+            <Route path="/terms" element={<RouteErrorBoundary><TermsOfService /></RouteErrorBoundary>} />
+            <Route path="/accessibility" element={<RouteErrorBoundary><Accessibility /></RouteErrorBoundary>} />
+            <Route path="/accessibility/vpat" element={<RouteErrorBoundary><VPAT /></RouteErrorBoundary>} />
+            <Route path="/faq" element={<RouteErrorBoundary><FAQ /></RouteErrorBoundary>} />
+            <Route path="/contact" element={<RouteErrorBoundary><Contact /></RouteErrorBoundary>} />
+            <Route path="/blog" element={<RouteErrorBoundary><Blog /></RouteErrorBoundary>} />
+            <Route path="/blog/:slug" element={<RouteErrorBoundary><BlogPost /></RouteErrorBoundary>} />
+            <Route path="/oauth/callback" element={<RouteErrorBoundary><OAuthCallback /></RouteErrorBoundary>} />
+            <Route path="/picky-eater-quiz" element={<RouteErrorBoundary><PickyEaterQuiz /></RouteErrorBoundary>} />
+            <Route path="/picky-eater-quiz/results" element={<RouteErrorBoundary><PickyEaterQuizResults /></RouteErrorBoundary>} />
+            <Route path="/budget-calculator" element={<RouteErrorBoundary><BudgetCalculator /></RouteErrorBoundary>} />
+            <Route path="/budget-calculator/results" element={<RouteErrorBoundary><BudgetCalculatorResults /></RouteErrorBoundary>} />
+            <Route path="/meal-plan" element={<RouteErrorBoundary><MealPlanGenerator /></RouteErrorBoundary>} />
+            <Route path="/meal-plan/results" element={<RouteErrorBoundary><MealPlanGeneratorResults /></RouteErrorBoundary>} />
+            <Route path="/api/docs" element={<RouteErrorBoundary><ApiDocs /></RouteErrorBoundary>} />
             {/* Admin routes - Protected with role check */}
-            <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
-            <Route path="/admin-dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-            <Route path="/seo-dashboard" element={<ProtectedRoute><SEODashboard /></ProtectedRoute>} />
-            <Route path="/search-traffic" element={<ProtectedRoute><SearchTrafficDashboard /></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute><RouteErrorBoundary><Admin /></RouteErrorBoundary></ProtectedRoute>} />
+            <Route path="/admin-dashboard" element={<ProtectedRoute><RouteErrorBoundary><AdminDashboard /></RouteErrorBoundary></ProtectedRoute>} />
+            <Route path="/seo-dashboard" element={<ProtectedRoute><RouteErrorBoundary><SEODashboard /></RouteErrorBoundary></ProtectedRoute>} />
+            <Route path="/search-traffic" element={<ProtectedRoute><RouteErrorBoundary><SearchTrafficDashboard /></RouteErrorBoundary></ProtectedRoute>} />
 
             {/* Main Dashboard with nested routes - Protected */}
-            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
-              <Route index element={<Home />} />
-              <Route path="kids" element={<Kids />} />
-              <Route path="pantry" element={<Pantry />} />
-              <Route path="recipes" element={<Recipes />} />
-              <Route path="planner" element={<Planner />} />
-              <Route path="ai-planner" element={<AIPlanner />} />
-              <Route path="insights" element={<InsightsDashboard />} />
-              <Route path="analytics" element={<Analytics />} />
-              <Route path="progress" element={<Progress />} />
-              <Route path="grocery" element={<Grocery />} />
-              <Route path="food-tracker" element={<FoodTracker />} />
-              <Route path="ai-coach" element={<AICoach />} />
-              <Route path="meal-builder" element={<MealBuilder />} />
-              <Route path="food-chaining" element={<FoodChaining />} />
-              <Route path="professional-settings" element={<ProfessionalSettings />} />
-              <Route path="billing" element={<Billing />} />
-              <Route path="settings" element={<AccountSettings />} />
-              <Route path="accessibility-settings" element={<AccessibilitySettingsPage />} />
+            <Route path="/dashboard" element={<ProtectedRoute><RouteErrorBoundary><Dashboard /></RouteErrorBoundary></ProtectedRoute>}>
+              <Route index element={<RouteErrorBoundary><Home /></RouteErrorBoundary>} />
+              <Route path="kids" element={<RouteErrorBoundary><Kids /></RouteErrorBoundary>} />
+              <Route path="pantry" element={<RouteErrorBoundary><Pantry /></RouteErrorBoundary>} />
+              <Route path="recipes" element={<RouteErrorBoundary><Recipes /></RouteErrorBoundary>} />
+              <Route path="planner" element={<RouteErrorBoundary><Planner /></RouteErrorBoundary>} />
+              <Route path="ai-planner" element={<RouteErrorBoundary><AIPlanner /></RouteErrorBoundary>} />
+              <Route path="insights" element={<RouteErrorBoundary><InsightsDashboard /></RouteErrorBoundary>} />
+              <Route path="analytics" element={<RouteErrorBoundary><Analytics /></RouteErrorBoundary>} />
+              <Route path="progress" element={<RouteErrorBoundary><Progress /></RouteErrorBoundary>} />
+              <Route path="grocery" element={<RouteErrorBoundary><Grocery /></RouteErrorBoundary>} />
+              <Route path="food-tracker" element={<RouteErrorBoundary><FoodTracker /></RouteErrorBoundary>} />
+              <Route path="ai-coach" element={<RouteErrorBoundary><AICoach /></RouteErrorBoundary>} />
+              <Route path="meal-builder" element={<RouteErrorBoundary><MealBuilder /></RouteErrorBoundary>} />
+              <Route path="food-chaining" element={<RouteErrorBoundary><FoodChaining /></RouteErrorBoundary>} />
+              <Route path="professional-settings" element={<RouteErrorBoundary><ProfessionalSettings /></RouteErrorBoundary>} />
+              <Route path="billing" element={<RouteErrorBoundary><Billing /></RouteErrorBoundary>} />
+              <Route path="settings" element={<RouteErrorBoundary><AccountSettings /></RouteErrorBoundary>} />
+              <Route path="accessibility-settings" element={<RouteErrorBoundary><AccessibilitySettingsPage /></RouteErrorBoundary>} />
             </Route>
 
             {/* Convenience aliases - redirect to dashboard nested routes - Protected */}
-            <Route path="/kids" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
-              <Route index element={<Kids />} />
+            <Route path="/kids" element={<ProtectedRoute><RouteErrorBoundary><Dashboard /></RouteErrorBoundary></ProtectedRoute>}>
+              <Route index element={<RouteErrorBoundary><Kids /></RouteErrorBoundary>} />
             </Route>
-            <Route path="/pantry" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
-              <Route index element={<Pantry />} />
+            <Route path="/pantry" element={<ProtectedRoute><RouteErrorBoundary><Dashboard /></RouteErrorBoundary></ProtectedRoute>}>
+              <Route index element={<RouteErrorBoundary><Pantry /></RouteErrorBoundary>} />
             </Route>
-            <Route path="/recipes" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
-              <Route index element={<Recipes />} />
+            <Route path="/recipes" element={<ProtectedRoute><RouteErrorBoundary><Dashboard /></RouteErrorBoundary></ProtectedRoute>}>
+              <Route index element={<RouteErrorBoundary><Recipes /></RouteErrorBoundary>} />
             </Route>
-            <Route path="/planner" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
-              <Route index element={<Planner />} />
+            <Route path="/planner" element={<ProtectedRoute><RouteErrorBoundary><Dashboard /></RouteErrorBoundary></ProtectedRoute>}>
+              <Route index element={<RouteErrorBoundary><Planner /></RouteErrorBoundary>} />
             </Route>
-            <Route path="/grocery" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
-              <Route index element={<Grocery />} />
+            <Route path="/grocery" element={<ProtectedRoute><RouteErrorBoundary><Dashboard /></RouteErrorBoundary></ProtectedRoute>}>
+              <Route index element={<RouteErrorBoundary><Grocery /></RouteErrorBoundary>} />
             </Route>
-            <Route path="/food-tracker" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
-              <Route index element={<FoodTracker />} />
+            <Route path="/food-tracker" element={<ProtectedRoute><RouteErrorBoundary><Dashboard /></RouteErrorBoundary></ProtectedRoute>}>
+              <Route index element={<RouteErrorBoundary><FoodTracker /></RouteErrorBoundary>} />
             </Route>
-            <Route path="/meal-builder" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
-              <Route index element={<MealBuilder />} />
+            <Route path="/meal-builder" element={<ProtectedRoute><RouteErrorBoundary><Dashboard /></RouteErrorBoundary></ProtectedRoute>}>
+              <Route index element={<RouteErrorBoundary><MealBuilder /></RouteErrorBoundary>} />
             </Route>
-            <Route path="/insights" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
-              <Route index element={<InsightsDashboard />} />
+            <Route path="/insights" element={<ProtectedRoute><RouteErrorBoundary><Dashboard /></RouteErrorBoundary></ProtectedRoute>}>
+              <Route index element={<RouteErrorBoundary><InsightsDashboard /></RouteErrorBoundary>} />
             </Route>
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
