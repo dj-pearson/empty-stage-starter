@@ -81,8 +81,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented RouteErrorBoundary with Sentry integration, go-back/go-home navigation, and dev-only error details. All 43+ routes wrapped in App.tsx."
     },
     {
       "id": "US-006",
@@ -350,8 +350,8 @@
         "Typecheck passes"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented sanitizeHtml, sanitizeText, sanitizeUrl, and sanitizeObject. 41 unit tests covering XSS vectors, protocol injection, nested objects, and arrays. Uses DOMPurify."
     },
     {
       "id": "US-022",
@@ -1031,6 +1031,180 @@
       "priority": 60,
       "passes": false,
       "notes": ""
+    },
+    {
+      "id": "US-061",
+      "category": "core",
+      "title": "Add session timeout warning and auto-refresh",
+      "description": "As a user, I want to be warned before my session expires so that I don't lose unsaved meal plans or grocery list edits mid-session.",
+      "acceptanceCriteria": [
+        "Create src/components/SessionTimeoutWarning.tsx that monitors JWT expiry",
+        "Show warning dialog 5 minutes before session expires",
+        "Provide 'Extend Session' button that calls supabase.auth.refreshSession()",
+        "Auto-redirect to /auth if session expires without extension",
+        "Preserve current URL for redirect after re-authentication",
+        "Typecheck passes"
+      ],
+      "priority": 61,
+      "passes": false,
+      "notes": "Critical for long meal planning sessions where parents may step away."
+    },
+    {
+      "id": "US-062",
+      "category": "core",
+      "title": "Add offline indicator and queued mutation support",
+      "description": "As a user, I want to see when I'm offline and have my changes saved when connectivity returns so that I can use the grocery list in stores with poor signal.",
+      "acceptanceCriteria": [
+        "Create src/components/OfflineIndicator.tsx that shows a banner when navigator.onLine is false",
+        "Queue failed Supabase mutations in localStorage with timestamp",
+        "Replay queued mutations when connectivity is restored (online event)",
+        "Show count of pending changes in the offline banner",
+        "Add conflict resolution for stale mutations (skip if server data is newer)",
+        "Typecheck passes"
+      ],
+      "priority": 62,
+      "passes": false,
+      "notes": "Especially important for grocery list usage in stores. Families use this app on-the-go."
+    },
+    {
+      "id": "US-063",
+      "category": "core",
+      "title": "Add global search across foods, recipes, kids, and meal plans",
+      "description": "As a user, I want to search across all my data from one place so that I can quickly find foods, recipes, or meal plans without navigating to each section.",
+      "acceptanceCriteria": [
+        "Extend CommandPalette.tsx to search across foods, recipes, kids, and plan entries",
+        "Show categorized results (Foods, Recipes, Kids, Plans) with icons",
+        "Navigate to the relevant page/item on selection",
+        "Support keyboard shortcut Cmd/Ctrl+K to open",
+        "Debounce search input by 300ms",
+        "Show recent searches when query is empty",
+        "Typecheck passes"
+      ],
+      "priority": 63,
+      "passes": false,
+      "notes": "CommandPalette already exists but is basic. This turns it into a productivity tool."
+    },
+    {
+      "id": "US-064",
+      "category": "integration",
+      "title": "Add recipe nutrition auto-calculation from food ingredients",
+      "description": "As a user, I want recipe nutrition totals calculated automatically when I add foods with nutrition data so that I can see per-serving nutrition without manual entry.",
+      "acceptanceCriteria": [
+        "When a recipe's food_ids reference foods with nutrition_info, auto-sum nutrition values",
+        "Calculate per-serving nutrition based on recipe servings count",
+        "Display nutrition breakdown on recipe detail view (calories, protein, carbs, fat, fiber)",
+        "Update nutrition totals when food items are added/removed from a recipe",
+        "Handle missing nutrition data gracefully (show 'partial data' indicator)",
+        "Typecheck passes"
+      ],
+      "priority": 64,
+      "passes": false,
+      "notes": "High user value - makes the nutrition tracking actually useful without manual data entry."
+    },
+    {
+      "id": "US-065",
+      "category": "integration",
+      "title": "Add weekly nutrition summary email notifications",
+      "description": "As a parent, I want a weekly email summarizing my children's nutrition so that I can track their dietary progress without logging in daily.",
+      "acceptanceCriteria": [
+        "Create functions/weekly-nutrition-email/index.ts edge function",
+        "Aggregate plan entries for the past week per child",
+        "Calculate nutrition coverage vs recommended daily values",
+        "Generate HTML email with nutrition highlights and recommendations",
+        "Send via Resend API to user's email address",
+        "Add opt-in/opt-out toggle in AccountSettings",
+        "Schedule via Supabase pg_cron or external scheduler",
+        "Typecheck passes"
+      ],
+      "priority": 65,
+      "passes": false,
+      "notes": "Drives weekly re-engagement. Parents who see progress are more likely to continue using the platform."
+    },
+    {
+      "id": "US-066",
+      "category": "core",
+      "title": "Add onboarding completion tracking and drop-off analytics",
+      "description": "As a product manager, I want to track where users drop off during onboarding so that we can optimize the signup-to-value flow.",
+      "acceptanceCriteria": [
+        "Track analytics events for each onboarding step: start, child_created, allergens_set, foods_selected, completed, skipped",
+        "Store onboarding state in user profile (onboarding_completed, onboarding_step, onboarding_skipped_at)",
+        "Add onboarding funnel chart to admin ConversionFunnelDashboard",
+        "Show re-engagement prompt for users who skipped onboarding after 3 days",
+        "Typecheck passes"
+      ],
+      "priority": 66,
+      "passes": false,
+      "notes": "Onboarding completion directly correlates with user retention. Currently no tracking exists."
+    },
+    {
+      "id": "US-067",
+      "category": "polish",
+      "title": "Add social sharing for recipes with Open Graph meta tags",
+      "description": "As a user, I want to share my recipes on social media with rich previews so that the platform grows through word-of-mouth.",
+      "acceptanceCriteria": [
+        "Add Open Graph meta tags to recipe detail pages (og:title, og:description, og:image)",
+        "Add Twitter Card meta tags for recipe pages",
+        "Create share buttons for Facebook, Twitter/X, Pinterest, and copy-link",
+        "Generate shareable recipe URL with public preview page",
+        "Track share events in analytics",
+        "Typecheck passes"
+      ],
+      "priority": 67,
+      "passes": false,
+      "notes": "Viral growth mechanism. Recipe sharing is one of the strongest organic acquisition channels for food apps."
+    },
+    {
+      "id": "US-068",
+      "category": "integration",
+      "title": "Add data import from common meal planning apps and CSV",
+      "description": "As a new user, I want to import my existing food and recipe data so that I don't have to re-enter everything when switching to EatPal.",
+      "acceptanceCriteria": [
+        "Create src/components/settings/DataImport.tsx with file upload UI",
+        "Support CSV import for foods (columns: name, category, allergens, calories)",
+        "Support CSV import for recipes (columns: name, ingredients, instructions, servings)",
+        "Validate imported data with Zod before inserting",
+        "Show import preview with row count and validation errors before confirming",
+        "Add to AccountSettings page",
+        "Typecheck passes"
+      ],
+      "priority": 68,
+      "passes": false,
+      "notes": "Reduces friction for new users switching from spreadsheets or other apps."
+    },
+    {
+      "id": "US-069",
+      "category": "polish",
+      "title": "Add drag-and-drop meal plan reordering",
+      "description": "As a user, I want to drag and drop meals between days and meal slots so that rearranging my weekly meal plan is intuitive.",
+      "acceptanceCriteria": [
+        "Add drag-and-drop support to the Planner weekly view using @dnd-kit/core",
+        "Allow dragging meals between days (Monday to Tuesday, etc.)",
+        "Allow dragging meals between slots (breakfast to lunch, etc.)",
+        "Show visual drop targets when dragging",
+        "Update plan_entries in Supabase on drop",
+        "Support touch drag on mobile devices",
+        "Typecheck passes"
+      ],
+      "priority": 69,
+      "passes": false,
+      "notes": "The #1 UX improvement for the core meal planning feature."
+    },
+    {
+      "id": "US-070",
+      "category": "core",
+      "title": "Add meal plan template save and quick-apply",
+      "description": "As a user, I want to save my weekly meal plans as templates and quickly apply them to future weeks so that I can reuse plans I've liked.",
+      "acceptanceCriteria": [
+        "Add 'Save as Template' button to Planner page that saves current week's plan",
+        "Create template browser dialog showing saved templates with preview",
+        "Add 'Apply Template' action that populates a target week with template meals",
+        "Allow naming templates (e.g., 'Summer Week', 'School Week')",
+        "Store templates in meal_plan_templates table",
+        "Typecheck passes"
+      ],
+      "priority": 70,
+      "passes": false,
+      "notes": "Families tend to rotate through 4-6 weekly plans. Templates make this effortless."
     }
   ]
 }
