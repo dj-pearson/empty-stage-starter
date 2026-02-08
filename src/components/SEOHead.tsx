@@ -15,6 +15,10 @@ export interface SEOProps {
   aiUseCases?: string;
   structuredData?: object | object[];
   noindex?: boolean;
+  datePublished?: string;
+  dateModified?: string;
+  author?: string;
+  section?: string;
 }
 
 /**
@@ -26,11 +30,12 @@ export interface SEOProps {
  *
  * Features:
  * - Dynamic meta tags (title, description, keywords)
- * - Open Graph tags for social sharing
+ * - Open Graph tags for social sharing (with article support)
  * - Twitter Card optimization
  * - AI Search optimization (GEO - Generative Engine Optimization)
  * - JSON-LD structured data support
  * - Canonical URLs
+ * - Content freshness signals (datePublished/dateModified)
  * - E-E-A-T signals
  */
 export function SEOHead({
@@ -48,6 +53,10 @@ export function SEOHead({
   aiUseCases,
   structuredData,
   noindex = false,
+  datePublished,
+  dateModified,
+  author = "EatPal Team",
+  section,
 }: SEOProps) {
   const fullTitle = title.includes("EatPal") ? title : `${title} | EatPal`;
   const robots = noindex
@@ -63,6 +72,16 @@ export function SEOHead({
       {keywords && <meta name="keywords" content={keywords} />}
       <meta name="robots" content={robots} />
       <link rel="canonical" href={canonicalUrl} />
+
+      {/* Content Freshness Signals */}
+      {datePublished && (
+        <meta name="article:published_time" content={datePublished} />
+      )}
+      {dateModified && (
+        <meta name="article:modified_time" content={dateModified} />
+      )}
+      {datePublished && <meta name="date" content={datePublished} />}
+      {dateModified && <meta name="last-modified" content={dateModified} />}
 
       {/* RSS and Atom Feeds - Important for SEO and content syndication */}
       <link
@@ -89,7 +108,24 @@ export function SEOHead({
       <meta property="og:image:height" content="630" />
       <meta property="og:image:alt" content={ogImageAlt} />
       <meta property="og:locale" content="en_US" />
-      <meta property="og:site_name" content="EatPal - Kids Meal Planning for Picky Eaters" />
+      <meta
+        property="og:site_name"
+        content="EatPal - Kids Meal Planning for Picky Eaters"
+      />
+
+      {/* Article-specific OG tags for blog/content pages */}
+      {ogType === "article" && datePublished && (
+        <meta property="article:published_time" content={datePublished} />
+      )}
+      {ogType === "article" && dateModified && (
+        <meta property="article:modified_time" content={dateModified} />
+      )}
+      {ogType === "article" && author && (
+        <meta property="article:author" content={author} />
+      )}
+      {ogType === "article" && section && (
+        <meta property="article:section" content={section} />
+      )}
 
       {/* Twitter */}
       <meta name="twitter:card" content={twitterCard} />
@@ -104,18 +140,31 @@ export function SEOHead({
       {/* AI Search Optimization (GEO - Generative Engine Optimization) */}
       {aiPurpose && <meta name="ai:purpose" content={aiPurpose} />}
       {aiAudience && <meta name="ai:primary_audience" content={aiAudience} />}
-      {aiKeyFeatures && <meta name="ai:key_features" content={aiKeyFeatures} />}
+      {aiKeyFeatures && (
+        <meta name="ai:key_features" content={aiKeyFeatures} />
+      )}
       {aiUseCases && <meta name="ai:use_cases" content={aiUseCases} />}
       <meta name="citation_name" content={`${fullTitle}`} />
       <meta name="citation_description" content={description} />
 
       {/* Additional GEO Meta Tags for AI Crawlers */}
-      <meta name="subject" content={keywords || "picky eating, meal planning, food chaining therapy"} />
+      <meta
+        name="subject"
+        content={
+          keywords || "picky eating, meal planning, food chaining therapy"
+        }
+      />
       <meta name="abstract" content={description} />
-      <meta name="topic" content="Picky eating, feeding therapy, food chaining, selective eating, ARFID" />
+      <meta
+        name="topic"
+        content="Picky eating, feeding therapy, food chaining, selective eating, ARFID"
+      />
       <meta name="summary" content={description} />
-      <meta name="Classification" content="Health & Wellness, Parenting, Meal Planning" />
-      <meta name="author" content="EatPal Team - Feeding Therapy Specialists" />
+      <meta
+        name="Classification"
+        content="Health & Wellness, Parenting, Meal Planning"
+      />
+      <meta name="author" content={author} />
       <meta name="reply-to" content="Support@TryEatPal.com" />
       <meta name="url" content={canonicalUrl} />
       <meta name="identifier-URL" content={canonicalUrl} />

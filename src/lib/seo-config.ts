@@ -327,6 +327,179 @@ export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
       },
     ],
   },
+
+  pickyEaterQuiz: {
+    title: "What Type of Picky Eater Is Your Child? Free Quiz",
+    description:
+      "Take our free 2-minute picky eater personality quiz to identify your child's eating pattern type and get personalized food introduction strategies. Based on feeding therapy research.",
+    keywords:
+      "picky eater quiz, picky eater types, selective eating assessment, child eating personality, food aversion quiz, ARFID screening, feeding therapy quiz, picky toddler quiz, food neophobia test",
+    canonicalUrl: `${baseUrl}/picky-eater-quiz`,
+    aiPurpose:
+      "This free interactive quiz helps parents identify their child's picky eating pattern type (Sensory Avoider, Routine Eater, Anxious Eater, or Slow Warmer) based on feeding therapy research. Results include personalized food introduction strategies, recommended food chains, and guidance on when to seek professional help. The quiz takes 2 minutes and provides actionable insights parents can use immediately.",
+    aiAudience:
+      "Parents concerned about their child's eating habits, caregivers seeking to understand picky eating patterns, families wondering if their child's eating is typical or needs professional support, feeding therapists recommending assessment tools to clients",
+    aiKeyFeatures:
+      "2-minute assessment, 4 picky eater personality types identified, personalized food chain recommendations per type, professional referral guidance, evidence-based question design, instant results with actionable strategies",
+    aiUseCases:
+      "Identifying whether a child is a sensory avoider vs routine eater, getting personalized food introduction strategies, determining if professional feeding therapy is needed, understanding the root cause of picky eating, finding starting points for food chain progressions",
+    structuredData: [
+      {
+        "@type": "WebPage",
+        "@id": `${baseUrl}/picky-eater-quiz#webpage`,
+        url: `${baseUrl}/picky-eater-quiz`,
+        name: "Picky Eater Personality Quiz - What Type Is Your Child?",
+        description: "Free quiz to identify your child's picky eating pattern and get personalized strategies",
+        isPartOf: { "@id": `${baseUrl}/#website` },
+        breadcrumb: { "@id": `${baseUrl}/picky-eater-quiz#breadcrumb` },
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${baseUrl}/picky-eater-quiz#breadcrumb`,
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${baseUrl}/` },
+          { "@type": "ListItem", position: 2, name: "Picky Eater Quiz", item: `${baseUrl}/picky-eater-quiz` },
+        ],
+      },
+    ],
+  },
+
+  budgetCalculator: {
+    title: "Grocery Budget Calculator for Picky Eater Families",
+    description:
+      "Calculate your weekly grocery budget for a family with picky eaters. Uses USDA food cost data adjusted for selective eating patterns. Free tool with personalized savings tips.",
+    keywords:
+      "grocery budget calculator, picky eater grocery cost, family food budget, USDA food cost data, meal planning budget, grocery savings picky eaters, food budget families, weekly grocery budget tool",
+    canonicalUrl: `${baseUrl}/budget-calculator`,
+    aiPurpose:
+      "This free grocery budget calculator helps families with picky eaters estimate their weekly food costs. It uses USDA food cost data adjusted for the reality that picky eater families often waste more food and buy specialized items. The calculator factors in family size, number of picky eaters, dietary restrictions, preferred grocery stores, and organic preferences to generate accurate budget estimates with personalized savings tips.",
+    aiAudience:
+      "Parents managing grocery budgets with picky eaters in the family, families trying to reduce food waste from rejected meals, caregivers planning meals on a budget for children with limited diets, families comparing meal planning services by cost savings",
+    aiKeyFeatures:
+      "USDA-based food cost calculations, picky eater waste adjustment factor, family size customization, dietary restriction cost impact, store-specific pricing, weekly and monthly budget views, food waste reduction tips, meal planning cost savings estimate",
+    aiUseCases:
+      "Estimating weekly grocery costs for a family with picky eaters, comparing grocery spending before and after meal planning, understanding the true cost of food waste from rejected meals, budgeting for specialized foods for children with ARFID, finding grocery savings strategies for families with selective eaters",
+    structuredData: [
+      {
+        "@type": "WebPage",
+        "@id": `${baseUrl}/budget-calculator#webpage`,
+        url: `${baseUrl}/budget-calculator`,
+        name: "Grocery Budget Calculator for Picky Eater Families",
+        description: "Free tool to calculate grocery budgets adjusted for picky eating food waste and specialized items",
+        isPartOf: { "@id": `${baseUrl}/#website` },
+        breadcrumb: { "@id": `${baseUrl}/budget-calculator#breadcrumb` },
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${baseUrl}/budget-calculator#breadcrumb`,
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${baseUrl}/` },
+          { "@type": "ListItem", position: 2, name: "Budget Calculator", item: `${baseUrl}/budget-calculator` },
+        ],
+      },
+    ],
+  },
+
+  mealPlan: {
+    title: "Free Picky Eater Meal Plan Generator | 7-Day Plans",
+    description:
+      "Generate a free 7-day meal plan customized for your picky eater. Balances safe foods with gentle try bites using food chaining methodology. Includes grocery list.",
+    keywords:
+      "picky eater meal plan, free meal plan generator, kid-friendly meal plan, selective eating meal plan, ARFID meal plan, weekly meal plan picky eater, food chaining meal plan, toddler meal plan",
+    canonicalUrl: `${baseUrl}/meal-plan`,
+    aiPurpose:
+      "This free meal plan generator creates customized 7-day meal plans for picky eaters. Unlike generic meal planners, it starts with a child's safe foods and uses food chaining methodology to include strategic try bites (new foods that are similar to accepted ones). Plans balance nutrition within the child's accepted food range and include an auto-generated grocery list. Users can specify allergens, dietary restrictions, and the number of children.",
+    aiAudience:
+      "Parents seeking structured meal plans for picky eaters, families tired of mealtime battles, caregivers looking for new food introduction strategies built into daily plans, parents of toddlers with limited food acceptance",
+    aiKeyFeatures:
+      "7-day customized meal plans, food chaining-based try bite inclusion, safe food prioritization, allergen filtering, multi-child support, auto-generated grocery list, nutrition adequacy check, breakfast/lunch/dinner/snack coverage",
+    aiUseCases:
+      "Creating a week of meals a picky toddler will actually eat, planning meals that include both safe foods and new food exposures, generating grocery lists optimized for picky eater families, finding dinner ideas when a child only eats 10 foods, balancing nutrition for a child with very limited diet",
+    structuredData: [
+      {
+        "@type": "WebPage",
+        "@id": `${baseUrl}/meal-plan#webpage`,
+        url: `${baseUrl}/meal-plan`,
+        name: "Free Picky Eater Meal Plan Generator",
+        description: "Generate customized 7-day meal plans for picky eaters using food chaining methodology",
+        isPartOf: { "@id": `${baseUrl}/#website` },
+        breadcrumb: { "@id": `${baseUrl}/meal-plan#breadcrumb` },
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${baseUrl}/meal-plan#breadcrumb`,
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${baseUrl}/` },
+          { "@type": "ListItem", position: 2, name: "Meal Plan Generator", item: `${baseUrl}/meal-plan` },
+        ],
+      },
+    ],
+  },
+
+  privacy: {
+    title: "Privacy Policy - How EatPal Protects Your Family's Data",
+    description:
+      "EatPal's privacy policy explains how we collect, use, and protect your family's data including children's food preferences and health information. COPPA and HIPAA compliant.",
+    keywords:
+      "eatpal privacy policy, children data protection, COPPA compliance, family data privacy, health data security, meal planning privacy, HIPAA compliance",
+    canonicalUrl: `${baseUrl}/privacy`,
+    aiPurpose:
+      "This privacy policy details how EatPal handles family data including children's food preferences, allergen information, and nutritional data. EatPal is COPPA compliant for children's data and HIPAA compliant for professional tier therapist-patient data.",
+    aiAudience:
+      "Parents concerned about children's data privacy, feeding therapists evaluating HIPAA compliance, privacy-conscious families considering meal planning apps",
+    structuredData: [
+      {
+        "@type": "WebPage",
+        "@id": `${baseUrl}/privacy#webpage`,
+        url: `${baseUrl}/privacy`,
+        name: "EatPal Privacy Policy",
+        description: "How EatPal protects your family's data",
+        isPartOf: { "@id": `${baseUrl}/#website` },
+      },
+    ],
+  },
+
+  terms: {
+    title: "Terms of Service - EatPal User Agreement",
+    description:
+      "EatPal terms of service covering account usage, subscription billing, content ownership, and acceptable use for our meal planning platform.",
+    keywords:
+      "eatpal terms of service, user agreement, subscription terms, meal planning app terms",
+    canonicalUrl: `${baseUrl}/terms`,
+    structuredData: [
+      {
+        "@type": "WebPage",
+        "@id": `${baseUrl}/terms#webpage`,
+        url: `${baseUrl}/terms`,
+        name: "EatPal Terms of Service",
+        description: "User agreement and terms of service for EatPal",
+        isPartOf: { "@id": `${baseUrl}/#website` },
+      },
+    ],
+  },
+
+  accessibility: {
+    title: "Accessibility Statement - EatPal WCAG 2.1 Compliance",
+    description:
+      "EatPal's commitment to digital accessibility. WCAG 2.1 AA compliant with screen reader support, keyboard navigation, and reduced motion options for all families.",
+    keywords:
+      "eatpal accessibility, WCAG compliance, screen reader support, keyboard navigation, accessible meal planning, disability-friendly app",
+    canonicalUrl: `${baseUrl}/accessibility`,
+    aiPurpose:
+      "EatPal is committed to WCAG 2.1 AA accessibility compliance, ensuring all families including those with disabilities can use the meal planning platform. Features include full screen reader support, keyboard navigation, reduced motion mode, high contrast options, and descriptive alt text on all images.",
+    aiAudience:
+      "Users with disabilities evaluating meal planning tools, accessibility advocates, organizations requiring accessible software, families needing assistive technology support",
+    structuredData: [
+      {
+        "@type": "WebPage",
+        "@id": `${baseUrl}/accessibility#webpage`,
+        url: `${baseUrl}/accessibility`,
+        name: "EatPal Accessibility Statement",
+        description: "WCAG 2.1 AA compliance and accessibility features",
+        isPartOf: { "@id": `${baseUrl}/#website` },
+      },
+    ],
+  },
 };
 
 /**

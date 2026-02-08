@@ -102,6 +102,26 @@
   Cache-Control: public, max-age=3600
   Content-Type: text/plain; charset=utf-8
 
+# LLM information files - moderate caching
+/llms.txt
+  Cache-Control: public, max-age=3600
+  Content-Type: text/plain; charset=utf-8
+  X-Robots-Tag: noindex
+
+/llms-full.txt
+  Cache-Control: public, max-age=3600
+  Content-Type: text/plain; charset=utf-8
+  X-Robots-Tag: noindex
+
+# RSS and Atom feeds
+/rss.xml
+  Cache-Control: public, max-age=3600
+  Content-Type: application/rss+xml; charset=utf-8
+
+/feed.xml
+  Cache-Control: public, max-age=3600
+  Content-Type: application/atom+xml; charset=utf-8
+
 # Manifest files
 /manifest.json
   Cache-Control: public, max-age=3600

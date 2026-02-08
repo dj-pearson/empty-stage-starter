@@ -39,3 +39,16 @@ export type {
   RecipeNutrition,
   RecipeRating,
 } from './RecipeSchema';
+
+export { ComparisonSchema } from './ComparisonSchema';
+export type { ComparisonItem, ComparisonSchemaProps } from './ComparisonSchema';
+
+export { WebSiteSchema } from './WebSiteSchema';
+export type { WebSiteSchemaProps } from './WebSiteSchema';
+
+export { GEOContent, GEOQuestionBlock, GEOStatistic } from './GEOContent';
+export type {
+  GEOContentProps,
+  GEOQuestionBlockProps,
+  GEOStatisticProps,
+} from './GEOContent';
