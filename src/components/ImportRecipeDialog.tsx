@@ -168,7 +168,7 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
       }
 
       const recipe = data.recipe;
-      onImport(mapRecipeToFormat(recipe));
+      onImport(mapRecipeToFormat(recipe, url.trim()));
       toast.success("Recipe imported from URL!");
       handleClose();
     } catch (error) {
@@ -259,12 +259,13 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
     reader.readAsText(file);
   };
 
-  const mapRecipeToFormat = (recipe: any) => {
-    const ingredientsList = recipe.ingredients || [];
-    
+  const mapRecipeToFormat = (recipe: Record<string, unknown>, sourceUrl?: string) => {
+    const ingredientsList = (recipe.ingredients || []) as Array<string | { name: string; quantity?: number; unit?: string; category?: string; notes?: string }>;
+
+    // Match ingredients to pantry foods
     const matchedFoodIds = foods
-      .filter(food => 
-        ingredientsList.some((ing: any) => {
+      .filter(food =>
+        ingredientsList.some((ing) => {
           const ingName = typeof ing === 'string' ? ing : ing.name;
           return food.name.toLowerCase().includes(ingName.toLowerCase()) ||
                  ingName.toLowerCase().includes(food.name.toLowerCase());
@@ -272,19 +273,62 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
       )
       .map(food => food.id);
 
+    // Build additional ingredients string from unmatched items
+    const unmatchedIngredients = ingredientsList.filter((ing) => {
+      const ingName = typeof ing === 'string' ? ing : ing.name;
+      return !foods.some(
+        (food) =>
+          food.name.toLowerCase().includes(ingName.toLowerCase()) ||
+          ingName.toLowerCase().includes(food.name.toLowerCase())
+      );
+    });
+    const additionalIngredientsStr = unmatchedIngredients
+      .map((ing) => {
+        if (typeof ing === 'string') return ing;
+        const parts = [ing.quantity, ing.unit, ing.name].filter(Boolean);
+        return parts.join(' ') + (ing.notes ? ` (${ing.notes})` : '');
+      })
+      .join(', ');
+
+    // Parse instructions into JSON array for step-by-step display
+    const rawInstructions = recipe.instructions as string | undefined;
+    let instructionsJson = '';
+    if (rawInstructions && typeof rawInstructions === 'string') {
+      // Split on numbered lines (e.g., "1. Step" or "1) Step") or newlines
+      const steps = rawInstructions
+        .split(/\n/)
+        .map((s: string) => s.replace(/^\d+[.)]\s*/, '').trim())
+        .filter((s: string) => s.length > 0);
+      instructionsJson = JSON.stringify(steps);
+    }
+
+    // Extract prep/cook times from AI response
+    const prepTime = (recipe.prepTime as string) || (recipe.prep_time as string) || '';
+    const cookTime = (recipe.cookTime as string) || (recipe.cook_time as string) || '';
+
+    // Calculate total time if possible
+    const prepMinutes = parseInt(prepTime) || 0;
+    const cookMinutes = parseInt(cookTime) || 0;
+    const totalTimeMinutes = prepMinutes + cookMinutes > 0 ? prepMinutes + cookMinutes : undefined;
+
     return {
-      name: recipe.title || "",
-      description: `${recipe.servings ? `Serves ${recipe.servings} | ` : ''}Imported recipe`,
+      name: (recipe.name as string) || (recipe.title as string) || "",
+      description: (recipe.description as string) || undefined,
       food_ids: matchedFoodIds,
-      instructions: ingredientsList.map((ing: any, i: number) => 
-        typeof ing === 'string' ? `${i + 1}. ${ing}` : `${i + 1}. ${ing.quantity} ${ing.unit} ${ing.name}`
-      ).join('\n'),
-      prepTime: "",
-      cookTime: "",
+      instructions: instructionsJson,
+      prepTime,
+      cookTime,
       servings: recipe.servings?.toString() || "",
-      additionalIngredients: "",
-      tips: "",
-      // Add designation metadata
+      additionalIngredients: additionalIngredientsStr || (recipe.additionalIngredients as string) || "",
+      tips: (recipe.tips as string) || "",
+      total_time_minutes: totalTimeMinutes,
+      source_url: sourceUrl || (recipe.source_url as string) || (recipe.sourceUrl as string) || undefined,
+      source_type: sourceUrl ? 'url' as const : (recipe.source_type as string) || undefined,
+      image_url: (recipe.image_url as string) || (recipe.imageUrl as string) || (recipe.image as string) || undefined,
+      difficulty_level: (recipe.difficulty_level as string) || (recipe.difficulty as string) || undefined,
+      tags: (recipe.tags as string[]) || undefined,
+      nutrition_info: recipe.nutrition_info || recipe.nutrition || undefined,
+      // Designation metadata
       metadata: {
         isFamily,
         kidId: isFamily ? null : selectedKidId || null,
@@ -309,14 +353,18 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
   const downloadTemplate = () => {
     const template = {
       name: "Example Recipe",
-      description: "A delicious meal",
-      ingredients: ["chicken", "cheese", "pasta"],
-      instructions: "1. Cook pasta\n2. Add chicken\n3. Top with cheese",
+      description: "A delicious and easy family meal",
+      ingredients: ["chicken breast", "cheddar cheese", "penne pasta", "marinara sauce"],
+      instructions: "1. Cook pasta according to package directions\n2. Season and cook chicken in a skillet\n3. Combine pasta, chicken, and sauce\n4. Top with cheese and broil until melted",
       prepTime: "10 min",
       cookTime: "20 min",
       servings: "4",
+      difficulty: "easy",
+      tags: ["dinner", "kid-friendly", "quick"],
       additionalIngredients: "salt, pepper, olive oil",
-      tips: "Let kids help with safe tasks"
+      tips: "Let kids help with safe tasks like adding cheese",
+      source_url: "https://example.com/recipe",
+      image_url: "https://example.com/recipe-photo.jpg"
     };
 
     const blob = new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' });
