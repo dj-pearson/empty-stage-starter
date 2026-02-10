@@ -54,6 +54,37 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const STORAGE_KEY = "kid-meal-planner";
 
+/** Map snake_case DB row to camelCase Recipe type */
+function normalizeRecipeFromDB(r: any): Recipe {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description ?? undefined,
+    food_ids: r.food_ids ?? [],
+    category: r.category ?? undefined,
+    instructions: r.instructions ?? undefined,
+    prepTime: r.prep_time ?? undefined,
+    cookTime: r.cook_time ?? undefined,
+    servings: r.servings ?? undefined,
+    additionalIngredients: r.additional_ingredients ?? undefined,
+    tips: r.tips ?? undefined,
+    assigned_kid_ids: r.assigned_kid_ids ?? undefined,
+    image_url: r.image_url ?? undefined,
+    source_url: r.source_url ?? undefined,
+    source_type: r.source_type ?? undefined,
+    tags: r.tags ?? undefined,
+    rating: r.rating ?? undefined,
+    times_made: r.times_made ?? undefined,
+    last_made_date: r.last_made_date ?? undefined,
+    total_time_minutes: r.total_time_minutes ?? undefined,
+    difficulty_level: r.difficulty_level ?? undefined,
+    kid_friendly_score: r.kid_friendly_score ?? undefined,
+    is_favorite: r.is_favorite ?? false,
+    created_at: r.created_at ?? undefined,
+    nutrition_info: r.nutrition_info ?? undefined,
+  };
+}
+
 const STARTER_FOODS: Omit<Food, "id">[] = [
   { name: "Chicken Nuggets", category: "protein", is_safe: true, is_try_bite: false },
   { name: "Mac & Cheese", category: "carb", is_safe: true, is_try_bite: false },
@@ -203,7 +234,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               setActiveKidId(null);
             }
             if (foodsRes.data) setFoods(foodsRes.data as unknown as Food[]);
-            if (recipesRes.data) setRecipes(recipesRes.data as unknown as Recipe[]);
+            if (recipesRes.data) setRecipes(recipesRes.data.map(normalizeRecipeFromDB));
             if (planRes.data) setPlanEntriesState(planRes.data as unknown as PlanEntry[]);
             if (groceryRes.data) setGroceryItemsState(groceryRes.data as unknown as GroceryItem[]);
           }
@@ -242,7 +273,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               
               // Check for local recipes and migrate them
               if (recipesRes.data) {
-                const dbRecipes = recipesRes.data as unknown as Recipe[];
+                const dbRecipes = recipesRes.data.map(normalizeRecipeFromDB);
                 const localData = localStorage.getItem(STORAGE_KEY);
                 
                 if (localData) {
@@ -286,7 +317,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                         .order('created_at', { ascending: true });
                       
                       if (updatedRecipes) {
-                        setRecipes(updatedRecipes as unknown as Recipe[]);
+                        setRecipes(updatedRecipes.map(normalizeRecipeFromDB));
                       }
                     } else {
                       setRecipes(dbRecipes);
@@ -588,10 +619,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         description: recipe.description,
         food_ids: recipe.food_ids,
         category: recipe.category,
-        instructions: recipe.instructions ?? recipe.tips, // prefer explicit instructions, fallback to tips
+        instructions: recipe.instructions ?? recipe.tips,
         prep_time: recipe.prepTime,
         cook_time: recipe.cookTime,
         servings: recipe.servings,
+        image_url: recipe.image_url,
+        source_url: recipe.source_url,
+        source_type: recipe.source_type,
+        tags: recipe.tags,
+        rating: recipe.rating,
+        times_made: recipe.times_made,
+        last_made_date: recipe.last_made_date,
+        total_time_minutes: recipe.total_time_minutes,
+        difficulty_level: recipe.difficulty_level,
+        kid_friendly_score: recipe.kid_friendly_score,
+        is_favorite: recipe.is_favorite,
+        nutrition_info: recipe.nutrition_info,
+        assigned_kid_ids: recipe.assigned_kid_ids,
+        tips: recipe.tips,
+        additional_ingredients: recipe.additionalIngredients,
         user_id: userId,
         household_id: householdId || undefined,
       };
@@ -611,19 +657,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         logger.error('Failed payload:', dbPayload);
         throw new Error(`Database error: ${error.message}`);
       } else if (data) {
-        // Normalize DB response to our Recipe type (camelCase for UI)
-        const r: any = data;
-        const newRecipe: Recipe = {
-          id: r.id,
-          name: r.name,
-          description: r.description ?? undefined,
-          food_ids: r.food_ids ?? [],
-          category: r.category ?? undefined,
-          instructions: r.instructions ?? undefined,
-          prepTime: r.prep_time ?? undefined,
-          cookTime: r.cook_time ?? undefined,
-          servings: r.servings ?? undefined,
-        };
+        const newRecipe = normalizeRecipeFromDB(data);
         setRecipes([...recipes, newRecipe]);
         return newRecipe;
       }
@@ -638,18 +672,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateRecipe = (id: string, updates: Partial<Recipe>) => {
     if (userId) {
       // Map camelCase to DB snake_case for updates
-      const dbUpdates: any = {
-        ...(updates.name !== undefined ? { name: updates.name } : {}),
-        ...(updates.description !== undefined ? { description: updates.description } : {}),
-        ...(updates.food_ids !== undefined ? { food_ids: updates.food_ids } : {}),
-        ...(updates.category !== undefined ? { category: updates.category } : {}),
-        ...(updates.instructions !== undefined || updates.tips !== undefined
-          ? { instructions: updates.instructions ?? updates.tips }
-          : {}),
-        ...(updates.prepTime !== undefined ? { prep_time: updates.prepTime } : {}),
-        ...(updates.cookTime !== undefined ? { cook_time: updates.cookTime } : {}),
-        ...(updates.servings !== undefined ? { servings: updates.servings } : {}),
-      };
+      const dbUpdates: any = {};
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.description !== undefined) dbUpdates.description = updates.description;
+      if (updates.food_ids !== undefined) dbUpdates.food_ids = updates.food_ids;
+      if (updates.category !== undefined) dbUpdates.category = updates.category;
+      if (updates.instructions !== undefined || updates.tips !== undefined) {
+        dbUpdates.instructions = updates.instructions ?? updates.tips;
+      }
+      if (updates.prepTime !== undefined) dbUpdates.prep_time = updates.prepTime;
+      if (updates.cookTime !== undefined) dbUpdates.cook_time = updates.cookTime;
+      if (updates.servings !== undefined) dbUpdates.servings = updates.servings;
+      if (updates.image_url !== undefined) dbUpdates.image_url = updates.image_url;
+      if (updates.source_url !== undefined) dbUpdates.source_url = updates.source_url;
+      if (updates.source_type !== undefined) dbUpdates.source_type = updates.source_type;
+      if (updates.tags !== undefined) dbUpdates.tags = updates.tags;
+      if (updates.rating !== undefined) dbUpdates.rating = updates.rating;
+      if (updates.times_made !== undefined) dbUpdates.times_made = updates.times_made;
+      if (updates.last_made_date !== undefined) dbUpdates.last_made_date = updates.last_made_date;
+      if (updates.total_time_minutes !== undefined) dbUpdates.total_time_minutes = updates.total_time_minutes;
+      if (updates.difficulty_level !== undefined) dbUpdates.difficulty_level = updates.difficulty_level;
+      if (updates.kid_friendly_score !== undefined) dbUpdates.kid_friendly_score = updates.kid_friendly_score;
+      if (updates.is_favorite !== undefined) dbUpdates.is_favorite = updates.is_favorite;
+      if (updates.nutrition_info !== undefined) dbUpdates.nutrition_info = updates.nutrition_info;
+      if (updates.assigned_kid_ids !== undefined) dbUpdates.assigned_kid_ids = updates.assigned_kid_ids;
+      if (updates.tips !== undefined) dbUpdates.tips = updates.tips;
+      if (updates.additionalIngredients !== undefined) dbUpdates.additional_ingredients = updates.additionalIngredients;
 
       supabase
         .from('recipes')
@@ -657,7 +705,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .eq('id', id)
         .then(({ error }) => {
           if (error) logger.error('Supabase updateRecipe error:', error);
-          // Keep UI state in camelCase
           setRecipes(recipes.map(r => (r.id === id ? { ...r, ...updates } : r)));
         });
     } else {
@@ -1052,7 +1099,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .order('created_at', { ascending: true });
 
       if (data) {
-        setRecipes(data as unknown as Recipe[]);
+        setRecipes(data.map(normalizeRecipeFromDB));
       }
     }
   };

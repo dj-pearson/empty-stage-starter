@@ -100,6 +100,10 @@ export { useSecurityAudit, useAdminSecurityAudit } from './useSecurityAudit';
 // Login History
 export { useLoginHistory, useAdminLoginHistory } from './useLoginHistory';
 
+// Recipe Filters
+export { useRecipeFilters } from './useRecipeFilters';
+export type { RecipeSortOption, RecipeViewMode, RecipeQuickFilter } from './useRecipeFilters';
+
 // Re-export types
 export type { WindowSize } from './useWindowSize';
 export type { UseIntersectionObserverOptions } from './useIntersectionObserver';

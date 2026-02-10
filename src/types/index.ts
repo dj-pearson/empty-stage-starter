@@ -101,6 +101,9 @@ export interface Recipe {
   total_time_minutes?: number;
   difficulty_level?: 'easy' | 'medium' | 'hard';
   kid_friendly_score?: number;
+  is_favorite?: boolean;
+  created_at?: string;
+  recipe_ingredients?: RecipeIngredient[];
   nutrition_info?: {
     calories?: number;
     protein_g?: number;

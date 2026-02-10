@@ -21,7 +21,9 @@
       "Bash(supabase functions deploy:*)",
       "Bash(npx shadcn@latest:*)",
       "Bash(node -e:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx vitest:*)"
     ],
     "deny": [],
     "ask": []
