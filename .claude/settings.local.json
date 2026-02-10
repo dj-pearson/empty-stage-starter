@@ -23,7 +23,8 @@
       "Bash(node -e:*)",
       "Bash(npx tsc:*)",
       "Bash(npx eslint:*)",
-      "Bash(npx vitest:*)"
+      "Bash(npx vitest:*)",
+      "Bash(npm ls:*)"
     ],
     "deny": [],
     "ask": []

@@ -38,7 +38,7 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
   // Designation states
   const [isFamily, setIsFamily] = useState(false);
   const [selectedKidId, setSelectedKidId] = useState<string>("");
-  const [preferredMealSlot, setPreferredMealSlot] = useState<string>("");
+  const [preferredMealSlot, setPreferredMealSlot] = useState<string>("any");
 
   // Clean up camera when dialog closes
   useEffect(() => {
@@ -332,7 +332,7 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
       metadata: {
         isFamily,
         kidId: isFamily ? null : selectedKidId || null,
-        preferredMealSlot: preferredMealSlot || null
+        preferredMealSlot: preferredMealSlot && preferredMealSlot !== 'any' ? preferredMealSlot : null
       }
     };
   };
@@ -346,7 +346,7 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
     stopCamera();
     setIsFamily(false);
     setSelectedKidId("");
-    setPreferredMealSlot("");
+    setPreferredMealSlot("any");
     onOpenChange(false);
   };
 
@@ -607,7 +607,7 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
                       <SelectValue placeholder="Any meal" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Any meal</SelectItem>
+                      <SelectItem value="any">Any meal</SelectItem>
                       <SelectItem value="breakfast">Breakfast</SelectItem>
                       <SelectItem value="lunch">Lunch</SelectItem>
                       <SelectItem value="dinner">Dinner</SelectItem>
