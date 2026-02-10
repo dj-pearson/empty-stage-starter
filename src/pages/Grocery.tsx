@@ -150,7 +150,7 @@ export default function Grocery() {
         description: "Items were already added to your pantry"
       });
     }
-  }, [groceryItems.length > 0]); // Run once when grocery items first load
+  }, [groceryItems, deleteGroceryItems]); // Run once when grocery items first load (ref guard prevents re-runs)
 
   const isFamilyMode = !activeKidId;
   const activeKid = kids.find(k => k.id === activeKidId);
