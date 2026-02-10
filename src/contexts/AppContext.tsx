@@ -644,16 +644,50 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (dbPayload[k] === undefined) delete dbPayload[k];
       });
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('recipes')
         .insert([dbPayload])
         .select()
         .single();
 
+      // If insert fails, retry with only core columns (handles schema mismatches)
       if (error) {
-        console.error('Supabase addRecipe error:', { message: error.message, code: error.code, details: error.details, hint: error.hint });
-        console.error('Failed payload keys:', Object.keys(dbPayload));
-        logger.error('Supabase addRecipe error:', error);
+        console.error('Supabase addRecipe error:', error.message, error.code, error.details);
+        console.error('Payload keys:', Object.keys(dbPayload));
+
+        const corePayload: Record<string, unknown> = {
+          name: dbPayload.name,
+          description: dbPayload.description,
+          food_ids: dbPayload.food_ids ?? [],
+          instructions: dbPayload.instructions,
+          prep_time: dbPayload.prep_time,
+          cook_time: dbPayload.cook_time,
+          servings: dbPayload.servings,
+          tips: dbPayload.tips,
+          additional_ingredients: dbPayload.additional_ingredients,
+          user_id: userId,
+          household_id: householdId || undefined,
+        };
+        Object.keys(corePayload).forEach((k) => {
+          if (corePayload[k] === undefined) delete corePayload[k];
+        });
+
+        console.warn('Retrying addRecipe with core columns only:', Object.keys(corePayload));
+        const retry = await supabase
+          .from('recipes')
+          .insert([corePayload])
+          .select()
+          .single();
+
+        if (retry.error) {
+          logger.error('Supabase addRecipe retry also failed:', retry.error);
+          throw new Error(`Database error: ${retry.error.message}`);
+        }
+        data = retry.data;
+        error = null;
+      }
+
+      if (error) {
         throw new Error(`Database error: ${error.message}`);
       } else if (data) {
         const newRecipe = normalizeRecipeFromDB(data);

@@ -76,23 +76,45 @@ export default async (req: Request) => {
         }
       }
       
-      // Fallback to HTML parsing (look for common recipe content areas)
+      // Fallback to HTML parsing - strip junk and extract readable text
       if (!recipeSchema) {
         console.log('No JSON-LD found, parsing HTML content');
-        // Look for recipe content sections
-        const recipeSection = html.match(/<div[^>]*class="[^"]*recipe[^"]*"[^>]*>[\s\S]*?<\/div>/i);
-        const ingredientsSection = html.match(/<ul[^>]*class="[^"]*ingredients[^"]*"[^>]*>[\s\S]*?<\/ul>/gi);
-        
-        if (ingredientsSection || recipeSection) {
-          const relevantContent = [
-            recipeSection ? recipeSection[0] : '',
-            ...(ingredientsSection || [])
-          ].join('\n');
-          recipeContent = relevantContent.slice(0, 20000); // Increased limit
-        } else {
-          // Last resort: take a larger chunk focusing on middle content
-          recipeContent = html.slice(5000, 25000);
+
+        // Strip non-content elements first
+        let cleaned = html
+          .replace(/<script[\s\S]*?<\/script>/gi, '')
+          .replace(/<style[\s\S]*?<\/style>/gi, '')
+          .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+          .replace(/<footer[\s\S]*?<\/footer>/gi, '')
+          .replace(/<header[\s\S]*?<\/header>/gi, '')
+          .replace(/<aside[\s\S]*?<\/aside>/gi, '')
+          .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+          .replace(/<!--[\s\S]*?-->/g, '');
+
+        // Try to find recipe-specific sections
+        const recipeBlock = cleaned.match(/<[^>]*class="[^"]*(?:recipe-card|wprm-recipe|tasty-recipe|recipe-content|recipe-body|entry-content)[^"]*"[^>]*>[\s\S]*?(?=<\/(?:div|article|section)>)/i);
+
+        if (recipeBlock) {
+          cleaned = recipeBlock[0];
         }
+
+        // Strip all remaining HTML tags to get plain text
+        const textContent = cleaned
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&#\d+;/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        if (textContent.length < 100) {
+          throw new Error('Could not extract recipe content from this URL. Try a direct recipe page, not a recipe list or roundup.');
+        }
+
+        recipeContent = textContent.slice(0, 15000);
+        console.log('Extracted text content length:', recipeContent.length);
       }
     } else {
       throw new Error('Either url or imageBase64 must be provided');
