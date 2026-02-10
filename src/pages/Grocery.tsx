@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { AddGroceryItemDialog } from "@/components/AddGroceryItemDialog";
 import { SmartRestockSuggestions } from "@/components/SmartRestockSuggestions";
@@ -17,7 +19,11 @@ import { ManageStoreAislesDialog } from "@/components/ManageStoreAislesDialog";
 import { AisleContributionDialog } from "@/components/AisleContributionDialog";
 import { ImportRecipeToGroceryDialog } from "@/components/ImportRecipeToGroceryDialog";
 import { generateGroceryList } from "@/lib/mealPlanner";
-import { ShoppingCart, Copy, Trash2, Printer, Download, Plus, Share2, FileText, Sparkles, Store, Barcode, RefreshCw } from "lucide-react";
+import {
+  ShoppingCart, Trash2, Printer, Download, Plus, Share2, FileText,
+  Sparkles, Store, Barcode, RefreshCw, ChevronDown, ChevronRight,
+  X, Minus, Check, MoreHorizontal, PackageCheck, ShoppingBag
+} from "lucide-react";
 import { toast } from "sonner";
 import { FoodCategory, GroceryItem } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
@@ -59,8 +65,23 @@ const categoryLabels: Record<FoodCategory, string> = {
   snack: "Snacks",
 };
 
+const categoryIcons: Record<FoodCategory, string> = {
+  protein: "🥩",
+  carb: "🍞",
+  dairy: "🧀",
+  fruit: "🍎",
+  vegetable: "🥦",
+  snack: "🍿",
+};
+
 export default function Grocery() {
-  const { foods, kids, activeKidId, planEntries, groceryItems, setGroceryItems, addGroceryItem, toggleGroceryItem, clearCheckedGroceryItems, addFood, updateFood } = useApp();
+  const {
+    foods, kids, activeKidId, planEntries, groceryItems,
+    setGroceryItems, addGroceryItem, toggleGroceryItem,
+    updateGroceryItem, deleteGroceryItem, deleteGroceryItems,
+    clearCheckedGroceryItems, addFood, updateFood
+  } = useApp();
+
   const [groupBy, setGroupBy] = useState<"category" | "aisle">("aisle");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [isGeneratingRestock, setIsGeneratingRestock] = useState(false);
@@ -69,7 +90,7 @@ export default function Grocery() {
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [showCreateListDialog, setShowCreateListDialog] = useState(false);
   const [showManageListsDialog, setShowManageListsDialog] = useState(false);
-  
+
   // Store layout states
   const [showCreateStoreDialog, setShowCreateStoreDialog] = useState(false);
   const [showManageStoresDialog, setShowManageStoresDialog] = useState(false);
@@ -77,38 +98,36 @@ export default function Grocery() {
   const [editingStore, setEditingStore] = useState<any>(null);
   const [managingAislesStore, setManagingAislesStore] = useState<any>(null);
   const [selectedStoreLayoutId, setSelectedStoreLayoutId] = useState<string | null>(null);
-  
+
   // Aisle contribution state
   const [showAisleContribution, setShowAisleContribution] = useState(false);
   const [contributionItem, setContributionItem] = useState<string | null>(null);
-  
+
   // Import recipe state
   const [showImportRecipeDialog, setShowImportRecipeDialog] = useState(false);
+
+  // Purchased section state
+  const [purchasedOpen, setPurchasedOpen] = useState(false);
+
+  // Auto-cleanup flag to prevent running multiple times
+  const hasAutoCleanedRef = useRef(false);
 
   useEffect(() => {
     const loadUserData = async () => {
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
-
         if (authError) {
           logger.error('Error getting user in Grocery:', authError);
           return;
         }
-
         setUserId(user?.id || null);
-
         if (user) {
-          // Get household ID
           const { data: hh, error: hhError } = await supabase.rpc('get_user_household_id', { _user_id: user.id });
-
           if (hhError) {
             logger.error('Error getting household ID in Grocery:', hhError);
-            toast.error('Failed to load household data', {
-              description: 'Some features may be unavailable'
-            });
+            toast.error('Failed to load household data', { description: 'Some features may be unavailable' });
             return;
           }
-
           setHouseholdId((hh as string) ?? null);
         }
       } catch (error) {
@@ -116,9 +135,22 @@ export default function Grocery() {
         toast.error('Failed to load user data');
       }
     };
-
     loadUserData();
   }, []);
+
+  // Auto-cleanup: Remove stale checked items from previous sessions on mount
+  useEffect(() => {
+    if (hasAutoCleanedRef.current) return;
+    const checkedItems = groceryItems.filter(item => item.checked);
+    if (checkedItems.length > 0) {
+      hasAutoCleanedRef.current = true;
+      const checkedIds = checkedItems.map(i => i.id);
+      deleteGroceryItems(checkedIds);
+      toast.info(`Cleared ${checkedItems.length} purchased item${checkedItems.length === 1 ? '' : 's'} from last trip`, {
+        description: "Items were already added to your pantry"
+      });
+    }
+  }, [groceryItems.length > 0]); // Run once when grocery items first load
 
   const isFamilyMode = !activeKidId;
   const activeKid = kids.find(k => k.id === activeKidId);
@@ -128,49 +160,37 @@ export default function Grocery() {
     ? groceryItems.filter(item => item.grocery_list_id === selectedListId)
     : groceryItems;
 
-  // Manual regeneration function instead of automatic useEffect
+  // Split into active (unchecked) and purchased (checked) items
+  const activeItems = filteredGroceryItems.filter(i => !i.checked);
+  const purchasedItems = filteredGroceryItems.filter(i => i.checked);
+
+  // Progress calculation
+  const totalItems = filteredGroceryItems.length;
+  const purchasedCount = purchasedItems.length;
+  const progressPercent = totalItems > 0 ? Math.round((purchasedCount / totalItems) * 100) : 0;
+
+  // Manual regeneration function
   const handleRegenerateFromPlan = () => {
     if (planEntries.length === 0) {
-      toast.info("No meal plan found", {
-        description: "Create a meal plan first to generate a grocery list"
-      });
+      toast.info("No meal plan found", { description: "Create a meal plan first to generate a grocery list" });
       return;
     }
-
     const filteredEntries = isFamilyMode
       ? planEntries
       : planEntries.filter(e => e.kid_id === activeKidId);
-
     const generated = generateGroceryList(filteredEntries, foods);
-
-    // Smart merge: preserve manual items and checked items
     const extendedItems = groceryItems as ExtendedGroceryItem[];
     const manual = extendedItems.filter(item => item.is_manual);
     const checked = extendedItems.filter(item => item.checked && !item.is_manual);
-
-    // Add generated items that don't conflict with manual/checked items
     const existingNames = new Set([
       ...manual.map(i => i.name.toLowerCase()),
       ...checked.map(i => i.name.toLowerCase())
     ]);
-
-    const newItems = generated.filter(
-      gen => !existingNames.has(gen.name.toLowerCase())
-    );
-
+    const newItems = generated.filter(gen => !existingNames.has(gen.name.toLowerCase()));
     setGroceryItems([...manual, ...checked, ...newItems]);
-
     toast.success(`Added ${newItems.length} items from meal plan`, {
       description: `Preserved ${manual.length + checked.length} existing items`
     });
-  };
-
-  const handleCopyList = () => {
-    const text = groceryItems
-      .map(item => `${item.checked ? "☑" : "☐"} ${item.name} (${item.quantity} ${item.unit})`)
-      .join("\n");
-    navigator.clipboard.writeText(text);
-    toast.success("List copied to clipboard!");
   };
 
   const handleToggleItem = async (itemId: string) => {
@@ -179,60 +199,48 @@ export default function Grocery() {
 
     toggleGroceryItem(itemId);
 
-    // If checking the item, ask for aisle contribution (max 2-3 items per trip)
-    if (!item.checked && selectedStoreLayoutId && userId) {
-      try {
-        // Check if user has already contributed for this item at this store
-        const { data: existingContribution } = await supabase
-          .from('user_store_contributions')
-          .select('*')
-          .eq('user_id', userId)
-          .eq('store_layout_id', selectedStoreLayoutId)
-          .eq('food_name', item.name)
-          .maybeSingle() as { data: UserContribution | null };
-
-        // Check if there's already a mapping
-        const { data: existingMapping } = await supabase
-          .from('food_aisle_mappings')
-          .select('*')
-          .eq('store_layout_id', selectedStoreLayoutId)
-          .eq('food_name', item.name)
-          .maybeSingle() as { data: AisleMapping | null };
-
-        // Only ask for contribution if:
-        // 1. User hasn't contributed this item before, OR
-        // 2. There's no mapping yet, OR
-        // 3. Confidence is still low
-        const shouldAskContribution = !existingContribution ||
-          !existingMapping ||
-          existingMapping?.confidence_level === 'low';
-
-        if (shouldAskContribution && Math.random() < 0.5) { // Ask for ~50% of items to get more data
-          setContributionItem(item.name);
-          setShowAisleContribution(true);
-        }
-      } catch (error) {
-        logger.error('Error checking contribution status:', error);
-      }
-    }
-
-    // If checking the item, add/update pantry inventory
+    // If checking the item (purchasing), handle pantry sync + aisle contribution
     if (!item.checked) {
+      // Aisle contribution prompt
+      if (selectedStoreLayoutId && userId) {
+        try {
+          const { data: existingContribution } = await supabase
+            .from('user_store_contributions')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('store_layout_id', selectedStoreLayoutId)
+            .eq('food_name', item.name)
+            .maybeSingle() as { data: UserContribution | null };
+
+          const { data: existingMapping } = await supabase
+            .from('food_aisle_mappings')
+            .select('*')
+            .eq('store_layout_id', selectedStoreLayoutId)
+            .eq('food_name', item.name)
+            .maybeSingle() as { data: AisleMapping | null };
+
+          const shouldAskContribution = !existingContribution ||
+            !existingMapping ||
+            existingMapping?.confidence_level === 'low';
+
+          if (shouldAskContribution && Math.random() < 0.5) {
+            setContributionItem(item.name);
+            setShowAisleContribution(true);
+          }
+        } catch (error) {
+          logger.error('Error checking contribution status:', error);
+        }
+      }
+
+      // Add/update pantry inventory
       const existingFood = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
-      
       if (existingFood) {
-        // Update existing food quantity
         updateFood(existingFood.id, {
           ...existingFood,
           quantity: (existingFood.quantity || 0) + item.quantity,
           unit: item.unit
         });
-        toast.success(
-          `✓ ${item.name} added to pantry`,
-          { description: `${item.quantity} ${item.unit} added to inventory` }
-        );
       } else {
-        // Create new food item in pantry
         addFood({
           name: item.name,
           category: item.category,
@@ -242,11 +250,25 @@ export default function Grocery() {
           quantity: item.quantity,
           unit: item.unit
         });
-        toast.success(
-          `✓ ${item.name} added to pantry`,
-          { description: `New item created with ${item.quantity} ${item.unit}` }
-        );
       }
+
+      toast.success(`${item.name} added to pantry`, {
+        description: `${item.quantity} ${item.unit} moved to inventory`,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            toggleGroceryItem(itemId);
+            // Reverse pantry update
+            const food = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+            if (food && food.quantity) {
+              updateFood(food.id, {
+                ...food,
+                quantity: Math.max(0, food.quantity - item.quantity),
+              });
+            }
+          }
+        }
+      });
     } else {
       // Unchecking - remove from pantry
       const existingFood = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
@@ -255,14 +277,50 @@ export default function Grocery() {
           ...existingFood,
           quantity: Math.max(0, existingFood.quantity - item.quantity),
         });
-        toast.info(`${item.name} quantity reduced in pantry`);
+        toast.info(`${item.name} moved back to shopping list`);
       }
     }
   };
 
-  const handleClearChecked = () => {
+  const handleDeleteItem = (itemId: string) => {
+    const item = groceryItems.find(i => i.id === itemId);
+    deleteGroceryItem(itemId);
+    if (item) {
+      toast.success(`Removed ${item.name}`, {
+        action: {
+          label: "Undo",
+          onClick: () => {
+            addGroceryItem({
+              name: item.name,
+              quantity: item.quantity,
+              unit: item.unit,
+              category: item.category,
+              aisle: item.aisle,
+              notes: item.notes,
+              brand_preference: item.brand_preference,
+              barcode: item.barcode,
+              grocery_list_id: item.grocery_list_id,
+            });
+          }
+        }
+      });
+    }
+  };
+
+  const handleQuantityChange = (itemId: string, delta: number) => {
+    const item = groceryItems.find(i => i.id === itemId);
+    if (!item) return;
+    const newQty = Math.max(1, item.quantity + delta);
+    updateGroceryItem(itemId, { quantity: newQty });
+  };
+
+  const handleDoneShopping = () => {
+    const count = purchasedItems.length;
     clearCheckedGroceryItems();
-    toast.success("Checked items cleared");
+    setPurchasedOpen(false);
+    toast.success(`Shopping trip complete!`, {
+      description: `${count} item${count === 1 ? '' : 's'} cleared from list and saved to pantry`
+    });
   };
 
   const handleSmartRestock = async () => {
@@ -273,16 +331,12 @@ export default function Grocery() {
         toast.error("You must be logged in");
         return;
       }
-
-      // Call the database function to detect and add restock items
       const { data, error } = await supabase.rpc('auto_add_restock_items', {
         p_user_id: user.id,
         p_kid_id: activeKidId
       });
-
       if (error) throw error;
 
-      // Reload grocery items from database
       const { data: groceryData } = await supabase
         .from('grocery_items')
         .select('*')
@@ -291,7 +345,6 @@ export default function Grocery() {
       if (groceryData) {
         setGroceryItems(groceryData as any);
       }
-
       const itemsAdded = Number(data) || 0;
       if (itemsAdded > 0) {
         toast.success(`Added ${itemsAdded} item${itemsAdded === 1 ? '' : 's'} to restock`, {
@@ -312,17 +365,15 @@ export default function Grocery() {
 
   const handlePrint = () => {
     window.print();
-    toast.success("Print dialog opened");
   };
 
   const handleExportCSV = () => {
     const csv = [
-      "Category,Item,Quantity,Unit,Aisle,Checked",
-      ...groceryItems.map(item => 
-        `${categoryLabels[item.category]},"${item.name}",${item.quantity},${item.unit},"${item.aisle || ""}",${item.checked ? "Yes" : "No"}`
+      "Category,Item,Quantity,Unit,Aisle,Status",
+      ...activeItems.map(item =>
+        `${categoryLabels[item.category]},"${item.name}",${item.quantity},${item.unit},"${item.aisle || ""}","To Buy"`
       )
     ].join("\n");
-    
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -334,33 +385,27 @@ export default function Grocery() {
   };
 
   const handleExportText = () => {
-    const uncheckedItems = groceryItems.filter(i => !i.checked);
     const text = [
       `Grocery List${activeKid ? ` - ${activeKid.name}` : ""}`,
-      `Generated: ${new Date().toLocaleDateString()}`,
+      `${new Date().toLocaleDateString()} - ${activeItems.length} items`,
       "",
-      ...Object.entries(itemsByGroup).map(([group, items]) => {
-        const groupItems = items.filter(i => !i.checked);
-        if (groupItems.length === 0) return "";
+      ...Object.entries(activeItemsByGroup).map(([group, items]) => {
+        if (items.length === 0) return "";
         return [
           `${group}:`,
-          ...groupItems.map(item => `  ☐ ${item.name} (${item.quantity} ${item.unit})`),
+          ...items.map(item => `  - ${item.name} (${item.quantity} ${item.unit})`),
           ""
         ].join("\n");
       }).filter(Boolean)
     ].join("\n");
-    
     navigator.clipboard.writeText(text);
-    toast.success("List copied to clipboard - paste into Notes or Reminders!");
+    toast.success("List copied to clipboard!");
   };
 
   const handleExportAnyList = () => {
-    // AnyList format: item name,quantity,category
-    const csv = groceryItems
-      .filter(i => !i.checked)
+    const csv = activeItems
       .map(item => `"${item.name}","${item.quantity} ${item.unit}","${item.aisle || categoryLabels[item.category]}"`)
       .join("\n");
-    
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -372,18 +417,15 @@ export default function Grocery() {
   };
 
   const handleShareiOS = async () => {
-    const uncheckedItems = groceryItems.filter(i => !i.checked);
-    const text = uncheckedItems
+    const text = activeItems
       .map(item => `${item.name} (${item.quantity} ${item.unit})`)
       .join("\n");
-    
     if (navigator.share) {
       try {
         await navigator.share({
           title: `Grocery List${activeKid ? ` - ${activeKid.name}` : ""}`,
           text: text,
         });
-        toast.success("Shared successfully!");
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
           navigator.clipboard.writeText(text);
@@ -396,139 +438,87 @@ export default function Grocery() {
     }
   };
 
-  // Group by category or aisle
-  const itemsByGroup: Record<string, typeof filteredGroceryItems> = {};
+  const handleCopyList = () => {
+    const text = activeItems
+      .map(item => `${item.name} (${item.quantity} ${item.unit})`)
+      .join("\n");
+    navigator.clipboard.writeText(text);
+    toast.success("List copied to clipboard!");
+  };
+
+  // Group active items by category or aisle
+  const activeItemsByGroup: Record<string, GroceryItem[]> = {};
 
   if (groupBy === "category") {
-    // Group by category
-    const categoryGroups: Record<FoodCategory, typeof filteredGroceryItems> = {
-      protein: [],
-      carb: [],
-      dairy: [],
-      fruit: [],
-      vegetable: [],
-      snack: [],
+    const categoryGroups: Record<FoodCategory, GroceryItem[]> = {
+      protein: [], carb: [], dairy: [], fruit: [], vegetable: [], snack: [],
     };
-    
-    filteredGroceryItems.forEach(item => {
+    activeItems.forEach(item => {
       categoryGroups[item.category].push(item);
     });
-
     Object.entries(categoryGroups).forEach(([category, items]) => {
       if (items.length > 0) {
-        itemsByGroup[categoryLabels[category as FoodCategory]] = items;
+        activeItemsByGroup[categoryLabels[category as FoodCategory]] = items;
       }
     });
   } else {
-    // Group by aisle
-    filteredGroceryItems.forEach(item => {
+    activeItems.forEach(item => {
       const aisle = item.aisle || "Uncategorized";
-      if (!itemsByGroup[aisle]) {
-        itemsByGroup[aisle] = [];
+      if (!activeItemsByGroup[aisle]) {
+        activeItemsByGroup[aisle] = [];
       }
-      itemsByGroup[aisle].push(item);
+      activeItemsByGroup[aisle].push(item);
     });
   }
 
-  const checkedCount = filteredGroceryItems.filter(i => i.checked).length;
+  const isEmpty = activeItems.length === 0 && purchasedItems.length === 0;
 
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        {/* Header */}
-        <div className="flex flex-col gap-4 mb-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold mb-2">
-                Grocery List
-              </h1>
-              <p className="text-muted-foreground">
-                {isFamilyMode 
-                  ? "Household shopping list for all family members - auto-generated from meal plans"
-                  : `Shopping list for ${activeKid?.name || 'your child'} - auto-generated from meal plan`
-                }
-              </p>
-              <p className="text-sm text-accent mt-1 font-medium">
-                ✓ Check items when purchased - they'll be added to your pantry automatically
-              </p>
+      <div className="container mx-auto px-4 py-6 max-w-3xl">
+
+        {/* ─── Header ─── */}
+        <div className="mb-6">
+          <div className="flex items-start justify-between gap-4 mb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <ShoppingCart className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">Grocery List</h1>
+                <p className="text-sm text-muted-foreground">
+                  {isFamilyMode ? "Household shopping list" : `Shopping for ${activeKid?.name || 'your child'}`}
+                </p>
+              </div>
             </div>
-          </div>
-          
-          {/* List Selector */}
-          {userId && (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <GroceryListSelector
-                userId={userId}
-                householdId={householdId || undefined}
-                selectedListId={selectedListId}
-                onListChange={setSelectedListId}
-                onCreateNew={() => setShowCreateListDialog(true)}
-                onManageLists={() => setShowManageListsDialog(true)}
-              />
-            </div>
-          )}
-          <div className="flex gap-2 flex-wrap">
-            <Button onClick={() => setShowAddDialog(true)} variant="default">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Item
-            </Button>
-            
-            <Button onClick={() => setShowImportRecipeDialog(true)} variant="secondary">
-              <FileText className="h-4 w-4 mr-2" />
-              Import Recipe
-            </Button>
 
-            <Button onClick={handleRegenerateFromPlan} variant="outline">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Sync from Meal Plan
-            </Button>
-
-            {/* Store Layout Manager Button */}
-            {userId && (
-              <Button
-                onClick={() => setShowManageStoresDialog(true)}
-                variant="outline"
-              >
-                <Store className="h-4 w-4 mr-2" />
-                Store Layouts
-              </Button>
-            )}
-
-            <Button
-              onClick={handleSmartRestock}
-              variant="secondary"
-              disabled={isGeneratingRestock}
-            >
-              {isGeneratingRestock ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2" />
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Smart Restock
-                </>
-              )}
-            </Button>
-
+            {/* More options menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" disabled={groceryItems.length === 0}>
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Export
+                <Button variant="ghost" size="icon" className="shrink-0">
+                  <MoreHorizontal className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={handleRegenerateFromPlan}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Sync from Meal Plan
+                </DropdownMenuItem>
+                {userId && (
+                  <DropdownMenuItem onClick={() => setShowManageStoresDialog(true)}>
+                    <Store className="h-4 w-4 mr-2" />
+                    Store Layouts
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleExportText}>
                   <FileText className="h-4 w-4 mr-2" />
                   Copy as Text
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleShareiOS}>
                   <Share2 className="h-4 w-4 mr-2" />
-                  Share (iOS/Android)
+                  Share
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleExportCSV}>
                   <Download className="h-4 w-4 mr-2" />
                   Export CSV
@@ -544,28 +534,71 @@ export default function Grocery() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-
-            <Button onClick={handleClearChecked} variant="outline" disabled={checkedCount === 0}>
-              <Trash2 className="h-4 w-4 mr-2" />
-              Clear Checked
-            </Button>
           </div>
+
+          {/* List Selector */}
+          {userId && (
+            <div className="mb-4">
+              <GroceryListSelector
+                userId={userId}
+                householdId={householdId || undefined}
+                selectedListId={selectedListId}
+                onListChange={setSelectedListId}
+                onCreateNew={() => setShowCreateListDialog(true)}
+                onManageLists={() => setShowManageListsDialog(true)}
+              />
+            </div>
+          )}
+
+          {/* Progress Bar - only show when shopping */}
+          {totalItems > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-muted-foreground">
+                  Shopping progress
+                </span>
+                <span className="text-sm font-semibold">
+                  {purchasedCount} of {totalItems} items
+                </span>
+              </div>
+              <Progress value={progressPercent} className="h-2" />
+              {progressPercent === 100 && (
+                <p className="text-sm text-primary font-medium mt-2">
+                  All items purchased! Tap "Done Shopping" below to clear your list.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-          <Card className="p-4">
-            <p className="text-sm text-muted-foreground mb-1">Total Items</p>
-            <p className="text-2xl font-bold">{filteredGroceryItems.length}</p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-sm text-muted-foreground mb-1">Checked</p>
-            <p className="text-2xl font-bold text-safe-food">{checkedCount}</p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-sm text-muted-foreground mb-1">Remaining</p>
-            <p className="text-2xl font-bold text-accent">{filteredGroceryItems.length - checkedCount}</p>
-          </Card>
+        {/* ─── Quick Actions ─── */}
+        <div className="flex gap-2 flex-wrap mb-6">
+          <Button onClick={() => setShowAddDialog(true)} size="sm">
+            <Plus className="h-4 w-4 mr-1.5" />
+            Add Item
+          </Button>
+          <Button onClick={() => setShowImportRecipeDialog(true)} variant="secondary" size="sm">
+            <FileText className="h-4 w-4 mr-1.5" />
+            From Recipe
+          </Button>
+          <Button
+            onClick={handleSmartRestock}
+            variant="secondary"
+            size="sm"
+            disabled={isGeneratingRestock}
+          >
+            {isGeneratingRestock ? (
+              <>
+                <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-primary mr-1.5" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4 mr-1.5" />
+                Smart Restock
+              </>
+            )}
+          </Button>
         </div>
 
         {/* Smart Restock Suggestions */}
@@ -581,114 +614,239 @@ export default function Grocery() {
           </div>
         )}
 
-        {/* Grocery List */}
-        {filteredGroceryItems.length === 0 ? (
+        {/* ─── Empty State ─── */}
+        {isEmpty ? (
           <Card className="p-12 text-center">
-            <div className="max-w-md mx-auto">
-              <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
-                <ShoppingCart className="h-8 w-8 text-accent" />
+            <div className="max-w-sm mx-auto">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <ShoppingBag className="h-8 w-8 text-primary" />
               </div>
-              <h3 className="text-xl font-semibold mb-2">No Grocery List Yet</h3>
-              <p className="text-muted-foreground">
-                Create a meal plan first, and your grocery list will be automatically generated!
+              <h3 className="text-xl font-semibold mb-2">Your list is empty</h3>
+              <p className="text-muted-foreground mb-6">
+                Add items manually, import from a recipe, or sync from your meal plan to get started.
               </p>
+              <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                <Button onClick={() => setShowAddDialog(true)} size="sm">
+                  <Plus className="h-4 w-4 mr-1.5" />
+                  Add Item
+                </Button>
+                <Button onClick={handleRegenerateFromPlan} variant="outline" size="sm">
+                  <RefreshCw className="h-4 w-4 mr-1.5" />
+                  Sync from Meal Plan
+                </Button>
+              </div>
             </div>
           </Card>
         ) : (
           <>
-            {/* Group By Toggle */}
-            <Card className="p-4 mb-6">
-              <Tabs value={groupBy} onValueChange={(v) => setGroupBy(v as "category" | "aisle")}>
-                <TabsList className="grid w-full max-w-md mx-auto grid-cols-2">
-                  <TabsTrigger value="aisle">Group by Aisle</TabsTrigger>
-                  <TabsTrigger value="category">Group by Category</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </Card>
+            {/* ─── Group Toggle ─── */}
+            {activeItems.length > 0 && (
+              <div className="mb-4">
+                <Tabs value={groupBy} onValueChange={(v) => setGroupBy(v as "category" | "aisle")}>
+                  <TabsList className="grid w-full max-w-xs grid-cols-2">
+                    <TabsTrigger value="aisle">By Aisle</TabsTrigger>
+                    <TabsTrigger value="category">By Category</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            )}
 
-            <div className="space-y-6">
-              {Object.entries(itemsByGroup).map(([group, items]) => {
-                if (items.length === 0) return null;
+            {/* ─── Active Shopping Items ─── */}
+            {activeItems.length > 0 ? (
+              <div className="space-y-3 mb-6">
+                {Object.entries(activeItemsByGroup).map(([group, items]) => {
+                  if (items.length === 0) return null;
 
-                return (
-                  <Card key={group} className="p-6">
-                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                      <Badge variant="outline">{group}</Badge>
-                      <span className="text-sm text-muted-foreground font-normal">
-                        ({items.length})
-                      </span>
-                    </h3>
-                    <div className="space-y-3">
-                      {items.map(item => (
-                        <div
-                          key={item.id}
-                          className={`flex items-start gap-3 p-3 rounded-lg transition-all ${
-                            item.checked 
-                              ? "bg-safe-food/10 border border-safe-food/20" 
-                              : "hover:bg-muted/50"
-                          }`}
-                        >
-                          {/* Item Photo (if available) */}
-                          {item.photo_url && (
-                            <div className="shrink-0">
+                  return (
+                    <Card key={group} className="overflow-hidden">
+                      <div className="px-4 py-3 bg-muted/30 border-b flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-sm">{group}</span>
+                          <Badge variant="secondary" className="text-xs px-1.5 py-0">
+                            {items.length}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="divide-y">
+                        {items.map(item => (
+                          <div
+                            key={item.id}
+                            className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors group"
+                          >
+                            <Checkbox
+                              checked={false}
+                              onCheckedChange={() => handleToggleItem(item.id)}
+                              className="shrink-0"
+                            />
+
+                            {/* Item photo */}
+                            {item.photo_url && (
                               <img
                                 src={item.photo_url}
                                 alt={item.name}
-                                className="w-16 h-16 object-cover rounded-md border"
+                                className="w-10 h-10 object-cover rounded-md border shrink-0"
                               />
-                            </div>
-                          )}
-                          
-                          <Checkbox
-                            checked={item.checked}
-                            onCheckedChange={() => handleToggleItem(item.id)}
-                            className="mt-1"
-                          />
-                          
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <p className={`font-medium ${item.checked ? "line-through text-muted-foreground" : ""}`}>
-                                  {item.name}
+                            )}
+
+                            {/* Item details */}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate">{item.name}</p>
+                              {item.brand_preference && (
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {item.brand_preference}
                                 </p>
-                                {item.brand_preference && (
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    Brand: {item.brand_preference}
-                                  </p>
-                                )}
-                                {item.barcode && (
-                                  <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                                    <Barcode className="h-3 w-3" />
-                                    {item.barcode}
-                                  </div>
-                                )}
-                                {item.notes && !item.checked && (
-                                  <p className="text-xs text-muted-foreground mt-1 italic">
-                                    Note: {item.notes}
-                                  </p>
-                                )}
-                                {item.checked && (
-                                  <p className="text-xs text-safe-food mt-1">
-                                    ✓ Added to pantry
-                                  </p>
-                                )}
-                              </div>
-                              <p className="text-sm text-muted-foreground whitespace-nowrap">
-                                {item.quantity} {item.unit}
-                              </p>
+                              )}
+                              {item.notes && (
+                                <p className="text-xs text-muted-foreground italic truncate">
+                                  {item.notes}
+                                </p>
+                              )}
+                              {item.barcode && (
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Barcode className="h-3 w-3" />
+                                  <span className="truncate">{item.barcode}</span>
+                                </div>
+                              )}
                             </div>
+
+                            {/* Quantity controls */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => handleQuantityChange(item.id, -1)}
+                                disabled={item.quantity <= 1}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <span className="text-sm font-medium w-16 text-center tabular-nums">
+                                {item.quantity} {item.unit}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => handleQuantityChange(item.id, 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+
+                            {/* Delete button */}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDeleteItem(item.id)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
                           </div>
+                        ))}
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            ) : purchasedItems.length > 0 ? (
+              /* All items purchased celebration */
+              <Card className="p-8 text-center mb-6 border-primary/20 bg-primary/5">
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                  <PackageCheck className="h-7 w-7 text-primary" />
+                </div>
+                <h3 className="text-lg font-semibold mb-1">All items purchased!</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Everything has been added to your pantry.
+                </p>
+                <Button onClick={handleDoneShopping} size="sm">
+                  <Check className="h-4 w-4 mr-1.5" />
+                  Done Shopping
+                </Button>
+              </Card>
+            ) : null}
+
+            {/* ─── Purchased Items Section ─── */}
+            {purchasedItems.length > 0 && activeItems.length > 0 && (
+              <Collapsible open={purchasedOpen} onOpenChange={setPurchasedOpen}>
+                <Card className="overflow-hidden border-dashed">
+                  <CollapsibleTrigger className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
+                    <div className="flex items-center gap-2">
+                      {purchasedOpen ? (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <span className="text-sm font-medium text-muted-foreground">
+                        Purchased
+                      </span>
+                      <Badge variant="secondary" className="text-xs px-1.5 py-0">
+                        {purchasedItems.length}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        - added to pantry
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDoneShopping();
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" />
+                      Clear
+                    </Button>
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent>
+                    <div className="divide-y border-t">
+                      {purchasedItems.map(item => (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-3 px-4 py-2.5 bg-muted/20"
+                        >
+                          <Checkbox
+                            checked={true}
+                            onCheckedChange={() => handleToggleItem(item.id)}
+                            className="shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm line-through text-muted-foreground truncate">
+                              {item.name}
+                            </p>
+                          </div>
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {item.quantity} {item.unit}
+                          </span>
                         </div>
                       ))}
                     </div>
-                  </Card>
-                );
-              })}
-            </div>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+            )}
+
+            {/* ─── Done Shopping Button (floating) ─── */}
+            {purchasedItems.length > 0 && activeItems.length > 0 && (
+              <div className="fixed bottom-24 md:bottom-8 left-0 right-0 flex justify-center z-30 pointer-events-none">
+                <Button
+                  onClick={handleDoneShopping}
+                  size="lg"
+                  className="shadow-lg pointer-events-auto rounded-full px-6"
+                >
+                  <Check className="h-4 w-4 mr-2" />
+                  Done Shopping ({purchasedItems.length} item{purchasedItems.length === 1 ? '' : 's'})
+                </Button>
+              </div>
+            )}
           </>
         )}
       </div>
 
+      {/* ─── Dialogs ─── */}
       <AddGroceryItemDialog
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
@@ -720,8 +878,7 @@ export default function Grocery() {
               }
             }}
           />
-          
-          {/* Store Layout Dialogs */}
+
           <CreateStoreLayoutDialog
             open={showCreateStoreDialog}
             onOpenChange={(open) => {
@@ -736,7 +893,7 @@ export default function Grocery() {
               setShowCreateStoreDialog(false);
             }}
           />
-          
+
           <ManageStoreLayoutsDialog
             open={showManageStoresDialog}
             onOpenChange={setShowManageStoresDialog}
@@ -753,7 +910,7 @@ export default function Grocery() {
               setShowManageAislesDialog(true);
             }}
           />
-          
+
           {managingAislesStore && (
             <ManageStoreAislesDialog
               open={showManageAislesDialog}
@@ -767,8 +924,7 @@ export default function Grocery() {
               storeLayout={managingAislesStore}
             />
           )}
-          
-          {/* Aisle Contribution Dialog */}
+
           <AisleContributionDialog
             open={showAisleContribution}
             onOpenChange={setShowAisleContribution}
@@ -776,12 +932,10 @@ export default function Grocery() {
             storeLayoutId={selectedStoreLayoutId}
             userId={userId}
             onContribute={() => {
-              // Reload mappings or update UI as needed
-              toast.success("Thank you for helping the community! 🎉");
+              toast.success("Thank you for helping the community!");
             }}
           />
-          
-          {/* Import Recipe Dialog */}
+
           <ImportRecipeToGroceryDialog
             open={showImportRecipeDialog}
             onOpenChange={setShowImportRecipeDialog}

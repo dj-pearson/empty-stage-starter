@@ -30,6 +30,9 @@ interface AppContextType {
   setGroceryItems: (items: GroceryItem[]) => void;
   addGroceryItem: (item: Omit<GroceryItem, "id" | "checked">) => void;
   toggleGroceryItem: (id: string) => void;
+  updateGroceryItem: (id: string, updates: Partial<GroceryItem>) => void;
+  deleteGroceryItem: (id: string) => void;
+  deleteGroceryItems: (ids: string[]) => void;
   clearCheckedGroceryItems: () => void;
   exportData: () => string;
   importData: (jsonData: string) => void;
@@ -803,6 +806,62 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateGroceryItem = (id: string, updates: Partial<GroceryItem>) => {
+    if (userId) {
+      supabase
+        .from('grocery_items')
+        .update(updates)
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) logger.error('Supabase updateGroceryItem error:', error);
+          setGroceryItemsState(
+            groceryItems.map(item =>
+              item.id === id ? { ...item, ...updates } : item
+            )
+          );
+        });
+    } else {
+      setGroceryItemsState(
+        groceryItems.map(item =>
+          item.id === id ? { ...item, ...updates } : item
+        )
+      );
+    }
+  };
+
+  const deleteGroceryItem = (id: string) => {
+    if (userId) {
+      supabase
+        .from('grocery_items')
+        .delete()
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) logger.error('Supabase deleteGroceryItem error:', error);
+          setGroceryItemsState(groceryItems.filter(item => item.id !== id));
+        });
+    } else {
+      setGroceryItemsState(groceryItems.filter(item => item.id !== id));
+    }
+  };
+
+  const deleteGroceryItems = (ids: string[]) => {
+    if (ids.length === 0) return;
+    if (userId) {
+      supabase
+        .from('grocery_items')
+        .delete()
+        .in('id', ids)
+        .then(({ error }) => {
+          if (error) logger.error('Supabase deleteGroceryItems error:', error);
+          const idSet = new Set(ids);
+          setGroceryItemsState(groceryItems.filter(item => !idSet.has(item.id)));
+        });
+    } else {
+      const idSet = new Set(ids);
+      setGroceryItemsState(groceryItems.filter(item => !idSet.has(item.id)));
+    }
+  };
+
   const clearCheckedGroceryItems = () => {
     const checkedIds = groceryItems.filter(item => item.checked).map(item => item.id);
     if (userId && checkedIds.length > 0) {
@@ -1038,6 +1097,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setGroceryItems,
         addGroceryItem,
         toggleGroceryItem,
+        updateGroceryItem,
+        deleteGroceryItem,
+        deleteGroceryItems,
         clearCheckedGroceryItems,
         exportData,
         importData,
