@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
