@@ -613,8 +613,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addRecipe = async (recipe: Omit<Recipe, "id">): Promise<Recipe> => {
     if (userId) {
-      // Map camelCase fields to DB snake_case columns and include only known columns
-      const dbPayload: any = {
+      // Map camelCase fields to DB snake_case columns (only columns that exist in recipes table)
+      const dbPayload: Record<string, unknown> = {
         name: recipe.name,
         description: recipe.description,
         food_ids: recipe.food_ids,
@@ -633,9 +633,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         total_time_minutes: recipe.total_time_minutes,
         difficulty_level: recipe.difficulty_level,
         kid_friendly_score: recipe.kid_friendly_score,
-        is_favorite: recipe.is_favorite,
         nutrition_info: recipe.nutrition_info,
-        assigned_kid_ids: recipe.assigned_kid_ids,
         tips: recipe.tips,
         additional_ingredients: recipe.additionalIngredients,
         user_id: userId,
@@ -653,8 +651,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error) {
+        console.error('Supabase addRecipe error:', { message: error.message, code: error.code, details: error.details, hint: error.hint });
+        console.error('Failed payload keys:', Object.keys(dbPayload));
         logger.error('Supabase addRecipe error:', error);
-        logger.error('Failed payload:', dbPayload);
         throw new Error(`Database error: ${error.message}`);
       } else if (data) {
         const newRecipe = normalizeRecipeFromDB(data);
@@ -693,9 +692,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (updates.total_time_minutes !== undefined) dbUpdates.total_time_minutes = updates.total_time_minutes;
       if (updates.difficulty_level !== undefined) dbUpdates.difficulty_level = updates.difficulty_level;
       if (updates.kid_friendly_score !== undefined) dbUpdates.kid_friendly_score = updates.kid_friendly_score;
-      if (updates.is_favorite !== undefined) dbUpdates.is_favorite = updates.is_favorite;
       if (updates.nutrition_info !== undefined) dbUpdates.nutrition_info = updates.nutrition_info;
-      if (updates.assigned_kid_ids !== undefined) dbUpdates.assigned_kid_ids = updates.assigned_kid_ids;
       if (updates.tips !== undefined) dbUpdates.tips = updates.tips;
       if (updates.additionalIngredients !== undefined) dbUpdates.additional_ingredients = updates.additionalIngredients;
 
