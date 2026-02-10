@@ -26,9 +26,15 @@ export default async (req: Request) => {
     if (url) {
       console.log('Fetching content from URL:', url);
       try {
-        const response = await fetch(url);
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; EatPal/1.0; +https://tryeatpal.com)',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+          },
+        });
         if (!response.ok) {
-          throw new Error(`Failed to fetch URL: ${response.statusText}`);
+          throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
         }
         content = await response.text();
       } catch (error) {

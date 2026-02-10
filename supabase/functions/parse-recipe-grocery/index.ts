@@ -37,9 +37,16 @@ export default async (req: Request) => {
     // Handle URL-based recipe parsing
     else if (url) {
       console.log('Fetching recipe from URL:', url);
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; EatPal/1.0; +https://tryeatpal.com)',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+        },
+      });
       if (!response.ok) {
-        throw new Error('Failed to fetch recipe from URL');
+        console.error(`URL fetch failed: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to fetch recipe from URL (HTTP ${response.status})`);
       }
       const html = await response.text();
       
@@ -90,9 +97,20 @@ export default async (req: Request) => {
 
     // Parse with structured output
     console.log('Parsing recipe content with AI...');
-    const parsePrompt = imageBase64 
-      ? `Parse this recipe text and extract structured data:\n\n${recipeContent}\n\nProvide JSON with: {"title": "Recipe Title", "servings": 4, "ingredients": [{"name": "flour", "quantity": 2, "unit": "cups", "category": "carb", "notes": "all-purpose"}]}`
-      : `Parse this recipe HTML and extract ingredients:\n\n${recipeContent}\n\nProvide JSON with: {"title": "Recipe Title", "servings": 4, "ingredients": [{"name": "flour", "quantity": 2, "unit": "cups", "category": "carb", "notes": "all-purpose"}]}`;
+    const jsonTemplate = `{
+  "title": "Recipe Title",
+  "description": "Brief description of the recipe",
+  "servings": 4,
+  "prepTime": "15 min",
+  "cookTime": "30 min",
+  "difficulty": "easy",
+  "tags": ["dinner", "healthy"],
+  "ingredients": [{"name": "flour", "quantity": 2, "unit": "cups", "category": "carb", "notes": "all-purpose"}],
+  "instructions": "1. First step\\n2. Second step\\n3. Third step"
+}`;
+    const parsePrompt = imageBase64
+      ? `Parse this recipe text and extract structured data:\n\n${recipeContent}\n\nProvide JSON with this structure:\n${jsonTemplate}`
+      : `Parse this recipe HTML and extract all recipe information:\n\n${recipeContent}\n\nProvide JSON with this structure:\n${jsonTemplate}\n\nExtract the full step-by-step instructions, prep/cook times, difficulty (easy/medium/hard), and relevant tags. For ingredients, use categories: protein, carb, vegetable, fruit, dairy, grain, fat, seasoning, condiment, other.`;
     
     const aiResponse = await aiService.generateContent({
       messages: [
