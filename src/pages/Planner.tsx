@@ -1,48 +1,29 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { GSAPCalendarMealPlanner } from "@/components/GSAPCalendarMealPlanner";
 import { FoodSelectorDialog } from "@/components/FoodSelectorDialog";
 import { DetailedTrackingDialog } from "@/components/DetailedTrackingDialog";
-import { buildWeekPlan, buildDayPlan } from "@/lib/mealPlanner";
+import { MobileMealPlanner } from "@/components/meal-planner/MobileMealPlanner";
+import { buildWeekPlan } from "@/lib/mealPlanner";
 import {
   Calendar,
-  RefreshCw,
   Sparkles,
-  Shuffle,
-  AlertTriangle,
-  Package,
+  RefreshCw,
   ChevronLeft,
   ChevronRight,
   Loader2,
-  MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MealSlot, PlanEntry } from "@/types";
 import { SwapMealDialog } from "@/components/SwapMealDialog";
 import { supabase } from "@/integrations/supabase/client";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
-import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
+import { format, startOfWeek, addWeeks, subWeeks, addDays } from "date-fns";
 import { calculateAge } from "@/lib/utils";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { logger } from "@/lib/logger";
-
-const MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
-  { slot: "breakfast", label: "Breakfast" },
-  { slot: "lunch", label: "Lunch" },
-  { slot: "dinner", label: "Dinner" },
-  { slot: "snack1", label: "Snack 1" },
-  { slot: "snack2", label: "Snack 2" },
-  { slot: "try_bite", label: "Try Bite" },
-];
 
 export default function Planner() {
   const {
@@ -59,18 +40,15 @@ export default function Planner() {
     copyWeekPlan,
     deleteWeekPlan,
   } = useApp();
+
+  const isMobile = useMediaQuery("(max-width: 1023px)");
+
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<PlanEntry | null>(null);
   const [currentWeekStart, setCurrentWeekStart] = useState(
     startOfWeek(new Date(), { weekStartsOn: 0 })
   );
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
-  // Default to list view on mobile (< 768px), calendar on desktop
-  const [viewMode, setViewMode] = useState<"calendar" | "list">(
-    typeof window !== "undefined" && window.innerWidth < 768
-      ? "list"
-      : "calendar"
-  );
   const [foodSelectorOpen, setFoodSelectorOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{
     date: string;
@@ -81,6 +59,8 @@ export default function Planner() {
   const [trackingEntry, setTrackingEntry] = useState<PlanEntry | null>(null);
 
   const activeKid = kids.find((k) => k.id === activeKidId);
+
+  // --- Shared handlers (used by both mobile and desktop) ---
 
   const checkStockIssues = () => {
     const outOfStock = foods.filter(
@@ -141,7 +121,6 @@ export default function Planner() {
 
     setIsGeneratingPlan(true);
     try {
-      // Get active AI model
       const { data: aiSettings, error: aiError } = await supabase
         .from("ai_settings")
         .select("*")
@@ -174,7 +153,6 @@ export default function Planner() {
         return;
       }
 
-      // Convert AI plan to plan entries
       const newEntries: PlanEntry[] = [];
       data.plan.forEach((day: any) => {
         Object.entries(day.meals).forEach(([slot, foodId]) => {
@@ -191,7 +169,6 @@ export default function Planner() {
         });
       });
 
-      // Remove existing entries for this date range and kid
       const dates = data.plan.map((d: any) => d.date);
       const filteredEntries = planEntries.filter(
         (e) => !dates.includes(e.date) || e.kid_id !== activeKidId
@@ -213,9 +190,9 @@ export default function Planner() {
     updatePlanEntry(entryId, updates);
   };
 
+  // Desktop handler (original signature)
   const handleAddEntry = (date: string, slot: MealSlot, foodId: string) => {
     if (!activeKid) return;
-
     addPlanEntry({
       kid_id: activeKid.id,
       date,
@@ -224,6 +201,61 @@ export default function Planner() {
       result: null,
     });
   };
+
+  // Mobile handler (accepts kidId directly)
+  const handleMobileAddEntry = useCallback(
+    (kidId: string, date: string, slot: MealSlot, foodId: string) => {
+      addPlanEntry({
+        kid_id: kidId,
+        date,
+        meal_slot: slot,
+        food_id: foodId,
+        result: null,
+      });
+    },
+    [addPlanEntry]
+  );
+
+  // Mobile recipe scheduling handler
+  const handleMobileSelectRecipe = useCallback(
+    async (recipeId: string, date: string, slot: MealSlot, kidId: string) => {
+      const recipe = recipes.find((r) => r.id === recipeId);
+      if (!recipe || recipe.food_ids.length === 0) return;
+
+      try {
+        const { error } = await supabase.rpc("schedule_recipe_to_plan", {
+          p_kid_id: kidId,
+          p_recipe_id: recipe.id,
+          p_date: date,
+          p_meal_slot: slot,
+        });
+
+        if (error) throw error;
+
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          const { data: planData } = await supabase
+            .from("plan_entries")
+            .select("*")
+            .order("date", { ascending: true });
+
+          if (planData) {
+            setPlanEntries(planData as any);
+          }
+        }
+
+        toast.success(
+          `${recipe.name} (${recipe.food_ids.length} items) added`
+        );
+      } catch (error) {
+        logger.error("Error scheduling recipe:", error);
+        toast.error("Failed to schedule recipe");
+      }
+    },
+    [recipes, setPlanEntries]
+  );
 
   const handlePreviousWeek = () => {
     setCurrentWeekStart(subWeeks(currentWeekStart, 1));
@@ -241,10 +273,9 @@ export default function Planner() {
     if (!activeKidId || !copyWeekPlan) return;
 
     try {
-      const fromDate = format(currentWeekStart, 'yyyy-MM-dd');
+      const fromDate = format(currentWeekStart, "yyyy-MM-dd");
       await copyWeekPlan(fromDate, toDate, activeKidId);
       toast.success("Week plan copied successfully!");
-      // Move to the next week to show the copied plan
       setCurrentWeekStart(addWeeks(currentWeekStart, 1));
     } catch (error) {
       logger.error("Error copying week:", error);
@@ -256,7 +287,7 @@ export default function Planner() {
     if (!activeKidId || !deleteWeekPlan) return;
 
     try {
-      const weekStart = format(currentWeekStart, 'yyyy-MM-dd');
+      const weekStart = format(currentWeekStart, "yyyy-MM-dd");
       await deleteWeekPlan(weekStart, activeKidId);
       toast.success("Week plan cleared");
     } catch (error) {
@@ -265,8 +296,11 @@ export default function Planner() {
     }
   };
 
-  const handleOpenFoodSelector = (date: string, slot: MealSlot, kidId?: string) => {
-    // Use provided kidId or fall back to activeKidId
+  const handleOpenFoodSelector = (
+    date: string,
+    slot: MealSlot,
+    kidId?: string
+  ) => {
     const targetKidId = kidId || activeKidId;
     if (!targetKidId) {
       toast.error("Please select a child first");
@@ -278,14 +312,13 @@ export default function Planner() {
 
   const handleSelectFood = (foodId: string) => {
     if (!selectedSlot) return;
-    
-    // Use the kidId from selectedSlot instead of activeKidId
+
     const targetKid = kids.find((k) => k.id === selectedSlot.kidId);
     if (!targetKid) {
       toast.error("Could not find the selected child");
       return;
     }
-    
+
     addPlanEntry({
       kid_id: selectedSlot.kidId,
       date: selectedSlot.date,
@@ -299,7 +332,6 @@ export default function Planner() {
   const handleSelectRecipe = async (recipeId: string) => {
     if (!selectedSlot) return;
 
-    // Use the kidId from selectedSlot
     const targetKid = kids.find((k) => k.id === selectedSlot.kidId);
     if (!targetKid) {
       toast.error("Could not find the selected child");
@@ -310,7 +342,6 @@ export default function Planner() {
     if (!recipe || recipe.food_ids.length === 0) return;
 
     try {
-      // Use the database function to schedule the full recipe
       const { error } = await supabase.rpc("schedule_recipe_to_plan", {
         p_kid_id: selectedSlot.kidId,
         p_recipe_id: recipe.id,
@@ -318,11 +349,8 @@ export default function Planner() {
         p_meal_slot: selectedSlot.slot,
       });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
-      // Refresh plan entries from database
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -342,12 +370,7 @@ export default function Planner() {
       );
     } catch (error) {
       logger.error("Error scheduling recipe:", error);
-      const message =
-        (error as any)?.message ||
-        (typeof error === "string" ? error : "Failed to schedule recipe");
-      toast.error("Failed to schedule recipe", {
-        description: message,
-      });
+      toast.error("Failed to schedule recipe");
     }
   };
 
@@ -363,12 +386,10 @@ export default function Planner() {
 
     updatePlanEntry(entry.id, updates);
 
-    // If marked as "ate", deduct from inventory
     if (result === "ate") {
       const food = foods.find((f) => f.id === entry.food_id);
       if (food && (food.quantity ?? 0) > 0) {
         try {
-          // Call the database function to deduct quantity
           const { error } = await supabase.rpc("deduct_food_quantity", {
             _food_id: entry.food_id,
             _amount: 1,
@@ -376,7 +397,6 @@ export default function Planner() {
 
           if (error) throw error;
 
-          // Update local state
           updateFood(entry.food_id, {
             ...food,
             quantity: Math.max(0, (food.quantity || 0) - 1),
@@ -399,64 +419,11 @@ export default function Planner() {
     }
   };
 
-  const handleOpenDetailedTracking = (entry: PlanEntry) => {
-    setTrackingEntry(entry);
-    setDetailedTrackingOpen(true);
-  };
-
-  const handleDetailedTrackingComplete = (
-    result: "ate" | "tasted" | "refused",
-    attemptId?: string
+  const handleCopyToChild = async (
+    entry: PlanEntry,
+    targetKidId: string
   ) => {
-    if (trackingEntry) {
-      handleMarkResult(trackingEntry, result, attemptId);
-    }
-  };
-
-  const handleSwapMeal = (entry: PlanEntry) => {
-    setSelectedEntry(entry);
-    setSwapDialogOpen(true);
-  };
-
-  const handleSwapConfirm = (newFoodId: string) => {
-    if (!selectedEntry) return;
-
-    updatePlanEntry(selectedEntry.id, { food_id: newFoodId });
-    const newFood = foods.find((f) => f.id === newFoodId);
-    toast.success(`Swapped to ${newFood?.name}`);
-  };
-
-  const handleShuffleDay = (date: string) => {
-    if (!activeKid) return;
-
-    checkStockIssues();
-
-    try {
-      // Remove existing entries for this date
-      const otherEntries = planEntries.filter(
-        (e) => e.date !== date || e.kid_id !== activeKidId
-      );
-
-      // Generate new entries for this date
-      const newDayPlan = buildDayPlan(activeKid.id, date, foods, planEntries);
-
-      // Combine
-      setPlanEntries([...otherEntries, ...newDayPlan]);
-
-      const dayName = new Date(date + "T00:00:00").toLocaleDateString("en-US", {
-        weekday: "long",
-      });
-      toast.success(`${dayName} shuffled!`);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to shuffle day"
-      );
-    }
-  };
-
-  const handleCopyToChild = async (entry: PlanEntry, targetKidId: string) => {
     if (entry.recipe_id) {
-      // Copy all recipe entries
       const recipeEntries = planEntries.filter(
         (e) =>
           e.recipe_id === entry.recipe_id &&
@@ -479,7 +446,6 @@ export default function Planner() {
       const targetKid = kids.find((k) => k.id === targetKidId);
       toast.success(`Recipe copied to ${targetKid?.name}'s plan`);
     } else {
-      // Copy single food entry
       await addPlanEntry({
         kid_id: targetKidId,
         date: entry.date,
@@ -492,21 +458,77 @@ export default function Planner() {
     }
   };
 
-  // Group entries by date (filter by active kid)
-  const planByDate: Record<string, PlanEntry[]> = {};
-  planEntries
-    .filter((entry) => entry.kid_id === activeKidId)
-    .forEach((entry) => {
-      if (!planByDate[entry.date]) {
-        planByDate[entry.date] = [];
-      }
-      planByDate[entry.date].push(entry);
-    });
+  const handleSwapConfirm = (newFoodId: string) => {
+    if (!selectedEntry) return;
+    updatePlanEntry(selectedEntry.id, { food_id: newFoodId });
+    const newFood = foods.find((f) => f.id === newFoodId);
+    toast.success(`Swapped to ${newFood?.name}`);
+  };
 
-  const dates = Object.keys(planByDate).sort();
+  // --- No children empty state ---
+  if (kids.length === 0) {
+    return (
+      <div className="min-h-screen pb-20 bg-background">
+        <div className="container mx-auto px-4 py-8 max-w-7xl">
+          <Card className="p-12 text-center">
+            <div className="max-w-md mx-auto">
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <Calendar className="h-8 w-8 text-primary" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">No Children Added</h3>
+              <p className="text-muted-foreground mb-6">
+                Please add a child to start planning meals
+              </p>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
-  const getFood = (foodId: string) => foods.find((f) => f.id === foodId);
+  // --- Mobile layout ---
+  if (isMobile) {
+    return (
+      <div className="min-h-screen pb-20 bg-background">
+        <div className="px-3 pt-4 pb-2">
+          {/* Compact mobile header */}
+          <div className="flex items-center justify-between mb-1">
+            <h1 className="text-xl font-bold text-foreground">
+              Meal Planner
+            </h1>
+            {activeKid && (
+              <span className="text-sm font-medium text-primary">
+                {activeKid.name}
+              </span>
+            )}
+          </div>
 
+          <MobileMealPlanner
+            weekStart={currentWeekStart}
+            planEntries={planEntries}
+            foods={foods}
+            recipes={recipes}
+            kids={kids}
+            activeKidId={activeKidId}
+            isGeneratingPlan={isGeneratingPlan}
+            onAddEntry={handleMobileAddEntry}
+            onUpdateEntry={handleUpdateEntry}
+            onSelectRecipe={handleMobileSelectRecipe}
+            onMarkResult={handleMarkResult}
+            onBuildWeek={handleBuildWeek}
+            onAIGenerate={() => handleAIMealPlan(7)}
+            onPreviousWeek={handlePreviousWeek}
+            onNextWeek={handleNextWeek}
+            onThisWeek={handleThisWeek}
+            onCopyWeek={handleCopyWeek}
+            onClearWeek={handleClearWeek}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // --- Desktop layout (existing) ---
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -521,7 +543,7 @@ export default function Planner() {
                 )}
               </h1>
               <p className="text-muted-foreground">
-                Drag and drop meals to plan your week
+                Plan meals for your family's week
               </p>
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -563,7 +585,6 @@ export default function Planner() {
                   variant="outline"
                   size="icon"
                   onClick={handlePreviousWeek}
-                  className="touch-target"
                   aria-label="Previous week"
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -581,7 +602,6 @@ export default function Planner() {
                   variant="outline"
                   size="icon"
                   onClick={handleNextWeek}
-                  className="touch-target"
                   aria-label="Next week"
                 >
                   <ChevronRight className="h-4 w-4" />
@@ -599,19 +619,7 @@ export default function Planner() {
           </Card>
         </div>
 
-        {kids.length === 0 ? (
-          <Card className="p-12 text-center">
-            <div className="max-w-md mx-auto">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <Calendar className="h-8 w-8 text-primary" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">No Children Added</h3>
-              <p className="text-muted-foreground mb-6">
-                Please add a child to start planning meals
-              </p>
-            </div>
-          </Card>
-        ) : activeKidId === null ? (
+        {activeKidId === null ? (
           // Family Mode - Show all children
           <div className="space-y-6">
             {kids.map((kid) => {
@@ -637,15 +645,17 @@ export default function Planner() {
                     kidId={kid.id}
                     kidName={kid.name}
                     kidAge={kidAge !== null ? kidAge : undefined}
-                    kidWeight={kid.weight_kg ? Number(kid.weight_kg) : undefined}
-                  onUpdateEntry={handleUpdateEntry}
-                  onAddEntry={handleAddEntry}
-                  onOpenFoodSelector={handleOpenFoodSelector}
-                  onCopyToChild={handleCopyToChild}
-                  onCopyWeek={handleCopyWeek}
-                  onClearWeek={handleClearWeek}
-                />
-              </div>
+                    kidWeight={
+                      kid.weight_kg ? Number(kid.weight_kg) : undefined
+                    }
+                    onUpdateEntry={handleUpdateEntry}
+                    onAddEntry={handleAddEntry}
+                    onOpenFoodSelector={handleOpenFoodSelector}
+                    onCopyToChild={handleCopyToChild}
+                    onCopyWeek={handleCopyWeek}
+                    onClearWeek={handleClearWeek}
+                  />
+                </div>
               );
             })}
           </div>
@@ -683,244 +693,6 @@ export default function Planner() {
           onSelectRecipe={handleSelectRecipe}
         />
 
-        {planEntries.length === 0 ? (
-          <Card className="p-12 text-center">
-            <div className="max-w-md mx-auto">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <Calendar className="h-8 w-8 text-primary" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">No Meal Plan Yet</h3>
-              <p className="text-muted-foreground mb-6">
-                Click "Build Week Plan" to generate a 7-day meal schedule with
-                safe foods and daily try bites
-              </p>
-              <Button onClick={handleBuildWeek} size="lg">
-                <Sparkles className="h-5 w-5 mr-2" />
-                Generate My First Plan
-              </Button>
-            </div>
-          </Card>
-        ) : (
-          <div className="space-y-6">
-            {dates.map((date, dayIndex) => {
-              const dayEntries = planByDate[date];
-              const dayName = new Date(date + "T00:00:00").toLocaleDateString(
-                "en-US",
-                {
-                  weekday: "long",
-                  month: "short",
-                  day: "numeric",
-                }
-              );
-
-              return (
-                <Card key={date} className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="font-bold text-primary">
-                          {dayIndex + 1}
-                        </span>
-                      </div>
-                      <h3 className="text-xl font-semibold">{dayName}</h3>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleShuffleDay(date)}
-                    >
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Shuffle Day
-                    </Button>
-                  </div>
-
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {MEAL_SLOTS.map(({ slot, label }) => {
-                      const entry = dayEntries.find(
-                        (e) => e.meal_slot === slot
-                      );
-                      const food = entry ? getFood(entry.food_id) : null;
-
-                      return (
-                        <div
-                          key={slot}
-                          className="p-4 rounded-lg border-2 bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all hover:border-primary/50"
-                        >
-                          <div className="flex items-start justify-between mb-3">
-                            <p className="text-sm font-semibold text-foreground uppercase tracking-wide">
-                              {label}
-                            </p>
-                            {slot === "try_bite" && (
-                              <Sparkles className="h-5 w-5 text-try-bite" />
-                            )}
-                          </div>
-
-                          {food ? (
-                            <>
-                              <div className="flex items-start justify-between mb-3">
-                                <p className="font-bold text-lg text-foreground leading-tight">
-                                  {food.name}
-                                </p>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => entry && handleSwapMeal(entry)}
-                                  title="Swap this meal"
-                                  className="hover:bg-primary/20"
-                                >
-                                  <Shuffle className="h-4 w-4" />
-                                </Button>
-                              </div>
-
-                              {/* Stock Status */}
-                              {food.quantity !== undefined &&
-                                food.quantity !== null && (
-                                  <div className="mb-3">
-                                    {food.quantity === 0 ? (
-                                      <Badge
-                                        variant="destructive"
-                                        className="gap-1 font-semibold"
-                                      >
-                                        <Package className="h-3 w-3" />
-                                        Out of Stock
-                                      </Badge>
-                                    ) : food.quantity <= 2 ? (
-                                      <Badge
-                                        variant="secondary"
-                                        className="gap-1 font-semibold bg-yellow-500/20 text-yellow-900 dark:bg-yellow-500/30 dark:text-yellow-300 border-yellow-500/50"
-                                      >
-                                        <AlertTriangle className="h-3 w-3" />
-                                        Low Stock ({food.quantity})
-                                      </Badge>
-                                    ) : (
-                                      <Badge
-                                        variant="outline"
-                                        className="gap-1 font-semibold border-green-500/50 bg-green-500/10 text-green-900 dark:bg-green-500/20 dark:text-green-300"
-                                      >
-                                        In Stock ({food.quantity})
-                                      </Badge>
-                                    )}
-                                  </div>
-                                )}
-
-                              {food.allergens && food.allergens.length > 0 && (
-                                <div className="mb-3">
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-xs font-semibold bg-orange-500/20 text-orange-900 dark:bg-orange-500/30 dark:text-orange-300 border-orange-500/50"
-                                  >
-                                    ⚠️ {food.allergens.join(", ")}
-                                  </Badge>
-                                </div>
-                              )}
-
-                              {entry && (
-                                <div className="space-y-2">
-                                  <div className="flex flex-wrap gap-2">
-                                    <Button
-                                      size="sm"
-                                      variant={
-                                        entry.result === "ate"
-                                          ? "default"
-                                          : "outline"
-                                      }
-                                      onClick={() =>
-                                        handleMarkResult(entry, "ate")
-                                      }
-                                      className={
-                                        entry.result === "ate"
-                                          ? "bg-safe-food hover:bg-safe-food/90 text-white font-semibold"
-                                          : "font-semibold hover:bg-safe-food/10"
-                                      }
-                                    >
-                                      Ate
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant={
-                                        entry.result === "tasted"
-                                          ? "default"
-                                          : "outline"
-                                      }
-                                      onClick={() =>
-                                        handleMarkResult(entry, "tasted")
-                                      }
-                                      className={
-                                        entry.result === "tasted"
-                                          ? "bg-secondary hover:bg-secondary/90 text-white font-semibold"
-                                          : "font-semibold hover:bg-secondary/10"
-                                      }
-                                    >
-                                      Tasted
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant={
-                                        entry.result === "refused"
-                                          ? "default"
-                                          : "outline"
-                                      }
-                                      onClick={() =>
-                                        handleMarkResult(entry, "refused")
-                                      }
-                                      className={
-                                        entry.result === "refused"
-                                          ? "bg-destructive hover:bg-destructive/90 text-white font-semibold"
-                                          : "font-semibold hover:bg-destructive/10"
-                                      }
-                                    >
-                                      Refused
-                                    </Button>
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button size="sm" variant="ghost">
-                                          <MoreVertical className="h-4 w-4" />
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent>
-                                        <DropdownMenuItem
-                                          onClick={() =>
-                                            handleOpenDetailedTracking(entry)
-                                          }
-                                        >
-                                          📊 Track in Detail
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                          onClick={() => handleSwapMeal(entry)}
-                                        >
-                                          🔄 Swap Food
-                                        </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  </div>
-                                  {entry.food_attempt_id && (
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs"
-                                    >
-                                      ✓ Detailed tracking
-                                    </Badge>
-                                  )}
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <div className="text-center py-4">
-                              <p className="text-muted-foreground font-medium">
-                                No meal planned
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-
         <SwapMealDialog
           open={swapDialogOpen}
           onOpenChange={setSwapDialogOpen}
@@ -936,7 +708,11 @@ export default function Planner() {
             entry={trackingEntry}
             food={foods.find((f) => f.id === trackingEntry.food_id)!}
             kidId={activeKidId!}
-            onComplete={handleDetailedTrackingComplete}
+            onComplete={(result, attemptId) => {
+              if (trackingEntry) {
+                handleMarkResult(trackingEntry, result, attemptId);
+              }
+            }}
           />
         )}
       </div>
