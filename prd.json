@@ -30,8 +30,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Deleted BlogCMSManager-OLD.tsx.bak and EmailMarketingManager-OLD.tsx.bak. Removed unused imports across 52 admin component files. Prefixed unused variables with _ for linter compliance. No other .bak files found in tracked source. Typecheck passes, all 176 tests pass."
     },
     {
       "id": "US-003",
@@ -47,8 +47,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created src/lib/env.ts with Zod schema validating required (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY) and optional (VITE_SENTRY_DSN, VITE_SENTRY_ENABLED, VITE_STRIPE_PUBLISHABLE_KEY, VITE_GA_MEASUREMENT_ID, VITE_FUNCTIONS_URL) env vars. Exports typed Env object via getEnv(). validateEnv() called in main.tsx before app renders. Logs clear errors in dev mode. Typecheck passes, all 176 tests pass."
     },
     {
       "id": "US-004",

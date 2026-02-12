@@ -13,6 +13,10 @@ import App from "./App.tsx";
 import "./index.css";
 import "./styles/mobile-first.css";
 import { initializeSentry, ErrorFallback } from "./lib/sentry";
+import { validateEnv } from "./lib/env";
+
+// Validate environment variables before anything else
+validateEnv();
 
 // Debug logging helper - only logs in development
 const debugLog = (message: string, ...args: unknown[]) => {
