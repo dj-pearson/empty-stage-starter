@@ -86,7 +86,7 @@ const Contact = () => {
       </header>
 
       {/* Content */}
-      <main className="container mx-auto px-4 py-12 max-w-5xl">
+      <main id="main-content" className="container mx-auto px-4 py-12 max-w-5xl">
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
             Contact EatPal Support - Get Help with Picky Eater Meal Planning

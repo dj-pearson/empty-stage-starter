@@ -40,6 +40,7 @@ import {
   ClipboardList,
   Plus,
   Settings,
+  Accessibility,
 } from "lucide-react";
 
 const mobileNavItems = [
@@ -241,7 +242,7 @@ const Dashboard = () => {
               </header>
 
               {/* Main Content */}
-              <main className="flex-1 overflow-auto">
+              <main id="main-content" className="flex-1 overflow-auto" role="main" aria-label="Dashboard content">
                 <Outlet />
               </main>
             </div>
@@ -377,8 +378,23 @@ const Dashboard = () => {
                           )
                         }
                       >
-                        <Settings className="h-5 w-5 shrink-0" />
+                        <Settings className="h-5 w-5 shrink-0" aria-hidden="true" />
                         <span className="text-base">Account Settings</span>
+                      </NavLink>
+                      <NavLink
+                        to="/dashboard/accessibility-settings"
+                        onClick={closeMobileMenu}
+                        className={({ isActive }) =>
+                          cn(
+                            "flex items-center gap-3 px-4 py-3 rounded-lg transition-all active:scale-[0.98]",
+                            isActive
+                              ? "bg-primary/10 text-primary font-medium shadow-sm"
+                              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                          )
+                        }
+                      >
+                        <Accessibility className="h-5 w-5 shrink-0" aria-hidden="true" />
+                        <span className="text-base">Accessibility</span>
                       </NavLink>
                       <Button
                         variant="outline"
@@ -422,9 +438,9 @@ const Dashboard = () => {
         </nav>
 
         {/* Mobile Content with padding */}
-        <div className="pt-14 pb-16">
+        <main id="main-content-mobile" className="pt-14 pb-16" role="main" aria-label="Dashboard content">
           <Outlet />
-        </div>
+        </main>
 
         {/* Mobile Bottom Navigation */}
         <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-bottom" aria-label="Primary mobile navigation">

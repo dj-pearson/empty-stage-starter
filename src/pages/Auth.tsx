@@ -424,7 +424,7 @@ const Auth = () => {
         onOpenChange={setShowResetDialog}
       />
 
-      <div className="min-h-screen flex flex-col lg:flex-row">
+      <main id="main-content" className="min-h-screen flex flex-col lg:flex-row" role="main" aria-label="Authentication">
         {/* Left side - Value Props (hidden on mobile) */}
         <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary to-primary/80 p-12 flex-col justify-center relative overflow-hidden">
           {/* Background decoration */}
@@ -485,9 +485,9 @@ const Auth = () => {
             {/* Social proof */}
             <div className="mt-12 pt-8 border-t border-white/20">
               <div className="flex items-center gap-4">
-                <div className="flex -space-x-2">
+                <div className="flex -space-x-2" aria-hidden="true">
                   {[1, 2, 3, 4, 5].map((i) => (
-                    <div key={i} className="w-8 h-8 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center text-xs text-white">
+                    <div key={i} className="w-8 h-8 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center text-xs text-white" role="presentation">
                       {["👩", "👨", "👩", "👨", "👩"][i-1]}
                     </div>
                   ))}
@@ -497,7 +497,7 @@ const Auth = () => {
                 </div>
               </div>
               <div className="mt-3 text-white/70 text-sm">
-                ⭐⭐⭐⭐⭐ <span className="text-white font-semibold">4.8/5</span> average rating
+                <span aria-hidden="true">⭐⭐⭐⭐⭐</span> <span className="text-white font-semibold">4.8/5</span> <span>average rating</span>
               </div>
             </div>
           </div>
@@ -629,7 +629,7 @@ const Auth = () => {
                 </TabsList>
 
                 <TabsContent value="signup">
-                  <form onSubmit={handleSignUp} className="space-y-4">
+                  <form onSubmit={handleSignUp} className="space-y-4" aria-label="Sign up form">
                     <div className="space-y-2">
                       <Label htmlFor="signup-email">Email</Label>
                       <div className="relative">
@@ -757,7 +757,7 @@ const Auth = () => {
                 </TabsContent>
 
                 <TabsContent value="signin">
-                  <form onSubmit={handleSignIn} className="space-y-4">
+                  <form onSubmit={handleSignIn} className="space-y-4" aria-label="Sign in form">
                     <div className="space-y-2">
                       <Label htmlFor="signin-email">Email</Label>
                       <Input
@@ -767,6 +767,8 @@ const Auth = () => {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
+                        aria-required="true"
+                        autoComplete="email"
                         className="h-11"
                       />
                     </div>
@@ -779,6 +781,8 @@ const Auth = () => {
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           required
+                          aria-required="true"
+                          autoComplete="current-password"
                           className="h-11 pr-10"
                         />
                         <Button
@@ -886,7 +890,7 @@ const Auth = () => {
             </div>
           </div>
         </div>
-      </div>
+      </main>
       <Footer />
     </>
   );

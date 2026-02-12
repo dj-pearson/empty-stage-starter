@@ -18,6 +18,7 @@ import { LoadingFallback } from "@/components/LoadingFallback";
 // Lazy load non-critical components to improve initial bundle size and LCP
 const PWAInstallPrompt = lazy(() => import("@/components/PWAInstallPrompt").then(m => ({ default: m.PWAInstallPrompt })));
 const CommandPalette = lazy(() => import("@/components/CommandPalette").then(m => ({ default: m.CommandPalette })));
+const AccessibilityWidget = lazy(() => import("@/components/AccessibilityWidget").then(m => ({ default: m.AccessibilityWidget })));
 
 // Lazy load all route components for better performance
 const Landing = lazy(() => import("./pages/Landing"));
@@ -101,6 +102,7 @@ function DeferredComponents() {
     <Suspense fallback={null}>
       <PWAInstallPrompt />
       <CommandPalette />
+      <AccessibilityWidget />
     </Suspense>
   );
 }

@@ -190,7 +190,7 @@ export default function BudgetCalculator() {
         />
       </Helmet>
 
-      <div className="min-h-screen bg-gradient-to-b from-green-50 to-white py-12 px-4 sm:px-6 lg:px-8">
+      <main id="main-content" className="min-h-screen bg-gradient-to-b from-green-50 to-white py-12 px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -406,7 +406,7 @@ export default function BudgetCalculator() {
             </p>
           </div>
         </motion.div>
-      </div>
+      </main>
     </>
   );
 }

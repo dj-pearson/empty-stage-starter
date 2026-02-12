@@ -67,7 +67,12 @@ export const Footer = () => {
               </li>
               <li>
                 <Link to="/accessibility" className="hover:text-primary transition-colors">
-                  Accessibility
+                  Accessibility Statement
+                </Link>
+              </li>
+              <li>
+                <Link to="/dashboard/accessibility-settings" className="hover:text-primary transition-colors">
+                  Accessibility Settings
                 </Link>
               </li>
             </ul>
