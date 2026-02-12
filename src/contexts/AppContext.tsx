@@ -4,6 +4,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateId, debounce } from "@/lib/utils";
 import { getStorage } from "@/lib/platform";
 import { logger } from "@/lib/logger";
+import type { Database } from "@/integrations/supabase/types";
+
+type RecipeRow = Database['public']['Tables']['recipes']['Row'];
+type RecipeInsert = Database['public']['Tables']['recipes']['Insert'];
+
+/** Shape of a Supabase real-time payload for postgres changes */
+interface RealtimePayload<T> {
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
+  new: T;
+  old: T;
+}
 
 interface AppContextType {
   foods: Food[];
@@ -55,7 +66,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 const STORAGE_KEY = "kid-meal-planner";
 
 /** Map snake_case DB row to camelCase Recipe type */
-function normalizeRecipeFromDB(r: any): Recipe {
+function normalizeRecipeFromDB(r: RecipeRow): Recipe {
   return {
     id: r.id,
     name: r.name,
@@ -292,20 +303,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                       logger.debug(`Migrating ${localOnlyRecipes.length} local recipes to database...`);
                       for (const localRecipe of localOnlyRecipes) {
                         const { id, ...recipeData } = localRecipe;
-                        const dbPayload: any = {
+                        const dbPayload: Partial<RecipeInsert> = {
                           name: recipeData.name,
                           description: recipeData.description,
                           food_ids: recipeData.food_ids,
-                          category: (recipeData as any).category,
-                          instructions: (recipeData as any).instructions ?? (recipeData as any).tips,
-                          prep_time: (recipeData as any).prepTime,
-                          cook_time: (recipeData as any).cookTime,
-                          servings: (recipeData as any).servings,
+                          category: recipeData.category,
+                          instructions: recipeData.instructions ?? recipeData.tips,
+                          prep_time: recipeData.prepTime,
+                          cook_time: recipeData.cookTime,
+                          servings: recipeData.servings,
                           user_id: uid,
                           household_id: hhId || undefined,
                         };
                         Object.keys(dbPayload).forEach((k) => {
-                          if (dbPayload[k] === undefined) delete dbPayload[k];
+                          const key = k as keyof typeof dbPayload;
+                          if (dbPayload[key] === undefined) delete dbPayload[key];
                         });
                         await supabase.from('recipes').insert([dbPayload]);
                       }
@@ -356,7 +368,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!userId || !householdId) return;
 
     // Performance: Debounce real-time updates to prevent render thrashing
-    const debouncedUpdate = debounce((payload: any) => {
+    const debouncedUpdate = debounce((payload: RealtimePayload<GroceryItem>) => {
       logger.debug('Grocery item changed:', payload);
 
       if (payload.eventType === 'INSERT') {
@@ -364,17 +376,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           // Avoid duplicates
           const exists = prev.some(item => item.id === payload.new.id);
           if (exists) return prev;
-          return [...prev, payload.new as GroceryItem];
+          return [...prev, payload.new];
         });
       } else if (payload.eventType === 'UPDATE') {
         setGroceryItemsState(prev =>
           prev.map(item =>
-            item.id === (payload.new as GroceryItem).id ? (payload.new as GroceryItem) : item
+            item.id === payload.new.id ? payload.new : item
           )
         );
       } else if (payload.eventType === 'DELETE') {
         setGroceryItemsState(prev =>
-          prev.filter(item => item.id !== (payload.old as GroceryItem).id)
+          prev.filter(item => item.id !== payload.old.id)
         );
       }
     }, 300); // 300ms debounce prevents excessive updates
@@ -403,7 +415,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!userId || !householdId) return;
 
     // Performance: Debounce real-time updates to prevent render thrashing
-    const debouncedUpdate = debounce((payload: any) => {
+    const debouncedUpdate = debounce((payload: RealtimePayload<PlanEntry>) => {
       logger.debug('Plan entry changed:', payload);
 
       if (payload.eventType === 'INSERT') {
@@ -411,17 +423,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           // Avoid duplicates
           const exists = prev.some(entry => entry.id === payload.new.id);
           if (exists) return prev;
-          return [...prev, payload.new as PlanEntry];
+          return [...prev, payload.new];
         });
       } else if (payload.eventType === 'UPDATE') {
         setPlanEntriesState(prev =>
           prev.map(entry =>
-            entry.id === (payload.new as PlanEntry).id ? (payload.new as PlanEntry) : entry
+            entry.id === payload.new.id ? payload.new : entry
           )
         );
       } else if (payload.eventType === 'DELETE') {
         setPlanEntriesState(prev =>
-          prev.filter(entry => entry.id !== (payload.old as PlanEntry).id)
+          prev.filter(entry => entry.id !== payload.old.id)
         );
       }
     }, 300); // 300ms debounce prevents excessive updates
@@ -450,7 +462,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!userId || !householdId) return;
 
     // Performance: Debounce real-time updates to prevent render thrashing
-    const debouncedUpdate = debounce((payload: any) => {
+    const debouncedUpdate = debounce((payload: RealtimePayload<Kid>) => {
       logger.debug('Kid profile changed:', payload);
 
       if (payload.eventType === 'INSERT') {
@@ -458,17 +470,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           // Avoid duplicates
           const exists = prev.some(kid => kid.id === payload.new.id);
           if (exists) return prev;
-          return [...prev, payload.new as Kid];
+          return [...prev, payload.new];
         });
       } else if (payload.eventType === 'UPDATE') {
         setKids(prev =>
           prev.map(kid =>
-            kid.id === (payload.new as Kid).id ? (payload.new as Kid) : kid
+            kid.id === payload.new.id ? payload.new : kid
           )
         );
       } else if (payload.eventType === 'DELETE') {
         setKids(prev =>
-          prev.filter(kid => kid.id !== (payload.old as Kid).id)
+          prev.filter(kid => kid.id !== payload.old.id)
         );
       }
     }, 300); // 300ms debounce prevents excessive updates
@@ -705,7 +717,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateRecipe = (id: string, updates: Partial<Recipe>) => {
     if (userId) {
       // Map camelCase to DB snake_case for updates
-      const dbUpdates: any = {};
+      const dbUpdates: Partial<RecipeRow> = {};
       if (updates.name !== undefined) dbUpdates.name = updates.name;
       if (updates.description !== undefined) dbUpdates.description = updates.description;
       if (updates.food_ids !== undefined) dbUpdates.food_ids = updates.food_ids;

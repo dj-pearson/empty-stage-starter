@@ -1,3 +1,29 @@
+## Codebase Patterns
+- TypeScript strict mode is enabled in both `tsconfig.json` and `tsconfig.app.json` - all new code must be strict-compliant
+- AppContext.tsx uses `RecipeRow` (DB type) and `RecipeInsert` for typed Supabase operations - use `Database['public']['Tables'][tableName]['Row']` pattern for other tables
+- Real-time subscription callbacks should use `RealtimePayload<T>` interface defined in AppContext.tsx for type safety
+- DB uses snake_case, UI uses camelCase - `normalizeRecipeFromDB()` maps between them
+- `npx tsc --noEmit` for typecheck, `npx vitest run` for tests (176 passing), `npm run build` for full build (~3.5 min)
+- Explicit `any` types exist in ~82 files (mostly admin/integration code) - these pass `noImplicitAny` but should be replaced with proper types incrementally
+
 # Ralph Progress Log
 Started: Thu Feb 12 10:21:37 CST 2026
+---
+
+## 2026-02-12 - US-001
+- Enabled `strict: true` in tsconfig.app.json (was `false`) and tsconfig.json
+- Removed redundant `noImplicitAny: true` from tsconfig.app.json (covered by strict)
+- Replaced `any` types in AppContext.tsx with proper typed alternatives:
+  - `normalizeRecipeFromDB(r: any)` → `normalizeRecipeFromDB(r: RecipeRow)`
+  - `dbPayload: any` → `dbPayload: Partial<RecipeInsert>`
+  - Removed `(recipeData as any).field` casts in recipe migration code
+  - Real-time subscription callbacks: `(payload: any)` → `RealtimePayload<GroceryItem|PlanEntry|Kid>`
+  - `dbUpdates: any` → `dbUpdates: Partial<RecipeRow>`
+- Added `Database` type import, `RecipeRow`, `RecipeInsert` type aliases, and `RealtimePayload<T>` interface
+- Files changed: tsconfig.json, tsconfig.app.json, src/contexts/AppContext.tsx, prd.json
+- **Learnings for future iterations:**
+  - The codebase was already `noImplicitAny: true` compliant, so enabling strict mode caused zero new errors
+  - `strict: true` subsumes `noImplicitAny`, `strictNullChecks`, `strictFunctionTypes`, etc.
+  - ~82 files still have explicit `any` types (pass noImplicitAny) - these are mostly in admin/integration components
+  - Supabase DB types are at `src/integrations/supabase/types.ts` with `Database['public']['Tables'][name]['Row'|'Insert'|'Update']` pattern
 ---
