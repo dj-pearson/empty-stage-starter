@@ -7,12 +7,11 @@
 // Import React first to ensure it's available before any components load
 import React from "react";
 import { createRoot } from "react-dom/client";
-// Import ErrorBoundary from Sentry
-import { ErrorBoundary as SentryErrorBoundary } from "@sentry/react";
 import App from "./App.tsx";
 import "./index.css";
 import "./styles/mobile-first.css";
-import { initializeSentry, ErrorFallback } from "./lib/sentry";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { initializeSentry } from "./lib/sentry";
 import { validateEnv } from "./lib/env";
 
 // Validate environment variables before anything else
@@ -48,7 +47,7 @@ try {
   console.warn('[EatPal] Sentry initialization failed:', error);
 }
 
-// Wrap in Sentry ErrorBoundary only if Sentry is configured
+// Wrap in global ErrorBoundary for crash recovery
 const rootElement = document.getElementById("root");
 if (!rootElement) {
   throw new Error('Root element not found');
@@ -56,23 +55,11 @@ if (!rootElement) {
 
 try {
   debugLog('Creating React root...');
-  const AppWithErrorBoundary = import.meta.env.VITE_SENTRY_DSN ? (
-    <SentryErrorBoundary
-      fallback={(errorData) => (
-        <ErrorFallback
-          error={(errorData.error as Error) ?? new Error('Unknown error')}
-          resetError={errorData.resetError}
-        />
-      )}
-      showDialog={false}
-    >
+  createRoot(rootElement).render(
+    <ErrorBoundary fullPage>
       <App />
-    </SentryErrorBoundary>
-  ) : (
-    <App />
+    </ErrorBoundary>
   );
-
-  createRoot(rootElement).render(AppWithErrorBoundary);
   debugLog('React root rendered successfully');
 } catch (error) {
   // Always log render errors - critical for production debugging

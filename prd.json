@@ -64,8 +64,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Enhanced ErrorBoundary.tsx with fullPage prop for top-level use, Sentry reporting via logError() with component stack traces, and dev/prod differentiated UI (dev shows error + component stack, prod shows friendly message). Updated main.tsx to always wrap App with ErrorBoundary fullPage instead of conditional SentryErrorBoundary. Typecheck passes, all 176 tests pass."
     },
     {
       "id": "US-005",
