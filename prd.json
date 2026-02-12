@@ -97,8 +97,8 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created src/lib/apiRetry.ts with withRetry() for generic async operations and withSupabaseRetry() for Supabase queries. Exponential backoff: 1s, 2s, 4s (configurable). Only retries network errors and 5xx, not 4xx. AbortSignal support via RetryAbortedError. Dev-mode console warnings for retry attempts. Typecheck passes, all 176 tests pass."
     },
     {
       "id": "US-007",

@@ -5,6 +5,9 @@
 - DB uses snake_case, UI uses camelCase - `normalizeRecipeFromDB()` maps between them
 - `npx tsc --noEmit` for typecheck, `npx vitest run` for tests (176 passing), `npm run build` for full build (~3.5 min)
 - Explicit `any` types exist in ~82 files (mostly admin/integration code) - these pass `noImplicitAny` but should be replaced with proper types incrementally
+- Error boundaries: `ErrorBoundary` (component-level, card UI) and `ErrorBoundary fullPage` (top-level, full-page UI) in `src/components/ErrorBoundary.tsx`; `RouteErrorBoundary` (per-route) in `src/components/RouteErrorBoundary.tsx`. All report to Sentry via `logError()`.
+- Use `logError(error, context)` from `src/lib/sentry.tsx` for Sentry reporting - it's safe to call regardless of Sentry configuration
+- Use `withRetry()` from `src/lib/apiRetry.ts` for generic async retry, `withSupabaseRetry()` for Supabase queries that return `{ data, error }` - only retries network/5xx errors
 
 # Ralph Progress Log
 Started: Thu Feb 12 10:21:37 CST 2026
@@ -54,4 +57,41 @@ Started: Thu Feb 12 10:21:37 CST 2026
   - The Supabase client already handles missing env vars gracefully with a mock client pattern - env validation supplements but doesn't replace this
   - `import.meta.env.VITE_*` values are `string | undefined` at runtime - Zod `.optional()` handles the undefined case
   - VITE_SENTRY_DSN and VITE_FUNCTIONS_URL can be empty strings in .env files, so validation must allow both URL and empty string
+---
+
+## 2026-02-12 - US-004
+- Enhanced `src/components/ErrorBoundary.tsx` with:
+  - `fullPage` prop for top-level app wrapping (renders full-page error UI)
+  - Sentry error reporting via `logError()` with component stack trace context
+  - `errorInfo` state to capture and display React component stack in dev mode
+  - Dev mode: shows error message, stack trace, and component stack
+  - Production mode: shows friendly message ("Our team has been notified...")
+  - "Try Again" button resets error state, "Go Home" button navigates to /
+- Updated `src/main.tsx`:
+  - Replaced conditional `SentryErrorBoundary` (only when DSN configured) with our `ErrorBoundary fullPage` (always wraps App)
+  - Removed `@sentry/react` ErrorBoundary and sentry ErrorFallback imports
+  - ErrorBoundary now handles Sentry reporting internally via `logError()`
+- Files changed: src/components/ErrorBoundary.tsx, src/main.tsx, prd.json
+- **Learnings for future iterations:**
+  - `logError()` from `src/lib/sentry.tsx` handles Sentry reporting conditionally (only in prod or when VITE_SENTRY_ENABLED=true) - safe to call always
+  - The sentry.tsx `ErrorFallback` is now unused by main.tsx but still exported for potential other uses
+  - React class error boundaries need `getDerivedStateFromError` for synchronous state updates and `componentDidCatch` for side effects (logging/Sentry)
+  - The try/catch block in main.tsx around `createRoot().render()` catches pre-React errors (e.g., missing root element); ErrorBoundary catches errors during React rendering
+---
+
+## 2026-02-12 - US-006
+- Created `src/lib/apiRetry.ts` with two main exports:
+  - `withRetry<T>(operation, config?)` - generic retry wrapper for any async operation
+  - `withSupabaseRetry<T>(operation, config?)` - Supabase-specific wrapper that handles `{ data, error }` return pattern
+- Exponential backoff: 1s → 2s → 4s (configurable via `initialDelayMs`, `backoffMultiplier`, `maxDelayMs`)
+- Only retries network errors and 5xx server errors; 4xx client errors are NOT retried
+- `AbortSignal` support via `config.signal` for cancellation; throws `RetryAbortedError` on abort
+- `isRetryableError()` exported for external use to check if an error should be retried
+- Dev-mode console warnings for each retry attempt
+- Files changed: src/lib/apiRetry.ts (new), prd.json, scripts/ralph/progress.txt
+- **Learnings for future iterations:**
+  - Supabase client methods return `{ data, error }` instead of throwing - need a wrapper (`withSupabaseRetry`) that throws retryable errors so the retry loop can catch them
+  - `import.meta.env.DEV` is available in library modules for conditional dev logging
+  - Network errors from `fetch` manifest as `TypeError: Failed to fetch` - check for this pattern
+  - DOMException with name `AbortError` indicates user-initiated abort and should NOT be retried
 ---
