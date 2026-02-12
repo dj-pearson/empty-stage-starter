@@ -31,14 +31,9 @@ import {
   Linkedin,
   TrendingUp,
   Calendar as CalendarIcon,
-  Clock,
   Plus,
   Send,
-  Image as ImageIcon,
   Link as LinkIcon,
-  Hash,
-  Eye,
-  Edit,
   Trash2,
   CheckCircle,
   XCircle,
@@ -46,8 +41,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format, addDays } from "date-fns";
-import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 import { logger } from "@/lib/logger";
 
 const PLATFORMS = [
@@ -96,7 +90,7 @@ export function SocialMediaManager() {
   const [showPostDialog, setShowPostDialog] = useState(false);
   const [showAccountDialog, setShowAccountDialog] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>();
-  const [selectedTime, setSelectedTime] = useState("12:00");
+  const [_selectedTime, _setSelectedTime] = useState("12:00");
 
   const [postForm, setPostForm] = useState({
     title: "",

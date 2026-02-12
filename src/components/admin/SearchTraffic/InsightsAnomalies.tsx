@@ -5,7 +5,7 @@ interface Props {
   connections: any[];
 }
 
-export function InsightsAnomalies({ dateRange, connections }: Props) {
+export function InsightsAnomalies({ dateRange: _dateRange, connections: _connections }: Props) {
   return (
     <Card>
       <CardHeader>

@@ -40,7 +40,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Progress } from "@/components/ui/progress";
+
 import {
   Link2,
   Unlink,
@@ -54,8 +54,6 @@ import {
   Upload,
   Clock,
   Users,
-  Zap,
-  ExternalLink,
   Shield,
   KeyRound,
   MapPin,
@@ -326,7 +324,7 @@ export function CRMIntegration() {
   const validateApiKey = async (
     provider: "hubspot" | "salesforce",
     key: string,
-    url?: string
+    _url?: string
   ): Promise<boolean> => {
     // In production, this would make actual API calls to validate
     // For now, we'll simulate validation

@@ -14,7 +14,6 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase-platform";
-import { formatDistanceToNow } from "date-fns";
 
 interface PerformanceMetrics {
   metric_date: string;
@@ -39,7 +38,7 @@ interface PerformanceMetrics {
 export function SupportPerformanceDashboard() {
   const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('30d');
+  const [period, _setPeriod] = useState<'7d' | '30d' | '90d'>('30d');
 
   useEffect(() => {
     loadMetrics();

@@ -5,7 +5,7 @@ interface Props {
   connections: any[];
 }
 
-export function SEOOpportunities({ dateRange, connections }: Props) {
+export function SEOOpportunities({ dateRange: _dateRange, connections: _connections }: Props) {
   return (
     <Card>
       <CardHeader>

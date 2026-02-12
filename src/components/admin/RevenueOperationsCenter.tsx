@@ -16,7 +16,6 @@ import {
   BarChart3,
   Calendar,
   Mail,
-  CreditCard,
   RefreshCw,
   Loader2,
   ArrowRight,

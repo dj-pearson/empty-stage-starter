@@ -10,13 +10,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -31,10 +24,7 @@ import {
   Users,
   Receipt,
   Utensils,
-  Calendar,
   BarChart3,
-  Settings,
-  CheckCircle2,
   Loader2,
   Package,
   Mail,
@@ -144,7 +134,7 @@ export function DocumentExportManager() {
   };
 
   const fetchDataForExport = async (template: ExportTemplate): Promise<any[]> => {
-    let query;
+    let _query;
 
     switch (template.dataSource) {
       case "profiles":

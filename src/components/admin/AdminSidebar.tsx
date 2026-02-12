@@ -46,7 +46,7 @@ interface AdminSidebarProps {
 
 export function AdminSidebar({ activeTab, onTabChange }: AdminSidebarProps) {
   const { state } = useSidebar();
-  const isCollapsed = state === "collapsed";
+  const _isCollapsed = state === "collapsed";
 
   return (
     <Sidebar collapsible="icon" className="border-r">

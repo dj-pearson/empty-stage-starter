@@ -47,22 +47,19 @@ import {
   MoreVertical,
   Clock,
   PlayCircle,
-  PauseCircle,
   Trash2,
   Edit,
   Copy,
   Eye,
   ChevronDown,
   ChevronRight,
-  GripVertical,
   Zap,
   Users,
   TrendingUp,
-  ArrowRight,
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
+
 import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 
@@ -245,7 +242,7 @@ export function EmailSequenceBuilder() {
 
   const handleCreateSequence = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from("email_sequences")
         .insert([{
           name: sequenceForm.name,

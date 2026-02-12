@@ -5,7 +5,7 @@ interface Props {
   connections: any[];
 }
 
-export function ComparativeAnalytics({ dateRange, connections }: Props) {
+export function ComparativeAnalytics({ dateRange: _dateRange, connections: _connections }: Props) {
   return (
     <Card>
       <CardHeader>

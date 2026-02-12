@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -157,7 +156,7 @@ export function UserManagementDashboard() {
 
   const handleBanUser = async (userId: string, ban: boolean) => {
     try {
-      const { data, error } = await invokeEdgeFunction('update-user', {
+      const { data: _data, error } = await invokeEdgeFunction('update-user', {
         body: { userId, action: ban ? 'ban' : 'unban' }
       });
 
@@ -174,7 +173,7 @@ export function UserManagementDashboard() {
 
   const handleMakeAdmin = async (userId: string) => {
     try {
-      const { data, error } = await invokeEdgeFunction('update-user', {
+      const { data: _data, error } = await invokeEdgeFunction('update-user', {
         body: { userId, action: 'make_admin' }
       });
 
@@ -190,7 +189,7 @@ export function UserManagementDashboard() {
 
   const handleRemoveAdmin = async (userId: string) => {
     try {
-      const { data, error } = await invokeEdgeFunction('update-user', {
+      const { data: _data, error } = await invokeEdgeFunction('update-user', {
         body: { userId, action: 'remove_admin' }
       });
 

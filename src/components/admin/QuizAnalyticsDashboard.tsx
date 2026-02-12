@@ -13,7 +13,7 @@ import { getQuizAnalyticsSummary, getRecentLeads } from '@/lib/quiz/supabaseInte
 import { getPersonalityName } from '@/lib/quiz/personalityTypes';
 import { PersonalityType } from '@/types/quiz';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { Users, Mail, FileDown, Share2, TrendingUp, Clock, RefreshCw } from 'lucide-react';
+import { Users, Mail, FileDown, Clock, RefreshCw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface AnalyticsSummary {

@@ -6,7 +6,7 @@
  * authentication method preferences, and login trends.
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useAdminLoginHistory } from "@/hooks/useLoginHistory";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,13 +27,9 @@ import {
   Smartphone,
   Tablet,
   Globe,
-  TrendingUp,
-  TrendingDown,
   Users,
   Shield,
   ShieldAlert,
-  Clock,
-  MapPin,
   Chrome,
   Apple,
   Key,
@@ -45,18 +41,18 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
-import { format, subDays, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 
 // Simple bar chart component
 function SimpleBarChart({
   data,
   maxValue,
-  color = "bg-primary",
+  _color = "bg-primary",
 }: {
   data: { label: string; value: number }[];
   maxValue: number;
-  color?: string;
+  _color?: string;
 }) {
   return (
     <div className="space-y-3">
@@ -140,7 +136,7 @@ function DeviceBreakdown({
     tablet: Tablet,
   };
 
-  const deviceColors: Record<string, string> = {
+  const _deviceColors: Record<string, string> = {
     desktop: "bg-blue-500",
     mobile: "bg-green-500",
     tablet: "bg-purple-500",

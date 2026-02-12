@@ -33,11 +33,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
-  CreditCard,
   TrendingUp,
   Users,
   DollarSign,
-  Calendar,
   Plus,
   Edit,
   Download,

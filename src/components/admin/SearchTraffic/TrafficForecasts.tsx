@@ -5,7 +5,7 @@ interface Props {
   connections: any[];
 }
 
-export function TrafficForecasts({ dateRange, connections }: Props) {
+export function TrafficForecasts({ dateRange: _dateRange, connections: _connections }: Props) {
   return (
     <Card>
       <CardHeader>

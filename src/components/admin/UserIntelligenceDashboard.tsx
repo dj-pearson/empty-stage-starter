@@ -4,40 +4,29 @@ import { calculateAge } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Search,
   User,
-  Mail,
   CreditCard,
   Activity,
   AlertTriangle,
   CheckCircle,
   XCircle,
-  Clock,
   TrendingDown,
-  TrendingUp,
-  DollarSign,
-  Calendar,
   Flag,
   MessageSquare,
   Send,
   Gift,
   StickyNote,
-  Play,
   ExternalLink,
-  RefreshCw,
   Loader2,
   AlertCircle,
   Brain,
   History,
-  ChevronDown,
-  ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase-platform";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { formatDistanceToNow, format } from "date-fns";
 import {

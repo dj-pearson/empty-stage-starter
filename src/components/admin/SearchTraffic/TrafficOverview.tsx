@@ -95,7 +95,7 @@ export function TrafficOverview({ dateRange, connections }: Props) {
       const totalUsers = chartDataArray.reduce((sum, day) => sum + day.users, 0);
       const totalPageviews = chartDataArray.reduce((sum, day) => sum + day.pageviews, 0);
       const totalClicks = chartDataArray.reduce((sum, day) => sum + day.clicks, 0);
-      const avgBounceRate = chartDataArray.reduce((sum, day) => sum + day.bounceRate, 0) / chartDataArray.length;
+      const _avgBounceRate = chartDataArray.reduce((sum, day) => sum + day.bounceRate, 0) / chartDataArray.length;
 
       // Calculate changes (compare first half vs second half of period)
       const midpoint = Math.floor(chartDataArray.length / 2);

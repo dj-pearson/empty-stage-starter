@@ -9,7 +9,6 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
@@ -25,7 +24,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { RefreshCw, Trash2, Download, Eye, HardDrive, FileImage, FileText, Lock, Unlock } from 'lucide-react';
-import { storageManager, BucketStats, StorageFileInfo, STORAGE_BUCKETS } from '@/lib/storage-manager';
+import { storageManager, BucketStats, StorageFileInfo } from '@/lib/storage-manager';
 import { formatBytes } from '@/lib/file-utils';
 import { cn } from '@/lib/utils';
 
@@ -51,7 +50,7 @@ export function StorageManagement() {
     try {
       const stats = await storageManager.getAllBucketStats();
       setBucketStats(stats);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to load storage statistics');
     } finally {
       setIsLoading(false);
@@ -63,7 +62,7 @@ export function StorageManagement() {
     try {
       const fileList = await storageManager.listFiles(bucket, undefined, { limit: 100 });
       setFiles(fileList);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to load files');
     } finally {
       setIsLoadingFiles(false);

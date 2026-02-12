@@ -2,7 +2,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, CheckCircle, XCircle, Info } from "lucide-react";
+import { AlertCircle, CheckCircle, XCircle } from "lucide-react";
 import type {
   CrawlResultsSummary,
   ImageResultsSummary,
