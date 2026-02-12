@@ -1,0 +1,25 @@
+# Navigate to the Meal Planner tab
+appId: com.eatpal.app
+---
+- launchApp:
+    appId: com.eatpal.app
+    clearState: false
+
+# Tap the Planner tab
+- tapOn:
+    text: "Planner"
+- waitForAnimationToEnd
+
+# Wait for the weekly calendar to render
+- extendedWaitUntil:
+    visible: "Breakfast"
+    timeout: 8000
+
+# Scroll to show all meal slots
+- scroll:
+    direction: "DOWN"
+- wait: 500
+- scroll:
+    direction: "UP"
+- waitForAnimationToEnd
+- wait: 1000

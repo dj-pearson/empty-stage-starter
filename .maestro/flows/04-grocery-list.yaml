@@ -1,0 +1,18 @@
+# Navigate to the Grocery List tab
+appId: com.eatpal.app
+---
+- launchApp:
+    appId: com.eatpal.app
+    clearState: false
+
+# Tap the Grocery tab
+- tapOn:
+    text: "Grocery"
+- waitForAnimationToEnd
+
+# Wait for the grocery list to render
+- extendedWaitUntil:
+    visible: "Add grocery item"
+    timeout: 8000
+
+- wait: 1000

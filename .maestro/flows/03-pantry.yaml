@@ -1,0 +1,19 @@
+# Navigate to the Pantry tab
+appId: com.eatpal.app
+---
+- launchApp:
+    appId: com.eatpal.app
+    clearState: false
+
+# Tap the Pantry tab
+- tapOn:
+    text: "Pantry"
+- waitForAnimationToEnd
+
+# Wait for the food list to load
+- extendedWaitUntil:
+    visible: "Search foods"
+    timeout: 8000
+
+# Ensure we see the full list with categories
+- wait: 1500

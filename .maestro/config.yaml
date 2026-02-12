@@ -1,0 +1,12 @@
+# Maestro configuration for EatPal screenshot automation
+#
+# App identifiers
+appId: com.eatpal.app
+
+# Timeouts
+initFlow:
+  appId: com.eatpal.app
+
+# Default settings
+sdk: 35           # Android SDK
+locale: en_US

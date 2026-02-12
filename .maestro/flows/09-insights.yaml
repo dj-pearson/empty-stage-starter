@@ -1,0 +1,23 @@
+# Navigate to the Nutrition Insights screen
+appId: com.eatpal.app
+---
+- launchApp:
+    appId: com.eatpal.app
+    clearState: false
+
+# Go to More tab
+- tapOn:
+    text: "More"
+- waitForAnimationToEnd
+
+# Tap Nutrition Insights
+- tapOn:
+    text: "Nutrition Insights"
+- waitForAnimationToEnd
+
+# Wait for insights to load
+- extendedWaitUntil:
+    visible: "Nutrition Insights"
+    timeout: 8000
+
+- wait: 1500

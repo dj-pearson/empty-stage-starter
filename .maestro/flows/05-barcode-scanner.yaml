@@ -1,0 +1,20 @@
+# Navigate to the Barcode Scanner modal
+# Note: On simulators, the camera won't work but the UI will render.
+appId: com.eatpal.app
+---
+- launchApp:
+    appId: com.eatpal.app
+    clearState: false
+
+# Go to Pantry (which has the scan button)
+- tapOn:
+    text: "Pantry"
+- waitForAnimationToEnd
+
+# Tap the scan barcode button
+- tapOn:
+    text: "📷"
+    optional: true
+
+# Wait for the scanner to load (will show permission screen on simulator)
+- wait: 2000

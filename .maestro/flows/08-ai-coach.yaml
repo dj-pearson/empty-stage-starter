@@ -1,0 +1,24 @@
+# Navigate to the AI Meal Coach chat screen
+appId: com.eatpal.app
+---
+- launchApp:
+    appId: com.eatpal.app
+    clearState: false
+
+# Go to More tab
+- tapOn:
+    text: "More"
+- waitForAnimationToEnd
+
+# Tap AI Meal Coach
+- tapOn:
+    text: "AI Meal Coach"
+- waitForAnimationToEnd
+
+# Wait for the chat UI to load
+- extendedWaitUntil:
+    visible: "AI Meal Coach"
+    timeout: 8000
+
+# The welcome screen with suggestion chips should be visible
+- wait: 1000
