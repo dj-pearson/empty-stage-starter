@@ -6,7 +6,9 @@ import { Platform, useColorScheme } from 'react-native';
 import { MobileAuthProvider } from './providers/MobileAuthProvider';
 import { MobileAppProvider } from './providers/MobileAppProvider';
 import { MobileThemeProvider, useTheme } from './providers/MobileThemeProvider';
+import { MobileErrorBoundary } from './components/MobileErrorBoundary';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Updates from 'expo-updates';
 
 // Prevent the splash screen from auto-hiding before app is ready
 SplashScreen.preventAutoHideAsync();
@@ -17,7 +19,19 @@ function AppContent() {
 
   useEffect(() => {
     async function prepare() {
-      // Add any async initialization here (fonts, assets, etc.)
+      // Check for OTA updates in production
+      if (!__DEV__) {
+        try {
+          const update = await Updates.checkForUpdateAsync();
+          if (update.isAvailable) {
+            await Updates.fetchUpdateAsync();
+            await Updates.reloadAsync();
+          }
+        } catch (e) {
+          // OTA check is best-effort; don't block app startup
+          console.log('OTA update check skipped:', e);
+        }
+      }
       setAppReady(true);
       await SplashScreen.hideAsync();
     }
@@ -87,14 +101,16 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <MobileThemeProvider>
-        <MobileAuthProvider>
-          <MobileAppProvider>
-            <AppContent />
-          </MobileAppProvider>
-        </MobileAuthProvider>
-      </MobileThemeProvider>
-    </SafeAreaProvider>
+    <MobileErrorBoundary>
+      <SafeAreaProvider>
+        <MobileThemeProvider>
+          <MobileAuthProvider>
+            <MobileAppProvider>
+              <AppContent />
+            </MobileAppProvider>
+          </MobileAuthProvider>
+        </MobileThemeProvider>
+      </SafeAreaProvider>
+    </MobileErrorBoundary>
   );
 }

@@ -1,0 +1,39 @@
+EatPal – Meal Planning for Families
+
+Take the stress out of family mealtimes. EatPal is the all-in-one meal planning, nutrition tracking, and grocery management app built for busy parents.
+
+<b>KEY FEATURES</b>
+
+★ Smart Meal Planning – Plan breakfasts, lunches, snacks, and dinners for each child with a visual weekly calendar.
+
+★ Allergen Tracking – Tag allergens per child and get warnings when meal plans include flagged ingredients.
+
+★ Nutrition Insights – Track acceptance rates, view category breakdowns, and monitor your family's nutrition progress over time.
+
+★ Barcode Scanner – Scan any packaged food to instantly add it to your pantry with full nutrition data from Open Food Facts.
+
+★ AI Meal Coach – Get personalized meal suggestions, recipe ideas, and picky-eater strategies from our AI-powered assistant.
+
+★ Food Chaining – Purpose-built tools for parents managing picky eaters, using the food chaining therapy approach to gradually expand accepted foods.
+
+★ Grocery Lists – Automatically generate grocery lists from your meal plans, check off items as you shop, and never forget an ingredient.
+
+★ Recipe Management – Save and organize family recipes with full nutritional information and easy scaling.
+
+★ Multi-Child Support – Manage separate profiles, preferences, and meal plans for every child in your family.
+
+★ Family Collaboration – Share meal plans with your partner and vote on weekly meals together.
+
+<b>WHO IS EATPAL FOR?</b>
+
+• Parents looking to simplify weekly meal prep
+• Families managing food allergies or dietary restrictions
+• Parents of picky eaters seeking structured feeding strategies
+• Caregivers tracking nutrition for growing children
+
+<b>SUBSCRIPTION</b>
+
+EatPal offers a free tier with core features. Unlock unlimited children, AI coaching, advanced insights, and grocery delivery integration with EatPal Family or EatPal Pro.
+
+Privacy Policy: https://tryeatpal.com/privacy
+Terms of Service: https://tryeatpal.com/terms

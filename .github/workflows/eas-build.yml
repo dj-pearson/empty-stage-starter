@@ -1,0 +1,129 @@
+name: EAS Build & Submit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'app.config.js'
+      - 'eas.json'
+      - 'package.json'
+      - 'metro.config.cjs'
+      - 'index.mobile.js'
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to build'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - ios
+          - android
+      profile:
+        description: 'Build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - development
+          - preview
+          - production
+      submit:
+        description: 'Submit to stores after build'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+  NODE_VERSION: '20.18.0'
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: TypeScript check (mobile files)
+        run: npx tsc --noEmit --project tsconfig.json
+
+  build:
+    name: EAS Build (${{ matrix.platform }})
+    needs: lint-and-typecheck
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: ${{ github.event_name == 'workflow_dispatch' && fromJson(format('["{0}"]', inputs.platform == 'all' && 'ios","android' || inputs.platform)) || fromJson('["ios","android"]') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - run: npm ci
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Determine build profile
+        id: profile
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "profile=${{ inputs.profile }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "profile=preview" >> $GITHUB_OUTPUT
+          else
+            echo "profile=development" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build ${{ matrix.platform }}
+        run: eas build --platform ${{ matrix.platform }} --profile ${{ steps.profile.outputs.profile }} --non-interactive
+
+  submit:
+    name: Submit to Stores
+    needs: build
+    if: >
+      (github.event_name == 'workflow_dispatch' && inputs.submit == true && inputs.profile == 'production') ||
+      false
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: ${{ github.event_name == 'workflow_dispatch' && fromJson(format('["{0}"]', inputs.platform == 'all' && 'ios","android' || inputs.platform)) || fromJson('["ios","android"]') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - run: npm ci
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Submit ${{ matrix.platform }}
+        run: eas submit --platform ${{ matrix.platform }} --latest --non-interactive
+        env:
+          # iOS App Store Connect
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          ASC_APP_ID: ${{ secrets.ASC_APP_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Android Google Play
+          GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
