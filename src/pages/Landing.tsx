@@ -281,11 +281,6 @@ const Landing = () => {
       />
 
       <div ref={containerRef} className="min-h-screen bg-background overflow-x-hidden">
-        {/* Skip to main content link target */}
-        <a id="main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-primary focus:text-white" href="#main">
-          Skip to main content
-        </a>
-
         {/* Header */}
         <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm transition-all duration-300">
           <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -456,7 +451,7 @@ const Landing = () => {
         </header>
 
         {/* Main content area - required for accessibility */}
-        <main id="main" role="main">
+        <main id="main-content" role="main">
           {/* Enhanced Hero Section with Trust Signals */}
           <div className="relative">
             <Suspense fallback={<div className="absolute inset-0" />}>
@@ -705,8 +700,8 @@ const Landing = () => {
             <div className="animate-section text-center mt-12">
               <div className="inline-flex items-center gap-8 flex-wrap justify-center bg-white/50 backdrop-blur-sm p-6 rounded-2xl shadow-sm">
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-primary">⭐⭐⭐⭐⭐</div>
-                  <p className="text-sm text-muted-foreground mt-2">4.8/5 stars</p>
+                  <div className="text-3xl font-bold text-primary" aria-hidden="true">⭐⭐⭐⭐⭐</div>
+                  <p className="text-sm text-muted-foreground mt-2">4.8 out of 5 stars</p>
                 </div>
                 <div className="text-center border-l border-primary/20 pl-8">
                   <div className="text-3xl font-bold text-primary">2,000+</div>
@@ -964,16 +959,16 @@ const Landing = () => {
               {/* Social proof */}
               <div className="flex justify-center items-center gap-6 mt-8 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <div className="flex -space-x-2">
+                  <div className="flex -space-x-2" aria-hidden="true">
                     {[1, 2, 3, 4].map((i) => (
-                      <div key={i} className="w-8 h-8 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center text-xs text-white">
+                      <div key={i} className="w-8 h-8 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center text-xs text-white" role="presentation">
                         {["👩", "👨", "👩", "👨"][i-1]}
                       </div>
                     ))}
                   </div>
                   <span className="text-white/80 text-sm ml-2">2,000+ happy parents</span>
                 </div>
-                <div className="text-white/80 text-sm">⭐⭐⭐⭐⭐ 4.8/5 rating</div>
+                <div className="text-white/80 text-sm"><span aria-hidden="true">⭐⭐⭐⭐⭐</span> 4.8/5 rating</div>
               </div>
             </div>
           </div>

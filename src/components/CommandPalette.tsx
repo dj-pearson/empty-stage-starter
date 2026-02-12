@@ -30,6 +30,7 @@ import {
   FileText,
   Tag,
   Clock,
+  Accessibility,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -278,10 +279,21 @@ export function CommandPalette() {
         label: "Account Settings",
         icon: Settings,
         action: () => {
-          navigate("/settings");
+          navigate("/dashboard/settings");
           setOpen(false);
         },
         keywords: ["preferences", "profile"],
+        group: "settings",
+      },
+      {
+        id: "settings-accessibility",
+        label: "Accessibility Settings",
+        icon: Accessibility,
+        action: () => {
+          navigate("/dashboard/accessibility-settings");
+          setOpen(false);
+        },
+        keywords: ["a11y", "contrast", "motion", "font", "screen reader", "keyboard", "wcag", "ada"],
         group: "settings",
       },
 

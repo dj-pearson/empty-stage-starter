@@ -17,6 +17,7 @@ import {
   Globe,
   Trophy,
   Settings,
+  Accessibility,
 } from "lucide-react";
 import {
   Sidebar,
@@ -278,8 +279,24 @@ export function AppSidebar() {
                       }`
                     }
                   >
-                    <Settings className="h-4 w-4 shrink-0" />
+                    <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
                     {!isCollapsed && <span>Account Settings</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Accessibility Settings">
+                  <NavLink
+                    to="/dashboard/accessibility-settings"
+                    className={({ isActive }) =>
+                      `flex items-center gap-2 ${isActive
+                        ? "bg-primary/10 text-primary font-medium no-underline visited:no-underline"
+                        : "text-sidebar-foreground visited:text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline visited:no-underline"
+                      }`
+                    }
+                  >
+                    <Accessibility className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    {!isCollapsed && <span>Accessibility</span>}
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>

@@ -126,7 +126,7 @@ const FAQ = () => {
       </header>
 
       {/* Content */}
-      <main className="container mx-auto px-4 py-12 max-w-4xl">
+      <main id="main-content" className="container mx-auto px-4 py-12 max-w-4xl">
         {/* SEO-optimized heading structure */}
         <header className="mb-12">
           <h1 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">

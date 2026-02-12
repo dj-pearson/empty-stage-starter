@@ -30,7 +30,7 @@ const TermsOfService = () => {
       </header>
 
       {/* Content */}
-      <main className="container mx-auto px-4 py-12 max-w-4xl">
+      <main id="main-content" className="container mx-auto px-4 py-12 max-w-4xl">
         <h1 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">Terms of Service</h1>
         <p className="text-sm text-muted-foreground mb-8">Last Updated: October 28, 2025</p>
 

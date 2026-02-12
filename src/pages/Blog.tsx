@@ -196,7 +196,7 @@ const Blog = () => {
       </section>
 
       {/* Blog Posts */}
-      <main className="container mx-auto px-4 py-12 max-w-6xl">
+      <main id="main-content" className="container mx-auto px-4 py-12 max-w-6xl">
         {isLoading ? (
           <div className="text-center py-12">
             <p className="text-muted-foreground">Loading articles...</p>
