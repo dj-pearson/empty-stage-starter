@@ -1,0 +1,86 @@
+{
+  "_comment": "Google Play Data Safety declarations for EatPal. This file documents the data types collected and shared, to be entered in Play Console under App Content > Data Safety.",
+  "version": "1.0.0",
+  "app": "com.eatpal.app",
+  "data_collected": {
+    "personal_info": {
+      "name": {
+        "collected": true,
+        "shared": false,
+        "purpose": ["app_functionality"],
+        "optional": false,
+        "encrypted_in_transit": true,
+        "user_can_request_deletion": true
+      },
+      "email_address": {
+        "collected": true,
+        "shared": false,
+        "purpose": ["app_functionality", "account_management"],
+        "optional": false,
+        "encrypted_in_transit": true,
+        "user_can_request_deletion": true
+      }
+    },
+    "health_and_fitness": {
+      "health_info": {
+        "collected": true,
+        "collected_description": "Nutrition data and dietary tracking for meal planning",
+        "shared": false,
+        "purpose": ["app_functionality"],
+        "optional": false,
+        "encrypted_in_transit": true,
+        "user_can_request_deletion": true
+      }
+    },
+    "photos_and_videos": {
+      "photos": {
+        "collected": true,
+        "collected_description": "Meal photos for food tracking",
+        "shared": false,
+        "purpose": ["app_functionality"],
+        "optional": true,
+        "encrypted_in_transit": true,
+        "user_can_request_deletion": true
+      }
+    },
+    "app_activity": {
+      "app_interactions": {
+        "collected": true,
+        "shared": false,
+        "purpose": ["analytics"],
+        "optional": true,
+        "encrypted_in_transit": true,
+        "user_can_request_deletion": true
+      }
+    },
+    "app_performance": {
+      "crash_logs": {
+        "collected": true,
+        "collected_description": "Crash reports via Sentry for bug fixing",
+        "shared_with": "Sentry (functional.sentry.io)",
+        "purpose": ["analytics", "app_functionality"],
+        "optional": true,
+        "encrypted_in_transit": true,
+        "user_can_request_deletion": true
+      },
+      "diagnostics": {
+        "collected": true,
+        "shared": false,
+        "purpose": ["analytics"],
+        "optional": true,
+        "encrypted_in_transit": true
+      }
+    }
+  },
+  "security_practices": {
+    "data_encrypted_in_transit": true,
+    "data_deletion_mechanism": true,
+    "deletion_request_url": "https://tryeatpal.com/privacy#deletion",
+    "independent_security_review": false
+  },
+  "children": {
+    "app_targets_children": false,
+    "app_contains_content_for_children": false,
+    "_note": "The app manages children's dietary data on behalf of parents/guardians. The parent is always the account holder."
+  }
+}

@@ -1,37 +1,55 @@
 {
   "cli": {
-    "version": ">= 15.3.0"
+    "version": ">= 15.3.0",
+    "appVersionSource": "remote"
   },
   "build": {
+    "base": {
+      "node": "20.18.0",
+      "env": {
+        "EXPO_NO_TELEMETRY": "1"
+      }
+    },
     "development": {
+      "extends": "base",
       "developmentClient": true,
       "distribution": "internal",
       "ios": {
-        "simulator": true
+        "simulator": true,
+        "resourceClass": "m-medium"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "resourceClass": "medium"
       }
     },
     "preview": {
+      "extends": "base",
       "distribution": "internal",
       "channel": "preview",
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "resourceClass": "m-medium"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "resourceClass": "medium"
       }
     },
     "production": {
+      "extends": "base",
       "distribution": "store",
       "channel": "production",
       "autoIncrement": true,
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "resourceClass": "m-medium",
+        "image": "latest"
       },
       "android": {
-        "buildType": "aab"
+        "buildType": "aab",
+        "resourceClass": "medium",
+        "image": "latest"
       }
     }
   },
@@ -44,9 +62,9 @@
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",
-        "track": "internal"
+        "track": "internal",
+        "releaseStatus": "draft"
       }
     }
   }
 }
-

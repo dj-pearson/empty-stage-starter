@@ -1,0 +1,7 @@
+• Brand new native iOS experience built from the ground up
+• Barcode scanner for instant food lookups
+• AI Meal Coach for personalized suggestions
+• Nutrition Insights dashboard with acceptance tracking
+• Food chaining tools for picky eaters
+• Dark mode support
+• Improved accessibility throughout

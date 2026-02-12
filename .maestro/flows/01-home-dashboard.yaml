@@ -1,0 +1,35 @@
+# Navigate to the Home Dashboard and capture screenshot
+# This is the main entry point after authentication.
+appId: com.eatpal.app
+---
+- launchApp:
+    appId: com.eatpal.app
+    clearState: false
+
+# If we land on login, authenticate first
+- runFlow:
+    when:
+      visible: "Sign In"
+    file: ../helpers/login.yaml
+
+# Ensure we're on the Home tab
+- tapOn:
+    id: "Home"
+    optional: true
+- tapOn:
+    text: "Home"
+    optional: true
+
+# Wait for content to load
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Hello"
+    timeout: 10000
+
+# Allow pull-to-refresh data to settle
+- scroll:
+    direction: "UP"
+- waitForAnimationToEnd
+- wait: 1000
+
+# Screenshot captured by the shell script after this flow completes

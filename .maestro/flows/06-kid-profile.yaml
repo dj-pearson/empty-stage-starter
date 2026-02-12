@@ -1,0 +1,24 @@
+# Navigate to a Kid Profile screen
+appId: com.eatpal.app
+---
+- launchApp:
+    appId: com.eatpal.app
+    clearState: false
+
+# Go to More tab
+- tapOn:
+    text: "More"
+- waitForAnimationToEnd
+
+# Tap Kids
+- tapOn:
+    text: "Kids"
+- waitForAnimationToEnd
+
+# If there are kids, tap the first one
+- tapOn:
+    index: 0
+    optional: true
+
+# Wait for profile to load
+- wait: 2000

@@ -1,0 +1,24 @@
+# Helper flow: Log in to EatPal
+# Called by other flows when the login screen is detected.
+#
+# Set these environment variables before running:
+#   export MAESTRO_EATPAL_EMAIL="test@example.com"
+#   export MAESTRO_EATPAL_PASSWORD="testpassword123"
+appId: com.eatpal.app
+---
+- tapOn:
+    text: "Email"
+    optional: true
+- inputText: ${MAESTRO_EATPAL_EMAIL}
+
+- tapOn:
+    text: "Password"
+    optional: true
+- inputText: ${MAESTRO_EATPAL_PASSWORD}
+
+- tapOn:
+    text: "Sign In"
+
+# Wait for navigation to complete
+- waitForAnimationToEnd
+- wait: 3000

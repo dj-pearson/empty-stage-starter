@@ -28,7 +28,7 @@ export default defineConfig({
         statements: 70,
       },
     },
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'app/**/*.{test,spec}.{ts,tsx}'],
     exclude: [
       'node_modules',
       'dist',

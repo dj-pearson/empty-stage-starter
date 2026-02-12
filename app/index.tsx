@@ -1,22 +1,26 @@
+import { Redirect } from 'expo-router';
 import { Platform } from 'react-native';
 import { useEffect } from 'react';
+import { useMobileAuth } from './providers/MobileAuthProvider';
 
 export default function Index() {
+  // On web, redirect to the existing React app
   useEffect(() => {
-    // On web, redirect to the existing React app
     if (Platform.OS === 'web') {
-      // The existing Vite app will handle web routing
       window.location.href = '/';
     }
   }, []);
 
-  // For mobile platforms, render the mobile app
-  if (Platform.OS !== 'web') {
-    // Import mobile components dynamically to avoid web build issues
-    const MobileApp = require('./mobile/MobileApp').default;
-    return <MobileApp />;
+  if (Platform.OS === 'web') return null;
+
+  const { session, isLoading } = useMobileAuth();
+
+  if (isLoading) return null;
+
+  // Route to appropriate section based on auth state
+  if (session) {
+    return <Redirect href="/(tabs)/home" />;
   }
 
-  return null;
+  return <Redirect href="/(auth)/login" />;
 }
-
