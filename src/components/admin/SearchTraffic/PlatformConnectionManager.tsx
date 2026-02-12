@@ -61,7 +61,7 @@ interface Props {
 export function PlatformConnectionManager({ open, onClose }: Props) {
   const [connections, setConnections] = useState<any[]>([]);
   const [connecting, setConnecting] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (open) {

@@ -63,21 +63,15 @@ import {
   FileText,
   MessageCircle,
   HelpCircle,
-  ChevronRight,
-  ExternalLink,
   Globe,
   Lock,
   Star,
-  TrendingUp,
-  Clock,
-  BarChart3,
   Copy,
   Tag,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format, formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import { logger } from "@/lib/logger";
-import { cn } from "@/lib/utils";
 
 // Types
 interface KBCategory {

@@ -1,45 +1,11 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Mail,
-  Send,
   Users,
   TrendingUp,
-  Plus,
-  Edit,
-  Trash2,
-  Download,
-  Upload,
-  Eye,
-  Copy,
-  Clock,
-  CheckCircle,
-  XCircle,
 } from "lucide-react";
-import { toast } from "sonner";
-import { format } from "date-fns";
 import { logger } from "@/lib/logger";
 
 interface EmailList {

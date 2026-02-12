@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { getBudgetAnalyticsSummary } from '@/lib/budgetCalculator/supabaseIntegration';
 import { formatCurrency } from '@/lib/budgetCalculator/calculator';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from 'recharts';
+import { Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from 'recharts';
 import { DollarSign, Users, Download, TrendingUp, Mail, MapPin } from 'lucide-react';
 
 interface AnalyticsSummary {

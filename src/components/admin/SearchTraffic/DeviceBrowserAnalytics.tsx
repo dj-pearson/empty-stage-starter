@@ -5,7 +5,7 @@ interface Props {
   connections: any[];
 }
 
-export function DeviceBrowserAnalytics({ dateRange, connections }: Props) {
+export function DeviceBrowserAnalytics({ dateRange: _dateRange, connections: _connections }: Props) {
   return (
     <Card>
       <CardHeader>

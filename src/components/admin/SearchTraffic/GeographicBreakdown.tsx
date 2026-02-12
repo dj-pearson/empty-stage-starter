@@ -5,7 +5,7 @@ interface Props {
   connections: any[];
 }
 
-export function GeographicBreakdown({ dateRange, connections }: Props) {
+export function GeographicBreakdown({ dateRange: _dateRange, connections: _connections }: Props) {
   return (
     <Card>
       <CardHeader>

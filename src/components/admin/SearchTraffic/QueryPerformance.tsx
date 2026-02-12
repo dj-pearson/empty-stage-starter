@@ -5,7 +5,7 @@ interface Props {
   connections: any[];
 }
 
-export function QueryPerformance({ dateRange, connections }: Props) {
+export function QueryPerformance({ dateRange: _dateRange, connections: _connections }: Props) {
   return (
     <Card>
       <CardHeader>

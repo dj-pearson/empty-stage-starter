@@ -28,27 +28,20 @@ import {
   AlertTriangle,
   UserMinus,
   TrendingUp,
-  TrendingDown,
   BarChart3,
   Calendar,
-  Clock,
   RefreshCw,
   Download,
-  ChevronUp,
-  ChevronDown,
-  Filter,
   ArrowUpRight,
   ArrowDownRight,
-  Inbox,
   CheckCircle2,
   XCircle,
-  Globe,
   Smartphone,
   Monitor,
   Laptop,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format, subDays, startOfDay, endOfDay, eachDayOfInterval } from "date-fns";
+import { format, subDays, eachDayOfInterval } from "date-fns";
 import { logger } from "@/lib/logger";
 import { downloadCSV } from "@/lib/file-utils";
 import { cn } from "@/lib/utils";

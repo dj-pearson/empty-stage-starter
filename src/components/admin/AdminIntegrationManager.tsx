@@ -16,13 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+
 import {
   Plug,
   DollarSign,
@@ -40,7 +34,7 @@ import {
   Globe,
   Activity,
 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+
 import { toast } from 'sonner';
 import { logger } from "@/lib/logger";
 

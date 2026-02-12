@@ -5,7 +5,7 @@ interface Props {
   connections: any[];
 }
 
-export function TopPagesPerformance({ dateRange, connections }: Props) {
+export function TopPagesPerformance({ dateRange: _dateRange, connections: _connections }: Props) {
   return (
     <Card>
       <CardHeader>

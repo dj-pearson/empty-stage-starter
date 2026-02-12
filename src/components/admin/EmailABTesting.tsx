@@ -39,16 +39,13 @@ import {
   Pause,
   Trophy,
   TrendingUp,
-  TrendingDown,
   BarChart3,
   Mail,
   MousePointerClick,
   Eye,
   Clock,
   CheckCircle2,
-  XCircle,
   AlertCircle,
-  ArrowRight,
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -225,7 +222,7 @@ export function EmailABTesting() {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from("email_campaigns")
         .insert({
           name: newTest.name,

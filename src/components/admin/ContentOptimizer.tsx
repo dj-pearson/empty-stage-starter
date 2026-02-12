@@ -25,12 +25,10 @@ import {
   AlertCircle,
   CheckCircle,
   Copy,
-  ExternalLink,
   RefreshCw,
   Target,
 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { logger } from "@/lib/logger";
 

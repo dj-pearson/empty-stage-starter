@@ -1,6 +1,6 @@
 import { useState, useRef, lazy, Suspense } from "react";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
-import { isMobile, isWeb } from '@/lib/platform';
+import { isMobile } from '@/lib/platform';
 import { Button } from "@/components/ui/button";
 
 // Lazy load the native scanner for mobile platforms
@@ -86,7 +86,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
     return 'snack';
   }
 
-  const checkPermissions = async () => {
+  const _checkPermissions = async () => {
     // Web scanner uses browser permissions via getUserMedia
     // No special permission check needed for web
     return true;

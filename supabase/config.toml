@@ -9,6 +9,8 @@
 enable_signup = true
 
 # Edge Functions Configuration
+[functions.health-check]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,16 +46,13 @@ import {
   Plus,
   MoreVertical,
   PlayCircle,
-  PauseCircle,
   Trash2,
   Edit,
   Copy,
   Save,
-  ArrowDown,
   GitBranch,
   Mail,
   Clock,
-  Users,
   Tag,
   Bell,
   Target,
@@ -70,10 +67,9 @@ import {
   MessageSquare,
   UserPlus,
   Send,
-  Filter,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
+
 import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 
@@ -423,7 +419,7 @@ export function WorkflowBuilder() {
     return trigger?.icon || Zap;
   };
 
-  const getActionIcon = (type: string) => {
+  const _getActionIcon = (type: string) => {
     const action = ACTION_TYPES.find((a) => a.value === type);
     return action?.icon || Settings;
   };

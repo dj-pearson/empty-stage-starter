@@ -660,7 +660,7 @@ export function LeadCampaignManager() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {LEAD_STATUSES.map((status, idx) => {
+                {LEAD_STATUSES.map((status, _idx) => {
                   const count = leads.filter((l) => l.status === status.value).length;
                   const percentage = stats.total_leads > 0 ? (count / stats.total_leads) * 100 : 0;
 

@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/dialog";
 import {
   Sparkles,
-  Plus,
   Edit,
   Share2,
   Settings,
@@ -253,7 +252,7 @@ export function BlogCMSManager() {
       const content = socialData.content;
       const hashtagMatches =
         (content.facebook || content.twitter || "").match(/#\w+/g) || [];
-      const hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
+      const _hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
 
       const webhookPayload = {
         type: "blog_published",
@@ -537,7 +536,7 @@ export function BlogCMSManager() {
         // Extract hashtags from the content
         const hashtagMatches =
           (content.facebook || content.twitter || "").match(/#\w+/g) || [];
-        const hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
+        const _hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
 
         // If server-side autoPublish was used (webhook configured), skip client webhook
         if (webhookUrl) {

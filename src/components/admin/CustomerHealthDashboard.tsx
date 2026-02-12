@@ -21,7 +21,6 @@ import {
   AlertTriangle,
   Trophy,
   Heart,
-  Users,
   Activity,
 } from 'lucide-react';
 import {
@@ -84,7 +83,7 @@ export function CustomerHealthDashboard() {
       setAtRiskCustomers(atRiskData);
       setChampions(championsData);
       setDecliningCustomers(decliningData);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to load health data');
     } finally {
       setIsLoading(false);
@@ -97,7 +96,7 @@ export function CustomerHealthDashboard() {
       const result = await customerHealth.recalculateAllScores();
       toast.success(`Recalculated ${result.processed} scores (${result.errors} errors)`);
       loadData();
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to recalculate scores');
     } finally {
       setIsRecalculating(false);

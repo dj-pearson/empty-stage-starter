@@ -1,7 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import DOMPurify from "dompurify";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,31 +27,22 @@ import {
 import {
   Type,
   Image,
-  Link,
   AlignLeft,
   AlignCenter,
   AlignRight,
-  Bold,
-  Italic,
-  List,
   Minus,
   Square,
-  Plus,
   Trash2,
-  Move,
   Eye,
   Save,
   Undo,
   Redo,
   Copy,
   Settings,
-  Palette,
   Layout,
   Code,
-  Send,
   ChevronUp,
   ChevronDown,
-  GripVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
@@ -377,7 +367,7 @@ export function EmailTemplateBuilder() {
     try {
       const htmlContent = generateHTML();
 
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from("automation_email_templates")
         .insert({
           template_name: template.name,

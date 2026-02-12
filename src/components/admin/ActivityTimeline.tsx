@@ -20,13 +20,11 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import {
   RefreshCw,
   Search,
   Download,
-  Filter,
   Clock,
   User,
   Calendar,
@@ -38,7 +36,7 @@ import {
   FileText,
   Upload,
 } from 'lucide-react';
-import { activityTracker, ActivityEntry, ActivityCategory, ActivityType } from '@/lib/activity-tracker';
+import { activityTracker, ActivityEntry, ActivityCategory } from '@/lib/activity-tracker';
 import { downloadJSON, downloadCSV } from '@/lib/file-utils';
 import { cn } from '@/lib/utils';
 
@@ -104,7 +102,7 @@ export function ActivityTimeline({ userId }: ActivityTimelineProps) {
         result = await activityTracker.getRecentActivities(200);
       }
       setActivities(result);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to load activity timeline');
     } finally {
       setIsLoading(false);

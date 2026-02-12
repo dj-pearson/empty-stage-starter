@@ -15,8 +15,8 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Enabled strict: true in tsconfig.app.json and tsconfig.json. Zero compilation errors. Replaced any types in AppContext.tsx with proper typed alternatives (RecipeRow, RecipeInsert, RealtimePayload<T>). Build and all 176 tests pass."
     },
     {
       "id": "US-002",
@@ -30,8 +30,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Deleted BlogCMSManager-OLD.tsx.bak and EmailMarketingManager-OLD.tsx.bak. Removed unused imports across 52 admin component files. Prefixed unused variables with _ for linter compliance. No other .bak files found in tracked source. Typecheck passes, all 176 tests pass."
     },
     {
       "id": "US-003",
@@ -47,8 +47,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created src/lib/env.ts with Zod schema validating required (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY) and optional (VITE_SENTRY_DSN, VITE_SENTRY_ENABLED, VITE_STRIPE_PUBLISHABLE_KEY, VITE_GA_MEASUREMENT_ID, VITE_FUNCTIONS_URL) env vars. Exports typed Env object via getEnv(). validateEnv() called in main.tsx before app renders. Logs clear errors in dev mode. Typecheck passes, all 176 tests pass."
     },
     {
       "id": "US-004",
@@ -64,8 +64,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Enhanced ErrorBoundary.tsx with fullPage prop for top-level use, Sentry reporting via logError() with component stack traces, and dev/prod differentiated UI (dev shows error + component stack, prod shows friendly message). Updated main.tsx to always wrap App with ErrorBoundary fullPage instead of conditional SentryErrorBoundary. Typecheck passes, all 176 tests pass."
     },
     {
       "id": "US-005",
@@ -97,8 +97,8 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created src/lib/apiRetry.ts with withRetry() for generic async operations and withSupabaseRetry() for Supabase queries. Exponential backoff: 1s, 2s, 4s (configurable). Only retries network errors and 5xx, not 4xx. AbortSignal support via RetryAbortedError. Dev-mode console warnings for retry attempts. Typecheck passes, all 176 tests pass."
     },
     {
       "id": "US-007",
@@ -113,8 +113,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created functions/health-check/index.ts edge function. Returns JSON with status, timestamp, version, and database connectivity check (latency_ms). Uses 5-second timeout for DB queries - returns degraded (503) if DB unreachable or timed out, healthy (200) otherwise. Added to supabase/config.toml with verify_jwt=false. CORS headers included. Typecheck passes, all 176 tests pass."
     },
     {
       "id": "US-008",

@@ -47,11 +47,9 @@ import {
   ExternalLink,
   Clock,
   Shield,
-  Image as ImageIcon,
   Smartphone,
   Gauge,
   Link2,
-  Users,
   Trophy,
   XCircle,
   Info,
@@ -485,7 +483,7 @@ export function SEOManager() {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) return;
 
-      const { data, error } = await invokeEdgeFunction("gsc-oauth", {
+      const { data: _data, error } = await invokeEdgeFunction("gsc-oauth", {
         body: { action: "disconnect", userId: user.id },
       });
 
@@ -1139,9 +1137,9 @@ export function SEOManager() {
 
     // Twitter Cards
     const twitterCard = document.querySelector('meta[name="twitter:card"]');
-    const twitterTitle = document.querySelector('meta[name="twitter:title"]');
-    const twitterDescription = document.querySelector('meta[name="twitter:description"]');
-    const twitterImage = document.querySelector('meta[name="twitter:image"]');
+    const _twitterTitle = document.querySelector('meta[name="twitter:title"]');
+    const _twitterDescription = document.querySelector('meta[name="twitter:description"]');
+    const _twitterImage = document.querySelector('meta[name="twitter:image"]');
 
     if (twitterCard) {
       results.push({
@@ -1521,7 +1519,7 @@ export function SEOManager() {
 
       const passed = categoryResults.filter((r) => r.status === "passed").length;
       const warnings = categoryResults.filter((r) => r.status === "warning").length;
-      const failed = categoryResults.filter((r) => r.status === "failed").length;
+      const _failed = categoryResults.filter((r) => r.status === "failed").length;
 
       // Scoring: passed = 1.0, warning = 0.5, failed = 0
       const score = (passed + warnings * 0.5) / categoryResults.length * 100;
@@ -3442,7 +3440,7 @@ RESTful API available for integrations. Contact for API access.
                 onChange={(e) => {
                   try {
                     setStructuredData(JSON.parse(e.target.value));
-                  } catch (err) {
+                  } catch (_err) {
                     // Invalid JSON, ignore
                   }
                 }}

@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,18 +31,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   Globe,
-  Server,
   Database,
   Shield,
   RefreshCw,
@@ -54,15 +42,10 @@ import {
   Activity,
   HardDrive,
   Cloud,
-  Map,
   Plus,
-  Settings,
   Trash2,
-  Download,
-  Upload,
   Zap,
   Lock,
-  Eye,
   ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -156,8 +139,8 @@ export function MultiRegionBackup() {
 
   const [showAddRegionDialog, setShowAddRegionDialog] = useState(false);
   const [showAddPolicyDialog, setShowAddPolicyDialog] = useState(false);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [pendingAction, setPendingAction] = useState<{ type: string; id: string } | null>(null);
+  const [_showConfirmDialog, _setShowConfirmDialog] = useState(false);
+  const [_pendingAction, _setPendingAction] = useState<{ type: string; id: string } | null>(null);
 
   // New region form state
   const [newRegion, setNewRegion] = useState<Partial<Region>>({

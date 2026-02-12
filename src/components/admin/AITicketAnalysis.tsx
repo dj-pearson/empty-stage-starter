@@ -2,36 +2,23 @@
 import { useState, useEffect } from "react";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Button } from "@/components/ui/button";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Badge } from "@/components/ui/badge";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Separator } from "@/components/ui/separator";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Textarea } from "@/components/ui/textarea";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import {
   Brain,
   Sparkles,
-  CheckCircle,
   AlertCircle,
   Copy,
   Send,
   Loader2,
-  ThumbsUp,
-  ThumbsDown,
   FileText,
-  TrendingUp,
   Zap,
 } from "lucide-react";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { supabase } from "@/lib/supabase-platform";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { formatDistanceToNow } from "date-fns";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 
 interface AIAnalysis {
   id: string;
@@ -101,7 +88,7 @@ export function AITicketAnalysis({ ticketId }: { ticketId: string }) {
             .limit(3);
 
           if (similarData) {
-            const similar = similarData.map((ticket, index) => ({
+            const similar = similarData.map((ticket, _index) => ({
               id: ticket.id,
               subject: ticket.subject,
               resolution_summary: ticket.description?.substring(0, 150) + '...' || 'No description',
@@ -121,7 +108,7 @@ export function AITicketAnalysis({ ticketId }: { ticketId: string }) {
   const runAnalysis = async () => {
     setAnalyzing(true);
     try {
-      const { data, error } = await invokeEdgeFunction('analyze-support-ticket', {
+      const { data: _data, error } = await invokeEdgeFunction('analyze-support-ticket', {
         body: {
           ticketId,
           autoResolve: false,
@@ -150,7 +137,7 @@ export function AITicketAnalysis({ ticketId }: { ticketId: string }) {
       // This would send the response to the ticket
       // Implementation depends on your ticket messaging system
       toast.success('Response applied to ticket');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to use response');
     }
   };

@@ -21,7 +21,6 @@ import {
 import {
   Flag,
   Plus,
-  Edit,
   Trash2,
   Users,
   TrendingUp,
@@ -48,7 +47,6 @@ interface FeatureFlag {
 export function FeatureFlagDashboard() {
   const [flags, setFlags] = useState<FeatureFlag[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingFlag, setEditingFlag] = useState<FeatureFlag | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     key: "",

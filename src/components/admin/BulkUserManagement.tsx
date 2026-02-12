@@ -45,14 +45,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Search,
-  MoreVertical,
   UserX,
   UserCheck,
   Mail,
@@ -60,12 +58,8 @@ import {
   Clock,
   Download,
   Shield,
-  Eye,
-  CheckSquare,
-  Square,
   Users,
   Send,
-  Trash2,
   RefreshCw,
   FileSpreadsheet,
   FileText,

@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
@@ -16,7 +15,6 @@ type UserRole = {
 
 export const UserRolesManager = () => {
   const [roles, setRoles] = useState<UserRole[]>([]);
-  const [newAdminEmail, setNewAdminEmail] = useState("");
 
   useEffect(() => {
     fetchUserRoles();
@@ -37,19 +35,6 @@ export const UserRolesManager = () => {
     } else {
       setRoles(data || []);
     }
-  };
-
-  const handleAddAdmin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Note: In a real app, you'd need a way to look up users by email
-    // This is a simplified version - you might want to add a user search/select component
-    toast({
-      title: "Info",
-      description: "To add an admin, you need the user's ID. Consider implementing user search functionality.",
-      variant: "default",
-    });
-    setNewAdminEmail("");
   };
 
   const handleRemoveAdmin = async (roleId: string) => {
