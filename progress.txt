@@ -1,0 +1,23 @@
+## Codebase Patterns
+- Edge functions live in `functions/<function-name>/index.ts` (Supabase Edge Functions use Deno)
+- Edge function config goes in `supabase/config.toml` under `[functions.<name>]` with `verify_jwt` setting
+- Use `https://deno.land/std@0.168.0/http/server.ts` serve() and `https://esm.sh/@supabase/supabase-js@2` createClient()
+- Always include CORS headers and OPTIONS preflight handler in edge functions
+- `functions/sitemap.xml.ts` is a Cloudflare Pages function, NOT a Supabase edge function
+- Template patterns available in `edge-functions-template/functions/` for reference
+- TypeScript check: `npx tsc --noEmit`, Tests: `npx vitest run` (176 passing)
+- US-001 through US-006 already completed strict mode, dead code cleanup, env validation, error boundaries, route error boundaries, and API retry logic
+
+---
+
+## 2026-02-12 - US-007
+- What was implemented: Health check API endpoint edge function
+- Files changed:
+  - `functions/health-check/index.ts` (new) - Edge function with DB connectivity check, timeout, version info
+  - `supabase/config.toml` (modified) - Added `[functions.health-check]` with `verify_jwt = false`
+- **Learnings for future iterations:**
+  - Edge functions use Deno runtime, not Node.js - imports use URL-based modules
+  - For DB connectivity checks, use `SUPABASE_SERVICE_ROLE_KEY` (falls back to `SUPABASE_ANON_KEY`) since health checks run without user auth
+  - `Promise.race()` pattern works well for implementing timeouts on Supabase queries
+  - The `kids` table is a safe lightweight table to query for connectivity checks
+---

@@ -113,8 +113,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created functions/health-check/index.ts edge function. Returns JSON with status, timestamp, version, and database connectivity check (latency_ms). Uses 5-second timeout for DB queries - returns degraded (503) if DB unreachable or timed out, healthy (200) otherwise. Added to supabase/config.toml with verify_jwt=false. CORS headers included. Typecheck passes, all 176 tests pass."
     },
     {
       "id": "US-008",
