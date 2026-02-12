@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Home, Utensils, Calendar, ShoppingCart, Moon, Sun, Users, BarChart3, ChefHat, LogOut, Shield, Menu, X, Target, Bot, Sparkles, TrendingUp, MoreHorizontal, Search } from "lucide-react";
+import { Home, Utensils, Calendar, ShoppingCart, Moon, Sun, Users, BarChart3, ChefHat, LogOut, Shield, Menu, X, Target, Bot, Sparkles, TrendingUp, MoreHorizontal, Search, Accessibility } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet";
@@ -92,7 +92,7 @@ export function Navigation() {
   return (
     <>
       {/* Desktop Header */}
-      <nav className="hidden md:block fixed top-0 left-0 right-0 bg-card border-b border-border z-50">
+      <nav className="hidden md:block fixed top-0 left-0 right-0 bg-card border-b border-border z-50" aria-label="Main navigation">
         <div className="container mx-auto">
           <div className="flex justify-between items-center h-16 px-4">
             {/* Logo */}
@@ -139,6 +139,7 @@ export function Navigation() {
               <Button
                 variant="ghost"
                 className="gap-2 text-muted-foreground hover:text-foreground hidden lg:flex"
+                aria-label="Open search (press Control+K or Command+K)"
                 onClick={() => {
                   // Trigger command palette
                   const event = new KeyboardEvent('keydown', {
@@ -149,10 +150,10 @@ export function Navigation() {
                   document.dispatchEvent(event);
                 }}
               >
-                <Search className="h-4 w-4" />
+                <Search className="h-4 w-4" aria-hidden="true" />
                 <span className="text-sm">Search</span>
                 <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
-                  <span className="text-xs">⌘</span>K
+                  <span className="text-xs">{navigator?.platform?.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+'}</span>K
                 </kbd>
               </Button>
 
@@ -447,6 +448,21 @@ export function Navigation() {
 
                 {/* Actions */}
                 <div className="mt-6 pt-4 border-t space-y-1">
+                  <NavLink
+                    to="/dashboard/accessibility-settings"
+                    onClick={closeMobileMenu}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground hover:bg-muted"
+                      )
+                    }
+                  >
+                    <Accessibility className="h-5 w-5 shrink-0" aria-hidden="true" />
+                    <span>Accessibility</span>
+                  </NavLink>
                   <Button
                     variant="ghost"
                     className="w-full justify-start gap-3 px-3"
@@ -457,12 +473,12 @@ export function Navigation() {
                   >
                     {theme === "dark" ? (
                       <>
-                        <Sun className="h-5 w-5" />
+                        <Sun className="h-5 w-5" aria-hidden="true" />
                         <span>Light Mode</span>
                       </>
                     ) : (
                       <>
-                        <Moon className="h-5 w-5" />
+                        <Moon className="h-5 w-5" aria-hidden="true" />
                         <span>Dark Mode</span>
                       </>
                     )}
@@ -475,7 +491,7 @@ export function Navigation() {
                       closeMobileMenu();
                     }}
                   >
-                    <LogOut className="h-5 w-5" />
+                    <LogOut className="h-5 w-5" aria-hidden="true" />
                     <span>Sign Out</span>
                   </Button>
                 </div>
@@ -486,7 +502,7 @@ export function Navigation() {
       </nav>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-area-inset-bottom">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-area-inset-bottom" aria-label="Mobile bottom navigation">
         <div className="flex justify-around items-center h-16 px-2">
           {/* Priority Navigation Items */}
           {mobileBottomNavItems.map(({ to, icon: Icon, label }) => (
@@ -516,12 +532,13 @@ export function Navigation() {
                   "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[60px]",
                   "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 )}
+                aria-label="More navigation options"
               >
-                <MoreHorizontal className="h-6 w-6" />
+                <MoreHorizontal className="h-6 w-6" aria-hidden="true" />
                 <span className="text-[11px] leading-tight">More</span>
               </button>
             </SheetTrigger>
-            <SheetContent side="bottom" className="h-[80vh] rounded-t-xl">
+            <SheetContent side="bottom" className="h-[80vh] rounded-t-xl" aria-label="More navigation features">
               <SheetHeader>
                 <SheetTitle>More Features</SheetTitle>
                 <SheetDescription>

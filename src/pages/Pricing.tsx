@@ -443,7 +443,7 @@ export default function Pricing() {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-16">
+      <main id="main-content" className="container mx-auto px-4 py-16">
         <BreadcrumbNavigation
           items={[
             { name: 'Home', url: 'https://tryeatpal.com/' },
@@ -935,7 +935,7 @@ export default function Pricing() {
         >
           <FeatureComparisonTable plans={plans} />
         </Suspense>
-      </div>
+      </main>
 
       {/* Footer */}
       <Footer />

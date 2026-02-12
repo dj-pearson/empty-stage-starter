@@ -115,7 +115,7 @@ export default function PickyEaterQuiz() {
         <meta name="twitter:card" content="summary_large_image" />
       </Helmet>
 
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800">
+      <main id="main-content" className="min-h-screen bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800">
         <div className="container max-w-4xl mx-auto px-4 py-8">
           {/* Header */}
           <div className="text-center mb-8">
@@ -206,7 +206,7 @@ export default function PickyEaterQuiz() {
             </p>
           </div>
         </div>
-      </div>
+      </main>
     </>
   );
 }

@@ -194,7 +194,7 @@ export default function MealPlanGenerator() {
         />
       </Helmet>
 
-      <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white py-12 px-4 sm:px-6 lg:px-8">
+      <main id="main-content" className="min-h-screen bg-gradient-to-b from-purple-50 to-white py-12 px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -477,7 +477,7 @@ export default function MealPlanGenerator() {
             </p>
           </div>
         </motion.div>
-      </div>
+      </main>
     </>
   );
 }

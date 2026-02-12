@@ -53,6 +53,7 @@ import {
   LogOut,
   Settings,
   ExternalLink,
+  Accessibility,
 } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
@@ -337,18 +338,22 @@ export default function AccountSettings() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
             <TabsTrigger value="profile" className="flex items-center gap-2">
-              <User className="h-4 w-4" />
+              <User className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Profile</span>
             </TabsTrigger>
             <TabsTrigger value="subscription" className="flex items-center gap-2">
-              <Crown className="h-4 w-4" />
+              <Crown className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Subscription</span>
             </TabsTrigger>
             <TabsTrigger value="security" className="flex items-center gap-2">
-              <Shield className="h-4 w-4" />
+              <Shield className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Security</span>
+            </TabsTrigger>
+            <TabsTrigger value="accessibility" className="flex items-center gap-2">
+              <Accessibility className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Accessibility</span>
             </TabsTrigger>
           </TabsList>
 
@@ -959,6 +964,88 @@ export default function AccountSettings() {
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ==================== ACCESSIBILITY TAB ==================== */}
+          <TabsContent value="accessibility" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Accessibility className="h-5 w-5" aria-hidden="true" />
+                  Accessibility Preferences
+                </CardTitle>
+                <CardDescription>
+                  Customize your experience to match your accessibility needs.
+                  These settings are saved to your account and sync across devices.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Your full accessibility settings are available on the dedicated settings page
+                  where you can configure visual, motion, keyboard, screen reader, and cognitive preferences.
+                </p>
+                <Button
+                  onClick={() => navigate("/dashboard/accessibility-settings")}
+                  className="gap-2"
+                >
+                  <Accessibility className="h-4 w-4" aria-hidden="true" />
+                  Open Accessibility Settings
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Accessibility Resources</CardTitle>
+                <CardDescription>
+                  Learn about our commitment to accessibility.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 border rounded-lg">
+                  <div>
+                    <p className="font-medium">Accessibility Statement</p>
+                    <p className="text-sm text-muted-foreground">
+                      Read about our WCAG 2.1 AA compliance efforts.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate("/accessibility")}
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" aria-hidden="true" />
+                    View Statement
+                  </Button>
+                </div>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 border rounded-lg">
+                  <div>
+                    <p className="font-medium">VPAT Document</p>
+                    <p className="text-sm text-muted-foreground">
+                      View our Voluntary Product Accessibility Template.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate("/accessibility/vpat")}
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" aria-hidden="true" />
+                    View VPAT
+                  </Button>
+                </div>
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <p className="text-sm text-muted-foreground">
+                    Having trouble using EatPal? Contact our accessibility support team
+                    at{" "}
+                    <a
+                      href="mailto:accessibility@tryeatpal.com"
+                      className="text-primary hover:underline font-medium"
+                    >
+                      accessibility@tryeatpal.com
+                    </a>
+                  </p>
                 </div>
               </CardContent>
             </Card>
