@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     var body: some View {
         Group {
@@ -11,32 +12,41 @@ struct RootView: View {
             case .unauthenticated:
                 AuthView()
             case .authenticated:
-                MainTabView()
+                if hasCompletedOnboarding {
+                    MainTabView()
+                        .withToasts()
+                        .withOfflineBanner()
+                } else {
+                    OnboardingView()
+                }
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: authViewModel.authState)
+        .animation(AppTheme.Animation.standard, value: authViewModel.authState)
     }
 }
 
 struct LaunchScreenView: View {
     var body: some View {
         ZStack {
-            Color(.systemBackground)
+            AppTheme.Colors.background
                 .ignoresSafeArea()
 
-            VStack(spacing: 16) {
+            VStack(spacing: AppTheme.Spacing.lg) {
                 Image(systemName: "fork.knife.circle.fill")
                     .font(.system(size: 72))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppTheme.Colors.primary)
+                    .accessibilityHidden(true)
 
                 Text("EatPal")
                     .font(.largeTitle)
                     .fontWeight(.bold)
 
                 ProgressView()
-                    .tint(.green)
+                    .tint(AppTheme.Colors.primary)
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("EatPal is loading")
     }
 }
 
