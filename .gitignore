@@ -25,8 +25,13 @@ dist-ssr
 
 # Capacitor (deprecated, migrated to Expo)
 android/
-ios/
 .capacitor/
+
+# iOS build artifacts (the ios/ source directory is tracked)
+ios/EatPal/.build/
+ios/EatPal/.swiftpm/
+ios/EatPal/DerivedData/
+ios/EatPal/build/
 
 # Expo
 .expo/
