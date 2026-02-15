@@ -31,6 +31,12 @@ final class AuthViewModel: ObservableObject {
 
     @Published var passwordValidation: PasswordValidator.ValidationResult?
 
+    // MARK: - Apple Sign-In
+
+    /// The raw nonce for the current Apple Sign-In attempt.
+    /// Stored so it can be sent to Supabase after Apple returns the credential.
+    private(set) var currentNonce: String?
+
     // MARK: - Services
 
     private let authService = AuthService.shared
@@ -130,6 +136,50 @@ final class AuthViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    // MARK: - Apple Sign-In
+
+    /// Configures the Apple Sign-In request with a fresh nonce.
+    func configureAppleRequest(_ request: ASAuthorizationAppleIDRequest) {
+        let nonce = AppleSignInHelper.randomNonceString()
+        currentNonce = nonce
+        request.requestedScopes = [.email, .fullName]
+        request.nonce = AppleSignInHelper.sha256(nonce)
+    }
+
+    /// Handles the result of the Apple Sign-In authorization.
+    func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) async {
+        isSubmitting = true
+        errorMessage = nil
+
+        switch result {
+        case .success(let authorization):
+            guard let appleCredential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                  let identityTokenData = appleCredential.identityToken,
+                  let idToken = String(data: identityTokenData, encoding: .utf8),
+                  let nonce = currentNonce else {
+                errorMessage = "Failed to process Apple Sign-In credentials."
+                isSubmitting = false
+                return
+            }
+
+            do {
+                _ = try await authService.signInWithApple(idToken: idToken, nonce: nonce)
+                // Auth state listener will handle the transition to .authenticated
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+
+        case .failure(let error):
+            // Don't show error if user cancelled (error code 1001)
+            if (error as NSError).code != ASAuthorizationError.canceled.rawValue {
+                errorMessage = error.localizedDescription
+            }
+        }
+
+        currentNonce = nil
+        isSubmitting = false
     }
 
     func switchMode(to mode: AuthMode) {

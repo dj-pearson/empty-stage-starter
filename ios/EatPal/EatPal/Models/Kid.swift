@@ -79,6 +79,16 @@ struct Kid: Identifiable, Codable, Equatable {
         if let notes = updates.notes { self.notes = notes }
         if let heightCm = updates.heightCm { self.heightCm = heightCm }
         if let weightKg = updates.weightKg { self.weightKg = weightKg }
+        if let profilePictureUrl = updates.profilePictureUrl { self.profilePictureUrl = profilePictureUrl }
+        if let texturePreferences = updates.texturePreferences { self.texturePreferences = texturePreferences }
+        if let textureDislikes = updates.textureDislikes { self.textureDislikes = textureDislikes }
+        if let flavorPreferences = updates.flavorPreferences { self.flavorPreferences = flavorPreferences }
+        if let favoriteFoods = updates.favoriteFoods { self.favoriteFoods = favoriteFoods }
+        if let dislikedFoods = updates.dislikedFoods { self.dislikedFoods = dislikedFoods }
+        if let behavioralNotes = updates.behavioralNotes { self.behavioralNotes = behavioralNotes }
+        if let healthGoals = updates.healthGoals { self.healthGoals = healthGoals }
+        if let nutritionConcerns = updates.nutritionConcerns { self.nutritionConcerns = nutritionConcerns }
+        if let helpfulStrategies = updates.helpfulStrategies { self.helpfulStrategies = helpfulStrategies }
     }
 }
 
@@ -93,6 +103,15 @@ struct KidUpdate: Codable {
     var heightCm: Double?
     var weightKg: Double?
     var profilePictureUrl: String?
+    var texturePreferences: [String]?
+    var textureDislikes: [String]?
+    var flavorPreferences: [String]?
+    var favoriteFoods: [String]?
+    var dislikedFoods: [String]?
+    var behavioralNotes: String?
+    var healthGoals: [String]?
+    var nutritionConcerns: [String]?
+    var helpfulStrategies: [String]?
 
     enum CodingKeys: String, CodingKey {
         case name, age, gender, allergens, notes
@@ -101,5 +120,14 @@ struct KidUpdate: Codable {
         case heightCm = "height_cm"
         case weightKg = "weight_kg"
         case profilePictureUrl = "profile_picture_url"
+        case texturePreferences = "texture_preferences"
+        case textureDislikes = "texture_dislikes"
+        case flavorPreferences = "flavor_preferences"
+        case favoriteFoods = "favorite_foods"
+        case dislikedFoods = "disliked_foods"
+        case behavioralNotes = "behavioral_notes"
+        case healthGoals = "health_goals"
+        case nutritionConcerns = "nutrition_concerns"
+        case helpfulStrategies = "helpful_strategies"
     }
 }

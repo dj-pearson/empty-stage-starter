@@ -5,6 +5,8 @@ struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @State private var showingSignOutAlert = false
     @State private var showingDeleteDataAlert = false
+    @State private var showingPaywall = false
+    @StateObject private var store = StoreKitService.shared
 
     var body: some View {
         Form {
@@ -35,7 +37,7 @@ struct SettingsView: View {
             // App Info
             Section("App Info") {
                 LabeledContent("Version") {
-                    Text("1.0.0")
+                    Text(appVersion)
                         .foregroundStyle(.secondary)
                 }
 
@@ -53,6 +55,24 @@ struct SettingsView: View {
                     Text("\(appState.kids.count)")
                         .foregroundStyle(.secondary)
                 }
+            }
+
+            // Subscription
+            Section("Subscription") {
+                Button {
+                    showingPaywall = true
+                } label: {
+                    HStack {
+                        Label("Plan", systemImage: "crown.fill")
+                        Spacer()
+                        Text(store.currentTier.displayName)
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .foregroundStyle(.primary)
             }
 
             // Preferences
@@ -95,6 +115,10 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+        .accessibilityIdentifier("settingsForm")
+        .sheet(isPresented: $showingPaywall) {
+            PaywallView()
+        }
         .alert("Sign Out?", isPresented: $showingSignOutAlert) {
             Button("Sign Out", role: .destructive) {
                 Task {
@@ -107,24 +131,76 @@ struct SettingsView: View {
             Text("You will need to sign in again to access your data.")
         }
     }
+
+    private var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "\(version) (\(build))"
+    }
 }
 
 // MARK: - Notification Settings
 
 struct NotificationSettingsView: View {
-    @AppStorage("notificationsEnabled") private var notificationsEnabled = true
+    @AppStorage("notificationsEnabled") private var notificationsEnabled = false
     @AppStorage("mealReminders") private var mealReminders = true
     @AppStorage("groceryReminders") private var groceryReminders = false
+    @StateObject private var notificationService = NotificationService.shared
+    @State private var showingPermissionAlert = false
 
     var body: some View {
         Form {
             Section {
                 Toggle("Enable Notifications", isOn: $notificationsEnabled)
+                    .onChange(of: notificationsEnabled) { _, enabled in
+                        Task {
+                            if enabled {
+                                let granted = await notificationService.requestAuthorization()
+                                if !granted {
+                                    notificationsEnabled = false
+                                    showingPermissionAlert = true
+                                }
+                            } else {
+                                notificationService.cancelAll()
+                            }
+                        }
+                    }
+
+                if notificationService.authorizationStatus == .denied {
+                    Label(
+                        "Notifications are disabled in system settings.",
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                    .font(.callout)
+                }
             }
 
             Section("Meal Planning") {
                 Toggle("Meal Reminders", isOn: $mealReminders)
                     .disabled(!notificationsEnabled)
+                    .onChange(of: mealReminders) { _, enabled in
+                        Task {
+                            if enabled && notificationsEnabled {
+                                await notificationService.scheduleMealReminders()
+                            } else {
+                                notificationService.cancelMealReminders()
+                            }
+                        }
+                    }
+
+                if mealReminders && notificationsEnabled {
+                    Text("Reminders at 8:00 AM, 12:00 PM, and 6:00 PM")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Grocery") {
@@ -134,6 +210,22 @@ struct NotificationSettingsView: View {
         }
         .navigationTitle("Notifications")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await notificationService.checkAuthorizationStatus()
+            if notificationService.isAuthorized {
+                notificationsEnabled = true
+            }
+        }
+        .alert("Notifications Disabled", isPresented: $showingPermissionAlert) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Please enable notifications in Settings to receive meal and grocery reminders.")
+        }
     }
 }
 

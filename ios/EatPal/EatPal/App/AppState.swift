@@ -22,6 +22,7 @@ final class AppState: ObservableObject {
     // MARK: - Services
 
     private let dataService = DataService.shared
+    private let realtimeService = RealtimeService.shared
     private let toast = ToastManager.shared
 
     // MARK: - Computed Properties
@@ -71,6 +72,9 @@ final class AppState: ObservableObject {
             if activeKidId == nil, let firstKid = kids.first {
                 activeKidId = firstKid.id
             }
+
+            // Start real-time subscriptions after initial load
+            await realtimeService.subscribe(appState: self)
         } catch {
             errorMessage = error.localizedDescription
             toast.error("Failed to load data", message: error.localizedDescription)
@@ -81,6 +85,7 @@ final class AppState: ObservableObject {
     }
 
     func clearData() {
+        Task { await realtimeService.unsubscribeAll() }
         foods = []
         kids = []
         recipes = []

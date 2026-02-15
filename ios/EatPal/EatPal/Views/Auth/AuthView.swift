@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 
 struct AuthView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -134,14 +135,19 @@ struct AuthView: View {
 
                         // Sign in with Apple
                         if authViewModel.authMode != .forgotPassword {
+                            dividerWithText("or")
+
                             SignInWithAppleButton(.signIn) { request in
-                                request.requestedScopes = [.email, .fullName]
-                            } onCompletion: { _ in
-                                // Apple sign-in handled via AuthService
+                                authViewModel.configureAppleRequest(request)
+                            } onCompletion: { result in
+                                Task {
+                                    await authViewModel.handleAppleSignIn(result)
+                                }
                             }
                             .signInWithAppleButtonStyle(.black)
                             .frame(height: 50)
-                            .cornerRadius(10)
+                            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md))
+                            .accessibilityLabel("Sign in with Apple")
                         }
 
                         // Forgot Password / Back
@@ -170,6 +176,20 @@ struct AuthView: View {
         case .signIn: return "Sign In"
         case .signUp: return "Create Account"
         case .forgotPassword: return "Send Reset Link"
+        }
+    }
+
+    private func dividerWithText(_ text: String) -> some View {
+        HStack {
+            Rectangle()
+                .fill(Color(.separator))
+                .frame(height: 1)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Rectangle()
+                .fill(Color(.separator))
+                .frame(height: 1)
         }
     }
 }
