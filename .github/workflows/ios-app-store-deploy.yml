@@ -155,8 +155,16 @@ jobs:
           echo "Installed profile: $PROFILE_UUID"
 
       # ---------------------------------------------------------------
-      # Resolve dependencies
+      # Resolve dependencies (with caching)
       # ---------------------------------------------------------------
+      - name: Cache SPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/spm-cache
+          key: spm-deploy-${{ runner.os }}-${{ hashFiles('ios/EatPal/Package.swift') }}
+          restore-keys: |
+            spm-deploy-${{ runner.os }}-
+
       - name: Resolve Swift Package Manager dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
@@ -254,6 +262,10 @@ jobs:
           IPA_PATH=$(find "$EXPORT_PATH" -name "*.ipa" -type f | head -1)
 
           echo "Uploading $IPA_PATH to App Store Connect..."
+
+          # Set up API key directory for xcrun
+          mkdir -p ~/.appstoreconnect/private_keys
+          cp "$API_KEY_PATH" ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8
 
           xcrun altool --upload-app \
             --type ios \

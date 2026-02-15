@@ -6,7 +6,15 @@ struct PantryView: View {
     @State private var selectedCategory: FoodCategory?
     @State private var filterMode: PantryFilter = .all
     @State private var showingAddFood = false
+    @State private var showingScanner = false
+    @State private var scannedBarcode: ScannedBarcodeItem?
     @State private var selectedFood: Food?
+    @State private var showingFilters = false
+    @State private var filterCategories: Set<FoodCategory> = []
+    @State private var filterAllergens: Set<String> = []
+    @State private var filterSafeOnly = false
+    @State private var filterTryBiteOnly = false
+    @State private var sortOption: FoodSortOption = .nameAsc
 
     enum PantryFilter: String, CaseIterable {
         case all = "All"
@@ -14,27 +22,48 @@ struct PantryView: View {
         case tryBite = "Try Bite"
     }
 
+    private var hasActiveFilters: Bool {
+        !filterCategories.isEmpty || !filterAllergens.isEmpty || filterSafeOnly || filterTryBiteOnly || sortOption != .nameAsc
+    }
+
+    private var activeFilterCount: Int {
+        var count = filterCategories.count + filterAllergens.count
+        if filterSafeOnly { count += 1 }
+        if filterTryBiteOnly { count += 1 }
+        if sortOption != .nameAsc { count += 1 }
+        return count
+    }
+
+    private var availableAllergens: [String] {
+        let all = appState.foods.compactMap(\.allergens).flatMap { $0 }
+        return Array(Set(all)).sorted()
+    }
+
     private var filteredFoods: [Food] {
         var foods = appState.foods
 
-        // Apply category filter
+        // Apply quick category chip filter
         if let category = selectedCategory {
             foods = foods.filter { $0.category == category.rawValue }
         }
 
-        // Apply safe/try-bite filter
+        // Apply quick segment filter
         switch filterMode {
         case .all: break
         case .safe: foods = foods.filter(\.isSafe)
         case .tryBite: foods = foods.filter(\.isTryBite)
         }
 
-        // Apply search
-        if !searchText.isEmpty {
-            foods = foods.filter {
-                $0.name.localizedCaseInsensitiveContains(searchText)
-            }
-        }
+        // Apply advanced filters
+        foods = FoodFilterEngine.apply(
+            foods: foods,
+            searchText: searchText,
+            categories: filterCategories,
+            excludeAllergens: filterAllergens,
+            safeOnly: filterSafeOnly,
+            tryBiteOnly: filterTryBiteOnly,
+            sortOption: sortOption
+        )
 
         return foods
     }
@@ -136,10 +165,36 @@ struct PantryView: View {
         .searchable(text: $searchText, prompt: "Search foods...")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showingAddFood = true
-                } label: {
-                    Image(systemName: "plus")
+                HStack(spacing: 12) {
+                    Button {
+                        showingFilters = true
+                    } label: {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                            if hasActiveFilters {
+                                Text("\(activeFilterCount)")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 16, height: 16)
+                                    .background(.red, in: Circle())
+                                    .offset(x: 6, y: -6)
+                            }
+                        }
+                    }
+                    .accessibilityLabel("Filter and sort")
+
+                    Button {
+                        showingScanner = true
+                    } label: {
+                        Image(systemName: "barcode.viewfinder")
+                    }
+                    .accessibilityLabel("Scan barcode")
+
+                    Button {
+                        showingAddFood = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
                 }
             }
         }
@@ -148,6 +203,25 @@ struct PantryView: View {
         }
         .sheet(item: $selectedFood) { food in
             FoodDetailView(food: food)
+        }
+        .fullScreenCover(isPresented: $showingScanner) {
+            BarcodeScannerView { barcode in
+                scannedBarcode = ScannedBarcodeItem(code: barcode)
+            }
+        }
+        .sheet(item: $scannedBarcode) { item in
+            ScannedProductView(barcode: item.code)
+        }
+        .sheet(isPresented: $showingFilters) {
+            SearchFilterView(
+                selectedCategories: $filterCategories,
+                selectedAllergens: $filterAllergens,
+                safeOnly: $filterSafeOnly,
+                tryBiteOnly: $filterTryBiteOnly,
+                sortOption: $sortOption,
+                availableAllergens: availableAllergens
+            )
+            .presentationDetents([.medium, .large])
         }
         .refreshable {
             await appState.loadAllData()

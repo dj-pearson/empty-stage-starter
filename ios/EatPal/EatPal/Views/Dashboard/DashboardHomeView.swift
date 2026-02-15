@@ -2,6 +2,9 @@ import SwiftUI
 
 struct DashboardHomeView: View {
     @EnvironmentObject var appState: AppState
+    @State private var showingScanner = false
+    @State private var showingAddFood = false
+    @State private var scannedBarcode: ScannedBarcodeItem?
 
     var body: some View {
         ScrollView {
@@ -20,7 +23,10 @@ struct DashboardHomeView: View {
                 QuickStatsGrid()
 
                 // Quick Actions
-                QuickActionsSection()
+                QuickActionsSection(
+                    onAddFood: { showingAddFood = true },
+                    onScanBarcode: { showingScanner = true }
+                )
             }
             .padding()
         }
@@ -28,7 +34,24 @@ struct DashboardHomeView: View {
         .refreshable {
             await appState.loadAllData()
         }
+        .fullScreenCover(isPresented: $showingScanner) {
+            BarcodeScannerView { barcode in
+                scannedBarcode = ScannedBarcodeItem(code: barcode)
+            }
+        }
+        .sheet(isPresented: $showingAddFood) {
+            AddFoodView()
+        }
+        .sheet(item: $scannedBarcode) { item in
+            ScannedProductView(barcode: item.code)
+        }
     }
+}
+
+/// Wrapper to make a scanned barcode identifiable for sheet presentation.
+struct ScannedBarcodeItem: Identifiable {
+    let id = UUID()
+    let code: String
 }
 
 // MARK: - Kid Selector
@@ -200,6 +223,9 @@ struct StatCard: View {
 // MARK: - Quick Actions
 
 struct QuickActionsSection: View {
+    var onAddFood: () -> Void = {}
+    var onScanBarcode: () -> Void = {}
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Quick Actions")
@@ -210,9 +236,9 @@ struct QuickActionsSection: View {
                 GridItem(.flexible()),
                 GridItem(.flexible()),
             ], spacing: 12) {
-                QuickActionButton(title: "Add Food", icon: "plus.circle.fill", color: .green)
-                QuickActionButton(title: "Scan Barcode", icon: "barcode.viewfinder", color: .blue)
-                QuickActionButton(title: "New Recipe", icon: "book.fill", color: .orange)
+                QuickActionButton(title: "Add Food", icon: "plus.circle.fill", color: .green, action: onAddFood)
+                QuickActionButton(title: "Scan Barcode", icon: "barcode.viewfinder", color: .blue, action: onScanBarcode)
+                QuickActionButton(title: "New Recipe", icon: "book.fill", color: .orange, action: {})
             }
         }
     }
@@ -222,20 +248,24 @@ struct QuickActionButton: View {
     let title: String
     let icon: String
     let color: Color
+    var action: () -> Void = {}
 
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(color)
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundStyle(color)
 
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.primary)
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.primary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        .buttonStyle(.plain)
     }
 }
 
