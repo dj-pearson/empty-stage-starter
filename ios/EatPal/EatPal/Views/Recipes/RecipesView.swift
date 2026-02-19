@@ -48,7 +48,13 @@ struct RecipesView: View {
             }
 
             // Recipes
-            if filteredRecipes.isEmpty {
+            if appState.isLoading && appState.recipes.isEmpty {
+                Section {
+                    ForEach(0..<3, id: \.self) { _ in
+                        SkeletonView(shape: .recipeRow)
+                    }
+                }
+            } else if filteredRecipes.isEmpty {
                 Section {
                     ContentUnavailableView(
                         "No Recipes",
@@ -113,6 +119,10 @@ struct RecipeRowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
+                if recipe.imageUrl != nil {
+                    RecipeThumbnail(imageUrl: recipe.imageUrl, size: 44)
+                }
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(recipe.name)
                         .font(.body)
@@ -188,18 +198,35 @@ struct RecipeDetailView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
     let recipe: Recipe
+    @State private var showingEditRecipe = false
+
+    private var currentRecipe: Recipe {
+        appState.recipes.first { $0.id == recipe.id } ?? recipe
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    // Recipe Image
+                    if let imageUrl = currentRecipe.imageUrl, !imageUrl.isEmpty {
+                        CachedAsyncImage(
+                            url: URL(string: imageUrl),
+                            size: CGSize(width: UIScreen.main.bounds.width, height: 200)
+                        ) {
+                            Rectangle()
+                                .fill(Color(.systemGray5))
+                        }
+                        .clipped()
+                    }
+
                     // Header
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(recipe.name)
+                        Text(currentRecipe.name)
                             .font(.title2)
                             .fontWeight(.bold)
 
-                        if let description = recipe.description {
+                        if let description = currentRecipe.description {
                             Text(description)
                                 .font(.body)
                                 .foregroundStyle(.secondary)
@@ -208,16 +235,16 @@ struct RecipeDetailView: View {
 
                     // Meta Info
                     HStack(spacing: 16) {
-                        if let prepTime = recipe.prepTime {
+                        if let prepTime = currentRecipe.prepTime {
                             MetaBadge(icon: "timer", text: prepTime)
                         }
-                        if let cookTime = recipe.cookTime {
+                        if let cookTime = currentRecipe.cookTime {
                             MetaBadge(icon: "flame.fill", text: cookTime)
                         }
-                        if let servings = recipe.servings {
+                        if let servings = currentRecipe.servings {
                             MetaBadge(icon: "person.2.fill", text: "\(servings) servings")
                         }
-                        if let difficulty = recipe.difficultyLevel {
+                        if let difficulty = currentRecipe.difficultyLevel {
                             MetaBadge(icon: "chart.bar.fill", text: difficulty.capitalized)
                         }
                     }
@@ -227,7 +254,7 @@ struct RecipeDetailView: View {
                         Text("Ingredients")
                             .font(.headline)
 
-                        ForEach(recipe.foodIds, id: \.self) { foodId in
+                        ForEach(currentRecipe.foodIds, id: \.self) { foodId in
                             if let food = appState.foods.first(where: { $0.id == foodId }) {
                                 HStack(spacing: 8) {
                                     let cat = FoodCategory(rawValue: food.category)
@@ -238,15 +265,26 @@ struct RecipeDetailView: View {
                             }
                         }
 
-                        if let additional = recipe.additionalIngredients, !additional.isEmpty {
+                        if let additional = currentRecipe.additionalIngredients, !additional.isEmpty {
                             Text("Additional: \(additional)")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+
+                        Button {
+                            Task { await addIngredientsToGrocery() }
+                        } label: {
+                            Label("Add Ingredients to Grocery List", systemImage: "cart.badge.plus")
+                                .font(.subheadline)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.green)
+                        .padding(.top, 4)
                     }
 
                     // Instructions
-                    if let instructions = recipe.instructions, !instructions.isEmpty {
+                    if let instructions = currentRecipe.instructions, !instructions.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("Instructions")
                                 .font(.headline)
@@ -258,12 +296,12 @@ struct RecipeDetailView: View {
                     }
 
                     // Nutrition
-                    if let nutrition = recipe.nutritionInfo {
+                    if let nutrition = currentRecipe.nutritionInfo {
                         NutritionCard(nutrition: nutrition)
                     }
 
                     // Tips
-                    if let tips = recipe.tips, !tips.isEmpty {
+                    if let tips = currentRecipe.tips, !tips.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Tips")
                                 .font(.headline)
@@ -277,7 +315,7 @@ struct RecipeDetailView: View {
                     }
 
                     // Tags
-                    if let tags = recipe.tags, !tags.isEmpty {
+                    if let tags = currentRecipe.tags, !tags.isEmpty {
                         FlowLayout(spacing: 6) {
                             ForEach(tags, id: \.self) { tag in
                                 Text(tag)
@@ -297,8 +335,65 @@ struct RecipeDetailView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showingEditRecipe = true
+                    } label: {
+                        Image(systemName: "pencil")
+                    }
+                }
+            }
+            .sheet(isPresented: $showingEditRecipe) {
+                EditRecipeView(recipe: currentRecipe)
             }
         }
+    }
+
+    private func addIngredientsToGrocery() async {
+        let existingNames = Set(appState.groceryItems.map { $0.name.lowercased() })
+        var added = 0
+
+        for foodId in currentRecipe.foodIds {
+            guard let food = appState.foods.first(where: { $0.id == foodId }) else { continue }
+            if existingNames.contains(food.name.lowercased()) { continue }
+
+            let item = GroceryItem(
+                id: UUID().uuidString,
+                userId: "",
+                name: food.name,
+                category: food.category,
+                quantity: 1,
+                unit: food.unit ?? "count",
+                checked: false,
+                addedVia: "recipe"
+            )
+            try? await appState.addGroceryItem(item)
+            added += 1
+        }
+
+        if let additional = currentRecipe.additionalIngredients, !additional.isEmpty {
+            let ingredients = additional.split(separator: ",").map {
+                $0.trimmingCharacters(in: .whitespaces)
+            }
+            for ingredient in ingredients where !existingNames.contains(ingredient.lowercased()) {
+                let item = GroceryItem(
+                    id: UUID().uuidString,
+                    userId: "",
+                    name: ingredient,
+                    category: "other",
+                    quantity: 1,
+                    unit: "",
+                    checked: false,
+                    addedVia: "recipe"
+                )
+                try? await appState.addGroceryItem(item)
+                added += 1
+            }
+        }
+
+        let toast = ToastManager.shared
+        toast.success("Added to grocery list", message: "\(added) ingredients added.")
+        HapticManager.success()
     }
 }
 
@@ -435,11 +530,20 @@ struct AddRecipeView: View {
     @State private var difficulty = "easy"
     @State private var selectedFoodIds: Set<String> = []
     @State private var tags = ""
+    @State private var recipeImage: UIImage?
     @State private var isSubmitting = false
 
     var body: some View {
         NavigationStack {
             Form {
+                Section("Recipe Photo") {
+                    HStack {
+                        Spacer()
+                        ImagePicker(selectedImage: $recipeImage)
+                        Spacer()
+                    }
+                }
+
                 Section("Recipe Details") {
                     TextField("Recipe name", text: $name)
                     TextField("Description", text: $description, axis: .vertical)
@@ -514,8 +618,18 @@ struct AddRecipeView: View {
         let tagList = tags.isEmpty ? nil :
             tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
 
+        let recipeId = UUID().uuidString
+        var imageUrl: String?
+        if let image = recipeImage {
+            imageUrl = try? await ImageUploadService.upload(
+                image: image,
+                folder: .recipes,
+                id: recipeId
+            )
+        }
+
         let recipe = Recipe(
-            id: UUID().uuidString,
+            id: recipeId,
             userId: "",
             name: name,
             description: description.isEmpty ? nil : description,
@@ -524,6 +638,7 @@ struct AddRecipeView: View {
             prepTime: prepTime.isEmpty ? nil : prepTime,
             cookTime: cookTime.isEmpty ? nil : cookTime,
             servings: servings.isEmpty ? nil : servings,
+            imageUrl: imageUrl,
             tags: tagList,
             difficultyLevel: difficulty
         )
