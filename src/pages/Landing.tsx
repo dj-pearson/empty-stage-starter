@@ -15,13 +15,11 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import {
-  Utensils,
   Brain,
   Calendar,
   TrendingUp,
   Heart,
   Sparkles,
-  Users,
   ShoppingCart,
   Menu,
   Moon,
@@ -40,7 +38,6 @@ import { trackLandingView, trackPageView } from "@/lib/conversion-tracking";
 
 // Lazy load heavy components that use GSAP to reduce initial bundle size
 const EnhancedHero = lazy(() => import("@/components/EnhancedHero").then(m => ({ default: m.EnhancedHero })));
-const FeatureCard3D = lazy(() => import("@/components/Card3DTilt").then(m => ({ default: m.FeatureCard3D })));
 const ParallaxBackground = lazy(() => import("@/components/ParallaxBackground").then(m => ({ default: m.ParallaxBackground })));
 const ExitIntentPopup = lazy(() => import("@/components/ExitIntentPopup").then(m => ({ default: m.ExitIntentPopup })));
 
@@ -147,45 +144,6 @@ const Landing = () => {
       clearTimeout(timer);
     };
   }, []);
-
-  const features = [
-    {
-      icon: Utensils,
-      title: "Smart Food Library",
-      description:
-        "Build a safe foods library for your picky eater. Track allergens, sensory preferences, and nutrition for each child's meals.",
-    },
-    {
-      icon: Calendar,
-      title: "Weekly Kids Meal Plans",
-      description:
-        "Auto-generate 7-day personalized meal plans for picky eaters with balanced nutrition and daily try bites to expand food acceptance.",
-    },
-    {
-      icon: Brain,
-      title: "AI-Powered Food Suggestions",
-      description:
-        "Get intelligent food recommendations based on your child's eating patterns, preferences, and nutritional needs for selective eaters.",
-    },
-    {
-      icon: ShoppingCart,
-      title: "Auto Grocery Lists",
-      description:
-        "Generate organized shopping lists from your kids meal plans automatically. Track inventory and never run out of safe foods.",
-    },
-    {
-      icon: Users,
-      title: "Multi-Child Meal Planning",
-      description:
-        "Manage personalized meal plans for multiple picky eaters in one place. Perfect for families with different food preferences.",
-    },
-    {
-      icon: TrendingUp,
-      title: "Progress & Nutrition Tracking",
-      description:
-        "Monitor food acceptance, track nutrition intake, and celebrate wins as your picky eater tries new foods.",
-    },
-  ];
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
@@ -698,7 +656,7 @@ const Landing = () => {
             </div>
 
             <div className="animate-section text-center mt-12">
-              <div className="inline-flex items-center gap-8 flex-wrap justify-center bg-white/50 backdrop-blur-sm p-6 rounded-2xl shadow-sm">
+              <div className="inline-flex items-center gap-8 flex-wrap justify-center bg-card/80 backdrop-blur-sm p-6 rounded-2xl shadow-sm border border-border/50">
                 <div className="text-center">
                   <div className="text-3xl font-bold text-primary" aria-hidden="true">⭐⭐⭐⭐⭐</div>
                   <p className="text-sm text-muted-foreground mt-2">4.8 out of 5 stars</p>
@@ -745,54 +703,66 @@ const Landing = () => {
           </div>
         </section>
 
-        {/* Features Section with Animations */}
-        <section id="complete-solution" className="py-24 px-4 relative">
+        {/* Free Tools Section - Lead Magnets */}
+        <section id="free-tools" className="py-24 px-4 relative">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent pointer-events-none" />
-          <div className="container mx-auto relative z-10">
+          <div className="container mx-auto max-w-6xl relative z-10">
             <div className="animate-section text-center mb-16">
+              <Badge className="mb-4 bg-primary/10 text-primary border-primary px-4 py-1 text-sm">Free Tools</Badge>
               <h2 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-primary">
-                Complete Kids Meal Planning Solution
+                Try Our Free Parenting Tools
               </h2>
-              <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-                Powerful features designed to make meal planning effortless for
-                families with picky eaters, selective eating, and children's
-                nutrition challenges
+              <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+                No account needed. Get personalized insights for your family in under 3 minutes.
               </p>
             </div>
-            <div className="animate-grid grid md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
-              <Suspense fallback={
-                <div className="contents" role="status" aria-busy="true" aria-label="Loading features">
-                  {[1, 2, 3, 4, 5, 6].map((i) => (
-                    <div
-                      key={i}
-                      className="bg-card rounded-xl p-6 border shadow-sm animate-pulse h-full"
-                      style={{ animationDelay: `${i * 100}ms` }}
-                    >
-                      <div className="w-12 h-12 rounded-full bg-muted mb-4" />
-                      <div className="h-6 bg-muted rounded w-3/4 mb-3" />
-                      <div className="space-y-2">
-                        <div className="h-4 bg-muted rounded w-full" />
-                        <div className="h-4 bg-muted rounded w-5/6" />
-                      </div>
-                    </div>
-                  ))}
-                  <span className="sr-only">Loading feature cards, please wait...</span>
+            <div className="animate-grid grid md:grid-cols-3 gap-8">
+              {[
+                {
+                  icon: "🧩",
+                  title: "Picky Eater Personality Quiz",
+                  description: "Discover your child's eating personality type and get tailored strategies to expand their food repertoire.",
+                  cta: "Take the Quiz",
+                  href: "/picky-eater-quiz",
+                  highlight: true,
+                },
+                {
+                  icon: "💰",
+                  title: "Grocery Budget Calculator",
+                  description: "Find out how much you should spend on groceries based on your family size, location, and dietary needs.",
+                  cta: "Calculate Budget",
+                  href: "/budget-calculator",
+                  highlight: false,
+                },
+                {
+                  icon: "📋",
+                  title: "Meal Plan Generator",
+                  description: "Get a sample weekly meal plan customized for your picky eater's preferences and nutritional goals.",
+                  cta: "Generate Plan",
+                  href: "/meal-plan",
+                  highlight: false,
+                },
+              ].map((tool, index) => (
+                <div key={index} className="animate-item h-full">
+                  <Card className={`h-full flex flex-col hover:shadow-xl transition-all hover:-translate-y-1 duration-300 ${tool.highlight ? 'border-2 border-primary shadow-lg' : 'border-primary/10'}`}>
+                    <CardHeader>
+                      <div className="text-5xl mb-4">{tool.icon}</div>
+                      <CardTitle className="text-xl text-foreground">{tool.title}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col flex-1">
+                      <p className="text-muted-foreground mb-6 flex-1">{tool.description}</p>
+                      <Link to={tool.href}>
+                        <Button
+                          className={`w-full gap-2 ${tool.highlight ? '' : 'variant-outline'}`}
+                          variant={tool.highlight ? 'default' : 'outline'}
+                        >
+                          {tool.cta} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                        </Button>
+                      </Link>
+                    </CardContent>
+                  </Card>
                 </div>
-              }>
-                {features.map((feature) => (
-                  <div key={feature.title} className="animate-item h-full">
-                    <FeatureCard3D
-                      icon={feature.icon === Utensils ? '🍽️' :
-                        feature.icon === Calendar ? '📅' :
-                          feature.icon === Brain ? '🧠' :
-                            feature.icon === ShoppingCart ? '🛒' :
-                              feature.icon === Users ? '👨‍👩‍👧‍👦' : '📈'}
-                      title={feature.title}
-                      description={feature.description}
-                    />
-                  </div>
-                ))}
-              </Suspense>
+              ))}
             </div>
           </div>
         </section>
