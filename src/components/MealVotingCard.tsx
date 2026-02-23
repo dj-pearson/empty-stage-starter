@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import { motion, useMotionValue, useTransform, PanInfo } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +40,7 @@ const VOTE_COLORS = {
   no_way: 'bg-red-500',
 };
 
-export function MealVotingCard({
+export const MealVotingCard = memo(function MealVotingCard({
   mealName,
   mealSlot,
   mealDate,
@@ -251,4 +251,4 @@ export function MealVotingCard({
       </Card>
     </motion.div>
   );
-}
+});

@@ -16,3 +16,10 @@
 # VITE_APP_VERSION = 1.0.0
 # VITE_APP_URL = https://tryeatpal.com
 # ============================================================================
+
+# ============================================================================
+# Staging Environment
+# ============================================================================
+# Deploy staging with: npx wrangler pages deploy dist --project-name=eatpal-staging
+# Set staging env vars in Cloudflare Dashboard for the eatpal-staging project
+# ============================================================================

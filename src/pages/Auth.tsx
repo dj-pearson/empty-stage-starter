@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/input-otp";
 import { loginHistory, type LoginMethod } from "@/lib/login-history";
 import { trackSignup, trackPageView } from "@/lib/conversion-tracking";
+import { checkRateLimit, recordAttempt, clearRateLimit, formatRetryAfter } from "@/lib/rateLimiter";
 
 // Password requirement checks for real-time validation feedback
 interface PasswordRequirements {
@@ -338,6 +339,18 @@ const Auth = () => {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Check rate limit before attempting login
+    const rateCheck = checkRateLimit(email);
+    if (!rateCheck.allowed) {
+      toast({
+        title: "Too many attempts",
+        description: `Please try again in ${formatRetryAfter(rateCheck.retryAfterMs)}.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -348,14 +361,24 @@ const Auth = () => {
     setLoading(false);
 
     if (error) {
+      // Record failed attempt for rate limiting
+      recordAttempt(email);
       // Log failed login attempt
       loginHistory.logFailedLogin(email, 'password', error.message);
+
+      const updatedCheck = checkRateLimit(email);
+      const remainingMsg = updatedCheck.remaining > 0
+        ? ` ${updatedCheck.remaining} attempt${updatedCheck.remaining === 1 ? '' : 's'} remaining.`
+        : '';
+
       toast({
         title: "Error",
-        description: error.message,
+        description: `${error.message}${remainingMsg}`,
         variant: "destructive",
       });
     } else if (data.user) {
+      // Clear rate limit on successful login
+      clearRateLimit(email);
       // Log successful login
       loginHistory.logLogin(data.user.id, email, 'password');
     }

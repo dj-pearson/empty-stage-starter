@@ -81,11 +81,13 @@ interface UserProfile {
 }
 
 interface BulkAction {
-  type: "ban" | "unban" | "make_admin" | "remove_admin" | "send_email" | "delete" | "export";
+  type: "ban" | "unban" | "make_admin" | "remove_admin" | "send_email" | "delete" | "export" | "reset_password";
   label: string;
   icon: React.ReactNode;
   variant?: "default" | "destructive" | "outline";
 }
+
+const PAGE_SIZE = 20;
 
 export function BulkUserManagement() {
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -101,6 +103,7 @@ export function BulkUserManagement() {
   const [emailBody, setEmailBody] = useState("");
   const [processingProgress, setProcessingProgress] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [userStats, setUserStats] = useState({
     total: 0,
     active: 0,
@@ -113,6 +116,7 @@ export function BulkUserManagement() {
     { type: "unban", label: "Unban Selected", icon: <UserCheck className="h-4 w-4" /> },
     { type: "make_admin", label: "Make Admin", icon: <Shield className="h-4 w-4" /> },
     { type: "remove_admin", label: "Remove Admin", icon: <Shield className="h-4 w-4" /> },
+    { type: "reset_password", label: "Reset Password", icon: <Mail className="h-4 w-4" /> },
     { type: "send_email", label: "Send Email", icon: <Send className="h-4 w-4" /> },
     { type: "export", label: "Export Selected", icon: <Download className="h-4 w-4" /> },
   ];
@@ -178,13 +182,22 @@ export function BulkUserManagement() {
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
+    setCurrentPage(1);
     filterUsers(users, value, statusFilter);
   };
 
   const handleStatusFilterChange = (value: string) => {
     setStatusFilter(value);
+    setCurrentPage(1);
     filterUsers(users, searchQuery, value);
   };
+
+  // Pagination
+  const totalPages = Math.ceil(filteredUsers.length / PAGE_SIZE);
+  const paginatedUsers = filteredUsers.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
 
   const toggleUserSelection = (userId: string) => {
     const newSelection = new Set(selectedUserIds);
@@ -252,8 +265,21 @@ export function BulkUserManagement() {
           case "remove_admin":
             actionName = "remove_admin";
             break;
+          case "reset_password":
+            actionName = "reset_password";
+            break;
           default:
             continue;
+        }
+
+        if (actionName === "reset_password") {
+          const { error: resetError } = await supabase.auth.resetPasswordForEmail(user.email, {
+            redirectTo: `${window.location.origin}/auth?reset=true`,
+          });
+          if (resetError) throw resetError;
+          successCount++;
+          setProcessingProgress(((i + 1) / selectedUsers.length) * 100);
+          continue;
         }
 
         const { error } = await invokeEdgeFunction("update-user", {
@@ -544,14 +570,14 @@ export function BulkUserManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredUsers.length === 0 ? (
+                {paginatedUsers.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       No users found
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredUsers.map((user) => (
+                  paginatedUsers.map((user) => (
                     <TableRow
                       key={user.id}
                       className={selectedUserIds.has(user.id) ? "bg-muted/50" : ""}
@@ -621,6 +647,36 @@ export function BulkUserManagement() {
               </TableBody>
             </Table>
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <p className="text-sm text-muted-foreground">
+                Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredUsers.length)} of {filteredUsers.length} users
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm font-medium">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -13,6 +13,7 @@ import "./styles/mobile-first.css";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { initializeSentry } from "./lib/sentry";
 import { validateEnv } from "./lib/env";
+import { initWebVitals } from "./lib/webVitals";
 
 // Validate environment variables before anything else
 validateEnv();
@@ -61,6 +62,11 @@ try {
     </ErrorBoundary>
   );
   debugLog('React root rendered successfully');
+
+  // Initialize Core Web Vitals monitoring
+  initWebVitals().catch(() => {
+    debugLog('Web vitals initialization failed (non-critical)');
+  });
 } catch (error) {
   // Always log render errors - critical for production debugging
   console.error('[EatPal] Failed to render app:', error);

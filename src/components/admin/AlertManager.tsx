@@ -13,6 +13,8 @@ import {
   Bell,
   BellOff,
   RefreshCw,
+  Plus,
+  Settings,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "@/hooks/use-toast";
@@ -24,6 +26,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+
+interface AlertRule {
+  id: string;
+  alert_type: string;
+  threshold: number;
+  notification_channel: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+const ALERT_TYPES = [
+  { value: "error_rate_high", label: "High Error Rate" },
+  { value: "response_time_slow", label: "Slow Response Time" },
+  { value: "disk_usage_high", label: "High Disk Usage" },
+  { value: "subscription_churn_spike", label: "Subscription Churn Spike" },
+];
 
 interface Alert {
   id: string;
@@ -59,6 +81,13 @@ export function AlertManager() {
   const [loading, setLoading] = useState(true);
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
   const [showResolved, setShowResolved] = useState(false);
+  const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
+  const [showCreateRule, setShowCreateRule] = useState(false);
+  const [newRule, setNewRule] = useState({
+    alert_type: "",
+    threshold: 0,
+    notification_channel: "in_app",
+  });
 
   useEffect(() => {
     fetchAlerts();
@@ -114,6 +143,54 @@ export function AlertManager() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAlertRules = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("admin_alert_rules")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (!error && data) setAlertRules(data as any);
+    } catch {
+      // Table may not exist yet
+    }
+  };
+
+  useEffect(() => {
+    fetchAlertRules();
+  }, []);
+
+  const createAlertRule = async () => {
+    if (!newRule.alert_type) return;
+    try {
+      const { error } = await supabase.from("admin_alert_rules").insert([{
+        alert_type: newRule.alert_type,
+        threshold: newRule.threshold,
+        notification_channel: newRule.notification_channel,
+        is_active: true,
+      }]);
+      if (error) throw error;
+      toast({ title: "Alert rule created" });
+      setShowCreateRule(false);
+      setNewRule({ alert_type: "", threshold: 0, notification_channel: "in_app" });
+      fetchAlertRules();
+    } catch (error: unknown) {
+      toast({ title: "Error creating rule", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const toggleAlertRule = async (ruleId: string, isActive: boolean) => {
+    try {
+      const { error } = await supabase
+        .from("admin_alert_rules")
+        .update({ is_active: !isActive })
+        .eq("id", ruleId);
+      if (error) throw error;
+      setAlertRules(prev => prev.map(r => r.id === ruleId ? { ...r, is_active: !isActive } : r));
+    } catch {
+      // silent
     }
   };
 
@@ -236,6 +313,73 @@ export function AlertManager() {
           <div className="text-sm text-muted-foreground">Unread Alerts</div>
         </Card>
       </div>
+
+      {/* Alert Rules */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            <h3 className="font-semibold">Alert Rules</h3>
+          </div>
+          <Button size="sm" onClick={() => setShowCreateRule(!showCreateRule)}>
+            <Plus className="h-4 w-4 mr-1" />
+            Create Rule
+          </Button>
+        </div>
+
+        {showCreateRule && (
+          <div className="mb-4 p-4 border rounded-lg space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <Label>Alert Type</Label>
+                <Select value={newRule.alert_type} onValueChange={(v) => setNewRule({...newRule, alert_type: v})}>
+                  <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                  <SelectContent>
+                    {ALERT_TYPES.map(t => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Threshold</Label>
+                <Input type="number" value={newRule.threshold} onChange={(e) => setNewRule({...newRule, threshold: Number(e.target.value)})} />
+              </div>
+              <div>
+                <Label>Channel</Label>
+                <Select value={newRule.notification_channel} onValueChange={(v) => setNewRule({...newRule, notification_channel: v})}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="in_app">In-App</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={createAlertRule}>Save Rule</Button>
+              <Button size="sm" variant="outline" onClick={() => setShowCreateRule(false)}>Cancel</Button>
+            </div>
+          </div>
+        )}
+
+        {alertRules.length > 0 ? (
+          <div className="space-y-2">
+            {alertRules.map((rule) => (
+              <div key={rule.id} className="flex items-center justify-between p-3 border rounded-lg">
+                <div>
+                  <span className="font-medium capitalize">{rule.alert_type.replace(/_/g, " ")}</span>
+                  <span className="text-sm text-muted-foreground ml-2">Threshold: {rule.threshold}</span>
+                  <Badge variant="outline" className="ml-2 text-xs">{rule.notification_channel}</Badge>
+                </div>
+                <Switch checked={rule.is_active} onCheckedChange={() => toggleAlertRule(rule.id, rule.is_active)} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-4">No alert rules configured</p>
+        )}
+      </Card>
 
       {/* Alerts List */}
       <Card className="p-4">

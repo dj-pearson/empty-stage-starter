@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,7 +18,7 @@ const MEAL_SLOTS = [
   { id: 'try_bite', label: 'Try Bite', time: 'Any time', icon: '✨' },
 ];
 
-export function TodayMeals({ onLogMeal }: TodayMealsProps) {
+export const TodayMeals = memo(function TodayMeals({ onLogMeal }: TodayMealsProps) {
   const { planEntries, foods, activeKidId, kids } = useApp();
 
   const activeKid = kids.find(k => k.id === activeKidId);
@@ -211,4 +211,4 @@ export function TodayMeals({ onLogMeal }: TodayMealsProps) {
       </CardContent>
     </Card>
   );
-}
+});

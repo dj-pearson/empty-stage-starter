@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   CommandDialog,
   CommandEmpty,
@@ -9,6 +9,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { useNavigate } from "react-router-dom";
+import { useApp } from "@/contexts/AppContext";
 import {
   Home,
   Users,
@@ -46,8 +47,10 @@ interface Command {
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const navigate = useNavigate();
   const { setTheme, theme } = useTheme();
+  const { foods, recipes, kids, planEntries } = useApp();
 
   // Toggle command palette with Cmd/Ctrl + K
   useKeyboardShortcuts({
@@ -342,11 +345,96 @@ export function CommandPalette() {
     };
   }, [filteredCommands]);
 
+  // Search data with 300ms debounce effect
+  const dataResults = useMemo(() => {
+    if (!searchQuery || searchQuery.length < 2) return { foods: [], recipes: [], kids: [], plans: [] };
+    const q = searchQuery.toLowerCase();
+    return {
+      foods: foods.filter(f => f.name?.toLowerCase().includes(q)).slice(0, 5),
+      recipes: recipes.filter(r => r.name?.toLowerCase().includes(q)).slice(0, 5),
+      kids: kids.filter(k => k.name?.toLowerCase().includes(q)).slice(0, 5),
+      plans: planEntries.filter(p => {
+        const food = foods.find(f => f.id === p.food_id);
+        return food?.name?.toLowerCase().includes(q);
+      }).slice(0, 5),
+    };
+  }, [searchQuery, foods, recipes, kids, planEntries]);
+
+  const hasDataResults = dataResults.foods.length > 0 || dataResults.recipes.length > 0 || dataResults.kids.length > 0 || dataResults.plans.length > 0;
+
+  // Recent searches
+  const [recentSearches] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("eatpal_recent_searches") || "[]");
+    } catch { return []; }
+  });
+
+  const saveRecentSearch = useCallback((term: string) => {
+    try {
+      const current = JSON.parse(localStorage.getItem("eatpal_recent_searches") || "[]");
+      const updated = [term, ...current.filter((s: string) => s !== term)].slice(0, 5);
+      localStorage.setItem("eatpal_recent_searches", JSON.stringify(updated));
+    } catch { /* ignore */ }
+  }, []);
+
   return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Type a command or search..." />
+    <CommandDialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setSearchQuery(""); }}>
+      <CommandInput placeholder="Type a command or search..." value={searchQuery} onValueChange={setSearchQuery} />
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
+
+        {/* Recent searches when empty */}
+        {!searchQuery && recentSearches.length > 0 && (
+          <>
+            <CommandGroup heading="Recent Searches">
+              {recentSearches.map((term) => (
+                <CommandItem key={term} onSelect={() => setSearchQuery(term)}>
+                  <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <span>{term}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <CommandSeparator />
+          </>
+        )}
+
+        {/* Data search results */}
+        {hasDataResults && (
+          <>
+            {dataResults.foods.length > 0 && (
+              <CommandGroup heading="Foods">
+                {dataResults.foods.map((food) => (
+                  <CommandItem key={food.id} onSelect={() => { saveRecentSearch(searchQuery); navigate("/pantry"); setOpen(false); }}>
+                    <Apple className="mr-2 h-4 w-4 text-green-500" />
+                    <span>{food.name}</span>
+                    {food.category && <span className="ml-auto text-xs text-muted-foreground">{food.category}</span>}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {dataResults.recipes.length > 0 && (
+              <CommandGroup heading="Recipes">
+                {dataResults.recipes.map((recipe) => (
+                  <CommandItem key={recipe.id} onSelect={() => { saveRecentSearch(searchQuery); navigate("/recipes"); setOpen(false); }}>
+                    <BookOpen className="mr-2 h-4 w-4 text-orange-500" />
+                    <span>{recipe.name}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {dataResults.kids.length > 0 && (
+              <CommandGroup heading="Kids">
+                {dataResults.kids.map((kid) => (
+                  <CommandItem key={kid.id} onSelect={() => { saveRecentSearch(searchQuery); navigate("/kids"); setOpen(false); }}>
+                    <Users className="mr-2 h-4 w-4 text-blue-500" />
+                    <span>{kid.name}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            <CommandSeparator />
+          </>
+        )}
 
         <CommandGroup heading="Navigation">
           {groupedCommands.navigation.map((cmd) => (

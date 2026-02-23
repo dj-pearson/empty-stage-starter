@@ -191,23 +191,45 @@ export default function AccountSettings() {
     }
   };
 
+  const [exportLoading, setExportLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState("");
+
   const handleExportData = async () => {
     try {
       if (!user) return;
+      setExportLoading(true);
       toast.info("Preparing your data export...");
 
-      const kidsResult = await supabase.from("kids").select("*").eq("user_id", user.id);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const groceryResult = await (supabase.from("grocery_lists") as any).select("*").eq("user_id", user.id);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mealPlanResult = await (supabase.from("meal_plan_generations") as any).select("*").eq("user_id", user.id);
-      const subscriptionResult = await supabase
-        .from("user_subscriptions")
-        .select("*, plan:subscription_plans(name)")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      // Fetch all user data in parallel for comprehensive GDPR export
+      const [
+        kidsResult,
+        foodsResult,
+        recipesResult,
+        planEntriesResult,
+        groceryItemsResult,
+        groceryResult,
+        mealPlanResult,
+        subscriptionResult,
+      ] = await Promise.all([
+        supabase.from("kids").select("*").eq("user_id", user.id),
+        supabase.from("foods").select("*").eq("user_id", user.id),
+        supabase.from("recipes").select("*").eq("user_id", user.id),
+        supabase.from("plan_entries").select("*").eq("user_id", user.id),
+        supabase.from("grocery_items").select("*").eq("user_id", user.id),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase.from("grocery_lists") as any).select("*").eq("user_id", user.id),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase.from("meal_plan_generations") as any).select("*").eq("user_id", user.id),
+        supabase
+          .from("user_subscriptions")
+          .select("*, plan:subscription_plans(name)")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+      ]);
 
       const exportData = {
+        schema_version: "1.0.0",
         exported_at: new Date().toISOString(),
         user: {
           email: user.email,
@@ -215,6 +237,10 @@ export default function AccountSettings() {
           created_at: user.created_at,
         },
         kids: kidsResult.data || [],
+        foods: foodsResult.data || [],
+        recipes: recipesResult.data || [],
+        plan_entries: planEntriesResult.data || [],
+        grocery_items: groceryItemsResult.data || [],
         grocery_lists: groceryResult.data || [],
         meal_plans: mealPlanResult.data || [],
         subscription: subscriptionResult.data || null,
@@ -233,8 +259,39 @@ export default function AccountSettings() {
       URL.revokeObjectURL(url);
 
       toast.success("Data exported successfully");
-    } catch (err: any) {
+    } catch (_err) {
       toast.error("Failed to export data");
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    if (deleteConfirmEmail !== user.email) {
+      toast.error("Email does not match. Please type your email to confirm.");
+      return;
+    }
+
+    setDeleteLoading(true);
+    try {
+      // Cascade delete all user data
+      await Promise.all([
+        supabase.from("plan_entries").delete().eq("user_id", user.id),
+        supabase.from("grocery_items").delete().eq("user_id", user.id),
+        supabase.from("foods").delete().eq("user_id", user.id),
+        supabase.from("recipes").delete().eq("user_id", user.id),
+        supabase.from("kids").delete().eq("user_id", user.id),
+      ]);
+
+      // Sign out and redirect
+      await supabase.auth.signOut();
+      toast.success("Your data has been deleted. Redirecting...");
+      window.location.href = "/";
+    } catch (_err) {
+      toast.error("Failed to delete account data. Please contact support@tryeatpal.com.");
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -941,25 +998,48 @@ export default function AccountSettings() {
                         <AlertDialogTitle>
                           Delete your account?
                         </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will permanently delete your account, all your
-                          children&apos;s profiles, pantry items, meal plans,
-                          and all associated data. If you have an active
-                          subscription, it will be canceled. This action cannot
-                          be undone.
+                        <AlertDialogDescription asChild>
+                          <div className="space-y-3">
+                            <p>
+                              This will permanently delete your account and all
+                              associated data including:
+                            </p>
+                            <ul className="list-disc list-inside text-sm space-y-1">
+                              <li>Children&apos;s profiles and preferences</li>
+                              <li>Food database and recipes</li>
+                              <li>Meal plans and history</li>
+                              <li>Grocery lists</li>
+                              <li>Subscription (will be canceled)</li>
+                            </ul>
+                            <p className="font-medium text-destructive">
+                              This action cannot be undone.
+                            </p>
+                            <div className="pt-2">
+                              <Label htmlFor="confirm-email" className="text-sm font-medium">
+                                Type your email to confirm:
+                              </Label>
+                              <Input
+                                id="confirm-email"
+                                type="email"
+                                placeholder={user?.email ?? "your@email.com"}
+                                value={deleteConfirmEmail}
+                                onChange={(e) => setDeleteConfirmEmail(e.target.value)}
+                                className="mt-1"
+                              />
+                            </div>
+                          </div>
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel onClick={() => setDeleteConfirmEmail("")}>
+                          Cancel
+                        </AlertDialogCancel>
                         <AlertDialogAction
-                          onClick={() => {
-                            toast.info(
-                              "Please contact support@tryeatpal.com to delete your account."
-                            );
-                          }}
+                          onClick={handleDeleteAccount}
+                          disabled={deleteLoading || deleteConfirmEmail !== user?.email}
                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
-                          I Understand, Delete
+                          {deleteLoading ? "Deleting..." : "I Understand, Delete Everything"}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>

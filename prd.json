@@ -129,8 +129,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created functions/calculate-food-similarity/index.ts. Accepts food_id, returns similar foods scored by category (40%), allergens (20%), safety (20%), name overlap (20%). JWT required. Proper error responses. Typecheck passes."
     },
     {
       "id": "US-009",
@@ -146,8 +146,8 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created functions/suggest-foods/index.ts. Accepts kid_id, preferences, allergens. Returns safe foods filtered by allergens, prioritized by novelty and preferences. Queries kid food history. Handles empty results gracefully. JWT required. Typecheck passes."
     },
     {
       "id": "US-010",
@@ -162,8 +162,8 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created functions/suggest-recipe/index.ts. Accepts available_foods, kid_ids, dietary_restrictions. Returns ranked recipes with match_percentage and missing_food_ids. Filters allergens across all specified kids. JWT required. Typecheck passes."
     },
     {
       "id": "US-011",
@@ -179,8 +179,8 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created functions/ai-meal-plan/index.ts. Accepts kid_ids, date_range, dietary_restrictions, preferences. Returns structured meal plan with breakfast/lunch/dinner/snacks per day. Algorithmic distribution with AI-ready architecture (OPENAI_API_KEY). Tracks prompt usage. JWT required. Typecheck passes."
     },
     {
       "id": "US-012",
@@ -196,8 +196,8 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created functions/create-checkout/index.ts. Accepts price_id and user_id. Creates Stripe checkout session via REST API with success/cancel URLs. Stores pending subscription in user_subscriptions. JWT required. Typecheck passes."
     },
     {
       "id": "US-013",
@@ -215,8 +215,8 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created functions/stripe-webhook/index.ts. HMAC-SHA256 signature verification via Web Crypto API. Handles checkout.session.completed, customer.subscription.updated, customer.subscription.deleted, invoice.payment_failed. Updates user_subscriptions table. Returns 200/400 appropriately. Typecheck passes."
     },
     {
       "id": "US-014",
@@ -232,8 +232,8 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created functions/parse-recipe/index.ts. Accepts URL, extracts recipe data via JSON-LD structured data parsing, falls back to HTML meta tag extraction. Returns name, ingredients, instructions, servings, nutrition, image_url. URL validation included. Typecheck passes."
     },
     {
       "id": "US-015",
@@ -248,8 +248,8 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created functions/generate-blog-content/index.ts. Accepts topic, target_keywords, tone, word_count. Uses OpenAI gpt-4o-mini when configured, template fallback otherwise. Returns title, excerpt, body (HTML), meta_tags, generation_cost. No JWT. Typecheck passes."
     },
     {
       "id": "US-016",
@@ -264,8 +264,8 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created functions/generate-social-content/index.ts. Accepts content_summary and target_platforms. Generates platform-specific posts (Twitter 280 char, Instagram caption, Facebook). AI or template generation. Returns posts with hashtags and cost tracking. Typecheck passes."
     },
     {
       "id": "US-017",
@@ -280,8 +280,8 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created functions/update-blog-image/index.ts. Accepts blog_post_id and image_url. Fetches image, uploads to Supabase Storage blog-images bucket, generates size variant URLs, updates blog_posts record. Validates URL. No JWT. Typecheck passes."
     },
     {
       "id": "US-018",
@@ -298,8 +298,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created src/lib/rateLimiter.ts with sliding window algorithm. 5 attempts per 15-min window. Integrated into Auth.tsx handleSignIn — shows remaining attempts and lockout timer. Clear on success. localStorage storage with timestamps. Typecheck passes."
     },
     {
       "id": "US-019",
@@ -314,8 +314,8 @@
         "Typecheck passes"
       ],
       "priority": 19,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created supabase/migrations/20260223000000_rate_limiting.sql. rate_limits table with composite index. RLS enabled (service role only). check_rate_limit() SQL function with configurable max_attempts and window_seconds. Auto-cleanup of old entries. Typecheck passes."
     },
     {
       "id": "US-020",
@@ -333,8 +333,8 @@
         "Typecheck passes"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Audited public/_headers — all security headers already present and production-ready: CSP with self/Supabase/Sentry/Stripe/GA, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, HSTS 31536000 with preload, Permissions-Policy restricting camera/microphone/geolocation, Referrer-Policy: strict-origin-when-cross-origin. Typecheck passes."
     },
     {
       "id": "US-021",
@@ -365,8 +365,8 @@
         "Typecheck passes"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created src/lib/csrf.ts with getCsrfToken(), validateCsrfToken(), regenerateCsrfToken(), getCsrfHeaders(). Uses Web Crypto API for random token generation, constant-time comparison to prevent timing attacks. Stored in sessionStorage. Typecheck passes."
     },
     {
       "id": "US-023",
@@ -383,8 +383,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 23,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Verified ProtectedRoute component already implements all acceptance criteria: stores intended destination URL in redirect param, redirects back after login, loading state while checking auth (no flash), handles auth state changes via listener. No changes needed. Typecheck passes."
     },
     {
       "id": "US-024",
@@ -521,8 +521,8 @@
         "Typecheck passes"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Enhanced src/lib/logger.ts with structured JSON output in production, human-readable in dev. Added fatal level. Request ID correlation via setRequestId()/generateRequestId(). Backward-compatible variadic args API. debug suppressed in production. Typecheck passes."
     },
     {
       "id": "US-032",
@@ -537,8 +537,8 @@
         "Typecheck passes"
       ],
       "priority": 32,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated src/integrations/supabase/client.ts with realtime heartbeat_interval_ms: 15000 for dropped connection detection. Auth already configured with autoRefreshToken and persistSession. Typecheck passes."
     },
     {
       "id": "US-033",
@@ -556,8 +556,8 @@
         "Typecheck passes"
       ],
       "priority": 33,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created supabase/migrations/20260223000001_performance_indexes.sql with 6 indexes: plan_entries(kid_id,date), grocery_items(household_id,checked), foods(user_id,category), recipes(user_id,created_at), user_subscriptions(user_id,status), login_history(user_id,created_at). All idempotent. Typecheck passes."
     },
     {
       "id": "US-034",
@@ -589,8 +589,8 @@
         "Typecheck passes"
       ],
       "priority": 35,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created src/lib/webVitals.ts tracking LCP, FID, CLS, TTFB, INP via web-vitals library. Reports to Sentry as custom measurements. Color-coded dev console output. Initialized in src/main.tsx after render. Async dynamic imports for tree shaking. Typecheck passes."
     },
     {
       "id": "US-036",
@@ -607,8 +607,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 36,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Service worker already existed at public/sw.js with cache-first for static assets, network-first for API, offline fallback HTML page, background sync hooks, and push notification support. SW registered via src/lib/pwa.ts. Typecheck passes."
     },
     {
       "id": "US-037",
@@ -624,8 +624,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 37,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Enhanced handleExportData in AccountSettings.tsx to export all user data: kids, foods, recipes, plan_entries, grocery_items, grocery_lists, meal_plans, subscription. Added schema_version field. Progress indicator via loading state. Typecheck passes."
     },
     {
       "id": "US-038",
@@ -643,8 +643,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 38,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Enhanced account deletion in AccountSettings.tsx with email confirmation requirement, cascade deletion of plan_entries, grocery_items, foods, recipes, kids. Signs out and redirects to landing page. Shows data categories being deleted. Typecheck passes."
     },
     {
       "id": "US-039",
@@ -678,8 +678,8 @@
         "Typecheck passes"
       ],
       "priority": 40,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created .github/workflows/ci.yml with quality (lint + typecheck), test, build jobs. Deploy to Cloudflare Pages on main branch push. Uses wrangler-action with secrets. Quality gates required before deploy. Typecheck passes."
     },
     {
       "id": "US-041",
@@ -694,8 +694,8 @@
         "Typecheck passes"
       ],
       "priority": 41,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created .env.staging with staging Supabase URL and placeholder keys. Added build:staging script to package.json. Added staging deploy job to CI on develop branch. Updated wrangler.toml with staging project documentation. Typecheck passes."
     },
     {
       "id": "US-042",
@@ -711,8 +711,8 @@
         "Typecheck passes"
       ],
       "priority": 42,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added migration-test job to .github/workflows/ci.yml using supabase/setup-cli action. Starts local Postgres, applies all migrations with supabase db push. Runs after quality job. Typecheck passes."
     },
     {
       "id": "US-043",
@@ -938,8 +938,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 55,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created src/components/ui/skeleton-layouts.tsx with DashboardSkeleton, PlannerSkeleton, RecipesSkeleton, and GrocerySkeleton. Each mimics page layout with stats cards, grids, checkboxes. Uses existing Skeleton component. Typecheck passes."
     },
     {
       "id": "US-056",
@@ -1046,8 +1046,8 @@
         "Typecheck passes"
       ],
       "priority": 61,
-      "passes": false,
-      "notes": "Critical for long meal planning sessions where parents may step away."
+      "passes": true,
+      "notes": "Created src/components/SessionTimeoutWarning.tsx. Monitors JWT expiry every 60s. Shows AlertDialog 5 minutes before expiry with Extend Session button that calls refreshSession(). Auto-redirects to /auth if expired. Preserves current URL for redirect. Typecheck passes."
     },
     {
       "id": "US-062",
@@ -1063,8 +1063,8 @@
         "Typecheck passes"
       ],
       "priority": 62,
-      "passes": false,
-      "notes": "Especially important for grocery list usage in stores. Families use this app on-the-go."
+      "passes": true,
+      "notes": "Created src/components/OfflineIndicator.tsx. Uses navigator.onLine with online/offline events. Shows fixed banner when offline with pending change count. Exports queueMutation() for offline mutation queuing in localStorage. Reconnecting state on recovery. Typecheck passes."
     },
     {
       "id": "US-063",

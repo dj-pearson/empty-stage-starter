@@ -70,11 +70,7 @@ export default defineConfig(({ mode }) => ({
       output: {
         // Manual chunking for better caching and smaller initial bundles
         manualChunks: (id) => {
-          // Vendor chunks
           if (id.includes('node_modules')) {
-            // DON'T separate React or Radix UI - they must stay in vendor-misc
-            // modulepreload causes parallel chunk loading; vendor-ui executes before vendor-misc
-            // Keeping React and Radix together ensures React initializes before Radix uses it
             // React Router (separate chunk for route changes)
             if (id.includes('react-router')) {
               return 'vendor-router';
@@ -83,7 +79,9 @@ export default defineConfig(({ mode }) => ({
             if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform')) {
               return 'vendor-forms';
             }
-            // DON'T separate Radix UI - needs React from vendor-misc to be initialized first
+            // DON'T separate React or Radix UI - they must stay in vendor-misc
+            // modulepreload causes parallel chunk loading; vendor-ui executes before vendor-misc
+            // Keeping React and Radix together ensures React initializes before Radix uses it
             // Supabase (database operations)
             if (id.includes('@supabase')) {
               return 'vendor-supabase';
@@ -92,26 +90,29 @@ export default defineConfig(({ mode }) => ({
             if (id.includes('@dnd-kit')) {
               return 'vendor-dnd';
             }
-          // Animation libraries (can be lazy loaded)
-          if (id.includes('framer-motion')) {
-            return 'vendor-animation';
-          }
-          // GSAP (lazy loaded on pages with scroll animations)
-          if (id.includes('gsap')) {
-            return 'vendor-gsap';
-          }
-          // Sentry (error tracking - keep together to avoid circular dependencies)
-          // DO NOT split sentry and sentry-replay - causes TDZ errors in production
-          if (id.includes('@sentry')) {
-            return 'vendor-sentry';
-          }
-          // 3D graphics - Let Vite handle automatic chunking through lazy imports
-          // Manual chunking causes circular dependency issues with Three.js
-          // The lazy-loaded components will create their own chunks automatically
-          // Charts (only on analytics pages)
-          if (id.includes('recharts')) {
-            return 'vendor-charts';
-          }
+            // Animation libraries (can be lazy loaded)
+            if (id.includes('framer-motion')) {
+              return 'vendor-animation';
+            }
+            // GSAP (lazy loaded on pages with scroll animations)
+            if (id.includes('gsap')) {
+              return 'vendor-gsap';
+            }
+            // Sentry (error tracking - keep together to avoid circular dependencies)
+            // DO NOT split sentry and sentry-replay - causes TDZ errors in production
+            if (id.includes('@sentry')) {
+              return 'vendor-sentry';
+            }
+            // TipTap editor (only loaded on blog/CMS pages)
+            if (id.includes('@tiptap') || id.includes('prosemirror') || id.includes('lowlight')) {
+              return 'vendor-tiptap';
+            }
+            // 3D graphics - Let Vite handle automatic chunking through lazy imports
+            // Manual chunking causes circular dependency issues with Three.js
+            // Charts (only on analytics pages)
+            if (id.includes('recharts')) {
+              return 'vendor-charts';
+            }
             // Markdown (only on blog)
             if (id.includes('react-markdown') || id.includes('rehype') || id.includes('remark')) {
               return 'vendor-markdown';
@@ -124,7 +125,7 @@ export default defineConfig(({ mode }) => ({
             if (id.includes('clsx') || id.includes('tailwind-merge') || id.includes('date-fns')) {
               return 'vendor-utils';
             }
-            // Everything else
+            // Everything else (React, Radix UI, etc.)
             return 'vendor-misc';
           }
         },

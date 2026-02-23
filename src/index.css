@@ -187,6 +187,31 @@ All colors MUST be HSL.
     outline: none;
     box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring));
   }
+
+  /* US-043: Minimum touch target sizes for mobile accessibility (WCAG 2.5.8) */
+  @media (pointer: coarse) {
+    button,
+    [role="button"],
+    a,
+    input[type="checkbox"],
+    input[type="radio"],
+    select,
+    [data-radix-collection-item] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+
+  /* US-044: Ensure placeholder text meets WCAG 2.1 AA contrast requirements */
+  ::placeholder {
+    color: hsl(var(--muted-foreground));
+    opacity: 1;
+  }
+
+  /* Ensure disabled text has adequate contrast */
+  :disabled {
+    opacity: 0.6;
+  }
 }
 
 @layer utilities {

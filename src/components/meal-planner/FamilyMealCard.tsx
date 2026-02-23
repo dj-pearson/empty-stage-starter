@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, memo } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -70,7 +70,7 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-export function FamilyMealCard({
+export const FamilyMealCard = memo(function FamilyMealCard({
   slot,
   label,
   date,
@@ -408,4 +408,4 @@ export function FamilyMealCard({
       )}
     </div>
   );
-}
+});

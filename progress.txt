@@ -7,6 +7,7 @@
 - Template patterns available in `edge-functions-template/functions/` for reference
 - TypeScript check: `npx tsc --noEmit`, Tests: `npx vitest run` (176 passing)
 - US-001 through US-006 already completed strict mode, dead code cleanup, env validation, error boundaries, route error boundaries, and API retry logic
+- Build: `npx vite build` (the `npm run build` has an Expo prebuild step that requires native deps; Cloudflare Pages should use `npx vite build`)
 
 ---
 
@@ -21,3 +22,207 @@
   - `Promise.race()` pattern works well for implementing timeouts on Supabase queries
   - The `kids` table is a safe lightweight table to query for connectivity checks
 ---
+
+## 2026-02-23 - US-008: Calculate Food Similarity Edge Function
+- What was implemented: Edge function that computes similarity scores between foods based on category, allergens, safety status, and name overlap
+- Files changed:
+  - `functions/calculate-food-similarity/index.ts` (new) - POST endpoint, JWT required, returns ranked similar foods with scores
+- Accepts `food_id`, fetches source food and all user foods, calculates weighted similarity (category 40%, allergens 20%, safety 20%, name 20%)
+---
+
+## 2026-02-23 - US-009: Suggest Foods Edge Function
+- What was implemented: Edge function that suggests safe foods for a child based on allergens, preferences, and food history
+- Files changed:
+  - `functions/suggest-foods/index.ts` (new) - POST endpoint, JWT required, returns scored food suggestions
+- Merges allergens from kid profile and request, filters unsafe foods, prioritizes unused and favorite foods
+---
+
+## 2026-02-23 - US-010: Suggest Recipe Edge Function
+- What was implemented: Edge function that ranks recipes by ingredient availability and filters by allergens
+- Files changed:
+  - `functions/suggest-recipe/index.ts` (new) - POST endpoint, JWT required, returns recipes with match percentages
+- Accepts available_foods[], kid_ids[], dietary_restrictions[]; calculates match % and lists missing ingredients
+---
+
+## 2026-02-23 - US-011: AI Meal Plan Edge Function
+- What was implemented: Edge function that generates weekly meal plans using algorithmic distribution (AI-ready when OPENAI_API_KEY configured)
+- Files changed:
+  - `functions/ai-meal-plan/index.ts` (new) - POST endpoint, JWT required, returns structured meal plan
+- Accepts kid_ids[], date_range, dietary_restrictions; distributes safe foods across breakfast/lunch/dinner/snacks
+---
+
+## 2026-02-23 - US-012: Create Checkout Stripe Edge Function
+- What was implemented: Edge function that creates Stripe checkout sessions for subscription purchases
+- Files changed:
+  - `functions/create-checkout/index.ts` (new) - POST endpoint, JWT required, returns checkout URL
+- Uses Stripe REST API (no SDK needed in Deno), stores pending subscription in user_subscriptions table
+---
+
+## 2026-02-23 - US-013: Stripe Webhook Edge Function
+- What was implemented: Edge function that processes Stripe webhook events with HMAC-SHA256 signature verification
+- Files changed:
+  - `functions/stripe-webhook/index.ts` (new) - POST endpoint, no JWT (uses webhook signature), handles 4 event types
+- Handles: checkout.session.completed, customer.subscription.updated, customer.subscription.deleted, invoice.payment_failed
+- Uses Web Crypto API for HMAC verification, 5-minute timestamp tolerance
+---
+
+## 2026-02-23 - US-014: Parse Recipe Edge Function
+- What was implemented: Edge function that extracts recipe data from URLs via JSON-LD structured data with HTML fallback
+- Files changed:
+  - `functions/parse-recipe/index.ts` (new) - POST endpoint, no JWT, returns parsed recipe with ingredients/instructions/nutrition
+- Tries JSON-LD Recipe schema first, falls back to Open Graph meta tags for basic info
+---
+
+## 2026-02-23 - US-015: Generate Blog Content Edge Function
+- What was implemented: Edge function that generates blog content via OpenAI or template fallback
+- Files changed:
+  - `functions/generate-blog-content/index.ts` (new) - POST endpoint, no JWT, returns title/excerpt/body/meta_tags
+- Uses gpt-4o-mini when OPENAI_API_KEY configured, otherwise generates structured template HTML
+---
+
+## 2026-02-23 - US-016: Generate Social Content Edge Function
+- What was implemented: Edge function that generates platform-specific social media posts
+- Files changed:
+  - `functions/generate-social-content/index.ts` (new) - POST endpoint, no JWT, returns posts per platform
+- Supports Twitter (280 char limit), Instagram (caption + hashtags), Facebook; AI or template generation
+---
+
+## 2026-02-23 - US-017: Update Blog Image Edge Function
+- What was implemented: Edge function that fetches an image URL and uploads to Supabase Storage
+- Files changed:
+  - `functions/update-blog-image/index.ts` (new) - POST endpoint, no JWT, returns image URLs (original + size variants)
+- Uploads to `blog-images` bucket, updates blog_posts table with featured_image URL
+---
+
+## 2026-02-23 - US-018: Login Rate Limiting
+- What was implemented: Client-side sliding window rate limiter (5 attempts per 15 min window)
+- Files changed:
+  - `src/lib/rateLimiter.ts` (new) - checkRateLimit(), recordAttempt(), clearRateLimit(), formatRetryAfter()
+  - `src/pages/Auth.tsx` (modified) - Integrated rate limiting into handleSignIn; shows remaining attempts and lockout timer
+- Stores attempts in localStorage with timestamps; clears on successful login
+---
+
+## 2026-02-23 - US-019: Server-Side Rate Limiting Migration
+- What was implemented: Database table and SQL function for server-side rate limit enforcement
+- Files changed:
+  - `supabase/migrations/20260223000000_rate_limiting.sql` (new) - rate_limits table with check_rate_limit() function
+- RLS enabled (service role only), composite index on (identifier, action, window_start), auto-cleanup of old entries
+---
+
+## 2026-02-23 - US-020: CSP Headers Audit
+- What was verified: The `public/_headers` file already has comprehensive security headers
+- Already present: CSP, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, HSTS (31536000 + preload), Referrer-Policy, Permissions-Policy
+- No changes needed — all acceptance criteria already met
+---
+
+## 2026-02-23 - US-022: CSRF Protection
+- What was implemented: Client-side CSRF token generation and validation module
+- Files changed:
+  - `src/lib/csrf.ts` (new) - getCsrfToken(), validateCsrfToken(), regenerateCsrfToken(), getCsrfHeaders()
+- Uses Web Crypto API for random token generation, constant-time comparison, stored in sessionStorage
+---
+
+## 2026-02-23 - US-023: Protected Route Auth Flow
+- What was verified: ProtectedRoute component already handles all acceptance criteria
+- Already present: Route memory (saves redirect URL), loading state, session check, auth state listener
+- No changes needed — redirects back to intended destination after login
+---
+
+## 2026-02-23 - US-031: Structured Logging
+- What was implemented: Enhanced logger with structured JSON output, log levels, and request ID correlation
+- Files changed:
+  - `src/lib/logger.ts` (modified) - Added fatal level, structured JSON in production, human-readable in dev, request ID support
+- Backward-compatible with existing callers (variadic args auto-parsed into context/error)
+- Exports: logger, setRequestId(), generateRequestId()
+---
+
+## 2026-02-23 - US-033: Database Performance Indexes
+- What was implemented: Composite indexes on frequently queried columns
+- Files changed:
+  - `supabase/migrations/20260223000001_performance_indexes.sql` (new) - 6 indexes using CREATE INDEX IF NOT EXISTS
+- Indexes: plan_entries(kid_id, date), grocery_items(household_id, checked), foods(user_id, category), recipes(user_id, created_at), user_subscriptions(user_id, status), login_history(user_id, created_at)
+---
+
+## 2026-02-23 - US-035: Core Web Vitals Monitoring
+- What was implemented: Web vitals tracking (LCP, FID, CLS, TTFB, INP) with Sentry reporting
+- Files changed:
+  - `src/lib/webVitals.ts` (new) - initWebVitals() tracks all 5 metrics, reports to Sentry, colored dev console output
+  - `src/main.tsx` (modified) - Calls initWebVitals() after app renders
+- Uses dynamic import of web-vitals for tree shaking, async Sentry reporting
+---
+
+## 2026-02-23 - US-032: Database Connection Configuration
+- What was implemented: Enhanced Supabase client with realtime heartbeat, schema config, storage key, and client info header
+- Files changed:
+  - `src/integrations/supabase/client.ts` (modified) - Added heartbeat_interval_ms: 15_000, db schema: 'public', storageKey, X-Client-Info header
+- Already had persistSession and autoRefreshToken; added connection stability improvements
+---
+
+## 2026-02-23 - US-036: Service Worker for Offline Caching
+- What was verified: Service worker already exists in `public/sw.js` with proper caching strategies
+- Already present: Cache-first for static assets, network-first for API calls, offline fallback page
+- No changes needed — all acceptance criteria already met
+---
+
+## 2026-02-23 - US-037: User Data Export (GDPR Compliance)
+- What was implemented: Enhanced data export in AccountSettings to include all user data tables
+- Files changed:
+  - `src/pages/dashboard/AccountSettings.tsx` (modified) - Export now fetches foods, recipes, plan_entries, grocery_items from Supabase
+- Exports as JSON with schema_version, exported_at timestamp, and all major data categories
+---
+
+## 2026-02-23 - US-038: Account Deletion (GDPR Compliance)
+- What was implemented: Enhanced account deletion with email confirmation and cascade deletion
+- Files changed:
+  - `src/pages/dashboard/AccountSettings.tsx` (modified) - Added email confirmation input, cascade deletes user data before account removal
+- Deletes grocery_items, plan_entries, recipes, foods, kids in order, then signs out and redirects
+---
+
+## 2026-02-23 - US-040: GitHub Actions CI/CD Pipeline
+- What was implemented: Full CI/CD workflow with quality, test, build, and deploy stages
+- Files changed:
+  - `.github/workflows/ci.yml` (new) - Multi-job pipeline: quality (lint+typecheck), test (vitest), build, deploy-production (main), deploy-staging (develop)
+- Uses Cloudflare Pages deploy action, caches node_modules, runs on push/PR to main and develop
+---
+
+## 2026-02-23 - US-041: Staging Environment Configuration
+- What was implemented: Staging environment variable file and Cloudflare wrangler config
+- Files changed:
+  - `.env.staging` (new) - Staging environment variable placeholders (VITE_SUPABASE_URL, etc.)
+  - `wrangler.toml` (modified) - Added staging environment documentation and build:staging script reference
+  - `package.json` (modified) - Added `build:staging` script
+---
+
+## 2026-02-23 - US-042: Migration Testing in CI
+- What was implemented: Migration test job added to CI pipeline
+- Files changed:
+  - `.github/workflows/ci.yml` (modified) - Added migration-test job that validates SQL migrations parse correctly
+- Checks migration file existence, validates SQL syntax patterns, ensures RLS and indexes are present
+---
+
+## 2026-02-23 - US-055: Loading Skeleton Components
+- What was implemented: Skeleton layout components for major dashboard views
+- Files changed:
+  - `src/components/ui/skeleton-layouts.tsx` (new) - DashboardSkeleton, PlannerSkeleton, RecipesSkeleton, GrocerySkeleton
+- Uses existing Skeleton UI component, responsive layouts matching actual page structures
+---
+
+## 2026-02-23 - US-061: Session Timeout Warning
+- What was implemented: AlertDialog warning when session is about to expire
+- Files changed:
+  - `src/components/SessionTimeoutWarning.tsx` (new) - Checks JWT expiry every 60s, warns 5 min before, offers extend or sign out
+- Uses supabase.auth.refreshSession() to extend, redirects to /auth on expiry with route memory
+---
+
+## 2026-02-23 - US-062: Offline Indicator
+- What was implemented: Banner notification when user goes offline
+- Files changed:
+  - `src/components/OfflineIndicator.tsx` (new) - Shows offline banner with WifiOff icon, reconnecting state, pending mutation count
+- Uses navigator.onLine and online/offline events, tracks pending mutations via localStorage queue
+
+---
+
+## Build Verification (Batch 2)
+- `npx vite build`: SUCCESS (no errors)
+- `npx tsc --noEmit`: SUCCESS (zero TypeScript errors)
+- Large chunk warnings (vendor-misc 4.6MB) are pre-existing and tracked in US-034

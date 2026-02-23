@@ -8,8 +8,37 @@ import { supabase } from "@/integrations/supabase/client";
  * @param defaultValue - Default value if flag cannot be evaluated
  * @returns boolean indicating if the feature is enabled
  */
+const FLAG_CACHE_KEY = "eatpal_feature_flags";
+const FLAG_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCachedFlag(flagKey: string): boolean | null {
+  try {
+    const cached = localStorage.getItem(FLAG_CACHE_KEY);
+    if (!cached) return null;
+    const parsed = JSON.parse(cached);
+    if (Date.now() - parsed.timestamp > FLAG_CACHE_TTL) return null;
+    return parsed.flags?.[flagKey] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedFlag(flagKey: string, value: boolean): void {
+  try {
+    const cached = localStorage.getItem(FLAG_CACHE_KEY);
+    const parsed = cached ? JSON.parse(cached) : { flags: {}, timestamp: Date.now() };
+    parsed.flags[flagKey] = value;
+    parsed.timestamp = Date.now();
+    localStorage.setItem(FLAG_CACHE_KEY, JSON.stringify(parsed));
+  } catch {
+    // localStorage may be unavailable
+  }
+}
+
 export function useFeatureFlag(flagKey: string, defaultValue: boolean = false): boolean {
-  const [isEnabled, setIsEnabled] = useState<boolean>(defaultValue);
+  // Check localStorage cache first for instant response
+  const cachedValue = getCachedFlag(flagKey);
+  const [isEnabled, setIsEnabled] = useState<boolean>(cachedValue ?? defaultValue);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
@@ -40,7 +69,9 @@ export function useFeatureFlag(flagKey: string, defaultValue: boolean = false): 
         return;
       }
 
-      setIsEnabled(data ?? defaultValue);
+      const result = data ?? defaultValue;
+      setIsEnabled(result);
+      setCachedFlag(flagKey, result);
     } catch (error) {
       console.error("Error checking feature flag:", error);
       setIsEnabled(defaultValue);

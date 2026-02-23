@@ -13,7 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, memo } from "react";
 
 interface MealSuggestion {
   id: string;
@@ -47,7 +47,7 @@ const factorLabels: Record<string, { label: string; icon: any }> = {
   uses_pantry: { label: "Uses Pantry Items", icon: ChefHat },
 };
 
-export function MealSuggestionCard({
+export const MealSuggestionCard = memo(function MealSuggestionCard({
   suggestion,
   onAccept,
   onReject,
@@ -192,4 +192,4 @@ export function MealSuggestionCard({
       </CardFooter>
     </Card>
   );
-}
+});
