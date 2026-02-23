@@ -151,7 +151,78 @@
 - Uses dynamic import of web-vitals for tree shaking, async Sentry reporting
 ---
 
-## Build Verification
-- `npx vite build`: SUCCESS (no errors, built in ~81s)
+## 2026-02-23 - US-032: Database Connection Configuration
+- What was implemented: Enhanced Supabase client with realtime heartbeat, schema config, storage key, and client info header
+- Files changed:
+  - `src/integrations/supabase/client.ts` (modified) - Added heartbeat_interval_ms: 15_000, db schema: 'public', storageKey, X-Client-Info header
+- Already had persistSession and autoRefreshToken; added connection stability improvements
+---
+
+## 2026-02-23 - US-036: Service Worker for Offline Caching
+- What was verified: Service worker already exists in `public/sw.js` with proper caching strategies
+- Already present: Cache-first for static assets, network-first for API calls, offline fallback page
+- No changes needed — all acceptance criteria already met
+---
+
+## 2026-02-23 - US-037: User Data Export (GDPR Compliance)
+- What was implemented: Enhanced data export in AccountSettings to include all user data tables
+- Files changed:
+  - `src/pages/dashboard/AccountSettings.tsx` (modified) - Export now fetches foods, recipes, plan_entries, grocery_items from Supabase
+- Exports as JSON with schema_version, exported_at timestamp, and all major data categories
+---
+
+## 2026-02-23 - US-038: Account Deletion (GDPR Compliance)
+- What was implemented: Enhanced account deletion with email confirmation and cascade deletion
+- Files changed:
+  - `src/pages/dashboard/AccountSettings.tsx` (modified) - Added email confirmation input, cascade deletes user data before account removal
+- Deletes grocery_items, plan_entries, recipes, foods, kids in order, then signs out and redirects
+---
+
+## 2026-02-23 - US-040: GitHub Actions CI/CD Pipeline
+- What was implemented: Full CI/CD workflow with quality, test, build, and deploy stages
+- Files changed:
+  - `.github/workflows/ci.yml` (new) - Multi-job pipeline: quality (lint+typecheck), test (vitest), build, deploy-production (main), deploy-staging (develop)
+- Uses Cloudflare Pages deploy action, caches node_modules, runs on push/PR to main and develop
+---
+
+## 2026-02-23 - US-041: Staging Environment Configuration
+- What was implemented: Staging environment variable file and Cloudflare wrangler config
+- Files changed:
+  - `.env.staging` (new) - Staging environment variable placeholders (VITE_SUPABASE_URL, etc.)
+  - `wrangler.toml` (modified) - Added staging environment documentation and build:staging script reference
+  - `package.json` (modified) - Added `build:staging` script
+---
+
+## 2026-02-23 - US-042: Migration Testing in CI
+- What was implemented: Migration test job added to CI pipeline
+- Files changed:
+  - `.github/workflows/ci.yml` (modified) - Added migration-test job that validates SQL migrations parse correctly
+- Checks migration file existence, validates SQL syntax patterns, ensures RLS and indexes are present
+---
+
+## 2026-02-23 - US-055: Loading Skeleton Components
+- What was implemented: Skeleton layout components for major dashboard views
+- Files changed:
+  - `src/components/ui/skeleton-layouts.tsx` (new) - DashboardSkeleton, PlannerSkeleton, RecipesSkeleton, GrocerySkeleton
+- Uses existing Skeleton UI component, responsive layouts matching actual page structures
+---
+
+## 2026-02-23 - US-061: Session Timeout Warning
+- What was implemented: AlertDialog warning when session is about to expire
+- Files changed:
+  - `src/components/SessionTimeoutWarning.tsx` (new) - Checks JWT expiry every 60s, warns 5 min before, offers extend or sign out
+- Uses supabase.auth.refreshSession() to extend, redirects to /auth on expiry with route memory
+---
+
+## 2026-02-23 - US-062: Offline Indicator
+- What was implemented: Banner notification when user goes offline
+- Files changed:
+  - `src/components/OfflineIndicator.tsx` (new) - Shows offline banner with WifiOff icon, reconnecting state, pending mutation count
+- Uses navigator.onLine and online/offline events, tracks pending mutations via localStorage queue
+
+---
+
+## Build Verification (Batch 2)
+- `npx vite build`: SUCCESS (no errors)
 - `npx tsc --noEmit`: SUCCESS (zero TypeScript errors)
 - Large chunk warnings (vendor-misc 4.6MB) are pre-existing and tracked in US-034

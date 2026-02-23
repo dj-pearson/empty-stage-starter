@@ -141,6 +141,16 @@ function createSupabaseClient(): SupabaseClient<Database> {
           'X-Client-Info': 'eatpal-web',
         },
       },
+      realtime: {
+        params: {
+          // Heartbeat interval to detect dropped connections
+          heartbeat_interval_ms: 15_000,
+        },
+      },
+      db: {
+        // Schema to use for all queries
+        schema: 'public',
+      },
     });
   }
 
