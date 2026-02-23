@@ -26,7 +26,10 @@
       "Bash(npx vitest:*)",
       "Bash(npm ls:*)",
       "Bash(gh repo view:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
