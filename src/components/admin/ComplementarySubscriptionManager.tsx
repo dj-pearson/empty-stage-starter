@@ -9,9 +9,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Gift } from "lucide-react";
+import { Plus, Trash2, Gift, DollarSign, Users, TrendingDown, CreditCard, Filter } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { logger } from "@/lib/logger";
+
+interface SubscriptionMetrics {
+  mrr: number;
+  activeSubscribers: number;
+  churnRate: number;
+  complementaryCount: number;
+}
 
 interface Profile {
   id: string;
@@ -44,6 +51,13 @@ export function ComplementarySubscriptionManager() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [searchEmail, setSearchEmail] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [metrics, setMetrics] = useState<SubscriptionMetrics>({
+    mrr: 0,
+    activeSubscribers: 0,
+    churnRate: 0,
+    complementaryCount: 0,
+  });
   
   const [formData, setFormData] = useState({
     user_id: "",
@@ -61,13 +75,27 @@ export function ComplementarySubscriptionManager() {
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      const [subsRes, plansRes] = await Promise.all([
+      const [subsRes, plansRes, userSubsRes] = await Promise.all([
         supabase
           .from("complementary_subscriptions")
           .select("*")
           .order("created_at", { ascending: false }),
         supabase.from("subscription_plans").select("id, name"),
+        supabase.from("user_subscriptions").select("status, plan_id, stripe_subscription_id"),
       ]);
+
+      // Calculate subscription metrics
+      if (userSubsRes.data) {
+        const activeSubs = userSubsRes.data.filter(s => s.status === "active" || s.status === "trialing");
+        const canceledSubs = userSubsRes.data.filter(s => s.status === "canceled");
+        const totalSubs = userSubsRes.data.length;
+        setMetrics({
+          mrr: activeSubs.length * 9.99, // Estimate based on plan price
+          activeSubscribers: activeSubs.length,
+          churnRate: totalSubs > 0 ? (canceledSubs.length / totalSubs) * 100 : 0,
+          complementaryCount: subsRes.data?.filter(s => s.status === "active").length || 0,
+        });
+      }
 
       // Fetch user and plan details separately
       if (subsRes.data) {
@@ -220,6 +248,46 @@ export function ComplementarySubscriptionManager() {
         )}
       </div>
 
+      {/* Subscription Metrics Overview */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 mb-1">
+              <DollarSign className="h-4 w-4 text-green-500" />
+              <span className="text-sm text-muted-foreground">MRR</span>
+            </div>
+            <p className="text-2xl font-bold">${metrics.mrr.toFixed(2)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 mb-1">
+              <Users className="h-4 w-4 text-blue-500" />
+              <span className="text-sm text-muted-foreground">Active Subscribers</span>
+            </div>
+            <p className="text-2xl font-bold">{metrics.activeSubscribers}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingDown className="h-4 w-4 text-red-500" />
+              <span className="text-sm text-muted-foreground">Churn Rate</span>
+            </div>
+            <p className="text-2xl font-bold">{metrics.churnRate.toFixed(1)}%</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 mb-1">
+              <Gift className="h-4 w-4 text-purple-500" />
+              <span className="text-sm text-muted-foreground">Complementary</span>
+            </div>
+            <p className="text-2xl font-bold">{metrics.complementaryCount}</p>
+          </CardContent>
+        </Card>
+      </div>
+
       {isCreating && (
         <Card>
           <CardHeader>
@@ -347,13 +415,27 @@ export function ComplementarySubscriptionManager() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Granted Subscriptions</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Granted Subscriptions</CardTitle>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-40">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Filter status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="revoked">Revoked</SelectItem>
+                <SelectItem value="expired">Expired</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <p>Loading subscriptions...</p>
-          ) : subscriptions.length === 0 ? (
-            <p className="text-muted-foreground">No complementary subscriptions granted yet</p>
+          ) : subscriptions.filter(s => statusFilter === "all" || s.status === statusFilter).length === 0 ? (
+            <p className="text-muted-foreground">No complementary subscriptions found</p>
           ) : (
             <Table>
               <TableHeader>
@@ -367,7 +449,7 @@ export function ComplementarySubscriptionManager() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {subscriptions.map((sub) => (
+                {subscriptions.filter(s => statusFilter === "all" || s.status === statusFilter).map((sub) => (
                   <TableRow key={sub.id}>
                     <TableCell className="font-medium">
                       {sub.profiles?.full_name || "Unknown User"}

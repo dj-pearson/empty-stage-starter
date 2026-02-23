@@ -42,10 +42,10 @@ export function SystemHealthDashboard() {
   useEffect(() => {
     fetchMetrics();
 
-    // Auto-refresh every 60 seconds
+    // Auto-refresh every 30 seconds
     const interval = setInterval(() => {
       fetchMetrics();
-    }, 60000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, []);
