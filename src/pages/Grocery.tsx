@@ -18,11 +18,12 @@ import { ManageStoreLayoutsDialog } from "@/components/ManageStoreLayoutsDialog"
 import { ManageStoreAislesDialog } from "@/components/ManageStoreAislesDialog";
 import { AisleContributionDialog } from "@/components/AisleContributionDialog";
 import { ImportRecipeToGroceryDialog } from "@/components/ImportRecipeToGroceryDialog";
+import { ParseGroceryScreenshotDialog } from "@/components/ParseGroceryScreenshotDialog";
 import { generateGroceryList } from "@/lib/mealPlanner";
 import {
   ShoppingCart, Trash2, Printer, Download, Plus, Share2, FileText,
   Sparkles, Store, Barcode, RefreshCw, ChevronDown, ChevronRight,
-  X, Minus, Check, MoreHorizontal, PackageCheck, ShoppingBag
+  X, Minus, Check, MoreHorizontal, PackageCheck, ShoppingBag, ImageIcon
 } from "lucide-react";
 import { toast } from "sonner";
 import { FoodCategory, GroceryItem } from "@/types";
@@ -105,6 +106,9 @@ export default function Grocery() {
 
   // Import recipe state
   const [showImportRecipeDialog, setShowImportRecipeDialog] = useState(false);
+
+  // Screenshot parser state
+  const [showScreenshotDialog, setShowScreenshotDialog] = useState(false);
 
   // Purchased section state
   const [purchasedOpen, setPurchasedOpen] = useState(false);
@@ -581,6 +585,10 @@ export default function Grocery() {
             <FileText className="h-4 w-4 mr-1.5" />
             From Recipe
           </Button>
+          <Button onClick={() => setShowScreenshotDialog(true)} variant="secondary" size="sm">
+            <ImageIcon className="h-4 w-4 mr-1.5" />
+            From Screenshot
+          </Button>
           <Button
             onClick={handleSmartRestock}
             variant="secondary"
@@ -949,6 +957,20 @@ export default function Grocery() {
                   notes: ingredient.notes,
                   aisle: undefined,
                   grocery_list_id: selectedListId || undefined
+                });
+              });
+            }}
+          />
+
+          <ParseGroceryScreenshotDialog
+            open={showScreenshotDialog}
+            onOpenChange={setShowScreenshotDialog}
+            onAddItems={(items) => {
+              items.forEach(item => {
+                addGroceryItem({
+                  ...item,
+                  aisle: undefined,
+                  grocery_list_id: selectedListId || undefined,
                 });
               });
             }}

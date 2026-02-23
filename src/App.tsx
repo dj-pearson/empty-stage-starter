@@ -67,6 +67,7 @@ const Billing = lazy(() => import("./pages/dashboard/Billing"));
 const AccountSettings = lazy(() => import("./pages/dashboard/AccountSettings"));
 const AccessibilitySettingsPage = lazy(() => import("./pages/dashboard/AccessibilitySettings"));
 const ApiDocs = lazy(() => import("./pages/ApiDocs"));
+const ShareTarget = lazy(() => import("./pages/ShareTarget"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -198,6 +199,7 @@ const App = () => (
             <Route path="/insights" element={<ProtectedRoute><RouteErrorBoundary><Dashboard /></RouteErrorBoundary></ProtectedRoute>}>
               <Route index element={<RouteErrorBoundary><InsightsDashboard /></RouteErrorBoundary>} />
             </Route>
+            <Route path="/share" element={<ProtectedRoute><RouteErrorBoundary><ShareTarget /></RouteErrorBoundary></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
