@@ -103,8 +103,10 @@ export default defineConfig(({ mode }) => ({
             if (id.includes('@sentry')) {
               return 'vendor-sentry';
             }
-            // TipTap editor (only loaded on blog/CMS pages)
-            if (id.includes('@tiptap') || id.includes('prosemirror') || id.includes('lowlight')) {
+            // TipTap editor and its CJS dependencies (only loaded on blog/CMS pages)
+            // highlight.js and react-syntax-highlighter are CommonJS — they must stay
+            // in the same chunk as lowlight/@tiptap to avoid cross-chunk CJS interop failures
+            if (id.includes('@tiptap') || id.includes('prosemirror') || id.includes('lowlight') || id.includes('highlight.js') || id.includes('react-syntax-highlighter')) {
               return 'vendor-tiptap';
             }
             // 3D graphics - Let Vite handle automatic chunking through lazy imports
