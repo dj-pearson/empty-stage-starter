@@ -79,9 +79,6 @@ export default defineConfig(({ mode }) => ({
             if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform')) {
               return 'vendor-forms';
             }
-            // DON'T separate React or Radix UI - they must stay in vendor-misc
-            // modulepreload causes parallel chunk loading; vendor-ui executes before vendor-misc
-            // Keeping React and Radix together ensures React initializes before Radix uses it
             // Supabase (database operations)
             if (id.includes('@supabase')) {
               return 'vendor-supabase';
@@ -127,8 +124,22 @@ export default defineConfig(({ mode }) => ({
             if (id.includes('clsx') || id.includes('tailwind-merge') || id.includes('date-fns')) {
               return 'vendor-utils';
             }
-            // Everything else (React, Radix UI, etc.)
-            return 'vendor-misc';
+            // React core + Radix UI (must stay in same chunk)
+            // modulepreload causes parallel loading; keeping these together
+            // ensures React initializes before Radix UI components use it
+            if (id.includes('@radix-ui') ||
+                /[\\/]node_modules[\\/]react[\\/]/.test(id) ||
+                /[\\/]node_modules[\\/]react-dom[\\/]/.test(id) ||
+                /[\\/]node_modules[\\/]react-is[\\/]/.test(id) ||
+                /[\\/]node_modules[\\/]scheduler[\\/]/.test(id)) {
+              return 'vendor-react';
+            }
+            // No catch-all — let Vite auto-chunk remaining node_modules.
+            // A catch-all (like the old 'vendor-misc') forces ALL uncategorized
+            // modules into one mega-chunk. When that chunk contains Rollup's CJS
+            // interop helpers and another chunk (e.g. vendor-tiptap) has CJS
+            // wrappers that call those helpers cross-chunk, the module variable
+            // becomes undefined → "Cannot set properties of undefined ('exports')".
           }
         },
         // Consistent naming for better caching
