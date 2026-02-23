@@ -74,13 +74,81 @@ struct MoreView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Insights")
                                 .font(.body)
-                            Text("Nutrition analytics and progress")
+                            Text("Nutrition analytics and charts")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: "chart.pie.fill")
                             .foregroundStyle(.purple)
+                    }
+                }
+
+                NavigationLink {
+                    AICoachView()
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("AI Coach")
+                                .font(.body)
+                            Text("Meal coaching and advice")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "bubble.left.and.text.bubble.right.fill")
+                            .foregroundStyle(.green)
+                    }
+                }
+
+                NavigationLink {
+                    FoodChainingView()
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Food Chaining")
+                                .font(.body)
+                            Text("Bridge to new foods from favorites")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "link.circle.fill")
+                            .foregroundStyle(.teal)
+                    }
+                }
+
+                NavigationLink {
+                    PickyEaterQuizView()
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Picky Eater Quiz")
+                                .font(.body)
+                            Text("Discover your child's eating style")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "questionmark.circle.fill")
+                            .foregroundStyle(.pink)
+                    }
+                }
+
+                NavigationLink {
+                    ProgressDashboardView()
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Progress")
+                                .font(.body)
+                            Text("Achievements and weekly reports")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "trophy.fill")
+                            .foregroundStyle(.yellow)
                     }
                 }
             }
@@ -195,94 +263,68 @@ struct TrackerStat: View {
     }
 }
 
-// MARK: - Insights View (simplified)
+// MARK: - Insights View (Charts)
 
 struct InsightsView: View {
     @EnvironmentObject var appState: AppState
 
+    private var weekStart: Date {
+        Date().weekDates.first ?? Date()
+    }
+
     var body: some View {
-        List {
-            // Pantry Distribution
-            Section("Pantry Distribution") {
-                ForEach(FoodCategory.allCases, id: \.self) { category in
-                    let count = appState.foods.filter { $0.category == category.rawValue }.count
-                    let total = max(appState.foods.count, 1)
-                    let percentage = Double(count) / Double(total)
+        ScrollView {
+            VStack(spacing: 16) {
+                // Summary stats
+                HStack(spacing: 12) {
+                    StatCard(title: "Total Foods", value: "\(appState.foods.count)", icon: "leaf.fill", color: .green)
+                    StatCard(title: "Safe Foods", value: "\(appState.safeFoods.count)", icon: "checkmark.shield.fill", color: .blue)
+                    StatCard(title: "Recipes", value: "\(appState.recipes.count)", icon: "book.fill", color: .orange)
+                }
+                .padding(.horizontal)
 
-                    HStack {
-                        Text(category.icon)
-                        Text(category.displayName)
-                            .font(.subheadline)
-                        Spacer()
-                        Text("\(count)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                if #available(iOS 17.0, *) {
+                    PantryDistributionChart(foods: appState.foods)
+                        .padding(.horizontal)
 
-                        ProgressView(value: percentage)
-                            .frame(width: 60)
-                            .tint(.green)
-                    }
+                    WeeklyMealChart(planEntries: appState.planEntries, weekStart: weekStart)
+                        .padding(.horizontal)
+
+                    FoodResultsChart(planEntries: appState.planEntries)
+                        .padding(.horizontal)
+
+                    AllergenChart(foods: appState.foods)
+                        .padding(.horizontal)
                 }
             }
-
-            // Safety Stats
-            Section("Food Safety") {
-                let safe = appState.safeFoods.count
-                let tryBite = appState.tryBiteFoods.count
-                let other = appState.foods.count - safe - tryBite
-
-                LabeledContent("Safe Foods") {
-                    Text("\(safe)")
-                        .foregroundStyle(.green)
-                        .fontWeight(.semibold)
-                }
-                LabeledContent("Try Bite Foods") {
-                    Text("\(tryBite)")
-                        .foregroundStyle(.orange)
-                        .fontWeight(.semibold)
-                }
-                LabeledContent("Other Foods") {
-                    Text("\(other)")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            // Meal Planning Coverage
-            Section("This Week's Coverage") {
-                let thisWeek = Date().weekDates
-                ForEach(thisWeek, id: \.self) { date in
-                    let entries = appState.activeKidId.map {
-                        appState.planEntriesForDate(date, kidId: $0)
-                    } ?? []
-
-                    HStack {
-                        Text(DateFormatter.shortDayOfWeek.string(from: date))
-                            .font(.subheadline)
-                            .frame(width: 40, alignment: .leading)
-
-                        if Calendar.current.isDateInToday(date) {
-                            Text("Today")
-                                .font(.caption2)
-                                .foregroundStyle(.green)
-                                .fontWeight(.semibold)
-                        }
-
-                        Spacer()
-
-                        Text("\(entries.count) meals")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        Circle()
-                            .fill(entries.isEmpty ? Color(.systemGray4) : .green)
-                            .frame(width: 8, height: 8)
-                    }
-                }
-            }
+            .padding(.vertical)
         }
-        .listStyle(.insetGrouped)
         .navigationTitle("Insights")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct StatCard: View {
+    let title: String
+    let value: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(color)
+            Text(value)
+                .font(.title2)
+                .fontWeight(.bold)
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
     }
 }
 

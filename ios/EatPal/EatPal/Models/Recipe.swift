@@ -89,6 +89,9 @@ struct Recipe: Identifiable, Codable, Equatable {
         if let tags = updates.tags { self.tags = tags }
         if let rating = updates.rating { self.rating = rating }
         if let difficultyLevel = updates.difficultyLevel { self.difficultyLevel = difficultyLevel }
+        if let imageUrl = updates.imageUrl { self.imageUrl = imageUrl }
+        if let additionalIngredients = updates.additionalIngredients { self.additionalIngredients = additionalIngredients }
+        if let tips = updates.tips { self.tips = tips }
     }
 }
 
@@ -104,12 +107,17 @@ struct RecipeUpdate: Codable {
     var tags: [String]?
     var rating: Double?
     var difficultyLevel: String?
+    var imageUrl: String?
+    var additionalIngredients: String?
+    var tips: String?
 
     enum CodingKeys: String, CodingKey {
-        case name, description, instructions, category, tags, rating, servings
+        case name, description, instructions, category, tags, rating, servings, tips
         case foodIds = "food_ids"
         case prepTime = "prep_time"
         case cookTime = "cook_time"
         case difficultyLevel = "difficulty_level"
+        case imageUrl = "image_url"
+        case additionalIngredients = "additional_ingredients"
     }
 }

@@ -54,7 +54,10 @@ enum GroceryGeneratorService {
         // Also check recipes for additional ingredients
         let recipeIds = Set(appState.planEntries.compactMap(\.recipeId))
         for recipe in appState.recipes where recipeIds.contains(recipe.id) {
-            if let ingredients = recipe.additionalIngredients {
+            if let ingredientsStr = recipe.additionalIngredients, !ingredientsStr.isEmpty {
+                let ingredients = ingredientsStr.split(separator: ",").map {
+                    $0.trimmingCharacters(in: .whitespaces)
+                }
                 for ingredient in ingredients {
                     let ingredientLower = ingredient.lowercased()
                     if !existingNames.contains(ingredientLower) &&

@@ -1,8 +1,10 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
 import { LazyFoodOrbit } from '@/components/LazyFoodOrbit';
 import { Link } from 'react-router-dom';
+import { useInView } from '@/hooks/useInView';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 // Dynamically import GSAP only when needed (deferred loading)
 let gsapModule: typeof import("gsap") | null = null;
@@ -15,6 +17,77 @@ const loadGSAP = async () => {
 };
 
 /**
+ * Animated counter that counts up from 0 to a target value when in view.
+ * Respects prefers-reduced-motion by showing the final value immediately.
+ */
+function AnimatedCounter({
+  end,
+  suffix = '',
+  prefix = '',
+  decimals = 0,
+  duration = 2000,
+  inView,
+  reducedMotion,
+}: {
+  end: number;
+  suffix?: string;
+  prefix?: string;
+  decimals?: number;
+  duration?: number;
+  inView: boolean;
+  reducedMotion: boolean;
+}) {
+  const [count, setCount] = useState(0);
+  const hasAnimated = useRef(false);
+
+  useEffect(() => {
+    if (!inView || hasAnimated.current) return;
+    hasAnimated.current = true;
+
+    if (reducedMotion) {
+      setCount(end);
+      return;
+    }
+
+    let startTime: number | null = null;
+    let animationFrame: number;
+
+    const animate = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+
+      // Ease out cubic for natural deceleration
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(eased * end);
+
+      if (progress < 1) {
+        animationFrame = requestAnimationFrame(animate);
+      } else {
+        setCount(end);
+      }
+    };
+
+    animationFrame = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+    };
+  }, [inView, end, duration, reducedMotion]);
+
+  let formatted: string;
+  if (decimals > 0) {
+    formatted = `${prefix}${count.toFixed(decimals)}${suffix}`;
+  } else {
+    const rounded = Math.floor(count);
+    formatted = rounded >= 1000
+      ? `${prefix}${(rounded / 1000).toFixed(rounded >= 10000 ? 0 : 1).replace(/\.0$/, '')}K${suffix}`
+      : `${prefix}${rounded.toLocaleString()}${suffix}`;
+  }
+
+  return <>{formatted}</>;
+}
+
+/**
  * Enhanced Hero Section with Trust Signals and 3D Elements
  * Optimized with deferred GSAP loading for better performance
  */
@@ -24,6 +97,14 @@ export function EnhancedHero() {
   const subheadlineRef = useRef<HTMLParagraphElement>(null);
   const ctaRef = useRef<HTMLDivElement>(null);
   const statsRef = useRef<HTMLDivElement>(null);
+  const { ref: statsInViewRef, inView: statsInView } = useInView({ threshold: 0.3, triggerOnce: true });
+  const reducedMotion = useReducedMotion();
+
+  // Merge the two refs for the stats container
+  const setStatsRef = useCallback((node: HTMLDivElement | null) => {
+    (statsRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+    (statsInViewRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+  }, [statsInViewRef]);
 
   useEffect(() => {
     let mounted = true;
@@ -89,6 +170,13 @@ export function EnhancedHero() {
       clearTimeout(timer);
     };
   }, []);
+
+  const stats: Array<{ numericValue: number; suffix: string; label: string; icon: string; decimals?: number }> = [
+    { numericValue: 2000, suffix: '+', label: 'Parents Trust EatPal', icon: '👨‍👩‍👧' },
+    { numericValue: 50000, suffix: '+', label: 'Meals Planned', icon: '🍽️' },
+    { numericValue: 12, suffix: '+', label: 'New Foods Tried', icon: '🎯' },
+    { numericValue: 4.8, suffix: '', label: 'Parent Rating', icon: '⭐', decimals: 1 },
+  ];
 
   return (
     <section ref={containerRef} className="relative py-20 bg-gradient-to-b from-background via-trust-softPink/5 to-secondary/10 overflow-hidden min-h-[85vh] flex items-center">
@@ -166,22 +254,24 @@ export function EnhancedHero() {
 
         {/* Animated Stats - Trust Signals */}
         <div
-          ref={statsRef}
+          ref={setStatsRef}
           className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto mt-20"
         >
-          {[
-            { value: '2,000+', label: 'Parents Trust EatPal', icon: '👨‍👩‍👧' },
-            { value: '50K+', label: 'Meals Planned', icon: '🍽️' },
-            { value: '12+', label: 'New Foods Tried', icon: '🎯' },
-            { value: '4.8⭐', label: 'Parent Rating', icon: '⭐' },
-          ].map((stat) => (
+          {stats.map((stat) => (
             <div
               key={stat.label}
               className="stat-card group cursor-default bg-white/60 dark:bg-black/20 backdrop-blur-md rounded-2xl p-6 border border-white/20 shadow-sm hover:shadow-md transition-all"
             >
               <div className="text-3xl mb-3">{stat.icon}</div>
               <div className="text-3xl md:text-4xl font-heading font-bold text-primary mb-2 transition-colors group-hover:text-primary/80">
-                {stat.value}
+                <AnimatedCounter
+                  end={stat.numericValue}
+                  suffix={stat.suffix}
+                  decimals={stat.decimals ?? 0}
+                  duration={2000}
+                  inView={statsInView}
+                  reducedMotion={reducedMotion}
+                />
               </div>
               <div className="text-xs md:text-sm text-muted-foreground font-medium">{stat.label}</div>
             </div>

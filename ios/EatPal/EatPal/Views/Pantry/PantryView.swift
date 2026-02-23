@@ -112,7 +112,13 @@ struct PantryView: View {
             }
 
             // Foods List
-            if groupedFoods.isEmpty {
+            if appState.isLoading && appState.foods.isEmpty {
+                Section {
+                    ForEach(0..<5, id: \.self) { _ in
+                        SkeletonView(shape: .foodRow)
+                    }
+                }
+            } else if groupedFoods.isEmpty {
                 Section {
                     ContentUnavailableView(
                         "No Foods",

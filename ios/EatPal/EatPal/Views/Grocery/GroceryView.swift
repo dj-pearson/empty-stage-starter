@@ -5,6 +5,7 @@ struct GroceryView: View {
     @State private var searchText = ""
     @State private var showingAddItem = false
     @State private var showingClearAlert = false
+    @State private var isGenerating = false
 
     private var uncheckedItems: [GroceryItem] {
         appState.groceryItems.filter { !$0.checked && matchesSearch($0) }
@@ -51,7 +52,13 @@ struct GroceryView: View {
             }
 
             // Unchecked Items by Category
-            if groupedUncheckedItems.isEmpty && checkedItems.isEmpty {
+            if appState.isLoading && appState.groceryItems.isEmpty {
+                Section {
+                    ForEach(0..<5, id: \.self) { _ in
+                        SkeletonView(shape: .groceryRow)
+                    }
+                }
+            } else if groupedUncheckedItems.isEmpty && checkedItems.isEmpty {
                 Section {
                     ContentUnavailableView(
                         "No Grocery Items",
@@ -102,10 +109,23 @@ struct GroceryView: View {
         .searchable(text: $searchText, prompt: "Search items...")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showingAddItem = true
-                } label: {
-                    Image(systemName: "plus")
+                HStack(spacing: 12) {
+                    Menu {
+                        Button {
+                            Task { await generateFromWeekPlan() }
+                        } label: {
+                            Label("Generate from This Week's Plan", systemImage: "calendar.badge.plus")
+                        }
+                        .disabled(isGenerating)
+                    } label: {
+                        Image(systemName: "wand.and.stars")
+                    }
+
+                    Button {
+                        showingAddItem = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
                 }
             }
         }
@@ -123,6 +143,30 @@ struct GroceryView: View {
         .refreshable {
             await appState.loadAllData()
         }
+    }
+
+    private func generateFromWeekPlan() async {
+        isGenerating = true
+        let weekStart = Date().weekDates.first ?? Date()
+        let kidIds = appState.activeKidId.map { [$0] } ?? appState.kids.map(\.id)
+
+        do {
+            let items = try await GroceryGeneratorService.generateFromMealPlan(
+                weekStart: weekStart,
+                kidIds: kidIds,
+                appState: appState
+            )
+            if !items.isEmpty {
+                try await GroceryGeneratorService.addGeneratedItems(items, appState: appState)
+            } else {
+                let toast = ToastManager.shared
+                toast.info("No new items", message: "All ingredients are already on your list.")
+            }
+        } catch {
+            let toast = ToastManager.shared
+            toast.error("Generation failed", message: error.localizedDescription)
+        }
+        isGenerating = false
     }
 }
 

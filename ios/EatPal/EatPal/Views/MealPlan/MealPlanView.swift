@@ -5,9 +5,19 @@ struct MealPlanView: View {
     @State private var selectedDate = Date()
     @State private var showingAddEntry = false
     @State private var selectedSlot: MealSlot?
+    @State private var showingAIMealPlan = false
+    @State private var showingCopyWeek = false
+    @State private var showingClearWeekAlert = false
+    @State private var showingSaveTemplate = false
+    @State private var templateName = ""
+    @State private var copyTargetDate = Date()
 
     private var weekDates: [Date] {
         selectedDate.weekDates
+    }
+
+    private var weekStart: Date {
+        weekDates.first ?? selectedDate
     }
 
     private var entriesForSelectedDate: [PlanEntry] {
@@ -31,7 +41,14 @@ struct MealPlanView: View {
                 )
 
                 // Meal Slots
-                if appState.activeKidId != nil {
+                if appState.isLoading && appState.planEntries.isEmpty {
+                    VStack(spacing: 12) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            SkeletonView(shape: .mealSlotCard)
+                        }
+                    }
+                    .padding(.horizontal)
+                } else if appState.activeKidId != nil {
                     VStack(spacing: 12) {
                         ForEach(MealSlot.allCases, id: \.self) { slot in
                             MealSlotCard(
@@ -59,11 +76,43 @@ struct MealPlanView: View {
         .navigationTitle("Meal Plan")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    selectedDate = Date()
-                } label: {
-                    Text("Today")
-                        .font(.subheadline)
+                HStack(spacing: 12) {
+                    Button {
+                        showingAIMealPlan = true
+                    } label: {
+                        Image(systemName: "wand.and.stars")
+                    }
+
+                    Menu {
+                        Button {
+                            showingCopyWeek = true
+                        } label: {
+                            Label("Copy This Week", systemImage: "doc.on.doc")
+                        }
+
+                        Button(role: .destructive) {
+                            showingClearWeekAlert = true
+                        } label: {
+                            Label("Clear This Week", systemImage: "trash")
+                        }
+
+                        Divider()
+
+                        Button {
+                            showingSaveTemplate = true
+                        } label: {
+                            Label("Save as Template", systemImage: "square.and.arrow.down")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+
+                    Button {
+                        selectedDate = Date()
+                    } label: {
+                        Text("Today")
+                            .font(.subheadline)
+                    }
                 }
             }
         }
@@ -71,6 +120,76 @@ struct MealPlanView: View {
             if let slot = selectedSlot {
                 AddPlanEntryView(date: selectedDate, mealSlot: slot)
             }
+        }
+        .sheet(isPresented: $showingAIMealPlan) {
+            AIMealPlanView(date: selectedDate)
+        }
+        .sheet(isPresented: $showingCopyWeek) {
+            NavigationStack {
+                Form {
+                    Section("Copy meals to another week") {
+                        DatePicker("Target Week", selection: $copyTargetDate, displayedComponents: .date)
+                    }
+                }
+                .navigationTitle("Copy Week")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { showingCopyWeek = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Copy") {
+                            Task {
+                                guard let kidId = appState.activeKidId else { return }
+                                let targetStart = copyTargetDate.weekDates.first ?? copyTargetDate
+                                try? await MealPlanTemplateService.shared.copyWeekPlan(
+                                    from: weekStart,
+                                    to: targetStart,
+                                    kidId: kidId,
+                                    appState: appState
+                                )
+                                showingCopyWeek = false
+                            }
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+        }
+        .alert("Clear This Week?", isPresented: $showingClearWeekAlert) {
+            Button("Clear", role: .destructive) {
+                Task {
+                    guard let kidId = appState.activeKidId else { return }
+                    try? await MealPlanTemplateService.shared.deleteWeekPlan(
+                        weekStart: weekStart,
+                        kidId: kidId,
+                        appState: appState
+                    )
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will remove all meals planned for this week.")
+        }
+        .alert("Save as Template", isPresented: $showingSaveTemplate) {
+            TextField("Template name", text: $templateName)
+            Button("Save") {
+                Task {
+                    guard let kidId = appState.activeKidId, !templateName.isEmpty else { return }
+                    try? await MealPlanTemplateService.shared.saveAsTemplate(
+                        name: templateName,
+                        weekStart: weekStart,
+                        kidId: kidId,
+                        appState: appState
+                    )
+                    templateName = ""
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                templateName = ""
+            }
+        } message: {
+            Text("Save this week's meals as a reusable template.")
         }
         .refreshable {
             await appState.loadAllData()
@@ -216,13 +335,24 @@ struct PlanEntryRow: View {
         appState.foods.first { $0.id == entry.foodId }
     }
 
+    private var recipe: Recipe? {
+        guard let recipeId = entry.recipeId else { return nil }
+        return appState.recipes.first { $0.id == recipeId }
+    }
+
     var body: some View {
         HStack(spacing: 10) {
-            let cat = FoodCategory(rawValue: food?.category ?? "")
-            Text(cat?.icon ?? "🍽")
-
-            Text(food?.name ?? "Unknown Food")
-                .font(.subheadline)
+            if let recipe = recipe {
+                Image(systemName: "book.fill")
+                    .foregroundStyle(.green)
+                Text(recipe.name)
+                    .font(.subheadline)
+            } else {
+                let cat = FoodCategory(rawValue: food?.category ?? "")
+                Text(cat?.icon ?? "🍽")
+                Text(food?.name ?? "Unknown Food")
+                    .font(.subheadline)
+            }
 
             Spacer()
 
@@ -275,7 +405,9 @@ struct AddPlanEntryView: View {
     let date: Date
     let mealSlot: MealSlot
 
+    @State private var entryType = 0 // 0 = Food, 1 = Recipe
     @State private var selectedFoodId: String?
+    @State private var selectedRecipeId: String?
     @State private var searchText = ""
 
     private var filteredFoods: [Food] {
@@ -283,6 +415,15 @@ struct AddPlanEntryView: View {
             return appState.foods
         }
         return appState.foods.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    private var filteredRecipes: [Recipe] {
+        if searchText.isEmpty {
+            return appState.recipes
+        }
+        return appState.recipes.filter {
             $0.name.localizedCaseInsensitiveContains(searchText)
         }
     }
@@ -300,29 +441,68 @@ struct AddPlanEntryView: View {
                         Text(DateFormatter.shortDisplay.string(from: date))
                             .foregroundStyle(.secondary)
                     }
+
+                    Picker("Type", selection: $entryType) {
+                        Text("Food").tag(0)
+                        Text("Recipe").tag(1)
+                    }
+                    .pickerStyle(.segmented)
                 }
 
-                Section("Select a Food") {
-                    if filteredFoods.isEmpty {
-                        Text("No foods available")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(filteredFoods) { food in
-                            Button {
-                                selectedFoodId = food.id
-                            } label: {
-                                HStack {
-                                    let cat = FoodCategory(rawValue: food.category)
-                                    Text(cat?.icon ?? "🍽")
-
-                                    Text(food.name)
-                                        .foregroundStyle(.primary)
-
-                                    Spacer()
-
-                                    if selectedFoodId == food.id {
-                                        Image(systemName: "checkmark.circle.fill")
+                if entryType == 0 {
+                    Section("Select a Food") {
+                        if filteredFoods.isEmpty {
+                            Text("No foods available")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(filteredFoods) { food in
+                                Button {
+                                    selectedFoodId = food.id
+                                    selectedRecipeId = nil
+                                } label: {
+                                    HStack {
+                                        let cat = FoodCategory(rawValue: food.category)
+                                        Text(cat?.icon ?? "🍽")
+                                        Text(food.name)
+                                            .foregroundStyle(.primary)
+                                        Spacer()
+                                        if selectedFoodId == food.id {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundStyle(.green)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Section("Select a Recipe") {
+                        if filteredRecipes.isEmpty {
+                            Text("No recipes available")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(filteredRecipes) { recipe in
+                                Button {
+                                    selectedRecipeId = recipe.id
+                                    selectedFoodId = recipe.foodIds.first
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "book.fill")
                                             .foregroundStyle(.green)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(recipe.name)
+                                                .foregroundStyle(.primary)
+                                            if let difficulty = recipe.difficultyLevel {
+                                                Text(difficulty.capitalized)
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                        }
+                                        Spacer()
+                                        if selectedRecipeId == recipe.id {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundStyle(.green)
+                                        }
                                     }
                                 }
                             }
@@ -333,7 +513,7 @@ struct AddPlanEntryView: View {
             .listStyle(.insetGrouped)
             .navigationTitle("Add to Plan")
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "Search foods...")
+            .searchable(text: $searchText, prompt: entryType == 0 ? "Search foods..." : "Search recipes...")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -342,23 +522,24 @@ struct AddPlanEntryView: View {
                     Button("Add") {
                         Task { await addEntry() }
                     }
-                    .disabled(selectedFoodId == nil)
+                    .disabled(selectedFoodId == nil && selectedRecipeId == nil)
                 }
             }
         }
     }
 
     private func addEntry() async {
-        guard let foodId = selectedFoodId,
-              let kidId = appState.activeKidId else { return }
+        guard let kidId = appState.activeKidId else { return }
 
+        let foodId = selectedFoodId ?? ""
         let entry = PlanEntry(
             id: UUID().uuidString,
             userId: "",
             kidId: kidId,
             date: DateFormatter.isoDate.string(from: date),
             mealSlot: mealSlot.rawValue,
-            foodId: foodId
+            foodId: foodId,
+            recipeId: selectedRecipeId
         )
 
         try? await appState.addPlanEntry(entry)
