@@ -76,10 +76,65 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Share Target Cache name
+const SHARE_CACHE = 'share-target-cache';
+
 // Fetch event - implement caching strategies
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
+
+  // Handle share target POST requests from the Web Share Target API
+  if (request.method === 'POST' && url.pathname === '/share') {
+    event.respondWith(
+      (async () => {
+        try {
+          const formData = await request.formData();
+          const cache = await caches.open(SHARE_CACHE);
+
+          // Extract shared data
+          const shareData = {};
+          const title = formData.get('title');
+          const text = formData.get('text');
+          const url_field = formData.get('url');
+          const image = formData.get('image');
+
+          if (title) shareData.title = title;
+          if (text) shareData.text = text;
+          if (url_field) shareData.url = url_field;
+
+          if (image && image instanceof File && image.size > 0) {
+            // Store image as base64 in cache
+            const reader = new Response(image);
+            const blob = await reader.blob();
+            const arrayBuffer = await blob.arrayBuffer();
+            const bytes = new Uint8Array(arrayBuffer);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            shareData.imageBase64 = btoa(binary);
+            shareData.imageType = image.type;
+          }
+
+          // Store in cache as a JSON response
+          await cache.put(
+            new Request('/share-data'),
+            new Response(JSON.stringify(shareData), {
+              headers: { 'Content-Type': 'application/json' },
+            })
+          );
+
+          // Redirect to the share target page
+          return Response.redirect('/share?source=sw', 303);
+        } catch (error) {
+          console.error('[SW] Share target error:', error);
+          return Response.redirect('/share?error=processing', 303);
+        }
+      })()
+    );
+    return;
+  }
 
   // Skip non-GET requests
   if (request.method !== 'GET') {

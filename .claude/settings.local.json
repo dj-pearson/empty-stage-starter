@@ -25,7 +25,8 @@
       "Bash(npx eslint:*)",
       "Bash(npx vitest:*)",
       "Bash(npm ls:*)",
-      "Bash(gh repo view:*)"
+      "Bash(gh repo view:*)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []

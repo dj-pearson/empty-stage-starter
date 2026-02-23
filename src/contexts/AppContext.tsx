@@ -837,7 +837,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addGroceryItem = (item: Omit<GroceryItem, "id" | "checked">) => {
     if (userId && householdId) {
-      const newItem = { 
+      const newItem: Record<string, any> = {
         name: item.name,
         quantity: item.quantity || 1,
         unit: item.unit || '',
@@ -845,10 +845,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         notes: item.notes || null,
         aisle: item.aisle || null,
         grocery_list_id: item.grocery_list_id || null,
-        user_id: userId, 
-        household_id: householdId, 
-        checked: false 
+        user_id: userId,
+        household_id: householdId,
+        checked: false
       };
+      if (item.added_via) newItem.added_via = item.added_via;
+      if (item.brand_preference) newItem.brand_preference = item.brand_preference;
+      if (item.barcode) newItem.barcode = item.barcode;
       
       supabase
         .from('grocery_items')

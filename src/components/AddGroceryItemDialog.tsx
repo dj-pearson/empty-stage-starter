@@ -9,12 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FoodCategory } from "@/types";
-import { Plus, Camera, Barcode, Package, Sparkles, ShoppingCart, Edit3 } from "lucide-react";
+import { Plus, Camera, Barcode, Package, Sparkles, ShoppingCart, Edit3, ListPlus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useApp } from "@/contexts/AppContext";
 import { BarcodeScannerDialog } from "@/components/admin/BarcodeScannerDialog";
 import { ImageFoodCapture } from "@/components/ImageFoodCapture";
+import { GroceryImportTab } from "@/components/grocery/GroceryImportTab";
 
 interface AddGroceryItemDialogProps {
   open: boolean;
@@ -52,7 +53,7 @@ const categoryLabels: Record<FoodCategory, string> = {
 
 export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryItemDialogProps) {
   const { foods } = useApp();
-  const [activeTab, setActiveTab] = useState<"manual" | "barcode" | "camera">("manual");
+  const [activeTab, setActiveTab] = useState<"manual" | "barcode" | "camera" | "import">("manual");
   
   // Form states
   const [name, setName] = useState("");
@@ -219,10 +220,14 @@ export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryIt
           </DialogHeader>
           
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col overflow-hidden">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="manual" className="gap-2">
                 <Edit3 className="h-4 w-4" />
                 <span className="hidden sm:inline">Manual</span>
+              </TabsTrigger>
+              <TabsTrigger value="import" className="gap-2">
+                <ListPlus className="h-4 w-4" />
+                <span className="hidden sm:inline">From List</span>
               </TabsTrigger>
               <TabsTrigger value="barcode" className="gap-2" onClick={() => setScannerOpen(true)}>
                 <Barcode className="h-4 w-4" />
@@ -270,6 +275,22 @@ export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryIt
                     Open Camera
                   </Button>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="import" className="space-y-4 mt-0">
+                <GroceryImportTab
+                  onAddItems={(items) => {
+                    for (const item of items) {
+                      onAdd({
+                        name: item.name,
+                        quantity: item.quantity,
+                        unit: item.unit,
+                        category: item.category,
+                      });
+                    }
+                    resetForm();
+                  }}
+                />
               </TabsContent>
 
             {/* Pantry Inventory Alert */}
