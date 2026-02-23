@@ -67,6 +67,7 @@ const Billing = lazy(() => import("./pages/dashboard/Billing"));
 const AccountSettings = lazy(() => import("./pages/dashboard/AccountSettings"));
 const AccessibilitySettingsPage = lazy(() => import("./pages/dashboard/AccessibilitySettings"));
 const ApiDocs = lazy(() => import("./pages/ApiDocs"));
+const ShareTarget = lazy(() => import("./pages/ShareTarget"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -145,6 +146,7 @@ const App = () => (
             <Route path="/meal-plan" element={<RouteErrorBoundary><MealPlanGenerator /></RouteErrorBoundary>} />
             <Route path="/meal-plan/results" element={<RouteErrorBoundary><MealPlanGeneratorResults /></RouteErrorBoundary>} />
             <Route path="/api/docs" element={<RouteErrorBoundary><ApiDocs /></RouteErrorBoundary>} />
+            <Route path="/share" element={<RouteErrorBoundary><ShareTarget /></RouteErrorBoundary>} />
             {/* Admin routes - Protected with role check */}
             <Route path="/admin" element={<ProtectedRoute><RouteErrorBoundary><Admin /></RouteErrorBoundary></ProtectedRoute>} />
             <Route path="/admin-dashboard" element={<ProtectedRoute><RouteErrorBoundary><AdminDashboard /></RouteErrorBoundary></ProtectedRoute>} />
