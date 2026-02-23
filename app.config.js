@@ -20,6 +20,7 @@ export default {
       supportsTablet: true,
       bundleIdentifier: "com.eatpal.app",
       buildNumber: "1",
+      usesAppleSignIn: true,
       infoPlist: {
         NSCameraUsageDescription: "EatPal needs camera access to scan food barcodes for nutrition information",
         NSPhotoLibraryUsageDescription: "EatPal needs photo library access to let you add images of meals and foods",
@@ -48,6 +49,7 @@ export default {
     },
     plugins: [
       "expo-router",
+      "expo-apple-authentication",
       [
         "expo-camera",
         {
