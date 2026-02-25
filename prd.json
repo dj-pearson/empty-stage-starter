@@ -299,7 +299,7 @@
       ],
       "priority": 18,
       "passes": true,
-      "notes": "Created src/lib/rateLimiter.ts with sliding window algorithm. 5 attempts per 15-min window. Integrated into Auth.tsx handleSignIn \u2014 shows remaining attempts and lockout timer. Clear on success. localStorage storage with timestamps. Typecheck passes."
+      "notes": "Created src/lib/rateLimiter.ts with sliding window algorithm. 5 attempts per 15-min window. Integrated into Auth.tsx handleSignIn — shows remaining attempts and lockout timer. Clear on success. localStorage storage with timestamps. Typecheck passes."
     },
     {
       "id": "US-019",
@@ -334,7 +334,7 @@
       ],
       "priority": 20,
       "passes": true,
-      "notes": "Audited public/_headers \u2014 all security headers already present and production-ready: CSP with self/Supabase/Sentry/Stripe/GA, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, HSTS 31536000 with preload, Permissions-Policy restricting camera/microphone/geolocation, Referrer-Policy: strict-origin-when-cross-origin. Typecheck passes."
+      "notes": "Audited public/_headers — all security headers already present and production-ready: CSP with self/Supabase/Sentry/Stripe/GA, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, HSTS 31536000 with preload, Permissions-Policy restricting camera/microphone/geolocation, Referrer-Policy: strict-origin-when-cross-origin. Typecheck passes."
     },
     {
       "id": "US-021",
@@ -573,8 +573,8 @@
         "Typecheck passes"
       ],
       "priority": 34,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Split Three.js into vendor-three-core (653KB, single-file engine) + vendor-three-eco (156KB). Split swagger-ui into vendor-swagger (1023KB, pre-bundled monolith) + vendor-swagger-deps (115KB). Both >500KB chunks are inherently monolithic third-party libraries that are lazy-loaded. All other 15 vendor chunks under 500KB. TipTap (436KB), Charts (367KB), Markdown (441KB), Sentry (374KB), React+Radix (352KB) all properly chunked. Build succeeds with no circular dependency errors. Typecheck passes."
     },
     {
       "id": "US-035",
@@ -1895,7 +1895,7 @@
         "Audit and verify: Recipes page 'Add to Planner' button opens FoodSelectorDialog or navigates to /dashboard/planner",
         "Audit and verify: Planner page 'View Grocery List' link navigates to /dashboard/grocery",
         "Audit and verify: Grocery page 'Generate from Plan' correctly reads planner data from AppContext",
-        "Audit and verify: Empty state CTAs on each page link to the correct setup page (e.g., Planner empty state \u2192 /dashboard/kids to add a kid first)",
+        "Audit and verify: Empty state CTAs on each page link to the correct setup page (e.g., Planner empty state → /dashboard/kids to add a kid first)",
         "Audit and verify: Blog post 'Back to Blog' link works on all blog posts",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"

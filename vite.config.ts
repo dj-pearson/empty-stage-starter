@@ -106,8 +106,25 @@ export default defineConfig(({ mode }) => ({
             if (id.includes('@tiptap') || id.includes('prosemirror') || id.includes('lowlight') || id.includes('highlight.js') || id.includes('react-syntax-highlighter')) {
               return 'vendor-tiptap';
             }
-            // 3D graphics - Let Vite handle automatic chunking through lazy imports
-            // Manual chunking causes circular dependency issues with Three.js
+            // 3D graphics (only on landing page via lazy-loaded ThreeDHeroScene)
+            // Split into core (three.js engine) and ecosystem (@react-three + helpers)
+            // to keep each chunk under 500KB
+            if (/[\\/]node_modules[\\/]three[\\/]/.test(id)) {
+              return 'vendor-three-core';
+            }
+            if (id.includes('@react-three') || id.includes('meshline') || id.includes('camera-controls') || id.includes('maath') || id.includes('troika') || id.includes('three-mesh-bvh') || id.includes('three-stdlib') || id.includes('stats-gl')) {
+              return 'vendor-three-eco';
+            }
+            // Swagger UI (only on /api/docs page)
+            // Split into core swagger package and its heavy dependencies
+            if (id.includes('swagger-ui') || id.includes('swagger-client')) {
+              return 'vendor-swagger';
+            }
+            // DOMPurify is shared (blog, admin, sanitize) - do NOT put in swagger chunk
+            // redux/immutable are only used by swagger-ui internally
+            if (id.includes('immutable') || id.includes('js-yaml') || id.includes('react-redux') || id.includes('/redux/')) {
+              return 'vendor-swagger-deps';
+            }
             // Charts (only on analytics pages)
             if (id.includes('recharts')) {
               return 'vendor-charts';
