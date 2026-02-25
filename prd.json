@@ -1,7 +1,7 @@
 {
   "project": "EatPal",
-  "branchName": "ralph/enterprise-production-readiness",
-  "description": "Enterprise & Production Readiness - Harden EatPal (Munch Maker Mate) for production launch by fixing critical bugs, deploying missing edge functions, completing admin features, improving test coverage, adding security hardening, and automating deployment.",
+  "branchName": "ralph/page-functionality-audit",
+  "description": "Page-by-Page Functionality Audit & Fixes - Systematically audit all 43 pages of EatPal for broken functionality, missing empty states, type errors (@ts-nocheck files), broken navigation flows, and inter-page data consistency. Includes removing @ts-nocheck suppressions, fixing route protection gaps, correcting page-level Helmet metadata, and ensuring every page is fully functional end-to-end.",
   "userStories": [
     {
       "id": "US-001",
@@ -1205,6 +1205,725 @@
       "priority": 70,
       "passes": false,
       "notes": "Families tend to rotate through 4-6 weekly plans. Templates make this effortless."
+    },
+    {
+      "id": "US-071",
+      "title": "Remove @ts-nocheck from PickyEaterQuizResults and fix type errors",
+      "description": "As a developer, I want PickyEaterQuizResults.tsx to have full TypeScript coverage so that type errors are caught at compile time not runtime.",
+      "acceptanceCriteria": [
+        "Remove `// @ts-nocheck` from the top of src/pages/PickyEaterQuizResults.tsx",
+        "Import and apply correct types for QuizAnswers, QuizResult from @/types/quiz",
+        "Type the useLocation state as { answers: Partial<QuizAnswers>; sessionId: string; completionTime: number } using a named interface",
+        "Ensure all component props passed to PersonalityChart, FoodRecommendationsDisplay, StrategyCards, SampleMealsCarousel, ProgressPathway, EmailCaptureModal, ShareButtons are typed correctly",
+        "Run npx tsc --noEmit and confirm zero errors in this file",
+        "Typecheck passes"
+      ],
+      "priority": 71,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-072",
+      "title": "Remove @ts-nocheck from BudgetCalculatorResults and fix type errors",
+      "description": "As a developer, I want BudgetCalculatorResults.tsx to have full TypeScript coverage so that type safety is maintained throughout the budget feature.",
+      "acceptanceCriteria": [
+        "Remove `// @ts-nocheck` from the top of src/pages/BudgetCalculatorResults.tsx",
+        "Replace the loose LocationState interface with properly typed imports from @/types/budgetCalculator",
+        "Type the useLocation state using the LocationState interface via `const state = location.state as LocationState | null`",
+        "Ensure all recharts components (PieChart, BarChart, etc.) have correctly typed data arrays",
+        "Ensure EmailCaptureModal and ShareButtons component props are typed",
+        "Run npx tsc --noEmit and confirm zero errors in this file",
+        "Typecheck passes"
+      ],
+      "priority": 72,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-073",
+      "title": "Remove @ts-nocheck from MealPlanGeneratorResults and fix type errors",
+      "description": "As a developer, I want MealPlanGeneratorResults.tsx to have full TypeScript coverage so that the meal plan results page is type-safe.",
+      "acceptanceCriteria": [
+        "Remove `// @ts-nocheck` from the top of src/pages/MealPlanGeneratorResults.tsx",
+        "Import MealPlanInput, MealPlanResult, GeneratedMeal from @/types/mealPlanGenerator and use them for the LocationState interface",
+        "Type the useLocation state as `const state = location.state as LocationState | null`",
+        "Fix any type errors in map/filter operations over GeneratedMeal arrays",
+        "Ensure ShareButtons and EmailCaptureModal props are correctly typed",
+        "Run npx tsc --noEmit and confirm zero errors in this file",
+        "Typecheck passes"
+      ],
+      "priority": 73,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-074",
+      "title": "Remove @ts-nocheck from SearchTrafficDashboard and fix type errors",
+      "description": "As a developer, I want SearchTrafficDashboard.tsx to have full TypeScript coverage so that the admin traffic dashboard is type-safe.",
+      "acceptanceCriteria": [
+        "Remove `// @ts-nocheck` from the top of src/pages/SearchTrafficDashboard.tsx",
+        "Type the dateRange state as `{ from: Date; to: Date }`",
+        "Type all supabase query results with the correct database row types or explicit interfaces",
+        "Type all chart data arrays passed to recharts or other charting components",
+        "Fix any implicit any types in event handlers, map callbacks, and state setters",
+        "Run npx tsc --noEmit and confirm zero errors in this file",
+        "Typecheck passes"
+      ],
+      "priority": 74,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-075",
+      "title": "Add admin role protection to /seo-dashboard and /search-traffic routes",
+      "description": "As a security engineer, I want /seo-dashboard and /search-traffic routes to be protected by admin role check so that non-admin users cannot access sensitive SEO and traffic data.",
+      "acceptanceCriteria": [
+        "In src/App.tsx, wrap the /seo-dashboard Route with `<ProtectedRoute requireAdmin>` or equivalent admin role check",
+        "In src/App.tsx, wrap the /search-traffic Route with `<ProtectedRoute requireAdmin>` or equivalent admin role check",
+        "Verify ProtectedRoute supports an admin check prop; if not, add `requireAdmin?: boolean` prop that queries the user_roles table and redirects non-admins to /dashboard",
+        "Non-admin authenticated users who visit /seo-dashboard or /search-traffic are redirected to /dashboard",
+        "Unauthenticated users who visit /seo-dashboard or /search-traffic are redirected to /auth",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 75,
+      "passes": false,
+      "notes": "Currently both routes use ProtectedRoute but no admin role check, so any logged-in user can access admin SEO data."
+    },
+    {
+      "id": "US-076",
+      "title": "Audit and fix Landing page navigation, CTAs, and hero section",
+      "description": "As a visitor, I want all Landing page buttons and links to work correctly so that I can seamlessly start using the app or learn more.",
+      "acceptanceCriteria": [
+        "Verify all hero section CTA buttons ('Get Started Free', 'See How It Works') navigate to /auth or the correct target",
+        "Verify all pricing plan 'Get Started' buttons link to /pricing or /auth with the correct plan pre-selected",
+        "Verify navigation header links (Features, Blog, Pricing, Sign In) all navigate to correct routes",
+        "Verify logo link returns to / (home)",
+        "Verify the landing page loads without console errors",
+        "Verify the 3D hero scene loads with a Suspense fallback when Three.js is loading",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 76,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-077",
+      "title": "Audit and fix Auth page sign-in, sign-up, and password reset flows",
+      "description": "As a user, I want the auth page to correctly handle all authentication flows so that I can reliably access my account.",
+      "acceptanceCriteria": [
+        "Verify sign-in tab: email + password form submits, success redirects to /dashboard (or stored redirect param), error shows inline message",
+        "Verify sign-up tab: email + password + confirm password form validates, success shows 'check your email' confirmation state",
+        "Verify forgot password tab: email form submits, triggers Supabase reset email, shows confirmation message",
+        "Verify 'Back to sign in' link from forgot password tab works",
+        "Verify rate limiter shows remaining attempts and lockout countdown (from US-018)",
+        "Verify the page does not flash the login form while checking existing session",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 77,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-078",
+      "title": "Audit and fix PickyEaterQuiz page step progression and results handoff",
+      "description": "As a parent, I want the picky eater quiz to progress through all steps and correctly pass results to the results page so that I receive accurate recommendations.",
+      "acceptanceCriteria": [
+        "Verify quiz loads at /picky-eater-quiz and shows the first question step",
+        "Verify each 'Next' button advances to the next step and progress bar increments",
+        "Verify 'Back' button returns to the previous step",
+        "Verify clicking the final 'Get Results' button navigates to /picky-eater-quiz/results with `answers`, `sessionId`, and `completionTime` in navigate state",
+        "Verify /picky-eater-quiz/results redirects to /picky-eater-quiz when visited directly without state",
+        "Verify results page shows personality type, food recommendations, and strategy cards when reached with valid state",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 78,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-079",
+      "title": "Audit and fix BudgetCalculator page form and results navigation",
+      "description": "As a user, I want the grocery budget calculator to submit correctly and show results so that I can plan my family grocery budget.",
+      "acceptanceCriteria": [
+        "Verify /budget-calculator renders the form with family size, location, and dietary preference fields",
+        "Verify form validation prevents submission when required fields are empty",
+        "Verify form submission calls the budget calculation library and navigates to /budget-calculator/results with `sessionId`, `input`, `calculation`, and `recommendedMeals` in navigate state",
+        "Verify /budget-calculator/results shows budget breakdown charts and meal suggestions when reached with valid state",
+        "Verify /budget-calculator/results redirects to /budget-calculator when visited without state",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 79,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-080",
+      "title": "Audit and fix MealPlanGenerator form and results navigation",
+      "description": "As a user, I want the public meal plan generator to work end-to-end so that I can see a sample meal plan before signing up.",
+      "acceptanceCriteria": [
+        "Verify /meal-plan renders the form with family size, dietary restrictions, allergies, and cooking skill fields",
+        "Verify selecting dietary restrictions and allergies updates the form state correctly",
+        "Verify form submission calls generateMealPlan() from the mealPlanGenerator library",
+        "Verify successful generation navigates to /meal-plan/results with `sessionId`, `input`, and `mealPlan` in navigate state",
+        "Verify /meal-plan/results shows a 7-day meal plan with breakfast/lunch/dinner when reached with valid state",
+        "Verify /meal-plan/results redirects to /meal-plan when visited without state",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 80,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-081",
+      "title": "Audit and fix Dashboard layout - sidebar, mobile nav, and user state",
+      "description": "As a user, I want the dashboard layout to correctly show my profile, highlight the current route, and provide working navigation so that moving between features is seamless.",
+      "acceptanceCriteria": [
+        "Verify AppSidebar renders all nav items from the navItems configuration",
+        "Verify the current active route is visually highlighted in the sidebar",
+        "Verify user's display name shows in the sidebar footer (from Supabase profile)",
+        "Verify logout button in the sidebar/header signs the user out and redirects to /",
+        "Verify the ThemeProvider toggle (dark/light) applies the theme and persists it",
+        "Verify mobile bottom navigation bar is sticky at the bottom and all 5+ items are accessible and tappable",
+        "Verify the KidSelector in the mobile header switches the active kid in AppContext",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 81,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-082",
+      "title": "Audit and fix Home page (dashboard index) stats and quick actions",
+      "description": "As a user, I want the dashboard home page to show accurate stats and working quick action buttons so that I can get an overview of my data at a glance.",
+      "acceptanceCriteria": [
+        "Verify food count stat card shows the correct number of foods from AppContext",
+        "Verify kids count stat card shows the correct number of kids",
+        "Verify meals planned stat card shows the correct number of plan entries",
+        "Verify 'Today's Meals' section shows meals for the active kid for today's date, or empty state if none planned",
+        "Verify Quick Action buttons ('Add Food', 'Plan Meals', 'View Grocery', 'Add Recipe') navigate to the correct dashboard sub-routes",
+        "Verify the welcome message shows the user's name from the Supabase profile",
+        "Verify the SubscriptionStatusBanner shows for free-tier users",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 82,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-083",
+      "title": "Audit and fix Kids page - add, edit, delete child profiles",
+      "description": "As a parent, I want to fully manage child profiles from the Kids page so that each child has accurate allergen and preference data.",
+      "acceptanceCriteria": [
+        "Verify 'Add Child' button opens ManageKidsDialog in create mode",
+        "Verify filling in the kid form and clicking Save creates a new kid in AppContext and Supabase",
+        "Verify clicking 'Edit' on a ChildProfileCard opens ManageKidsDialog pre-filled with that kid's data",
+        "Verify deleting a kid shows a confirmation dialog and removes the kid from AppContext",
+        "Verify ChildProfileCard shows correct stat counts from getKidStats() (total meals, safe foods, try-bites)",
+        "Verify 'Complete Profile' button opens ChildIntakeQuestionnaire dialog for that kid",
+        "Verify KidSelector in the dashboard header updates activeKidId when a different kid is chosen",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 83,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-084",
+      "title": "Audit and fix Pantry page - food CRUD, filtering, and view modes",
+      "description": "As a user, I want the Pantry page to let me add, edit, delete, and filter foods so that managing my food database is intuitive.",
+      "acceptanceCriteria": [
+        "Verify 'Add Food' button opens AddFoodDialog and saving creates a food in AppContext",
+        "Verify clicking a FoodCard opens the edit dialog pre-populated with food data",
+        "Verify deleting a food shows confirmation and removes it from AppContext",
+        "Verify search input filters displayed foods by name in real-time",
+        "Verify category filter dropdown (All, Protein, Fruit, Vegetable, etc.) correctly filters food list",
+        "Verify grid view and list view toggle switches between PantryCategorySection and PantryListItem layouts",
+        "Verify empty state renders 'No foods yet - Add your first food' when no foods exist",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 84,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-085",
+      "title": "Audit and fix Recipes page - add recipe, detail view, URL import",
+      "description": "As a user, I want the Recipes page to let me add recipes manually and by URL so that I can build my recipe library quickly.",
+      "acceptanceCriteria": [
+        "Verify EnhancedRecipeCard renders recipe name, ingredient count, and action buttons",
+        "Verify 'Add Recipe' button (or FAB) opens EnhancedRecipeBuilder in create mode",
+        "Verify filling in the recipe builder and saving creates a recipe in AppContext and Supabase",
+        "Verify clicking a recipe card opens RecipeDetailView Sheet with full recipe information",
+        "Verify RecipeDetailView shows linked foods with their names (resolved from food_ids)",
+        "Verify ImportRecipeDialog correctly calls the parse-recipe edge function with a URL",
+        "Verify empty state shows 'No recipes yet - Add your first recipe' when no recipes exist",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 85,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-086",
+      "title": "Audit and fix Planner page - weekly calendar, meal slot interactions, week navigation",
+      "description": "As a user, I want the Planner page to display a working weekly calendar where I can add and manage meals for each slot so that planning my children's meals is easy.",
+      "acceptanceCriteria": [
+        "Verify GSAPCalendarMealPlanner renders a 7-day grid with Breakfast, Lunch, Dinner, Snack rows",
+        "Verify week navigation chevrons move to previous/next week and the date header updates",
+        "Verify clicking an empty meal slot opens FoodSelectorDialog with the correct kid context",
+        "Verify selecting a food from FoodSelectorDialog creates a PlanEntry via addPlanEntry in AppContext",
+        "Verify existing plan entries display the food name in the correct day/slot cell",
+        "Verify MobileMealPlanner renders on screens below 1024px and shows the same data",
+        "Verify 'Generate AI Plan' button triggers the AI meal plan generation flow",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 86,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-087",
+      "title": "Audit and fix Grocery page - list management, item CRUD, generate from planner",
+      "description": "As a user, I want the Grocery page to show my grocery list, let me check off items, and auto-generate from my meal plan so that shopping is efficient.",
+      "acceptanceCriteria": [
+        "Verify GroceryListSelector shows available grocery lists and the selected list is displayed",
+        "Verify 'Add Item' button opens AddGroceryItemDialog and saving adds the item to the active list",
+        "Verify checking off a grocery item checkbox marks it as checked in AppContext and visually strikes through",
+        "Verify 'Generate from Meal Plan' button calls generateGroceryList() from mealPlanner lib and adds items",
+        "Verify category grouping (Protein, Fruit, etc.) correctly groups items in the list",
+        "Verify progress bar shows checked count out of total items",
+        "Verify empty state shows 'Your grocery list is empty' when no items exist",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 87,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-088",
+      "title": "Audit and fix AIPlanner page - generation flow, plan display, save to planner",
+      "description": "As a user, I want the AI Planner page to generate and save a meal plan so that AI planning integrates with my existing week view.",
+      "acceptanceCriteria": [
+        "Verify kid selector shows all kids and selecting a kid sets selectedKidForPlan state",
+        "Verify 'Generate Plan' button calls the ai-meal-plan edge function with the selected kid's ID",
+        "Verify loading spinner shows during generation and disappears on completion",
+        "Verify the generated mealPlan array renders as day cards with breakfast/lunch/dinner/snacks displayed",
+        "Verify nutritional_insights and try_bite_strategy sections render when returned from edge function",
+        "Verify 'Save to Planner' button calls addPlanEntries() to persist the generated plan",
+        "Verify error toast shows when the edge function call fails",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 88,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-089",
+      "title": "Audit and fix AICoach page - chat interface, message display, API error handling",
+      "description": "As a user, I want the AI Coach chat to send messages and display responses so that I can get real-time meal advice.",
+      "acceptanceCriteria": [
+        "Verify AIMealCoach component renders a chat interface with message history area and input field",
+        "Verify typing in the input field and pressing Enter (or clicking Send) submits the message",
+        "Verify a loading indicator shows while the AI response is being fetched",
+        "Verify AI response text displays in the chat history with correct user/assistant visual distinction",
+        "Verify an error message displays when the API call fails (network error or non-200 response)",
+        "Verify the input field clears after successful submission",
+        "Verify page renders correctly when no active kid is selected (shows general coaching mode)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 89,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-090",
+      "title": "Audit and fix MealBuilder page - food combination interface and save",
+      "description": "As a user, I want the Meal Builder to let me combine foods into a custom meal and save it to my planner so that I can create new combinations for picky eaters.",
+      "acceptanceCriteria": [
+        "Verify KidMealBuilder component renders with a food selection interface (search or category browse)",
+        "Verify selecting a food adds it to the current meal combination",
+        "Verify removing a food removes it from the combination",
+        "Verify the meal summary section shows the combined foods and their categories",
+        "Verify 'Save Meal' or 'Add to Planner' button saves the combination as a plan entry or recipe",
+        "Verify empty state shows when no foods have been added to the combination yet",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 90,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-091",
+      "title": "Audit and fix FoodChaining page - recommendations display and progression",
+      "description": "As a user, I want the Food Chaining page to show food progression recommendations so that I can gradually expand my child's diet.",
+      "acceptanceCriteria": [
+        "Verify FoodChainingRecommendations component renders without crashing when foods exist",
+        "Verify the component shows the active child's current safe foods as the starting point",
+        "Verify recommended 'next step' foods are displayed with visual similarity indicators",
+        "Verify clicking a recommended food marks it as something to try (adds to try-bite list or opens a dialog)",
+        "Verify the component renders a helpful empty state when the active child has no safe foods yet with a link to /dashboard/pantry",
+        "Verify the component works in family mode (no active kid) by showing a kid selector prompt",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 91,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-092",
+      "title": "Audit and fix FoodTracker page - daily tracking and attempt history",
+      "description": "As a user, I want the Food Tracker to let me log food attempts and see history so that I can track my child's eating progress over time.",
+      "acceptanceCriteria": [
+        "Verify FoodSuccessTracker component renders a list of safe and try-bite foods for the active kid",
+        "Verify clicking a food entry opens a dialog to log a new attempt result (ate, tasted, refused)",
+        "Verify submitting a result calls addPlanEntry or updatePlanEntry in AppContext",
+        "Verify the attempt history displays the last few results for each food",
+        "Verify streak counter (consecutive days with entries) displays correctly",
+        "Verify empty state with 'Add a child first' CTA renders when no kids exist",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 92,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-093",
+      "title": "Audit and fix Analytics page - charts, stats, and kid/family mode",
+      "description": "As a user, I want the Analytics page to show charts and stats for my child's meal history so that I can see eating patterns over time.",
+      "acceptanceCriteria": [
+        "Verify recharts ResponsiveContainer renders without console errors or zero-height issues",
+        "Verify the overall stats (total, ate, tasted, refused, successRate) show correct values for the active kid",
+        "Verify family mode (no active kid) aggregates stats across all kids",
+        "Verify food performance BarChart renders correctly with no crashes when foodStats array is empty",
+        "Verify ResultHistoryCard, SmartInsights, and WeeklyProgressReport components render without crashing",
+        "Verify empty state renders when no plan entries exist (no chart data)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 93,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-094",
+      "title": "Audit and fix InsightsDashboard - food coverage, charts, and family mode",
+      "description": "As a user, I want the Insights Dashboard to show useful food coverage and meal history insights so that I can understand my child's nutritional variety.",
+      "acceptanceCriteria": [
+        "Verify food coverage by category (protein, carb, dairy, fruit, vegetable, snack) renders as a Progress bar per category",
+        "Verify recent meal history (last 30 days) shows correct completed meal counts",
+        "Verify family mode shows aggregated insights across all kids",
+        "Verify 'Quick Wins' and 'Areas to Improve' insight sections render with data",
+        "Verify all charts render without console errors when data is available",
+        "Verify helpful empty state with link to /dashboard/pantry renders when no foods or entries exist",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 94,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-095",
+      "title": "Fix Progress page empty state - add CTA to create first child",
+      "description": "As a user, I want to be guided to create a child profile when visiting the Progress page with no active kid so that I understand what to do next.",
+      "acceptanceCriteria": [
+        "When no activeKid, instead of only showing 'No Child Selected' card, add a Button linking to /dashboard/kids with label 'Go to Children'",
+        "When no activeKid and no kids exist at all, show a description 'Add your first child to start tracking progress'",
+        "When no activeKid but kids exist, show KidSelector component or a list of clickable kid cards to select a child",
+        "Verify Tabs (Overview, Achievements, Weekly Report) all render their content when an active kid is selected",
+        "Verify ProgressDashboard, AchievementsView, and WeeklyProgressReport render without console errors",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 95,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-096",
+      "title": "Audit and fix AccountSettings page - profile save, data export, data import",
+      "description": "As a user, I want the Account Settings page to correctly save my profile, export my data as JSON, and import data from a backup file.",
+      "acceptanceCriteria": [
+        "Verify the profile form pre-populates with current user data (name, email, avatar) from Supabase",
+        "Verify saving the profile form updates the profiles table in Supabase with a success toast",
+        "Verify 'Export Data' button calls exportData() from AppContext and triggers a JSON file download",
+        "Verify 'Import Data' file input accepts JSON files and calls importData() which merges foods, kids, recipes, and plan entries",
+        "Verify 'Delete Account' confirmation dialog requires email confirmation before proceeding",
+        "Verify account deletion removes user data from all tables and redirects to /",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 96,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-097",
+      "title": "Audit and fix Billing page - subscription display, upgrade flow, cancel/reactivate",
+      "description": "As a user, I want the Billing page to show my current subscription status and let me upgrade, cancel, or reactivate so that I can manage my plan easily.",
+      "acceptanceCriteria": [
+        "Verify the current plan name and status badge (Active, Trialing, Past Due, Canceled) display correctly",
+        "Verify billing period end date and days remaining are shown",
+        "Verify 'Upgrade Plan' button navigates to /pricing when user is on free plan",
+        "Verify 'Manage Billing Portal' loads the Stripe customer portal via the billing-portal edge function",
+        "Verify 'Cancel Subscription' shows a confirmation dialog and calls cancel() from useSubscription hook",
+        "Verify 'Reactivate Subscription' button shows when willCancelAtPeriodEnd is true and calls reactivate()",
+        "Verify loading skeleton shows while subscription data loads",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 97,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-098",
+      "title": "Audit and fix Pricing page - plan cards, active plan indication, upgrade CTA",
+      "description": "As a visitor or user, I want the Pricing page to clearly show plan options and let me start an upgrade so that I understand the value of each tier.",
+      "acceptanceCriteria": [
+        "Verify all subscription plan cards render with name, price, and feature list",
+        "Verify for authenticated users, the current plan is visually indicated (e.g., 'Current Plan' badge)",
+        "Verify 'Get Started' / 'Upgrade' CTA buttons for each plan call the create-checkout edge function or redirect unauthenticated users to /auth",
+        "Verify the annual billing toggle (if present) switches displayed prices between monthly and annual",
+        "Verify the FAQ or comparison table (if present) renders without console errors",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 98,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-099",
+      "title": "Audit and fix CheckoutSuccess page - subscription polling and confirmation display",
+      "description": "As a user, I want the checkout success page to confirm my subscription activation so that I know my upgrade was successful.",
+      "acceptanceCriteria": [
+        "Verify page redirects to /dashboard when no session_id query param is present",
+        "Verify the loading spinner shows while polling for subscription activation (up to 15 seconds)",
+        "Verify once subscription is found, the plan name and next billing date display in the success card",
+        "Verify after polling timeout (15 iterations), the page still shows a success confirmation with a 'Go to Dashboard' button even if subscription data is not yet in DB (webhook delay)",
+        "Verify the page has a Helmet title tag ('Subscription Activated - EatPal')",
+        "Verify 'Go to Dashboard' button navigates to /dashboard",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 99,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-100",
+      "title": "Audit and fix Blog listing page - posts, search, category filter, empty state",
+      "description": "As a visitor, I want the Blog page to show published posts with working search and category filters so that I can find relevant content.",
+      "acceptanceCriteria": [
+        "Verify blog_posts Supabase query runs and published posts render as cards with title, excerpt, and published date",
+        "Verify loading skeleton shows while posts are fetching",
+        "Verify search input filters posts by title in real-time",
+        "Verify category filter buttons filter posts by category slug",
+        "Verify 'All' category button clears the filter and shows all posts",
+        "Verify empty state shows 'No posts found' when search yields no results",
+        "Verify each post card links to /blog/[slug]",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 100,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-101",
+      "title": "Audit and fix BlogPost detail page - content rendering, 404 handling, metadata",
+      "description": "As a visitor, I want individual blog posts to render correctly with proper metadata so that I can read content and share it.",
+      "acceptanceCriteria": [
+        "Verify /blog/:slug fetches the correct post from Supabase by slug",
+        "Verify post title, author, published date, reading time, and body HTML render correctly",
+        "Verify post body HTML is sanitized before rendering (use sanitizeHtml from src/lib/sanitize.ts)",
+        "Verify Helmet sets og:title, og:description, og:image, and og:type from post data",
+        "Verify a 404-style page or redirect to /blog renders when the slug does not match any post",
+        "Verify 'Back to Blog' breadcrumb link navigates to /blog",
+        "Verify ArticleSchema component is used with correct post metadata for SEO structured data",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 101,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-102",
+      "title": "Audit and fix Admin page - role check, tab navigation, and component rendering",
+      "description": "As an admin, I want the Admin page to verify my role and display all admin tabs correctly so that administrative features are accessible.",
+      "acceptanceCriteria": [
+        "Verify useAdminCheck hook redirects non-admins away from /admin to /dashboard",
+        "Verify AdminDashboard tabs (Overview, Users, Blog, Email, Analytics) all render their respective components",
+        "Verify each tab's component loads data from Supabase without console errors",
+        "Verify the admin user count, subscriber count, and revenue stats load in the Overview tab",
+        "Verify switching tabs does not cause loading flash or data loss",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 102,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-103",
+      "title": "Audit and fix AdminDashboard page - system health, alert manager, feature flags",
+      "description": "As an admin, I want the AdminDashboard to display real system health metrics and allow managing alerts and feature flags so that I can monitor and control the platform.",
+      "acceptanceCriteria": [
+        "Verify SystemHealthMonitor component renders and shows database connection status",
+        "Verify AlertManager component renders alert rules and allows creating a new alert rule",
+        "Verify FeatureFlagDashboard renders the flag list and the toggle switches work",
+        "Verify LiveActivityFeed renders recent activity events and auto-updates",
+        "Verify each component handles empty/loading states without crashing",
+        "Verify the page has a proper Helmet title ('Admin Dashboard - EatPal')",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 103,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-104",
+      "title": "Add Helmet page titles and meta descriptions to all dashboard pages missing them",
+      "description": "As a developer, I want every page to have a proper <Helmet> title and meta description so that browser tabs, bookmarks, and SEO crawlers show meaningful page names.",
+      "acceptanceCriteria": [
+        "Audit all pages in src/pages/ and src/pages/dashboard/ for missing or generic Helmet tags",
+        "Add `<Helmet><title>[Page Name] - EatPal</title><meta name='description' content='[description]' /></Helmet>` to: Home, Kids, Pantry, Recipes, Planner, AIPlanner, Grocery, FoodTracker, AICoach, MealBuilder, FoodChaining, InsightsDashboard, Analytics, Progress, AccountSettings, Billing, ProfessionalSettings, AccessibilitySettings, Admin, AdminDashboard, SEODashboard, ShareTarget",
+        "Titles follow pattern: '[Feature Name] - EatPal' (e.g., 'Meal Planner - EatPal')",
+        "Meta descriptions are 120-160 characters and describe the page's purpose",
+        "Typecheck passes"
+      ],
+      "priority": 104,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-105",
+      "title": "Fix mobile navigation bottom bar - active route highlighting and full route coverage",
+      "description": "As a mobile user, I want the bottom navigation bar to highlight my current page and give me access to all key features so that navigation on small screens is clear.",
+      "acceptanceCriteria": [
+        "Verify the mobile bottom nav in Dashboard.tsx highlights the current active route using NavLink's active class or isActive prop",
+        "Verify the 5 primary navigation items (Home, Kids, Pantry, Planner, Grocery) are always visible in the bottom bar",
+        "Verify a 'More' button or expandable menu opens the remaining navigation items (AI Coach, Analytics, Progress, Settings)",
+        "Verify tapping a bottom nav item navigates to the correct route without full page reload",
+        "Verify the bottom nav is not obscured by the iOS safari address bar (uses safe-area-inset-bottom padding)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 105,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-106",
+      "title": "Fix AppSidebar - add visual grouping and ensure all routes are listed",
+      "description": "As a user, I want the sidebar to organize navigation items into logical groups and list all available pages so that I can find any feature quickly.",
+      "acceptanceCriteria": [
+        "Verify AppSidebar renders within a SidebarProvider and is scrollable when nav items overflow viewport height",
+        "Group nav items into visual sections with labels: Core (Home, Kids, Pantry, Recipes, Planner, Grocery), Tools (Food Tracker, AI Coach, Meal Builder, Food Chaining, AI Planner), Insights (Insights, Analytics, Progress), Settings (Account, Billing, Professional Settings, Accessibility)",
+        "Verify all 14+ nav items from mobileNavItems array are accessible in the sidebar",
+        "Verify sidebar collapses to icon-only mode when SidebarTrigger is clicked (uses shadcn Sidebar collapsible feature)",
+        "Verify sidebar state persists across page navigation within the dashboard",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 106,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-107",
+      "title": "Audit and fix ProfessionalSettings page - white label settings load and save",
+      "description": "As a Professional tier subscriber, I want the Professional Settings page to load my white label configuration and allow me to save changes so that I can customize the app branding.",
+      "acceptanceCriteria": [
+        "Verify the page fetches the user's professional settings from the profiles or household table on mount",
+        "Verify brand name, primary color, and logo URL fields pre-populate with saved values",
+        "Verify saving the form updates the database and shows a success toast",
+        "Verify a subscription gate shows for users not on the Professional plan (show upgrade prompt instead of settings form)",
+        "Verify the page has a Helmet title ('Professional Settings - EatPal')",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 107,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-108",
+      "title": "Audit and fix AccessibilitySettings page - settings persistence and preview",
+      "description": "As a user, I want accessibility settings (font size, contrast, reduced motion, dyslexia font) to save correctly and apply instantly so that the app is usable for my accessibility needs.",
+      "acceptanceCriteria": [
+        "Verify all accessibility toggles/sliders (font size scale, high contrast mode, reduced motion, dyslexia-friendly font) render and are interactive",
+        "Verify toggling a setting updates the AccessibilityContext and applies the change visually without page reload",
+        "Verify settings persist to localStorage so they survive page refresh",
+        "Verify 'Reset to defaults' button restores all settings to their default values",
+        "Verify the preview section shows how text looks with current settings applied",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 108,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-109",
+      "title": "Fix cross-page navigation flows - ensure all inter-page CTAs and breadcrumbs work",
+      "description": "As a user, I want every 'Go to Planner', 'Add to Grocery List', 'View Recipe', and similar cross-page action to navigate to the correct destination so that the app feels connected.",
+      "acceptanceCriteria": [
+        "Audit and verify: Home page 'Plan Meals' button navigates to /dashboard/planner",
+        "Audit and verify: Home page 'Add Food' button navigates to /dashboard/pantry",
+        "Audit and verify: Recipes page 'Add to Planner' button opens FoodSelectorDialog or navigates to /dashboard/planner",
+        "Audit and verify: Planner page 'View Grocery List' link navigates to /dashboard/grocery",
+        "Audit and verify: Grocery page 'Generate from Plan' correctly reads planner data from AppContext",
+        "Audit and verify: Empty state CTAs on each page link to the correct setup page (e.g., Planner empty state → /dashboard/kids to add a kid first)",
+        "Audit and verify: Blog post 'Back to Blog' link works on all blog posts",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 109,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-110",
+      "title": "Fix page-level empty states - every page guides users when no data exists",
+      "description": "As a new user, I want every page to show a helpful empty state with next steps when I have no data so that I understand how to get started with each feature.",
+      "acceptanceCriteria": [
+        "Pantry: empty state shows 'Add your first food' with AddFoodDialog trigger button",
+        "Recipes: empty state shows 'Create your first recipe' with EnhancedRecipeBuilder trigger button",
+        "Planner: empty state (no kids) shows 'Add a child first' with link to /dashboard/kids",
+        "Planner: empty state (kids exist, no plan) shows 'Start planning meals' with slot interaction hint",
+        "Grocery: empty state shows 'Your list is empty - Generate from your meal plan' with generate button",
+        "Analytics: empty state shows 'No meal data yet - Start logging meals in the Planner' with link to /dashboard/planner",
+        "Progress: empty state (no kid) shows CTA to /dashboard/kids (per US-095)",
+        "FoodTracker: empty state (no kids) shows CTA to /dashboard/kids",
+        "Each empty state includes the page icon, a short description, and one primary action button",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 110,
+      "passes": false,
+      "notes": ""
     }
   ]
 }
