@@ -145,7 +145,8 @@ export function GestureTutorial() {
       <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 bg-card rounded-lg shadow-2xl p-6 max-w-md mx-auto md:hidden">
         <button
           onClick={handleClose}
-          className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
+          className="absolute top-2 right-2 min-h-11 min-w-11 flex items-center justify-center text-muted-foreground hover:text-foreground"
+          aria-label="Close tutorial"
         >
           <X className="h-5 w-5" />
         </button>
@@ -170,13 +171,19 @@ export function GestureTutorial() {
             <button
               key={index}
               onClick={() => setCurrentStep(index)}
+              aria-label={`Go to step ${index + 1}`}
               className={cn(
-                "h-2 rounded-full transition-all",
-                index === currentStep
-                  ? "w-8 bg-primary"
-                  : "w-2 bg-muted-foreground/30"
+                "relative h-11 flex items-center justify-center transition-all",
+                index === currentStep ? "w-8" : "w-4"
               )}
-            />
+            >
+              <span className={cn(
+                "h-2 rounded-full transition-all w-full",
+                index === currentStep
+                  ? "bg-primary"
+                  : "bg-muted-foreground/30"
+              )} />
+            </button>
           ))}
         </div>
 

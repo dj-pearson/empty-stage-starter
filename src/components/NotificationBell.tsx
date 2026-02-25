@@ -273,9 +273,10 @@ export function NotificationBell() {
                               e.stopPropagation();
                               dismissNotification(notification.id);
                             }}
-                            className="h-6 w-6 flex-shrink-0"
+                            className="h-11 w-11 flex-shrink-0"
+                            aria-label="Dismiss notification"
                           >
-                            <X className="h-3 w-3" />
+                            <X className="h-4 w-4" />
                           </Button>
                         </div>
                         <p className="text-sm text-muted-foreground mt-0.5">

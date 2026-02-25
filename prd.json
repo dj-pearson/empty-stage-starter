@@ -728,8 +728,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 43,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Button sm variant h-10→h-11 (44px). Toggle default/sm h-10/h-9→h-11 (44px). GestureTutorial close button: added min-h-11 min-w-11 + aria-label. GestureTutorial progress dots: wrapped in h-11 tappable container with aria-label. NotificationBell dismiss: h-6→h-11 (44px). Global mobile-first.css already enforces min-height:44px on all buttons/links. Radix checkbox/radio/switch render as buttons so inherit the global minimum."
     },
     {
       "id": "US-044",
