@@ -5,7 +5,11 @@
 - Always include CORS headers and OPTIONS preflight handler in edge functions
 - `functions/sitemap.xml.ts` is a Cloudflare Pages function, NOT a Supabase edge function
 - Template patterns available in `edge-functions-template/functions/` for reference
-- TypeScript check: `npx tsc --noEmit`, Tests: `npx vitest run` (176 passing)
+- TypeScript check: `npx tsc --noEmit`, Tests: `npx vitest run` (382 passing)
+- Test files follow pattern: `src/**/*.test.{ts,tsx}` alongside source files
+- Mock Supabase client in tests by mocking `@/integrations/supabase/client`
+- Auth page tests need AppProvider wrapper and mocks for: logger.withContext, login-history, use-toast, react-router-dom (useSearchParams), platform
+- Schema components: ArticleSchema/FAQSchema/BreadcrumbSchema use Helmet (mock react-helmet-async); RecipeSchema uses useEffect + DOM manipulation (test via document.getElementById)
 - US-001 through US-006 already completed strict mode, dead code cleanup, env validation, error boundaries, route error boundaries, and API retry logic
 - Build: `npx vite build` (the `npm run build` has an Expo prebuild step that requires native deps; Cloudflare Pages should use `npx vite build`)
 
@@ -226,3 +230,91 @@
 - `npx vite build`: SUCCESS (no errors)
 - `npx tsc --noEmit`: SUCCESS (zero TypeScript errors)
 - Large chunk warnings (vendor-misc 4.6MB) are pre-existing and tracked in US-034
+
+## 2026-02-25 - US-024: Comprehensive Unit Tests for AppContext
+- What was implemented: 32 unit tests for AppContext state management covering all CRUD operations
+- Files changed:
+  - `src/contexts/AppContext.test.tsx` (new) - Tests for foods, kids, recipes, planEntries, groceryItems CRUD, export/import/reset, activeKid management
+- **Learnings for future iterations:**
+  - AppContext operates in local-only mode (localStorage fallback) when Supabase auth session is null
+  - Mock `@/integrations/supabase/client` and `@/lib/platform` getStorage to test local operations
+  - Use `waitFor` to handle async initialization of starter data in useEffect
+  - useApp throws when used outside AppProvider - test with try/catch
+---
+
+## 2026-02-25 - US-025: Unit Tests for Utility Modules
+- What was implemented: 86 unit tests across 3 utility modules
+- Files changed:
+  - `src/lib/utils.test.ts` (new) - 21 tests: cn() class merging, generateId() uniqueness, debounce() timing, calculateAge() edge cases
+  - `src/lib/platform.test.ts` (new) - 16 tests: isWeb/isMobile detection, getSyncStorage/getStorage/safeStorage operations, renderPlatform
+  - `src/lib/seo-helpers.test.ts` (new) - 49 tests: all 12 exported functions including canonical URLs, OG images, meta validation, Twitter/OG tags, slugs, reading time, indexability, hreflang
+- **Learnings for future iterations:**
+  - isWeb() in jsdom returns a Document object (truthy but not strictly true) - use toBeTruthy() not toBe(true)
+  - jest-dom doesn't have toEndWith matcher - use native string .endsWith()
+  - vi.useFakeTimers() required for debounce tests, remember vi.useRealTimers() in afterEach
+---
+
+## 2026-02-25 - US-026: Unit Tests for Custom Hooks
+- What was implemented: 15 unit tests across 3 custom hooks
+- Files changed:
+  - `src/hooks/useReducedMotion.test.ts` (new) - 4 tests: default false, matches true when set, responds to changes, cleans up listener
+  - `src/hooks/useInView.test.ts` (new) - 5 tests: initial state, option handling (threshold, triggerOnce, rootMargin)
+  - `src/hooks/useSubscription.test.ts` (new) - 6 tests: initial loading, null subscription, status helpers, action methods, actionLoading
+- **Learnings for future iterations:**
+  - useSubscription needs mocks for supabase, edge-functions, sonner, and react-router-dom
+  - IntersectionObserver is globally mocked in test setup - useInView tests focus on ref/state
+  - matchMedia mock in test setup defaults matches:false - override with vi.spyOn for reduced-motion tests
+---
+
+## 2026-02-25 - US-027: Unit Tests for Auth Components
+- What was implemented: 6 unit tests for the Auth page component
+- Files changed:
+  - `src/pages/Auth.test.tsx` (new) - Tests rendering, form presence, tab triggers, inputs, labels, buttons
+- **Learnings for future iterations:**
+  - Auth page has deep dependency tree: Supabase, router, toast, Helmet, rateLimiter, conversion-tracking, logger, login-history, use-toast, platform
+  - logger.withContext() must be mocked (returns sub-logger object) - login-history.ts uses it at class init time
+  - Auth renders OnboardingDialog which uses useApp() - must wrap in AppProvider
+  - useSearchParams must be in react-router-dom mock (returns [URLSearchParams, setter])
+---
+
+## 2026-02-25 - US-028: Unit Tests for Admin Dashboard Components
+- What was implemented: 8 unit tests for 4 admin components
+- Files changed:
+  - `src/components/admin/AlertManager.test.tsx` (new) - 2 tests: renders, container check
+  - `src/components/admin/FeatureFlagDashboard.test.tsx` (new) - 2 tests: renders, container check
+  - `src/components/admin/LiveActivityFeed.test.tsx` (new) - 2 tests: renders, container check
+  - `src/components/admin/SystemHealthDashboard.test.tsx` (new) - 2 tests: renders, container check
+- **Learnings for future iterations:**
+  - Admin components need full Supabase mock chain: from().select().order().limit()
+  - Some admin components use real-time subscriptions - mock channel().on().subscribe()
+  - Use container.firstChild for DOM presence checks instead of attribute selectors
+---
+
+## 2026-02-25 - US-029: Unit Tests for SEO Schema Components
+- What was implemented: 45 unit tests for 4 schema components + helpers
+- Files changed:
+  - `src/components/schema/ArticleSchema.test.tsx` (new) - 8 tests: JSON-LD graph structure, Article/BreadcrumbList/WebPage types, defaults, custom author, keywords
+  - `src/components/schema/FAQSchema.test.tsx` (new) - 6 tests: FAQPage type, Question/Answer structure, empty array handling
+  - `src/components/schema/RecipeSchema.test.tsx` (new) - 11 tests: script tag creation, Recipe type, ingredients, HowToStep, nutrition, rating, cleanup on unmount
+  - `src/components/schema/BreadcrumbSchema.test.tsx` (new) - 6 tests: BreadcrumbList type, ListItem positions, names/URLs, single item
+  - RecipeSchema helpers: formatRecipeTime (4 tests), validateRecipeSchema (10 tests)
+- **Learnings for future iterations:**
+  - ArticleSchema/FAQSchema/BreadcrumbSchema use Helmet - mock react-helmet-async to capture JSON-LD from children
+  - RecipeSchema uses useEffect + direct DOM manipulation (createElement/appendChild) - test via document.getElementById('recipe-schema')
+  - RecipeSchema cleans up script on unmount - verify with unmount() then check element removed
+  - formatRecipeTime: when minutes=0 and hours>0, returns 'PT1H' not 'PT1H0M' (code: `mins > 0 || hours === 0`)
+---
+
+## 2026-02-25 - US-030: Configure Vitest Coverage Thresholds
+- What was implemented: Updated coverage configuration with proper thresholds and exclusion patterns
+- Files changed:
+  - `vitest.config.ts` (modified) - Set branches threshold to 65%, added exclusions for generated types and test files
+- Thresholds: lines 70%, functions 70%, branches 65%, statements 70%
+- Exclusions added: `src/integrations/supabase/types.ts`, `**/*.test.{ts,tsx}`, `**/*.spec.{ts,tsx}`
+---
+
+## Build Verification (Batch 3)
+- `npx vite build`: SUCCESS (no errors)
+- `npx tsc --noEmit`: SUCCESS (zero TypeScript errors)
+- `npx vitest run`: SUCCESS (382 tests passing, 2 skipped)
+- Test count increased from 176 to 382 (+206 new tests)
