@@ -17,9 +17,10 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), ambient-light-sensor=()
 
   # Cross-Origin policies
-  Cross-Origin-Embedder-Policy: credentialless
+  # NOTE: COEP (credentialless) and CORP (same-origin) removed — they can
+  # block cross-origin fonts, analytics scripts, and modulepreloaded chunks
+  # from loading, which causes blank pages in some browser configurations.
   Cross-Origin-Opener-Policy: same-origin-allow-popups
-  Cross-Origin-Resource-Policy: same-origin
 
   # DNS prefetch control
   X-DNS-Prefetch-Control: on

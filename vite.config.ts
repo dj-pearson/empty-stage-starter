@@ -68,82 +68,21 @@ export default defineConfig(({ mode }) => ({
         warn(warning);
       },
       output: {
-        // Manual chunking for better caching and smaller initial bundles
+        // Manual chunking — ONLY for always-loaded, ESM-only packages.
+        //
+        // IMPORTANT: Do NOT manually chunk libraries with CJS dependencies
+        // (recharts/d3, tiptap/highlight.js, swagger-ui/redux, three.js,
+        // react-markdown/rehype/remark, etc.). Manual chunking misplaces
+        // Rollup's CJS interop helpers (getDefaultExportFromCjs) into a
+        // vendor chunk, which forces the entry bundle to eagerly import
+        // ALL chunks that share that helper — pulling 900KB+ of JS that
+        // should be lazy-loaded, causing a blank white page.
+        //
+        // Vite's automatic code-splitting handles CJS interop correctly
+        // and still creates separate chunks at React.lazy() boundaries.
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
-            // React Router (separate chunk for route changes)
-            if (id.includes('react-router')) {
-              return 'vendor-router';
-            }
-            // Form libraries (only loaded on pages with forms)
-            if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform')) {
-              return 'vendor-forms';
-            }
-            // Supabase (database operations)
-            if (id.includes('@supabase')) {
-              return 'vendor-supabase';
-            }
-            // Drag and drop (only on planner page)
-            if (id.includes('@dnd-kit')) {
-              return 'vendor-dnd';
-            }
-            // Animation libraries (can be lazy loaded)
-            if (id.includes('framer-motion')) {
-              return 'vendor-animation';
-            }
-            // GSAP (lazy loaded on pages with scroll animations)
-            if (id.includes('gsap')) {
-              return 'vendor-gsap';
-            }
-            // Sentry (error tracking - keep together to avoid circular dependencies)
-            // DO NOT split sentry and sentry-replay - causes TDZ errors in production
-            if (id.includes('@sentry')) {
-              return 'vendor-sentry';
-            }
-            // TipTap editor and its CJS dependencies (only loaded on blog/CMS pages)
-            // highlight.js and react-syntax-highlighter are CommonJS — they must stay
-            // in the same chunk as lowlight/@tiptap to avoid cross-chunk CJS interop failures
-            if (id.includes('@tiptap') || id.includes('prosemirror') || id.includes('lowlight') || id.includes('highlight.js') || id.includes('react-syntax-highlighter')) {
-              return 'vendor-tiptap';
-            }
-            // 3D graphics (only on landing page via lazy-loaded ThreeDHeroScene)
-            // Split into core (three.js engine) and ecosystem (@react-three + helpers)
-            // to keep each chunk under 500KB
-            if (/[\\/]node_modules[\\/]three[\\/]/.test(id)) {
-              return 'vendor-three-core';
-            }
-            if (id.includes('@react-three') || id.includes('meshline') || id.includes('camera-controls') || id.includes('maath') || id.includes('troika') || id.includes('three-mesh-bvh') || id.includes('three-stdlib') || id.includes('stats-gl')) {
-              return 'vendor-three-eco';
-            }
-            // Swagger UI (only on /api/docs page)
-            // Split into core swagger package and its heavy dependencies
-            if (id.includes('swagger-ui') || id.includes('swagger-client')) {
-              return 'vendor-swagger';
-            }
-            // DOMPurify is shared (blog, admin, sanitize) - do NOT put in swagger chunk
-            // redux/immutable are only used by swagger-ui internally
-            if (id.includes('immutable') || id.includes('js-yaml') || id.includes('react-redux') || id.includes('/redux/')) {
-              return 'vendor-swagger-deps';
-            }
-            // Charts (only on analytics pages)
-            if (id.includes('recharts')) {
-              return 'vendor-charts';
-            }
-            // Markdown (only on blog)
-            if (id.includes('react-markdown') || id.includes('rehype') || id.includes('remark')) {
-              return 'vendor-markdown';
-            }
-            // TanStack Query (data fetching)
-            if (id.includes('@tanstack')) {
-              return 'vendor-query';
-            }
-            // Utilities (small, can bundle together)
-            if (id.includes('clsx') || id.includes('tailwind-merge') || id.includes('date-fns')) {
-              return 'vendor-utils';
-            }
-            // React core + Radix UI (must stay in same chunk)
-            // modulepreload causes parallel loading; keeping these together
-            // ensures React initializes before Radix UI components use it
+            // React core + Radix UI (always loaded, ESM-only)
             if (id.includes('@radix-ui') ||
                 /[\\/]node_modules[\\/]react[\\/]/.test(id) ||
                 /[\\/]node_modules[\\/]react-dom[\\/]/.test(id) ||
@@ -151,12 +90,26 @@ export default defineConfig(({ mode }) => ({
                 /[\\/]node_modules[\\/]scheduler[\\/]/.test(id)) {
               return 'vendor-react';
             }
-            // No catch-all — let Vite auto-chunk remaining node_modules.
-            // A catch-all (like the old 'vendor-misc') forces ALL uncategorized
-            // modules into one mega-chunk. When that chunk contains Rollup's CJS
-            // interop helpers and another chunk (e.g. vendor-tiptap) has CJS
-            // wrappers that call those helpers cross-chunk, the module variable
-            // becomes undefined → "Cannot set properties of undefined ('exports')".
+            // React Router (always loaded, ESM-only)
+            if (id.includes('react-router')) {
+              return 'vendor-router';
+            }
+            // Sentry — keep ALL @sentry modules together to avoid TDZ errors
+            if (id.includes('@sentry')) {
+              return 'vendor-sentry';
+            }
+            // Supabase client (loaded early, ESM-only)
+            if (id.includes('@supabase')) {
+              return 'vendor-supabase';
+            }
+            // TanStack Query (data fetching, ESM-only)
+            if (id.includes('@tanstack')) {
+              return 'vendor-query';
+            }
+            // Everything else: let Vite/Rollup auto-chunk.
+            // This includes recharts, tiptap, swagger-ui, three.js,
+            // react-markdown, framer-motion, gsap, dnd-kit, etc.
+            // Vite still code-splits at dynamic import() boundaries.
           }
         },
         // Consistent naming for better caching
