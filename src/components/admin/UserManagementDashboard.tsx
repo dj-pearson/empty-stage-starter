@@ -349,11 +349,11 @@ export function UserManagementDashboard() {
                           <Avatar className="h-8 w-8">
                             <AvatarImage src={`https://avatar.vercel.sh/${user.email}`} />
                             <AvatarFallback>
-                              {user.full_name.charAt(0).toUpperCase()}
+                              {(user.full_name || user.email).charAt(0).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <p className="font-medium">{user.full_name}</p>
+                            <p className="font-medium">{user.full_name || "No Name Set"}</p>
                             {user.role === "admin" && (
                               <Badge variant="secondary" className="text-xs mt-1">
                                 <Shield className="h-2 w-2 mr-1" />
@@ -461,11 +461,11 @@ export function UserManagementDashboard() {
                 <Avatar className="h-16 w-16">
                   <AvatarImage src={`https://avatar.vercel.sh/${selectedUser.email}`} />
                   <AvatarFallback className="text-2xl">
-                    {selectedUser.full_name.charAt(0).toUpperCase()}
+                    {(selectedUser.full_name || selectedUser.email).charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <h3 className="text-xl font-semibold">{selectedUser.full_name}</h3>
+                  <h3 className="text-xl font-semibold">{selectedUser.full_name || "No Name Set"}</h3>
                   <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
                 </div>
               </div>

@@ -539,9 +539,10 @@ export function RecipeDetailView({
                       )}
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground text-center py-8">
-                      No nutrition data available.
-                    </p>
+                    <div className="text-center py-8 space-y-2">
+                      <p className="text-sm text-muted-foreground font-medium">Nutrition data coming soon</p>
+                      <p className="text-xs text-muted-foreground">We're working on adding detailed nutrition information from recipe ingredients. Edit this recipe to help us get this data!</p>
+                    </div>
                   )}
                 </TabsContent>
               </Tabs>
