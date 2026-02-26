@@ -37,7 +37,9 @@
       "Bash(echo Exit code: $?:*)",
       "Bash(head:*)",
       "Bash(wc:*)",
-      "Bash(grep ›:*)"
+      "Bash(grep ›:*)",
+      "Bash(rm:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

@@ -121,14 +121,15 @@ export default defineConfig(({ mode }) => ({
               return 'vendor-swagger';
             }
             // DOMPurify is shared (blog, admin, sanitize) - do NOT put in swagger chunk
-            // redux/immutable are only used by swagger-ui internally
-            if (id.includes('immutable') || id.includes('js-yaml') || id.includes('react-redux') || id.includes('/redux/')) {
+            // swagger-only deps (immutable, js-yaml are not used by recharts)
+            if (id.includes('js-yaml') || id.includes('immutable') || id.includes('redux-immutable') || id.includes('react-immutable')) {
               return 'vendor-swagger-deps';
             }
-            // Charts (only on analytics pages)
-            if (id.includes('recharts')) {
-              return 'vendor-charts';
-            }
+            // Charts: recharts 3.x depends on react-redux/@reduxjs/toolkit
+            // which call React.forwardRef at module init time. Forcing recharts
+            // into a manual chunk creates circular deps with vendor-react.
+            // Let Vite auto-chunk the entire recharts + redux ecosystem.
+            // (Removed: manual 'vendor-charts' chunk)
             // Markdown (only on blog)
             if (id.includes('react-markdown') || id.includes('rehype') || id.includes('remark')) {
               return 'vendor-markdown';
@@ -141,11 +142,12 @@ export default defineConfig(({ mode }) => ({
             if (id.includes('clsx') || id.includes('tailwind-merge') || id.includes('date-fns')) {
               return 'vendor-utils';
             }
-            // React core + Radix UI (must stay in same chunk)
-            // modulepreload causes parallel loading; keeping these together
-            // ensures React initializes before Radix UI components use it
-            if (id.includes('@radix-ui') ||
-                /[\\/]node_modules[\\/]react[\\/]/.test(id) ||
+            // React core only — keep minimal to avoid circular chunk deps.
+            // @radix-ui, react-redux, and redux are left to Vite auto-chunking
+            // because forcing them here causes circular imports with vendor-charts
+            // (recharts 3.x depends on react-redux which uses React.forwardRef
+            // at module init time).
+            if (/[\\/]node_modules[\\/]react[\\/]/.test(id) ||
                 /[\\/]node_modules[\\/]react-dom[\\/]/.test(id) ||
                 /[\\/]node_modules[\\/]react-is[\\/]/.test(id) ||
                 /[\\/]node_modules[\\/]scheduler[\\/]/.test(id)) {
