@@ -745,8 +745,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 44,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Replaced all hardcoded hex colors (#1f2937, #6b7280, #111827, etc.) in mobile-first.css with CSS custom properties (hsl(var(--foreground)), hsl(var(--muted-foreground)), etc.) so they auto-adapt to light/dark mode. Replaced @media (prefers-color-scheme: dark) with .dark class to match app darkMode:[\"class\"] config. Muted-foreground light mode 215 25% 40% gives ~6.1:1 contrast (passes AA). Dark mode 215 20% 75% gives ~9:1 contrast. Focus ring uses --ring variable for theme-consistent indicators."
     },
     {
       "id": "US-045",

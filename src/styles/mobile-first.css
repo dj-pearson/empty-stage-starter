@@ -126,7 +126,7 @@ label {
   margin-bottom: 8px;
   font-weight: 500;
   font-size: 14px;
-  color: #374151; /* High contrast */
+  color: hsl(var(--foreground));
 }
 
 /* Form groups */
@@ -137,6 +137,7 @@ label {
 
 /* ==========================================================================
    Typography - Minimum 16px for body, high contrast
+   Uses CSS custom properties for light/dark mode compatibility
    ========================================================================== */
 
 /* Base font size */
@@ -147,14 +148,14 @@ html {
 body {
   font-size: 16px;
   line-height: 1.6;
-  color: #1f2937; /* Very high contrast on white */
+  color: hsl(var(--foreground));
 }
 
 /* Paragraphs */
 p {
   font-size: 16px;
   line-height: 1.6;
-  color: #1f2937;
+  color: hsl(var(--foreground));
   margin-bottom: 16px;
 }
 
@@ -164,10 +165,10 @@ small,
 .text-xs {
   font-size: 14px !important;
   line-height: 1.5;
-  color: #374151; /* Still high contrast */
+  color: hsl(var(--foreground));
 }
 
-/* Links - follow design system tokens, no default underline */
+/* Links - follow design system tokens */
 a {
   color: hsl(var(--foreground));
   text-decoration: none;
@@ -185,40 +186,42 @@ a:visited {
 
 /* ==========================================================================
    Text Contrast Fixes - WCAG AA Compliant (4.5:1)
+   Uses CSS custom properties so light/dark mode automatically adapts
    ========================================================================== */
 
 /* Navigation text */
 nav,
 .navigation {
-  color: #1f2937; /* 16.2:1 contrast on white */
+  color: hsl(var(--foreground));
 }
 
 nav a,
 .nav-link {
-  color: #1f2937;
+  color: hsl(var(--foreground));
 }
 
 nav a:hover,
 .nav-link:hover {
-  color: #111827; /* Even darker on hover */
+  color: hsl(var(--foreground));
+  opacity: 0.85;
 }
 
-/* Muted text - ensure it's still readable */
+/* Muted text - uses theme token for proper light/dark contrast */
 .text-muted,
 .text-secondary,
 .text-gray-500 {
-  color: #6b7280 !important; /* 4.54:1 - Passes WCAG AA */
+  color: hsl(var(--muted-foreground)) !important;
 }
 
 /* Very subtle text (still need to meet standards) */
 .text-subtle,
 .text-gray-400 {
-  color: #6b7280 !important; /* Same as muted for consistency */
+  color: hsl(var(--muted-foreground)) !important;
 }
 
 /* Headings */
 h1, h2, h3, h4, h5, h6 {
-  color: #111827; /* Darkest for maximum contrast */
+  color: hsl(var(--foreground));
   line-height: 1.3;
   font-weight: 700;
 }
@@ -416,59 +419,23 @@ img {
 
 /* ==========================================================================
    Dark Mode Support (maintains contrast)
+   Uses CSS custom properties - no hardcoded colors needed.
+   The .dark class is toggled by the app (darkMode: ["class"]).
+   All text/bg colors above use hsl(var(--foreground)) etc., which
+   automatically resolve to the correct values in .dark mode.
    ========================================================================== */
 
-@media (prefers-color-scheme: dark) {
-  body {
-    background-color: #111827;
-    color: #f9fafb; /* 18.1:1 contrast on dark */
-  }
+/* Form elements in dark mode need explicit background overrides */
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: hsl(var(--card));
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+}
 
-  nav,
-  .navigation {
-    color: #f9fafb;
-  }
-
-  nav a,
-  .nav-link {
-    color: #f9fafb;
-  }
-
-  .text-muted,
-  .text-secondary {
-    color: #9ca3af !important; /* 3.08:1 - acceptable for large text in dark mode */
-  }
-
-  h1, h2, h3, h4, h5, h6 {
-    color: #f9fafb;
-  }
-
-  p {
-    color: #f9fafb;
-  }
-
-  a {
-    color: hsl(var(--foreground));
-    text-decoration: none;
-  }
-
-  a:visited {
-    color: hsl(var(--foreground));
-    text-decoration: none;
-  }
-
-  /* Form elements */
-  input,
-  select,
-  textarea {
-    background-color: #1f2937;
-    border-color: #374151;
-    color: #f9fafb;
-  }
-
-  label {
-    color: #e5e7eb;
-  }
+.dark label {
+  color: hsl(var(--foreground));
 }
 
 /* ==========================================================================
@@ -490,11 +457,11 @@ img {
 .text-readable {
   font-size: 16px;
   line-height: 1.6;
-  color: #1f2937;
+  color: hsl(var(--foreground));
 }
 
 .text-readable-dark {
-  color: #111827;
+  color: hsl(var(--foreground));
 }
 
 /* Mobile spacing utilities */
