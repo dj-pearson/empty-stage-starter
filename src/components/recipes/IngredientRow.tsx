@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -46,7 +47,7 @@ const UNITS = [
   "to taste",
 ];
 
-export function IngredientRow({
+export const IngredientRow = memo(function IngredientRow({
   ingredient,
   onUpdate,
   onRemove,
@@ -125,4 +126,4 @@ export function IngredientRow({
       </Button>
     </div>
   );
-}
+});

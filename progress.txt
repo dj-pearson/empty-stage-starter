@@ -411,3 +411,21 @@
   - The `useRealtimeSubscription` hook already had a global `activeSubscriptions` registry — just needed `register`/`unregister` exports for external callers
   - AppContext.test.tsx needed `logger.withContext` mock (returns sub-logger) because `useRealtimeSubscription.ts` calls it at module init time
 ---
+
+## 2026-02-26 - US-054: Add React.memo Optimization to Frequently Re-Rendered Components
+- What was implemented: Applied React.memo to 3 list item components, wrapped 3 Planner.tsx handlers in useCallback
+- Files changed:
+  - `src/components/recipes/RecipeListItem.tsx` - Wrapped in `memo()`
+  - `src/components/recipes/IngredientRow.tsx` - Wrapped in `memo()`
+  - `src/components/EnhancedRecipeCard.tsx` - Wrapped in `memo()`
+  - `src/pages/Planner.tsx` - Wrapped `handleUpdateEntry`, `handleAddEntry`, `handleMarkResult` in `useCallback`
+- Already optimized (no changes needed):
+  - FoodCard, PantryListItem, FamilyMealCard, MealSuggestionCard, MealVotingCard already use memo
+  - Grocery.tsx already has comprehensive useMemo + useCallback
+  - Pantry.tsx already has useMemo for filtered lists + useCallback for handlers
+  - Recipes.tsx already has useCallback for all handlers, filteredRecipes from useRecipeFilters hook
+- **Learnings for future iterations:**
+  - `memo()` wrapper: `export const Comp = memo(function Comp({...}) { ... });` — close with `});`
+  - Grocery.tsx is the reference implementation for useMemo/useCallback patterns in this codebase
+  - `useRecipeFilters` hook already returns memoized filteredRecipes — no need for additional useMemo in Recipes.tsx
+---

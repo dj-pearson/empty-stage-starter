@@ -186,12 +186,12 @@ export default function Planner() {
     }
   };
 
-  const handleUpdateEntry = (entryId: string, updates: Partial<PlanEntry>) => {
+  const handleUpdateEntry = useCallback((entryId: string, updates: Partial<PlanEntry>) => {
     updatePlanEntry(entryId, updates);
-  };
+  }, [updatePlanEntry]);
 
   // Desktop handler (original signature)
-  const handleAddEntry = (date: string, slot: MealSlot, foodId: string) => {
+  const handleAddEntry = useCallback((date: string, slot: MealSlot, foodId: string) => {
     if (!activeKid) return;
     addPlanEntry({
       kid_id: activeKid.id,
@@ -200,7 +200,7 @@ export default function Planner() {
       food_id: foodId,
       result: null,
     });
-  };
+  }, [activeKid, addPlanEntry]);
 
   // Mobile handler (accepts kidId directly)
   const handleMobileAddEntry = useCallback(
@@ -374,7 +374,7 @@ export default function Planner() {
     }
   };
 
-  const handleMarkResult = async (
+  const handleMarkResult = useCallback(async (
     entry: PlanEntry,
     result: "ate" | "tasted" | "refused",
     attemptId?: string
@@ -417,7 +417,7 @@ export default function Planner() {
     if (!attemptId) {
       toast.success(`Marked as ${result}`);
     }
-  };
+  }, [foods, updatePlanEntry, updateFood]);
 
   const handleCopyToChild = async (
     entry: PlanEntry,

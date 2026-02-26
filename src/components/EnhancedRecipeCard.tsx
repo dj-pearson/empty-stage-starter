@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +40,7 @@ interface EnhancedRecipeCardProps {
   className?: string;
 }
 
-export function EnhancedRecipeCard({
+export const EnhancedRecipeCard = memo(function EnhancedRecipeCard({
   recipe,
   foods,
   kids = [],
@@ -308,4 +308,4 @@ export function EnhancedRecipeCard({
       </Card>
     </>
   );
-}
+});
