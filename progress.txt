@@ -384,3 +384,16 @@
 - Stories completed this batch: US-034, US-043, US-044, US-045, US-046
 - Total stories complete: 54 of 110 (passes: true)
 - Remaining: 56 stories with passes: false
+
+---
+
+## 2026-02-26 - US-052: Add Real-Time Admin Activity Feed
+- What was implemented: LiveActivityFeed component already fully implemented; enhanced test suite from 2 to 9 tests
+- Files changed:
+  - `src/components/admin/LiveActivityFeed.test.tsx` (rewritten) - 9 tests covering: heading/Live badge, activity items, anonymized users, timestamps, severity badges, stats footer, filter/search, real-time subscription, table fetch
+- Component already had: real-time Supabase subscription on admin_live_activity, anonymized user IDs, action type filter dropdown, 100-event limit with auto-scroll, severity-based styling, CSV export, polling fallback
+- **Learnings for future iterations:**
+  - vi.mock factory is hoisted — cannot reference top-level `const` variables from the test file; inline data directly in the mock factory
+  - LiveActivityFeed imports from `@/hooks/use-toast` (not `sonner`) — mock the correct module
+  - The component gracefully handles missing table (42P01 error) — shows warning card instead of crashing
+---
