@@ -9,6 +9,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "
 
 // Map of available functions
 const FUNCTIONS_MAP: { [key: string]: string } = {
+  "ai-coach-chat": "./functions/ai-coach-chat/index.ts",
   "ai-meal-plan": "./functions/ai-meal-plan/index.ts",
   "analyze-blog-posts-seo": "./functions/analyze-blog-posts-seo/index.ts",
   "analyze-blog-quality": "./functions/analyze-blog-quality/index.ts",
