@@ -183,7 +183,7 @@ export default function Authors() {
         ]}
       />
 
-      <div className="container mx-auto px-4 py-12 max-w-6xl">
+      <div id="main-content" className="container mx-auto px-4 py-12 max-w-6xl">
         {/* Page Header */}
         <header className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-bold mb-4">
@@ -199,7 +199,7 @@ export default function Authors() {
 
         {/* Loading State */}
         {isLoading && (
-          <div className="grid md:grid-cols-2 gap-8 mb-12">
+          <div className="grid md:grid-cols-2 gap-8 mb-12" role="status" aria-live="polite" aria-busy="true">
             {[1, 2, 3].map((i) => (
               <Card key={i}>
                 <CardHeader>

@@ -327,7 +327,7 @@ const BlogPost = () => {
   }, [post.category]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div id="main-content" className="min-h-screen bg-background">
       {/* Dynamic SEO Meta Tags */}
       <SEOHead
         title={post.meta_title || post.title}
