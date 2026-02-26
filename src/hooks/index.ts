@@ -104,6 +104,9 @@ export { useLoginHistory, useAdminLoginHistory } from './useLoginHistory';
 export { useRecipeFilters } from './useRecipeFilters';
 export type { RecipeSortOption, RecipeViewMode, RecipeQuickFilter } from './useRecipeFilters';
 
+// Real-time Subscriptions
+export { useRealtimeSubscription, getActiveSubscriptions } from './useRealtimeSubscription';
+
 // Re-export types
 export type { WindowSize } from './useWindowSize';
 export type { UseIntersectionObserverOptions } from './useIntersectionObserver';

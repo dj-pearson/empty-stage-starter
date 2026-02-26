@@ -38,6 +38,7 @@ export function NotificationBell() {
     fetchNotifications();
 
     // Subscribe to real-time updates
+    logger.debug('Subscribing to notifications channel');
     const channel = supabase
       .channel("notifications")
       .on(
@@ -54,6 +55,7 @@ export function NotificationBell() {
       .subscribe();
 
     return () => {
+      logger.debug('Unsubscribing from notifications channel');
       supabase.removeChannel(channel);
     };
   }, []);

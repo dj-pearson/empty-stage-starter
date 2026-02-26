@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, memo } from "react";
 import { format, addDays, addWeeks, subWeeks } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -63,7 +63,7 @@ interface MobileMealPlannerProps {
   onSaveTemplate?: () => void;
 }
 
-export function MobileMealPlanner({
+export const MobileMealPlanner = memo(function MobileMealPlanner({
   weekStart,
   planEntries,
   foods,
@@ -489,4 +489,4 @@ export function MobileMealPlanner({
       />
     </div>
   );
-}
+});

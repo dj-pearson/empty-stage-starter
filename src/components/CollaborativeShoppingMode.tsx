@@ -74,25 +74,30 @@ export function CollaborativeShoppingMode({
   }, [groceryListId, householdId]);
 
   // Set up real-time subscriptions
+  // Use activeSession.id (not the full object) as dependency to prevent
+  // infinite resubscription when the callback updates activeSession state.
+  const activeSessionId = activeSession?.id ?? null;
+
   useEffect(() => {
-    if (!activeSession || !householdId) return;
+    if (!activeSessionId || !householdId) return;
 
     // Subscribe to shopping session updates
+    logger.debug('Subscribing to shopping_session', { activeSessionId });
     const channel = supabase
-      .channel(`shopping_session_${activeSession.id}`)
+      .channel(`shopping_session_${activeSessionId}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'shopping_sessions',
-          filter: `id=eq.${activeSession.id}`
+          filter: `id=eq.${activeSessionId}`
         },
         (payload) => {
           if (payload.eventType === 'UPDATE') {
             const updatedSession = payload.new as ShoppingSession;
             setActiveSession(updatedSession);
-            
+
             if (!updatedSession.is_active) {
               toast.info("Shopping session ended");
               setActiveSession(null);
@@ -103,9 +108,10 @@ export function CollaborativeShoppingMode({
       .subscribe();
 
     return () => {
+      logger.debug('Unsubscribing from shopping_session', { activeSessionId });
       supabase.removeChannel(channel);
     };
-  }, [activeSession, householdId]);
+  }, [activeSessionId, householdId]);
 
   // loadActiveSession moved into useEffect to avoid dependency warnings
 

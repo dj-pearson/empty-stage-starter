@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, memo, useMemo } from "react";
 import { format, addDays, isToday, isSameDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { PlanEntry, Kid } from "@/types";
@@ -11,7 +11,7 @@ interface WeekStripProps {
   kids: Kid[];
 }
 
-export function WeekStrip({
+export const WeekStrip = memo(function WeekStrip({
   weekStart,
   selectedDayIndex,
   onSelectDay,
@@ -20,7 +20,7 @@ export function WeekStrip({
 }: WeekStripProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const days = Array.from({ length: 7 }, (_, i) => {
+  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => {
     const date = addDays(weekStart, i);
     const dateStr = format(date, "yyyy-MM-dd");
     const entriesForDay = planEntries.filter((e) => e.date === dateStr);
@@ -38,7 +38,7 @@ export function WeekStrip({
       hasEntries,
       filledSlots,
     };
-  });
+  }), [weekStart, selectedDayIndex, planEntries]);
 
   // Scroll selected day into view
   useEffect(() => {
@@ -109,4 +109,4 @@ export function WeekStrip({
       ))}
     </div>
   );
-}
+});

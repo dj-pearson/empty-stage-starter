@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -156,18 +156,30 @@ export default function Grocery() {
   const activeKid = kids.find(k => k.id === activeKidId);
 
   // Filter grocery items by selected list
-  const filteredGroceryItems = selectedListId
-    ? groceryItems.filter(item => item.grocery_list_id === selectedListId)
-    : groceryItems;
+  const filteredGroceryItems = useMemo(
+    () => selectedListId
+      ? groceryItems.filter(item => item.grocery_list_id === selectedListId)
+      : groceryItems,
+    [groceryItems, selectedListId]
+  );
 
   // Split into active (unchecked) and purchased (checked) items
-  const activeItems = filteredGroceryItems.filter(i => !i.checked);
-  const purchasedItems = filteredGroceryItems.filter(i => i.checked);
+  const activeItems = useMemo(
+    () => filteredGroceryItems.filter(i => !i.checked),
+    [filteredGroceryItems]
+  );
+  const purchasedItems = useMemo(
+    () => filteredGroceryItems.filter(i => i.checked),
+    [filteredGroceryItems]
+  );
 
   // Progress calculation
   const totalItems = filteredGroceryItems.length;
   const purchasedCount = purchasedItems.length;
-  const progressPercent = totalItems > 0 ? Math.round((purchasedCount / totalItems) * 100) : 0;
+  const progressPercent = useMemo(
+    () => totalItems > 0 ? Math.round((purchasedCount / totalItems) * 100) : 0,
+    [totalItems, purchasedCount]
+  );
 
   // Manual regeneration function
   const handleRegenerateFromPlan = () => {
@@ -193,7 +205,7 @@ export default function Grocery() {
     });
   };
 
-  const handleToggleItem = async (itemId: string) => {
+  const handleToggleItem = useCallback(async (itemId: string) => {
     const item = groceryItems.find(i => i.id === itemId);
     if (!item) return;
 
@@ -280,9 +292,9 @@ export default function Grocery() {
         toast.info(`${item.name} moved back to shopping list`);
       }
     }
-  };
+  }, [groceryItems, toggleGroceryItem, selectedStoreLayoutId, userId, foods, updateFood, addFood]);
 
-  const handleDeleteItem = (itemId: string) => {
+  const handleDeleteItem = useCallback((itemId: string) => {
     const item = groceryItems.find(i => i.id === itemId);
     deleteGroceryItem(itemId);
     if (item) {
@@ -305,23 +317,23 @@ export default function Grocery() {
         }
       });
     }
-  };
+  }, [groceryItems, deleteGroceryItem, addGroceryItem]);
 
-  const handleQuantityChange = (itemId: string, delta: number) => {
+  const handleQuantityChange = useCallback((itemId: string, delta: number) => {
     const item = groceryItems.find(i => i.id === itemId);
     if (!item) return;
     const newQty = Math.max(1, item.quantity + delta);
     updateGroceryItem(itemId, { quantity: newQty });
-  };
+  }, [groceryItems, updateGroceryItem]);
 
-  const handleDoneShopping = () => {
+  const handleDoneShopping = useCallback(() => {
     const count = purchasedItems.length;
     clearCheckedGroceryItems();
     setPurchasedOpen(false);
     toast.success(`Shopping trip complete!`, {
       description: `${count} item${count === 1 ? '' : 's'} cleared from list and saved to pantry`
     });
-  };
+  }, [purchasedItems.length, clearCheckedGroceryItems]);
 
   const handleSmartRestock = async () => {
     setIsGeneratingRestock(true);
@@ -447,29 +459,33 @@ export default function Grocery() {
   };
 
   // Group active items by category or aisle
-  const activeItemsByGroup: Record<string, GroceryItem[]> = {};
+  const activeItemsByGroup = useMemo(() => {
+    const groups: Record<string, GroceryItem[]> = {};
 
-  if (groupBy === "category") {
-    const categoryGroups: Record<FoodCategory, GroceryItem[]> = {
-      protein: [], carb: [], dairy: [], fruit: [], vegetable: [], snack: [],
-    };
-    activeItems.forEach(item => {
-      categoryGroups[item.category].push(item);
-    });
-    Object.entries(categoryGroups).forEach(([category, items]) => {
-      if (items.length > 0) {
-        activeItemsByGroup[categoryLabels[category as FoodCategory]] = items;
-      }
-    });
-  } else {
-    activeItems.forEach(item => {
-      const aisle = item.aisle || "Uncategorized";
-      if (!activeItemsByGroup[aisle]) {
-        activeItemsByGroup[aisle] = [];
-      }
-      activeItemsByGroup[aisle].push(item);
-    });
-  }
+    if (groupBy === "category") {
+      const categoryGroups: Record<FoodCategory, GroceryItem[]> = {
+        protein: [], carb: [], dairy: [], fruit: [], vegetable: [], snack: [],
+      };
+      activeItems.forEach(item => {
+        categoryGroups[item.category].push(item);
+      });
+      Object.entries(categoryGroups).forEach(([category, items]) => {
+        if (items.length > 0) {
+          groups[categoryLabels[category as FoodCategory]] = items;
+        }
+      });
+    } else {
+      activeItems.forEach(item => {
+        const aisle = item.aisle || "Uncategorized";
+        if (!groups[aisle]) {
+          groups[aisle] = [];
+        }
+        groups[aisle].push(item);
+      });
+    }
+
+    return groups;
+  }, [activeItems, groupBy]);
 
   const isEmpty = activeItems.length === 0 && purchasedItems.length === 0;
 

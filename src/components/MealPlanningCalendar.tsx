@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo, useMemo, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,7 @@ const MEAL_TYPES = [
   { value: "snack", label: "Snack", color: "bg-green-100 text-green-800 border-green-300" },
 ];
 
-export function MealPlanningCalendar({
+export const MealPlanningCalendar = memo(function MealPlanningCalendar({
   planEntries,
   recipes,
   kids,
@@ -44,37 +44,39 @@ export function MealPlanningCalendar({
     return startOfWeek(new Date(), { weekStartsOn: 0 }); // Sunday
   });
 
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
+  const weekDays = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i)),
+    [currentWeekStart]
+  );
 
-  const goToPreviousWeek = () => {
-    setCurrentWeekStart(addDays(currentWeekStart, -7));
-  };
+  const goToPreviousWeek = useCallback(() => {
+    setCurrentWeekStart(prev => addDays(prev, -7));
+  }, []);
 
-  const goToNextWeek = () => {
-    setCurrentWeekStart(addDays(currentWeekStart, 7));
-  };
+  const goToNextWeek = useCallback(() => {
+    setCurrentWeekStart(prev => addDays(prev, 7));
+  }, []);
 
-  const goToToday = () => {
+  const goToToday = useCallback(() => {
     setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 0 }));
-  };
+  }, []);
 
-  const getEntriesForDay = (date: Date) => {
-    const dateStr = format(date, "yyyy-MM-dd");
+  const getEntriesForDay = useCallback((date: Date) => {
     return planEntries.filter(entry => {
       const entryDate = parseISO(entry.date);
       const matchesDate = isSameDay(entryDate, date);
       const matchesKid = activeKidId === null || entry.kid_id === activeKidId;
       return matchesDate && matchesKid;
     });
-  };
+  }, [planEntries, activeKidId]);
 
-  const getRecipe = (recipeId: string) => {
+  const getRecipe = useCallback((recipeId: string) => {
     return recipes.find(r => r.id === recipeId);
-  };
+  }, [recipes]);
 
-  const getMealTypeConfig = (mealType: string) => {
+  const getMealTypeConfig = useCallback((mealType: string) => {
     return MEAL_TYPES.find(m => m.value === mealType) || MEAL_TYPES[0];
-  };
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -225,5 +227,5 @@ export function MealPlanningCalendar({
       </Card>
     </div>
   );
-}
+});
 

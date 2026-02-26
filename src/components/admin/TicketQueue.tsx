@@ -1,6 +1,7 @@
 // @ts-nocheck - Admin tables not yet in generated types
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -91,6 +92,7 @@ export function TicketQueue() {
     fetchTickets();
 
     // Subscribe to new tickets
+    logger.debug('Subscribing to ticket_changes');
     const channel = supabase
       .channel("ticket_changes")
       .on(
@@ -107,6 +109,7 @@ export function TicketQueue() {
       .subscribe();
 
     return () => {
+      logger.debug('Unsubscribing from ticket_changes');
       supabase.removeChannel(channel);
     };
   }, []);
