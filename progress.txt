@@ -318,3 +318,69 @@
 - `npx tsc --noEmit`: SUCCESS (zero TypeScript errors)
 - `npx vitest run`: SUCCESS (382 tests passing, 2 skipped)
 - Test count increased from 176 to 382 (+206 new tests)
+
+---
+
+## 2026-02-26 - US-034: Optimize Bundle Splitting for Vendor Chunks
+- What was implemented: Split Three.js and Swagger UI into separate vendor chunks
+- Files changed:
+  - `vite.config.ts` (modified) - Added vendor-three-core, vendor-three-eco, vendor-swagger, vendor-swagger-deps manual chunks
+- Key decisions:
+  - Three.js core (653KB) and swagger-ui (1023KB) are inherently monolithic and cannot be split further
+  - Both are lazy-loaded, so they don't affect initial page load
+  - Kept DOMPurify out of swagger-deps since it's shared across blog/admin components
+- All other 15 vendor chunks under 500KB
+
+---
+
+## 2026-02-26 - US-043: Mobile Touch Target Accessibility Fixes
+- What was implemented: Ensured all interactive elements meet 44x44px minimum touch targets
+- Files changed:
+  - `src/components/ui/button.tsx` - Button sm variant h-10 → h-11 (44px)
+  - `src/components/ui/toggle.tsx` - Toggle default/sm h-10/h-9 → h-11 (44px)
+  - `src/components/GestureTutorial.tsx` - Close button min-h-11 + aria-label, progress dots wrapped in h-11 container
+  - `src/components/NotificationBell.tsx` - Dismiss button h-6 → h-11 (44px) + aria-label
+- Global mobile-first.css already enforces min-height:44px on all button elements
+
+---
+
+## 2026-02-26 - US-044: Fix Color Contrast Ratios for WCAG 2.1 AA
+- What was implemented: Replaced hardcoded hex colors with CSS custom properties for dark mode compat
+- Files changed:
+  - `src/styles/mobile-first.css` - Replaced #1f2937/#6b7280/#111827 with hsl(var(--foreground))/hsl(var(--muted-foreground)); replaced @media (prefers-color-scheme: dark) with .dark class selector
+- Key learning: App uses darkMode: ["class"], not media queries. Hardcoded hex colors broke class-based dark mode.
+- Muted-foreground contrast: light mode ~6.1:1 (passes AA), dark mode ~9:1 (exceeds AA)
+
+---
+
+## 2026-02-26 - US-045: Add Keyboard Navigation Support
+- What was implemented: Added id="main-content" to 11 more pages for skip-to-content link
+- Files changed:
+  - BlogPost, Authors, BudgetCalculatorResults, MealPlanGeneratorResults, PickyEaterQuizResults, ResetPassword, ApiDocs, FoodChaining, SEODashboard, SearchTrafficDashboard, CheckoutSuccess
+- Total 28 pages now have skip link targets (up from 17)
+- Existing infrastructure: SkipToContent in App.tsx, useFocusTrap hook, RouteAnnouncer, Radix UI keyboard support
+
+---
+
+## 2026-02-26 - US-046: Add ARIA Live Regions for Dynamic Content
+- What was implemented: Added aria-busy/role="status" to Blog and Authors loading states
+- Files changed:
+  - `src/pages/Blog.tsx` - aria-busy={isLoading} on main, role="status" on loading div
+  - `src/pages/Authors.tsx` - role="status" + aria-busy on loading skeleton
+- Existing infrastructure already covers all criteria:
+  - Sonner: aria-live="polite" on section wrapper
+  - Radix Toast: aria-live="assertive"/"polite" based on type
+  - AccessibleFormField: aria-live="assertive" for errors
+  - AccessibleLoading: aria-busy="true" for loading states
+  - RouteAnnouncer: aria-live="polite" for navigation
+  - useAnnounce hook: dynamic screen reader announcements
+
+---
+
+## Build Verification (Batch 4)
+- `npx vite build`: SUCCESS
+- `npx tsc --noEmit`: SUCCESS (zero TypeScript errors)
+- `npx vitest run`: SUCCESS (382 tests passing, 2 skipped)
+- Stories completed this batch: US-034, US-043, US-044, US-045, US-046
+- Total stories complete: 54 of 110 (passes: true)
+- Remaining: 56 stories with passes: false
