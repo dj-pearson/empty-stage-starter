@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/tooltip";
 import { TrendingUp, TrendingDown, Minus, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { logger } from "@/lib/logger";
 import { Kid } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +60,7 @@ export function VoteResultsDisplay({
     loadVotes();
 
     // Subscribe to real-time updates
+    logger.debug('Subscribing to vote-updates', { planEntryId });
     const channel = supabase
       .channel('vote-updates')
       .on(
@@ -76,6 +78,7 @@ export function VoteResultsDisplay({
       .subscribe();
 
     return () => {
+      logger.debug('Unsubscribing from vote-updates');
       supabase.removeChannel(channel);
     };
   }, [planEntryId, recipeId, mealDate, mealSlot]);

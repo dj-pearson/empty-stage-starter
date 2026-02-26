@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -111,6 +112,7 @@ export function useSubscription() {
     fetchSubscription();
 
     // Subscribe to real-time updates
+    logger.debug('Subscribing to subscription-updates');
     const channel = supabase
       .channel("subscription-updates")
       .on(
@@ -127,6 +129,7 @@ export function useSubscription() {
       .subscribe();
 
     return () => {
+      logger.debug('Unsubscribing from subscription-updates');
       supabase.removeChannel(channel);
     };
   }, []);

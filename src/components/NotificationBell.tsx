@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { NotificationPreferencesDialog } from "@/components/NotificationPreferencesDialog";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 import { formatDistanceToNow } from "date-fns";
 
 interface Notification {
@@ -34,6 +35,7 @@ export function NotificationBell() {
     loadNotifications();
 
     // Set up real-time subscription
+    logger.debug('Subscribing to notification-updates');
     const channel = supabase
       .channel('notification-updates')
       .on(
@@ -51,6 +53,7 @@ export function NotificationBell() {
       .subscribe();
 
     return () => {
+      logger.debug('Unsubscribing from notification-updates');
       supabase.removeChannel(channel);
     };
   }, []);

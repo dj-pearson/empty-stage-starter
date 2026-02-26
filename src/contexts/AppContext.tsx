@@ -367,9 +367,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId || !householdId) return;
 
+    logger.debug('Subscribing to grocery_items_changes', { householdId });
+
     // Performance: Debounce real-time updates to prevent render thrashing
     const debouncedUpdate = debounce((payload: RealtimePayload<GroceryItem>) => {
-      logger.debug('Grocery item changed:', payload);
+      logger.debug('Grocery item changed:', { eventType: payload.eventType });
 
       if (payload.eventType === 'INSERT') {
         setGroceryItemsState(prev => {
@@ -406,6 +408,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .subscribe();
 
     return () => {
+      logger.debug('Unsubscribing from grocery_items_changes');
       supabase.removeChannel(channel);
     };
   }, [userId, householdId]);
@@ -414,9 +417,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId || !householdId) return;
 
+    logger.debug('Subscribing to plan_entries_changes', { householdId });
+
     // Performance: Debounce real-time updates to prevent render thrashing
     const debouncedUpdate = debounce((payload: RealtimePayload<PlanEntry>) => {
-      logger.debug('Plan entry changed:', payload);
+      logger.debug('Plan entry changed:', { eventType: payload.eventType });
 
       if (payload.eventType === 'INSERT') {
         setPlanEntriesState(prev => {
@@ -453,6 +458,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .subscribe();
 
     return () => {
+      logger.debug('Unsubscribing from plan_entries_changes');
       supabase.removeChannel(channel);
     };
   }, [userId, householdId]);
@@ -461,9 +467,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId || !householdId) return;
 
+    logger.debug('Subscribing to kids_changes', { householdId });
+
     // Performance: Debounce real-time updates to prevent render thrashing
     const debouncedUpdate = debounce((payload: RealtimePayload<Kid>) => {
-      logger.debug('Kid profile changed:', payload);
+      logger.debug('Kid profile changed:', { eventType: payload.eventType });
 
       if (payload.eventType === 'INSERT') {
         setKids(prev => {
@@ -500,6 +508,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .subscribe();
 
     return () => {
+      logger.debug('Unsubscribing from kids_changes');
       supabase.removeChannel(channel);
     };
   }, [userId, householdId]);

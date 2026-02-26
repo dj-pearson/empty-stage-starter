@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -207,6 +208,7 @@ export function AlertManager() {
     fetchAlertRules();
 
     // Subscribe to new alerts via real-time
+    logger.debug('Subscribing to admin_alerts_changes');
     const channel = supabase
       .channel("admin_alerts_changes")
       .on(
@@ -233,6 +235,7 @@ export function AlertManager() {
       .subscribe();
 
     return () => {
+      logger.debug('Unsubscribing from admin_alerts_changes');
       supabase.removeChannel(channel);
     };
   }, [fetchAlerts, fetchAlertRules]);

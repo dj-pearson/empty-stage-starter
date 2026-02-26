@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 
 export interface UsageStats {
   plan: {
@@ -76,6 +77,7 @@ export function useUsageStats() {
     fetchStats();
 
     // Subscribe to real-time updates
+    logger.debug('Subscribing to usage-updates');
     const channel = supabase
       .channel("usage-updates")
       .on(
@@ -103,6 +105,7 @@ export function useUsageStats() {
       .subscribe();
 
     return () => {
+      logger.debug('Unsubscribing from usage-updates');
       supabase.removeChannel(channel);
     };
   }, []);

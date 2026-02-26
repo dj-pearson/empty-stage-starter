@@ -1,6 +1,7 @@
 // @ts-nocheck - Database tables require migrations to be approved
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 
 interface BrandSettings {
   primary_color: string;
@@ -59,7 +60,8 @@ export function useWhiteLabelTheme() {
     applyCustomTheme();
 
     // Subscribe to changes in brand settings
-    const subscription = supabase
+    logger.debug('Subscribing to brand_settings_changes');
+    const channel = supabase
       .channel('brand_settings_changes')
       .on(
         'postgres_changes',
@@ -80,7 +82,8 @@ export function useWhiteLabelTheme() {
       .subscribe();
 
     return () => {
-      subscription.unsubscribe();
+      logger.debug('Unsubscribing from brand_settings_changes');
+      supabase.removeChannel(channel);
     };
   }, []);
 }

@@ -30,9 +30,20 @@
       "Bash(npm uninstall:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(cd:*)",
+      "Bash(tail:*)",
+      "Bash(echo EXIT_CODE=$?:*)",
+      "Bash(echo Exit code: $?:*)",
+      "Bash(head:*)",
+      "Bash(wc:*)",
+      "Bash(grep ›:*)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "claude-flow"
+  ]
 }
