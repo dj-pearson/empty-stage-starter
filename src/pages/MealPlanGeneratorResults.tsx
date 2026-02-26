@@ -86,7 +86,7 @@ export default function MealPlanGeneratorResults() {
         />
       </Helmet>
 
-      <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white py-12 px-4 sm:px-6 lg:px-8">
+      <div id="main-content" className="min-h-screen bg-gradient-to-b from-purple-50 to-white py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           {/* Back Button */}
           <Link to="/meal-plan">

@@ -37,5 +37,5 @@ export default function SEODashboard() {
     );
   }
 
-  return <SEOManager />;
+  return <div id="main-content"><SEOManager /></div>;
 }

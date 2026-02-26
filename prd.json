@@ -762,8 +762,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 45,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Skip-to-main-content: SkipToContent component already in App.tsx. Added id=\"main-content\" to 11 more pages (BlogPost, Authors, BudgetCalculatorResults, MealPlanGeneratorResults, PickyEaterQuizResults, ResetPassword, ApiDocs, FoodChaining, SEODashboard, SearchTrafficDashboard, CheckoutSuccess). Total 28 pages now have skip link targets. Focus indicators: global :focus-visible ring in index.css, enhanced-focus class available. Keyboard nav: Radix UI Dialog/DropdownMenu/Popover have built-in Escape/Arrow/Enter/Tab support. useFocusTrap hook available for custom modals. RouteAnnouncer announces page changes."
     },
     {
       "id": "US-046",
