@@ -43,7 +43,19 @@ vi.mock('@/lib/logger', () => ({
     warn: vi.fn(),
     error: vi.fn(),
     fatal: vi.fn(),
+    withContext: vi.fn().mockReturnValue({
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    }),
   },
+}));
+
+// Mock subscription tracking
+vi.mock('@/hooks/useRealtimeSubscription', () => ({
+  registerSubscription: vi.fn(),
+  unregisterSubscription: vi.fn(),
 }));
 
 function wrapper({ children }: { children: React.ReactNode }) {

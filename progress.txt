@@ -397,3 +397,17 @@
   - LiveActivityFeed imports from `@/hooks/use-toast` (not `sonner`) — mock the correct module
   - The component gracefully handles missing table (42P01 error) — shows warning card instead of crashing
 ---
+
+## 2026-02-26 - US-053: Optimize Supabase Real-Time Subscription Cleanup
+- What was implemented: Centralized subscription tracking for all 12 real-time subscriptions; added registerSubscription/unregisterSubscription helpers
+- Files changed:
+  - `src/hooks/useRealtimeSubscription.ts` (modified) - Added `registerSubscription()` and `unregisterSubscription()` exports for external callers
+  - `src/hooks/index.ts` (modified) - Added new exports to barrel
+  - `src/contexts/AppContext.tsx` (modified) - Integrated tracking for 3 subscriptions (grocery_items, plan_entries, kids)
+  - `src/contexts/AppContext.test.tsx` (modified) - Added mock for `@/hooks/useRealtimeSubscription` + logger.withContext
+- Audit results: All 12 subscription files already had proper cleanup (removeChannel), duplicate protection (dependency arrays), and dev logging
+- **Learnings for future iterations:**
+  - All subscriptions already used `supabase.removeChannel()` in cleanup — the codebase was already well-managed
+  - The `useRealtimeSubscription` hook already had a global `activeSubscriptions` registry — just needed `register`/`unregister` exports for external callers
+  - AppContext.test.tsx needed `logger.withContext` mock (returns sub-logger) because `useRealtimeSubscription.ts` calls it at module init time
+---

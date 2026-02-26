@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateId, debounce } from "@/lib/utils";
 import { getStorage } from "@/lib/platform";
 import { logger } from "@/lib/logger";
+import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import type { Database } from "@/integrations/supabase/types";
 
 type RecipeRow = Database['public']['Tables']['recipes']['Row'];
@@ -407,8 +408,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       )
       .subscribe();
 
+    registerSubscription('grocery_items_changes', 'grocery_items');
+
     return () => {
       logger.debug('Unsubscribing from grocery_items_changes');
+      unregisterSubscription('grocery_items_changes');
       supabase.removeChannel(channel);
     };
   }, [userId, householdId]);
@@ -457,8 +461,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       )
       .subscribe();
 
+    registerSubscription('plan_entries_changes', 'plan_entries');
+
     return () => {
       logger.debug('Unsubscribing from plan_entries_changes');
+      unregisterSubscription('plan_entries_changes');
       supabase.removeChannel(channel);
     };
   }, [userId, householdId]);
@@ -507,8 +514,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       )
       .subscribe();
 
+    registerSubscription('kids_changes', 'kids');
+
     return () => {
       logger.debug('Unsubscribing from kids_changes');
+      unregisterSubscription('kids_changes');
       supabase.removeChannel(channel);
     };
   }, [userId, householdId]);
