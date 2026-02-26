@@ -779,8 +779,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 46,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Toast aria-live: Sonner section has aria-live=\"polite\"+aria-relevant=\"additions text\". Radix Toast uses aria-live=\"assertive\" for foreground, \"polite\" for background. Error messages: AccessibleFormField has aria-live=\"assertive\". OfflineIndicator uses aria-live=\"assertive\". Loading states: AccessibleLoading has aria-busy=\"true\"+role=\"status\". Added aria-busy to Blog.tsx and Authors.tsx loading states. Route announcements: RouteAnnouncer in App.tsx with aria-live=\"polite\" and AccessibilityContext announce(). Form submissions: toast.success/error calls render through accessible Sonner/Radix."
     },
     {
       "id": "US-047",

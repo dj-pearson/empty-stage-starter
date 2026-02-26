@@ -196,9 +196,9 @@ const Blog = () => {
       </section>
 
       {/* Blog Posts */}
-      <main id="main-content" className="container mx-auto px-4 py-12 max-w-6xl">
+      <main id="main-content" className="container mx-auto px-4 py-12 max-w-6xl" aria-busy={isLoading}>
         {isLoading ? (
-          <div className="text-center py-12">
+          <div className="text-center py-12" role="status" aria-live="polite">
             <p className="text-muted-foreground">Loading articles...</p>
           </div>
         ) : filteredPosts.length === 0 ? (

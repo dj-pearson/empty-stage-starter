@@ -199,7 +199,7 @@ export default function Authors() {
 
         {/* Loading State */}
         {isLoading && (
-          <div className="grid md:grid-cols-2 gap-8 mb-12">
+          <div className="grid md:grid-cols-2 gap-8 mb-12" role="status" aria-live="polite" aria-busy="true">
             {[1, 2, 3].map((i) => (
               <Card key={i}>
                 <CardHeader>
