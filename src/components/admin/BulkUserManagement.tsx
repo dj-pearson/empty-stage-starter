@@ -1,6 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
+import { useAdminCheck } from "@/hooks/useAdminCheck";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -45,6 +47,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
@@ -63,6 +66,12 @@ import {
   RefreshCw,
   FileSpreadsheet,
   FileText,
+  MoreVertical,
+  Eye,
+  KeyRound,
+  CreditCard,
+  Activity,
+  ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -87,9 +96,22 @@ interface BulkAction {
   variant?: "default" | "destructive" | "outline";
 }
 
+interface UserSubscription {
+  id: string;
+  status: string;
+  plan_id: string | null;
+  billing_cycle: string | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean | null;
+  trial_end: string | null;
+  created_at: string | null;
+}
+
 const PAGE_SIZE = 20;
 
 export function BulkUserManagement() {
+  const { isAdmin, isLoading: isAdminLoading } = useAdminCheck();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,6 +132,11 @@ export function BulkUserManagement() {
     onboarded: 0,
     banned: 0,
   });
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [showUserDetails, setShowUserDetails] = useState(false);
+  const [userSubscription, setUserSubscription] = useState<UserSubscription | null>(null);
+  const [loadingSubscription, setLoadingSubscription] = useState(false);
+  const [banConfirmUserId, setBanConfirmUserId] = useState<string | null>(null);
 
   const bulkActions: BulkAction[] = [
     { type: "ban", label: "Ban Selected", icon: <UserX className="h-4 w-4" />, variant: "destructive" },
@@ -176,9 +203,66 @@ export function BulkUserManagement() {
     setFilteredUsers(filtered);
   }, []);
 
-  useState(() => {
-    loadUsers();
-  });
+  useEffect(() => {
+    if (isAdmin) {
+      loadUsers();
+    }
+  }, [isAdmin]);
+
+  const loadUserSubscription = useCallback(async (userId: string) => {
+    setLoadingSubscription(true);
+    setUserSubscription(null);
+    try {
+      const { data, error } = await supabase
+        .from("user_subscriptions")
+        .select("id, status, plan_id, billing_cycle, current_period_start, current_period_end, cancel_at_period_end, trial_end, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      setUserSubscription(data);
+    } catch (error) {
+      logger.error("Error loading user subscription:", error);
+    } finally {
+      setLoadingSubscription(false);
+    }
+  }, []);
+
+  const handleViewUserDetails = (user: UserProfile) => {
+    setSelectedUser(user);
+    setShowUserDetails(true);
+    loadUserSubscription(user.id);
+  };
+
+  const handleSingleBanToggle = async (userId: string, ban: boolean) => {
+    try {
+      const { error } = await invokeEdgeFunction("update-user", {
+        body: { userId, action: ban ? "ban" : "unban" },
+      });
+      if (error) throw error;
+      toast.success(ban ? "User account disabled" : "User account enabled");
+      setBanConfirmUserId(null);
+      loadUsers();
+    } catch (error) {
+      logger.error("Error toggling user ban:", error);
+      toast.error(ban ? "Failed to disable user" : "Failed to enable user");
+    }
+  };
+
+  const handleSingleResetPassword = async (user: UserProfile) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: `${window.location.origin}/auth?reset=true`,
+      });
+      if (error) throw error;
+      toast.success(`Password reset email sent to ${user.email}`);
+    } catch (error) {
+      logger.error("Error sending password reset:", error);
+      toast.error("Failed to send password reset email");
+    }
+  };
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
@@ -404,11 +488,29 @@ export function BulkUserManagement() {
     toast.success(`Exported ${filteredUsers.length} user(s) as ${format.toUpperCase()}`);
   };
 
-  if (loading) {
+  if (isAdminLoading || loading) {
     return (
       <div className="flex justify-center items-center py-12">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <Card>
+        <CardContent className="py-12">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <ShieldAlert className="h-12 w-12 text-destructive" />
+            <div>
+              <h3 className="text-lg font-semibold">Access Denied</h3>
+              <p className="text-sm text-muted-foreground">
+                You do not have admin permissions to access user management.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -567,12 +669,13 @@ export function BulkUserManagement() {
                   <TableHead>Created</TableHead>
                   <TableHead>Last Sign In</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginatedUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       No users found
                     </TableCell>
                   </TableRow>
@@ -640,6 +743,41 @@ export function BulkUserManagement() {
                             <Badge variant="secondary">Pending</Badge>
                           )}
                         </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" aria-label={`Actions for ${user.full_name}`}>
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleViewUserDetails(user)}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleSingleResetPassword(user)}>
+                              <KeyRound className="h-4 w-4 mr-2" />
+                              Reset Password
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {user.is_banned ? (
+                              <DropdownMenuItem onClick={() => handleSingleBanToggle(user.id, false)}>
+                                <UserCheck className="h-4 w-4 mr-2" />
+                                Enable Account
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                onClick={() => setBanConfirmUserId(user.id)}
+                                className="text-destructive"
+                              >
+                                <UserX className="h-4 w-4 mr-2" />
+                                Disable Account
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))
@@ -762,6 +900,234 @@ export function BulkUserManagement() {
               className={pendingAction?.variant === "destructive" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
             >
               {isProcessing ? "Processing..." : "Confirm"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* User Details Dialog */}
+      <Dialog open={showUserDetails} onOpenChange={setShowUserDetails}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>User Details</DialogTitle>
+            <DialogDescription>
+              Profile, subscription, and activity information
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedUser && (
+            <div className="space-y-6">
+              {/* Profile Section */}
+              <div className="flex items-center gap-4">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage src={`https://avatar.vercel.sh/${selectedUser.email}`} />
+                  <AvatarFallback className="text-2xl">
+                    {selectedUser.full_name.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h3 className="text-xl font-semibold">{selectedUser.full_name}</h3>
+                  <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
+                  <div className="flex gap-2 mt-1">
+                    {selectedUser.role === "admin" && (
+                      <Badge variant="secondary">
+                        <Shield className="h-3 w-3 mr-1" />
+                        Admin
+                      </Badge>
+                    )}
+                    {selectedUser.is_banned ? (
+                      <Badge variant="destructive">Disabled</Badge>
+                    ) : (
+                      <Badge variant="default" className="bg-safe-food">Active</Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Profile Details */}
+              <div>
+                <h4 className="text-sm font-semibold flex items-center gap-2 mb-3">
+                  <Users className="h-4 w-4" />
+                  Profile
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">User ID</Label>
+                    <p className="text-sm font-mono break-all">{selectedUser.id}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Role</Label>
+                    <p className="text-sm capitalize">{selectedUser.role}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Onboarding</Label>
+                    <p className="text-sm">
+                      {selectedUser.onboarding_completed ? "Completed" : "Not completed"}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Account Status</Label>
+                    <p className="text-sm">{selectedUser.is_banned ? "Disabled" : "Active"}</p>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Subscription Section */}
+              <div>
+                <h4 className="text-sm font-semibold flex items-center gap-2 mb-3">
+                  <CreditCard className="h-4 w-4" />
+                  Subscription
+                </h4>
+                {loadingSubscription ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                    Loading subscription data...
+                  </div>
+                ) : userSubscription ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Status</Label>
+                      <p className="text-sm">
+                        <Badge
+                          variant={
+                            userSubscription.status === "active" ? "default" :
+                            userSubscription.status === "trialing" ? "secondary" :
+                            "destructive"
+                          }
+                          className={userSubscription.status === "active" ? "bg-safe-food" : ""}
+                        >
+                          {userSubscription.status}
+                        </Badge>
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Billing Cycle</Label>
+                      <p className="text-sm capitalize">{userSubscription.billing_cycle || "N/A"}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Current Period</Label>
+                      <p className="text-sm">
+                        {userSubscription.current_period_start
+                          ? `${format(new Date(userSubscription.current_period_start), "MMM d")} - ${
+                              userSubscription.current_period_end
+                                ? format(new Date(userSubscription.current_period_end), "MMM d, yyyy")
+                                : "N/A"
+                            }`
+                          : "N/A"}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Auto-Renew</Label>
+                      <p className="text-sm">
+                        {userSubscription.cancel_at_period_end ? "Cancels at period end" : "Yes"}
+                      </p>
+                    </div>
+                    {userSubscription.trial_end && (
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Trial Ends</Label>
+                        <p className="text-sm">
+                          {format(new Date(userSubscription.trial_end), "PPP")}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No active subscription</p>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Activity Section */}
+              <div>
+                <h4 className="text-sm font-semibold flex items-center gap-2 mb-3">
+                  <Activity className="h-4 w-4" />
+                  Activity
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Account Created</Label>
+                    <p className="text-sm">
+                      {format(new Date(selectedUser.created_at), "PPP 'at' p")}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Last Sign In</Label>
+                    <p className="text-sm">
+                      {selectedUser.last_sign_in_at
+                        ? format(new Date(selectedUser.last_sign_in_at), "PPP 'at' p")
+                        : "Never"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowUserDetails(false)}>
+              Close
+            </Button>
+            {selectedUser && (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (selectedUser) handleSingleResetPassword(selectedUser);
+                  }}
+                >
+                  <KeyRound className="h-4 w-4 mr-2" />
+                  Reset Password
+                </Button>
+                {selectedUser.is_banned ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSingleBanToggle(selectedUser.id, false)}
+                  >
+                    <UserCheck className="h-4 w-4 mr-2" />
+                    Enable Account
+                  </Button>
+                ) : (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      setShowUserDetails(false);
+                      setBanConfirmUserId(selectedUser.id);
+                    }}
+                  >
+                    <UserX className="h-4 w-4 mr-2" />
+                    Disable Account
+                  </Button>
+                )}
+              </div>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Single User Ban Confirmation Dialog */}
+      <AlertDialog open={!!banConfirmUserId} onOpenChange={() => setBanConfirmUserId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disable User Account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will prevent the user from accessing their account. They can be re-enabled later if needed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => banConfirmUserId && handleSingleBanToggle(banConfirmUserId, true)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Disable Account
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
