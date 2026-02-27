@@ -1203,7 +1203,7 @@
         "Typecheck passes"
       ],
       "priority": 70,
-      "passes": false,
+      "passes": true,
       "notes": "Families tend to rotate through 4-6 weekly plans. Templates make this effortless."
     },
     {

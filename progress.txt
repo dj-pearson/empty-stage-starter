@@ -577,3 +577,15 @@
   - CalendarMealPlanner is an alternative implementation with dnd-kit
   - MobileMealPlanner does NOT have drag support (day-by-day card view)
 ---
+
+## 2026-02-26 - US-070
+- Integrated existing SaveMealPlanTemplateDialog and MealPlanTemplateGallery into Planner.tsx
+- Added "Save Template" and "Templates" buttons to planner header
+- Lazy-loaded template dialogs for performance
+- Components were already built but not connected to the Planner page
+- Files changed: src/pages/Planner.tsx
+- **Learnings for future iterations:**
+  - SaveMealPlanTemplateDialog and MealPlanTemplateGallery are pre-built, just need integration
+  - Template system uses edge function manage-meal-plan-templates
+  - Planner header uses flex gap-2 flex-wrap for button layout
+---

@@ -14,6 +14,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Save,
+  LayoutTemplate,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MealSlot, PlanEntry } from "@/types";
@@ -24,6 +26,10 @@ import { format, startOfWeek, addWeeks, subWeeks, addDays } from "date-fns";
 import { calculateAge } from "@/lib/utils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { logger } from "@/lib/logger";
+import { lazy, Suspense } from "react";
+
+const SaveMealPlanTemplateDialog = lazy(() => import("@/components/SaveMealPlanTemplateDialog").then(m => ({ default: m.SaveMealPlanTemplateDialog })));
+const MealPlanTemplateGallery = lazy(() => import("@/components/MealPlanTemplateGallery").then(m => ({ default: m.MealPlanTemplateGallery })));
 
 export default function Planner() {
   const {
@@ -49,6 +55,8 @@ export default function Planner() {
     startOfWeek(new Date(), { weekStartsOn: 0 })
   );
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [showTemplateGallery, setShowTemplateGallery] = useState(false);
   const [foodSelectorOpen, setFoodSelectorOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{
     date: string;
@@ -574,6 +582,22 @@ export default function Planner() {
                 <RefreshCw className="h-5 w-5 mr-2" />
                 Quick Build
               </Button>
+              <Button
+                onClick={() => setShowSaveTemplate(true)}
+                variant="outline"
+                size="lg"
+              >
+                <Save className="h-5 w-5 mr-2" />
+                Save Template
+              </Button>
+              <Button
+                onClick={() => setShowTemplateGallery(true)}
+                variant="outline"
+                size="lg"
+              >
+                <LayoutTemplate className="h-5 w-5 mr-2" />
+                Templates
+              </Button>
             </div>
           </div>
 
@@ -715,6 +739,27 @@ export default function Planner() {
             }}
           />
         )}
+
+        <Suspense fallback={null}>
+          {showSaveTemplate && (
+            <SaveMealPlanTemplateDialog
+              open={showSaveTemplate}
+              onOpenChange={setShowSaveTemplate}
+              weekStart={format(currentWeekStart, "yyyy-MM-dd")}
+              kidId={activeKidId}
+            />
+          )}
+          {showTemplateGallery && (
+            <MealPlanTemplateGallery
+              open={showTemplateGallery}
+              onOpenChange={setShowTemplateGallery}
+              onApply={() => {
+                setShowTemplateGallery(false);
+                toast.success("Template applied to planner");
+              }}
+            />
+          )}
+        </Suspense>
       </div>
     </div>
   );
