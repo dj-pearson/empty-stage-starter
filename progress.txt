@@ -429,3 +429,15 @@
   - Grocery.tsx is the reference implementation for useMemo/useCallback patterns in this codebase
   - `useRecipeFilters` hook already returns memoized filteredRecipes — no need for additional useMemo in Recipes.tsx
 ---
+
+## 2026-02-26 - US-056: Comprehensive E2E Test for Subscription Purchase Flow
+- What was verified: `tests/subscription-flow.spec.ts` already exists with 29+ tests covering all acceptance criteria
+- Tests cover: pricing page navigation, Stripe checkout redirect (mocked), checkout success, subscription status, cancellation, test card scenarios
+- No changes needed — all acceptance criteria already met
+---
+
+## 2026-02-26 - US-057: Comprehensive E2E Test for Meal Planning Workflow
+- What was verified: `tests/meal-plan-workflow.spec.ts` already exists with 29+ tests covering all acceptance criteria
+- Tests cover: kid profile creation, food database additions, meal plan entries, weekly calendar, grocery list generation, marking items purchased
+- No changes needed — all acceptance criteria already met
+---
