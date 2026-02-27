@@ -524,3 +524,16 @@
   - Edge functions use Deno runtime, not Node.js - different import syntax
   - AccountSettings uses grid-cols-N on TabsList - update when adding tabs
 ---
+
+## 2026-02-26 - US-066
+- Added analytics.trackEvent calls to OnboardingDialog for each step (start, child_created, allergens_set, foods_selected, completed, skipped)
+- Stores onboarding_completed in profiles table on completion
+- Added onboardingCompleted metric to ConversionFunnelDashboard with ClipboardCheck icon
+- Created OnboardingReengagement component shown on Home page for users who skipped onboarding 3+ days ago
+- Files changed: src/components/OnboardingDialog.tsx, src/components/admin/ConversionFunnelDashboard.tsx, src/components/OnboardingReengagement.tsx (new), src/pages/Home.tsx
+- **Learnings for future iterations:**
+  - OnboardingDialog uses step 1-4, not 0-indexed
+  - profiles table has onboarding_completed column (boolean)
+  - ConversionFunnelDashboard fetches from funnel_events table with legacy fallback
+  - analytics.trackEvent(name, properties) is the standard tracking function
+---

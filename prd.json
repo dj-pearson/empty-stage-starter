@@ -1133,7 +1133,7 @@
         "Typecheck passes"
       ],
       "priority": 66,
-      "passes": false,
+      "passes": true,
       "notes": "Onboarding completion directly correlates with user retention. Currently no tracking exists."
     },
     {

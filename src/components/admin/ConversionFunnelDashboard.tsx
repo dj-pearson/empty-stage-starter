@@ -29,6 +29,7 @@ import {
   MousePointer,
   Eye,
   UserPlus,
+  ClipboardCheck,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase-platform';
 import { format, subDays } from 'date-fns';
@@ -49,6 +50,7 @@ interface ConversionMetrics {
   quizCompletes: number;
   emailCaptures: number;
   signups: number;
+  onboardingCompleted: number;
   paidConversions: number;
   trialStarts: number;
 }
@@ -70,6 +72,7 @@ export function ConversionFunnelDashboard() {
     quizCompletes: 0,
     emailCaptures: 0,
     signups: 0,
+    onboardingCompleted: 0,
     paidConversions: 0,
     trialStarts: 0,
   });
@@ -206,12 +209,24 @@ export function ConversionFunnelDashboard() {
       // Use actual page views if available, otherwise estimate (typically 3-5x quiz starts)
       const pageViews = funnelMetrics?.pageViews || Math.max(quizStarts * 4, legacyQuizStarts * 4);
 
+      // Count users who completed onboarding
+      let onboardingCompleted = 0;
+      try {
+        const { count } = await supabase
+          .from('profiles')
+          .select('*', { count: 'exact', head: true })
+          .eq('onboarding_completed', true)
+          .gte('created_at', startDate.toISOString());
+        onboardingCompleted = count || 0;
+      } catch { /* profiles may not have onboarding_completed */ }
+
       setMetrics({
         pageViews,
         quizStarts,
         quizCompletes,
         emailCaptures,
         signups,
+        onboardingCompleted,
         paidConversions,
         trialStarts,
       });
@@ -280,11 +295,18 @@ export function ConversionFunnelDashboard() {
       description: `${calculateConversionRate(metrics.signups, metrics.emailCaptures)}% signup rate`,
     },
     {
+      name: 'Onboarding Completed',
+      count: metrics.onboardingCompleted,
+      icon: <ClipboardCheck className="w-5 h-5" />,
+      color: 'bg-teal-500',
+      description: `${calculateConversionRate(metrics.onboardingCompleted, metrics.signups)}% onboarding rate`,
+    },
+    {
       name: 'Paid Conversions',
       count: metrics.paidConversions,
       icon: <CreditCard className="w-5 h-5" />,
       color: 'bg-green-500',
-      description: `${calculateConversionRate(metrics.paidConversions, metrics.signups)}% paid conversion`,
+      description: `${calculateConversionRate(metrics.paidConversions, metrics.onboardingCompleted)}% paid conversion`,
     },
   ];
 
