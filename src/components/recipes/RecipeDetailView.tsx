@@ -41,6 +41,8 @@ import { cn } from "@/lib/utils";
 import { CookMode } from "./CookMode";
 import { AddToPlannerPopover } from "./AddToPlannerPopover";
 import { calculateRecipeNutrition, perServingNutrition } from "@/lib/nutritionCalculator";
+import { RecipeShareButton } from "./RecipeShareButton";
+import { Helmet } from "react-helmet-async";
 
 interface RecipeDetailViewProps {
   recipe: Recipe | null;
@@ -110,6 +112,10 @@ export function RecipeDetailView({
   const [checkedIngredients, setCheckedIngredients] = useState<Set<string>>(new Set());
 
   if (!recipe) return null;
+
+  const ogDescription = recipe.description || `${recipe.name} - A family-friendly recipe on EatPal`;
+  const ogImage = recipe.image_url || "https://tryeatpal.com/og-recipe-default.png";
+  const ogUrl = `${window.location.origin}/recipes/${recipe.id}`;
 
   const recipeFoods = recipe.food_ids
     .map((id) => foods.find((f) => f.id === id))
@@ -203,6 +209,20 @@ export function RecipeDetailView({
   }
 
   return (
+    <>
+    {open && (
+      <Helmet>
+        <meta property="og:title" content={recipe.name} />
+        <meta property="og:description" content={ogDescription} />
+        <meta property="og:image" content={ogImage} />
+        <meta property="og:url" content={ogUrl} />
+        <meta property="og:type" content="article" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={recipe.name} />
+        <meta name="twitter:description" content={ogDescription} />
+        <meta name="twitter:image" content={ogImage} />
+      </Helmet>
+    )}
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
@@ -314,6 +334,8 @@ export function RecipeDetailView({
                   <ShoppingCart className="h-4 w-4" />
                   Grocery
                 </Button>
+
+                <RecipeShareButton recipe={recipe} />
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -628,5 +650,6 @@ export function RecipeDetailView({
         </ScrollArea>
       </SheetContent>
     </Sheet>
+    </>
   );
 }

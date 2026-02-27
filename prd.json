@@ -1150,7 +1150,7 @@
         "Typecheck passes"
       ],
       "priority": 67,
-      "passes": false,
+      "passes": true,
       "notes": "Viral growth mechanism. Recipe sharing is one of the strongest organic acquisition channels for food apps."
     },
     {

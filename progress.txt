@@ -537,3 +537,16 @@
   - ConversionFunnelDashboard fetches from funnel_events table with legacy fallback
   - analytics.trackEvent(name, properties) is the standard tracking function
 ---
+
+## 2026-02-26 - US-067
+- Created RecipeShareButton component with Facebook, Twitter/X, Pinterest, copy-link sharing
+- Uses native Web Share API on mobile, dropdown menu on desktop
+- Tracks share events via analytics.trackEvent("recipe_shared")
+- Added OG and Twitter Card meta tags via Helmet in RecipeDetailView
+- Integrated share button into recipe detail action buttons
+- Files changed: src/components/recipes/RecipeShareButton.tsx (new), src/components/recipes/RecipeDetailView.tsx
+- **Learnings for future iterations:**
+  - navigator.share is available on mobile browsers for native share sheet
+  - OG meta tags set via Helmet in SPAs only work after JS loads (SSR needed for crawlers)
+  - RecipeDetailView is a Sheet (side panel), not a full page
+---
