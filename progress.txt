@@ -563,3 +563,17 @@
   - addFood and addRecipe from AppContext are async
   - Profile tab in AccountSettings is the right place for data management
 ---
+
+## 2026-02-26 - US-069
+- Verified: Drag-and-drop meal plan reordering is already fully implemented
+- Desktop: GSAPCalendarMealPlanner uses GSAP Draggable (touch-native) with findClosestCell for visual drop targets
+- Desktop alt: CalendarMealPlanner uses @dnd-kit/core with DndContext, useDraggable, useDroppable
+- Both support: drag between days, drag between slots, visual feedback, touch on mobile
+- Updates propagate via onUpdateEntry → AppContext.updatePlanEntry → Supabase
+- No code changes needed - all acceptance criteria already met
+- **Learnings for future iterations:**
+  - GSAPCalendarMealPlanner is the primary desktop planner (used in Planner.tsx)
+  - GSAP Draggable is inherently touch-compatible
+  - CalendarMealPlanner is an alternative implementation with dnd-kit
+  - MobileMealPlanner does NOT have drag support (day-by-day card view)
+---
