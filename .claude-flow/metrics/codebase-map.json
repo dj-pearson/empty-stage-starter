@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-02-26T18:52:21.615Z",
+  "timestamp": "2026-02-27T04:29:14.702Z",
   "projectRoot": "C:\\Users\\pears\\Documents\\EatPal\\empty-stage-starter",
   "structure": {
     "hasPackageJson": true,
@@ -7,5 +7,5 @@
     "hasClaudeConfig": true,
     "hasClaudeFlow": true
   },
-  "scannedAt": 1772131941615
+  "scannedAt": 1772166554703
 }
