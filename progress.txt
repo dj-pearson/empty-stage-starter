@@ -474,3 +474,14 @@
   - Supabase row types: `Database["public"]["Tables"]["table_name"]["Row"]` for typed query results
   - `catch (error: any)` → `catch (error)` + `error instanceof Error` is the strict-mode pattern
 ---
+
+## 2026-02-26 - US-075: Add Admin Role Protection to SEO Routes
+- What was implemented: Added `requireAdmin` prop to ProtectedRoute component, applied to /seo-dashboard and /search-traffic routes
+- Files changed:
+  - `src/components/ProtectedRoute.tsx` (modified) - Added `requireAdmin?: boolean` prop, admin role check via user_roles table, redirect to /dashboard for non-admins
+  - `src/App.tsx` (modified) - Added `requireAdmin` to SEODashboard and SearchTrafficDashboard route guards
+- **Learnings for future iterations:**
+  - Admin check queries `user_roles` table with `maybeSingle()` — returns null if no row (non-admin), row if admin
+  - The `isAdmin` state starts as `null` (unknown), shows loading spinner while checking, then resolves to `true`/`false`
+  - Non-admin users see loading briefly then redirect to /dashboard (not /auth)
+---

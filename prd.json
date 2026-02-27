@@ -1287,7 +1287,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 75,
-      "passes": false,
+      "passes": true,
       "notes": "Currently both routes use ProtectedRoute but no admin role check, so any logged-in user can access admin SEO data."
     },
     {
