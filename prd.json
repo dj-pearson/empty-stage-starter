@@ -1081,7 +1081,7 @@
         "Typecheck passes"
       ],
       "priority": 63,
-      "passes": false,
+      "passes": true,
       "notes": "CommandPalette already exists but is basic. This turns it into a productivity tool."
     },
     {

@@ -485,3 +485,14 @@
   - The `isAdmin` state starts as `null` (unknown), shows loading spinner while checking, then resolves to `true`/`false`
   - Non-admin users see loading briefly then redirect to /dashboard (not /auth)
 ---
+
+## 2026-02-26 - US-063
+- Enhanced CommandPalette with proper 300ms debounce using useRef/useEffect instead of direct useMemo
+- Added plan entries rendering in search results (was computed but never displayed in JSX)
+- Plan entries show with Calendar icon (purple) and navigate to /planner
+- Files changed: src/components/CommandPalette.tsx
+- **Learnings for future iterations:**
+  - CommandPalette already had most search features, just missing debounce and plan rendering
+  - useMemo alone is NOT a debounce - it recomputes synchronously on every state change
+  - Proper debounce: useState + useEffect + setTimeout + useRef for cleanup
+---
