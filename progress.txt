@@ -550,3 +550,16 @@
   - OG meta tags set via Helmet in SPAs only work after JS loads (SSR needed for crawlers)
   - RecipeDetailView is a Sheet (side panel), not a full page
 ---
+
+## 2026-02-26 - US-068
+- Created src/components/settings/DataImport.tsx with CSV upload UI
+- Supports food CSV (name, category, allergens, calories) and recipe CSV (name, ingredients, instructions, servings)
+- Validates with Zod schemas before import
+- Shows preview table with row count, validation status, and error details
+- Added to AccountSettings profile tab
+- Files changed: src/components/settings/DataImport.tsx (new), src/pages/dashboard/AccountSettings.tsx
+- **Learnings for future iterations:**
+  - CSV parsing is simple split(",") - doesn't handle escaped commas in quoted strings
+  - addFood and addRecipe from AppContext are async
+  - Profile tab in AccountSettings is the right place for data management
+---

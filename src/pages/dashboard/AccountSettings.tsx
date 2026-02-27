@@ -58,6 +58,7 @@ import {
 } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { EmailPreferences } from "@/components/EmailPreferences";
+import { DataImport } from "@/components/settings/DataImport";
 
 export default function AccountSettings() {
   const [activeTab, setActiveTab] = useState("profile");
@@ -532,6 +533,9 @@ export default function AccountSettings() {
                 </Button>
               </CardContent>
             </Card>
+
+            {/* CSV Data Import */}
+            <DataImport />
           </TabsContent>
 
           {/* ==================== SUBSCRIPTION TAB ==================== */}
