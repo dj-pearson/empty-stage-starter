@@ -460,3 +460,17 @@
   - `PRODUCTION_READY.md` (new) - Build verification, edge functions audit, env vars, security headers, Sentry config, RLS audit (61 migrations), docs completeness
 - Verification results: build SUCCESS, typecheck SUCCESS, 399 tests passing, all 12 edge functions present, security headers complete, RLS on all tables
 ---
+
+## 2026-02-26 - US-071 to US-074: Remove @ts-nocheck from 4 Pages
+- What was implemented: Removed `// @ts-nocheck` from 4 page components and fixed all type errors
+- Files changed:
+  - `src/pages/PickyEaterQuizResults.tsx` - Added `PersonalityType` import, typed scoresObj properly, removed `as any` cast
+  - `src/pages/BudgetCalculatorResults.tsx` - Removed unused imports (BudgetResult, calculateSavingsPercentage, Share2)
+  - `src/pages/MealPlanGeneratorResults.tsx` - Removed unused import (GeneratedMeal)
+  - `src/pages/SearchTrafficDashboard.tsx` - Added DateRange type from react-day-picker, Database types for PlatformConnection, typed connections state, fixed catch clauses, removed unused imports
+- **Learnings for future iterations:**
+  - Most @ts-nocheck files only had unused import issues — the types were already properly applied
+  - `react-day-picker` exports `DateRange` type for Calendar range selection
+  - Supabase row types: `Database["public"]["Tables"]["table_name"]["Row"]` for typed query results
+  - `catch (error: any)` → `catch (error)` + `error instanceof Error` is the strict-mode pattern
+---

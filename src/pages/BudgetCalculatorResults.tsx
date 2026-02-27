@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
@@ -12,7 +11,6 @@ import {
   ShoppingCart,
   Calendar,
   Download,
-  Share2,
   ArrowLeft,
   CheckCircle2,
   Lightbulb,
@@ -20,10 +18,9 @@ import {
 import {
   BudgetCalculatorInput,
   BudgetCalculation,
-  BudgetResult,
   BudgetMealSuggestion,
 } from '@/types/budgetCalculator';
-import { formatCurrency, calculateSavingsPercentage } from '@/lib/budgetCalculator/calculator';
+import { formatCurrency } from '@/lib/budgetCalculator/calculator';
 import { saveBudgetCalculation, trackBudgetPDFDownload } from '@/lib/budgetCalculator/supabaseIntegration';
 import { downloadBudgetPDFReport } from '@/lib/budgetCalculator/pdfGenerator';
 import { EmailCaptureModal } from '@/components/budget/EmailCaptureModal';
