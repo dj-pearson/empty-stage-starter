@@ -1117,7 +1117,7 @@
         "Typecheck passes"
       ],
       "priority": 65,
-      "passes": false,
+      "passes": true,
       "notes": "Drives weekly re-engagement. Parents who see progress are more likely to continue using the platform."
     },
     {

@@ -54,8 +54,10 @@ import {
   Settings,
   ExternalLink,
   Accessibility,
+  Bell,
 } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
+import { EmailPreferences } from "@/components/EmailPreferences";
 
 export default function AccountSettings() {
   const [activeTab, setActiveTab] = useState("profile");
@@ -395,7 +397,7 @@ export default function AccountSettings() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
             <TabsTrigger value="profile" className="flex items-center gap-2">
               <User className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Profile</span>
@@ -403,6 +405,10 @@ export default function AccountSettings() {
             <TabsTrigger value="subscription" className="flex items-center gap-2">
               <Crown className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Subscription</span>
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="flex items-center gap-2">
+              <Bell className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Notifications</span>
             </TabsTrigger>
             <TabsTrigger value="security" className="flex items-center gap-2">
               <Shield className="h-4 w-4" aria-hidden="true" />
@@ -875,6 +881,11 @@ export default function AccountSettings() {
                 )}
               </>
             )}
+          </TabsContent>
+
+          {/* ==================== NOTIFICATIONS TAB ==================== */}
+          <TabsContent value="notifications" className="space-y-6">
+            <EmailPreferences />
           </TabsContent>
 
           {/* ==================== SECURITY TAB ==================== */}

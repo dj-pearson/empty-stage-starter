@@ -509,3 +509,18 @@
   - Recipe.nutrition_info = manual override, auto-calc = fallback from food ingredients
   - RecipeDetailView has servingMultiplier state but nutrition display doesn't use it (separate from per-serving calc)
 ---
+
+## 2026-02-26 - US-065
+- Created functions/weekly-nutrition-email/index.ts edge function
+- Aggregates plan entries per child for past week (ate/tasted/refused counts)
+- Calculates meal coverage % vs 21 meals/week recommended
+- Generates HTML email with per-child stats and progress bar
+- Sends via Resend API, queues in automation_email_queue
+- Added Notifications tab to AccountSettings with EmailPreferences component
+- Files changed: functions/weekly-nutrition-email/index.ts (new), src/pages/dashboard/AccountSettings.tsx
+- **Learnings for future iterations:**
+  - EmailPreferences component already exists and manages weekly_summary toggle
+  - automation_email_subscriptions table has weekly_summary column
+  - Edge functions use Deno runtime, not Node.js - different import syntax
+  - AccountSettings uses grid-cols-N on TabsList - update when adding tabs
+---
