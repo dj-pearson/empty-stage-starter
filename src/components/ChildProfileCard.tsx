@@ -275,6 +275,14 @@ export function ChildProfileCard({
                 </div>
               </div>
             )}
+
+            {!kid.allergens?.length && !kid.dietary_restrictions?.length && !kid.health_goals?.length && !kid.nutrition_concerns?.length && (
+              <div className="text-center py-6 text-muted-foreground">
+                <Heart className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm font-medium">No health info added yet</p>
+                <p className="text-xs mt-1">Complete {kid.name}'s profile to add health details, allergens, and nutrition concerns</p>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="preferences" className="space-y-4 mt-4">
@@ -349,6 +357,14 @@ export function ChildProfileCard({
                     </Badge>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {!kid.texture_preferences?.length && !kid.texture_dislikes?.length && !kid.flavor_preferences?.length && !kid.preferred_preparations?.length && !kid.helpful_strategies?.length && (
+              <div className="text-center py-6 text-muted-foreground">
+                <ChefHat className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm font-medium">No preferences set yet</p>
+                <p className="text-xs mt-1">Complete {kid.name}'s profile to add texture and flavor preferences</p>
               </div>
             )}
           </TabsContent>

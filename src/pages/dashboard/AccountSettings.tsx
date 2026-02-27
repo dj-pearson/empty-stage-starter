@@ -69,6 +69,7 @@ export default function AccountSettings() {
   const [savingProfile, setSavingProfile] = useState(false);
 
   // Password change
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
@@ -137,6 +138,10 @@ export default function AccountSettings() {
   };
 
   const handleChangePassword = async () => {
+    if (!currentPassword) {
+      toast.error("Please enter your current password");
+      return;
+    }
     if (newPassword.length < 8) {
       toast.error("Password must be at least 8 characters");
       return;
@@ -145,13 +150,39 @@ export default function AccountSettings() {
       toast.error("Passwords do not match");
       return;
     }
+    if (newPassword === currentPassword) {
+      toast.error("New password must be different from current password");
+      return;
+    }
     try {
       setChangingPassword(true);
+      
+      // First verify current password by attempting reauthentication
+      if (!user?.email) {
+        throw new Error("Email not found");
+      }
+      
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+      
+      if (reauthError) {
+        if (reauthError.message.includes("Invalid login credentials")) {
+          toast.error("Current password is incorrect");
+        } else {
+          throw reauthError;
+        }
+        return;
+      }
+
+      // Now update the password
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
       });
       if (error) throw error;
       toast.success("Password updated successfully");
+      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (err: any) {
@@ -907,6 +938,20 @@ export default function AccountSettings() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
+                  <Label htmlFor="currentPassword">Current Password</Label>
+                  <Input
+                    id="currentPassword"
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter your current password"
+                    disabled={changingPassword}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    For security, we require your current password to set a new one.
+                  </p>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="newPassword">New Password</Label>
                   <Input
                     id="newPassword"
@@ -915,6 +960,7 @@ export default function AccountSettings() {
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Enter new password"
                     minLength={8}
+                    disabled={changingPassword}
                   />
                 </div>
                 <div className="space-y-2">
@@ -926,6 +972,7 @@ export default function AccountSettings() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Confirm new password"
                     minLength={8}
+                    disabled={changingPassword}
                   />
                 </div>
               </CardContent>
@@ -933,7 +980,7 @@ export default function AccountSettings() {
                 <Button
                   onClick={handleChangePassword}
                   disabled={
-                    changingPassword || !newPassword || !confirmPassword
+                    changingPassword || !currentPassword || !newPassword || !confirmPassword
                   }
                 >
                   {changingPassword && (

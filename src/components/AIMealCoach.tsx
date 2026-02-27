@@ -220,44 +220,20 @@ export function AIMealCoach() {
         recipe_count: recipes.length,
       };
 
-      // Get AI settings
-      const { data: aiSettings, error: aiError } = await supabase
-        .from("ai_settings")
-        .select("*")
-        .eq("is_active", true)
-        .single();
-
-      if (aiError || !aiSettings) {
-        throw new Error("No active AI configuration found");
-      }
-
-      // Create system prompt with context
+      // Prepare kid context for the edge function
       const activeKidAge = activeKid ? calculateAge(activeKid.date_of_birth) : null;
-      const systemPrompt = `You are a friendly, knowledgeable meal planning assistant specializing in helping parents of picky eaters.
+      const kidContext = activeKid ? {
+        name: activeKid.name,
+        age: activeKidAge,
+        allergens: activeKid.allergens || [],
+        safeFoodsCount: context.safe_foods.length,
+        tryBiteFoodsCount: context.try_bites.length,
+      } : null;
 
-Current child context:
-${activeKid ? `- Child's name: ${activeKid.name}` : "- No child selected"}
-${activeKidAge !== null ? `- Age: ${activeKidAge} years old` : ""}
-${activeKid?.allergens && activeKid.allergens.length > 0 ? `- Allergens: ${activeKid.allergens.join(", ")}` : "- No allergens listed"}
-- Safe foods (${context.safe_foods.length}): ${context.safe_foods.slice(0, 10).join(", ")}${context.safe_foods.length > 10 ? "..." : ""}
-- Foods to try (${context.try_bites.length}): ${context.try_bites.slice(0, 5).join(", ")}${context.try_bites.length > 5 ? "..." : ""}
-- Available recipes: ${context.recipe_count}
-
-Provide helpful, empathetic, and practical advice. Keep responses conversational and encouraging. If asked about specific foods, consider the child's current safe foods and allergens.`;
-
-      // Call Claude API
+      // Call secure edge function instead of direct API
       const startTime = Date.now();
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": aiSettings.api_key_env_var,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: aiSettings.model_name || "claude-3-5-sonnet-20241022",
-          max_tokens: 1024,
-          system: systemPrompt,
+      const { data: result, error: aiError } = await supabase.functions.invoke('ai-coach-chat', {
+        body: {
           messages: [
             ...messages
               .filter((m) => m.role !== "system")
@@ -270,15 +246,20 @@ Provide helpful, empathetic, and practical advice. Keep responses conversational
               content: userMessage,
             },
           ],
-        }),
+          kidContext,
+          maxTokens: 2000,
+        },
       });
 
-      if (!response.ok) {
-        throw new Error("AI request failed");
+      if (aiError) {
+        throw new Error(aiError.message || "AI request failed");
       }
 
-      const result = await response.json();
-      const aiResponse = result.content[0].text;
+      if (!result || !result.message) {
+        throw new Error("Invalid AI response");
+      }
+
+      const aiResponse = result.message;
       const responseTime = Date.now() - startTime;
 
       // Save AI response to database
@@ -290,8 +271,8 @@ Provide helpful, empathetic, and practical advice. Keep responses conversational
             role: "assistant",
             content: aiResponse,
             context_snapshot: context,
-            model_used: aiSettings.model_name,
-            tokens_used: result.usage?.input_tokens + result.usage?.output_tokens || 0,
+            model_used: result.model || 'claude-3-5-sonnet-20241022',
+            tokens_used: result.usage?.totalTokens || 0,
             response_time_ms: responseTime,
           },
         ])

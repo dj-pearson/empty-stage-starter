@@ -638,7 +638,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       afterDelete();
     }
   };
-  const setActiveKid = (id: string) => {
+  const setActiveKid = (id: string | null) => {
     setActiveKidId(id);
   };
 
