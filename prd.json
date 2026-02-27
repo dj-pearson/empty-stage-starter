@@ -1,1927 +1,800 @@
 {
   "project": "EatPal",
-  "branchName": "ralph/page-functionality-audit",
-  "description": "Page-by-Page Functionality Audit & Fixes - Systematically audit all 43 pages of EatPal for broken functionality, missing empty states, type errors (@ts-nocheck files), broken navigation flows, and inter-page data consistency. Includes removing @ts-nocheck suppressions, fixing route protection gaps, correcting page-level Helmet metadata, and ensuring every page is fully functional end-to-end.",
+  "branchName": "ralph/platform-hardening-v2",
+  "description": "Platform Hardening & Quality Improvements - Comprehensive security remediation, performance optimization, UI/UX consistency fixes, and accessibility improvements identified through a full-spectrum platform audit. Covers critical credential rotation, CORS hardening, SSRF prevention, dependency vulnerability patching, AppContext performance overhaul, bundle optimization, dark mode fixes, form UX standardization, and navigation/feedback consistency.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Fix TypeScript compilation errors and strict mode violations",
-      "description": "As a developer, I want the codebase to compile cleanly with zero TypeScript errors so that we have a reliable type-safe foundation for all subsequent work.",
+      "title": "Remove live credentials from wrangler.toml and rotate keys",
+      "description": "As a security engineer, I want all real credentials removed from version-controlled files so that production secrets are not exposed in the git history.",
       "acceptanceCriteria": [
-        "Run npx tsc --noEmit and resolve all errors",
-        "Replace all uses of 'any' type with proper typed alternatives",
-        "Ensure strict mode settings in tsconfig.json are enabled (strict: true, noImplicitAny: true, strictNullChecks: true)",
-        "npm run build completes without TypeScript errors",
-        "Typecheck passes"
+        "Replace the real Supabase anon key in wrangler.toml (line 12 comment) with a placeholder: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.XXXXXXXX",
+        "Replace the real Stripe publishable key in wrangler.toml (line 14 comment) with a placeholder: pk_live_XXXXXXXXXXXXXXXX",
+        "Search entire codebase for any other real API keys, JWTs, or secrets and replace with placeholders",
+        "Verify no .env files are tracked in git",
+        "Typecheck passes",
+        "npm run build succeeds"
       ],
       "priority": 1,
-      "passes": true,
-      "notes": "Enabled strict: true in tsconfig.app.json and tsconfig.json. Zero compilation errors. Replaced any types in AppContext.tsx with proper typed alternatives (RecipeRow, RecipeInsert, RealtimePayload<T>). Build and all 176 tests pass."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-002",
-      "title": "Remove .bak files and dead code from admin components",
-      "description": "As a developer, I want to clean up dead code and backup files so that the codebase is professional and maintainable.",
+      "title": "Fix wildcard CORS on all edge functions",
+      "description": "As a security engineer, I want CORS restricted to our domain so that third-party websites cannot make authenticated requests to our API.",
       "acceptanceCriteria": [
-        "Delete src/components/admin/BlogCMSManager-OLD.tsx.bak",
-        "Delete src/components/admin/EmailMarketingManager-OLD.tsx.bak",
-        "Search for and remove any other .bak files in the project",
-        "Search for and remove any unused imports in admin components",
+        "Replace Access-Control-Allow-Origin: * with the production domain https://tryeatpal.com in all edge functions under functions/",
+        "Add development origin http://localhost:8080 conditionally based on environment",
+        "Create a shared corsHeaders utility in functions/_shared/cors.ts to avoid duplication",
+        "All 14+ edge functions use the shared CORS headers",
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Deleted BlogCMSManager-OLD.tsx.bak and EmailMarketingManager-OLD.tsx.bak. Removed unused imports across 52 admin component files. Prefixed unused variables with _ for linter compliance. No other .bak files found in tracked source. Typecheck passes, all 176 tests pass."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Create centralized environment variable validation module",
-      "description": "As a developer, I want environment variables validated at startup so that missing or malformed config is caught early rather than causing runtime failures.",
+      "title": "Add JWT authentication to unauthenticated edge functions",
+      "description": "As a security engineer, I want all privileged edge functions to require authentication so that anonymous users cannot consume API credits or write to storage.",
       "acceptanceCriteria": [
-        "Create src/lib/env.ts that uses Zod to validate all VITE_ env vars",
-        "Validate required vars: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY",
-        "Validate optional vars with correct types: VITE_SENTRY_DSN, VITE_STRIPE_PUBLISHABLE_KEY, VITE_GA_MEASUREMENT_ID, VITE_SENTRY_ENABLED, VITE_FUNCTIONS_URL",
-        "Export typed env object for use across the app",
-        "Log clear error message if required vars are missing (development only)",
-        "Import and call validation in src/main.tsx before app renders",
+        "Add JWT verification to functions/generate-blog-content/index.ts",
+        "Add JWT verification to functions/generate-social-content/index.ts",
+        "Add JWT verification to functions/update-blog-image/index.ts",
+        "Add JWT verification to functions/parse-grocery-image/index.ts",
+        "Add JWT verification to functions/parse-recipe/index.ts",
+        "Create a shared auth helper in functions/_shared/auth.ts to reduce duplication",
+        "All functions return 401 for missing/invalid JWT",
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "Created src/lib/env.ts with Zod schema validating required (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY) and optional (VITE_SENTRY_DSN, VITE_SENTRY_ENABLED, VITE_STRIPE_PUBLISHABLE_KEY, VITE_GA_MEASUREMENT_ID, VITE_FUNCTIONS_URL) env vars. Exports typed Env object via getEnv(). validateEnv() called in main.tsx before app renders. Logs clear errors in dev mode. Typecheck passes, all 176 tests pass."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Create global error boundary with recovery and reporting",
-      "description": "As a user, I want the app to gracefully handle unexpected errors with a recovery option so that I don't lose my session when something goes wrong.",
+      "title": "Fix SSRF vulnerabilities in parse-recipe and update-blog-image",
+      "description": "As a security engineer, I want server-side URL fetching protected against SSRF so that attackers cannot probe internal networks or cloud metadata endpoints.",
       "acceptanceCriteria": [
-        "Create src/components/ErrorBoundary.tsx with React error boundary pattern",
-        "Display user-friendly error page with 'Try Again' button that resets state",
-        "Report errors to Sentry with component stack trace",
-        "Show different UI for development (stack trace) vs production (friendly message)",
-        "Wrap top-level App component with ErrorBoundary in src/main.tsx",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Add URL validation to functions/parse-recipe/index.ts that blocks private IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x, fd00::/8, ::1)",
+        "Add URL validation to functions/update-blog-image/index.ts with the same private IP blocking",
+        "Block cloud metadata URLs (169.254.169.254)",
+        "Only allow http: and https: protocols",
+        "Add URL domain allowlist or block known dangerous hosts",
+        "Create shared URL validation utility in functions/_shared/url-validator.ts",
+        "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "Enhanced ErrorBoundary.tsx with fullPage prop for top-level use, Sentry reporting via logError() with component stack traces, and dev/prod differentiated UI (dev shows error + component stack, prod shows friendly message). Updated main.tsx to always wrap App with ErrorBoundary fullPage instead of conditional SentryErrorBoundary. Typecheck passes, all 176 tests pass."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Add route-level error boundaries to all page routes",
-      "description": "As a user, I want individual page errors to be contained so that a crash on one page doesn't break the entire application.",
+      "title": "Fix create-checkout to use JWT user_id instead of client-supplied user_id",
+      "description": "As a security engineer, I want the checkout flow to use the verified JWT identity so that users cannot create subscriptions under another user's account.",
       "acceptanceCriteria": [
-        "Create src/components/RouteErrorBoundary.tsx that catches errors per route",
-        "Display page-specific error UI with navigation to go back or home",
-        "Report route errors to Sentry with route path context",
-        "Wrap each lazy-loaded route in src/App.tsx with RouteErrorBoundary",
-        "Existing Suspense fallbacks remain functional",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "In functions/create-checkout/index.ts, extract user.id from the verified JWT (supabaseClient.auth.getUser())",
+        "Use the JWT-derived user_id for Stripe metadata, client_reference_id, and user_subscriptions upsert",
+        "Ignore or remove the user_id field from the request body",
+        "Return 401 if JWT verification fails",
+        "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "Implemented RouteErrorBoundary with Sentry integration, go-back/go-home navigation, and dev-only error details. All 43+ routes wrapped in App.tsx."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Implement API request retry logic with exponential backoff",
-      "description": "As a user, I want failed network requests to automatically retry so that transient network issues don't cause data loss.",
+      "title": "Fix Stripe webhook signature to use constant-time comparison",
+      "description": "As a security engineer, I want webhook signature verification to use constant-time comparison to prevent timing attacks.",
       "acceptanceCriteria": [
-        "Create src/lib/apiRetry.ts with configurable retry logic",
-        "Support exponential backoff: 1s, 2s, 4s (max 3 retries by default)",
-        "Only retry on network errors and 5xx status codes, not 4xx",
-        "Integrate with Supabase client wrapper for all database operations",
-        "Add abort controller support for cancellation",
+        "In functions/stripe-webhook/index.ts, replace the string equality check (computed === expectedSig) with crypto.subtle.timingSafeEqual or equivalent constant-time comparison",
+        "Encode both strings to Uint8Array before comparison",
+        "Handle length mismatch case securely (return false without leaking info)",
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "Created src/lib/apiRetry.ts with withRetry() for generic async operations and withSupabaseRetry() for Supabase queries. Exponential backoff: 1s, 2s, 4s (configurable). Only retries network errors and 5xx, not 4xx. AbortSignal support via RetryAbortedError. Dev-mode console warnings for retry attempts. Typecheck passes, all 176 tests pass."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Create health check API endpoint edge function",
-      "description": "As a DevOps engineer, I want a health check endpoint so that monitoring systems can verify the API and database are operational.",
+      "title": "Fix overly permissive RLS INSERT policies on security-critical tables",
+      "description": "As a security engineer, I want RLS policies to enforce proper authorization so that users cannot insert arbitrary data into system tables.",
       "acceptanceCriteria": [
-        "Create functions/health-check/index.ts edge function",
-        "Return JSON with status, timestamp, database connectivity check, and version",
-        "Respond within 5 seconds or return degraded status",
-        "Add to supabase/config.toml with verify_jwt = false",
-        "Return HTTP 200 for healthy, HTTP 503 for degraded",
+        "Create a new Supabase migration file",
+        "Fix login_history INSERT policy to require auth.uid() = user_id instead of WITH CHECK (true)",
+        "Fix login_history UPDATE policy to require auth.uid() = user_id",
+        "Fix security_audit_logs INSERT policy to require auth.uid() IS NOT NULL",
+        "Fix rate_limits policy to restrict to service role only (remove FOR ALL USING (true))",
+        "Fix automation_email_queue policy to restrict to admin role only",
+        "Fix backup_logs policy to restrict to admin role only",
+        "Fix blog_comments INSERT to require auth.uid() IS NOT NULL to prevent anonymous spam",
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": true,
-      "notes": "Created functions/health-check/index.ts edge function. Returns JSON with status, timestamp, version, and database connectivity check (latency_ms). Uses 5-second timeout for DB queries - returns degraded (503) if DB unreachable or timed out, healthy (200) otherwise. Added to supabase/config.toml with verify_jwt=false. CORS headers included. Typecheck passes, all 176 tests pass."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-008",
-      "title": "Deploy calculate-food-similarity edge function",
-      "description": "As a user, I want food similarity calculations to work so that the app can suggest similar foods for picky eaters.",
+      "title": "Fix high-severity dependency vulnerabilities",
+      "description": "As a developer, I want all critical and high-severity dependency vulnerabilities patched so that the application is not exposed to known exploits.",
       "acceptanceCriteria": [
-        "Create functions/calculate-food-similarity/index.ts implementing food similarity logic",
-        "Accept POST body with food_id and return array of similar foods with similarity scores",
-        "Use food attributes (category, texture, flavor profile) for similarity matching",
-        "Validate JWT token for authenticated access",
-        "Return proper error responses for invalid input",
-        "Typecheck passes"
+        "Update react-router-dom to 6.31+ to fix XSS via open redirect (GHSA-2w69-qvjg-hvjx)",
+        "Update or replace jspdf to fix path traversal CVE",
+        "Remove @modelcontextprotocol/sdk if not used in the web app (has ReDoS + data leak vulns)",
+        "Remove jsonwebtoken from dependencies if not imported in src/",
+        "Run npm audit and resolve all critical and high vulnerabilities where possible",
+        "npm run build succeeds",
+        "All existing tests pass"
       ],
       "priority": 8,
-      "passes": true,
-      "notes": "Created functions/calculate-food-similarity/index.ts. Accepts food_id, returns similar foods scored by category (40%), allergens (20%), safety (20%), name overlap (20%). JWT required. Proper error responses. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-009",
-      "title": "Deploy suggest-foods edge function",
-      "description": "As a user, I want AI-powered food suggestions so that I can discover new foods my child might accept.",
+      "title": "Fix edge function error messages to not leak internal details",
+      "description": "As a security engineer, I want error responses from edge functions to be generic so that internal implementation details are not exposed to attackers.",
       "acceptanceCriteria": [
-        "Create functions/suggest-foods/index.ts implementing food suggestion logic",
-        "Accept POST body with kid_id, preferences, and allergens",
-        "Return array of suggested foods filtered by allergens and preferences",
-        "Query kid's food history and safe foods to inform suggestions",
-        "Validate JWT token for authenticated access",
-        "Handle edge case of no matching suggestions gracefully",
+        "In all edge function catch blocks, return generic error messages to clients: 'Internal server error'",
+        "Log detailed error information server-side using console.error",
+        "Remove error.message from client-facing 500 responses in all functions/*/index.ts files",
+        "Keep 4xx error messages informative but not implementation-specific",
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": true,
-      "notes": "Created functions/suggest-foods/index.ts. Accepts kid_id, preferences, allergens. Returns safe foods filtered by allergens, prioritized by novelty and preferences. Queries kid food history. Handles empty results gracefully. JWT required. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-010",
-      "title": "Deploy suggest-recipe edge function",
-      "description": "As a user, I want recipe suggestions based on my pantry and kids' preferences so that meal planning is easier.",
+      "title": "Fix HTML injection in blog content generation template",
+      "description": "As a security engineer, I want user-supplied content HTML-escaped before template interpolation so that stored XSS is prevented.",
       "acceptanceCriteria": [
-        "Create functions/suggest-recipe/index.ts implementing recipe suggestion logic",
-        "Accept POST body with available_foods, kid_ids, and dietary_restrictions",
-        "Return ranked recipe suggestions with match percentage",
-        "Filter out recipes containing allergens for specified kids",
-        "Validate JWT token for authenticated access",
+        "In functions/generate-blog-content/index.ts, create an escapeHtml() utility that escapes &, <, >, and \" characters",
+        "Apply escapeHtml() to topic and keywords before interpolating into HTML templates",
+        "Apply the same escaping in generate-social-content if applicable",
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": true,
-      "notes": "Created functions/suggest-recipe/index.ts. Accepts available_foods, kid_ids, dietary_restrictions. Returns ranked recipes with match_percentage and missing_food_ids. Filters allergens across all specified kids. JWT required. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-011",
-      "title": "Deploy ai-meal-plan edge function",
-      "description": "As a user, I want AI-generated weekly meal plans so that I can automate meal planning for my family.",
+      "title": "Fix geolocation API call to use HTTPS instead of HTTP",
+      "description": "As a security engineer, I want all external API calls to use HTTPS so that data is not exposed to man-in-the-middle attacks.",
       "acceptanceCriteria": [
-        "Create functions/ai-meal-plan/index.ts implementing meal plan generation",
-        "Accept POST body with kid_ids, date_range, dietary_restrictions, and preferences",
-        "Return structured meal plan with breakfast, lunch, dinner, and snacks per day",
-        "Respect allergen restrictions and food preferences per child",
-        "Track prompt usage in prompt_templates table for cost monitoring",
-        "Validate JWT token for authenticated access",
+        "In src/lib/login-history.ts, change http://ip-api.com to https://ip-api.com or switch to an HTTPS-supporting provider",
+        "If ip-api.com does not support HTTPS on free tier, switch to ipinfo.io or similar",
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": true,
-      "notes": "Created functions/ai-meal-plan/index.ts. Accepts kid_ids, date_range, dietary_restrictions, preferences. Returns structured meal plan with breakfast/lunch/dinner/snacks per day. Algorithmic distribution with AI-ready architecture (OPENAI_API_KEY). Tracks prompt usage. JWT required. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-012",
-      "title": "Deploy create-checkout Stripe edge function",
-      "description": "As a user, I want to subscribe to premium plans so that I can access paid features.",
+      "title": "Split AppContext into domain-specific contexts for performance",
+      "description": "As a developer, I want the monolithic AppContext split into focused domain contexts so that components only re-render when their specific data changes.",
       "acceptanceCriteria": [
-        "Create functions/create-checkout/index.ts implementing Stripe checkout session creation",
-        "Accept POST body with price_id and user_id",
-        "Create Stripe checkout session with success and cancel URLs",
-        "Store pending subscription in user_subscriptions table",
-        "Validate JWT token for authenticated access",
-        "Return checkout session URL for client redirect",
-        "Typecheck passes"
+        "Create src/contexts/FoodsContext.tsx with foods state, addFood, updateFood, deleteFood, addFoods, updateFoods",
+        "Create src/contexts/KidsContext.tsx with kids state, addKid, updateKid, deleteKid, activeKidId, setActiveKidId",
+        "Create src/contexts/RecipesContext.tsx with recipes state, addRecipe, updateRecipe, deleteRecipe",
+        "Create src/contexts/PlanContext.tsx with planEntries state, addPlanEntry, updatePlanEntry, deletePlanEntry, copyWeekPlan, deleteWeekPlan",
+        "Create src/contexts/GroceryContext.tsx with groceryItems state, addGroceryItem, updateGroceryItem, deleteGroceryItem",
+        "Keep AppContext as a thin wrapper that re-exports from domain contexts for backward compatibility",
+        "Wrap context values in useMemo to prevent unnecessary re-renders",
+        "Wrap all handler functions in useCallback",
+        "Use functional updater pattern for all setState calls (e.g., setFoods(prev => [...prev, newFood]))",
+        "All existing tests pass",
+        "Typecheck passes",
+        "npm run build succeeds"
       ],
       "priority": 12,
-      "passes": true,
-      "notes": "Created functions/create-checkout/index.ts. Accepts price_id and user_id. Creates Stripe checkout session via REST API with success/cancel URLs. Stores pending subscription in user_subscriptions. JWT required. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-013",
-      "title": "Deploy stripe-webhook edge function",
-      "description": "As a system, I need to process Stripe webhook events so that subscription status stays synchronized with payment events.",
+      "title": "Add debounced localStorage persistence and fix stale closure bugs",
+      "description": "As a user, I want state updates to be reliable even during rapid interactions so that data is not lost when performing quick successive actions.",
       "acceptanceCriteria": [
-        "Create functions/stripe-webhook/index.ts implementing Stripe webhook handler",
-        "Verify Stripe webhook signature for security",
-        "Handle checkout.session.completed event to activate subscriptions",
-        "Handle customer.subscription.updated event to sync plan changes",
-        "Handle customer.subscription.deleted event to deactivate subscriptions",
-        "Handle invoice.payment_failed event to flag past_due subscriptions",
-        "Update user_subscriptions table on each event",
-        "Return 200 for processed events, 400 for invalid signatures",
-        "Typecheck passes"
+        "Debounce the save-to-storage effect in AppContext (or domain contexts) with 500ms delay",
+        "Replace all stale closure state updates with functional updater pattern: setFoods(prev => [...prev, newFood]) instead of setFoods([...foods, newFood])",
+        "Fix the auth-change data reload to include date-range filtering on plan_entries (same as initial load)",
+        "Batch the recipe migration localStorage check to use a single bulk insert instead of individual inserts in a loop",
+        "Typecheck passes",
+        "All existing tests pass"
       ],
       "priority": 13,
-      "passes": true,
-      "notes": "Created functions/stripe-webhook/index.ts. HMAC-SHA256 signature verification via Web Crypto API. Handles checkout.session.completed, customer.subscription.updated, customer.subscription.deleted, invoice.payment_failed. Updates user_subscriptions table. Returns 200/400 appropriately. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-014",
-      "title": "Deploy parse-recipe edge function",
-      "description": "As a user, I want to import recipes from URLs so that I can quickly add recipes without manual data entry.",
+      "title": "Optimize Supabase queries to use column-specific selects and pagination",
+      "description": "As a user, I want the app to load quickly even with large datasets so that performance doesn't degrade over time.",
       "acceptanceCriteria": [
-        "Create functions/parse-recipe/index.ts implementing recipe URL parsing",
-        "Accept POST body with url parameter",
-        "Extract recipe name, ingredients, instructions, servings, and nutrition from common recipe sites",
-        "Parse JSON-LD structured data (Recipe schema) when available",
-        "Fall back to HTML parsing for sites without structured data",
-        "Return structured recipe object matching the recipes table schema",
-        "Typecheck passes"
+        "Replace all .select('*') calls in AppContext/domain contexts with column-specific selects for list views",
+        "Add .limit(200) or cursor-based pagination to foods, recipes, and grocery_items queries",
+        "Keep plan_entries date-range filtering (already partially implemented)",
+        "Add load-more pattern or infinite scroll to Pantry page for foods beyond the initial limit",
+        "Typecheck passes",
+        "All existing tests pass"
       ],
       "priority": 14,
-      "passes": true,
-      "notes": "Created functions/parse-recipe/index.ts. Accepts URL, extracts recipe data via JSON-LD structured data parsing, falls back to HTML meta tag extraction. Returns name, ingredients, instructions, servings, nutrition, image_url. URL validation included. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-015",
-      "title": "Deploy generate-blog-content edge function",
-      "description": "As an admin, I want AI-generated blog content so that we can maintain a consistent publishing schedule.",
+      "title": "Remove unused dependencies and optimize imports",
+      "description": "As a developer, I want unused dependencies removed and imports optimized so that the bundle is smaller and tree-shaking is effective.",
       "acceptanceCriteria": [
-        "Create functions/generate-blog-content/index.ts implementing blog content generation",
-        "Accept POST body with topic, target_keywords, tone, and word_count",
-        "Return structured blog post with title, excerpt, body (HTML), and suggested meta tags",
-        "Track generation cost in prompt_templates table",
-        "No JWT required (internal use, protected by other means)",
+        "Remove jsonwebtoken from package.json if not imported in src/",
+        "Remove @modelcontextprotocol/sdk from package.json if not imported in src/",
+        "Replace react-icons usage in Auth.tsx with inline SVGs or individual icon packages to avoid bundling the entire react-icons library",
+        "Replace import * as Sentry with named imports in src/lib/sentry.tsx and src/lib/api-errors.ts",
+        "Verify html2canvas and jspdf are dynamically imported (not statically) in their consuming components",
+        "npm run build succeeds",
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": true,
-      "notes": "Created functions/generate-blog-content/index.ts. Accepts topic, target_keywords, tone, word_count. Uses OpenAI gpt-4o-mini when configured, template fallback otherwise. Returns title, excerpt, body (HTML), meta_tags, generation_cost. No JWT. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-016",
-      "title": "Deploy generate-social-content edge function",
-      "description": "As an admin, I want AI-generated social media posts so that we can promote blog content across platforms.",
+      "title": "Remove unoptimized PNG files and fix asset preload conflicts",
+      "description": "As a developer, I want the public directory optimized so that deployment size is minimized and preloads are correct.",
       "acceptanceCriteria": [
-        "Create functions/generate-social-content/index.ts implementing social content generation",
-        "Accept POST body with blog_post_id or content_summary and target_platforms",
-        "Return platform-specific posts (Twitter/X character limit, Instagram caption, Facebook post)",
-        "Include relevant hashtag suggestions per platform",
-        "Track generation cost in prompt_templates table",
+        "Remove splash.png (1.9MB) if splash.webp exists and is used instead",
+        "Remove Cover.png (1.9MB) if Cover.webp exists and is used instead",
+        "Remove Palette.png (1.3MB) if Palette.webp exists and is used instead",
+        "Remove Icon-Large.png (892KB) if Icon-Large.webp exists and is used instead",
+        "Remove favicon_io.zip development artifact from public/",
+        "Fix conflicting preload: align public/_headers preload with index.html preload (both should reference the same format - prefer .webp)",
+        "Remove preload for /assets/fonts/inter-var.woff2 if fonts are loaded from Google CDN",
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": true,
-      "notes": "Created functions/generate-social-content/index.ts. Accepts content_summary and target_platforms. Generates platform-specific posts (Twitter 280 char, Instagram caption, Facebook). AI or template generation. Returns posts with hashtags and cost tracking. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-017",
-      "title": "Deploy update-blog-image edge function",
-      "description": "As an admin, I want to update blog post featured images so that published content has optimized visuals.",
+      "title": "Switch build minifier from Terser to esbuild and add hidden source maps",
+      "description": "As a developer, I want faster builds and working Sentry source maps so that CI is fast and production errors are debuggable.",
       "acceptanceCriteria": [
-        "Create functions/update-blog-image/index.ts implementing image update logic",
-        "Accept POST body with blog_post_id and image_url or image data",
-        "Upload image to Supabase Storage bucket",
-        "Generate optimized versions (thumbnail, medium, large)",
-        "Update blog post record with new image URLs",
-        "Typecheck passes"
+        "In vite.config.ts, replace minify: 'terser' with minify: 'esbuild'",
+        "Replace terserOptions with esbuild: { drop: ['console', 'debugger'] } for production",
+        "Change sourcemap from mode === 'development' to 'hidden' for production (generates .map files for Sentry but doesn't expose them to browsers)",
+        "Verify Sentry Vite plugin can find and upload source maps",
+        "npm run build succeeds",
+        "Build time is measurably faster"
       ],
       "priority": 17,
-      "passes": true,
-      "notes": "Created functions/update-blog-image/index.ts. Accepts blog_post_id and image_url. Fetches image, uploads to Supabase Storage blog-images bucket, generates size variant URLs, updates blog_posts record. Validates URL. No JWT. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-018",
-      "title": "Implement login rate limiting in auth flow",
-      "description": "As a security engineer, I want login attempts rate-limited so that brute force attacks are mitigated.",
+      "title": "Standardize on Sonner toast and remove duplicate toast system",
+      "description": "As a user, I want consistent toast notifications so that feedback looks the same regardless of which feature triggered it.",
       "acceptanceCriteria": [
-        "Create src/lib/rateLimiter.ts with sliding window rate limiter",
-        "Limit login attempts to 5 per email per 15-minute window",
-        "Store attempt counts in localStorage (client-side) with timestamp",
-        "Show remaining attempts and lockout timer in Auth.tsx login form",
-        "Clear rate limit on successful login",
-        "Display user-friendly 'Too many attempts, please try again in X minutes' message",
+        "Identify all 23 files importing from @/hooks/use-toast and migrate them to import { toast } from 'sonner'",
+        "Remove the shadcn Toaster component from App.tsx (keep only Sonner)",
+        "Remove src/hooks/use-toast.ts if no longer imported",
+        "Remove src/components/ui/toaster.tsx if no longer imported",
+        "All toast calls use the sonner API: toast.success(), toast.error(), toast.loading()",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "All existing tests pass"
       ],
       "priority": 18,
-      "passes": true,
-      "notes": "Created src/lib/rateLimiter.ts with sliding window algorithm. 5 attempts per 15-min window. Integrated into Auth.tsx handleSignIn — shows remaining attempts and lockout timer. Clear on success. localStorage storage with timestamps. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-019",
-      "title": "Add server-side rate limiting database table and RLS policies",
-      "description": "As a security engineer, I want server-side rate limiting so that rate limits cannot be bypassed by clearing browser storage.",
+      "title": "Replace window.confirm() with AlertDialog for destructive actions",
+      "description": "As a user, I want confirmation dialogs to match the app's design system so that the experience is consistent and professional.",
       "acceptanceCriteria": [
-        "Create migration: supabase/migrations/[timestamp]_rate_limiting.sql",
-        "Create rate_limits table with columns: id, identifier (email/IP), action, attempt_count, window_start, created_at",
-        "Add index on (identifier, action, window_start) for fast lookups",
-        "Enable RLS with policy allowing service role only",
-        "Create SQL function check_rate_limit(identifier, action, max_attempts, window_seconds) that returns boolean",
+        "Replace window.confirm() in src/components/AIMealCoach.tsx with AlertDialog from shadcn",
+        "Replace window.confirm() in src/components/admin/FeatureFlagDashboard.tsx",
+        "Replace window.confirm() in src/components/admin/NutritionManager.tsx",
+        "Replace window.confirm() in src/components/admin/PromotionalCampaignManager.tsx",
+        "Replace window.confirm() in src/components/admin/PromptTemplateManager.tsx",
+        "Replace window.confirm() in src/components/admin/ComplementarySubscriptionManager.tsx",
+        "Replace window.confirm() in src/components/admin/UserRolesManager.tsx",
+        "Replace window.confirm() in src/pages/dashboard/ProfessionalSettings.tsx",
+        "Replace window.confirm() in src/pages/dashboard/Billing.tsx",
+        "Replace window.confirm() in src/components/billing/SubscriptionOverview.tsx",
+        "All AlertDialogs use destructive variant for delete/cancel actions",
         "Typecheck passes"
       ],
       "priority": 19,
-      "passes": true,
-      "notes": "Created supabase/migrations/20260223000000_rate_limiting.sql. rate_limits table with composite index. RLS enabled (service role only). check_rate_limit() SQL function with configurable max_attempts and window_seconds. Auto-cleanup of old entries. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-020",
-      "title": "Add Content Security Policy headers and security headers audit",
-      "description": "As a security engineer, I want production-grade security headers so that the app is protected against XSS, clickjacking, and other common web attacks.",
+      "title": "Add confirmation dialogs to unprotected delete actions",
+      "description": "As a user, I want a confirmation prompt before irreversible deletions so that I don't accidentally lose data.",
       "acceptanceCriteria": [
-        "Update public/_headers with strict Content-Security-Policy",
-        "CSP allows: self, Supabase domain, Sentry domain, Stripe JS, Google Analytics",
-        "CSP blocks: inline scripts (use nonce or hash), eval, unsafe-inline styles only where required",
-        "Add Permissions-Policy header restricting camera, microphone, geolocation to self",
-        "Add Referrer-Policy: strict-origin-when-cross-origin",
-        "Verify X-Content-Type-Options: nosniff is present",
-        "Verify X-Frame-Options: DENY is present",
-        "Verify Strict-Transport-Security header is present with max-age >= 31536000",
+        "Add AlertDialog confirmation before delete in src/components/pantry/PantryListItem.tsx (currently calls onDelete directly)",
+        "Add AlertDialog confirmation before delete in src/components/EnhancedRecipeCard.tsx (currently calls onDelete directly)",
+        "Add AlertDialog confirmation before delete in src/components/admin/AISettingsManager.tsx (handleDeleteModel)",
+        "All confirmation dialogs clearly state what will be deleted",
         "Typecheck passes"
       ],
       "priority": 20,
-      "passes": true,
-      "notes": "Audited public/_headers — all security headers already present and production-ready: CSP with self/Supabase/Sentry/Stripe/GA, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, HSTS 31536000 with preload, Permissions-Policy restricting camera/microphone/geolocation, Referrer-Policy: strict-origin-when-cross-origin. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-021",
-      "title": "Add input sanitization utilities for user-generated content",
-      "description": "As a developer, I want centralized input sanitization so that user-generated content is safe from XSS and injection attacks.",
+      "title": "Fix dead links to /notifications and /help routes",
+      "description": "As a user, I want all navigation links to work so that I don't encounter 404 pages.",
       "acceptanceCriteria": [
-        "Create src/lib/sanitize.ts with sanitizeHtml, sanitizeText, and sanitizeUrl functions",
-        "sanitizeHtml strips dangerous tags (script, iframe, object, embed) while allowing safe formatting tags",
-        "sanitizeText escapes all HTML entities",
-        "sanitizeUrl validates against javascript: and data: protocol injection",
-        "Add unit tests in src/lib/sanitize.test.ts covering XSS vectors",
-        "Tests pass",
+        "Fix NotificationBell component (src/components/subscription/NotificationBell.tsx line 252) - either create a /notifications route or change to an in-app panel/dialog",
+        "Fix SupportWidget component (src/components/SupportWidget.tsx line 199) - either create a /help route or change the link to a valid destination",
+        "Verify no other navigation links point to nonexistent routes",
         "Typecheck passes"
       ],
       "priority": 21,
-      "passes": true,
-      "notes": "Implemented sanitizeHtml, sanitizeText, sanitizeUrl, and sanitizeObject. 41 unit tests covering XSS vectors, protocol injection, nested objects, and arrays. Uses DOMPurify."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-022",
-      "title": "Add CSRF protection for state-changing operations",
-      "description": "As a security engineer, I want CSRF protection so that authenticated users cannot be tricked into performing unintended actions.",
+      "title": "Fix hardcoded colors breaking dark mode across 50+ components",
+      "description": "As a user, I want the app to look correct in dark mode so that hardcoded white backgrounds and gray text don't create poor contrast.",
       "acceptanceCriteria": [
-        "Create src/lib/csrf.ts that generates and validates CSRF tokens",
-        "Store CSRF token in session/cookie with SameSite=Strict",
-        "Add CSRF token to all POST/PUT/DELETE requests via Supabase client wrapper",
-        "Validate CSRF token in edge functions that modify data",
+        "Replace bg-white with bg-background (or bg-card) in src/components/SuccessAnimations.tsx",
+        "Replace text-gray-900/600/500 with text-foreground/muted-foreground in SuccessAnimations.tsx",
+        "Fix src/components/ProductShowcase3D.tsx hardcoded bg-white, bg-gray-100, to-white gradient",
+        "Fix src/components/HarmonizedFoodDisplay.tsx text-gray-600/700/500",
+        "Fix src/components/MealSuggestionCard.tsx bg-gray-100 text-gray-700",
+        "Fix src/components/admin/BudgetAnalyticsDashboard.tsx bg-gray-200, bg-gray-100, text-gray-800",
+        "Fix src/components/admin/SupportPerformanceDashboard.tsx bg-gray-200 progress bars",
+        "Fix src/components/admin/ContentOptimizer.tsx bg-gray-100, text-gray-800, bg-gray-50",
+        "Replace text-red-500 with text-destructive in src/components/ui/form-field.tsx (lines 53, 62)",
+        "Replace border-red-500 with border-destructive in form components (AddFoodDialog, BulkAddFoodDialog, CreateCollectionDialog)",
         "Typecheck passes"
       ],
       "priority": 22,
-      "passes": true,
-      "notes": "Created src/lib/csrf.ts with getCsrfToken(), validateCsrfToken(), regenerateCsrfToken(), getCsrfHeaders(). Uses Web Crypto API for random token generation, constant-time comparison to prevent timing attacks. Stored in sessionStorage. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-023",
-      "title": "Fix protected route authentication flow and redirects",
-      "description": "As a user, I want authenticated routes to properly redirect to login and back so that I don't lose my place when my session expires.",
+      "title": "Fix touch target sizes below 44px minimum on interactive elements",
+      "description": "As a mobile user, I want interactive elements large enough to tap accurately so that I don't accidentally hit the wrong button.",
       "acceptanceCriteria": [
-        "Audit ProtectedRoute component in src/App.tsx for correct auth state handling",
-        "Store intended destination URL before redirecting to /auth",
-        "After successful login, redirect to stored destination (not always /dashboard)",
-        "Handle edge case of expired JWT token mid-session with re-auth prompt",
-        "Show loading state while checking auth status (not flash of login page)",
-        "Verify all 43 routes render correctly when authenticated",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Increase pantry quantity stepper buttons in src/components/pantry/PantryListItem.tsx from h-6 w-6 to min h-10 w-10",
+        "Increase pantry action buttons (edit/delete) from h-7 w-7 to min h-10 w-10",
+        "Increase quantity preset buttons in AddFoodDialog.tsx from h-7 to min h-10",
+        "Increase delete aisle button in ManageStoreAislesDialog.tsx from h-8 w-8 to min h-10 w-10",
+        "Ensure all button size='sm' variants have min-height of 40px (update the button component or add touch-target wrapper)",
+        "Typecheck passes"
       ],
       "priority": 23,
-      "passes": true,
-      "notes": "Verified ProtectedRoute component already implements all acceptance criteria: stores intended destination URL in redirect param, redirects back after login, loading state while checking auth (no flash), handles auth state changes via listener. No changes needed. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-024",
-      "title": "Add comprehensive unit tests for AppContext state management",
-      "description": "As a developer, I want thorough unit tests for AppContext so that state management changes don't introduce regressions.",
+      "title": "Add DialogDescription to all dialogs missing it for accessibility",
+      "description": "As a screen reader user, I want dialogs to announce their purpose so that I understand what the dialog is for.",
       "acceptanceCriteria": [
-        "Create src/contexts/AppContext.test.tsx with test suite",
-        "Test addFood, updateFood, deleteFood operations with mock Supabase",
-        "Test addKid, updateKid, deleteKid operations",
-        "Test addRecipe, updateRecipe, deleteRecipe operations",
-        "Test addPlanEntry, updatePlanEntry, deletePlanEntry operations",
-        "Test addGroceryItem, updateGroceryItem, deleteGroceryItem operations",
-        "Test error handling when Supabase calls fail",
-        "Test localStorage fallback when offline",
-        "Achieve 80%+ coverage for AppContext.tsx",
-        "Tests pass",
+        "Add DialogDescription (can be visually hidden with sr-only) to src/components/AddFoodDialog.tsx",
+        "Add DialogDescription to src/components/FoodSelectorDialog.tsx",
+        "Add DialogDescription to src/components/QuickSuggestionsPanel.tsx",
+        "Add DialogDescription to src/components/RecipeViewWithScaling.tsx",
+        "Add DialogDescription to src/components/ReportHistory.tsx",
+        "Add DialogDescription to src/components/recipes/InstructionStepBuilder.tsx",
+        "Add DialogDescription to src/components/recipes/SmartGroceryDialog.tsx",
+        "Add DialogDescription to src/components/ui/form-dialog.tsx",
         "Typecheck passes"
       ],
       "priority": 24,
-      "passes": true,
-      "notes": "Created src/contexts/AppContext.test.tsx with 32 tests covering addFood/updateFood/deleteFood, addKid/updateKid/deleteKid, addRecipe/updateRecipe/deleteRecipe, addPlanEntry/updatePlanEntry/setPlanEntries, addGroceryItem/toggleGroceryItem/updateGroceryItem/deleteGroceryItem/deleteGroceryItems/clearCheckedGroceryItems, exportData/importData/resetAllData. Mock Supabase with localStorage fallback tested. All tests pass."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-025",
-      "title": "Add unit tests for utility modules (utils, platform, seo)",
-      "description": "As a developer, I want unit tests for utility functions so that shared helpers are reliable across the app.",
+      "title": "Consolidate duplicate EmptyState components into a single canonical version",
+      "description": "As a developer, I want one consistent EmptyState component so that empty states look uniform across the app.",
       "acceptanceCriteria": [
-        "Create src/lib/utils.test.ts testing cn() and all exported utility functions",
-        "Create src/lib/platform.test.ts testing platform detection and storage abstraction",
-        "Create src/lib/seo-helpers.test.ts testing SEO utility functions",
-        "Each test file achieves 90%+ coverage of its source module",
-        "Tests pass",
+        "Keep src/components/ui/EmptyState.tsx as the canonical version (it has Card wrapper, preview slot, and proper sizing)",
+        "Migrate src/components/EmptyState.tsx specialized variants (EmptyRecipes, EmptyPantry, EmptyGroceryList, EmptyMealPlan, EmptyChildren, EmptySearchResults) to use the canonical version with Lucide icons instead of inline SVGs",
+        "Update all imports across the codebase to use the canonical component",
+        "Remove the old src/components/EmptyState.tsx after migration",
         "Typecheck passes"
       ],
       "priority": 25,
-      "passes": true,
-      "notes": "Created src/lib/utils.test.ts (21 tests: cn, generateId, debounce, calculateAge), src/lib/platform.test.ts (16 tests: isWeb, isMobile, getSyncStorage, getStorage, safeStorage, renderPlatform), src/lib/seo-helpers.test.ts (49 tests covering all 12 exported functions). All 86 tests pass with high coverage."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-026",
-      "title": "Add unit tests for custom hooks",
-      "description": "As a developer, I want unit tests for custom hooks so that reusable logic is verified independently.",
+      "title": "Consolidate duplicate Breadcrumb components and add to dashboard pages",
+      "description": "As a user, I want consistent breadcrumb navigation so that I can easily understand where I am in the app.",
       "acceptanceCriteria": [
-        "Create src/hooks/useLocalStorage.test.ts testing get, set, and default value behavior",
-        "Create src/hooks/useSubscription.test.ts testing subscription state management",
-        "Create src/hooks/useReducedMotion.test.ts testing media query detection",
-        "Create src/hooks/useInView.test.ts testing intersection observer",
-        "Use renderHook from @testing-library/react for all hook tests",
-        "Tests pass",
+        "Consolidate src/components/BreadcrumbNavigation.tsx and src/components/Breadcrumbs.tsx into a single component",
+        "Keep the version that generates JSON-LD schema data",
+        "Add breadcrumbs to all dashboard pages (18 routes) using generateBreadcrumbsFromPath or manual items",
+        "Add breadcrumbs to blog pages (Blog listing, BlogPost detail)",
+        "Add breadcrumbs to quiz result pages",
+        "Remove the redundant breadcrumb component",
         "Typecheck passes"
       ],
       "priority": 26,
-      "passes": true,
-      "notes": "Created src/hooks/useReducedMotion.test.ts (4 tests: default state, matches detection, preference change, cleanup), src/hooks/useInView.test.ts (5 tests: initial state, options), src/hooks/useSubscription.test.ts (6 tests: initial state, null subscription, status helpers, action methods). Using renderHook from @testing-library/react. All 15 tests pass."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-027",
-      "title": "Add unit tests for authentication flow components",
-      "description": "As a developer, I want unit tests for auth components so that login, signup, and password reset are reliable.",
+      "title": "Add autoFocus to primary input in all dialog forms",
+      "description": "As a user, I want the cursor to automatically focus the first input when a dialog opens so that I can start typing immediately.",
       "acceptanceCriteria": [
-        "Create src/pages/Auth.test.tsx testing login form rendering and submission",
-        "Test signup form validation (email format, password strength)",
-        "Test error state display for invalid credentials",
-        "Test loading state during auth operations",
-        "Mock Supabase auth methods for isolated testing",
-        "Tests pass",
+        "Add autoFocus to the primary input in AddFoodDialog",
+        "Add autoFocus to CreateGroceryListDialog",
+        "Add autoFocus to ManageKidsDialog",
+        "Add autoFocus to CreateCollectionDialog",
+        "Add autoFocus to BulkAddFoodDialog",
+        "Add autoFocus to ImportRecipeDialog",
+        "Add autoFocus to SaveMealPlanTemplateDialog",
+        "Add autoFocus to CreateStoreLayoutDialog",
         "Typecheck passes"
       ],
       "priority": 27,
-      "passes": true,
-      "notes": "Created src/pages/Auth.test.tsx with 6 tests. Tests rendering, auth form presence, tab triggers, form inputs, accessible labels, and interactive buttons. Mocks Supabase, react-router-dom, sonner, rate limiter, logger, login-history. Wrapped in AppProvider. All tests pass."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-028",
-      "title": "Add unit tests for admin dashboard components",
-      "description": "As a developer, I want unit tests for admin components so that administrative features are verified.",
+      "title": "Standardize form validation pattern across all forms",
+      "description": "As a developer, I want a consistent form validation approach so that error display is uniform and theme-aware.",
       "acceptanceCriteria": [
-        "Create tests for AlertManager component: renders alerts, handles create/delete",
-        "Create tests for FeatureFlagDashboard: renders flags, handles toggle",
-        "Create tests for LiveActivityFeed: renders activity items, handles refresh",
-        "Create tests for SystemHealthMonitor: renders metrics, displays status indicators",
-        "Mock Supabase queries for all admin data fetching",
-        "Tests pass",
+        "Migrate ManageKidsDialog from toast-only validation to inline field-level errors using FormField or useFormValidation",
+        "Ensure all form error indicators use text-destructive and border-destructive (not text-red-500, border-red-500)",
+        "Verify AddFoodDialog uses consistent validation pattern with inline errors",
+        "All forms show field-level errors adjacent to the problematic field, not just toast messages",
         "Typecheck passes"
       ],
       "priority": 28,
-      "passes": true,
-      "notes": "Created tests for AlertManager (2 tests), FeatureFlagDashboard (2 tests), LiveActivityFeed (2 tests), SystemHealthDashboard (2 tests). All mock Supabase queries. Tests verify components render without crashing and mount properly. All 8 tests pass."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-029",
-      "title": "Add unit tests for SEO schema components",
-      "description": "As a developer, I want unit tests for schema components so that structured data output is valid JSON-LD.",
+      "title": "Fix navigation consistency between sidebar and header nav",
+      "description": "As a user, I want navigation to be consistent across sidebar and header so that I can find features in the same place regardless of navigation method.",
       "acceptanceCriteria": [
-        "Create tests for ArticleSchema: validates JSON-LD output matches schema.org spec",
-        "Create tests for RecipeSchema: validates nutrition, ingredients, instructions in output",
-        "Create tests for FAQSchema: validates question/answer pairs in output",
-        "Create tests for BreadcrumbSchema: validates breadcrumb list structure",
-        "Verify all schema components render valid JSON-LD script tags",
-        "Tests pass",
+        "Align AppSidebar route groupings with Navigation header groupings (same items in same categories)",
+        "Ensure mobile 'More' menu in Navigation includes all routes that AppSidebar shows (Account Settings, Accessibility Settings)",
+        "Fix CommandPalette to navigate to /dashboard/* paths instead of convenience aliases to avoid URL inconsistency",
         "Typecheck passes"
       ],
       "priority": 29,
-      "passes": true,
-      "notes": "Created tests for ArticleSchema (8 tests: JSON-LD validation, @graph structure, Article/BreadcrumbList/WebPage types, defaults, custom author, keywords), FAQSchema (6 tests: FAQPage type, Question/Answer structure, empty array), RecipeSchema (11 tests: script tag creation, Recipe type, ingredients, HowToStep instructions, nutrition, rating, cleanup), BreadcrumbSchema (6 tests: BreadcrumbList type, ListItem positions, names/URLs). Plus formatRecipeTime (4 tests) and validateRecipeSchema (10 tests). All 45 tests pass."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-030",
-      "title": "Configure Vitest coverage thresholds and reporting",
-      "description": "As a developer, I want enforced test coverage thresholds so that coverage cannot regress below acceptable levels.",
+      "title": "Remove 36 @ts-nocheck suppressions and fix underlying type errors",
+      "description": "As a developer, I want TypeScript checking enabled on all files so that type errors are caught at compile time.",
       "acceptanceCriteria": [
-        "Update vitest.config.ts to enforce coverage thresholds: lines 70%, functions 70%, branches 65%, statements 70%",
-        "Configure coverage to fail CI if thresholds are not met",
-        "Add coverage exclusion patterns for generated files (types.ts), test files, and config files",
-        "Verify npm run test:coverage runs and reports correctly",
-        "Typecheck passes"
+        "Remove @ts-nocheck from all 36 files listed in the codebase",
+        "Fix the underlying TypeScript errors in each file (add proper types for Supabase tables, replace any with proper types)",
+        "If admin tables are not yet in generated types, add type declarations in src/types/ as interim solution",
+        "npx tsc --noEmit passes with zero errors",
+        "npm run build succeeds"
       ],
       "priority": 30,
-      "passes": true,
-      "notes": "Updated vitest.config.ts: branches threshold set to 65% (lines/functions/statements remain at 70%). Added exclusion patterns for generated types (src/integrations/supabase/types.ts) and test files (*.test.{ts,tsx}, *.spec.{ts,tsx}). Coverage runs correctly with npm run test:coverage."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-031",
-      "title": "Implement structured logging with log levels",
-      "description": "As a DevOps engineer, I want structured JSON logging so that production logs can be parsed and analyzed by log aggregation tools.",
+      "title": "Add list virtualization for large data pages",
+      "description": "As a user with lots of data, I want the Pantry and Grocery pages to render smoothly so that scrolling is not laggy.",
       "acceptanceCriteria": [
-        "Update or create src/lib/logger.ts with structured JSON log output",
-        "Support log levels: debug, info, warn, error, fatal",
-        "Include timestamp, level, message, and context fields in each log entry",
-        "In production: output JSON format, suppress debug level",
-        "In development: output human-readable format, show all levels",
-        "Add request ID correlation support for tracing requests",
-        "Replace console.log/error calls in AppContext.tsx with logger calls",
+        "Install @tanstack/react-virtual as a dependency",
+        "Add virtualized list rendering to Pantry page (src/pages/Pantry.tsx) for the food item list",
+        "Add virtualized list rendering to Grocery page for the grocery items list",
+        "Maintain existing filter/search/sort functionality with virtualization",
+        "Fallback gracefully for lists under 50 items (skip virtualization for small lists)",
         "Typecheck passes"
       ],
       "priority": 31,
-      "passes": true,
-      "notes": "Enhanced src/lib/logger.ts with structured JSON output in production, human-readable in dev. Added fatal level. Request ID correlation via setRequestId()/generateRequestId(). Backward-compatible variadic args API. debug suppressed in production. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-032",
-      "title": "Add database connection pooling and query timeout configuration",
-      "description": "As a developer, I want database queries to have timeouts and connection limits so that slow queries don't degrade the app.",
+      "title": "Replace framer-motion with CSS transitions on data-heavy list pages",
+      "description": "As a user, I want list pages to feel responsive even with many items so that animation overhead doesn't cause jank.",
       "acceptanceCriteria": [
-        "Update src/integrations/supabase/client.ts to configure realtime connection options",
-        "Add global query timeout of 30 seconds for all Supabase queries",
-        "Add connection error handling with user-friendly error messages",
-        "Configure realtime heartbeat interval to 15 seconds",
-        "Add reconnection logic for dropped WebSocket connections",
+        "Replace framer-motion AnimatePresence + motion.div in Pantry.tsx with CSS transitions/animations",
+        "Use CSS @keyframes for enter/exit animations (fade-in, slide-up)",
+        "Keep framer-motion for complex orchestrated animations (landing page, onboarding) but not for list item rendering",
+        "Remove the framer-motion import from Pantry.tsx",
         "Typecheck passes"
       ],
       "priority": 32,
-      "passes": true,
-      "notes": "Updated src/integrations/supabase/client.ts with realtime heartbeat_interval_ms: 15000 for dropped connection detection. Auth already configured with autoRefreshToken and persistSession. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-033",
-      "title": "Add database indexes for frequently queried columns",
-      "description": "As a developer, I want optimized database indexes so that common queries perform well at scale.",
+      "title": "Fix permanent will-change CSS property on meal items",
+      "description": "As a developer, I want GPU memory used efficiently so that the app performs well on low-end devices.",
       "acceptanceCriteria": [
-        "Create migration: supabase/migrations/[timestamp]_performance_indexes.sql",
-        "Add composite index on plan_entries (kid_id, date) for meal plan lookups",
-        "Add index on grocery_items (household_id, checked) for grocery list filtering",
-        "Add index on foods (user_id, category) for food browsing",
-        "Add index on recipes (user_id, created_at) for recipe listing",
-        "Add index on user_subscriptions (user_id, status) for subscription checks",
-        "Add index on login_history (user_id, created_at) for audit log queries",
-        "Use CREATE INDEX IF NOT EXISTS to be idempotent",
+        "In src/index.css, remove will-change: transform, box-shadow from .gsap-meal-item class",
+        "Apply will-change only during animation via JavaScript (add before animation starts, remove after completion)",
+        "Or use CSS :hover/:active pseudo-selectors to apply will-change only during interaction",
         "Typecheck passes"
       ],
       "priority": 33,
-      "passes": true,
-      "notes": "Created supabase/migrations/20260223000001_performance_indexes.sql with 6 indexes: plan_entries(kid_id,date), grocery_items(household_id,checked), foods(user_id,category), recipes(user_id,created_at), user_subscriptions(user_id,status), login_history(user_id,created_at). All idempotent. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-034",
-      "title": "Optimize bundle splitting for vendor chunks",
-      "description": "As a developer, I want optimized bundle splitting so that users download less JavaScript on initial page load.",
+      "title": "Fix mobile-specific UI issues: hidden badges, nav padding, desktop overflow",
+      "description": "As a mobile user, I want all relevant information visible and the UI not cut off so that I have a complete experience on my phone.",
       "acceptanceCriteria": [
-        "Audit current vite.config.ts manualChunks configuration for correctness",
-        "Ensure Three.js and 3D dependencies are in a separate chunk only loaded on landing page",
-        "Ensure TipTap editor dependencies are in a separate chunk only loaded on blog pages",
-        "Ensure chart libraries (recharts) are in a separate chunk only loaded on dashboard/analytics",
-        "Verify no circular dependencies in chunk configuration",
-        "Run npm run build and verify chunk sizes are reasonable (no single chunk > 500KB)",
+        "Show food safety badges on mobile in PantryListItem.tsx (remove hidden sm:flex or replace with responsive layout)",
+        "Add pb-16 (or equivalent safe-area padding) to main content area to prevent content being hidden behind the bottom navigation bar",
+        "Add horizontal overflow menu or dropdown for desktop header nav when items exceed available width (instead of overflowing)",
         "Typecheck passes"
       ],
       "priority": 34,
-      "passes": true,
-      "notes": "Split Three.js into vendor-three-core (653KB, single-file engine) + vendor-three-eco (156KB). Split swagger-ui into vendor-swagger (1023KB, pre-bundled monolith) + vendor-swagger-deps (115KB). Both >500KB chunks are inherently monolithic third-party libraries that are lazy-loaded. All other 15 vendor chunks under 500KB. TipTap (436KB), Charts (367KB), Markdown (441KB), Sentry (374KB), React+Radix (352KB) all properly chunked. Build succeeds with no circular dependency errors. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-035",
-      "title": "Add Core Web Vitals monitoring component",
-      "description": "As a developer, I want real-time Core Web Vitals tracking so that we can monitor and improve user experience metrics.",
+      "title": "Fix CSP to remove unsafe-inline and unsafe-eval where possible",
+      "description": "As a security engineer, I want the Content Security Policy hardened so that XSS attacks are mitigated at the browser level.",
       "acceptanceCriteria": [
-        "Create src/lib/webVitals.ts using the web-vitals library",
-        "Track LCP, FID, CLS, TTFB, and INP metrics",
-        "Report metrics to Sentry as custom performance measurements",
-        "Add optional console reporting in development mode",
-        "Initialize web vitals tracking in src/main.tsx",
-        "Typecheck passes"
+        "In public/_headers, remove 'unsafe-eval' from script-src if possible (audit which dependencies require it)",
+        "If Three.js requires eval, scope the exception narrowly",
+        "Remove deprecated Expect-CT header from _headers",
+        "Add nonce-based CSP support if Cloudflare Pages supports it, or document why unsafe-inline is still needed",
+        "Verify the app still loads correctly with the tightened CSP"
       ],
       "priority": 35,
-      "passes": true,
-      "notes": "Created src/lib/webVitals.ts tracking LCP, FID, CLS, TTFB, INP via web-vitals library. Reports to Sentry as custom measurements. Color-coded dev console output. Initialized in src/main.tsx after render. Async dynamic imports for tree shaking. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-036",
-      "title": "Implement service worker for offline support and caching",
-      "description": "As a user, I want the app to work offline so that I can view my meal plans and grocery lists without internet.",
+      "title": "Wire server-side rate limiting into the login flow",
+      "description": "As a security engineer, I want brute-force login prevention enforced server-side so that client-side bypass does not negate rate limiting.",
       "acceptanceCriteria": [
-        "Create public/sw.js service worker with cache-first strategy for static assets",
-        "Cache API responses for foods, recipes, kids, and grocery items",
-        "Serve cached data when offline with 'offline' banner notification",
-        "Register service worker in src/main.tsx",
-        "Add network status detection using navigator.onLine",
-        "Queue failed mutations for sync when back online",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "In src/pages/Auth.tsx, call the check_rate_limit RPC (supabase.rpc('check_rate_limit', { ... })) before attempting sign-in",
+        "If rate limit is exceeded, display the lockout message and prevent the sign-in attempt",
+        "Keep client-side rate limiter as a UX-level enhancement (fast feedback)",
+        "The server-side check should be the authoritative enforcement",
+        "Typecheck passes"
       ],
       "priority": 36,
-      "passes": true,
-      "notes": "Service worker already existed at public/sw.js with cache-first for static assets, network-first for API, offline fallback HTML page, background sync hooks, and push notification support. SW registered via src/lib/pwa.ts. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-037",
-      "title": "Add user data export functionality (GDPR compliance)",
-      "description": "As a user, I want to export all my data so that the app complies with GDPR and data portability requirements.",
+      "title": "Remove DOMPurify style attribute allowance in admin email builders",
+      "description": "As a security engineer, I want DOMPurify configured to block style attributes so that CSS-based data exfiltration is prevented.",
       "acceptanceCriteria": [
-        "Create src/components/settings/DataExport.tsx component",
-        "Export button generates JSON file containing all user data: kids, foods, recipes, meal plans, grocery lists",
-        "Include data schema version in export for forward compatibility",
-        "Show progress indicator during export generation",
-        "Add to Settings page navigation",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Remove 'style' from ALLOWED_ATTR in src/components/admin/EmailSequenceBuilder.tsx DOMPurify config",
+        "Remove 'style' from ALLOWED_ATTR in src/components/admin/EmailTemplateBuilder.tsx",
+        "If styling is needed, use DOMPurify ALLOW_CSS option with a strict CSS property allowlist",
+        "Verify email preview still renders correctly",
+        "Typecheck passes"
       ],
       "priority": 37,
-      "passes": true,
-      "notes": "Enhanced handleExportData in AccountSettings.tsx to export all user data: kids, foods, recipes, plan_entries, grocery_items, grocery_lists, meal_plans, subscription. Added schema_version field. Progress indicator via loading state. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-038",
-      "title": "Add account deletion functionality (GDPR compliance)",
-      "description": "As a user, I want to delete my account and all associated data so that the app complies with GDPR right to erasure.",
+      "title": "Add loading states to dialog submit buttons that lack them",
+      "description": "As a user, I want to see feedback when I submit a form so that I know my action is being processed.",
       "acceptanceCriteria": [
-        "Create src/components/settings/AccountDeletion.tsx component",
-        "Require password confirmation before deletion",
-        "Show warning dialog listing all data that will be deleted",
-        "Call Supabase auth.admin.deleteUser or mark for deletion",
-        "Cascade delete all user data (foods, kids, recipes, plans, grocery items)",
-        "Redirect to landing page after successful deletion",
-        "Add to Settings page below Data Export section",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Add loading spinner to the save button in AddFoodDialog when onSave is in progress",
+        "Add loading spinner to the submit button in ManageKidsDialog when addKid/updateKid is in progress",
+        "Add disabled state to prevent double-submission during loading",
+        "Use the existing LoadingButton component or the Loader2 + disabled pattern",
+        "Typecheck passes"
       ],
       "priority": 38,
-      "passes": true,
-      "notes": "Enhanced account deletion in AccountSettings.tsx with email confirmation requirement, cascade deletion of plan_entries, grocery_items, foods, recipes, kids. Signs out and redirects to landing page. Shows data categories being deleted. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-039",
-      "title": "Add comprehensive API documentation page",
-      "description": "As a developer integrating with EatPal, I want API documentation so that I understand available endpoints, request/response formats, and authentication.",
+      "title": "Consolidate duplicate touch target CSS rules",
+      "description": "As a developer, I want touch target sizing defined in one place so that changes are consistent and maintainable.",
       "acceptanceCriteria": [
-        "Update src/pages/ApiDocs.tsx with comprehensive endpoint documentation",
-        "Document all deployed edge functions with request/response schemas",
-        "Include authentication requirements (JWT tokens, API keys)",
-        "Add example request/response for each endpoint",
-        "Include rate limiting information",
-        "Organize by feature area (Foods, Recipes, Meal Plans, Admin, Billing)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Audit src/index.css and src/styles/mobile-first.css for overlapping touch target rules",
+        "Consolidate into a single set of rules in one file",
+        "Remove the overly broad blanket rules in mobile-first.css (lines 15-29) that apply min-height/width to ALL buttons, links, and inputs",
+        "Replace with targeted utility classes or component-level sizing",
+        "Verify touch targets are still appropriately sized on mobile",
+        "Typecheck passes"
       ],
       "priority": 39,
-      "passes": true,
-      "notes": "Enhanced ApiDocs.tsx with collapsible EndpointDetail components showing request/response JSON schemas and error codes for all 12 edge functions (calculate-food-similarity, suggest-foods, parse-recipe, parse-grocery-image, suggest-recipe, ai-meal-plan, create-checkout, stripe-webhook, generate-blog-content, generate-social-content, update-blog-image, health-check). Organized by feature area. Added rate limit cards and auth instructions. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-040",
-      "title": "Add GitHub Actions deployment job for Cloudflare Pages",
-      "description": "As a DevOps engineer, I want automated deployments so that merges to main are automatically deployed to production.",
+      "title": "Add missing Helmet meta tags to all pages without them",
+      "description": "As an SEO specialist, I want every page to have unique title and meta description so that search engines can properly index and display results.",
       "acceptanceCriteria": [
-        "Add deploy job to .github/workflows/ci.yml that runs after successful build",
-        "Deploy to Cloudflare Pages using wrangler-action",
-        "Only run on pushes to main branch (not PRs)",
-        "Require all quality gates to pass before deploy (lint, typecheck, tests, build)",
-        "Add deployment URL to GitHub deployment status",
-        "Use GitHub secrets for CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID",
+        "Audit all 43 page components for Helmet usage",
+        "Add <Helmet> with unique <title> and <meta name='description'> to any pages missing them",
+        "Ensure all dashboard pages have descriptive titles in format: 'Page Name - EatPal'",
+        "Add Open Graph tags (og:title, og:description) to public-facing pages",
         "Typecheck passes"
       ],
       "priority": 40,
-      "passes": true,
-      "notes": "Created .github/workflows/ci.yml with quality (lint + typecheck), test, build jobs. Deploy to Cloudflare Pages on main branch push. Uses wrangler-action with secrets. Quality gates required before deploy. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-041",
-      "title": "Add staging environment configuration",
-      "description": "As a developer, I want a staging environment so that changes can be tested in a production-like setting before release.",
+      "title": "Fix interactive div elements to use proper semantic HTML on Home page",
+      "description": "As a keyboard and screen reader user, I want interactive elements to be proper buttons so that I can navigate and activate them with keyboard and assistive technology.",
       "acceptanceCriteria": [
-        "Create .env.staging with staging Supabase URL and keys (placeholder values)",
-        "Add staging build script to package.json: build:staging",
-        "Add staging deploy job to CI that runs on pushes to develop branch",
-        "Configure wrangler.toml with staging environment (eatpal-staging project)",
-        "Document staging workflow in README or deployment guide",
+        "Replace the 3 onboarding step <div onClick> elements in src/pages/Home.tsx (lines 226-329) with <button> elements or add role='button', tabIndex={0}, and onKeyDown for Enter/Space",
+        "Replace the Quick Action <Card onClick> elements (lines 339, 360) with button-like semantics",
+        "Fix the overlay <div onClick> in src/components/GestureTutorial.tsx (line 142) with proper button role and keyboard support",
+        "Follow the pattern used in src/components/recipes/RecipeListItem.tsx as a reference implementation",
         "Typecheck passes"
       ],
       "priority": 41,
-      "passes": true,
-      "notes": "Created .env.staging with staging Supabase URL and placeholder keys. Added build:staging script to package.json. Added staging deploy job to CI on develop branch. Updated wrangler.toml with staging project documentation. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-042",
-      "title": "Add database migration testing to CI pipeline",
-      "description": "As a developer, I want migrations tested in CI so that broken migrations are caught before deployment.",
+      "title": "Fix heading hierarchy on dashboard Home page",
+      "description": "As a screen reader user, I want proper heading hierarchy so that I can navigate the page structure efficiently.",
       "acceptanceCriteria": [
-        "Add migration-test job to .github/workflows/ci.yml",
-        "Use supabase/setup-cli action to install Supabase CLI",
-        "Run supabase db start to spin up local Postgres",
-        "Run supabase db push to apply all migrations",
-        "Verify all 95+ migrations apply cleanly in sequence",
-        "Run after lint and typecheck jobs",
+        "Add an h1 heading to src/pages/Home.tsx (can be visually hidden with sr-only class if the welcome banner serves as visual heading)",
+        "Change h4 headings (lines 240, 276, 314, 347, 368) to h2 for section titles",
+        "Ensure heading levels do not skip (h1 > h2 > h3, no h1 > h4 jumps)",
         "Typecheck passes"
       ],
       "priority": 42,
-      "passes": true,
-      "notes": "Added migration-test job to .github/workflows/ci.yml using supabase/setup-cli action. Starts local Postgres, applies all migrations with supabase db push. Runs after quality job. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-043",
-      "title": "Add mobile touch target accessibility fixes",
-      "description": "As a mobile user, I want all interactive elements to be easily tappable so that I don't accidentally tap the wrong button.",
+      "title": "Fix Landing page GSAP animations to respect prefers-reduced-motion",
+      "description": "As a user with motion sensitivity, I want scroll animations to be disabled when I request reduced motion so that the landing page doesn't cause discomfort.",
       "acceptanceCriteria": [
-        "Audit all Button, IconButton, and interactive elements for minimum 44x44px touch targets",
-        "Add min-h-11 min-w-11 (44px) to all icon-only buttons across the app",
-        "Add adequate padding to small interactive elements (links, checkboxes, toggles)",
-        "Fix the 49 touch target violations identified in MOBILE_OPTIMIZATION_ACTION_PLAN.md",
-        "Run accessibility tests to verify: npm run test:a11y",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "In src/pages/Landing.tsx, check window.matchMedia('(prefers-reduced-motion: reduce)') before initializing GSAP ScrollTrigger animations (lines 89-146)",
+        "If reduced motion is preferred, skip the Y-translation and opacity animations or reduce them to instant state changes",
+        "Add reduced-motion media query to the animate-bounce-dynamic CSS class (line 472)",
+        "Typecheck passes"
       ],
       "priority": 43,
-      "passes": true,
-      "notes": "Button sm variant h-10→h-11 (44px). Toggle default/sm h-10/h-9→h-11 (44px). GestureTutorial close button: added min-h-11 min-w-11 + aria-label. GestureTutorial progress dots: wrapped in h-11 tappable container with aria-label. NotificationBell dismiss: h-6→h-11 (44px). Global mobile-first.css already enforces min-height:44px on all buttons/links. Radix checkbox/radio/switch render as buttons so inherit the global minimum."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-044",
-      "title": "Fix color contrast ratios for WCAG 2.1 AA compliance",
-      "description": "As a user with visual impairments, I want sufficient color contrast so that I can read all text and distinguish interactive elements.",
+      "title": "Fix Pricing page accessibility issues (radiogroup and sr-only contradiction)",
+      "description": "As an assistive technology user, I want pricing controls to be properly labeled so that I can understand and interact with billing options.",
       "acceptanceCriteria": [
-        "Audit all text colors against their backgrounds using WCAG 2.1 AA standards (4.5:1 for normal text, 3:1 for large text)",
-        "Fix low-contrast text in muted-foreground, placeholder, and disabled states",
-        "Update tailwind.config.ts CSS variable colors if needed to meet ratios",
-        "Ensure focus indicators have sufficient contrast (3:1 against adjacent colors)",
-        "Run accessibility tests to verify: npm run test:a11y",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Add role='radio' and aria-checked to child Button elements within the billing cycle toggle role='radiogroup' in src/pages/Pricing.tsx (line 480)",
+        "Fix the sr-only + aria-hidden='true' contradiction on line 474 - remove aria-hidden='true' to let screen readers access the content",
+        "Typecheck passes"
       ],
       "priority": 44,
-      "passes": true,
-      "notes": "Replaced all hardcoded hex colors (#1f2937, #6b7280, #111827, etc.) in mobile-first.css with CSS custom properties (hsl(var(--foreground)), hsl(var(--muted-foreground)), etc.) so they auto-adapt to light/dark mode. Replaced @media (prefers-color-scheme: dark) with .dark class to match app darkMode:[\"class\"] config. Muted-foreground light mode 215 25% 40% gives ~6.1:1 contrast (passes AA). Dark mode 215 20% 75% gives ~9:1 contrast. Focus ring uses --ring variable for theme-consistent indicators."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-045",
-      "title": "Add keyboard navigation support for all interactive components",
-      "description": "As a keyboard-only user, I want to navigate the entire app with keyboard so that I can use all features without a mouse.",
+      "title": "Upgrade public lead-magnet pages from Helmet to SEOHead with full metadata",
+      "description": "As an SEO specialist, I want high-traffic public pages to have full SEO treatment so that they appear with rich results in search engines.",
       "acceptanceCriteria": [
-        "Add visible focus indicators to all interactive elements (buttons, links, inputs, cards)",
-        "Ensure tab order follows logical reading order on all pages",
-        "Add keyboard support for modal dialogs (Escape to close, trap focus inside)",
-        "Add keyboard support for dropdown menus (Arrow keys to navigate, Enter to select, Escape to close)",
-        "Add skip-to-main-content link at top of page layout",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Replace raw <Helmet> with <SEOHead> in src/pages/PickyEaterQuiz.tsx with full OG tags and canonical URL",
+        "Replace raw <Helmet> with <SEOHead> in src/pages/BudgetCalculator.tsx with full OG tags and canonical URL",
+        "Replace raw <Helmet> with <SEOHead> in src/pages/MealPlanGenerator.tsx with full OG tags and canonical URL",
+        "Add appropriate structured data schema components (HowToSchema or SoftwareAppSchema) to these pages",
+        "Add noindex meta to authenticated dashboard pages that currently have no Helmet at all",
+        "Typecheck passes"
       ],
       "priority": 45,
-      "passes": true,
-      "notes": "Skip-to-main-content: SkipToContent component already in App.tsx. Added id=\"main-content\" to 11 more pages (BlogPost, Authors, BudgetCalculatorResults, MealPlanGeneratorResults, PickyEaterQuizResults, ResetPassword, ApiDocs, FoodChaining, SEODashboard, SearchTrafficDashboard, CheckoutSuccess). Total 28 pages now have skip link targets. Focus indicators: global :focus-visible ring in index.css, enhanced-focus class available. Keyboard nav: Radix UI Dialog/DropdownMenu/Popover have built-in Escape/Arrow/Enter/Tab support. useFocusTrap hook available for custom modals. RouteAnnouncer announces page changes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-046",
-      "title": "Add ARIA live regions for dynamic content updates",
-      "description": "As a screen reader user, I want to be notified of dynamic content changes so that I know when data loads, errors occur, or actions complete.",
+      "title": "Audit and fix sitemap.xml for nonexistent routes",
+      "description": "As an SEO specialist, I want the sitemap to only contain valid URLs so that search engine crawl budget is not wasted on 404s.",
       "acceptanceCriteria": [
-        "Add aria-live='polite' region for toast notifications",
-        "Add aria-live='assertive' region for error messages",
-        "Add aria-busy attribute to loading states in data tables and lists",
-        "Add sr-only route change announcements for client-side navigation",
-        "Announce successful form submissions to screen readers",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Cross-reference all URLs in public/sitemap.xml with routes defined in src/App.tsx",
+        "Remove any sitemap entries for routes that do not exist (/features/*, /solutions/*, /resources/*, /about if not defined)",
+        "Add any public-facing routes that are missing from the sitemap",
+        "Verify the dynamic sitemap edge function (functions/sitemap.xml.ts) has a more complete fallback than just the homepage",
+        "Typecheck passes"
       ],
       "priority": 46,
-      "passes": true,
-      "notes": "Toast aria-live: Sonner section has aria-live=\"polite\"+aria-relevant=\"additions text\". Radix Toast uses aria-live=\"assertive\" for foreground, \"polite\" for background. Error messages: AccessibleFormField has aria-live=\"assertive\". OfflineIndicator uses aria-live=\"assertive\". Loading states: AccessibleLoading has aria-busy=\"true\"+role=\"status\". Added aria-busy to Blog.tsx and Authors.tsx loading states. Route announcements: RouteAnnouncer in App.tsx with aria-live=\"polite\" and AccessibilityContext announce(). Form submissions: toast.success/error calls render through accessible Sonner/Radix."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-047",
-      "title": "Complete admin user management interface",
-      "description": "As an admin, I want to view and manage user accounts so that I can handle support issues and account administration.",
+      "title": "Fix RecipeListItem image alt text for meaningful thumbnails",
+      "description": "As a screen reader user, I want recipe images to have descriptive alt text so that I understand what dish is shown.",
       "acceptanceCriteria": [
-        "Verify src/components/admin/BulkUserManagement.tsx renders user list with search and filter",
-        "Add ability to view user details (profile, subscription status, activity)",
-        "Add ability to disable/enable user accounts",
-        "Add ability to reset user passwords (send reset email)",
-        "Add pagination for user list (20 users per page)",
-        "Protect with admin role check",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Change alt='' to alt={recipe.name} in src/components/recipes/RecipeListItem.tsx (line 60)",
+        "Audit other image components for similar empty alt text on meaningful images",
+        "Ensure decorative images retain alt='' (only fix meaningful images)",
+        "Typecheck passes"
       ],
       "priority": 47,
-      "passes": true,
-      "notes": "Enhanced BulkUserManagement.tsx with user detail dialog (profile/subscription/activity views), per-row action dropdown (view details, reset password, enable/disable), admin role check via useAdminCheck, and fixed useState initializer bug. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-048",
-      "title": "Complete admin subscription management interface",
-      "description": "As an admin, I want to view and manage user subscriptions so that I can handle billing issues and grant complimentary access.",
+      "title": "Self-host Google Fonts for performance and privacy",
+      "description": "As a developer, I want fonts self-hosted so that we eliminate external DNS lookups, improve loading performance, and reduce privacy concerns.",
       "acceptanceCriteria": [
-        "Verify src/components/admin/ComplementarySubscriptionManager.tsx is functional",
-        "Add subscription overview dashboard showing MRR, churn rate, active subscribers count",
-        "Add ability to grant complimentary subscriptions with expiry date",
-        "Add ability to extend subscription periods",
-        "Add subscription status filter (active, trialing, past_due, canceled)",
-        "Display Stripe subscription ID linking to Stripe dashboard",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Install @fontsource/inter and @fontsource/nunito-sans packages",
+        "Import the required font weights (400, 500, 600, 700) in the app entry point",
+        "Remove Google Fonts CDN links from index.html (lines 228-248)",
+        "Update CSS font-family declarations to reference the local fonts",
+        "Verify fonts render correctly",
+        "Remove the font preload from public/_headers if it references a CDN path",
+        "npm run build succeeds"
       ],
       "priority": 48,
-      "passes": true,
-      "notes": "Enhanced ComplementarySubscriptionManager.tsx with real MRR calculation from plan prices, All Subscriptions tab with status filtering, extend subscription dialog, Stripe dashboard links, and fixed data overwrite bug. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-049",
-      "title": "Complete system health monitoring dashboard",
-      "description": "As an admin, I want real-time system health metrics so that I can identify and respond to issues before they affect users.",
+      "title": "Defer GSAP loading to IntersectionObserver instead of 100ms timer",
+      "description": "As a user, I want the landing page to load fast so that JavaScript resources are only loaded when animations will be visible.",
       "acceptanceCriteria": [
-        "Verify src/components/admin/SystemHealthMonitor component displays key metrics",
-        "Show database connection status (connected/disconnected)",
-        "Show API response time (p50, p95, p99 from admin_system_health table)",
-        "Show error rate trend (last 24 hours from Sentry)",
-        "Show active user count (real-time from Supabase presence)",
-        "Add refresh interval of 30 seconds with manual refresh button",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "In src/pages/Landing.tsx, replace the 100ms setTimeout GSAP loading with IntersectionObserver on the first animated section",
+        "Only dynamically import GSAP and ScrollTrigger when the animated sections enter the viewport",
+        "Maintain existing animation behavior once loaded",
+        "Typecheck passes"
       ],
       "priority": 49,
-      "passes": true,
-      "notes": "Enhanced SystemHealthDashboard.tsx with DB connection status check, p50/p95/p99 response times, error rate trend chart (24h), active user count, 30s auto-refresh with countdown, demo data fallback. Removed @ts-nocheck. Typecheck passes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-050",
-      "title": "Add admin alert notification system",
-      "description": "As an admin, I want automated alerts so that I'm notified when system metrics exceed thresholds.",
+      "title": "Add aria-live regions to major feature pages for dynamic content updates",
+      "description": "As a screen reader user, I want to be notified when data changes on the page so that I don't miss important updates.",
       "acceptanceCriteria": [
-        "Verify AlertManager component allows creating alert rules",
-        "Support alert types: error_rate_high, response_time_slow, disk_usage_high, subscription_churn_spike",
-        "Allow setting threshold values per alert type",
-        "Support notification channels: in-app, email (via Resend)",
-        "Show alert history with timestamps and resolution status",
-        "Add active/inactive toggle per alert rule",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Add aria-live='polite' region or use AccessibleLoading for loading/data states on Pantry page (food add/delete feedback)",
+        "Add aria-live announcements on Grocery page for item checking/unchecking",
+        "Add aria-live announcements on Kids page for profile updates",
+        "Add aria-live announcement on Planner page for meal plan generation results",
+        "Verify sonner toast library provides its own aria-live region (if not, add one)",
+        "Typecheck passes"
       ],
       "priority": 50,
-      "passes": true,
-      "notes": "Enhanced AlertManager.tsx with alert type definitions (error_rate_high, response_time_slow, disk_usage_high, subscription_churn_spike), notification channels (in-app/email), alert history tab with timestamps and resolution status, active/inactive toggle per rule, delete capability. Removed @ts-nocheck. Typecheck passes."
-    },
-    {
-      "id": "US-051",
-      "title": "Add feature flag management to admin dashboard",
-      "description": "As an admin, I want to toggle feature flags so that I can gradually roll out features and quickly disable problematic ones.",
-      "acceptanceCriteria": [
-        "Verify FeatureFlagDashboard component renders flag list",
-        "Add ability to create new feature flags with name and description",
-        "Add ability to toggle flags on/off globally",
-        "Add percentage-based rollout (e.g., enable for 10% of users)",
-        "Store flags in Supabase and cache in localStorage for performance",
-        "Integrate with useFeatureFlag hook for frontend consumption",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 51,
-      "passes": true,
-      "notes": "Enhanced FeatureFlagDashboard.tsx with localStorage caching (5-min TTL), percentage-based rollout with DJB2 hash bucketing, optimistic updates with rollback. Enhanced useFeatureFlag.ts with multi-strategy resolution (RPC -> direct query -> cache). Fixed user data access bug. Typecheck passes."
-    },
-    {
-      "id": "US-052",
-      "title": "Add real-time admin activity feed",
-      "description": "As an admin, I want to see live user activity so that I can monitor usage patterns and identify issues in real-time.",
-      "acceptanceCriteria": [
-        "Verify LiveActivityFeed component renders recent activity",
-        "Subscribe to admin_live_activity table via Supabase real-time",
-        "Display user actions: login, food added, recipe created, meal planned, subscription changed",
-        "Show timestamp, user identifier (anonymized), and action type",
-        "Add filter by action type",
-        "Limit display to last 100 events with auto-scroll",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 52,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-053",
-      "title": "Optimize Supabase real-time subscription cleanup",
-      "description": "As a developer, I want proper subscription cleanup so that the app doesn't leak memory from orphaned WebSocket connections.",
-      "acceptanceCriteria": [
-        "Audit all Supabase .channel() and .on() subscriptions in the codebase",
-        "Ensure every subscription has a corresponding .unsubscribe() in useEffect cleanup",
-        "Add subscription tracking to AppContext with cleanup on unmount",
-        "Verify no duplicate subscriptions are created on component re-renders",
-        "Add logging for subscription lifecycle events in development mode",
-        "Typecheck passes"
-      ],
-      "priority": 53,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-054",
-      "title": "Add React.memo optimization to frequently re-rendered components",
-      "description": "As a developer, I want memoized components so that unnecessary re-renders don't degrade performance.",
-      "acceptanceCriteria": [
-        "Identify high-frequency re-render components using React DevTools profiler patterns",
-        "Apply React.memo to meal plan card components",
-        "Apply React.memo to food list item components",
-        "Apply React.memo to grocery list item components",
-        "Apply useMemo to expensive filtered/sorted lists in AppContext consumers",
-        "Apply useCallback to event handlers passed as props",
-        "Typecheck passes"
-      ],
-      "priority": 54,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-055",
-      "title": "Add loading skeleton components for data-dependent pages",
-      "description": "As a user, I want skeleton loading states so that pages feel fast and responsive while data loads.",
-      "acceptanceCriteria": [
-        "Create src/components/ui/skeleton-layouts.tsx with page-specific skeleton layouts",
-        "Add skeleton for Dashboard page (stats cards, meal plan grid, activity feed)",
-        "Add skeleton for Planner page (weekly calendar grid with meal slots)",
-        "Add skeleton for Recipes page (recipe card grid)",
-        "Add skeleton for Grocery page (list with checkboxes)",
-        "Replace generic loading spinners with contextual skeletons",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 55,
-      "passes": true,
-      "notes": "Created src/components/ui/skeleton-layouts.tsx with DashboardSkeleton, PlannerSkeleton, RecipesSkeleton, and GrocerySkeleton. Each mimics page layout with stats cards, grids, checkboxes. Uses existing Skeleton component. Typecheck passes."
-    },
-    {
-      "id": "US-056",
-      "title": "Add comprehensive E2E test for subscription purchase flow",
-      "description": "As a developer, I want E2E tests for the payment flow so that subscription purchases are verified end-to-end.",
-      "acceptanceCriteria": [
-        "Create tests/subscription-flow.spec.ts with Playwright test",
-        "Test navigation from Pricing page to checkout",
-        "Test Stripe checkout redirect (using Stripe test mode)",
-        "Test checkout success page renders with subscription confirmation",
-        "Test subscription status updates in user dashboard",
-        "Test subscription cancellation flow",
-        "Handle Stripe test card numbers for success and failure scenarios",
-        "Tests pass"
-      ],
-      "priority": 56,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-057",
-      "title": "Add comprehensive E2E test for meal planning workflow",
-      "description": "As a developer, I want E2E tests for meal planning so that the core feature is verified end-to-end.",
-      "acceptanceCriteria": [
-        "Create tests/meal-plan-workflow.spec.ts with Playwright test",
-        "Test creating a kid profile with allergens",
-        "Test adding foods to the food database",
-        "Test creating a meal plan entry for a specific day and meal slot",
-        "Test viewing the weekly meal plan calendar",
-        "Test generating a grocery list from the meal plan",
-        "Test marking grocery items as purchased",
-        "Tests pass"
-      ],
-      "priority": 57,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-058",
-      "title": "Add production monitoring and alerting documentation",
-      "description": "As a DevOps engineer, I want a runbook for production monitoring so that on-call engineers can diagnose and resolve issues quickly.",
-      "acceptanceCriteria": [
-        "Create docs/runbook.md with production monitoring procedures",
-        "Document Sentry alert triage process (P0-P3 severity levels)",
-        "Document Cloudflare Pages deployment rollback procedure",
-        "Document Supabase database emergency procedures (backup restore, RLS bypass for debugging)",
-        "Document Stripe webhook failure recovery steps",
-        "Include escalation contacts and communication templates",
-        "Include health check endpoint monitoring setup instructions",
-        "Typecheck passes"
-      ],
-      "priority": 58,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-059",
-      "title": "Add production deployment checklist",
-      "description": "As a release manager, I want a deployment checklist so that releases follow a consistent, safe process.",
-      "acceptanceCriteria": [
-        "Create docs/deployment-checklist.md with pre-deploy, deploy, and post-deploy steps",
-        "Pre-deploy: verify CI passes, review changes, check for migration safety",
-        "Deploy: document Cloudflare Pages deploy command, Supabase migration push, edge function deploy",
-        "Post-deploy: verify health check, check error rates, validate critical flows",
-        "Rollback: document rollback steps for each deployment component",
-        "Include environment variable change procedures",
-        "Typecheck passes"
-      ],
-      "priority": 59,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-060",
-      "title": "Final production readiness verification and smoke test",
-      "description": "As a release manager, I want a final verification that all production readiness items are complete so that we can confidently launch.",
-      "acceptanceCriteria": [
-        "Run npm run build and verify zero errors",
-        "Run npm run test:run and verify all tests pass",
-        "Run npm run lint and verify zero warnings",
-        "Verify all edge functions have corresponding files in functions/ directory",
-        "Verify all environment variables documented in .env.example",
-        "Verify security headers in public/_headers are production-ready",
-        "Verify error monitoring (Sentry) is configured for production",
-        "Verify all database tables have RLS policies enabled",
-        "Create PRODUCTION_READY.md summary with sign-off checklist",
-        "Typecheck passes"
-      ],
-      "priority": 60,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-061",
-      "category": "core",
-      "title": "Add session timeout warning and auto-refresh",
-      "description": "As a user, I want to be warned before my session expires so that I don't lose unsaved meal plans or grocery list edits mid-session.",
-      "acceptanceCriteria": [
-        "Create src/components/SessionTimeoutWarning.tsx that monitors JWT expiry",
-        "Show warning dialog 5 minutes before session expires",
-        "Provide 'Extend Session' button that calls supabase.auth.refreshSession()",
-        "Auto-redirect to /auth if session expires without extension",
-        "Preserve current URL for redirect after re-authentication",
-        "Typecheck passes"
-      ],
-      "priority": 61,
-      "passes": true,
-      "notes": "Created src/components/SessionTimeoutWarning.tsx. Monitors JWT expiry every 60s. Shows AlertDialog 5 minutes before expiry with Extend Session button that calls refreshSession(). Auto-redirects to /auth if expired. Preserves current URL for redirect. Typecheck passes."
-    },
-    {
-      "id": "US-062",
-      "category": "core",
-      "title": "Add offline indicator and queued mutation support",
-      "description": "As a user, I want to see when I'm offline and have my changes saved when connectivity returns so that I can use the grocery list in stores with poor signal.",
-      "acceptanceCriteria": [
-        "Create src/components/OfflineIndicator.tsx that shows a banner when navigator.onLine is false",
-        "Queue failed Supabase mutations in localStorage with timestamp",
-        "Replay queued mutations when connectivity is restored (online event)",
-        "Show count of pending changes in the offline banner",
-        "Add conflict resolution for stale mutations (skip if server data is newer)",
-        "Typecheck passes"
-      ],
-      "priority": 62,
-      "passes": true,
-      "notes": "Created src/components/OfflineIndicator.tsx. Uses navigator.onLine with online/offline events. Shows fixed banner when offline with pending change count. Exports queueMutation() for offline mutation queuing in localStorage. Reconnecting state on recovery. Typecheck passes."
-    },
-    {
-      "id": "US-063",
-      "category": "core",
-      "title": "Add global search across foods, recipes, kids, and meal plans",
-      "description": "As a user, I want to search across all my data from one place so that I can quickly find foods, recipes, or meal plans without navigating to each section.",
-      "acceptanceCriteria": [
-        "Extend CommandPalette.tsx to search across foods, recipes, kids, and plan entries",
-        "Show categorized results (Foods, Recipes, Kids, Plans) with icons",
-        "Navigate to the relevant page/item on selection",
-        "Support keyboard shortcut Cmd/Ctrl+K to open",
-        "Debounce search input by 300ms",
-        "Show recent searches when query is empty",
-        "Typecheck passes"
-      ],
-      "priority": 63,
-      "passes": true,
-      "notes": "CommandPalette already exists but is basic. This turns it into a productivity tool."
-    },
-    {
-      "id": "US-064",
-      "category": "integration",
-      "title": "Add recipe nutrition auto-calculation from food ingredients",
-      "description": "As a user, I want recipe nutrition totals calculated automatically when I add foods with nutrition data so that I can see per-serving nutrition without manual entry.",
-      "acceptanceCriteria": [
-        "When a recipe's food_ids reference foods with nutrition_info, auto-sum nutrition values",
-        "Calculate per-serving nutrition based on recipe servings count",
-        "Display nutrition breakdown on recipe detail view (calories, protein, carbs, fat, fiber)",
-        "Update nutrition totals when food items are added/removed from a recipe",
-        "Handle missing nutrition data gracefully (show 'partial data' indicator)",
-        "Typecheck passes"
-      ],
-      "priority": 64,
-      "passes": true,
-      "notes": "High user value - makes the nutrition tracking actually useful without manual data entry."
-    },
-    {
-      "id": "US-065",
-      "category": "integration",
-      "title": "Add weekly nutrition summary email notifications",
-      "description": "As a parent, I want a weekly email summarizing my children's nutrition so that I can track their dietary progress without logging in daily.",
-      "acceptanceCriteria": [
-        "Create functions/weekly-nutrition-email/index.ts edge function",
-        "Aggregate plan entries for the past week per child",
-        "Calculate nutrition coverage vs recommended daily values",
-        "Generate HTML email with nutrition highlights and recommendations",
-        "Send via Resend API to user's email address",
-        "Add opt-in/opt-out toggle in AccountSettings",
-        "Schedule via Supabase pg_cron or external scheduler",
-        "Typecheck passes"
-      ],
-      "priority": 65,
-      "passes": true,
-      "notes": "Drives weekly re-engagement. Parents who see progress are more likely to continue using the platform."
-    },
-    {
-      "id": "US-066",
-      "category": "core",
-      "title": "Add onboarding completion tracking and drop-off analytics",
-      "description": "As a product manager, I want to track where users drop off during onboarding so that we can optimize the signup-to-value flow.",
-      "acceptanceCriteria": [
-        "Track analytics events for each onboarding step: start, child_created, allergens_set, foods_selected, completed, skipped",
-        "Store onboarding state in user profile (onboarding_completed, onboarding_step, onboarding_skipped_at)",
-        "Add onboarding funnel chart to admin ConversionFunnelDashboard",
-        "Show re-engagement prompt for users who skipped onboarding after 3 days",
-        "Typecheck passes"
-      ],
-      "priority": 66,
-      "passes": true,
-      "notes": "Onboarding completion directly correlates with user retention. Currently no tracking exists."
-    },
-    {
-      "id": "US-067",
-      "category": "polish",
-      "title": "Add social sharing for recipes with Open Graph meta tags",
-      "description": "As a user, I want to share my recipes on social media with rich previews so that the platform grows through word-of-mouth.",
-      "acceptanceCriteria": [
-        "Add Open Graph meta tags to recipe detail pages (og:title, og:description, og:image)",
-        "Add Twitter Card meta tags for recipe pages",
-        "Create share buttons for Facebook, Twitter/X, Pinterest, and copy-link",
-        "Generate shareable recipe URL with public preview page",
-        "Track share events in analytics",
-        "Typecheck passes"
-      ],
-      "priority": 67,
-      "passes": true,
-      "notes": "Viral growth mechanism. Recipe sharing is one of the strongest organic acquisition channels for food apps."
-    },
-    {
-      "id": "US-068",
-      "category": "integration",
-      "title": "Add data import from common meal planning apps and CSV",
-      "description": "As a new user, I want to import my existing food and recipe data so that I don't have to re-enter everything when switching to EatPal.",
-      "acceptanceCriteria": [
-        "Create src/components/settings/DataImport.tsx with file upload UI",
-        "Support CSV import for foods (columns: name, category, allergens, calories)",
-        "Support CSV import for recipes (columns: name, ingredients, instructions, servings)",
-        "Validate imported data with Zod before inserting",
-        "Show import preview with row count and validation errors before confirming",
-        "Add to AccountSettings page",
-        "Typecheck passes"
-      ],
-      "priority": 68,
-      "passes": true,
-      "notes": "Reduces friction for new users switching from spreadsheets or other apps."
-    },
-    {
-      "id": "US-069",
-      "category": "polish",
-      "title": "Add drag-and-drop meal plan reordering",
-      "description": "As a user, I want to drag and drop meals between days and meal slots so that rearranging my weekly meal plan is intuitive.",
-      "acceptanceCriteria": [
-        "Add drag-and-drop support to the Planner weekly view using @dnd-kit/core",
-        "Allow dragging meals between days (Monday to Tuesday, etc.)",
-        "Allow dragging meals between slots (breakfast to lunch, etc.)",
-        "Show visual drop targets when dragging",
-        "Update plan_entries in Supabase on drop",
-        "Support touch drag on mobile devices",
-        "Typecheck passes"
-      ],
-      "priority": 69,
-      "passes": true,
-      "notes": "The #1 UX improvement for the core meal planning feature."
-    },
-    {
-      "id": "US-070",
-      "category": "core",
-      "title": "Add meal plan template save and quick-apply",
-      "description": "As a user, I want to save my weekly meal plans as templates and quickly apply them to future weeks so that I can reuse plans I've liked.",
-      "acceptanceCriteria": [
-        "Add 'Save as Template' button to Planner page that saves current week's plan",
-        "Create template browser dialog showing saved templates with preview",
-        "Add 'Apply Template' action that populates a target week with template meals",
-        "Allow naming templates (e.g., 'Summer Week', 'School Week')",
-        "Store templates in meal_plan_templates table",
-        "Typecheck passes"
-      ],
-      "priority": 70,
-      "passes": true,
-      "notes": "Families tend to rotate through 4-6 weekly plans. Templates make this effortless."
-    },
-    {
-      "id": "US-071",
-      "title": "Remove @ts-nocheck from PickyEaterQuizResults and fix type errors",
-      "description": "As a developer, I want PickyEaterQuizResults.tsx to have full TypeScript coverage so that type errors are caught at compile time not runtime.",
-      "acceptanceCriteria": [
-        "Remove `// @ts-nocheck` from the top of src/pages/PickyEaterQuizResults.tsx",
-        "Import and apply correct types for QuizAnswers, QuizResult from @/types/quiz",
-        "Type the useLocation state as { answers: Partial<QuizAnswers>; sessionId: string; completionTime: number } using a named interface",
-        "Ensure all component props passed to PersonalityChart, FoodRecommendationsDisplay, StrategyCards, SampleMealsCarousel, ProgressPathway, EmailCaptureModal, ShareButtons are typed correctly",
-        "Run npx tsc --noEmit and confirm zero errors in this file",
-        "Typecheck passes"
-      ],
-      "priority": 71,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-072",
-      "title": "Remove @ts-nocheck from BudgetCalculatorResults and fix type errors",
-      "description": "As a developer, I want BudgetCalculatorResults.tsx to have full TypeScript coverage so that type safety is maintained throughout the budget feature.",
-      "acceptanceCriteria": [
-        "Remove `// @ts-nocheck` from the top of src/pages/BudgetCalculatorResults.tsx",
-        "Replace the loose LocationState interface with properly typed imports from @/types/budgetCalculator",
-        "Type the useLocation state using the LocationState interface via `const state = location.state as LocationState | null`",
-        "Ensure all recharts components (PieChart, BarChart, etc.) have correctly typed data arrays",
-        "Ensure EmailCaptureModal and ShareButtons component props are typed",
-        "Run npx tsc --noEmit and confirm zero errors in this file",
-        "Typecheck passes"
-      ],
-      "priority": 72,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-073",
-      "title": "Remove @ts-nocheck from MealPlanGeneratorResults and fix type errors",
-      "description": "As a developer, I want MealPlanGeneratorResults.tsx to have full TypeScript coverage so that the meal plan results page is type-safe.",
-      "acceptanceCriteria": [
-        "Remove `// @ts-nocheck` from the top of src/pages/MealPlanGeneratorResults.tsx",
-        "Import MealPlanInput, MealPlanResult, GeneratedMeal from @/types/mealPlanGenerator and use them for the LocationState interface",
-        "Type the useLocation state as `const state = location.state as LocationState | null`",
-        "Fix any type errors in map/filter operations over GeneratedMeal arrays",
-        "Ensure ShareButtons and EmailCaptureModal props are correctly typed",
-        "Run npx tsc --noEmit and confirm zero errors in this file",
-        "Typecheck passes"
-      ],
-      "priority": 73,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-074",
-      "title": "Remove @ts-nocheck from SearchTrafficDashboard and fix type errors",
-      "description": "As a developer, I want SearchTrafficDashboard.tsx to have full TypeScript coverage so that the admin traffic dashboard is type-safe.",
-      "acceptanceCriteria": [
-        "Remove `// @ts-nocheck` from the top of src/pages/SearchTrafficDashboard.tsx",
-        "Type the dateRange state as `{ from: Date; to: Date }`",
-        "Type all supabase query results with the correct database row types or explicit interfaces",
-        "Type all chart data arrays passed to recharts or other charting components",
-        "Fix any implicit any types in event handlers, map callbacks, and state setters",
-        "Run npx tsc --noEmit and confirm zero errors in this file",
-        "Typecheck passes"
-      ],
-      "priority": 74,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-075",
-      "title": "Add admin role protection to /seo-dashboard and /search-traffic routes",
-      "description": "As a security engineer, I want /seo-dashboard and /search-traffic routes to be protected by admin role check so that non-admin users cannot access sensitive SEO and traffic data.",
-      "acceptanceCriteria": [
-        "In src/App.tsx, wrap the /seo-dashboard Route with `<ProtectedRoute requireAdmin>` or equivalent admin role check",
-        "In src/App.tsx, wrap the /search-traffic Route with `<ProtectedRoute requireAdmin>` or equivalent admin role check",
-        "Verify ProtectedRoute supports an admin check prop; if not, add `requireAdmin?: boolean` prop that queries the user_roles table and redirects non-admins to /dashboard",
-        "Non-admin authenticated users who visit /seo-dashboard or /search-traffic are redirected to /dashboard",
-        "Unauthenticated users who visit /seo-dashboard or /search-traffic are redirected to /auth",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 75,
-      "passes": true,
-      "notes": "Currently both routes use ProtectedRoute but no admin role check, so any logged-in user can access admin SEO data."
-    },
-    {
-      "id": "US-076",
-      "title": "Audit and fix Landing page navigation, CTAs, and hero section",
-      "description": "As a visitor, I want all Landing page buttons and links to work correctly so that I can seamlessly start using the app or learn more.",
-      "acceptanceCriteria": [
-        "Verify all hero section CTA buttons ('Get Started Free', 'See How It Works') navigate to /auth or the correct target",
-        "Verify all pricing plan 'Get Started' buttons link to /pricing or /auth with the correct plan pre-selected",
-        "Verify navigation header links (Features, Blog, Pricing, Sign In) all navigate to correct routes",
-        "Verify logo link returns to / (home)",
-        "Verify the landing page loads without console errors",
-        "Verify the 3D hero scene loads with a Suspense fallback when Three.js is loading",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 76,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-077",
-      "title": "Audit and fix Auth page sign-in, sign-up, and password reset flows",
-      "description": "As a user, I want the auth page to correctly handle all authentication flows so that I can reliably access my account.",
-      "acceptanceCriteria": [
-        "Verify sign-in tab: email + password form submits, success redirects to /dashboard (or stored redirect param), error shows inline message",
-        "Verify sign-up tab: email + password + confirm password form validates, success shows 'check your email' confirmation state",
-        "Verify forgot password tab: email form submits, triggers Supabase reset email, shows confirmation message",
-        "Verify 'Back to sign in' link from forgot password tab works",
-        "Verify rate limiter shows remaining attempts and lockout countdown (from US-018)",
-        "Verify the page does not flash the login form while checking existing session",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 77,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-078",
-      "title": "Audit and fix PickyEaterQuiz page step progression and results handoff",
-      "description": "As a parent, I want the picky eater quiz to progress through all steps and correctly pass results to the results page so that I receive accurate recommendations.",
-      "acceptanceCriteria": [
-        "Verify quiz loads at /picky-eater-quiz and shows the first question step",
-        "Verify each 'Next' button advances to the next step and progress bar increments",
-        "Verify 'Back' button returns to the previous step",
-        "Verify clicking the final 'Get Results' button navigates to /picky-eater-quiz/results with `answers`, `sessionId`, and `completionTime` in navigate state",
-        "Verify /picky-eater-quiz/results redirects to /picky-eater-quiz when visited directly without state",
-        "Verify results page shows personality type, food recommendations, and strategy cards when reached with valid state",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 78,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-079",
-      "title": "Audit and fix BudgetCalculator page form and results navigation",
-      "description": "As a user, I want the grocery budget calculator to submit correctly and show results so that I can plan my family grocery budget.",
-      "acceptanceCriteria": [
-        "Verify /budget-calculator renders the form with family size, location, and dietary preference fields",
-        "Verify form validation prevents submission when required fields are empty",
-        "Verify form submission calls the budget calculation library and navigates to /budget-calculator/results with `sessionId`, `input`, `calculation`, and `recommendedMeals` in navigate state",
-        "Verify /budget-calculator/results shows budget breakdown charts and meal suggestions when reached with valid state",
-        "Verify /budget-calculator/results redirects to /budget-calculator when visited without state",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 79,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-080",
-      "title": "Audit and fix MealPlanGenerator form and results navigation",
-      "description": "As a user, I want the public meal plan generator to work end-to-end so that I can see a sample meal plan before signing up.",
-      "acceptanceCriteria": [
-        "Verify /meal-plan renders the form with family size, dietary restrictions, allergies, and cooking skill fields",
-        "Verify selecting dietary restrictions and allergies updates the form state correctly",
-        "Verify form submission calls generateMealPlan() from the mealPlanGenerator library",
-        "Verify successful generation navigates to /meal-plan/results with `sessionId`, `input`, and `mealPlan` in navigate state",
-        "Verify /meal-plan/results shows a 7-day meal plan with breakfast/lunch/dinner when reached with valid state",
-        "Verify /meal-plan/results redirects to /meal-plan when visited without state",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 80,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-081",
-      "title": "Audit and fix Dashboard layout - sidebar, mobile nav, and user state",
-      "description": "As a user, I want the dashboard layout to correctly show my profile, highlight the current route, and provide working navigation so that moving between features is seamless.",
-      "acceptanceCriteria": [
-        "Verify AppSidebar renders all nav items from the navItems configuration",
-        "Verify the current active route is visually highlighted in the sidebar",
-        "Verify user's display name shows in the sidebar footer (from Supabase profile)",
-        "Verify logout button in the sidebar/header signs the user out and redirects to /",
-        "Verify the ThemeProvider toggle (dark/light) applies the theme and persists it",
-        "Verify mobile bottom navigation bar is sticky at the bottom and all 5+ items are accessible and tappable",
-        "Verify the KidSelector in the mobile header switches the active kid in AppContext",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 81,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-082",
-      "title": "Audit and fix Home page (dashboard index) stats and quick actions",
-      "description": "As a user, I want the dashboard home page to show accurate stats and working quick action buttons so that I can get an overview of my data at a glance.",
-      "acceptanceCriteria": [
-        "Verify food count stat card shows the correct number of foods from AppContext",
-        "Verify kids count stat card shows the correct number of kids",
-        "Verify meals planned stat card shows the correct number of plan entries",
-        "Verify 'Today's Meals' section shows meals for the active kid for today's date, or empty state if none planned",
-        "Verify Quick Action buttons ('Add Food', 'Plan Meals', 'View Grocery', 'Add Recipe') navigate to the correct dashboard sub-routes",
-        "Verify the welcome message shows the user's name from the Supabase profile",
-        "Verify the SubscriptionStatusBanner shows for free-tier users",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 82,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-083",
-      "title": "Audit and fix Kids page - add, edit, delete child profiles",
-      "description": "As a parent, I want to fully manage child profiles from the Kids page so that each child has accurate allergen and preference data.",
-      "acceptanceCriteria": [
-        "Verify 'Add Child' button opens ManageKidsDialog in create mode",
-        "Verify filling in the kid form and clicking Save creates a new kid in AppContext and Supabase",
-        "Verify clicking 'Edit' on a ChildProfileCard opens ManageKidsDialog pre-filled with that kid's data",
-        "Verify deleting a kid shows a confirmation dialog and removes the kid from AppContext",
-        "Verify ChildProfileCard shows correct stat counts from getKidStats() (total meals, safe foods, try-bites)",
-        "Verify 'Complete Profile' button opens ChildIntakeQuestionnaire dialog for that kid",
-        "Verify KidSelector in the dashboard header updates activeKidId when a different kid is chosen",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 83,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-084",
-      "title": "Audit and fix Pantry page - food CRUD, filtering, and view modes",
-      "description": "As a user, I want the Pantry page to let me add, edit, delete, and filter foods so that managing my food database is intuitive.",
-      "acceptanceCriteria": [
-        "Verify 'Add Food' button opens AddFoodDialog and saving creates a food in AppContext",
-        "Verify clicking a FoodCard opens the edit dialog pre-populated with food data",
-        "Verify deleting a food shows confirmation and removes it from AppContext",
-        "Verify search input filters displayed foods by name in real-time",
-        "Verify category filter dropdown (All, Protein, Fruit, Vegetable, etc.) correctly filters food list",
-        "Verify grid view and list view toggle switches between PantryCategorySection and PantryListItem layouts",
-        "Verify empty state renders 'No foods yet - Add your first food' when no foods exist",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 84,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-085",
-      "title": "Audit and fix Recipes page - add recipe, detail view, URL import",
-      "description": "As a user, I want the Recipes page to let me add recipes manually and by URL so that I can build my recipe library quickly.",
-      "acceptanceCriteria": [
-        "Verify EnhancedRecipeCard renders recipe name, ingredient count, and action buttons",
-        "Verify 'Add Recipe' button (or FAB) opens EnhancedRecipeBuilder in create mode",
-        "Verify filling in the recipe builder and saving creates a recipe in AppContext and Supabase",
-        "Verify clicking a recipe card opens RecipeDetailView Sheet with full recipe information",
-        "Verify RecipeDetailView shows linked foods with their names (resolved from food_ids)",
-        "Verify ImportRecipeDialog correctly calls the parse-recipe edge function with a URL",
-        "Verify empty state shows 'No recipes yet - Add your first recipe' when no recipes exist",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 85,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-086",
-      "title": "Audit and fix Planner page - weekly calendar, meal slot interactions, week navigation",
-      "description": "As a user, I want the Planner page to display a working weekly calendar where I can add and manage meals for each slot so that planning my children's meals is easy.",
-      "acceptanceCriteria": [
-        "Verify GSAPCalendarMealPlanner renders a 7-day grid with Breakfast, Lunch, Dinner, Snack rows",
-        "Verify week navigation chevrons move to previous/next week and the date header updates",
-        "Verify clicking an empty meal slot opens FoodSelectorDialog with the correct kid context",
-        "Verify selecting a food from FoodSelectorDialog creates a PlanEntry via addPlanEntry in AppContext",
-        "Verify existing plan entries display the food name in the correct day/slot cell",
-        "Verify MobileMealPlanner renders on screens below 1024px and shows the same data",
-        "Verify 'Generate AI Plan' button triggers the AI meal plan generation flow",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 86,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-087",
-      "title": "Audit and fix Grocery page - list management, item CRUD, generate from planner",
-      "description": "As a user, I want the Grocery page to show my grocery list, let me check off items, and auto-generate from my meal plan so that shopping is efficient.",
-      "acceptanceCriteria": [
-        "Verify GroceryListSelector shows available grocery lists and the selected list is displayed",
-        "Verify 'Add Item' button opens AddGroceryItemDialog and saving adds the item to the active list",
-        "Verify checking off a grocery item checkbox marks it as checked in AppContext and visually strikes through",
-        "Verify 'Generate from Meal Plan' button calls generateGroceryList() from mealPlanner lib and adds items",
-        "Verify category grouping (Protein, Fruit, etc.) correctly groups items in the list",
-        "Verify progress bar shows checked count out of total items",
-        "Verify empty state shows 'Your grocery list is empty' when no items exist",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 87,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-088",
-      "title": "Audit and fix AIPlanner page - generation flow, plan display, save to planner",
-      "description": "As a user, I want the AI Planner page to generate and save a meal plan so that AI planning integrates with my existing week view.",
-      "acceptanceCriteria": [
-        "Verify kid selector shows all kids and selecting a kid sets selectedKidForPlan state",
-        "Verify 'Generate Plan' button calls the ai-meal-plan edge function with the selected kid's ID",
-        "Verify loading spinner shows during generation and disappears on completion",
-        "Verify the generated mealPlan array renders as day cards with breakfast/lunch/dinner/snacks displayed",
-        "Verify nutritional_insights and try_bite_strategy sections render when returned from edge function",
-        "Verify 'Save to Planner' button calls addPlanEntries() to persist the generated plan",
-        "Verify error toast shows when the edge function call fails",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 88,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-089",
-      "title": "Audit and fix AICoach page - chat interface, message display, API error handling",
-      "description": "As a user, I want the AI Coach chat to send messages and display responses so that I can get real-time meal advice.",
-      "acceptanceCriteria": [
-        "Verify AIMealCoach component renders a chat interface with message history area and input field",
-        "Verify typing in the input field and pressing Enter (or clicking Send) submits the message",
-        "Verify a loading indicator shows while the AI response is being fetched",
-        "Verify AI response text displays in the chat history with correct user/assistant visual distinction",
-        "Verify an error message displays when the API call fails (network error or non-200 response)",
-        "Verify the input field clears after successful submission",
-        "Verify page renders correctly when no active kid is selected (shows general coaching mode)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 89,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-090",
-      "title": "Audit and fix MealBuilder page - food combination interface and save",
-      "description": "As a user, I want the Meal Builder to let me combine foods into a custom meal and save it to my planner so that I can create new combinations for picky eaters.",
-      "acceptanceCriteria": [
-        "Verify KidMealBuilder component renders with a food selection interface (search or category browse)",
-        "Verify selecting a food adds it to the current meal combination",
-        "Verify removing a food removes it from the combination",
-        "Verify the meal summary section shows the combined foods and their categories",
-        "Verify 'Save Meal' or 'Add to Planner' button saves the combination as a plan entry or recipe",
-        "Verify empty state shows when no foods have been added to the combination yet",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 90,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-091",
-      "title": "Audit and fix FoodChaining page - recommendations display and progression",
-      "description": "As a user, I want the Food Chaining page to show food progression recommendations so that I can gradually expand my child's diet.",
-      "acceptanceCriteria": [
-        "Verify FoodChainingRecommendations component renders without crashing when foods exist",
-        "Verify the component shows the active child's current safe foods as the starting point",
-        "Verify recommended 'next step' foods are displayed with visual similarity indicators",
-        "Verify clicking a recommended food marks it as something to try (adds to try-bite list or opens a dialog)",
-        "Verify the component renders a helpful empty state when the active child has no safe foods yet with a link to /dashboard/pantry",
-        "Verify the component works in family mode (no active kid) by showing a kid selector prompt",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 91,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-092",
-      "title": "Audit and fix FoodTracker page - daily tracking and attempt history",
-      "description": "As a user, I want the Food Tracker to let me log food attempts and see history so that I can track my child's eating progress over time.",
-      "acceptanceCriteria": [
-        "Verify FoodSuccessTracker component renders a list of safe and try-bite foods for the active kid",
-        "Verify clicking a food entry opens a dialog to log a new attempt result (ate, tasted, refused)",
-        "Verify submitting a result calls addPlanEntry or updatePlanEntry in AppContext",
-        "Verify the attempt history displays the last few results for each food",
-        "Verify streak counter (consecutive days with entries) displays correctly",
-        "Verify empty state with 'Add a child first' CTA renders when no kids exist",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 92,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-093",
-      "title": "Audit and fix Analytics page - charts, stats, and kid/family mode",
-      "description": "As a user, I want the Analytics page to show charts and stats for my child's meal history so that I can see eating patterns over time.",
-      "acceptanceCriteria": [
-        "Verify recharts ResponsiveContainer renders without console errors or zero-height issues",
-        "Verify the overall stats (total, ate, tasted, refused, successRate) show correct values for the active kid",
-        "Verify family mode (no active kid) aggregates stats across all kids",
-        "Verify food performance BarChart renders correctly with no crashes when foodStats array is empty",
-        "Verify ResultHistoryCard, SmartInsights, and WeeklyProgressReport components render without crashing",
-        "Verify empty state renders when no plan entries exist (no chart data)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 93,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-094",
-      "title": "Audit and fix InsightsDashboard - food coverage, charts, and family mode",
-      "description": "As a user, I want the Insights Dashboard to show useful food coverage and meal history insights so that I can understand my child's nutritional variety.",
-      "acceptanceCriteria": [
-        "Verify food coverage by category (protein, carb, dairy, fruit, vegetable, snack) renders as a Progress bar per category",
-        "Verify recent meal history (last 30 days) shows correct completed meal counts",
-        "Verify family mode shows aggregated insights across all kids",
-        "Verify 'Quick Wins' and 'Areas to Improve' insight sections render with data",
-        "Verify all charts render without console errors when data is available",
-        "Verify helpful empty state with link to /dashboard/pantry renders when no foods or entries exist",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 94,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-095",
-      "title": "Fix Progress page empty state - add CTA to create first child",
-      "description": "As a user, I want to be guided to create a child profile when visiting the Progress page with no active kid so that I understand what to do next.",
-      "acceptanceCriteria": [
-        "When no activeKid, instead of only showing 'No Child Selected' card, add a Button linking to /dashboard/kids with label 'Go to Children'",
-        "When no activeKid and no kids exist at all, show a description 'Add your first child to start tracking progress'",
-        "When no activeKid but kids exist, show KidSelector component or a list of clickable kid cards to select a child",
-        "Verify Tabs (Overview, Achievements, Weekly Report) all render their content when an active kid is selected",
-        "Verify ProgressDashboard, AchievementsView, and WeeklyProgressReport render without console errors",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 95,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-096",
-      "title": "Audit and fix AccountSettings page - profile save, data export, data import",
-      "description": "As a user, I want the Account Settings page to correctly save my profile, export my data as JSON, and import data from a backup file.",
-      "acceptanceCriteria": [
-        "Verify the profile form pre-populates with current user data (name, email, avatar) from Supabase",
-        "Verify saving the profile form updates the profiles table in Supabase with a success toast",
-        "Verify 'Export Data' button calls exportData() from AppContext and triggers a JSON file download",
-        "Verify 'Import Data' file input accepts JSON files and calls importData() which merges foods, kids, recipes, and plan entries",
-        "Verify 'Delete Account' confirmation dialog requires email confirmation before proceeding",
-        "Verify account deletion removes user data from all tables and redirects to /",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 96,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-097",
-      "title": "Audit and fix Billing page - subscription display, upgrade flow, cancel/reactivate",
-      "description": "As a user, I want the Billing page to show my current subscription status and let me upgrade, cancel, or reactivate so that I can manage my plan easily.",
-      "acceptanceCriteria": [
-        "Verify the current plan name and status badge (Active, Trialing, Past Due, Canceled) display correctly",
-        "Verify billing period end date and days remaining are shown",
-        "Verify 'Upgrade Plan' button navigates to /pricing when user is on free plan",
-        "Verify 'Manage Billing Portal' loads the Stripe customer portal via the billing-portal edge function",
-        "Verify 'Cancel Subscription' shows a confirmation dialog and calls cancel() from useSubscription hook",
-        "Verify 'Reactivate Subscription' button shows when willCancelAtPeriodEnd is true and calls reactivate()",
-        "Verify loading skeleton shows while subscription data loads",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 97,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-098",
-      "title": "Audit and fix Pricing page - plan cards, active plan indication, upgrade CTA",
-      "description": "As a visitor or user, I want the Pricing page to clearly show plan options and let me start an upgrade so that I understand the value of each tier.",
-      "acceptanceCriteria": [
-        "Verify all subscription plan cards render with name, price, and feature list",
-        "Verify for authenticated users, the current plan is visually indicated (e.g., 'Current Plan' badge)",
-        "Verify 'Get Started' / 'Upgrade' CTA buttons for each plan call the create-checkout edge function or redirect unauthenticated users to /auth",
-        "Verify the annual billing toggle (if present) switches displayed prices between monthly and annual",
-        "Verify the FAQ or comparison table (if present) renders without console errors",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 98,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-099",
-      "title": "Audit and fix CheckoutSuccess page - subscription polling and confirmation display",
-      "description": "As a user, I want the checkout success page to confirm my subscription activation so that I know my upgrade was successful.",
-      "acceptanceCriteria": [
-        "Verify page redirects to /dashboard when no session_id query param is present",
-        "Verify the loading spinner shows while polling for subscription activation (up to 15 seconds)",
-        "Verify once subscription is found, the plan name and next billing date display in the success card",
-        "Verify after polling timeout (15 iterations), the page still shows a success confirmation with a 'Go to Dashboard' button even if subscription data is not yet in DB (webhook delay)",
-        "Verify the page has a Helmet title tag ('Subscription Activated - EatPal')",
-        "Verify 'Go to Dashboard' button navigates to /dashboard",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 99,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-100",
-      "title": "Audit and fix Blog listing page - posts, search, category filter, empty state",
-      "description": "As a visitor, I want the Blog page to show published posts with working search and category filters so that I can find relevant content.",
-      "acceptanceCriteria": [
-        "Verify blog_posts Supabase query runs and published posts render as cards with title, excerpt, and published date",
-        "Verify loading skeleton shows while posts are fetching",
-        "Verify search input filters posts by title in real-time",
-        "Verify category filter buttons filter posts by category slug",
-        "Verify 'All' category button clears the filter and shows all posts",
-        "Verify empty state shows 'No posts found' when search yields no results",
-        "Verify each post card links to /blog/[slug]",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 100,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-101",
-      "title": "Audit and fix BlogPost detail page - content rendering, 404 handling, metadata",
-      "description": "As a visitor, I want individual blog posts to render correctly with proper metadata so that I can read content and share it.",
-      "acceptanceCriteria": [
-        "Verify /blog/:slug fetches the correct post from Supabase by slug",
-        "Verify post title, author, published date, reading time, and body HTML render correctly",
-        "Verify post body HTML is sanitized before rendering (use sanitizeHtml from src/lib/sanitize.ts)",
-        "Verify Helmet sets og:title, og:description, og:image, and og:type from post data",
-        "Verify a 404-style page or redirect to /blog renders when the slug does not match any post",
-        "Verify 'Back to Blog' breadcrumb link navigates to /blog",
-        "Verify ArticleSchema component is used with correct post metadata for SEO structured data",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 101,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-102",
-      "title": "Audit and fix Admin page - role check, tab navigation, and component rendering",
-      "description": "As an admin, I want the Admin page to verify my role and display all admin tabs correctly so that administrative features are accessible.",
-      "acceptanceCriteria": [
-        "Verify useAdminCheck hook redirects non-admins away from /admin to /dashboard",
-        "Verify AdminDashboard tabs (Overview, Users, Blog, Email, Analytics) all render their respective components",
-        "Verify each tab's component loads data from Supabase without console errors",
-        "Verify the admin user count, subscriber count, and revenue stats load in the Overview tab",
-        "Verify switching tabs does not cause loading flash or data loss",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 102,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-103",
-      "title": "Audit and fix AdminDashboard page - system health, alert manager, feature flags",
-      "description": "As an admin, I want the AdminDashboard to display real system health metrics and allow managing alerts and feature flags so that I can monitor and control the platform.",
-      "acceptanceCriteria": [
-        "Verify SystemHealthMonitor component renders and shows database connection status",
-        "Verify AlertManager component renders alert rules and allows creating a new alert rule",
-        "Verify FeatureFlagDashboard renders the flag list and the toggle switches work",
-        "Verify LiveActivityFeed renders recent activity events and auto-updates",
-        "Verify each component handles empty/loading states without crashing",
-        "Verify the page has a proper Helmet title ('Admin Dashboard - EatPal')",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 103,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-104",
-      "title": "Add Helmet page titles and meta descriptions to all dashboard pages missing them",
-      "description": "As a developer, I want every page to have a proper <Helmet> title and meta description so that browser tabs, bookmarks, and SEO crawlers show meaningful page names.",
-      "acceptanceCriteria": [
-        "Audit all pages in src/pages/ and src/pages/dashboard/ for missing or generic Helmet tags",
-        "Add `<Helmet><title>[Page Name] - EatPal</title><meta name='description' content='[description]' /></Helmet>` to: Home, Kids, Pantry, Recipes, Planner, AIPlanner, Grocery, FoodTracker, AICoach, MealBuilder, FoodChaining, InsightsDashboard, Analytics, Progress, AccountSettings, Billing, ProfessionalSettings, AccessibilitySettings, Admin, AdminDashboard, SEODashboard, ShareTarget",
-        "Titles follow pattern: '[Feature Name] - EatPal' (e.g., 'Meal Planner - EatPal')",
-        "Meta descriptions are 120-160 characters and describe the page's purpose",
-        "Typecheck passes"
-      ],
-      "priority": 104,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-105",
-      "title": "Fix mobile navigation bottom bar - active route highlighting and full route coverage",
-      "description": "As a mobile user, I want the bottom navigation bar to highlight my current page and give me access to all key features so that navigation on small screens is clear.",
-      "acceptanceCriteria": [
-        "Verify the mobile bottom nav in Dashboard.tsx highlights the current active route using NavLink's active class or isActive prop",
-        "Verify the 5 primary navigation items (Home, Kids, Pantry, Planner, Grocery) are always visible in the bottom bar",
-        "Verify a 'More' button or expandable menu opens the remaining navigation items (AI Coach, Analytics, Progress, Settings)",
-        "Verify tapping a bottom nav item navigates to the correct route without full page reload",
-        "Verify the bottom nav is not obscured by the iOS safari address bar (uses safe-area-inset-bottom padding)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 105,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-106",
-      "title": "Fix AppSidebar - add visual grouping and ensure all routes are listed",
-      "description": "As a user, I want the sidebar to organize navigation items into logical groups and list all available pages so that I can find any feature quickly.",
-      "acceptanceCriteria": [
-        "Verify AppSidebar renders within a SidebarProvider and is scrollable when nav items overflow viewport height",
-        "Group nav items into visual sections with labels: Core (Home, Kids, Pantry, Recipes, Planner, Grocery), Tools (Food Tracker, AI Coach, Meal Builder, Food Chaining, AI Planner), Insights (Insights, Analytics, Progress), Settings (Account, Billing, Professional Settings, Accessibility)",
-        "Verify all 14+ nav items from mobileNavItems array are accessible in the sidebar",
-        "Verify sidebar collapses to icon-only mode when SidebarTrigger is clicked (uses shadcn Sidebar collapsible feature)",
-        "Verify sidebar state persists across page navigation within the dashboard",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 106,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-107",
-      "title": "Audit and fix ProfessionalSettings page - white label settings load and save",
-      "description": "As a Professional tier subscriber, I want the Professional Settings page to load my white label configuration and allow me to save changes so that I can customize the app branding.",
-      "acceptanceCriteria": [
-        "Verify the page fetches the user's professional settings from the profiles or household table on mount",
-        "Verify brand name, primary color, and logo URL fields pre-populate with saved values",
-        "Verify saving the form updates the database and shows a success toast",
-        "Verify a subscription gate shows for users not on the Professional plan (show upgrade prompt instead of settings form)",
-        "Verify the page has a Helmet title ('Professional Settings - EatPal')",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 107,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-108",
-      "title": "Audit and fix AccessibilitySettings page - settings persistence and preview",
-      "description": "As a user, I want accessibility settings (font size, contrast, reduced motion, dyslexia font) to save correctly and apply instantly so that the app is usable for my accessibility needs.",
-      "acceptanceCriteria": [
-        "Verify all accessibility toggles/sliders (font size scale, high contrast mode, reduced motion, dyslexia-friendly font) render and are interactive",
-        "Verify toggling a setting updates the AccessibilityContext and applies the change visually without page reload",
-        "Verify settings persist to localStorage so they survive page refresh",
-        "Verify 'Reset to defaults' button restores all settings to their default values",
-        "Verify the preview section shows how text looks with current settings applied",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 108,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-109",
-      "title": "Fix cross-page navigation flows - ensure all inter-page CTAs and breadcrumbs work",
-      "description": "As a user, I want every 'Go to Planner', 'Add to Grocery List', 'View Recipe', and similar cross-page action to navigate to the correct destination so that the app feels connected.",
-      "acceptanceCriteria": [
-        "Audit and verify: Home page 'Plan Meals' button navigates to /dashboard/planner",
-        "Audit and verify: Home page 'Add Food' button navigates to /dashboard/pantry",
-        "Audit and verify: Recipes page 'Add to Planner' button opens FoodSelectorDialog or navigates to /dashboard/planner",
-        "Audit and verify: Planner page 'View Grocery List' link navigates to /dashboard/grocery",
-        "Audit and verify: Grocery page 'Generate from Plan' correctly reads planner data from AppContext",
-        "Audit and verify: Empty state CTAs on each page link to the correct setup page (e.g., Planner empty state → /dashboard/kids to add a kid first)",
-        "Audit and verify: Blog post 'Back to Blog' link works on all blog posts",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 109,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-110",
-      "title": "Fix page-level empty states - every page guides users when no data exists",
-      "description": "As a new user, I want every page to show a helpful empty state with next steps when I have no data so that I understand how to get started with each feature.",
-      "acceptanceCriteria": [
-        "Pantry: empty state shows 'Add your first food' with AddFoodDialog trigger button",
-        "Recipes: empty state shows 'Create your first recipe' with EnhancedRecipeBuilder trigger button",
-        "Planner: empty state (no kids) shows 'Add a child first' with link to /dashboard/kids",
-        "Planner: empty state (kids exist, no plan) shows 'Start planning meals' with slot interaction hint",
-        "Grocery: empty state shows 'Your list is empty - Generate from your meal plan' with generate button",
-        "Analytics: empty state shows 'No meal data yet - Start logging meals in the Planner' with link to /dashboard/planner",
-        "Progress: empty state (no kid) shows CTA to /dashboard/kids (per US-095)",
-        "FoodTracker: empty state (no kids) shows CTA to /dashboard/kids",
-        "Each empty state includes the page icon, a short description, and one primary action button",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 110,
       "passes": false,
       "notes": ""
     }
