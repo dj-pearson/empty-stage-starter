@@ -496,3 +496,16 @@
   - useMemo alone is NOT a debounce - it recomputes synchronously on every state change
   - Proper debounce: useState + useEffect + setTimeout + useRef for cleanup
 ---
+
+## 2026-02-26 - US-064
+- Added nutrition_info field to Food type in src/types/index.ts
+- Created src/lib/nutritionCalculator.ts with calculateRecipeNutrition() and perServingNutrition()
+- Updated RecipeDetailView to auto-calculate nutrition from food ingredients when no manual data exists
+- Shows partial data indicator when some foods lack nutrition info
+- Manual nutrition_info on recipe takes precedence over auto-calculated
+- Files changed: src/types/index.ts, src/lib/nutritionCalculator.ts (new), src/components/recipes/RecipeDetailView.tsx
+- **Learnings for future iterations:**
+  - Foods DB table doesn't have nutrition_info column yet - type added to TS only
+  - Recipe.nutrition_info = manual override, auto-calc = fallback from food ingredients
+  - RecipeDetailView has servingMultiplier state but nutrition display doesn't use it (separate from per-serving calc)
+---
