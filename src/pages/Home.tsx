@@ -8,6 +8,7 @@ import { useRef, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 import { BackupDataSchema } from "@/lib/validations";
+import { OnboardingReengagement } from "@/components/OnboardingReengagement";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -189,6 +190,9 @@ export default function Home() {
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
       <AnimatedDashboard className="container mx-auto px-4 py-8 max-w-4xl">
+        {/* Re-engagement prompt for skipped onboarding */}
+        <OnboardingReengagement />
+
         {/* Subscription Status Banner */}
         <SubscriptionStatusBanner />
 

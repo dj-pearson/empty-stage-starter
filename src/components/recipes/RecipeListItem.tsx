@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -27,7 +28,7 @@ const difficultyColors: Record<string, string> = {
   hard: "bg-red-50 text-red-700 border-red-200",
 };
 
-export function RecipeListItem({
+export const RecipeListItem = memo(function RecipeListItem({
   recipe,
   onView,
   onAddToGrocery,
@@ -137,4 +138,4 @@ export function RecipeListItem({
       </div>
     </div>
   );
-}
+});

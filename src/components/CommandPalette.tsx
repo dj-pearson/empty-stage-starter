@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
   CommandDialog,
   CommandEmpty,
@@ -48,6 +48,8 @@ interface Command {
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const navigate = useNavigate();
   const { setTheme, theme } = useTheme();
   const { foods, recipes, kids, planEntries } = useApp();
@@ -81,6 +83,14 @@ export function CommandPalette() {
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
   }, []);
+
+  // Debounce search query by 300ms for data search
+  useEffect(() => {
+    debounceRef.current = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(debounceRef.current);
+  }, [searchQuery]);
 
   const commands: Command[] = useMemo(
     () => [
@@ -345,10 +355,10 @@ export function CommandPalette() {
     };
   }, [filteredCommands]);
 
-  // Search data with 300ms debounce effect
+  // Search data using debounced query
   const dataResults = useMemo(() => {
-    if (!searchQuery || searchQuery.length < 2) return { foods: [], recipes: [], kids: [], plans: [] };
-    const q = searchQuery.toLowerCase();
+    if (!debouncedQuery || debouncedQuery.length < 2) return { foods: [], recipes: [], kids: [], plans: [] };
+    const q = debouncedQuery.toLowerCase();
     return {
       foods: foods.filter(f => f.name?.toLowerCase().includes(q)).slice(0, 5),
       recipes: recipes.filter(r => r.name?.toLowerCase().includes(q)).slice(0, 5),
@@ -358,7 +368,7 @@ export function CommandPalette() {
         return food?.name?.toLowerCase().includes(q);
       }).slice(0, 5),
     };
-  }, [searchQuery, foods, recipes, kids, planEntries]);
+  }, [debouncedQuery, foods, recipes, kids, planEntries]);
 
   const hasDataResults = dataResults.foods.length > 0 || dataResults.recipes.length > 0 || dataResults.kids.length > 0 || dataResults.plans.length > 0;
 
@@ -430,6 +440,20 @@ export function CommandPalette() {
                     <span>{kid.name}</span>
                   </CommandItem>
                 ))}
+              </CommandGroup>
+            )}
+            {dataResults.plans.length > 0 && (
+              <CommandGroup heading="Meal Plans">
+                {dataResults.plans.map((plan) => {
+                  const food = foods.find(f => f.id === plan.food_id);
+                  return (
+                    <CommandItem key={plan.id} onSelect={() => { saveRecentSearch(searchQuery); navigate("/planner"); setOpen(false); }}>
+                      <Calendar className="mr-2 h-4 w-4 text-purple-500" />
+                      <span>{food?.name || "Planned meal"}</span>
+                      {plan.date && <span className="ml-auto text-xs text-muted-foreground">{plan.date}</span>}
+                    </CommandItem>
+                  );
+                })}
               </CommandGroup>
             )}
             <CommandSeparator />

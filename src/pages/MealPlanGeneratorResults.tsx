@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
@@ -21,7 +20,7 @@ import {
   Lightbulb,
   DollarSign,
 } from 'lucide-react';
-import { MealPlanInput, MealPlanResult, GeneratedMeal } from '@/types/mealPlanGenerator';
+import { MealPlanInput, MealPlanResult } from '@/types/mealPlanGenerator';
 import { formatCurrency } from '@/lib/budgetCalculator/calculator';
 import { saveMealPlanGeneration } from '@/lib/mealPlanGenerator/supabaseIntegration';
 

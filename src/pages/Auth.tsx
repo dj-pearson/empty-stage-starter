@@ -71,8 +71,10 @@ function RequirementIndicator({ met, label }: { met: boolean; label: string }) {
 const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
@@ -188,8 +190,11 @@ const Auth = () => {
               navigate(redirectTo, { replace: true });
             } else {
               setShowOnboarding(true);
+              setCheckingSession(false);
             }
           });
+      } else {
+        setCheckingSession(false);
       }
     });
 
@@ -224,6 +229,16 @@ const Auth = () => {
       toast({
         title: "Weak Password",
         description: passwordValidation.error.errors[0].message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate passwords match
+    if (password !== confirmPassword) {
+      toast({
+        title: "Passwords Don't Match",
+        description: "Please make sure both passwords are the same.",
         variant: "destructive",
       });
       return;
@@ -434,6 +449,18 @@ const Auth = () => {
     // The edge function will handle the OAuth flow and redirect back to /auth/callback
     window.location.href = oauthUrl;
   };
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted">
+        <div className="animate-pulse flex flex-col items-center gap-3">
+          <img src="/Logo-Green.png" alt="EatPal" className="h-10 block dark:hidden" />
+          <img src="/Logo-White.png" alt="EatPal" className="h-10 hidden dark:block" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <OnboardingDialog
@@ -736,11 +763,34 @@ const Auth = () => {
                         <RequirementIndicator met={passwordRequirements.hasSpecial} label="Special character" />
                       </div>
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-confirm-password">Confirm Password</Label>
+                      <Input
+                        id="signup-confirm-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Re-enter your password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                        aria-invalid={confirmPassword.length > 0 && password !== confirmPassword}
+                        className={cn(
+                          "h-11 transition-colors",
+                          confirmPassword.length > 0 && password === confirmPassword && "border-green-500 focus-visible:ring-green-500",
+                          confirmPassword.length > 0 && password !== confirmPassword && "border-red-500 focus-visible:ring-red-500"
+                        )}
+                      />
+                      {confirmPassword.length > 0 && password !== confirmPassword && (
+                        <p className="text-xs text-red-500 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          Passwords do not match
+                        </p>
+                      )}
+                    </div>
                     <LoadingButton
                       type="submit"
                       className="w-full h-11"
                       isLoading={loading}
-                      disabled={!isPasswordValid || emailValidation.isValid === false}
+                      disabled={!isPasswordValid || emailValidation.isValid === false || password !== confirmPassword}
                     >
                       Sign Up
                     </LoadingButton>

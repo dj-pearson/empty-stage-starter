@@ -105,7 +105,7 @@ export { useRecipeFilters } from './useRecipeFilters';
 export type { RecipeSortOption, RecipeViewMode, RecipeQuickFilter } from './useRecipeFilters';
 
 // Real-time Subscriptions
-export { useRealtimeSubscription, getActiveSubscriptions } from './useRealtimeSubscription';
+export { useRealtimeSubscription, getActiveSubscriptions, registerSubscription, unregisterSubscription } from './useRealtimeSubscription';
 
 // Re-export types
 export type { WindowSize } from './useWindowSize';

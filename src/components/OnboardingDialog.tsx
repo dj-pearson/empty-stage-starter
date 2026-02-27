@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -54,6 +54,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format, differenceInYears } from "date-fns";
 import { cn } from "@/lib/utils";
 import { logger } from "@/lib/logger";
+import { analytics } from "@/lib/analytics";
 
 const PREDEFINED_ALLERGENS = [
   "peanuts",
@@ -87,6 +88,15 @@ export function OnboardingDialog({ open, onComplete, onOpenChange }: OnboardingD
   const [step, setStep] = useState(1);
   const [uploading, setUploading] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const trackedStart = useRef(false);
+
+  // Track onboarding start
+  useEffect(() => {
+    if (open && !trackedStart.current) {
+      analytics.trackEvent("onboarding_start");
+      trackedStart.current = true;
+    }
+  }, [open]);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
 
   const [childData, setChildData] = useState({
@@ -167,6 +177,9 @@ export function OnboardingDialog({ open, onComplete, onOpenChange }: OnboardingD
       toast.error("Please enter your child's name");
       return;
     }
+    // Track onboarding step progression
+    const stepNames = ["start", "child_created", "allergens_set", "foods_selected", "completed"];
+    analytics.trackEvent(`onboarding_${stepNames[step]}`, { step });
     if (step === 4) {
       handleComplete();
     } else {
@@ -203,8 +216,25 @@ export function OnboardingDialog({ open, onComplete, onOpenChange }: OnboardingD
       });
     }
 
+    // Track completion and update profile
+    analytics.trackEvent("onboarding_completed", {
+      allergens_count: childData.allergens.length,
+      foods_count: childData.favorite_foods.length,
+    });
+    updateOnboardingProfile("completed");
+
     toast.success("Welcome to EatPal! Let's start planning meals!");
     onComplete();
+  };
+
+  const updateOnboardingProfile = async (status: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase.from("profiles").update({
+        onboarding_completed: status === "completed",
+      }).eq("id", user.id);
+    } catch { /* non-critical */ }
   };
 
   const getCategoryForFood = (food: string) => {
@@ -225,7 +255,7 @@ export function OnboardingDialog({ open, onComplete, onOpenChange }: OnboardingD
   const progress = (step / 4) * 100;
 
   const handleSkip = () => {
-    // Mark onboarding as complete even if skipped
+    analytics.trackEvent("onboarding_skipped", { skipped_at_step: step });
     onComplete();
     setShowSkipConfirm(false);
   };
