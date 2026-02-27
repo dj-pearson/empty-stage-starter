@@ -613,3 +613,16 @@
   - Rate limiter uses checkRateLimit/recordAttempt/clearRateLimit from @/lib/rateLimiter
   - onAuthStateChange listener handles redirect after successful auth (checks onboarding_completed in profiles)
 ---
+
+## 2026-02-26 - US-078
+- Audited PickyEaterQuiz and PickyEaterQuizResults pages - all acceptance criteria already passing
+- Quiz step progression, back button, progress bar, Get Results navigation all working
+- Results page properly redirects to quiz when visited without state (line 56-59)
+- Results page shows personality type, food recommendations (email-gated), strategy cards, sample meals
+- No code changes needed
+- **Learnings for future iterations:**
+  - Quiz uses QUIZ_QUESTIONS from @/lib/quiz/questions and QuizQuestion component for rendering
+  - Results are email-gated: personality chart shown free, food recommendations/strategies behind email capture
+  - confetti library used for celebration effect on results page
+  - Quiz response saved to Supabase via saveQuizResponse from @/lib/quiz/supabaseIntegration
+---
