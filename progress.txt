@@ -589,3 +589,14 @@
   - Template system uses edge function manage-meal-plan-templates
   - Planner header uses flex gap-2 flex-wrap for button layout
 ---
+
+## 2026-02-26 - US-076
+- Audited Landing page: navigation, CTAs, hero section, pricing buttons, lead magnet links
+- Fixed desktop logo not wrapped in Link component (was plain div, now navigates to "/" on click)
+- All other elements verified working: nav links, pricing CTAs, 3D hero Suspense, quiz/budget links
+- Files changed: src/pages/Landing.tsx
+- **Learnings for future iterations:**
+  - Landing page has separate desktop header (hidden md:flex) and mobile Sheet menu
+  - Logo uses <picture> with WebP/AVIF sources - wrap entire picture in <Link>
+  - SheetTitle logo doesn't need Link since user is already on landing page
+---

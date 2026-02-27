@@ -242,7 +242,7 @@ const Landing = () => {
         {/* Header */}
         <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm transition-all duration-300">
           <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-            <div className="flex items-center gap-2">
+            <Link to="/" className="flex items-center gap-2" aria-label="EatPal home">
               <picture className="block dark:hidden">
                 <source srcSet="/Logo-Green.webp" type="image/webp" />
                 <img
@@ -263,7 +263,7 @@ const Landing = () => {
                   height="32"
                 />
               </picture>
-            </div>
+            </Link>
 
             {/* Desktop Navigation */}
             <nav className="hidden md:flex gap-6 items-center">
