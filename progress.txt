@@ -600,3 +600,16 @@
   - Logo uses <picture> with WebP/AVIF sources - wrap entire picture in <Link>
   - SheetTitle logo doesn't need Link since user is already on landing page
 ---
+
+## 2026-02-26 - US-077
+- Audited Auth page sign-in, sign-up, and password reset flows
+- Added confirm password field to signup form with real-time match validation
+- Added session-checking loading state to prevent form flash while checking existing session
+- Verified: sign-in with rate limiting, sign-up with OTP verification, forgot password dialog with "Back to Sign In"
+- Files changed: src/pages/Auth.tsx
+- **Learnings for future iterations:**
+  - Auth uses PasswordResetDialog (separate component) not a tab - "Forgot Password?" opens dialog
+  - OTP verification flow: signup → 6-digit code → verify via supabase.auth.verifyOtp
+  - Rate limiter uses checkRateLimit/recordAttempt/clearRateLimit from @/lib/rateLimiter
+  - onAuthStateChange listener handles redirect after successful auth (checks onboarding_completed in profiles)
+---
