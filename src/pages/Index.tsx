@@ -1,14 +1,12 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { Navigate } from "react-router-dom";
 
+/**
+ * Index page redirects to Landing page.
+ * The "/" route in App.tsx already renders Landing directly,
+ * but this ensures any stale imports also resolve correctly.
+ */
 const Index = () => {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
-  );
+  return <Navigate to="/" replace />;
 };
 
 export default Index;
