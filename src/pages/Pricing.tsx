@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, Sparkles, Utensils, Menu } from "lucide-react";
+import { Check, X, Sparkles, Utensils, Menu, Shield, Clock, CreditCard, Users, ChevronDown } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -61,6 +61,28 @@ interface Campaign {
 interface PlanWithDiscount extends SubscriptionPlan {
   activeCampaign?: Campaign;
   discountedPrice?: number;
+}
+
+function BillingFaqItem({ question, answer }: { question: string; answer: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="border rounded-lg">
+      <button
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-muted/50 transition-colors"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
+        <span className="font-medium pr-4">{question}</span>
+        <ChevronDown className={`w-5 h-5 text-muted-foreground shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="px-4 pb-4">
+          <p className="text-muted-foreground text-sm leading-relaxed">{answer}</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Pricing() {
@@ -347,6 +369,12 @@ export default function Pricing() {
             <Link to="/pricing" className="text-primary font-medium">
               Pricing
             </Link>
+            <Link
+              to="/#free-tools"
+              className="hover:text-primary transition-colors font-medium"
+            >
+              Free Tools
+            </Link>
             {user ? (
               <Link to="/dashboard">
                 <Button className="font-semibold shadow-md">Dashboard</Button>
@@ -411,6 +439,13 @@ export default function Pricing() {
                   onClick={closeMobileMenu}
                 >
                   Pricing
+                </Link>
+                <Link
+                  to="/#free-tools"
+                  className="text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted transition-colors"
+                  onClick={closeMobileMenu}
+                >
+                  Free Tools
                 </Link>
                 <div className="border-t pt-4 mt-4 space-y-3">
                   {user ? (
@@ -937,6 +972,68 @@ export default function Pricing() {
         >
           <FeatureComparisonTable plans={plans} />
         </Suspense>
+
+        {/* Money-Back Guarantee & Trust Signals */}
+        <section className="mt-16 max-w-4xl mx-auto" aria-label="Trust and guarantee information">
+          {/* Money-Back Guarantee Banner */}
+          <div className="bg-primary/5 border border-primary/20 rounded-2xl p-8 text-center mb-12">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+              <Shield className="w-8 h-8 text-primary" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">30-Day Money-Back Guarantee</h2>
+            <p className="text-muted-foreground max-w-xl mx-auto leading-relaxed">
+              If EatPal isn't the right fit for your family, we'll refund your subscription within
+              the first 30 days. No questions asked, no hoops to jump through.
+            </p>
+          </div>
+
+          {/* Trust Signal Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-16">
+            {[
+              { icon: Shield, label: "256-bit SSL Encryption", sublabel: "Your data is secure" },
+              { icon: Clock, label: "Cancel Anytime", sublabel: "No long-term contracts" },
+              { icon: CreditCard, label: "No Hidden Fees", sublabel: "What you see is what you pay" },
+              { icon: Users, label: "2,000+ Families", sublabel: "Trust EatPal daily" },
+            ].map((signal, index) => (
+              <div key={index} className="flex flex-col items-center text-center p-4 rounded-xl bg-card border">
+                <signal.icon className="w-6 h-6 text-primary mb-2" />
+                <p className="text-sm font-semibold">{signal.label}</p>
+                <p className="text-xs text-muted-foreground">{signal.sublabel}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Billing FAQ Section */}
+          <div className="mb-16">
+            <h2 className="text-2xl font-bold text-center mb-8">Billing Questions</h2>
+            <div className="space-y-3">
+              {[
+                {
+                  q: "Can I change plans anytime?",
+                  a: "Yes! You can upgrade or downgrade your plan at any time. When upgrading, you'll be charged the prorated difference. When downgrading, the new rate applies at your next billing cycle."
+                },
+                {
+                  q: "What payment methods do you accept?",
+                  a: "We accept all major credit and debit cards (Visa, Mastercard, American Express, Discover) through our secure payment partner, Stripe. All transactions are encrypted and PCI-compliant."
+                },
+                {
+                  q: "Is there a free trial?",
+                  a: "Yes! Our Free plan is available forever with core features. For paid plans, you can try them risk-free with our 30-day money-back guarantee — if it's not for you, just reach out for a full refund."
+                },
+                {
+                  q: "How does yearly billing work?",
+                  a: "Yearly billing saves you 20% compared to monthly. You're billed once per year, and you can switch between monthly and yearly at any time from your account settings."
+                },
+                {
+                  q: "What happens if I cancel?",
+                  a: "You keep access to all paid features until the end of your current billing period. After that, your account reverts to the Free plan. Your data is never deleted — you can upgrade again anytime to restore full access."
+                },
+              ].map((faq, index) => (
+                <BillingFaqItem key={index} question={faq.q} answer={faq.a} />
+              ))}
+            </div>
+          </div>
+        </section>
       </main>
 
       {/* Footer */}

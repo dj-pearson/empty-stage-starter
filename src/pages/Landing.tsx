@@ -289,6 +289,12 @@ const Landing = () => {
               >
                 Pricing
               </Link>
+              <a
+                href="#free-tools"
+                className="text-foreground hover:text-primary transition-colors font-medium"
+              >
+                Free Tools
+              </a>
               <Button
                 variant="ghost"
                 size="icon"
@@ -373,6 +379,13 @@ const Landing = () => {
                   >
                     Pricing
                   </Link>
+                  <a
+                    href="#free-tools"
+                    className="text-foreground text-base font-medium py-4 px-4 rounded-lg hover:bg-muted active:scale-[0.98] transition-all"
+                    onClick={closeMobileMenu}
+                  >
+                    Free Tools
+                  </a>
                   <div className="border-t pt-4 mt-auto space-y-3 pb-safe">
                     <Button
                       variant="outline"

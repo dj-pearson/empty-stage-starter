@@ -797,6 +797,417 @@
       "priority": 50,
       "passes": false,
       "notes": ""
+    },
+    {
+      "id": "US-051",
+      "title": "Replace placeholder Index page with proper homepage redirect",
+      "description": "As a visitor landing on the root URL, I want to see the full landing page instead of a blank placeholder so that I immediately understand EatPal's value proposition and can take action.",
+      "acceptanceCriteria": [
+        "Replace the generic 'Welcome to Your Blank App' content in src/pages/Index.tsx with a redirect to the Landing page, or render the Landing component directly",
+        "Ensure the / route resolves to the full Landing page experience with hero, features, social proof, and CTAs",
+        "Verify no SEO impact: canonical URL remains https://tryeatpal.com/",
+        "Verify existing links to / still work correctly",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 51,
+      "passes": false,
+      "notes": "CRITICAL: The Index.tsx page is a generic placeholder that shows 'Welcome to Your Blank App' — any visitor landing on / sees zero brand messaging, zero value proposition, and zero CTAs. This is the #1 conversion killer on the site."
+    },
+    {
+      "id": "US-052",
+      "title": "Add money-back guarantee and trust signals to Pricing page",
+      "description": "As a potential customer evaluating pricing, I want to see risk-reduction messaging (money-back guarantee, trust badges) so that I feel confident committing to a paid plan.",
+      "acceptanceCriteria": [
+        "Add a '30-day money-back guarantee' banner below the pricing cards in src/pages/Pricing.tsx",
+        "Add trust signals section with: 'Cancel anytime', 'No long-term contracts', '256-bit SSL encryption', '2,000+ families trust EatPal'",
+        "Add a 'Billing FAQ' accordion section below pricing cards with 3-5 common billing questions",
+        "Ensure dark mode compatibility (use theme tokens, not hardcoded colors)",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 52,
+      "passes": false,
+      "notes": "Pricing page has zero risk-reduction messaging. Adding trust signals and money-back guarantee typically increases conversion 15-30%."
+    },
+    {
+      "id": "US-053",
+      "title": "Add cross-page internal linking for lead magnets on Landing page",
+      "description": "As a visitor browsing the landing page, I want to easily discover free tools (Quiz, Budget Calculator, Meal Plan Generator) so that I engage deeper with the brand before signing up.",
+      "acceptanceCriteria": [
+        "Verify the 'Free Tools' section on Landing.tsx (lines 710-772) links correctly to /picky-eater-quiz, /budget-calculator, and /meal-plan",
+        "Add a promotional banner or card in the Landing page hero area or pain points section that highlights the Picky Eater Quiz as a gateway engagement tool",
+        "Add 'Try our free tools' link to the desktop navigation header on Landing.tsx between 'Pricing' and 'Sign In'",
+        "Add the same link to the mobile menu",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 53,
+      "passes": false,
+      "notes": "Lead magnets exist but are buried in a section users may never scroll to. Promoting them in navigation dramatically increases engagement and email capture."
+    },
+    {
+      "id": "US-054",
+      "title": "Add newsletter email capture to Blog listing and Blog post pages",
+      "description": "As a blog reader interested in picky eating content, I want to subscribe to a newsletter so that I receive weekly tips and stay engaged with the brand.",
+      "acceptanceCriteria": [
+        "Create a reusable NewsletterSignup component in src/components/NewsletterSignup.tsx",
+        "Component should include email input, submit button, privacy note, and success/error states",
+        "Add the component to src/pages/Blog.tsx above the article grid with copy: 'Get weekly picky eating tips delivered to your inbox'",
+        "Add the component to src/pages/BlogPost.tsx after the article content and before related articles",
+        "Store email submissions in Supabase (newsletter_subscribers table or use existing mechanism)",
+        "Component uses theme-aware styling (bg-card, text-foreground, etc.)",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 54,
+      "passes": false,
+      "notes": "Blog pages have zero email capture. Blog readers are warm leads who are researching picky eating — capturing their email is a critical conversion touchpoint."
+    },
+    {
+      "id": "US-055",
+      "title": "Add contextual CTA after Blog post content to drive signups",
+      "description": "As a blog reader who just finished an article, I want to see a relevant next step so that I know how EatPal can help me implement what I just learned.",
+      "acceptanceCriteria": [
+        "Add a CTA section in src/pages/BlogPost.tsx between the article content and the related articles section",
+        "CTA should include: headline 'Ready to put these strategies into action?', brief value prop, and two buttons: 'Start Free Trial' and 'Take the Picky Eater Quiz'",
+        "CTA should be visually distinct (use primary gradient background) but not feel intrusive",
+        "Responsive design: stack buttons vertically on mobile",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 55,
+      "passes": false,
+      "notes": "Blog posts end with related articles but no conversion CTA. Every blog post is a missed conversion opportunity."
+    },
+    {
+      "id": "US-056",
+      "title": "Add 'What you will learn' intro section to Picky Eater Quiz page",
+      "description": "As a visitor starting the quiz, I want to know what insights I'll receive so that I'm motivated to complete all questions.",
+      "acceptanceCriteria": [
+        "Add an intro/overview section at the top of src/pages/PickyEaterQuiz.tsx before the quiz starts",
+        "Include: estimated time (2 minutes), what results include (personality type, tailored strategies, food suggestions), privacy note",
+        "Add a 'Start Quiz' button that transitions to the actual quiz questions",
+        "Show a brief animation or icon grid showing the 4 personality types as a teaser",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 56,
+      "passes": false,
+      "notes": "Quiz launches immediately with no context. Setting expectations increases completion rates by 20-40%."
+    },
+    {
+      "id": "US-057",
+      "title": "Add search and category filtering to FAQ page",
+      "description": "As a visitor with a specific question, I want to search or filter FAQs by category so that I can quickly find my answer without scrolling through all items.",
+      "acceptanceCriteria": [
+        "Add a search input above the FAQ list in src/pages/FAQ.tsx that filters questions in real-time as the user types",
+        "Organize FAQ items into categories: 'Getting Started', 'Features', 'Billing', 'Technical'",
+        "Add category filter tabs/buttons that show only questions from the selected category",
+        "Show 'No results found. Try a different search or contact us.' when no FAQs match",
+        "Maintain existing FAQ schema markup",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 57,
+      "passes": false,
+      "notes": "FAQ page shows all questions in a flat list with no search or categorization. Users must scroll through everything to find their answer."
+    },
+    {
+      "id": "US-058",
+      "title": "Add comparison section to Pricing page showing EatPal vs alternatives",
+      "description": "As a potential customer comparing options, I want to see how EatPal compares to alternatives (feeding therapy, meal kits, generic meal planners) so that I understand the unique value.",
+      "acceptanceCriteria": [
+        "Add a 'Why Choose EatPal?' comparison section to src/pages/Pricing.tsx below the feature comparison table",
+        "Include comparison cards for: Traditional feeding therapy ($150/session), Meal kit services ($200+/month), Generic meal planners (not built for picky eaters), and DIY planning (2+ hours/week)",
+        "Highlight EatPal's advantages: cost ($9.99/month), specialization (picky eaters), time savings (5 min/day), science-backed approach",
+        "Use theme-aware styling",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 58,
+      "passes": false,
+      "notes": "No competitive positioning anywhere on the site. Users evaluating options need context to understand EatPal's value relative to alternatives."
+    },
+    {
+      "id": "US-059",
+      "title": "Add guided onboarding flow that continues across dashboard pages",
+      "description": "As a new user who just signed up, I want a step-by-step onboarding flow that guides me through Kids, Pantry, and Planner setup so that I reach my 'aha moment' quickly.",
+      "acceptanceCriteria": [
+        "Enhance the existing onboarding in src/pages/Home.tsx to show a persistent progress bar at the top of all dashboard pages for new users",
+        "Progress steps: 1. Create child profile, 2. Add 5+ safe foods, 3. Generate first meal plan, 4. Create grocery list",
+        "Each step links to the relevant page (Kids, Pantry, Planner, Grocery)",
+        "Mark steps as completed when the user actually completes them (check kids.length > 0, safeFoods >= 5, planEntries.length > 0, groceryItems.length > 0)",
+        "Dismiss onboarding after all steps complete or user explicitly closes it",
+        "Store dismissal state in localStorage",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 59,
+      "passes": false,
+      "notes": "Current onboarding only exists on the Home page and doesn't persist across the app. New users get lost after navigating away from Home."
+    },
+    {
+      "id": "US-060",
+      "title": "Add 'Today's Meals' quick-view widget and streak counter to Dashboard Home",
+      "description": "As a returning user, I want to see today's planned meals at a glance and my logging streak so that I stay engaged and on track without clicking into the Planner.",
+      "acceptanceCriteria": [
+        "Ensure the existing TodayMeals component on Home.tsx is prominently placed above the fold",
+        "Add a daily streak counter showing consecutive days of logging meal results (e.g., '7 day streak!')",
+        "Add celebratory UI (badge color change, small animation) at streak milestones (3, 7, 14, 30 days)",
+        "Show encouragement text when streak is broken: 'Log today's meals to start a new streak'",
+        "Streak data derived from planEntries with results logged in consecutive days",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 60,
+      "passes": false,
+      "notes": "Gamification through streaks increases daily engagement by 30-50%. Currently no visible engagement hooks on the dashboard."
+    },
+    {
+      "id": "US-061",
+      "title": "Improve empty states across Pantry, Planner, and Grocery pages with actionable guidance",
+      "description": "As a new user visiting feature pages for the first time, I want clear, encouraging empty states that tell me exactly what to do so that I don't feel lost or confused.",
+      "acceptanceCriteria": [
+        "Audit empty states in src/pages/Pantry.tsx — ensure it shows: illustration/icon, 'Your pantry is empty' heading, 'Add your child's safe foods to get started with meal planning' description, prominent 'Add Food' button, and a tip: 'Start with 5-10 foods your child eats regularly'",
+        "Audit empty states in src/pages/Planner.tsx — when no meals are planned, show: 'No meals planned this week' heading, 'Create a meal plan to see it here' description, 'Generate Meal Plan' and 'Add Meal Manually' buttons",
+        "Audit empty states in src/pages/Grocery.tsx — show: 'Your grocery list is empty' heading, 'Add items from recipes or create a list manually' description, action buttons for both paths",
+        "All empty states use consistent design (canonical EmptyState component from src/components/ui/EmptyState.tsx)",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 61,
+      "passes": false,
+      "notes": "Poor empty states are the #1 cause of user drop-off in the first session. Users who don't know what to do next leave and don't come back."
+    },
+    {
+      "id": "US-062",
+      "title": "Add social proof testimonials section to Auth page sign-up tab",
+      "description": "As a user on the sign-up page, I want to see testimonials and success metrics so that I feel confident creating an account.",
+      "acceptanceCriteria": [
+        "Verify the existing left-side panel on Auth.tsx (desktop, lines 479-551) includes testimonials and value props",
+        "Ensure the mobile version (lines 947-963) shows at least 2-3 key value props above the form",
+        "Add a 'Trusted by 2,000+ parents' counter with animated number if not already present",
+        "Add at least one short testimonial quote visible on mobile above the sign-up form",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 62,
+      "passes": false,
+      "notes": "Auth page desktop has social proof but mobile version hides most of it. Mobile users represent 60%+ of traffic and see less persuasion content."
+    },
+    {
+      "id": "US-063",
+      "title": "Add 'Author Bio' section and reading progress bar to Blog post page",
+      "description": "As a blog reader, I want to see the author's credentials and my reading progress so that I trust the content and stay engaged through the article.",
+      "acceptanceCriteria": [
+        "Add a reading progress bar at the top of src/pages/BlogPost.tsx that shows how far the user has scrolled through the article",
+        "Progress bar should be a thin line (2-3px) in the primary color, positioned sticky at the top of the viewport",
+        "Add an 'About the Author' section after the article content showing author name, role/credentials, and a brief bio",
+        "Author data should come from the blog post data or a sensible default ('EatPal Team')",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 63,
+      "passes": false,
+      "notes": "Reading progress bars increase average time on page by 10-20%. Author bios build E-E-A-T signals for SEO."
+    },
+    {
+      "id": "US-064",
+      "title": "Add 'Save and Resume' for multi-step lead magnet forms",
+      "description": "As a user filling out the Meal Plan Generator or Budget Calculator, I want my progress auto-saved so that I can return and finish if I navigate away.",
+      "acceptanceCriteria": [
+        "Add localStorage auto-save to src/pages/MealPlanGenerator.tsx that saves form state on every field change",
+        "Add localStorage auto-save to src/pages/BudgetCalculator.tsx with the same pattern",
+        "On page load, check for saved state and show a 'Resume where you left off?' prompt if found",
+        "Add a 'Start Fresh' button to clear saved state",
+        "Clear saved state after successful form submission",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 64,
+      "passes": false,
+      "notes": "Long forms on mobile have high abandonment. Auto-save prevents frustration and increases completion rates."
+    },
+    {
+      "id": "US-065",
+      "title": "Add expected response time and department routing to Contact page",
+      "description": "As a user seeking help, I want to know when I'll get a response and route my inquiry to the right team so that I feel confident my issue will be addressed.",
+      "acceptanceCriteria": [
+        "Add a prominent 'We respond within 24 hours on business days' badge at the top of src/pages/Contact.tsx",
+        "Replace the generic Subject text input with a dropdown select: 'Account & Billing', 'Technical Support', 'Feature Requests', 'Partnership Inquiries', 'Other'",
+        "Add a 'What happens next?' section below the form explaining the process: 1. We receive your message, 2. Our team reviews it, 3. You get a response via email",
+        "Add a 'Check our FAQ first' nudge above the form linking to /faq",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 65,
+      "passes": false,
+      "notes": "Contact page has no response time expectation and a generic subject field. Setting expectations reduces anxiety and repeat inquiries."
+    },
+    {
+      "id": "US-066",
+      "title": "Add mobile-visible food safety badges to Pantry list items",
+      "description": "As a mobile user managing my child's food library, I want to see food safety badges (Safe, Try Bite) on mobile so that I can quickly scan food status without tapping into each item.",
+      "acceptanceCriteria": [
+        "In src/components/pantry/PantryListItem.tsx, make safety badges visible on mobile by replacing 'hidden sm:flex' with a responsive layout that shows badges on all screen sizes",
+        "Use smaller badge variants on mobile (text-xs) to fit within the compact layout",
+        "Ensure badges don't cause text truncation or overflow on small screens (320px width)",
+        "Test with food names of varying lengths (short: 'Rice', long: 'Chocolate Chip Cookie Dough Ice Cream')",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 66,
+      "passes": false,
+      "notes": "Safety badges are hidden on mobile (hidden sm:flex). Mobile users can't see the most important food classification at a glance."
+    },
+    {
+      "id": "US-067",
+      "title": "Add progress indicators and time estimates to lead magnet forms",
+      "description": "As a user filling out a multi-section form, I want to see a progress bar and time estimate so that I know how much more effort is needed to complete it.",
+      "acceptanceCriteria": [
+        "Add a progress bar/stepper to src/pages/MealPlanGenerator.tsx showing completion across form sections (Family Details, Preferences, Equipment, Allergies)",
+        "Add a time estimate label: 'About 5 minutes to complete'",
+        "Add encouraging micro-copy at progress milestones: 'Halfway there!', 'Almost done!'",
+        "Add a progress bar to src/pages/BudgetCalculator.tsx with similar treatment",
+        "Progress bar should respect reduced motion preferences",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 67,
+      "passes": false,
+      "notes": "Both lead magnet forms are long with no progress indication. Users don't know how much more is required, leading to abandonment."
+    },
+    {
+      "id": "US-068",
+      "title": "Add keyboard shortcut help modal discoverable via ? key",
+      "description": "As a power user, I want to see all available keyboard shortcuts in a modal so that I can navigate the app efficiently.",
+      "acceptanceCriteria": [
+        "Create a KeyboardShortcutsModal component that shows all available shortcuts in a categorized grid",
+        "Trigger the modal when user presses '?' key (Shift + /)",
+        "Include shortcuts from Dashboard.tsx (K, G, S, T) and any other registered shortcuts",
+        "Add a '?' icon button in the dashboard header that also opens the modal",
+        "Modal should be dismissible via Escape key",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 68,
+      "passes": false,
+      "notes": "Keyboard shortcuts exist but are completely undiscoverable. Power users who discover them become more engaged."
+    },
+    {
+      "id": "US-069",
+      "title": "Add contextual tooltips to dashboard stats cards and feature icons",
+      "description": "As a user viewing my dashboard, I want to understand what each stat means so that I can interpret my data correctly.",
+      "acceptanceCriteria": [
+        "Add tooltips to stat cards on src/pages/Home.tsx explaining: 'Safe Foods' = foods your child consistently eats, 'Try Bites' = foods being introduced, 'Meals Planned' = meals scheduled this week, 'Grocery Items' = items on your current list",
+        "Use the existing Tooltip component from shadcn-ui",
+        "Add a small info icon (CircleHelp from lucide) next to each stat label that triggers the tooltip",
+        "Ensure tooltips work on both hover (desktop) and tap (mobile)",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 69,
+      "passes": false,
+      "notes": "Stats like 'Safe Foods' and 'Try Bites' use domain-specific terminology that new users may not understand."
+    },
+    {
+      "id": "US-070",
+      "title": "Add 404 page improvements with search, popular links, and contact CTA",
+      "description": "As a user who lands on a non-existent page, I want helpful options to find what I'm looking for so that I don't leave the site entirely.",
+      "acceptanceCriteria": [
+        "Enhance src/pages/NotFound.tsx with: a search input, links to popular pages (Landing, Pricing, FAQ, Blog, Contact), and a 'Contact Support' link",
+        "Add a friendly illustration or icon",
+        "Add proper SEO meta tags (noindex) to prevent 404 pages from being indexed",
+        "Track 404 hits in analytics so the team can fix broken links",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 70,
+      "passes": false,
+      "notes": "A good 404 page recovers potentially lost visitors. Current 404 page quality needs audit."
+    },
+    {
+      "id": "US-071",
+      "title": "Add Planner mobile feature parity for templates, copy week, and clear week",
+      "description": "As a mobile user managing meal plans, I want access to save/load templates, copy week, and clear week actions so that I have the same capabilities as desktop users.",
+      "acceptanceCriteria": [
+        "In src/pages/Planner.tsx, add a 'More Actions' overflow menu (three-dot icon or kebab menu) to the mobile header",
+        "Include in the menu: 'Save as Template', 'Load Template', 'Copy to Next Week', 'Clear This Week'",
+        "Ensure each action opens the appropriate dialog or triggers the correct handler",
+        "Match the existing desktop functionality exactly",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 71,
+      "passes": false,
+      "notes": "Mobile Planner is missing key features that desktop users have. This creates a frustrating experience for the 60%+ of users on mobile."
+    },
+    {
+      "id": "US-072",
+      "title": "Add reading time and category badges to Blog listing cards",
+      "description": "As a blog reader browsing articles, I want to see estimated reading time and article category on each card so that I can choose what to read based on available time and interest.",
+      "acceptanceCriteria": [
+        "Add estimated reading time (e.g., '5 min read') to each blog card in src/pages/Blog.tsx",
+        "Calculate reading time from article content length (average 200 words/minute)",
+        "Add category badge on each card matching the article's category",
+        "Add author name to each card if available",
+        "Ensure responsive layout doesn't break with added elements",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 72,
+      "passes": false,
+      "notes": "Blog cards show minimal metadata. Reading time and categories help users choose content, increasing engagement and time on site."
+    },
+    {
+      "id": "US-073",
+      "title": "Add persistent bottom safe-area padding to prevent content hidden behind mobile nav",
+      "description": "As a mobile user, I want all page content visible above the bottom navigation bar so that I don't miss information or buttons cut off at the bottom of the page.",
+      "acceptanceCriteria": [
+        "Add pb-20 (or equivalent safe-area padding) to the main content wrapper in src/pages/Dashboard.tsx for all child routes",
+        "Verify the padding applies to: Home, Pantry, Recipes, Planner, Grocery, Kids, FoodTracker, Progress, FoodChaining, MealBuilder",
+        "Ensure the padding does not apply on desktop where there is no bottom nav",
+        "Use 'pb-20 md:pb-0' or similar responsive approach",
+        "Test on iPhone SE (375px) and iPad (768px) viewports",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 73,
+      "passes": false,
+      "notes": "Content at the bottom of pages gets hidden behind the mobile bottom navigation bar. Critical usability issue."
+    },
+    {
+      "id": "US-074",
+      "title": "Add Grocery list progress percentage and smart completion messages",
+      "description": "As a user shopping with my grocery list, I want to see a percentage of items checked off and encouraging messages as I progress so that shopping feels like an accomplishment.",
+      "acceptanceCriteria": [
+        "In src/pages/Grocery.tsx, enhance the existing progress bar (lines 569-587) to show percentage text: '8 of 12 items (67%)'",
+        "Add milestone messages at 25% ('Great start!'), 50% ('Halfway there!'), 75% ('Almost done!'), and 100% ('Shopping complete!')",
+        "Show a celebration animation or confetti effect at 100% completion",
+        "Add an 'Add to Pantry' prompt when all items are checked to sync purchased items",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 74,
+      "passes": false,
+      "notes": "The grocery list has a progress bar but minimal celebration or encouragement. Gamifying the shopping experience increases feature usage."
+    },
+    {
+      "id": "US-075",
+      "title": "Add child profile completion indicator to Kids page",
+      "description": "As a parent managing child profiles, I want to see how complete each profile is so that I know what information to add for better meal recommendations.",
+      "acceptanceCriteria": [
+        "Add a 'Profile X% complete' progress indicator to each child card on src/pages/Kids.tsx",
+        "Calculate completeness based on: name (required), age, allergens list, safe foods count (≥5), preferences, and completed intake questionnaire",
+        "Show a 'Complete Profile' button for profiles under 80% completion",
+        "Add tooltip explaining what fields improve recommendations",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 75,
+      "passes": false,
+      "notes": "Users don't know what data improves recommendations. Profile completion indicators guide users to provide the data that makes AI suggestions better."
     }
   ]
 }
