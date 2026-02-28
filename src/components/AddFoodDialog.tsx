@@ -4,6 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -87,6 +88,7 @@ export function AddFoodDialog({
 
   // Validation state
   const [nameError, setNameError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   // Search nutrition database as user types
   useEffect(() => {
@@ -173,28 +175,33 @@ export function AddFoodDialog({
     return 'snack';
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Validate name
     if (!name.trim()) {
       setNameError("Food name is required");
       return;
     }
     setNameError("");
+    setIsSaving(true);
 
-    onSave({
-      name: name.trim(),
-      category,
-      is_safe: isSafe,
-      is_try_bite: isTryBite,
-      aisle: aisle.trim() || undefined,
-      quantity,
-      unit,
-      servings_per_container: servingsPerContainer,
-      package_quantity: packageQuantity || undefined,
-    });
+    try {
+      await onSave({
+        name: name.trim(),
+        category,
+        is_safe: isSafe,
+        is_try_bite: isTryBite,
+        aisle: aisle.trim() || undefined,
+        quantity,
+        unit,
+        servings_per_container: servingsPerContainer,
+        package_quantity: packageQuantity || undefined,
+      });
 
-    resetForm();
-    onOpenChange(false);
+      resetForm();
+      onOpenChange(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -205,6 +212,7 @@ export function AddFoodDialog({
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editFood ? "Edit Food" : "Add New Food"}</DialogTitle>
+          <DialogDescription className="sr-only">Add or edit a food item with nutrition details and safety settings</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
           {!editFood && !showConfirmation && (
@@ -303,6 +311,7 @@ export function AddFoodDialog({
               className={nameError ? "border-red-500 focus-visible:ring-red-500" : ""}
               aria-invalid={!!nameError}
               aria-describedby={nameError ? "name-error" : undefined}
+              autoFocus
             />
             {nameError && (
               <p id="name-error" className="text-sm text-red-500 mt-1">
@@ -444,8 +453,9 @@ export function AddFoodDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={!name.trim()}>
-            {editFood ? "Update" : "Add Food"}
+          <Button onClick={handleSave} disabled={!name.trim() || isSaving}>
+            {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {isSaving ? "Saving..." : editFood ? "Update" : "Add Food"}
           </Button>
         </DialogFooter>
       </DialogContent>

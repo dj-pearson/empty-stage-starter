@@ -471,7 +471,7 @@ export default function Pricing() {
           </p>
 
           {/* Entity markers for AI understanding */}
-          <div className="sr-only" aria-hidden="true">
+          <div className="sr-only">
             Pricing for: EatPal meal planning app, picky eater subscription plans, ARFID meal planner cost,
             family meal planning pricing, kids nutrition app subscription, feeding therapy tools pricing
           </div>
@@ -481,8 +481,9 @@ export default function Pricing() {
             <Button
               variant={billingCycle === "monthly" ? "default" : "ghost"}
               size="sm"
+              role="radio"
               onClick={() => setBillingCycle("monthly")}
-              aria-pressed={billingCycle === "monthly"}
+              aria-checked={billingCycle === "monthly"}
               aria-label="Monthly billing"
             >
               Monthly
@@ -490,8 +491,9 @@ export default function Pricing() {
             <Button
               variant={billingCycle === "yearly" ? "default" : "ghost"}
               size="sm"
+              role="radio"
               onClick={() => setBillingCycle("yearly")}
-              aria-pressed={billingCycle === "yearly"}
+              aria-checked={billingCycle === "yearly"}
               aria-label="Yearly billing, save 20%"
             >
               Yearly

@@ -95,3 +95,85 @@ Started: Thu Feb 12 10:21:37 CST 2026
   - Network errors from `fetch` manifest as `TypeError: Failed to fetch` - check for this pattern
   - DOMException with name `AbortError` indicates user-initiated abort and should NOT be retried
 ---
+
+## 2026-02-28 - Ralph Loop Batch: US-017, US-021, US-022, US-024, US-027, US-033, US-038, US-041, US-042, US-043, US-044, US-047
+
+### US-017: Switch build minifier from Terser to esbuild
+- Changed `minify: 'terser'` to `minify: 'esbuild'` in vite.config.ts
+- Replaced `terserOptions.compress.drop_console` with `esbuild.drop: ['console', 'debugger']`
+- Added `sourcemap: 'hidden'` for production (Sentry sourcemap uploads)
+- Build time improved from ~3.5min to ~55s
+- Files changed: vite.config.ts
+
+### US-021: Fix dead links to /notifications and /help
+- NotificationBell.tsx: Changed `/notifications` → `/dashboard` (route doesn't exist)
+- SupportWidget.tsx: Changed `/help` → `/faq` (verified /faq route exists in App.tsx)
+- Files changed: src/components/subscription/NotificationBell.tsx, src/components/SupportWidget.tsx
+
+### US-022: Fix hardcoded colors breaking dark mode
+- SuccessAnimations.tsx: `bg-white` → `bg-card`, `text-gray-900` → `text-foreground`, `text-gray-600` → `text-muted-foreground`
+- ProductShowcase3D.tsx: `bg-white` → `bg-card`, `bg-gray-100` → `bg-muted`, `text-gray-400` → `text-muted-foreground/70`, `text-gray-600` → `text-muted-foreground`, `to-white` → `to-background`
+- HarmonizedFoodDisplay.tsx: `text-gray-600/700/500` → `text-muted-foreground`
+- MealSuggestionCard.tsx: `bg-gray-100 text-gray-700` → `bg-muted text-muted-foreground`, `bg-white/90 text-black` → `bg-background/90 text-foreground`
+- form-field.tsx: `text-red-500` → `text-destructive`, `border-red-500` → `border-destructive`
+- Files changed: 5 component files
+
+### US-024: Add DialogDescription for accessibility
+- Added `<DialogDescription className="sr-only">` to RecipeViewWithScaling.tsx (both conditional branches)
+- Verified 7 other listed files already had DialogDescription
+- Files changed: src/components/RecipeViewWithScaling.tsx
+
+### US-027: Add autoFocus to dialog form inputs
+- Added autoFocus to primary input in 8 dialog forms:
+  - AddFoodDialog (name Input), CreateGroceryListDialog (name Input), ManageKidsDialog (name Input)
+  - CreateCollectionDialog (name Input), BulkAddFoodDialog (Textarea), ImportRecipeDialog (URL Input)
+  - SaveMealPlanTemplateDialog (name Input), CreateStoreLayoutDialog (name Input)
+- Files changed: 8 dialog components
+
+### US-033: Fix permanent will-change CSS property
+- Removed `will-change: transform, box-shadow` from `.gsap-meal-item` base rule
+- Added `will-change` only on `:hover` and `:active` states
+- Added `@media (prefers-reduced-motion: reduce)` rule to disable `animate-bounce-dynamic`
+- Files changed: src/index.css
+
+### US-038: Add loading states to dialog submit buttons
+- AddFoodDialog: Added `isSaving` state, made handleSave async, added Loader2 spinner to save button
+- ManageKidsDialog: Added `isSubmitting` state, made handleSubmit async, added Loader2 spinner + disabled state
+- Files changed: src/components/AddFoodDialog.tsx, src/components/ManageKidsDialog.tsx
+
+### US-041: Fix interactive div elements to semantic HTML
+- Added `role="button"`, `tabIndex={0}`, and `onKeyDown` (Enter/Space) to 3 onboarding step divs in Home.tsx
+- Added same keyboard support to 2 Quick Action Card elements in Home.tsx
+- Fixed overlay div in GestureTutorial.tsx with button role and keyboard support
+- Files changed: src/pages/Home.tsx, src/components/GestureTutorial.tsx
+
+### US-042: Fix heading hierarchy on dashboard Home page
+- Added `<h1 className="sr-only">EatPal Dashboard</h1>` as visually hidden page heading
+- Changed 5 `<h4>` section headings to `<h2>` with `text-base` class for visual consistency
+- Files changed: src/pages/Home.tsx
+
+### US-043: Fix GSAP animations to respect prefers-reduced-motion
+- Added `window.matchMedia('(prefers-reduced-motion: reduce)')` check before GSAP initialization in Landing.tsx
+- Early return skips all ScrollTrigger animations when reduced motion is preferred
+- CSS `animate-bounce-dynamic` also respects reduced-motion (done in US-033)
+- Files changed: src/pages/Landing.tsx
+
+### US-044: Fix Pricing page accessibility
+- Removed contradictory `aria-hidden="true"` from `sr-only` entity marker div
+- Changed `aria-pressed` to `aria-checked` on billing toggle buttons
+- Added `role="radio"` to billing toggle buttons (matching parent `role="radiogroup"`)
+- Files changed: src/pages/Pricing.tsx
+
+### US-047: Fix RecipeListItem image alt text
+- Changed `alt=""` to `alt={recipe.name}` on recipe thumbnail images
+- Files changed: src/components/recipes/RecipeListItem.tsx
+
+### Build Verification
+- `npm run build` succeeds in ~55s (esbuild minifier)
+- No TypeScript errors
+
+### Progress Summary
+- 12 stories completed this session (US-017, US-021, US-022, US-024, US-027, US-033, US-038, US-041, US-042, US-043, US-044, US-047)
+- Total: 21/50 stories now passing
+- Remaining: 29 stories with passes: false
+---

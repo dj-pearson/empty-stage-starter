@@ -14,20 +14,20 @@ export const HarmonizedFoodDisplay: React.FC<HarmonizedFoodDisplayProps> = ({ da
   return (
     <div className="p-4 border rounded-lg shadow-sm">
       <h2 className="text-xl font-semibold mb-2">{data.name}</h2>
-      <p className="text-gray-600 mb-3">{data.calories} calories</p>
+      <p className="text-muted-foreground mb-3">{data.calories} calories</p>
       <div className="space-y-1">
         <h3 className="text-lg font-medium">Nutrients:</h3>
         {data.nutrients.length > 0 ? (
           <ul>
             {data.nutrients.map((nutrient, index) => (
-              <li key={index} className="text-sm text-gray-700">
+              <li key={index} className="text-sm text-muted-foreground">
                 {nutrient.name}: {nutrient.value}
                 {nutrient.unit}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-gray-500">No detailed nutrient information available.</p>
+          <p className="text-sm text-muted-foreground">No detailed nutrient information available.</p>
         )}
       </div>
     </div>

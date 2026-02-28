@@ -74,7 +74,7 @@ export function ProductShowcase3D({
   // Fallback for mobile or reduced motion
   if (!isDesktop || shouldReduceMotion) {
     return (
-      <section ref={ref} className="py-20 bg-gradient-to-b from-secondary/10 to-white">
+      <section ref={ref} className="py-20 bg-gradient-to-b from-secondary/10 to-background">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-12">
             <h2 className="text-4xl font-heading font-bold mb-4">
@@ -88,16 +88,16 @@ export function ProductShowcase3D({
           {/* Simple grid for mobile */}
           <div className="grid md:grid-cols-3 gap-8">
             {screenshots.map((screenshot, index) => (
-              <div key={index} className="bg-white rounded-2xl shadow-lg overflow-hidden">
-                <div className="aspect-[9/19] bg-gray-100 relative">
+              <div key={index} className="bg-card rounded-2xl shadow-lg overflow-hidden">
+                <div className="aspect-[9/19] bg-muted relative">
                   {/* Placeholder for screenshot */}
-                  <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+                  <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/70">
                     <span className="text-6xl">{index === 0 ? '🍽️' : index === 1 ? '📊' : '🛒'}</span>
                   </div>
                 </div>
                 <div className="p-6">
                   <h3 className="text-xl font-bold mb-2">{screenshot.title}</h3>
-                  <p className="text-gray-600">{screenshot.description}</p>
+                  <p className="text-muted-foreground">{screenshot.description}</p>
                 </div>
               </div>
             ))}
@@ -109,7 +109,7 @@ export function ProductShowcase3D({
 
   return (
     <LazyMotion features={domAnimation} strict>
-      <section ref={ref} className="py-32 bg-gradient-to-b from-secondary/10 to-white overflow-hidden">
+      <section ref={ref} className="py-32 bg-gradient-to-b from-secondary/10 to-background overflow-hidden">
         <div className="max-w-7xl mx-auto px-4">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             {/* Left Column - Text Content */}

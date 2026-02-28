@@ -57,7 +57,7 @@ export const RecipeListItem = memo(function RecipeListItem({
       {recipe.image_url ? (
         <img
           src={recipe.image_url}
-          alt=""
+          alt={recipe.name}
           className="w-12 h-12 rounded-md object-cover shrink-0"
         />
       ) : (

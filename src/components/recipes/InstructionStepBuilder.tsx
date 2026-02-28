@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { GripVertical, Plus, X, FileText } from "lucide-react";
@@ -154,6 +155,7 @@ export function InstructionStepBuilder({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Import Instructions</DialogTitle>
+            <DialogDescription className="sr-only">Build recipe instructions step by step</DialogDescription>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             Paste your recipe instructions. Each line or numbered step will

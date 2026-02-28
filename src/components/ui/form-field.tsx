@@ -28,7 +28,7 @@ interface FormFieldProps {
  *     id="name"
  *     value={name}
  *     onChange={(e) => setName(e.target.value)}
- *     className={errors.name ? "border-red-500" : ""}
+ *     className={errors.name ? "border-destructive" : ""}
  *     aria-invalid={!!errors.name}
  *     aria-describedby={errors.name ? "name-error" : undefined}
  *   />
@@ -50,7 +50,7 @@ export function FormField({
     <div className={`space-y-2 ${className}`}>
       <Label htmlFor={htmlFor}>
         {label}
-        {required && <span className="text-red-500 ml-1">*</span>}
+        {required && <span className="text-destructive ml-1">*</span>}
       </Label>
       {children}
       {hint && !error && (
@@ -59,7 +59,7 @@ export function FormField({
         </p>
       )}
       {error && (
-        <div id={errorId} className="flex items-start gap-2 text-sm text-red-500">
+        <div id={errorId} className="flex items-start gap-2 text-sm text-destructive">
           <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
           <p>{error}</p>
         </div>
