@@ -14,18 +14,21 @@
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
+import { authenticateRequest } from '../_shared/auth.ts';
 
 const VALID_CATEGORIES = ['protein', 'carb', 'dairy', 'fruit', 'vegetable', 'snack'];
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return handleCorsPreFlight(req);
   }
+
+  // Authenticate request
+  const auth = await authenticateRequest(req);
+  if (auth.error) return auth.error;
 
   try {
     if (req.method !== 'POST') {
@@ -152,7 +155,7 @@ Rules:
   } catch (error) {
     console.error('parse-grocery-image error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
     );
   }

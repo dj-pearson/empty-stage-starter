@@ -5,9 +5,9 @@ Your `.env` file containing Supabase API credentials was committed to the git re
 
 ### Exposed Credentials
 The following credentials are potentially compromised:
-- **Supabase Project ID**: `tbuszxkevkpjcjapbrir`
-- **Supabase Anon Key**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
-- **Supabase URL**: `https://tbuszxkevkpjcjapbrir.supabase.co`
+- **Supabase Project ID**: `<your-project-id>` (was exposed)
+- **Supabase Anon Key**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.XXXXXXXX` (was exposed)
+- **Supabase URL**: `https://your-project.supabase.co` (was exposed)
 
 ## Immediate Actions Required
 

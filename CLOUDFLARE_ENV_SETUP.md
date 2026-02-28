@@ -8,7 +8,7 @@ The following critical environment variables are already set in `wrangler.toml`:
 - **VITE_SUPABASE_URL**: `https://api.tryeatpal.com`
 - **VITE_SUPABASE_ANON_KEY**: Configured ✓
 - **VITE_FUNCTIONS_URL**: `https://functions.tryeatpal.com`
-- **VITE_STRIPE_PUBLISHABLE_KEY**: `pk_live_51SFmtlEQGPvinhrFu06bhMiTicheSKMvIwL5fUPTvoZBAyUQTSpFHWXVRxZwdmcLS82iBzA0qlgdNSww0tPmOI3y009iwWSlX2`
+- **VITE_STRIPE_PUBLISHABLE_KEY**: `pk_live_XXXXXXXXXXXXXXXX`
 - **VITE_APP_NAME**: `EatPal`
 - **VITE_APP_VERSION**: `1.0.0`
 - **VITE_APP_URL**: `https://tryeatpal.com`

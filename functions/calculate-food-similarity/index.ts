@@ -19,11 +19,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
 
 /** Weights for similarity dimensions */
 const WEIGHTS = {
@@ -79,8 +75,10 @@ function calculateSimilarity(
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return handleCorsPreFlight(req);
   }
 
   try {
@@ -124,7 +122,7 @@ serve(async (req) => {
 
     if (sourceFoodError || !sourceFood) {
       return new Response(
-        JSON.stringify({ error: 'Food not found', details: sourceFoodError?.message }),
+        JSON.stringify({ error: 'Food not found' }),
         { status: 404, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }
@@ -139,7 +137,7 @@ serve(async (req) => {
 
     if (candidateError) {
       return new Response(
-        JSON.stringify({ error: 'Failed to fetch foods', details: candidateError.message }),
+        JSON.stringify({ error: 'Internal server error' }),
         { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }
@@ -169,7 +167,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('calculate-food-similarity error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
     );
   }

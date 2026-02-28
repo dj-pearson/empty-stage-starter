@@ -2,8 +2,12 @@
 - Edge functions live in `functions/<function-name>/index.ts` (Supabase Edge Functions use Deno)
 - Edge function config goes in `supabase/config.toml` under `[functions.<name>]` with `verify_jwt` setting
 - Use `https://deno.land/std@0.168.0/http/server.ts` serve() and `https://esm.sh/@supabase/supabase-js@2` createClient()
-- Always include CORS headers and OPTIONS preflight handler in edge functions
+- Shared edge function utilities in `functions/_shared/`: cors.ts (CORS headers), auth.ts (JWT verification), url-validator.ts (SSRF prevention)
+- All edge functions use `getCorsHeaders(req)` from `../_shared/cors.ts` - no more wildcard CORS
+- All privileged edge functions use `authenticateRequest(req)` from `../_shared/auth.ts` for JWT verification
 - `functions/sitemap.xml.ts` is a Cloudflare Pages function, NOT a Supabase edge function
+- Edge function error responses must return generic messages to clients (`'Internal server error'`), log details server-side with `console.error`
+- Always derive user identity from JWT (supabase.auth.getUser()), never trust client-supplied user_id
 - Template patterns available in `edge-functions-template/functions/` for reference
 - TypeScript check: `npx tsc --noEmit`, Tests: `npx vitest run` (382 passing)
 - Test files follow pattern: `src/**/*.test.{ts,tsx}` alongside source files
@@ -625,4 +629,66 @@
   - Results are email-gated: personality chart shown free, food recommendations/strategies behind email capture
   - confetti library used for celebration effect on results page
   - Quiz response saved to Supabase via saveQuizResponse from @/lib/quiz/supabaseIntegration
+---
+
+## 2026-02-28 - Platform Hardening Batch (US-001 through US-011)
+
+### US-001: Remove Live Credentials from Version-Controlled Files
+- Replaced real Supabase anon key, Stripe publishable key, and service role key with placeholders across 12+ files
+- Files changed: wrangler.toml (already had placeholders), wrangler.toml.example, docs/AUTH_SETUP_DOCUMENTATION.md, coolify-migration/DEPLOY_NOW_SIMPLE.md, SECURITY_AUDIT_REPORT.md, SECURITY_REMEDIATION_SUMMARY.md, SECURITY_CREDENTIALS_ROTATION_REQUIRED.md, LAUNCH_CHECKLIST.md, SUPABASE_SETUP_GUIDE.md, SELF_HOSTED_SUPABASE_MIGRATION.md, CODE_REVIEW_FINDINGS.md, coolify-migration/COMPLETE_DEPLOYMENT_PLAN.md, supabase/config.toml
+- Also replaced old Supabase project ID `tbuszxkevkpjcjapbrir` with `<your-project-id>` in all docs
+- Verified: no .env files tracked in git, zero remaining real credential patterns
+- **Learnings:** Always search for both full keys and truncated patterns (e.g., `eyJ0eXAi...` prefix)
+
+### US-002: Fix Wildcard CORS on All Edge Functions
+- Created shared `functions/_shared/cors.ts` with origin-aware CORS (production: tryeatpal.com, dev: localhost:8080)
+- Updated all 13 Supabase edge functions to import and use shared CORS utility
+- Replaced `Access-Control-Allow-Origin: *` in every function
+- **Learnings:** `functions/sitemap.xml.ts` is a Cloudflare Pages function, not Supabase - don't modify it
+
+### US-003: Add JWT Authentication to Unauthenticated Edge Functions
+- Created shared `functions/_shared/auth.ts` with `authenticateRequest()` helper
+- Added JWT verification to: update-blog-image, parse-grocery-image, parse-recipe
+- generate-blog-content and generate-social-content already had auth
+- Pattern: auth check goes after CORS preflight, before business logic
+
+### US-004: Fix SSRF Vulnerabilities
+- Already implemented: `functions/_shared/url-validator.ts` with private IP blocking
+- parse-recipe and update-blog-image already validate URLs before fetch()
+- No changes needed - all acceptance criteria already met
+
+### US-005: Fix create-checkout to Use JWT user_id
+- Moved JWT verification before body parsing in create-checkout
+- Now uses `user.id` from verified JWT instead of client-supplied `user_id`
+- Removed `user_id` from request body validation (only `price_id` needed)
+- **Learnings:** Always derive identity from JWT, never trust client-supplied user IDs
+
+### US-006: Fix Stripe Webhook Constant-Time Comparison
+- Replaced `computed === expectedSig` with XOR-based constant-time comparison
+- Length mismatch returns false without leaking timing info
+- Uses bitwise OR accumulator pattern for timing-safe equality check
+- Also fixed error message leaking in catch block
+
+### US-009: Fix Error Messages Leaking Internal Details
+- Fixed 7 edge functions to return generic `'Internal server error'` instead of `error.message`
+- Functions fixed: health-check (3 fixes), parse-grocery-image, parse-recipe, suggest-foods (3 fixes), suggest-recipe (3 fixes), update-blog-image (3 fixes), weekly-nutrition-email
+- All `console.error` server-side logging preserved
+- 4xx messages kept informative but not implementation-specific
+
+### US-010: Fix HTML Injection in Blog Content Generation
+- Added `escapeHtml()` utility to generate-blog-content/index.ts
+- Escapes &, <, >, " characters in user-supplied topic and keywords
+- Applied to all template interpolation paths (template body, title, excerpt, fallback)
+- Also escapes AI-returned raw content when JSON parsing fails
+
+### US-011: Fix Geolocation API to Use HTTPS
+- Changed `http://ip-api.com/json/` to `https://ipapi.co/json/` in src/lib/login-history.ts
+- Updated response field mapping (ip-api uses countryCode, ipapi.co uses country_code)
+- ipapi.co provides free HTTPS support (1000 req/day)
+
+### Build Verification (Platform Hardening Batch)
+- `npx tsc --noEmit`: SUCCESS (zero TypeScript errors)
+- `npm run build`: SUCCESS (built in 1m 18s)
+- Stories completed: US-001, US-002, US-003, US-004, US-005, US-006, US-009, US-010, US-011 (9 of 50)
+- Remaining: 41 stories with passes: false
 ---

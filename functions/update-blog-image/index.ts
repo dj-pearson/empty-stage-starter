@@ -9,7 +9,7 @@
  *   "blog_post_id": "uuid",
  *   "image_url": "https://..." (external URL to fetch and store)
  * }
- * Auth: No JWT (internal use, protected by other means)
+ * Auth: JWT required (Authorization: Bearer <token>)
  *
  * Response (200):
  * {
@@ -25,18 +25,22 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
+import { validateUrl } from '../_shared/url-validator.ts';
+import { authenticateRequest } from '../_shared/auth.ts';
 
 const STORAGE_BUCKET = 'blog-images';
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return handleCorsPreFlight(req);
   }
+
+  // Authenticate request
+  const auth = await authenticateRequest(req);
+  if (auth.error) return auth.error;
 
   try {
     if (req.method !== 'POST') {
@@ -68,22 +72,17 @@ serve(async (req) => {
       );
     }
 
-    // Validate URL
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(image_url);
-      if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-        throw new Error('Invalid protocol');
-      }
-    } catch {
+    // Validate URL (SSRF protection)
+    const urlValidation = validateUrl(image_url);
+    if (!urlValidation.valid) {
       return new Response(
-        JSON.stringify({ error: 'Invalid image URL' }),
+        JSON.stringify({ error: urlValidation.error }),
         { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }
 
     // Fetch the image
-    const imageResponse = await fetch(parsedUrl.toString());
+    const imageResponse = await fetch(image_url);
     if (!imageResponse.ok) {
       return new Response(
         JSON.stringify({ error: `Failed to fetch image: HTTP ${imageResponse.status}` }),
@@ -119,7 +118,7 @@ serve(async (req) => {
     if (uploadError) {
       console.error('Upload error:', uploadError);
       return new Response(
-        JSON.stringify({ error: 'Failed to upload image', details: uploadError.message }),
+        JSON.stringify({ error: 'Internal server error' }),
         { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }
@@ -157,7 +156,6 @@ serve(async (req) => {
           blog_post_id,
           image_urls: imageUrls,
           warning: 'Image uploaded but blog post record update failed',
-          details: updateError.message,
         }),
         { status: 207, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
@@ -170,7 +168,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('update-blog-image error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
     );
   }

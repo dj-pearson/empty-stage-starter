@@ -23,11 +23,8 @@
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
+import { authenticateRequest } from '../_shared/auth.ts';
 
 const PLATFORM_LIMITS: Record<string, number> = {
   twitter: 280,
@@ -67,9 +64,15 @@ function generateFacebookPost(summary: string): { text: string; hashtags: string
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return handleCorsPreFlight(req);
   }
+
+  // Authenticate request
+  const auth = await authenticateRequest(req);
+  if (auth.error) return auth.error;
 
   try {
     if (req.method !== 'POST') {
@@ -175,7 +178,7 @@ Include relevant hashtags. Brand: EatPal (family meal planning app).`;
   } catch (error) {
     console.error('generate-social-content error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
     );
   }

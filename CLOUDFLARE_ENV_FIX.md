@@ -31,7 +31,7 @@ Environment: Production
 
 ```
 Variable name: VITE_SUPABASE_ANON_KEY
-Value: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc2NTI1MzE2MCwiZXhwIjo0OTIwOTI2NzYwLCJyb2xlIjoiYW5vbiJ9.HBFEkJdBlHpZozkyUAcaV2IO-065599yClMPfsYt3Ug
+Value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.XXXXXXXX
 Environment: Production
 ```
 
@@ -43,7 +43,7 @@ Environment: Production
 
 ```
 Variable name: VITE_STRIPE_PUBLISHABLE_KEY
-Value: pk_live_51SFmtlEQGPvinhrFu06bhMiTicheSKMvIwL5fUPTvoZBAyUQTSpFHWXVRxZwdmcLS82iBzA0qlgdNSww0tPmOI3y009iwWSlX2
+Value: pk_live_XXXXXXXXXXXXXXXX
 Environment: Production
 ```
 
@@ -90,9 +90,9 @@ For faster setup, here's the format for bulk adding:
 
 ```
 VITE_SUPABASE_URL=https://api.tryeatpal.com
-VITE_SUPABASE_ANON_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc2NTI1MzE2MCwiZXhwIjo0OTIwOTI2NzYwLCJyb2xlIjoiYW5vbiJ9.HBFEkJdBlHpZozkyUAcaV2IO-065599yClMPfsYt3Ug
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.XXXXXXXX
 VITE_FUNCTIONS_URL=https://functions.tryeatpal.com
-VITE_STRIPE_PUBLISHABLE_KEY=pk_live_51SFmtlEQGPvinhrFu06bhMiTicheSKMvIwL5fUPTvoZBAyUQTSpFHWXVRxZwdmcLS82iBzA0qlgdNSww0tPmOI3y009iwWSlX2
+VITE_STRIPE_PUBLISHABLE_KEY=pk_live_XXXXXXXXXXXXXXXX
 VITE_APP_NAME=EatPal
 VITE_APP_VERSION=1.0.0
 VITE_APP_URL=https://tryeatpal.com
