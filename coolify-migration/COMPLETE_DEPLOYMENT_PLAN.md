@@ -193,7 +193,7 @@ curl -X POST https://functions.tryeatpal.com/ai-meal-plan \
 
 ```env
 # Old (hosted Supabase)
-# VITE_SUPABASE_URL=https://tbuszxkevkpjcjapbrir.supabase.co
+# VITE_SUPABASE_URL=https://your-project.supabase.co
 # VITE_SUPABASE_ANON_KEY=old-key
 
 # New (Coolify self-hosted)

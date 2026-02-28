@@ -25,18 +25,16 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
 
 const VERSION = '1.0.0';
 const DB_TIMEOUT_MS = 5000;
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return handleCorsPreFlight(req);
   }
 
   const timestamp = new Date().toISOString();
@@ -70,17 +68,20 @@ serve(async (req) => {
       dbLatencyMs = Math.round(performance.now() - dbStart);
 
       if (error) {
-        dbError = error.message;
+        console.error('Database health check error:', error.message);
+        dbError = 'Database query failed';
       } else {
         dbConnected = true;
       }
     } catch (err) {
       clearTimeout(timeout);
       dbLatencyMs = Math.round(performance.now() - dbStart);
-      dbError = err instanceof Error ? err.message : 'Unknown database error';
+      console.error('Database health check query error:', err);
+      dbError = 'Database query failed';
     }
   } catch (err) {
-    dbError = err instanceof Error ? err.message : 'Failed to initialize database client';
+    console.error('Database client initialization error:', err);
+    dbError = 'Failed to initialize database client';
   }
 
   const status = dbConnected ? 'healthy' : 'degraded';

@@ -4,7 +4,7 @@
  * Creates a Stripe checkout session for subscription purchases.
  *
  * POST /create-checkout
- * Body: { "price_id": "price_xxx", "user_id": "uuid" }
+ * Body: { "price_id": "price_xxx" }
  * Auth: JWT required
  *
  * Response (200):
@@ -13,15 +13,13 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return handleCorsPreFlight(req);
   }
 
   try {
@@ -54,29 +52,25 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
 
+    // Verify JWT and extract user identity (ignore client-supplied user_id)
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid or expired token' }),
+        { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
+      );
+    }
+
+    // Use JWT-verified user_id, never trust client-supplied user_id
+    const user_id = user.id;
+
     const body = await req.json();
-    const { price_id, user_id } = body;
+    const { price_id } = body;
 
     if (!price_id || typeof price_id !== 'string') {
       return new Response(
         JSON.stringify({ error: 'price_id is required' }),
         { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
-      );
-    }
-
-    if (!user_id || typeof user_id !== 'string') {
-      return new Response(
-        JSON.stringify({ error: 'user_id is required' }),
-        { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
-      );
-    }
-
-    // Get user email for Stripe
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Failed to get user info' }),
-        { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }
 
@@ -129,7 +123,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('create-checkout error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
     );
   }

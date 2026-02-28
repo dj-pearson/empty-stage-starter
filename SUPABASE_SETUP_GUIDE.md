@@ -12,7 +12,7 @@ Your local migrations folder has `20251014000000_grocery_recipe_phase1.sql` but 
 ### Option 1: Use Supabase Dashboard (Recommended)
 
 1. **Open the Supabase SQL Editor:**
-   - Go to: https://supabase.com/dashboard/project/tbuszxkevkpjcjapbrir/sql/new
+   - Go to: https://supabase.com/dashboard/project/<your-project-id>/sql/new
 
 2. **Copy the migration SQL:**
    - Open: `supabase/migrations/20251014000000_grocery_recipe_phase1.sql`

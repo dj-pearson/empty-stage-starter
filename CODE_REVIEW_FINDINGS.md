@@ -444,7 +444,7 @@ Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With
 **File:** `src/integrations/supabase/client.ts:5-6`
 **Current Implementation:**
 ```typescript
-const SUPABASE_URL = "https://tbuszxkevkpjcjapbrir.supabase.co";
+const SUPABASE_URL = "https://your-project.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
 ```
 

@@ -343,8 +343,8 @@ CREATE POLICY "Users can manage their own conversations"
 **Location of API Key Usage:**
 ```typescript
 // src/integrations/supabase/client.ts - HARDCODED ANON KEY
-const SUPABASE_URL = "https://tbuszxkevkpjcjapbrir.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
+const SUPABASE_URL = "https://your-project.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.XXXXXXXX";
 ```
 
 #### 4. **Personally Identifiable Information (PII)**
@@ -426,8 +426,8 @@ beforeSend(event, hint) {
 
 **Environment Variables:**
 ```
-VITE_SUPABASE_URL=https://tbuszxkevkpjcjapbrir.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.XXXXXXXX
 VITE_SENTRY_DSN=your_sentry_dsn
 VITE_SENTRY_ENABLED=false
 NODE_ENV=development
@@ -679,8 +679,8 @@ const event = stripe.webhooks.constructEvent(
 
 **Problem:**
 ```typescript
-const SUPABASE_URL = "https://tbuszxkevkpjcjapbrir.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRidXN6eGtldmtwamNqYXBicmlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk4ODU5NDAsImV4cCI6MjA3NTQ2MTk0MH0.DlzY_3Fv2sXjNQNQPzCW4hh_WhC8o-_pqq6rQXGlfow";
+const SUPABASE_URL = "https://your-project.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.XXXXXXXX";
 ```
 
 **Impact:**

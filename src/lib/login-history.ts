@@ -90,9 +90,8 @@ async function getGeoLocation(): Promise<GeoLocation> {
   };
 
   try {
-    // Using ip-api.com - free for non-commercial use, 45 req/min
-    // For production, consider ipinfo.io, ipdata.co, or MaxMind GeoLite2
-    const response = await fetch('http://ip-api.com/json/?fields=status,country,countryCode,region,regionName,city,lat,lon,timezone,query', {
+    // Using ipapi.co - free tier with HTTPS support, 1000 req/day
+    const response = await fetch('https://ipapi.co/json/', {
       signal: AbortSignal.timeout(3000), // 3 second timeout
     });
 
@@ -102,19 +101,19 @@ async function getGeoLocation(): Promise<GeoLocation> {
 
     const data = await response.json();
 
-    if (data.status !== 'success') {
+    if (data.error) {
       return defaultGeo;
     }
 
     return {
-      country: data.country || null,
-      country_code: data.countryCode || null,
-      region: data.regionName || data.region || null,
+      country: data.country_name || null,
+      country_code: data.country_code || null,
+      region: data.region || null,
       city: data.city || null,
-      latitude: data.lat || null,
-      longitude: data.lon || null,
+      latitude: data.latitude || null,
+      longitude: data.longitude || null,
       timezone: data.timezone || null,
-      ip: data.query || null,
+      ip: data.ip || null,
     };
   } catch (error) {
     logger.warn('Failed to get geolocation', error);

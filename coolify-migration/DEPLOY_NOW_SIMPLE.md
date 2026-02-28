@@ -60,7 +60,7 @@ docker exec -i supabase-db-ig8ow4o4okkogowggkog4cww \
 ```powershell
 # Set environment
 $env:SUPABASE_URL = "https://api.tryeatpal.com"
-$env:SUPABASE_SERVICE_ROLE_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc2NTI1MzE2MCwiZXhwIjo0OTIwOTI2NzYwLCJyb2xlIjoic2VydmljZV9yb2xlIn0.boQSRX69iO2srPeiyEmc6IgDfwpJZOIhDmnW-NnW6rs"
+$env:SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.XXXXXXXX"
 
 # Deploy all functions
 cd ..\supabase\functions

@@ -6,7 +6,7 @@
  *
  * POST /parse-recipe
  * Body: { "url": "https://example.com/recipe/..." }
- * Auth: No JWT required (public)
+ * Auth: JWT required (Authorization: Bearer <token>)
  *
  * Response (200):
  * {
@@ -23,11 +23,9 @@
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
+import { validateUrl } from '../_shared/url-validator.ts';
+import { authenticateRequest } from '../_shared/auth.ts';
 
 interface ParsedRecipe {
   name: string;
@@ -172,9 +170,15 @@ function parseFromHtml(html: string, url: string): ParsedRecipe {
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return handleCorsPreFlight(req);
   }
+
+  // Authenticate request
+  const auth = await authenticateRequest(req);
+  if (auth.error) return auth.error;
 
   try {
     if (req.method !== 'POST') {
@@ -194,22 +198,17 @@ serve(async (req) => {
       );
     }
 
-    // Validate URL
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(url);
-      if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-        throw new Error('Invalid protocol');
-      }
-    } catch {
+    // Validate URL (SSRF protection)
+    const urlValidation = validateUrl(url);
+    if (!urlValidation.valid) {
       return new Response(
-        JSON.stringify({ error: 'Invalid URL. Must be an HTTP or HTTPS URL.' }),
+        JSON.stringify({ error: urlValidation.error }),
         { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }
 
     // Fetch the recipe page
-    const pageResponse = await fetch(parsedUrl.toString(), {
+    const pageResponse = await fetch(url, {
       headers: {
         'User-Agent': 'EatPal Recipe Parser/1.0',
         'Accept': 'text/html',
@@ -245,7 +244,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('parse-recipe error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
     );
   }

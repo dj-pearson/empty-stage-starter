@@ -347,7 +347,7 @@ If critical issues found on launch:
 ## 🔗 IMPORTANT LINKS
 
 - **Production:** https://tryeatpal.com
-- **Supabase Dashboard:** https://supabase.com/dashboard/project/tbuszxkevkpjcjapbrir
+- **Supabase Dashboard:** https://supabase.com/dashboard/project/<your-project-id>
 - **Stripe Dashboard:** https://dashboard.stripe.com
 - **Sentry:** https://sentry.io (after setup)
 - **Resend:** https://resend.com/dashboard (after setup)
