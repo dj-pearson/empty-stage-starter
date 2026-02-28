@@ -381,6 +381,12 @@ All colors MUST be HSL.
     animation: bounce-dynamic 4s ease-in-out infinite;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .animate-bounce-dynamic {
+      animation: none;
+    }
+  }
+
   /* Preserve 3D transformations */
   .preserve-3d {
     transform-style: preserve-3d;
@@ -397,13 +403,14 @@ All colors MUST be HSL.
   }
 
   .gsap-meal-item {
-    will-change: transform, box-shadow;
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
     transform: translateZ(0);
   }
 
-  .gsap-meal-item:hover {
+  .gsap-meal-item:hover,
+  .gsap-meal-item:active {
+    will-change: transform, box-shadow;
     transform: translateY(-2px);
   }
 

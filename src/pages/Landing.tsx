@@ -90,6 +90,10 @@ const Landing = () => {
     let mounted = true;
 
     const initAnimations = async () => {
+      // Respect prefers-reduced-motion
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (prefersReducedMotion) return;
+
       const { gsap, ScrollTrigger } = await loadGSAP();
       if (!mounted || !containerRef.current) return;
 

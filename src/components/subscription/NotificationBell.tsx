@@ -249,7 +249,7 @@ export function NotificationBell() {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="justify-center text-sm text-primary cursor-pointer"
-              onSelect={() => navigate("/notifications")}
+              onSelect={() => navigate("/dashboard")}
             >
               View all notifications
             </DropdownMenuItem>

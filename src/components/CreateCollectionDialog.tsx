@@ -243,6 +243,7 @@ export function CreateCollectionDialog({
               className={errors.name ? "border-red-500" : ""}
               aria-invalid={!!errors.name}
               aria-describedby={errors.name ? "name-error" : undefined}
+              autoFocus
             />
           </FormField>
 

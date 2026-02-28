@@ -50,14 +50,11 @@ export default defineConfig(({ mode }) => ({
     // Optimize for Cloudflare Pages
     outDir: 'dist',
     assetsDir: 'assets',
-    sourcemap: mode === 'development', // Only generate sourcemaps in development
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: mode === 'production', // Remove console.logs in production only
-        drop_debugger: true,
-      },
-    },
+    sourcemap: mode === 'production' ? 'hidden' : mode === 'development', // Hidden sourcemaps for Sentry in production
+    minify: 'esbuild',
+    esbuild: mode === 'production' ? {
+      drop: ['console', 'debugger'],
+    } : undefined,
     rollupOptions: {
       // Handle circular dependencies (common in Three.js)
       onwarn(warning, warn) {

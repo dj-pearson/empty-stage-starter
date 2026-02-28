@@ -140,6 +140,7 @@ export function SaveMealPlanTemplateDialog({
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={100}
+              autoFocus
             />
             <p className="text-xs text-muted-foreground">
               Give your template a memorable name

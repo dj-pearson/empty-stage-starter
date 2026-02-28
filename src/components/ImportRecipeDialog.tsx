@@ -418,6 +418,7 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   disabled={isLoading}
+                  autoFocus
                 />
                 <p className="text-sm text-muted-foreground">
                   Paste a URL to a recipe and AI will extract the details

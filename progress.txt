@@ -692,3 +692,57 @@
 - Stories completed: US-001, US-002, US-003, US-004, US-005, US-006, US-009, US-010, US-011 (9 of 50)
 - Remaining: 41 stories with passes: false
 ---
+
+## 2026-02-28 - Ralph Loop Batch 2: UI/UX & Accessibility (12 stories)
+
+### US-017: Switch Build Minifier to esbuild
+- Replaced Terser with esbuild minifier in vite.config.ts
+- Added hidden sourcemaps for production Sentry integration
+- Build time dropped from ~80s to ~55s
+
+### US-021: Fix Dead Navigation Links
+- NotificationBell `/notifications` → `/dashboard`
+- SupportWidget `/help` → `/faq` (verified route exists)
+
+### US-022: Fix Hardcoded Colors for Dark Mode
+- Fixed 5 component files: SuccessAnimations, ProductShowcase3D, HarmonizedFoodDisplay, MealSuggestionCard, form-field
+- `bg-white` → `bg-card/bg-background`, `text-gray-*` → `text-muted-foreground`, `text-red-500` → `text-destructive`
+
+### US-024: Add DialogDescription for Accessibility
+- Added sr-only DialogDescription to RecipeViewWithScaling (both conditional branches)
+- 7 other listed files already had DialogDescription from previous work
+
+### US-027: Add autoFocus to Dialog Form Inputs
+- Added autoFocus to primary input in 8 dialog forms
+
+### US-033: Fix will-change CSS and bounce animation
+- Moved `will-change` to `:hover/:active` states only
+- Added `prefers-reduced-motion: reduce` media query for bounce animation
+
+### US-038: Add Loading States to Dialog Submit Buttons
+- AddFoodDialog: async handleSave with isSaving state + Loader2 spinner
+- ManageKidsDialog: async handleSubmit with isSubmitting state + Loader2 spinner
+
+### US-041: Fix Interactive Divs to Semantic HTML
+- Added role="button", tabIndex={0}, onKeyDown to 5 elements in Home.tsx
+- Fixed GestureTutorial.tsx overlay with button role and keyboard support
+
+### US-042: Fix Heading Hierarchy on Dashboard Home
+- Added sr-only h1 heading, changed h4 → h2 for section headings
+
+### US-043: Fix GSAP Reduced-Motion Support
+- Added prefers-reduced-motion check before GSAP animation initialization in Landing.tsx
+
+### US-044: Fix Pricing Page Accessibility
+- Removed contradictory aria-hidden from sr-only div
+- Fixed radiogroup: aria-pressed → aria-checked with role="radio"
+
+### US-047: Fix RecipeListItem Image Alt Text
+- Changed empty alt="" to alt={recipe.name} for meaningful thumbnails
+
+### Build Verification
+- `npm run build`: SUCCESS (built in ~55s with esbuild)
+- Stories completed this batch: 12 (US-017, US-021, US-022, US-024, US-027, US-033, US-038, US-041, US-042, US-043, US-044, US-047)
+- Total progress: 21/50 stories passing
+- Remaining: 29 stories with passes: false
+---

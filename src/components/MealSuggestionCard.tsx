@@ -93,7 +93,7 @@ export const MealSuggestionCard = memo(function MealSuggestionCard({
       case 'hard':
         return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
       default:
-        return 'bg-gray-100 text-gray-700';
+        return 'bg-muted text-muted-foreground';
     }
   };
 
@@ -108,7 +108,7 @@ export const MealSuggestionCard = memo(function MealSuggestionCard({
             className="w-full h-full object-cover"
           />
           <div className="absolute top-2 right-2 flex gap-2">
-            <Badge className="bg-white/90 text-black">
+            <Badge className="bg-background/90 text-foreground">
               {suggestion.confidence_score.toFixed(0)}% match
             </Badge>
           </div>

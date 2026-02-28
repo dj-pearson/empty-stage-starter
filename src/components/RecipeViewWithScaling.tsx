@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -84,12 +84,14 @@ export function RecipeViewWithScaling({
               <DialogTitle className="absolute bottom-4 left-6 text-2xl font-bold text-white">
                 {recipe.name}
               </DialogTitle>
+              <DialogDescription className="sr-only">View recipe details with ingredient scaling options</DialogDescription>
             </div>
           )}
 
           {!recipe.image_url && (
             <DialogHeader className="p-6 pb-4">
               <DialogTitle className="text-2xl">{recipe.name}</DialogTitle>
+              <DialogDescription className="sr-only">View recipe details with ingredient scaling options</DialogDescription>
             </DialogHeader>
           )}
 

@@ -139,7 +139,7 @@ export function GestureTutorial() {
   return (
     <>
       {/* Overlay */}
-      <div className="fixed inset-0 bg-black/50 z-50 md:hidden" onClick={handleSkip} />
+      <div className="fixed inset-0 bg-black/50 z-50 md:hidden" role="button" tabIndex={0} aria-label="Skip tutorial" onClick={handleSkip} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSkip(); } }} />
 
       {/* Tutorial Card */}
       <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 bg-card rounded-lg shadow-2xl p-6 max-w-md mx-auto md:hidden">

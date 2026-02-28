@@ -8,7 +8,7 @@ import { MealSuggestionCard } from "@/components/MealSuggestionCard";
 import { supabase } from "@/lib/supabase";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
@@ -165,6 +165,7 @@ export function QuickSuggestionsPanel({
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Suggestion Options</DialogTitle>
+                <DialogDescription className="sr-only">Quick food suggestions based on your preferences</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 pt-4">
                 <div>
