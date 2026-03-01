@@ -10,6 +10,7 @@ export default function AccessibilitySettingsPage() {
           name="description"
           content="Customize your EatPal experience with accessibility settings including high contrast mode, reduced motion, screen reader optimization, and more."
         />
+        <meta name="robots" content="noindex" />
       </Helmet>
 
       <div className="container mx-auto py-6 px-4 max-w-4xl">

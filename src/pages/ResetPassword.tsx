@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { toast } from "sonner";
+import { Helmet } from "react-helmet-async";
 import { Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -95,6 +96,12 @@ export default function ResetPassword() {
   }
 
   return (
+    <>
+    <Helmet>
+      <title>Reset Password - EatPal</title>
+      <meta name="description" content="Reset your EatPal account password." />
+      <meta name="robots" content="noindex" />
+    </Helmet>
     <div id="main-content" className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
@@ -200,5 +207,6 @@ export default function ResetPassword() {
         </div>
       </div>
     </div>
+    </>
   );
 }

@@ -417,6 +417,7 @@ export default function AccountSettings() {
           name="description"
           content="Manage your account, subscription, and security settings"
         />
+        <meta name="robots" content="noindex" />
       </Helmet>
 
       <div className="container mx-auto p-4 sm:p-6 max-w-4xl">

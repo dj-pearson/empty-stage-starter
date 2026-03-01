@@ -89,9 +89,10 @@ const Landing = () => {
   // Get SEO configuration for homepage
   const seoConfig = getPageSEO("home");
 
-  // Initialize GSAP animations after component mounts (deferred)
+  // Initialize GSAP animations when first animated section enters viewport
   useEffect(() => {
     let mounted = true;
+    let observer: IntersectionObserver | null = null;
 
     const initAnimations = async () => {
       // Respect prefers-reduced-motion
@@ -144,12 +145,46 @@ const Landing = () => {
       });
     };
 
-    // Delay animation initialization to not block initial render
-    const timer = setTimeout(initAnimations, 100);
+    // Use IntersectionObserver to load GSAP only when animated sections are near viewport
+    const firstAnimatedSection = containerRef.current?.querySelector('.animate-section, .animate-grid');
+    if (firstAnimatedSection) {
+      observer = new IntersectionObserver(
+        (entries) => {
+          if (entries.some(entry => entry.isIntersecting)) {
+            observer?.disconnect();
+            initAnimations();
+          }
+        },
+        { rootMargin: '200px' } // Start loading 200px before section enters viewport
+      );
+      observer.observe(firstAnimatedSection);
+    } else {
+      // Fallback: if no animated sections found yet (SSR/hydration), defer briefly
+      const timer = setTimeout(() => {
+        const section = containerRef.current?.querySelector('.animate-section, .animate-grid');
+        if (section) {
+          observer = new IntersectionObserver(
+            (entries) => {
+              if (entries.some(entry => entry.isIntersecting)) {
+                observer?.disconnect();
+                initAnimations();
+              }
+            },
+            { rootMargin: '200px' }
+          );
+          observer.observe(section);
+        }
+      }, 0);
+      return () => {
+        mounted = false;
+        clearTimeout(timer);
+        observer?.disconnect();
+      };
+    }
 
     return () => {
       mounted = false;
-      clearTimeout(timer);
+      observer?.disconnect();
     };
   }, []);
 

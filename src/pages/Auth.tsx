@@ -467,6 +467,9 @@ const Auth = () => {
       <Helmet>
         <title>Sign In - EatPal | ARFID & Picky Eater Meal Planner</title>
         <meta name="description" content="Sign in or create your EatPal account. AI-powered meal planning built on food chaining science for families managing ARFID, extreme picky eating, and feeding disorders." />
+        <meta property="og:title" content="Sign In - EatPal | ARFID & Picky Eater Meal Planner" />
+        <meta property="og:description" content="Sign in or create your EatPal account. AI-powered meal planning built on food chaining science for families managing ARFID and feeding disorders." />
+        <meta property="og:type" content="website" />
       </Helmet>
 
       <OnboardingDialog

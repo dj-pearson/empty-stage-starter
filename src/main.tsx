@@ -8,6 +8,17 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
+
+// Self-hosted fonts (replaces Google Fonts CDN for performance and privacy)
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
+import "@fontsource/nunito-sans/400.css";
+import "@fontsource/nunito-sans/600.css";
+import "@fontsource/nunito-sans/700.css";
+import "@fontsource/nunito-sans/800.css";
+
 import "./index.css";
 import "./styles/mobile-first.css";
 import { ErrorBoundary } from "./components/ErrorBoundary";

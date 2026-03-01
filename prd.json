@@ -647,8 +647,8 @@
         "Typecheck passes"
       ],
       "priority": 40,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added Helmet/SEOHead meta tags to all pages. Added noindex to CheckoutSuccess, ResetPassword, Home, ShareTarget, AICoach, MealBuilder, FoodChaining, AccessibilitySettings, AccountSettings, Billing. Added OG tags to Auth, Accessibility, VPAT. Added SEOHead to PrivacyPolicy and TermsOfService."
     },
     {
       "id": "US-041",
@@ -719,8 +719,8 @@
         "Typecheck passes"
       ],
       "priority": 45,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Replaced Helmet with SEOHead+getPageSEO in PickyEaterQuiz, BudgetCalculator, MealPlanGenerator. Added noindex to 5 dashboard pages missing it. Full AI metadata, structured data, and OG tags now served from seo-config."
     },
     {
       "id": "US-046",
@@ -765,8 +765,8 @@
         "npm run build succeeds"
       ],
       "priority": 48,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Installed @fontsource/inter and @fontsource/nunito-sans. Added font imports to main.tsx. Removed Google Fonts CDN from index.html. Updated CSP in _headers to remove fonts.googleapis.com and fonts.gstatic.com references."
     },
     {
       "id": "US-049",
@@ -779,8 +779,8 @@
         "Typecheck passes"
       ],
       "priority": 49,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Replaced setTimeout(initAnimations, 100) with IntersectionObserver in Landing.tsx. GSAP now loads only when first .animate-section enters viewport (200px rootMargin). Includes fallback for SSR hydration edge case."
     },
     {
       "id": "US-050",
@@ -926,8 +926,8 @@
         "npm run build succeeds"
       ],
       "priority": 58,
-      "passes": false,
-      "notes": "No competitive positioning anywhere on the site. Users evaluating options need context to understand EatPal's value relative to alternatives."
+      "passes": true,
+      "notes": "Added Why Choose EatPal comparison section to Pricing.tsx. Four comparison cards: Feeding Therapy ($150+/session), Meal Kit Services ($200+/month), Generic Planners ($5-15/month), EatPal ($9.99/month with Best Value badge). Uses theme-aware styling with Card components."
     },
     {
       "id": "US-059",

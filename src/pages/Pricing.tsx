@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, Sparkles, Menu, Users, ShieldCheck, FileText, Lock } from "lucide-react";
+import { Check, X, Sparkles, Menu, Users, ShieldCheck, FileText, Lock, Clock, DollarSign, Brain, Utensils } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -1005,6 +1005,149 @@ export default function Pricing() {
         >
           <FeatureComparisonTable plans={plans} />
         </Suspense>
+
+        {/* Why Choose EatPal - Comparison Section */}
+        <section className="mt-16 max-w-5xl mx-auto animate-section">
+          <h2 className="text-2xl md:text-3xl font-heading font-bold text-center mb-3">
+            Why Choose EatPal?
+          </h2>
+          <p className="text-center text-muted-foreground mb-10 max-w-2xl mx-auto">
+            See how EatPal compares to other options families try for picky eaters and feeding challenges.
+          </p>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Traditional Feeding Therapy */}
+            <Card className="border-muted">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 rounded-lg bg-muted">
+                    <Clock className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                </div>
+                <CardTitle className="text-lg">Feeding Therapy</CardTitle>
+                <CardDescription>
+                  <span className="text-xl font-bold text-foreground">$150+</span>
+                  <span className="text-muted-foreground"> /session</span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>Wait lists of 3-6 months</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>Limited to 1 hour/week</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>No at-home continuity</span>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+
+            {/* Meal Kit Services */}
+            <Card className="border-muted">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 rounded-lg bg-muted">
+                    <Utensils className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                </div>
+                <CardTitle className="text-lg">Meal Kit Services</CardTitle>
+                <CardDescription>
+                  <span className="text-xl font-bold text-foreground">$200+</span>
+                  <span className="text-muted-foreground"> /month</span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>Not built for picky eaters</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>No food chaining science</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>Food waste from refused meals</span>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+
+            {/* Generic Meal Planners */}
+            <Card className="border-muted">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 rounded-lg bg-muted">
+                    <DollarSign className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                </div>
+                <CardTitle className="text-lg">Generic Planners</CardTitle>
+                <CardDescription>
+                  <span className="text-xl font-bold text-foreground">$5-15</span>
+                  <span className="text-muted-foreground"> /month</span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>No ARFID or sensory support</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>No safe food tracking</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>Assumes kids eat anything</span>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+
+            {/* EatPal */}
+            <Card className="border-primary shadow-lg relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                <Badge className="bg-primary text-primary-foreground font-semibold px-3">Best Value</Badge>
+              </div>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <Brain className="h-5 w-5 text-primary" />
+                  </div>
+                </div>
+                <CardTitle className="text-lg text-primary">EatPal</CardTitle>
+                <CardDescription>
+                  <span className="text-xl font-bold text-primary">$9.99</span>
+                  <span className="text-muted-foreground"> /month</span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                    <span>Built for ARFID & picky eaters</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                    <span>AI food chaining, 5 min/day</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                    <span>70%+ prediction accuracy</span>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
 
         {/* 30-Day Money-Back Guarantee Banner */}
         <div className="text-center py-6">

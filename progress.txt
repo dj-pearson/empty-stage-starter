@@ -860,3 +860,59 @@ Implemented the remaining 5 branding stories to complete the ARFID/food chaining
 - All 9 branding stories now complete (US-076 through US-084)
 - Full ARFID/food chaining niche positioning overhaul is done across: Landing, Auth, Pricing, Blog, SEO config
 ---
+
+## 2026-03-01 - Session 3: Performance & SEO Batch (US-048, US-049, US-058, US-045, US-040)
+
+### US-048: Self-host Google Fonts for performance and privacy
+- Installed @fontsource/inter (400, 500, 600, 700) and @fontsource/nunito-sans (400, 600, 700, 800)
+- Added font CSS imports to `src/main.tsx`
+- Removed Google Fonts CDN `<link>` tags from `index.html` (lines 228-248 replaced with comment)
+- Updated CSP in `public/_headers`: removed `fonts.googleapis.com` from style-src and `fonts.gstatic.com` from font-src
+- Eliminates 2 external DNS lookups and improves privacy
+
+### US-049: Defer GSAP loading to IntersectionObserver
+- Replaced `setTimeout(initAnimations, 100)` with IntersectionObserver in `src/pages/Landing.tsx`
+- GSAP + ScrollTrigger now dynamically imported only when first `.animate-section` or `.animate-grid` enters viewport
+- Uses `rootMargin: '200px'` to preload slightly before visible
+- Includes fallback for edge case where DOM isn't ready yet (uses `setTimeout(0)` + observer)
+- Maintains `prefers-reduced-motion` check before any GSAP loading
+
+### US-058: Add comparison section to Pricing page
+- Added "Why Choose EatPal?" comparison section to `src/pages/Pricing.tsx`
+- Four comparison cards:
+  - Feeding Therapy: $150+/session (wait lists, limited hours, no home continuity)
+  - Meal Kit Services: $200+/month (not for picky eaters, no food chaining, food waste)
+  - Generic Planners: $5-15/month (no ARFID support, no safe food tracking)
+  - EatPal: $9.99/month with "Best Value" badge (ARFID built-in, AI food chaining, 70%+ accuracy)
+- Uses Card components with theme-aware styling
+- Added Clock, DollarSign, Brain, Utensils icons from lucide-react
+
+### US-045: Upgrade lead-magnet pages from Helmet to SEOHead
+- Replaced raw `<Helmet>` with `<SEOHead {...getPageSEO("key")!} />` in:
+  - `src/pages/PickyEaterQuiz.tsx` → uses "pickyEaterQuiz" config
+  - `src/pages/BudgetCalculator.tsx` → uses "budgetCalculator" config
+  - `src/pages/MealPlanGenerator.tsx` → uses "mealPlan" config
+- These pages now get full AI metadata, structured data (JSON-LD), OG tags, and canonical URLs from seo-config.ts
+- Added `noindex` to 5 dashboard pages that were missing it: MealBuilder, FoodChaining, AccessibilitySettings, AccountSettings, Billing
+
+### US-040: Add missing Helmet meta tags to all pages
+- Added Helmet with noindex to authenticated pages missing it:
+  - `src/pages/Home.tsx` - added Helmet with title, description, noindex
+  - `src/pages/CheckoutSuccess.tsx` - added Helmet with title, noindex
+  - `src/pages/ResetPassword.tsx` - added Helmet with title, description, noindex
+  - `src/pages/ShareTarget.tsx` - added noindex to both Helmet instances
+  - `src/pages/AICoach.tsx` - added noindex
+- Added SEOHead with full metadata to public pages missing it:
+  - `src/pages/PrivacyPolicy.tsx` - added SEOHead using "privacy" config from seo-config.ts
+  - `src/pages/TermsOfService.tsx` - added SEOHead using "terms" config from seo-config.ts
+- Added OG tags to public pages:
+  - `src/pages/Auth.tsx` - added og:title, og:description, og:type
+  - `src/pages/Accessibility.tsx` - added og:title, og:description, og:type
+  - `src/pages/VPAT.tsx` - added og:title, og:description, og:type
+
+### Progress Summary
+- 5 stories completed (US-048, US-049, US-058, US-045, US-040)
+- Total: 64/84 stories now passing
+- Performance: self-hosted fonts, deferred GSAP, comparison section for conversion
+- SEO: comprehensive meta tags across all 43+ pages
+---
