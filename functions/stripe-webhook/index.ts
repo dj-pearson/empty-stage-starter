@@ -16,11 +16,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, stripe-signature',
-};
+import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
 
 /** Verify Stripe webhook signature using HMAC-SHA256 */
 async function verifyStripeSignature(
@@ -59,19 +55,34 @@ async function verifyStripeSignature(
       encoder.encode(signedPayload),
     );
 
+    // Convert computed HMAC to hex string
     const computed = Array.from(new Uint8Array(signatureBytes))
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
 
-    return computed === expectedSig;
+    // Use constant-time comparison to prevent timing attacks
+    if (computed.length !== expectedSig.length) return false;
+
+    const computedBytes = encoder.encode(computed);
+    const expectedBytes = encoder.encode(expectedSig);
+
+    // crypto.subtle.timingSafeEqual is not available in all runtimes,
+    // so implement constant-time comparison manually
+    let mismatch = 0;
+    for (let i = 0; i < computedBytes.length; i++) {
+      mismatch |= computedBytes[i] ^ expectedBytes[i];
+    }
+    return mismatch === 0;
   } catch {
     return false;
   }
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return handleCorsPreFlight(req);
   }
 
   try {
@@ -208,7 +219,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('stripe-webhook error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
     );
   }

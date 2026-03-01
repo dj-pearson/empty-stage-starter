@@ -38,12 +38,12 @@ export function SuccessAnimation({
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"
             onClick={onComplete}
           >
-            <div className="bg-white rounded-3xl shadow-2xl p-8 text-center max-w-md mx-4">
+            <div className="bg-card rounded-3xl shadow-2xl p-8 text-center max-w-md mx-4">
               <div className="w-20 h-20 bg-trust-green rounded-full flex items-center justify-center mx-auto mb-4">
                 <Check className="w-10 h-10 text-white" />
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">{title}</h3>
-              {message && <p className="text-gray-600">{message}</p>}
+              <h3 className="text-2xl font-bold text-foreground mb-2">{title}</h3>
+              {message && <p className="text-muted-foreground">{message}</p>}
             </div>
           </m.div>
         )}
@@ -71,7 +71,7 @@ export function SuccessAnimation({
                 stiffness: 200,
                 damping: 20
               }}
-              className="bg-white rounded-3xl shadow-2xl p-8 text-center max-w-md mx-4"
+              className="bg-card rounded-3xl shadow-2xl p-8 text-center max-w-md mx-4"
             >
               {/* Lottie Animation */}
               {type === 'confetti' && (
@@ -118,7 +118,7 @@ export function SuccessAnimation({
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
-                  className="text-gray-600 text-lg"
+                  className="text-muted-foreground text-lg"
                 >
                   {message}
                 </m.p>

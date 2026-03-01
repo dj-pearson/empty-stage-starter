@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { Helmet } from "react-helmet-async";
 import { motion, AnimatePresence } from "framer-motion";
 import { useApp } from "@/contexts/AppContext";
 import { FoodCard } from "@/components/FoodCard";
@@ -482,6 +483,11 @@ export default function Pantry() {
       ref={pullToRefreshRef}
       className="min-h-screen pb-20 md:pt-20 bg-background overflow-y-auto"
     >
+      <Helmet>
+        <title>Pantry - EatPal</title>
+        <meta name="description" content="Manage your food pantry, track inventory, and organize items by category" />
+        <meta name="robots" content="noindex" />
+      </Helmet>
       {/* Pull to Refresh */}
       {isMobile && (
         <PullToRefreshIndicator
@@ -911,7 +917,7 @@ export default function Pantry() {
             <FilteredEmptyState onClear={clearAllFilters} />
           ) : showGroupedView ? (
             /* Grouped category view */
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2" aria-live="polite">
               {CATEGORY_ORDER.map((cat) => {
                 const items = groupedFoods[cat];
                 if (!items || items.length === 0) return null;
@@ -941,6 +947,7 @@ export default function Pantry() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3"
+                  aria-live="polite"
                 >
                   {processedFoods.map((food) => (
                     <motion.div
@@ -968,6 +975,7 @@ export default function Pantry() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   className="border rounded-xl overflow-hidden divide-y"
+                  aria-live="polite"
                 >
                   {processedFoods.map((food) => (
                     <PantryListItem

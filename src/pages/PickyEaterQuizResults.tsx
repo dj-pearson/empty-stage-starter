@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useEffect, useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
@@ -9,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { QuizAnswers, QuizResult } from '@/types/quiz';
+import { PersonalityType, QuizAnswers, QuizResult } from '@/types/quiz';
 import { generateQuizResults, calculatePersonalityScores, determinePersonalityTypes } from '@/lib/quiz/scoring';
 import { getPersonalityType } from '@/lib/quiz/personalityTypes';
 import { PersonalityChart } from '@/components/quiz/PersonalityChart';
@@ -80,14 +79,14 @@ export default function PickyEaterQuizResults() {
         const scoresObj = scores.reduce((acc, score) => {
           acc[score.type] = score.score;
           return acc;
-        }, {} as Record<string, number>);
+        }, {} as Record<PersonalityType, number>);
 
         const responseId = await saveQuizResponse(
           state.sessionId,
           state.answers,
           primary,
           secondary,
-          scoresObj as any,
+          scoresObj,
           state.completionTime
         );
 

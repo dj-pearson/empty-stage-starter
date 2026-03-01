@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Calendar, RefreshCw, TrendingUp, Eye } from "lucide-react";
 import { WeeklyReportCard } from "@/components/WeeklyReportCard";
@@ -210,6 +211,7 @@ export function ReportHistory({ householdId, className }: ReportHistoryProps) {
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Weekly Report Details</DialogTitle>
+            <DialogDescription className="sr-only">View and manage your weekly nutrition reports</DialogDescription>
           </DialogHeader>
           {selectedReport && (
             <WeeklyReportCard

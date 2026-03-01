@@ -1,6 +1,8 @@
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ArrowLeft, Search } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
@@ -10,72 +12,105 @@ import {
 import { SEOHead } from "@/components/SEOHead";
 import { getPageSEO } from "@/lib/seo-config";
 
+// FAQ categories for filtering
+const FAQ_CATEGORIES = ["All", "Getting Started", "Features", "Billing", "Technical"] as const;
+type FAQCategory = typeof FAQ_CATEGORIES[number];
+
 // FAQ data with semantic structure for both UI and schema
 const faqData = [
   {
     question: "What is EatPal and how does it work?",
     answer: "EatPal is a comprehensive meal planning platform designed specifically for parents of picky eaters. You start by building a pantry of your child's safe foods and foods you'd like them to try. Our AI then generates personalized 7-day meal plans that include daily \"try bites\" to gently expand your child's diet. The app also creates automatic grocery lists, tracks food acceptance, and provides nutrition insights.",
+    category: "Getting Started" as FAQCategory,
   },
   {
     question: "Is EatPal available now?",
     answer: "Yes! EatPal is now live and ready to help you plan meals for your picky eater. Sign up today and start creating personalized meal plans with safe foods and try bites.",
+    category: "Getting Started" as FAQCategory,
   },
   {
     question: "Is EatPal suitable for children with ARFID or autism?",
     answer: "Yes! EatPal is designed to support various feeding challenges including ARFID (Avoidant/Restrictive Food Intake Disorder), autism spectrum food sensitivities, sensory processing issues, and typical picky eating. Our platform allows you to track allergens, sensory preferences, and safe foods, making it ideal for children with complex feeding needs. However, EatPal is not a replacement for medical care or feeding therapy.",
+    category: "Features" as FAQCategory,
   },
   {
     question: "What are \"try bites\" and how do they work?",
     answer: "Try bites are single foods suggested each day for your child to try, based on food chaining principles used by feeding therapists. The goal is gentle exposure without pressure - you simply track whether your child ate it, tasted it, or refused it. Our AI learns from these responses to suggest increasingly appropriate foods that align with your child's preferences and expand their diet gradually.",
+    category: "Features" as FAQCategory,
   },
   {
     question: "Can I manage meal plans for multiple children?",
     answer: "Absolutely! EatPal supports multiple child profiles within one account. Each child can have their own safe foods list, allergen tracking, meal plans, and preferences. This is perfect for families with siblings who have different eating patterns and needs. Premium plans offer unlimited child profiles.",
+    category: "Features" as FAQCategory,
   },
   {
     question: "How does the AI meal planning work?",
     answer: "Our AI analyzes your child's safe foods, recent eating history, nutritional needs, and preferences to create balanced 7-day meal plans. It ensures variety (no repeated meals for 3 days), balanced nutrition across food groups, and respects allergen restrictions. The AI also learns from your feedback - when you mark foods as eaten, tried, or refused, it gets smarter about future suggestions.",
+    category: "Features" as FAQCategory,
   },
   {
     question: "What's included in the Free plan?",
     answer: "The Free plan includes basic meal planning features for one child, limited pantry foods, manual meal planning, and basic food tracking. Premium plans unlock AI-powered meal generation, unlimited children, unlimited pantry foods, nutrition tracking, AI food suggestions, recipe builder, and priority support. Check our pricing page for full details.",
+    category: "Billing" as FAQCategory,
   },
   {
     question: "Can I cancel my subscription anytime?",
     answer: "Yes, you can cancel your subscription at any time. Your access will continue through the end of your current billing period. We don't offer refunds for partial months, but you won't be charged again after cancellation.",
+    category: "Billing" as FAQCategory,
   },
   {
     question: "How do I track allergens and dietary restrictions?",
     answer: "When creating a child profile, you can specify all allergens and dietary restrictions. EatPal will automatically flag foods containing those allergens and exclude them from meal plans. You can also mark individual foods with allergen information, and our AI will never suggest meals containing your child's allergens.",
+    category: "Features" as FAQCategory,
   },
   {
     question: "Is my child's data private and secure?",
     answer: "Yes. We take privacy very seriously, especially when it comes to children's information. All data is encrypted, stored securely, and never shared or sold to third parties. We comply with all applicable privacy laws. See our Privacy Policy for complete details on how we protect your family's data.",
+    category: "Technical" as FAQCategory,
   },
   {
     question: "Can I export my meal plans and grocery lists?",
     answer: "Yes! You can export all your data including meal plans, grocery lists, food tracking history, and pantry information. This is useful for sharing with healthcare providers, dietitians, or feeding therapists, or simply for your own backup.",
+    category: "Features" as FAQCategory,
   },
   {
     question: "Does EatPal work with feeding therapy?",
     answer: "Yes! Many parents use EatPal alongside feeding therapy. Our food chaining and try bite features are based on evidence-based feeding therapy techniques. You can export your child's food tracking data to share progress with your occupational therapist, speech therapist, or dietitian. However, EatPal is a tool to support therapy, not replace professional treatment.",
+    category: "Features" as FAQCategory,
   },
   {
     question: "What if my child only eats 5-10 foods?",
     answer: "EatPal is designed for exactly this scenario! Even with a very limited safe food list, our platform can create meal plans using those foods while gently suggesting similar foods to try. The AI uses food chaining principles to recommend new foods that share textures, temperatures, or flavors with your child's safe foods, making expansion more likely to succeed.",
+    category: "Getting Started" as FAQCategory,
   },
   {
     question: "How do I get support if I have issues?",
     answer: "You can contact our support team at Support@TryEatPal.com. We typically respond within 24-48 hours. Premium subscribers receive priority support. We're here to help you get the most out of EatPal!",
+    category: "Technical" as FAQCategory,
   },
   {
     question: "Is there a mobile app?",
     answer: "EatPal is currently a web-based application that works great on mobile browsers. You can access it from any device with internet connectivity. Native iOS and Android apps are on our roadmap for future development.",
+    category: "Technical" as FAQCategory,
   },
 ];
 
 const FAQ = () => {
   const seoConfig = getPageSEO("faq");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<FAQCategory>("All");
+
+  const filteredFaqData = useMemo(() => {
+    return faqData.filter((faq) => {
+      const matchesCategory =
+        selectedCategory === "All" || faq.category === selectedCategory;
+      const matchesSearch =
+        !searchQuery ||
+        faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        faq.answer.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [searchQuery, selectedCategory]);
 
   // Generate FAQ schema for structured data
   const faqSchema = {
@@ -155,18 +190,54 @@ const FAQ = () => {
           safe food tracking, autism-friendly meal planning, allergen management, feeding therapy integration
         </div>
 
-        <Accordion type="single" collapsible className="w-full space-y-4">
-          {faqData.map((faq, index) => (
-            <AccordionItem key={`item-${index + 1}`} value={`item-${index + 1}`}>
-              <AccordionTrigger className="text-left text-lg font-semibold">
-                {faq.question}
-              </AccordionTrigger>
-              <AccordionContent className="text-muted-foreground leading-relaxed">
-                {faq.answer}
-              </AccordionContent>
-            </AccordionItem>
+        {/* Search */}
+        <div className="relative mb-6">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" aria-hidden="true" />
+          <Input
+            type="text"
+            placeholder="Search questions..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+            aria-label="Search frequently asked questions"
+          />
+        </div>
+
+        {/* Category Filters */}
+        <div className="flex flex-wrap gap-2 mb-8">
+          {FAQ_CATEGORIES.map((category) => (
+            <Button
+              key={category}
+              variant={selectedCategory === category ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedCategory(category)}
+            >
+              {category}
+            </Button>
           ))}
-        </Accordion>
+        </div>
+
+        {filteredFaqData.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground text-lg mb-2">No results found</p>
+            <p className="text-sm text-muted-foreground">
+              Try adjusting your search or category filter.
+            </p>
+          </div>
+        ) : (
+          <Accordion type="single" collapsible className="w-full space-y-4">
+            {filteredFaqData.map((faq, index) => (
+              <AccordionItem key={`item-${index + 1}`} value={`item-${index + 1}`}>
+                <AccordionTrigger className="text-left text-lg font-semibold">
+                  {faq.question}
+                </AccordionTrigger>
+                <AccordionContent className="text-muted-foreground leading-relaxed">
+                  {faq.answer}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        )}
 
         <div className="mt-12 p-6 bg-primary/5 border border-primary/20 rounded-lg text-center">
           <h3 className="text-xl font-heading font-bold mb-3 text-primary">Still have questions?</h3>

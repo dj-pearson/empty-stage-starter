@@ -150,8 +150,8 @@ const App = () => (
             {/* Admin routes - Protected with role check */}
             <Route path="/admin" element={<ProtectedRoute><RouteErrorBoundary><Admin /></RouteErrorBoundary></ProtectedRoute>} />
             <Route path="/admin-dashboard" element={<ProtectedRoute><RouteErrorBoundary><AdminDashboard /></RouteErrorBoundary></ProtectedRoute>} />
-            <Route path="/seo-dashboard" element={<ProtectedRoute><RouteErrorBoundary><SEODashboard /></RouteErrorBoundary></ProtectedRoute>} />
-            <Route path="/search-traffic" element={<ProtectedRoute><RouteErrorBoundary><SearchTrafficDashboard /></RouteErrorBoundary></ProtectedRoute>} />
+            <Route path="/seo-dashboard" element={<ProtectedRoute requireAdmin><RouteErrorBoundary><SEODashboard /></RouteErrorBoundary></ProtectedRoute>} />
+            <Route path="/search-traffic" element={<ProtectedRoute requireAdmin><RouteErrorBoundary><SearchTrafficDashboard /></RouteErrorBoundary></ProtectedRoute>} />
 
             {/* Main Dashboard with nested routes - Protected */}
             <Route path="/dashboard" element={<ProtectedRoute><RouteErrorBoundary><Dashboard /></RouteErrorBoundary></ProtectedRoute>}>

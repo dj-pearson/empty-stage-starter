@@ -1,11 +1,11 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 import { useNavigate } from "react-router-dom";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -14,10 +14,6 @@ import {
   BarChart3,
   TrendingUp,
   Users,
-  MousePointerClick,
-  Eye,
-  Globe,
-  Smartphone,
   FileText,
   AlertCircle,
   RefreshCw,
@@ -28,6 +24,8 @@ import {
 } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
+import type { DateRange } from "react-day-picker";
+import type { Database } from "@/integrations/supabase/types";
 
 // Import sub-components
 import { PlatformConnectionManager } from "@/components/admin/SearchTraffic/PlatformConnectionManager";
@@ -42,6 +40,8 @@ import { ComparativeAnalytics } from "@/components/admin/SearchTraffic/Comparati
 import { InsightsAnomalies } from "@/components/admin/SearchTraffic/InsightsAnomalies";
 import { TrafficForecasts } from "@/components/admin/SearchTraffic/TrafficForecasts";
 
+type PlatformConnection = Database["public"]["Tables"]["analytics_platform_connections"]["Row"];
+
 export default function SearchTrafficDashboard() {
   const navigate = useNavigate();
   const { isAdmin, loading: adminLoading } = useAdminCheck();
@@ -51,7 +51,7 @@ export default function SearchTrafficDashboard() {
     to: new Date(),
   });
   const [activeTab, setActiveTab] = useState("overview");
-  const [connections, setConnections] = useState<any[]>([]);
+  const [connections, setConnections] = useState<PlatformConnection[]>([]);
   const [selectedConnections, setSelectedConnections] = useState<string[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [showConnectionManager, setShowConnectionManager] = useState(false);
@@ -91,7 +91,7 @@ export default function SearchTrafficDashboard() {
       if (data) {
         setSelectedConnections(data.map(c => c.id));
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error fetching connections:", error);
       toast.error("Failed to load platform connections");
     }
@@ -117,9 +117,10 @@ export default function SearchTrafficDashboard() {
 
       // Refresh the dashboard data
       window.location.reload();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error syncing data:", error);
-      toast.error(error.message || "Failed to sync analytics data");
+      const message = error instanceof Error ? error.message : "Failed to sync analytics data";
+      toast.error(message);
     } finally {
       setSyncing(false);
     }
@@ -129,7 +130,7 @@ export default function SearchTrafficDashboard() {
     try {
       toast.info("Export functionality coming soon!");
       // TODO: Implement CSV/PDF export
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error exporting data:", error);
       toast.error("Failed to export data");
     }
@@ -151,6 +152,11 @@ export default function SearchTrafficDashboard() {
 
   return (
     <div id="main-content" className="container mx-auto py-6 space-y-6">
+      <Helmet>
+        <title>Search Traffic Analytics - EatPal</title>
+        <meta name="description" content="Unified search traffic dashboard for Google Analytics, Search Console, Bing, and Yandex" />
+        <meta name="robots" content="noindex" />
+      </Helmet>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -217,7 +223,7 @@ export default function SearchTrafficDashboard() {
                     <Calendar
                       mode="range"
                       selected={dateRange}
-                      onSelect={(range: any) => {
+                      onSelect={(range: DateRange | undefined) => {
                         if (range?.from && range?.to) {
                           setDateRange({ from: range.from, to: range.to });
                         }

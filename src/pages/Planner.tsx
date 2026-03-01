@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { Helmet } from "react-helmet-async";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,6 +15,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Save,
+  LayoutTemplate,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MealSlot, PlanEntry } from "@/types";
@@ -24,6 +27,10 @@ import { format, startOfWeek, addWeeks, subWeeks, addDays } from "date-fns";
 import { calculateAge } from "@/lib/utils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { logger } from "@/lib/logger";
+import { lazy, Suspense } from "react";
+
+const SaveMealPlanTemplateDialog = lazy(() => import("@/components/SaveMealPlanTemplateDialog").then(m => ({ default: m.SaveMealPlanTemplateDialog })));
+const MealPlanTemplateGallery = lazy(() => import("@/components/MealPlanTemplateGallery").then(m => ({ default: m.MealPlanTemplateGallery })));
 
 export default function Planner() {
   const {
@@ -49,6 +56,8 @@ export default function Planner() {
     startOfWeek(new Date(), { weekStartsOn: 0 })
   );
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [showTemplateGallery, setShowTemplateGallery] = useState(false);
   const [foodSelectorOpen, setFoodSelectorOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{
     date: string;
@@ -186,12 +195,12 @@ export default function Planner() {
     }
   };
 
-  const handleUpdateEntry = (entryId: string, updates: Partial<PlanEntry>) => {
+  const handleUpdateEntry = useCallback((entryId: string, updates: Partial<PlanEntry>) => {
     updatePlanEntry(entryId, updates);
-  };
+  }, [updatePlanEntry]);
 
   // Desktop handler (original signature)
-  const handleAddEntry = (date: string, slot: MealSlot, foodId: string) => {
+  const handleAddEntry = useCallback((date: string, slot: MealSlot, foodId: string) => {
     if (!activeKid) return;
     addPlanEntry({
       kid_id: activeKid.id,
@@ -200,7 +209,7 @@ export default function Planner() {
       food_id: foodId,
       result: null,
     });
-  };
+  }, [activeKid, addPlanEntry]);
 
   // Mobile handler (accepts kidId directly)
   const handleMobileAddEntry = useCallback(
@@ -374,7 +383,7 @@ export default function Planner() {
     }
   };
 
-  const handleMarkResult = async (
+  const handleMarkResult = useCallback(async (
     entry: PlanEntry,
     result: "ate" | "tasted" | "refused",
     attemptId?: string
@@ -417,7 +426,7 @@ export default function Planner() {
     if (!attemptId) {
       toast.success(`Marked as ${result}`);
     }
-  };
+  }, [foods, updatePlanEntry, updateFood]);
 
   const handleCopyToChild = async (
     entry: PlanEntry,
@@ -466,9 +475,18 @@ export default function Planner() {
   };
 
   // --- No children empty state ---
+  const plannerHelmet = (
+    <Helmet>
+      <title>Meal Planner - EatPal</title>
+      <meta name="description" content="Plan weekly meals for your family with AI-powered suggestions and templates" />
+      <meta name="robots" content="noindex" />
+    </Helmet>
+  );
+
   if (kids.length === 0) {
     return (
       <div className="min-h-screen pb-20 bg-background">
+        {plannerHelmet}
         <div className="container mx-auto px-4 py-8 max-w-7xl">
           <Card className="p-12 text-center">
             <div className="max-w-md mx-auto">
@@ -490,6 +508,7 @@ export default function Planner() {
   if (isMobile) {
     return (
       <div className="min-h-screen pb-20 bg-background">
+        {plannerHelmet}
         <div className="px-3 pt-4 pb-2">
           {/* Compact mobile header */}
           <div className="flex items-center justify-between mb-1">
@@ -503,26 +522,28 @@ export default function Planner() {
             )}
           </div>
 
-          <MobileMealPlanner
-            weekStart={currentWeekStart}
-            planEntries={planEntries}
-            foods={foods}
-            recipes={recipes}
-            kids={kids}
-            activeKidId={activeKidId}
-            isGeneratingPlan={isGeneratingPlan}
-            onAddEntry={handleMobileAddEntry}
-            onUpdateEntry={handleUpdateEntry}
-            onSelectRecipe={handleMobileSelectRecipe}
-            onMarkResult={handleMarkResult}
-            onBuildWeek={handleBuildWeek}
-            onAIGenerate={() => handleAIMealPlan(7)}
-            onPreviousWeek={handlePreviousWeek}
-            onNextWeek={handleNextWeek}
-            onThisWeek={handleThisWeek}
-            onCopyWeek={handleCopyWeek}
-            onClearWeek={handleClearWeek}
-          />
+          <div aria-live="polite">
+            <MobileMealPlanner
+              weekStart={currentWeekStart}
+              planEntries={planEntries}
+              foods={foods}
+              recipes={recipes}
+              kids={kids}
+              activeKidId={activeKidId}
+              isGeneratingPlan={isGeneratingPlan}
+              onAddEntry={handleMobileAddEntry}
+              onUpdateEntry={handleUpdateEntry}
+              onSelectRecipe={handleMobileSelectRecipe}
+              onMarkResult={handleMarkResult}
+              onBuildWeek={handleBuildWeek}
+              onAIGenerate={() => handleAIMealPlan(7)}
+              onPreviousWeek={handlePreviousWeek}
+              onNextWeek={handleNextWeek}
+              onThisWeek={handleThisWeek}
+              onCopyWeek={handleCopyWeek}
+              onClearWeek={handleClearWeek}
+            />
+          </div>
         </div>
       </div>
     );
@@ -531,6 +552,7 @@ export default function Planner() {
   // --- Desktop layout (existing) ---
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
+      {plannerHelmet}
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Header */}
         <div className="flex flex-col gap-4 mb-8">
@@ -573,6 +595,22 @@ export default function Planner() {
               >
                 <RefreshCw className="h-5 w-5 mr-2" />
                 Quick Build
+              </Button>
+              <Button
+                onClick={() => setShowSaveTemplate(true)}
+                variant="outline"
+                size="lg"
+              >
+                <Save className="h-5 w-5 mr-2" />
+                Save Template
+              </Button>
+              <Button
+                onClick={() => setShowTemplateGallery(true)}
+                variant="outline"
+                size="lg"
+              >
+                <LayoutTemplate className="h-5 w-5 mr-2" />
+                Templates
               </Button>
             </div>
           </div>
@@ -621,7 +659,7 @@ export default function Planner() {
 
         {activeKidId === null ? (
           // Family Mode - Show all children
-          <div className="space-y-6">
+          <div className="space-y-6" aria-live="polite">
             {kids.map((kid) => {
               const kidAge = calculateAge(kid.date_of_birth);
               return (
@@ -661,25 +699,27 @@ export default function Planner() {
           </div>
         ) : (
           // Single child mode
-          <GSAPCalendarMealPlanner
-            weekStart={currentWeekStart}
-            planEntries={planEntries}
-            foods={foods}
-            recipes={recipes}
-            kids={kids}
-            kidId={activeKidId}
-            kidName={activeKid!.name}
-            kidAge={activeKid!.age}
-            kidWeight={
-              activeKid!.weight_kg ? Number(activeKid!.weight_kg) : undefined
-            }
-            onUpdateEntry={handleUpdateEntry}
-            onAddEntry={handleAddEntry}
-            onOpenFoodSelector={handleOpenFoodSelector}
-            onCopyToChild={handleCopyToChild}
-            onCopyWeek={handleCopyWeek}
-            onClearWeek={handleClearWeek}
-          />
+          <div aria-live="polite">
+            <GSAPCalendarMealPlanner
+              weekStart={currentWeekStart}
+              planEntries={planEntries}
+              foods={foods}
+              recipes={recipes}
+              kids={kids}
+              kidId={activeKidId}
+              kidName={activeKid!.name}
+              kidAge={activeKid!.age}
+              kidWeight={
+                activeKid!.weight_kg ? Number(activeKid!.weight_kg) : undefined
+              }
+              onUpdateEntry={handleUpdateEntry}
+              onAddEntry={handleAddEntry}
+              onOpenFoodSelector={handleOpenFoodSelector}
+              onCopyToChild={handleCopyToChild}
+              onCopyWeek={handleCopyWeek}
+              onClearWeek={handleClearWeek}
+            />
+          </div>
         )}
 
         <FoodSelectorDialog
@@ -715,6 +755,27 @@ export default function Planner() {
             }}
           />
         )}
+
+        <Suspense fallback={null}>
+          {showSaveTemplate && (
+            <SaveMealPlanTemplateDialog
+              open={showSaveTemplate}
+              onOpenChange={setShowSaveTemplate}
+              weekStart={format(currentWeekStart, "yyyy-MM-dd")}
+              kidId={activeKidId}
+            />
+          )}
+          {showTemplateGallery && (
+            <MealPlanTemplateGallery
+              open={showTemplateGallery}
+              onOpenChange={setShowTemplateGallery}
+              onApply={() => {
+                setShowTemplateGallery(false);
+                toast.success("Template applied to planner");
+              }}
+            />
+          )}
+        </Suspense>
       </div>
     </div>
   );

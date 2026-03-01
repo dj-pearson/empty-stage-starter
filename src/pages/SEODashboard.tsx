@@ -1,3 +1,4 @@
+import { Helmet } from "react-helmet-async";
 import { SEOManager } from "@/components/admin/SEOManager";
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
@@ -37,5 +38,14 @@ export default function SEODashboard() {
     );
   }
 
-  return <div id="main-content"><SEOManager /></div>;
+  return (
+    <div id="main-content">
+      <Helmet>
+        <title>SEO Dashboard - EatPal</title>
+        <meta name="description" content="Manage SEO settings, structured data, and search engine optimization for EatPal" />
+        <meta name="robots" content="noindex" />
+      </Helmet>
+      <SEOManager />
+    </div>
+  );
 }

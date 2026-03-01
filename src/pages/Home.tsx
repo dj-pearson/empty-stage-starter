@@ -2,12 +2,13 @@ import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { Utensils, Calendar, ShoppingCart, Sparkles, Download, Upload, Trash2, Users, BarChart3, ChefHat, Target, ArrowRight, Plus } from "lucide-react";
+import { Utensils, Calendar, ShoppingCart, Sparkles, Download, Upload, Trash2, Users, BarChart3, ChefHat, Target, ArrowRight, Plus, Flame } from "lucide-react";
 import { toast } from "sonner";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 import { BackupDataSchema } from "@/lib/validations";
+import { OnboardingReengagement } from "@/components/OnboardingReengagement";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +33,10 @@ import { SubscriptionStatusBanner } from "@/components/SubscriptionStatusBanner"
 import { MotivationalMessage } from "@/components/MotivationalMessage";
 import { TodayMeals } from "@/components/TodayMeals";
 import { QuickLogModal } from "@/components/QuickLogModal";
+
+const OnboardingProgressBar = lazy(() =>
+  import("@/components/OnboardingProgressBar").then(m => ({ default: m.OnboardingProgressBar }))
+);
 
 export default function Home() {
   const { foods, planEntries, groceryItems, kids, recipes, activeKidId, exportData, importData, resetAllData, updatePlanEntry } = useApp();
@@ -90,6 +95,21 @@ export default function Home() {
   const isNewUser = safeFoods < 3 && kidPlanEntries.length === 0;
   const needsMoreFoods = safeFoods < 5;
   const needsMealPlan = kidPlanEntries.length === 0 && safeFoods >= 3;
+
+  // Calculate streak from planEntries
+  const streak = useMemo(() => {
+    const today = new Date();
+    let count = 0;
+    for (let d = 0; d <= 365; d++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - d);
+      const dateStr = date.toISOString().split("T")[0];
+      const hasResult = planEntries.some(e => e.date === dateStr && e.result);
+      if (hasResult) count++;
+      else if (d > 0) break; // Break on first gap (but not today)
+    }
+    return count;
+  }, [planEntries]);
 
   const handleExport = () => {
     const data = exportData();
@@ -189,8 +209,19 @@ export default function Home() {
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
       <AnimatedDashboard className="container mx-auto px-4 py-8 max-w-4xl">
+        {/* Guided onboarding progress bar */}
+        <Suspense fallback={null}>
+          <OnboardingProgressBar />
+        </Suspense>
+
+        {/* Re-engagement prompt for skipped onboarding */}
+        <OnboardingReengagement />
+
         {/* Subscription Status Banner */}
         <SubscriptionStatusBanner />
+
+        {/* Accessible h1 heading */}
+        <h1 className="sr-only">EatPal Dashboard</h1>
 
         {/* Welcome Banner with Animations */}
         <AnimatedWelcomeBanner
@@ -225,7 +256,10 @@ export default function Home() {
                         ? 'border-green-500/30 bg-green-50/50 dark:bg-green-950/20'
                         : 'border-primary/30 bg-primary/5 hover:border-primary'
                     }`}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => navigate("/dashboard/pantry")}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate("/dashboard/pantry"); } }}
                   >
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                       safeFoods >= 3 ? 'bg-green-500 text-white' : 'bg-primary/10 text-primary'
@@ -233,7 +267,7 @@ export default function Home() {
                       {safeFoods >= 3 ? '✓' : '1'}
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-semibold">Add Your Child's Safe Foods</h4>
+                      <h2 className="font-semibold text-base">Add Your Child's Safe Foods</h2>
                       <p className="text-sm text-muted-foreground">
                         {safeFoods >= 3
                           ? `Great! You've added ${safeFoods} safe foods`
@@ -257,7 +291,10 @@ export default function Home() {
                           ? 'border-primary/30 bg-primary/5 hover:border-primary'
                           : 'border-muted bg-muted/30 opacity-60'
                     }`}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => safeFoods >= 3 && navigate("/dashboard/planner")}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); safeFoods >= 3 && navigate("/dashboard/planner"); } }}
                   >
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                       kidPlanEntries.length > 0
@@ -269,7 +306,7 @@ export default function Home() {
                       {kidPlanEntries.length > 0 ? '✓' : '2'}
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-semibold">Create Your First Meal Plan</h4>
+                      <h2 className="font-semibold text-base">Create Your First Meal Plan</h2>
                       <p className="text-sm text-muted-foreground">
                         {kidPlanEntries.length > 0
                           ? `Awesome! You have ${kidPlanEntries.length} meals planned`
@@ -295,7 +332,10 @@ export default function Home() {
                           ? 'border-primary/30 bg-primary/5 hover:border-primary'
                           : 'border-muted bg-muted/30 opacity-60'
                     }`}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => kidPlanEntries.length > 0 && navigate("/dashboard/grocery")}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); kidPlanEntries.length > 0 && navigate("/dashboard/grocery"); } }}
                   >
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                       groceryItems.length > 0
@@ -307,7 +347,7 @@ export default function Home() {
                       {groceryItems.length > 0 ? '✓' : '3'}
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-semibold">Generate Grocery List</h4>
+                      <h2 className="font-semibold text-base">Generate Grocery List</h2>
                       <p className="text-sm text-muted-foreground">
                         {groceryItems.length > 0
                           ? `Perfect! ${groceryItems.length} items on your list`
@@ -332,7 +372,7 @@ export default function Home() {
         {/* Quick Action Prompts for returning users */}
         {!isNewUser && needsMoreFoods && (
           <AnimatedPanel>
-            <Card className="mb-6 border-primary/20 bg-primary/5 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate("/dashboard/pantry")}>
+            <Card className="mb-6 border-primary/20 bg-primary/5 cursor-pointer hover:shadow-md transition-all" role="button" tabIndex={0} onClick={() => navigate("/dashboard/pantry")} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate("/dashboard/pantry"); } }}>
               <CardContent className="py-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -340,7 +380,7 @@ export default function Home() {
                       <Plus className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <h4 className="font-semibold">Add More Safe Foods</h4>
+                      <h2 className="font-semibold text-base">Add More Safe Foods</h2>
                       <p className="text-sm text-muted-foreground">The more foods you add, the better your meal plans will be</p>
                     </div>
                   </div>
@@ -353,7 +393,7 @@ export default function Home() {
 
         {!isNewUser && needsMealPlan && (
           <AnimatedPanel>
-            <Card className="mb-6 border-accent/20 bg-accent/5 cursor-pointer hover:shadow-md transition-all" onClick={() => navigate("/dashboard/planner")}>
+            <Card className="mb-6 border-accent/20 bg-accent/5 cursor-pointer hover:shadow-md transition-all" role="button" tabIndex={0} onClick={() => navigate("/dashboard/planner")} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate("/dashboard/planner"); } }}>
               <CardContent className="py-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -361,7 +401,7 @@ export default function Home() {
                       <Calendar className="h-5 w-5 text-accent" />
                     </div>
                     <div>
-                      <h4 className="font-semibold">Create Your First Meal Plan</h4>
+                      <h2 className="font-semibold text-base">Create Your First Meal Plan</h2>
                       <p className="text-sm text-muted-foreground">You have {safeFoods} foods ready - let's plan some meals!</p>
                     </div>
                   </div>
@@ -385,12 +425,14 @@ export default function Home() {
               label="Safe Foods"
               color="text-safe-food"
               icon={<Utensils className="w-6 h-6" />}
+              tooltip="Foods your child consistently eats"
             />
             <AnimatedStatCard
               value={tryBites}
               label="Try Bites"
               color="text-try-bite"
               icon={<Target className="w-6 h-6" />}
+              tooltip="New foods being introduced gradually"
             />
             <AnimatedStatCard
               value={recipes.length}
@@ -403,15 +445,45 @@ export default function Home() {
               label="Meals Planned"
               color="text-primary"
               icon={<Calendar className="w-6 h-6" />}
+              tooltip="Meals scheduled this week"
             />
             <AnimatedStatCard
               value={groceryItems.length}
               label="Grocery Items"
               color="text-accent"
               icon={<ShoppingCart className="w-6 h-6" />}
+              tooltip="Items on your current shopping list"
             />
           </div>
         </AnimatedPanel>
+
+        {/* Streak Counter */}
+        {streak > 0 && (
+          <AnimatedPanel>
+            <Card className="mb-8 border-orange-500/20 bg-gradient-to-r from-orange-500/5 to-amber-500/5">
+              <CardContent className="py-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center">
+                    <Flame className="h-6 w-6 text-orange-500" />
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-bold text-orange-500">{streak}</span>
+                      <span className="text-sm font-medium text-muted-foreground">day streak</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {streak >= 7
+                        ? "Amazing consistency! Keep it up!"
+                        : streak >= 3
+                          ? "Great progress! You're building a habit!"
+                          : "You're on a roll! Log meals daily to grow your streak."}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </AnimatedPanel>
+        )}
 
         {/* Action Cards with Animations */}
         <AnimatedPanel delay={0.1}>

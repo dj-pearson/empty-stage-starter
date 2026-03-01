@@ -1,6 +1,8 @@
 import { motion, LazyMotion, domAnimation, m } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { ReactNode } from 'react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { CircleHelp } from 'lucide-react';
 
 /**
  * Enhanced Dashboard Container with staggered entrance animations
@@ -85,6 +87,7 @@ interface AnimatedStatCardProps {
   color?: string;
   suffix?: string;
   icon?: ReactNode;
+  tooltip?: string;
 }
 
 export function AnimatedStatCard({
@@ -93,6 +96,7 @@ export function AnimatedStatCard({
   color = 'text-primary',
   suffix = '',
   icon,
+  tooltip,
 }: AnimatedStatCardProps) {
   const shouldReduceMotion = useReducedMotion();
 
@@ -132,7 +136,24 @@ export function AnimatedStatCard({
               {icon}
             </div>
           )}
-          <p className="text-sm text-muted-foreground mb-1">{label}</p>
+          <p className="text-sm text-muted-foreground mb-1">
+            {tooltip ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="flex items-center gap-1 cursor-help">
+                      {label} <CircleHelp className="h-3 w-3 text-muted-foreground" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{tooltip}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              label
+            )}
+          </p>
           <m.p
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1 }}

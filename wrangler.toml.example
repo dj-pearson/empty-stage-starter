@@ -29,7 +29,7 @@ compatibility_date = "2024-12-19"
 #    VITE_SUPABASE_URL=https://api.tryeatpal.com
 #    VITE_SUPABASE_ANON_KEY=your_key_here
 #    VITE_FUNCTIONS_URL=https://functions.tryeatpal.com
-#    VITE_STRIPE_PUBLISHABLE_KEY=pk_live_51SFmtlEQGPvinhrFu06bhMiTicheSKMvIwL5fUPTvoZBAyUQTSpFHWXVRxZwdmcLS82iBzA0qlgdNSww0tPmOI3y009iwWSlX2
+#    VITE_STRIPE_PUBLISHABLE_KEY=pk_live_XXXXXXXXXXXXXXXX
 #
 # The .dev.vars file is loaded automatically by wrangler during local development
 

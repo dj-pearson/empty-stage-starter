@@ -484,7 +484,7 @@ export function EmailTemplateBuilder() {
           // Sanitize HTML to prevent XSS attacks
           const sanitizedHtml = DOMPurify.sanitize(block.content.html || "", {
             ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'img', 'blockquote', 'code', 'pre', 'div', 'span', 'table', 'tr', 'td', 'th', 'thead', 'tbody'],
-            ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'style', 'target', 'rel'],
+            ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'target', 'rel'],
             ALLOW_DATA_ATTR: false,
           });
           return (

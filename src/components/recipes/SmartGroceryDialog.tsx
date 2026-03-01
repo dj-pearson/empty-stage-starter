@@ -4,6 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -162,6 +163,7 @@ export function SmartGroceryDialog({
             <ShoppingCart className="h-5 w-5" />
             Add to Grocery List
           </DialogTitle>
+          <DialogDescription className="sr-only">Add recipe ingredients to your grocery list</DialogDescription>
           <p className="text-sm text-muted-foreground">{recipe.name}</p>
         </DialogHeader>
 

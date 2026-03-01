@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Sheet,
   SheetContent,
@@ -33,12 +33,16 @@ import {
   ExternalLink,
   Minus,
   Plus,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Recipe, Food, Kid, MealSlot } from "@/types";
 import { cn } from "@/lib/utils";
 import { CookMode } from "./CookMode";
 import { AddToPlannerPopover } from "./AddToPlannerPopover";
+import { calculateRecipeNutrition, perServingNutrition } from "@/lib/nutritionCalculator";
+import { RecipeShareButton } from "./RecipeShareButton";
+import { Helmet } from "react-helmet-async";
 
 interface RecipeDetailViewProps {
   recipe: Recipe | null;
@@ -109,6 +113,10 @@ export function RecipeDetailView({
 
   if (!recipe) return null;
 
+  const ogDescription = recipe.description || `${recipe.name} - A family-friendly recipe on EatPal`;
+  const ogImage = recipe.image_url || "https://tryeatpal.com/og-recipe-default.png";
+  const ogUrl = `${window.location.origin}/recipes/${recipe.id}`;
+
   const recipeFoods = recipe.food_ids
     .map((id) => foods.find((f) => f.id === id))
     .filter(Boolean) as Food[];
@@ -118,6 +126,23 @@ export function RecipeDetailView({
     (parseInt(recipe.prepTime || "0") + parseInt(recipe.cookTime || "0"));
 
   const baseServings = parseInt(recipe.servings || "4");
+
+  // Auto-calculate nutrition from food ingredients when recipe has no manual nutrition_info
+  const autoNutrition = useMemo(() => {
+    if (recipe.nutrition_info) return null; // Manual data takes precedence
+    const total = calculateRecipeNutrition(recipe, foods);
+    if (!total) return null;
+    return perServingNutrition(total, baseServings);
+  }, [recipe, foods, baseServings]);
+
+  // Effective nutrition: manual data or auto-calculated
+  const effectiveNutrition = recipe.nutrition_info || (autoNutrition ? {
+    calories: autoNutrition.calories,
+    protein_g: autoNutrition.protein_g,
+    carbs_g: autoNutrition.carbs_g,
+    fat_g: autoNutrition.fat_g,
+    fiber_g: autoNutrition.fiber_g,
+  } : null);
 
   const difficultyColors: Record<string, string> = {
     easy: "bg-green-50 text-green-700 border-green-200",
@@ -184,6 +209,20 @@ export function RecipeDetailView({
   }
 
   return (
+    <>
+    {open && (
+      <Helmet>
+        <meta property="og:title" content={recipe.name} />
+        <meta property="og:description" content={ogDescription} />
+        <meta property="og:image" content={ogImage} />
+        <meta property="og:url" content={ogUrl} />
+        <meta property="og:type" content="article" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={recipe.name} />
+        <meta name="twitter:description" content={ogDescription} />
+        <meta name="twitter:image" content={ogImage} />
+      </Helmet>
+    )}
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
@@ -295,6 +334,8 @@ export function RecipeDetailView({
                   <ShoppingCart className="h-4 w-4" />
                   Grocery
                 </Button>
+
+                <RecipeShareButton recipe={recipe} />
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -505,44 +546,58 @@ export function RecipeDetailView({
 
                 {/* Nutrition tab */}
                 <TabsContent value="nutrition" className="mt-3">
-                  {recipe.nutrition_info ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      {recipe.nutrition_info.calories != null && (
-                        <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-950/20">
-                          <p className="text-xs text-muted-foreground">Calories</p>
-                          <p className="text-lg font-bold">{recipe.nutrition_info.calories}</p>
+                  {effectiveNutrition ? (
+                    <div className="space-y-3">
+                      {autoNutrition?.isPartial && (
+                        <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400">
+                          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                          <p className="text-xs">
+                            Partial data — {autoNutrition.foodsWithData} of {autoNutrition.totalFoods} ingredients have nutrition info
+                          </p>
                         </div>
                       )}
-                      {recipe.nutrition_info.protein_g != null && (
-                        <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20">
-                          <p className="text-xs text-muted-foreground">Protein</p>
-                          <p className="text-lg font-bold">{recipe.nutrition_info.protein_g}g</p>
-                        </div>
+                      {autoNutrition && !autoNutrition.isPartial && (
+                        <p className="text-xs text-muted-foreground">
+                          Auto-calculated per serving ({baseServings} servings)
+                        </p>
                       )}
-                      {recipe.nutrition_info.carbs_g != null && (
-                        <div className="p-3 rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
-                          <p className="text-xs text-muted-foreground">Carbs</p>
-                          <p className="text-lg font-bold">{recipe.nutrition_info.carbs_g}g</p>
-                        </div>
-                      )}
-                      {recipe.nutrition_info.fat_g != null && (
-                        <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-950/20">
-                          <p className="text-xs text-muted-foreground">Fat</p>
-                          <p className="text-lg font-bold">{recipe.nutrition_info.fat_g}g</p>
-                        </div>
-                      )}
-                      {recipe.nutrition_info.fiber_g != null && (
-                        <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/20">
-                          <p className="text-xs text-muted-foreground">Fiber</p>
-                          <p className="text-lg font-bold">{recipe.nutrition_info.fiber_g}g</p>
-                        </div>
-                      )}
+                      <div className="grid grid-cols-2 gap-3">
+                        {effectiveNutrition.calories != null && (
+                          <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-950/20">
+                            <p className="text-xs text-muted-foreground">Calories</p>
+                            <p className="text-lg font-bold">{effectiveNutrition.calories}</p>
+                          </div>
+                        )}
+                        {effectiveNutrition.protein_g != null && (
+                          <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20">
+                            <p className="text-xs text-muted-foreground">Protein</p>
+                            <p className="text-lg font-bold">{effectiveNutrition.protein_g}g</p>
+                          </div>
+                        )}
+                        {effectiveNutrition.carbs_g != null && (
+                          <div className="p-3 rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
+                            <p className="text-xs text-muted-foreground">Carbs</p>
+                            <p className="text-lg font-bold">{effectiveNutrition.carbs_g}g</p>
+                          </div>
+                        )}
+                        {effectiveNutrition.fat_g != null && (
+                          <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-950/20">
+                            <p className="text-xs text-muted-foreground">Fat</p>
+                            <p className="text-lg font-bold">{effectiveNutrition.fat_g}g</p>
+                          </div>
+                        )}
+                        {effectiveNutrition.fiber_g != null && (
+                          <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/20">
+                            <p className="text-xs text-muted-foreground">Fiber</p>
+                            <p className="text-lg font-bold">{effectiveNutrition.fiber_g}g</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ) : (
-                    <div className="text-center py-8 space-y-2">
-                      <p className="text-sm text-muted-foreground font-medium">Nutrition data coming soon</p>
-                      <p className="text-xs text-muted-foreground">We're working on adding detailed nutrition information from recipe ingredients. Edit this recipe to help us get this data!</p>
-                    </div>
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      No nutrition data available. Add nutrition info to food items to see auto-calculated totals.
+                    </p>
                   )}
                 </TabsContent>
               </Tabs>
@@ -595,5 +650,6 @@ export function RecipeDetailView({
         </ScrollArea>
       </SheetContent>
     </Sheet>
+    </>
   );
 }

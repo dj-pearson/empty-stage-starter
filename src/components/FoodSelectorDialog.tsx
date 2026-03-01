@@ -4,6 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,6 +104,7 @@ export function FoodSelectorDialog({
               </span>
             )}
           </DialogTitle>
+          <DialogDescription className="sr-only">Select foods to add to the meal plan</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

@@ -159,6 +159,7 @@ export function CreateStoreLayoutDialog({
                 placeholder="e.g., Costco, Whole Foods, Kroger"
                 className="pl-10"
                 required
+                autoFocus
               />
             </div>
           </div>

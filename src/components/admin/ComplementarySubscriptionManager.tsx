@@ -16,6 +16,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
@@ -106,6 +116,9 @@ export function ComplementarySubscriptionManager() {
     churnRate: 0,
     complementaryCount: 0,
   });
+
+  const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
+  const [pendingRevokeId, setPendingRevokeId] = useState<string | null>(null);
 
   // Extend subscription dialog state
   const [extendDialogOpen, setExtendDialogOpen] = useState(false);
@@ -301,8 +314,16 @@ export function ComplementarySubscriptionManager() {
     }
   };
 
-  const handleRevoke = async (id: string) => {
-    if (!confirm("Are you sure you want to revoke this complementary subscription?")) return;
+  const requestRevoke = (id: string) => {
+    setPendingRevokeId(id);
+    setShowRevokeConfirm(true);
+  };
+
+  const confirmRevoke = async () => {
+    if (!pendingRevokeId) return;
+    const id = pendingRevokeId;
+    setShowRevokeConfirm(false);
+    setPendingRevokeId(null);
 
     try {
       const { error } = await supabase
@@ -803,7 +824,7 @@ export function ComplementarySubscriptionManager() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => handleRevoke(sub.id)}
+                                onClick={() => requestRevoke(sub.id)}
                                 title="Revoke subscription"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -820,6 +841,27 @@ export function ComplementarySubscriptionManager() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={showRevokeConfirm} onOpenChange={setShowRevokeConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will revoke the complementary
+              subscription and the user will lose their premium access.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRevoke}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Revoke
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Extend Subscription Dialog */}
       <Dialog open={extendDialogOpen} onOpenChange={setExtendDialogOpen}>

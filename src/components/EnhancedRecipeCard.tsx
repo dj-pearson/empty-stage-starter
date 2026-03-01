@@ -1,8 +1,18 @@
-import React from "react";
+import React, { memo, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,7 +50,7 @@ interface EnhancedRecipeCardProps {
   className?: string;
 }
 
-export function EnhancedRecipeCard({
+export const EnhancedRecipeCard = memo(function EnhancedRecipeCard({
   recipe,
   foods,
   kids = [],
@@ -88,6 +98,8 @@ export function EnhancedRecipeCard({
     medium: "text-yellow-600 bg-yellow-50 border-yellow-200",
     hard: "text-red-600 bg-red-50 border-red-200",
   };
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleCardClick = (e: React.MouseEvent) => {
     // Don't trigger view if clicking on action buttons
@@ -191,7 +203,7 @@ export function EnhancedRecipeCard({
                 {onDelete && (
                   <DropdownMenuItem
                     className="text-destructive"
-                    onClick={() => onDelete(recipe.id)}
+                    onClick={() => setShowDeleteConfirm(true)}
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete
@@ -306,6 +318,26 @@ export function EnhancedRecipeCard({
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {recipe.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete "{recipe.name}" and all its associated data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => onDelete?.(recipe.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
-}
+});

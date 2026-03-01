@@ -6,6 +6,16 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   MessageCircle,
   Send,
   Sparkles,
@@ -45,6 +55,8 @@ export function AIMealCoach() {
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeKid = kids.find((k) => k.id === activeKidId);
 
@@ -147,8 +159,16 @@ export function AIMealCoach() {
     }
   };
 
-  const deleteConversation = async (conversationId: string) => {
-    if (!confirm("Delete this conversation?")) return;
+  const requestDeleteConversation = (conversationId: string) => {
+    setPendingDeleteId(conversationId);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteConversation = async () => {
+    if (!pendingDeleteId) return;
+    const conversationId = pendingDeleteId;
+    setShowDeleteConfirm(false);
+    setPendingDeleteId(null);
 
     try {
       const { error } = await supabase
@@ -378,7 +398,7 @@ export function AIMealCoach() {
                         className="h-6 w-6 p-0"
                         onClick={(e) => {
                           e.stopPropagation();
-                          deleteConversation(conv.id);
+                          requestDeleteConversation(conv.id);
                         }}
                       >
                         <Trash2 className="h-3 w-3 text-red-500" />
@@ -531,6 +551,27 @@ export function AIMealCoach() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the
+              conversation and all its messages.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteConversation}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

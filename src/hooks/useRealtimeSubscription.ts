@@ -16,6 +16,26 @@ export function getActiveSubscriptions(): ReadonlyMap<string, { createdAt: numbe
   return activeSubscriptions;
 }
 
+/**
+ * Register an externally-managed subscription in the global tracking registry.
+ * Use this for subscriptions not created via `useRealtimeSubscription` (e.g. AppContext).
+ */
+export function registerSubscription(channelName: string, table: string): void {
+  if (activeSubscriptions.has(channelName)) {
+    subscriptionLog.warn('Duplicate subscription detected (external)', { channelName, table });
+  }
+  subscriptionLog.debug('Registering external subscription', { channelName, table });
+  activeSubscriptions.set(channelName, { createdAt: Date.now(), table });
+}
+
+/**
+ * Unregister an externally-managed subscription from the global tracking registry.
+ */
+export function unregisterSubscription(channelName: string): void {
+  subscriptionLog.debug('Unregistering external subscription', { channelName });
+  activeSubscriptions.delete(channelName);
+}
+
 interface SubscriptionConfig {
   /** Unique channel name. Must be stable across renders. */
   channelName: string;

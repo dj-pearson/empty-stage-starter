@@ -24,16 +24,28 @@
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
+import { authenticateRequest } from '../_shared/auth.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+/** Escape HTML special characters to prevent stored XSS */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return handleCorsPreFlight(req);
   }
+
+  // Authenticate request
+  const auth = await authenticateRequest(req);
+  if (auth.error) return auth.error;
 
   try {
     if (req.method !== 'POST') {
@@ -57,6 +69,10 @@ serve(async (req) => {
         { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }
+
+    // Escape user input before interpolation into HTML templates
+    const safeTopic = escapeHtml(topic);
+    const safeKeywords = target_keywords.map((k: string) => escapeHtml(String(k)));
 
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
 
@@ -95,13 +111,13 @@ Return JSON with: title, excerpt (2 sentences), body (HTML with h2, h3, p, ul, l
 
         try {
           const parsed = JSON.parse(content);
-          title = parsed.title ?? `${topic} - A Complete Guide`;
-          excerpt = parsed.excerpt ?? `Learn everything about ${topic} in this comprehensive guide.`;
-          blogBody = parsed.body ?? `<p>Content about ${topic}.</p>`;
+          title = parsed.title ?? `${safeTopic} - A Complete Guide`;
+          excerpt = parsed.excerpt ?? `Learn everything about ${safeTopic} in this comprehensive guide.`;
+          blogBody = parsed.body ?? `<p>Content about ${safeTopic}.</p>`;
         } catch {
-          title = `${topic} - A Complete Guide`;
-          excerpt = `Learn everything about ${topic} in this comprehensive guide.`;
-          blogBody = `<p>${content}</p>`;
+          title = `${safeTopic} - A Complete Guide`;
+          excerpt = `Learn everything about ${safeTopic} in this comprehensive guide.`;
+          blogBody = `<p>${escapeHtml(content)}</p>`;
         }
 
         generationCost = {
@@ -111,20 +127,20 @@ Return JSON with: title, excerpt (2 sentences), body (HTML with h2, h3, p, ul, l
         };
       } else {
         // Fallback to template if OpenAI fails
-        title = `${topic} - A Complete Guide`;
-        excerpt = `Discover everything you need to know about ${topic} for your family's nutrition journey.`;
-        blogBody = generateTemplateBlogBody(topic, target_keywords, tone);
+        title = `${safeTopic} - A Complete Guide`;
+        excerpt = `Discover everything you need to know about ${safeTopic} for your family's nutrition journey.`;
+        blogBody = generateTemplateBlogBody(safeTopic, safeKeywords, tone);
       }
     } else {
       // Template-based generation
-      title = `${topic} - A Complete Guide`;
-      excerpt = `Discover everything you need to know about ${topic} for your family's nutrition journey.`;
-      blogBody = generateTemplateBlogBody(topic, target_keywords, tone);
+      title = `${safeTopic} - A Complete Guide`;
+      excerpt = `Discover everything you need to know about ${safeTopic} for your family's nutrition journey.`;
+      blogBody = generateTemplateBlogBody(safeTopic, safeKeywords, tone);
     }
 
     const metaTags = {
       description: excerpt,
-      keywords: target_keywords.join(', '),
+      keywords: safeKeywords.join(', '),
       og_title: title,
       og_description: excerpt,
     };
@@ -142,7 +158,7 @@ Return JSON with: title, excerpt (2 sentences), body (HTML with h2, h3, p, ul, l
   } catch (error) {
     console.error('generate-blog-content error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
     );
   }

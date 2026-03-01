@@ -3,6 +3,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { Shield, ShieldOff } from "lucide-react";
 
@@ -15,6 +25,8 @@ type UserRole = {
 
 export const UserRolesManager = () => {
   const [roles, setRoles] = useState<UserRole[]>([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchUserRoles();
@@ -37,8 +49,16 @@ export const UserRolesManager = () => {
     }
   };
 
-  const handleRemoveAdmin = async (roleId: string) => {
-    if (!confirm("Are you sure you want to remove admin access for this user?")) return;
+  const requestRemoveAdmin = (roleId: string) => {
+    setPendingDeleteId(roleId);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmRemoveAdmin = async () => {
+    if (!pendingDeleteId) return;
+    const roleId = pendingDeleteId;
+    setShowDeleteConfirm(false);
+    setPendingDeleteId(null);
 
     const { error } = await supabase
       .from("user_roles")
@@ -105,7 +125,7 @@ export const UserRolesManager = () => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleRemoveAdmin(role.id)}
+                        onClick={() => requestRemoveAdmin(role.id)}
                       >
                         <ShieldOff className="h-4 w-4 mr-2" />
                         Remove Admin
@@ -118,6 +138,27 @@ export const UserRolesManager = () => {
           </TableBody>
         </Table>
       </div>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will remove admin access for
+              this user and they will no longer be able to manage the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRemoveAdmin}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove Admin
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

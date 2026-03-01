@@ -95,3 +95,240 @@ Started: Thu Feb 12 10:21:37 CST 2026
   - Network errors from `fetch` manifest as `TypeError: Failed to fetch` - check for this pattern
   - DOMException with name `AbortError` indicates user-initiated abort and should NOT be retried
 ---
+
+## 2026-02-28 - Ralph Loop Batch: US-017, US-021, US-022, US-024, US-027, US-033, US-038, US-041, US-042, US-043, US-044, US-047
+
+### US-017: Switch build minifier from Terser to esbuild
+- Changed `minify: 'terser'` to `minify: 'esbuild'` in vite.config.ts
+- Replaced `terserOptions.compress.drop_console` with `esbuild.drop: ['console', 'debugger']`
+- Added `sourcemap: 'hidden'` for production (Sentry sourcemap uploads)
+- Build time improved from ~3.5min to ~55s
+- Files changed: vite.config.ts
+
+### US-021: Fix dead links to /notifications and /help
+- NotificationBell.tsx: Changed `/notifications` → `/dashboard` (route doesn't exist)
+- SupportWidget.tsx: Changed `/help` → `/faq` (verified /faq route exists in App.tsx)
+- Files changed: src/components/subscription/NotificationBell.tsx, src/components/SupportWidget.tsx
+
+### US-022: Fix hardcoded colors breaking dark mode
+- SuccessAnimations.tsx: `bg-white` → `bg-card`, `text-gray-900` → `text-foreground`, `text-gray-600` → `text-muted-foreground`
+- ProductShowcase3D.tsx: `bg-white` → `bg-card`, `bg-gray-100` → `bg-muted`, `text-gray-400` → `text-muted-foreground/70`, `text-gray-600` → `text-muted-foreground`, `to-white` → `to-background`
+- HarmonizedFoodDisplay.tsx: `text-gray-600/700/500` → `text-muted-foreground`
+- MealSuggestionCard.tsx: `bg-gray-100 text-gray-700` → `bg-muted text-muted-foreground`, `bg-white/90 text-black` → `bg-background/90 text-foreground`
+- form-field.tsx: `text-red-500` → `text-destructive`, `border-red-500` → `border-destructive`
+- Files changed: 5 component files
+
+### US-024: Add DialogDescription for accessibility
+- Added `<DialogDescription className="sr-only">` to RecipeViewWithScaling.tsx (both conditional branches)
+- Verified 7 other listed files already had DialogDescription
+- Files changed: src/components/RecipeViewWithScaling.tsx
+
+### US-027: Add autoFocus to dialog form inputs
+- Added autoFocus to primary input in 8 dialog forms:
+  - AddFoodDialog (name Input), CreateGroceryListDialog (name Input), ManageKidsDialog (name Input)
+  - CreateCollectionDialog (name Input), BulkAddFoodDialog (Textarea), ImportRecipeDialog (URL Input)
+  - SaveMealPlanTemplateDialog (name Input), CreateStoreLayoutDialog (name Input)
+- Files changed: 8 dialog components
+
+### US-033: Fix permanent will-change CSS property
+- Removed `will-change: transform, box-shadow` from `.gsap-meal-item` base rule
+- Added `will-change` only on `:hover` and `:active` states
+- Added `@media (prefers-reduced-motion: reduce)` rule to disable `animate-bounce-dynamic`
+- Files changed: src/index.css
+
+### US-038: Add loading states to dialog submit buttons
+- AddFoodDialog: Added `isSaving` state, made handleSave async, added Loader2 spinner to save button
+- ManageKidsDialog: Added `isSubmitting` state, made handleSubmit async, added Loader2 spinner + disabled state
+- Files changed: src/components/AddFoodDialog.tsx, src/components/ManageKidsDialog.tsx
+
+### US-041: Fix interactive div elements to semantic HTML
+- Added `role="button"`, `tabIndex={0}`, and `onKeyDown` (Enter/Space) to 3 onboarding step divs in Home.tsx
+- Added same keyboard support to 2 Quick Action Card elements in Home.tsx
+- Fixed overlay div in GestureTutorial.tsx with button role and keyboard support
+- Files changed: src/pages/Home.tsx, src/components/GestureTutorial.tsx
+
+### US-042: Fix heading hierarchy on dashboard Home page
+- Added `<h1 className="sr-only">EatPal Dashboard</h1>` as visually hidden page heading
+- Changed 5 `<h4>` section headings to `<h2>` with `text-base` class for visual consistency
+- Files changed: src/pages/Home.tsx
+
+### US-043: Fix GSAP animations to respect prefers-reduced-motion
+- Added `window.matchMedia('(prefers-reduced-motion: reduce)')` check before GSAP initialization in Landing.tsx
+- Early return skips all ScrollTrigger animations when reduced motion is preferred
+- CSS `animate-bounce-dynamic` also respects reduced-motion (done in US-033)
+- Files changed: src/pages/Landing.tsx
+
+### US-044: Fix Pricing page accessibility
+- Removed contradictory `aria-hidden="true"` from `sr-only` entity marker div
+- Changed `aria-pressed` to `aria-checked` on billing toggle buttons
+- Added `role="radio"` to billing toggle buttons (matching parent `role="radiogroup"`)
+- Files changed: src/pages/Pricing.tsx
+
+### US-047: Fix RecipeListItem image alt text
+- Changed `alt=""` to `alt={recipe.name}` on recipe thumbnail images
+- Files changed: src/components/recipes/RecipeListItem.tsx
+
+### Build Verification
+- `npm run build` succeeds in ~55s (esbuild minifier)
+- No TypeScript errors
+
+### Progress Summary
+- 12 stories completed this session (US-017, US-021, US-022, US-024, US-027, US-033, US-038, US-041, US-042, US-043, US-044, US-047)
+- Total: 21/50 stories now passing
+- Remaining: 29 stories with passes: false
+---
+
+## 2026-02-28 - Ralph Loop Batch 3: Platform Hardening & UI/UX (29 stories)
+
+### US-007: Fix overly permissive RLS INSERT policies
+- Created `supabase/migrations/20260228000000_fix_rls_policies.sql`
+- Fixed login_history INSERT/UPDATE to require auth.uid() = user_id
+- Fixed security_audit_logs INSERT to require auth.uid() IS NOT NULL
+- Fixed rate_limits: service role only (no user policies)
+- Fixed automation_email_queue: admin role only
+- Fixed backup_logs: admin role only
+- Fixed blog_comments INSERT: require auth.uid() IS NOT NULL
+- Files changed: supabase/migrations/20260228000000_fix_rls_policies.sql (new)
+
+### US-015: Remove unused dependencies
+- Removed `jsonwebtoken` and `@modelcontextprotocol/sdk` from package.json (64 packages removed)
+- Neither was imported anywhere in src/
+- Files changed: package.json, package-lock.json
+
+### US-016: Remove unoptimized PNG files and fix preloads
+- Removed splash.png (1.9MB), Cover.png (1.9MB), Palette.png (1.3MB), Icon-Large.png (892KB), favicon_io.zip (330KB) — total 6.3MB removed
+- WebP versions exist for all (64KB-65KB each)
+- Updated all Cover.png references to Cover.webp in: SEOHead.tsx, BlogPost.tsx, BlogPostTemplate.tsx, SoftwareAppSchema.tsx, SEOManager.tsx, BlogCMSManager.tsx
+- Fixed public/_headers: removed stale inter-var.woff2 font preload, changed Logo-Green.png preload to Logo-Green.webp
+- Files changed: 6 source files, public/_headers, 5 files removed
+
+### US-019: Replace window.confirm() with AlertDialog
+- Replaced window.confirm() in 10 components with shadcn AlertDialog
+- Components: AIMealCoach, FeatureFlagDashboard, NutritionManager, PromotionalCampaignManager, PromptTemplateManager, ComplementarySubscriptionManager, UserRolesManager, ProfessionalSettings, Billing, SubscriptionOverview
+- All use destructive variant styling for delete/cancel actions
+
+### US-020: Add confirmation dialogs to unprotected delete actions
+- Added AlertDialog confirmations to: PantryListItem, EnhancedRecipeCard, AISettingsManager
+- Each shows item name in title/description before deletion
+
+### US-023: Fix touch target sizes below 44px minimum
+- PantryListItem: quantity stepper h-6→h-10, edit/delete h-7→h-10
+- AddFoodDialog: quantity presets h-7→h-10
+- ManageStoreAislesDialog: delete button h-8→h-10
+
+### US-034: Fix mobile-specific UI issues
+- Dashboard.tsx already has pb-16 for mobile content (increased to pb-20 for US-073)
+- Safety badges: removed hidden sm:flex, now visible on all screen sizes
+
+### US-037: Remove DOMPurify style attribute allowance
+- Removed 'style' from ALLOWED_ATTR in EmailSequenceBuilder.tsx (2 instances)
+- Removed 'style' from ALLOWED_ATTR in EmailTemplateBuilder.tsx (1 instance)
+
+### US-039: Consolidate duplicate touch target CSS rules
+- Removed blanket touch target rules from mobile-first.css (lines 14-69) that applied to ALL devices
+- Kept @media (pointer: coarse) approach in index.css for touch-only devices
+- Removed duplicate .touch-target utility from mobile-first.css
+- Removed duplicate TOUCH TARGET SIZE section from index.css (lines 781-799)
+
+### US-050: Add aria-live regions to dynamic content
+- Pantry.tsx: Added aria-live="polite" to all 3 view modes (grouped, grid, list)
+- Grocery.tsx: Added to progress bar and items container
+- Kids.tsx: Added to profiles grid
+- Planner.tsx: Added to mobile and desktop meal plan displays
+- Verified sonner Toaster already provides aria-live
+
+### US-051: Replace placeholder Index page
+- Already complete: "/" route renders Landing directly in App.tsx
+- Index.tsx was never imported (orphan file)
+
+### US-052: Add trust signals to Pricing page
+- Added 30-day money-back guarantee banner with ShieldCheck icon
+- Added trust signals grid: Cancel anytime, No contracts, SSL, 2000+ families
+- Added Billing FAQ accordion with 5 questions using shadcn Accordion
+- Removed custom BillingFaqItem in favor of shadcn Accordion
+
+### US-053: Add cross-page internal linking for lead magnets
+- Already complete: Landing page has Free Tools link in both desktop and mobile nav
+- Free Tools section already has id="free-tools"
+
+### US-054: Add newsletter email capture
+- Created src/components/NewsletterSignup.tsx with email input, Supabase submission, success state
+- Added to Blog.tsx above article grid
+- Added to BlogPost.tsx after article content
+
+### US-055: Add contextual CTA after Blog post content
+- Added gradient CTA section in BlogPost.tsx with "Start Free Trial" and "Take the Picky Eater Quiz" buttons
+
+### US-056: Add quiz intro section
+- Added intro/overview section to PickyEaterQuiz.tsx with benefits grid (2 min, personality type, strategies, food suggestions)
+- Added showIntro state to toggle between intro and quiz
+
+### US-057: Add search and category filtering to FAQ page
+- Added search input with real-time filtering
+- Added category filter buttons: All, Getting Started, Features, Billing, Technical
+- Added category field to each FAQ item
+- Added "No results" message
+
+### US-059: Add guided onboarding flow
+- Created src/components/OnboardingProgressBar.tsx with 4-step progress tracking
+- Steps: Create child profile, Add 5+ safe foods, Generate meal plan, Create grocery list
+- Dismissible via X button, stored in localStorage
+- Lazy-loaded in Home.tsx
+
+### US-060: Add streak counter to Dashboard Home
+- Added streak calculation from planEntries with consecutive day counting
+- Displays streak card with Flame icon and contextual messages
+
+### US-062: Add social proof to Auth page sign-up
+- Added mobile-only testimonial section above sign-up form
+- Shows "Trusted by 2,000+ parents" and quote from Sarah M.
+
+### US-063: Add reading progress bar to Blog post page
+- Added thin 3px progress bar fixed at top of viewport
+- Calculates scroll percentage via scroll event listener
+- Added "About the Author" section after article content
+
+### US-065: Add expected response time to Contact page
+- Added "We respond within 24 hours" badge at top
+- Replaced generic Subject input with Select dropdown (7 categories)
+- Added "What happens next?" process steps section
+- Added "Check our FAQ first" nudge linking to /faq
+
+### US-066: Show food safety badges on mobile in PantryListItem
+- Changed badges from hidden sm:flex to flex (visible all screens)
+- Reduced padding on mobile (px-1 sm:px-1.5)
+
+### US-068: Add keyboard shortcut help modal
+- Created src/components/KeyboardShortcutsModal.tsx with ? key trigger
+- Lists Navigation and Actions shortcut categories
+- Added to Dashboard.tsx desktop header
+
+### US-069: Add contextual tooltips to dashboard stats cards
+- Added tooltip prop to AnimatedDashboard stat cards
+- Added CircleHelp icons with descriptive tooltips for Safe Foods, Try Bites, Meals Planned, Grocery Items
+
+### US-070: Add 404 page improvements
+- Enhanced NotFound.tsx with search input, popular page links, Back to home button
+- Added noindex meta tag and analytics tracking
+
+### US-073: Add persistent bottom safe-area padding
+- Changed Dashboard.tsx mobile content from pb-16 to pb-20
+
+### US-074: Add Grocery list progress percentage
+- Added percentage text: "8 of 12 items (67%)"
+- Added milestone messages at 25/50/75/100%
+
+### US-075: Add child profile completion indicator
+- Added profile completion calculation (name, age, allergens, safe foods, preferences)
+- Shows progress bar and "Profile X% complete" text
+- Shows "Complete Profile" link when under 80%
+
+### Build Verification
+- `npx tsc --noEmit`: SUCCESS (zero TypeScript errors)
+- `npx vite build`: SUCCESS (built in 1m 5s)
+
+### Progress Summary
+- 29 stories completed this session
+- Total: 50/75 stories now passing
+- Remaining: 25 stories with passes: false
+---

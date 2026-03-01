@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, Sparkles, Utensils, Menu } from "lucide-react";
+import { Check, X, Sparkles, Menu, Users, ShieldCheck, FileText, Lock } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -19,6 +19,12 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { toast } from "sonner";
 import { useNavigate, Link } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
@@ -347,6 +353,12 @@ export default function Pricing() {
             <Link to="/pricing" className="text-primary font-medium">
               Pricing
             </Link>
+            <Link
+              to="/#free-tools"
+              className="hover:text-primary transition-colors font-medium"
+            >
+              Free Tools
+            </Link>
             {user ? (
               <Link to="/dashboard">
                 <Button className="font-semibold shadow-md">Dashboard</Button>
@@ -412,6 +424,13 @@ export default function Pricing() {
                 >
                   Pricing
                 </Link>
+                <Link
+                  to="/#free-tools"
+                  className="text-lg font-medium py-3 px-4 rounded-lg hover:bg-muted transition-colors"
+                  onClick={closeMobileMenu}
+                >
+                  Free Tools
+                </Link>
                 <div className="border-t pt-4 mt-4 space-y-3">
                   {user ? (
                     <Link to="/dashboard" onClick={closeMobileMenu}>
@@ -471,7 +490,7 @@ export default function Pricing() {
           </p>
 
           {/* Entity markers for AI understanding */}
-          <div className="sr-only" aria-hidden="true">
+          <div className="sr-only">
             Pricing for: EatPal meal planning app, picky eater subscription plans, ARFID meal planner cost,
             family meal planning pricing, kids nutrition app subscription, feeding therapy tools pricing
           </div>
@@ -481,8 +500,9 @@ export default function Pricing() {
             <Button
               variant={billingCycle === "monthly" ? "default" : "ghost"}
               size="sm"
+              role="radio"
               onClick={() => setBillingCycle("monthly")}
-              aria-pressed={billingCycle === "monthly"}
+              aria-checked={billingCycle === "monthly"}
               aria-label="Monthly billing"
             >
               Monthly
@@ -490,8 +510,9 @@ export default function Pricing() {
             <Button
               variant={billingCycle === "yearly" ? "default" : "ghost"}
               size="sm"
+              role="radio"
               onClick={() => setBillingCycle("yearly")}
-              aria-pressed={billingCycle === "yearly"}
+              aria-checked={billingCycle === "yearly"}
               aria-label="Yearly billing, save 20%"
             >
               Yearly
@@ -935,6 +956,66 @@ export default function Pricing() {
         >
           <FeatureComparisonTable plans={plans} />
         </Suspense>
+
+        {/* 30-Day Money-Back Guarantee Banner */}
+        <div className="text-center py-6">
+          <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-primary/10 text-primary font-medium">
+            <ShieldCheck className="h-5 w-5" />
+            30-Day Money-Back Guarantee
+          </div>
+        </div>
+
+        {/* Trust Signals */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto py-8">
+          {[
+            { icon: <X className="h-5 w-5" />, text: "Cancel anytime" },
+            { icon: <FileText className="h-5 w-5" />, text: "No long-term contracts" },
+            { icon: <Lock className="h-5 w-5" />, text: "256-bit SSL encryption" },
+            { icon: <Users className="h-5 w-5" />, text: "2,000+ families trust EatPal" },
+          ].map((item, i) => (
+            <div key={i} className="flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
+              <div className="p-2 rounded-full bg-muted">{item.icon}</div>
+              {item.text}
+            </div>
+          ))}
+        </div>
+
+        {/* Billing FAQ */}
+        <div className="max-w-2xl mx-auto py-12">
+          <h2 className="text-2xl font-bold text-center mb-6">Billing FAQ</h2>
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="q1">
+              <AccordionTrigger>Can I cancel my subscription anytime?</AccordionTrigger>
+              <AccordionContent>
+                Yes! You can cancel at any time from your account settings. Your access continues until the end of your billing period.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="q2">
+              <AccordionTrigger>How does the 30-day money-back guarantee work?</AccordionTrigger>
+              <AccordionContent>
+                If EatPal isn't the right fit for your family within the first 30 days, simply contact our support team and we'll issue a full refund. No questions asked, no hoops to jump through.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="q3">
+              <AccordionTrigger>What payment methods do you accept?</AccordionTrigger>
+              <AccordionContent>
+                We accept all major credit and debit cards (Visa, Mastercard, American Express, Discover) through our secure payment partner, Stripe. All transactions are encrypted and PCI-compliant.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="q4">
+              <AccordionTrigger>Can I switch between monthly and yearly billing?</AccordionTrigger>
+              <AccordionContent>
+                Yes! You can switch between monthly and yearly billing at any time from your account settings. Yearly billing saves you 20% compared to monthly. Changes take effect at your next billing cycle.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="q5">
+              <AccordionTrigger>What happens to my data if I cancel?</AccordionTrigger>
+              <AccordionContent>
+                Your data is never deleted. When you cancel, your account reverts to the Free plan at the end of your billing period. You can upgrade again anytime to restore full access to all your saved meals, recipes, and tracking history.
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </div>
       </main>
 
       {/* Footer */}

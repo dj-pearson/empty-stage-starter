@@ -7,6 +7,8 @@ import { logger } from "@/lib/logger";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  /** When true, also checks that the user has an admin role. Non-admins are redirected to /dashboard. */
+  requireAdmin?: boolean;
 }
 
 /**
@@ -23,9 +25,10 @@ interface ProtectedRouteProps {
  * - Lost user position after page reload
  * - Duplicate auth logic across components
  */
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const location = useLocation();
 
   useEffect(() => {
@@ -74,9 +77,40 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     };
   }, []);
 
+  // Admin role check when required
+  useEffect(() => {
+    if (!requireAdmin || !session) {
+      setIsAdmin(requireAdmin ? null : true);
+      return;
+    }
+
+    let mounted = true;
+
+    const checkAdmin = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', session.user.id)
+          .eq('role', 'admin')
+          .maybeSingle();
+
+        if (mounted) {
+          setIsAdmin(!error && !!data);
+        }
+      } catch {
+        if (mounted) setIsAdmin(false);
+      }
+    };
+
+    checkAdmin();
+
+    return () => { mounted = false; };
+  }, [requireAdmin, session]);
+
   // Show loading spinner while checking auth
   // This prevents the flash of redirect before session loads
-  if (isLoading) {
+  if (isLoading || (requireAdmin && isAdmin === null)) {
     return (
       <div
         className="flex flex-col items-center justify-center min-h-screen gap-3"
@@ -100,6 +134,11 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to={authUrl} replace />;
   }
 
-  // Session exists - render protected content
+  // Admin check failed - redirect to dashboard
+  if (requireAdmin && isAdmin === false) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Session exists (and admin check passed if required) - render protected content
   return <>{children}</>;
 }

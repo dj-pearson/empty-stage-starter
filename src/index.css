@@ -381,6 +381,12 @@ All colors MUST be HSL.
     animation: bounce-dynamic 4s ease-in-out infinite;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .animate-bounce-dynamic {
+      animation: none;
+    }
+  }
+
   /* Preserve 3D transformations */
   .preserve-3d {
     transform-style: preserve-3d;
@@ -397,13 +403,14 @@ All colors MUST be HSL.
   }
 
   .gsap-meal-item {
-    will-change: transform, box-shadow;
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
     transform: translateZ(0);
   }
 
-  .gsap-meal-item:hover {
+  .gsap-meal-item:hover,
+  .gsap-meal-item:active {
+    will-change: transform, box-shadow;
     transform: translateY(-2px);
   }
 
@@ -769,26 +776,6 @@ a[target="_blank"]::after {
 
 a[target="_blank"][aria-label]::after {
   content: none;
-}
-
-/* =================================================================
-   TOUCH TARGET SIZE (WCAG 2.5.5 Level AAA - 44x44px minimum)
-   ================================================================= */
-@media (pointer: coarse) {
-  button,
-  a,
-  [role="button"],
-  input[type="checkbox"],
-  input[type="radio"],
-  select {
-    min-height: 44px;
-    min-width: 44px;
-  }
-
-  /* Spacing for adjacent touch targets */
-  .touch-spacing > * + * {
-    margin-top: 8px;
-  }
 }
 
 /* =================================================================

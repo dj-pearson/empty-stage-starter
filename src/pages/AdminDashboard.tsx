@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -151,6 +152,11 @@ export default function AdminDashboard() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      <Helmet>
+        <title>Admin Analytics - EatPal</title>
+        <meta name="description" content="Platform analytics, monitoring, and system health dashboard for EatPal administrators" />
+        <meta name="robots" content="noindex" />
+      </Helmet>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

@@ -90,6 +90,10 @@ const Landing = () => {
     let mounted = true;
 
     const initAnimations = async () => {
+      // Respect prefers-reduced-motion
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (prefersReducedMotion) return;
+
       const { gsap, ScrollTrigger } = await loadGSAP();
       if (!mounted || !containerRef.current) return;
 
@@ -242,7 +246,7 @@ const Landing = () => {
         {/* Header */}
         <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm transition-all duration-300">
           <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-            <div className="flex items-center gap-2">
+            <Link to="/" className="flex items-center gap-2" aria-label="EatPal home">
               <picture className="block dark:hidden">
                 <source srcSet="/Logo-Green.webp" type="image/webp" />
                 <img
@@ -263,7 +267,7 @@ const Landing = () => {
                   height="32"
                 />
               </picture>
-            </div>
+            </Link>
 
             {/* Desktop Navigation */}
             <nav className="hidden md:flex gap-6 items-center">
@@ -285,6 +289,12 @@ const Landing = () => {
               >
                 Pricing
               </Link>
+              <a
+                href="#free-tools"
+                className="text-foreground hover:text-primary transition-colors font-medium"
+              >
+                Free Tools
+              </a>
               <Button
                 variant="ghost"
                 size="icon"
@@ -369,6 +379,13 @@ const Landing = () => {
                   >
                     Pricing
                   </Link>
+                  <a
+                    href="#free-tools"
+                    className="text-foreground text-base font-medium py-4 px-4 rounded-lg hover:bg-muted active:scale-[0.98] transition-all"
+                    onClick={closeMobileMenu}
+                  >
+                    Free Tools
+                  </a>
                   <div className="border-t pt-4 mt-auto space-y-3 pb-safe">
                     <Button
                       variant="outline"

@@ -1146,7 +1146,7 @@ export function EmailSequenceBuilder() {
                       dangerouslySetInnerHTML={{
                         __html: DOMPurify.sanitize(stepForm.html_body, {
                           ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'img', 'blockquote', 'code', 'pre', 'div', 'span', 'table', 'thead', 'tbody', 'tr', 'td', 'th'],
-                          ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id', 'style', 'target', 'width', 'height']
+                          ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id', 'target', 'width', 'height']
                         })
                       }}
                     />

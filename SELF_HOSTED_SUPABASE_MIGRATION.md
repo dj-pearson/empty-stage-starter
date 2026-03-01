@@ -132,7 +132,7 @@ These variables must be set in your Edge Functions runtime (Coolify/Supabase das
 
 ```typescript
 // Before (BROKEN)
-const supabaseUrl = 'https://tbuszxkevkpjcjapbrir.supabase.co';
+const supabaseUrl = 'https://your-project.supabase.co';
 const supabaseAnonKey = 'eyJ...';
 
 // After (FIXED)

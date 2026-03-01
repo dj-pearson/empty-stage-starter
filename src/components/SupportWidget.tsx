@@ -196,7 +196,7 @@ export function SupportWidget() {
             <p>Need immediate help?</p>
             <p className="mt-1">
               Check our{" "}
-              <a href="/help" className="text-primary hover:underline">
+              <a href="/faq" className="text-primary hover:underline">
                 Help Center
               </a>{" "}
               for answers to common questions

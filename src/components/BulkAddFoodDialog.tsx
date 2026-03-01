@@ -144,6 +144,7 @@ export function BulkAddFoodDialog({
               className={`min-h-[200px] font-mono ${errors.foodText ? "border-red-500" : ""}`}
               aria-invalid={!!errors.foodText}
               aria-describedby={errors.foodText ? "food-list-error" : undefined}
+              autoFocus
             />
           </FormField>
 

@@ -125,9 +125,9 @@ if (error) {
 
 #### Issue
 Real Supabase API credentials were committed to git repository:
-- **Project ID**: `tbuszxkevkpjcjapbrir`
-- **Anon Key**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` (exposed)
-- **URL**: `https://tbuszxkevkpjcjapbrir.supabase.co`
+- **Project ID**: `<your-project-id>` (was exposed)
+- **Anon Key**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.XXXXXXXX` (was exposed)
+- **URL**: `https://your-project.supabase.co` (was exposed)
 
 Anyone with repository access could:
 - Access your database

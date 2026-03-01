@@ -14,6 +14,7 @@ import DOMPurify from "dompurify";
 import { SEOHead } from "@/components/SEOHead";
 import { ArticleSchema } from "@/components/schema/ArticleSchema";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { NewsletterSignup } from "@/components/NewsletterSignup";
 
 interface BlogPostData {
   id: string;
@@ -35,6 +36,17 @@ const BlogPost = () => {
   const [post, setPost] = useState<BlogPostData | null>(null);
   const [relatedPosts, setRelatedPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [readingProgress, setReadingProgress] = useState(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      setReadingProgress(docHeight > 0 ? (scrollTop / docHeight) * 100 : 0);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     if (slug) {
@@ -328,13 +340,18 @@ const BlogPost = () => {
 
   return (
     <div id="main-content" className="min-h-screen bg-background">
+      {/* Reading Progress Bar */}
+      <div className="fixed top-0 left-0 right-0 z-50 h-[3px] bg-muted">
+        <div className="h-full bg-primary transition-all duration-150" style={{ width: `${readingProgress}%` }} />
+      </div>
+
       {/* Dynamic SEO Meta Tags */}
       <SEOHead
         title={post.meta_title || post.title}
         description={post.meta_description || post.excerpt || `Read ${post.title} on the EatPal blog - expert advice on picky eating and family nutrition.`}
         canonicalUrl={articleUrl}
         ogType="article"
-        ogImage={post.featured_image_url || "https://tryeatpal.com/Cover.png"}
+        ogImage={post.featured_image_url || "https://tryeatpal.com/Cover.webp"}
         ogImageAlt={post.title}
         keywords={articleKeywords.join(", ")}
         aiPurpose={`This article from EatPal discusses ${post.category?.name || "picky eating and nutrition"}. ${post.excerpt || ""}`}
@@ -431,6 +448,44 @@ const BlogPost = () => {
 
         {/* Main Content */}
         {renderContent}
+
+        {/* CTA Section */}
+        <div className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-xl p-8 my-8 text-center">
+          <h3 className="text-xl font-bold mb-2">Ready to put these strategies into action?</h3>
+          <p className="text-muted-foreground mb-6 max-w-lg mx-auto">
+            Join thousands of parents using EatPal to create stress-free mealtimes with personalized meal plans.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button asChild size="lg">
+              <Link to="/auth?tab=signup">Start Free Trial</Link>
+            </Button>
+            <Button asChild variant="outline" size="lg">
+              <Link to="/picky-eater-quiz">Take the Picky Eater Quiz</Link>
+            </Button>
+          </div>
+        </div>
+
+        {/* Newsletter Signup */}
+        <NewsletterSignup className="my-8" />
+
+        {/* About the Author */}
+        <div className="border-t pt-8 mt-8">
+          <h3 className="text-lg font-heading font-semibold mb-4">About the Author</h3>
+          <div className="flex items-start gap-4">
+            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <span className="text-xl font-bold text-primary">EP</span>
+            </div>
+            <div>
+              <p className="font-semibold text-foreground mb-1">EatPal Team</p>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                The EatPal team combines expertise in pediatric nutrition, feeding therapy, and technology to help families navigate picky eating. Our evidence-based content is reviewed by registered dietitians and feeding specialists.
+              </p>
+              <Link to="/blog" className="text-sm text-primary hover:underline mt-2 inline-block">
+                View all articles
+              </Link>
+            </div>
+          </div>
+        </div>
       </article>
 
       {/* Related Posts */}

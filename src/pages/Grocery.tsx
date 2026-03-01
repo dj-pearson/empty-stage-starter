@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { Helmet } from "react-helmet-async";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -180,6 +181,15 @@ export default function Grocery() {
     () => totalItems > 0 ? Math.round((purchasedCount / totalItems) * 100) : 0,
     [totalItems, purchasedCount]
   );
+
+  // Milestone message based on progress percentage
+  const milestoneMessage = useMemo(() => {
+    if (progressPercent >= 100) return "Shopping complete!";
+    if (progressPercent >= 75) return "Almost done!";
+    if (progressPercent >= 50) return "Halfway there!";
+    if (progressPercent >= 25) return "Great start!";
+    return "";
+  }, [progressPercent]);
 
   // Manual regeneration function
   const handleRegenerateFromPlan = () => {
@@ -491,6 +501,11 @@ export default function Grocery() {
 
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
+      <Helmet>
+        <title>Grocery List - EatPal</title>
+        <meta name="description" content="Manage your grocery shopping list with smart suggestions and store organization" />
+        <meta name="robots" content="noindex" />
+      </Helmet>
       <div className="container mx-auto px-4 py-6 max-w-3xl">
 
         {/* ─── Header ─── */}
@@ -568,21 +583,28 @@ export default function Grocery() {
 
           {/* Progress Bar - only show when shopping */}
           {totalItems > 0 && (
-            <div className="mb-4">
+            <div className="mb-4" aria-live="polite">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-muted-foreground">
                   Shopping progress
                 </span>
                 <span className="text-sm font-semibold">
-                  {purchasedCount} of {totalItems} items
+                  {purchasedCount} of {totalItems} items ({progressPercent}%)
                 </span>
               </div>
               <Progress value={progressPercent} className="h-2" />
-              {progressPercent === 100 && (
-                <p className="text-sm text-primary font-medium mt-2">
-                  All items purchased! Tap "Done Shopping" below to clear your list.
-                </p>
-              )}
+              <div className="flex items-center justify-between mt-2">
+                {milestoneMessage && (
+                  <p className={`text-sm font-medium ${progressPercent >= 100 ? "text-primary" : "text-muted-foreground"}`}>
+                    {milestoneMessage}
+                  </p>
+                )}
+                {progressPercent === 100 && (
+                  <p className="text-sm text-primary font-medium">
+                    Tap "Done Shopping" below to clear your list.
+                  </p>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -669,7 +691,7 @@ export default function Grocery() {
 
             {/* ─── Active Shopping Items ─── */}
             {activeItems.length > 0 ? (
-              <div className="space-y-3 mb-6">
+              <div className="space-y-3 mb-6" aria-live="polite">
                 {Object.entries(activeItemsByGroup).map(([group, items]) => {
                   if (items.length === 0) return null;
 

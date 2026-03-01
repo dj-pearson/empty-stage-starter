@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { Helmet } from "react-helmet-async";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { AlertCircle, CheckCircle2, Clock, Globe, Palette, Copy, ExternalLink, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -52,6 +63,7 @@ export default function ProfessionalSettings() {
   const [newDomain, setNewDomain] = useState("");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showRemoveDomainConfirm, setShowRemoveDomainConfirm] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -172,10 +184,14 @@ export default function ProfessionalSettings() {
     }
   };
 
-  const handleRemoveDomain = async () => {
+  const requestRemoveDomain = () => {
     if (!customDomain) return;
+    setShowRemoveDomainConfirm(true);
+  };
 
-    if (!confirm("Are you sure you want to remove this custom domain?")) return;
+  const confirmRemoveDomain = async () => {
+    if (!customDomain) return;
+    setShowRemoveDomainConfirm(false);
 
     try {
       setActionLoading(true);
@@ -244,6 +260,11 @@ export default function ProfessionalSettings() {
 
   return (
     <div className="space-y-6 p-6">
+      <Helmet>
+        <title>Professional Settings - EatPal</title>
+        <meta name="description" content="Configure custom domains and brand settings for your white-labeled EatPal platform" />
+        <meta name="robots" content="noindex" />
+      </Helmet>
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <Sparkles className="h-6 w-6 text-primary" />
@@ -312,7 +333,7 @@ export default function ProfessionalSettings() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={handleRemoveDomain}
+                          onClick={requestRemoveDomain}
                           disabled={actionLoading}
                         >
                           Remove Domain
@@ -403,6 +424,27 @@ export default function ProfessionalSettings() {
           <BrandCustomizationForm settings={brandSettings} onUpdate={setBrandSettings} />
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={showRemoveDomainConfirm} onOpenChange={setShowRemoveDomainConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will remove your custom domain
+              configuration and any associated SSL certificates.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmRemoveDomain}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove Domain
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

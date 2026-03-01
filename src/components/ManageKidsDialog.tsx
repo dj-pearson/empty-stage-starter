@@ -28,7 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Users, Plus, Trash2, AlertTriangle, UserCircle, CalendarIcon, Heart, Pencil } from "lucide-react";
+import { Users, Plus, Trash2, AlertTriangle, UserCircle, CalendarIcon, Heart, Pencil, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format, differenceInYears } from "date-fns";
@@ -88,6 +88,7 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
     favorite_foods: [] as string[]
   });
   const [uploading, setUploading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
   
   // For date picker navigation
@@ -97,31 +98,36 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
     return differenceInYears(new Date(), dob);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
       toast.error("Please enter a name");
       return;
     }
 
-    const kidData = {
-      name: formData.name,
-      date_of_birth: formData.date_of_birth ? format(formData.date_of_birth, 'yyyy-MM-dd') : undefined,
-      // age is now calculated dynamically from date_of_birth, not stored
-      notes: formData.notes || undefined,
-      allergens: formData.allergens.length > 0 ? formData.allergens : undefined,
-      profile_picture_url: formData.profile_picture_url || undefined,
-      favorite_foods: formData.favorite_foods.length > 0 ? formData.favorite_foods : undefined,
-    };
+    setIsSubmitting(true);
+    try {
+      const kidData = {
+        name: formData.name,
+        date_of_birth: formData.date_of_birth ? format(formData.date_of_birth, 'yyyy-MM-dd') : undefined,
+        // age is now calculated dynamically from date_of_birth, not stored
+        notes: formData.notes || undefined,
+        allergens: formData.allergens.length > 0 ? formData.allergens : undefined,
+        profile_picture_url: formData.profile_picture_url || undefined,
+        favorite_foods: formData.favorite_foods.length > 0 ? formData.favorite_foods : undefined,
+      };
 
-    if (editingId) {
-      updateKid(editingId, kidData);
-      toast.success("Child updated!");
-      setOpen(false); // close dialog after editing
-    } else {
-      addKid(kidData);
-      toast.success("Child added!");
-      setOpen(false);
+      if (editingId) {
+        await updateKid(editingId, kidData);
+        toast.success("Child updated!");
+        setOpen(false);
+      } else {
+        await addKid(kidData);
+        toast.success("Child added!");
+        setOpen(false);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -292,6 +298,7 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Enter name"
+                  autoFocus
                 />
               </div>
 
@@ -462,9 +469,9 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
               </div>
 
               <div className="flex gap-2 pb-32">
-                <Button type="submit" className="flex-1">
-                  <Plus className="h-4 w-4 mr-2" />
-                  {editingId ? "Update Child" : "Add Child"}
+                <Button type="submit" className="flex-1" disabled={isSubmitting}>
+                  {isSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+                  {isSubmitting ? "Saving..." : editingId ? "Update Child" : "Add Child"}
                 </Button>
                 {editingId && (
                   <>

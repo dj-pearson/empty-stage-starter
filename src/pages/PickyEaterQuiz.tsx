@@ -8,13 +8,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { QUIZ_QUESTIONS } from '@/lib/quiz/questions';
 import { QuizAnswers, QuizState } from '@/types/quiz';
 import { calculateCompletionPercentage } from '@/lib/quiz/scoring';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Brain, Lightbulb, Apple } from 'lucide-react';
 import { QuizQuestion } from '@/components/quiz/QuizQuestion';
 import { v4 as uuidv4 } from 'uuid';
 import { trackQuizStart, trackQuizComplete, trackPageView } from '@/lib/conversion-tracking';
 
 export default function PickyEaterQuiz() {
   const navigate = useNavigate();
+  const [showIntro, setShowIntro] = useState(true);
   const [quizState, setQuizState] = useState<QuizState>({
     currentStep: 0,
     answers: {},
@@ -127,84 +128,114 @@ export default function PickyEaterQuiz() {
             </p>
           </div>
 
-          {/* Progress Bar */}
-          <div className="mb-8">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Question {quizState.currentStep + 1} of {QUIZ_QUESTIONS.length}
-              </span>
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {progress}% Complete
-              </span>
+          {showIntro ? (
+            /* Intro Section */
+            <div className="text-center space-y-6 max-w-lg mx-auto py-8">
+              <h2 className="text-2xl font-bold">Discover Your Child's Eating Personality</h2>
+              <p className="text-muted-foreground">Take this 2-minute quiz to understand your child's eating patterns and get personalized strategies.</p>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="bg-card border rounded-lg p-4">
+                  <Clock className="h-5 w-5 text-primary mx-auto mb-1" />
+                  <p className="font-medium">2 minutes</p>
+                </div>
+                <div className="bg-card border rounded-lg p-4">
+                  <Brain className="h-5 w-5 text-primary mx-auto mb-1" />
+                  <p className="font-medium">Personality type</p>
+                </div>
+                <div className="bg-card border rounded-lg p-4">
+                  <Lightbulb className="h-5 w-5 text-primary mx-auto mb-1" />
+                  <p className="font-medium">Tailored strategies</p>
+                </div>
+                <div className="bg-card border rounded-lg p-4">
+                  <Apple className="h-5 w-5 text-primary mx-auto mb-1" />
+                  <p className="font-medium">Food suggestions</p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">Your answers are private and never shared.</p>
+              <Button size="lg" onClick={() => setShowIntro(false)}>Start Quiz</Button>
             </div>
-            <Progress value={progress} className="h-3" />
-          </div>
+          ) : (
+            <>
+              {/* Progress Bar */}
+              <div className="mb-8">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Question {quizState.currentStep + 1} of {QUIZ_QUESTIONS.length}
+                  </span>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {progress}% Complete
+                  </span>
+                </div>
+                <Progress value={progress} className="h-3" />
+              </div>
 
-          {/* Question Card */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={quizState.currentStep}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Card className="shadow-xl">
-                <CardHeader>
-                  <CardTitle className="text-2xl flex items-center gap-2">
-                    <span className="text-3xl">{currentQuestion?.icon}</span>
-                    {currentQuestion?.question}
-                  </CardTitle>
-                  {currentQuestion?.description && (
-                    <CardDescription className="text-base">
-                      {currentQuestion.description}
-                    </CardDescription>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  {currentQuestion && (
-                    <QuizQuestion
-                      question={currentQuestion}
-                      value={(quizState.answers as any)[currentQuestion.id]}
-                      onChange={(value) => handleAnswer(currentQuestion.id, value)}
-                    />
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-          </AnimatePresence>
+              {/* Question Card */}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={quizState.currentStep}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Card className="shadow-xl">
+                    <CardHeader>
+                      <CardTitle className="text-2xl flex items-center gap-2">
+                        <span className="text-3xl">{currentQuestion?.icon}</span>
+                        {currentQuestion?.question}
+                      </CardTitle>
+                      {currentQuestion?.description && (
+                        <CardDescription className="text-base">
+                          {currentQuestion.description}
+                        </CardDescription>
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      {currentQuestion && (
+                        <QuizQuestion
+                          question={currentQuestion}
+                          value={(quizState.answers as any)[currentQuestion.id]}
+                          onChange={(value) => handleAnswer(currentQuestion.id, value)}
+                        />
+                      )}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </AnimatePresence>
 
-          {/* Navigation Buttons */}
-          <div className="flex justify-between items-center mt-8">
-            <Button
-              variant="outline"
-              onClick={handleBack}
-              disabled={quizState.currentStep === 0}
-              className="flex items-center gap-2"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Back
-            </Button>
+              {/* Navigation Buttons */}
+              <div className="flex justify-between items-center mt-8">
+                <Button
+                  variant="outline"
+                  onClick={handleBack}
+                  disabled={quizState.currentStep === 0}
+                  className="flex items-center gap-2"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Back
+                </Button>
 
-            <Button
-              onClick={handleNext}
-              disabled={!isCurrentQuestionAnswered}
-              className="flex items-center gap-2 bg-primary hover:bg-primary/90"
-              size="lg"
-            >
-              {isLastQuestion ? 'See My Results' : 'Next'}
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
+                <Button
+                  onClick={handleNext}
+                  disabled={!isCurrentQuestionAnswered}
+                  className="flex items-center gap-2 bg-primary hover:bg-primary/90"
+                  size="lg"
+                >
+                  {isLastQuestion ? 'See My Results' : 'Next'}
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
 
-          {/* Encouragement Text */}
-          <div className="text-center mt-6">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {isLastQuestion
-                ? '🎉 Almost there! Click to see your personalized results.'
-                : '✨ Keep going! You\'re doing great.'}
-            </p>
-          </div>
+              {/* Encouragement Text */}
+              <div className="text-center mt-6">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {isLastQuestion
+                    ? 'Almost there! Click to see your personalized results.'
+                    : 'Keep going! You\'re doing great.'}
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </main>
     </>

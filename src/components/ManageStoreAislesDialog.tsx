@@ -249,7 +249,7 @@ export function ManageStoreAislesDialog({
                         variant="ghost"
                         size="sm"
                         onClick={() => confirmDelete(aisle)}
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                        className="h-10 w-10 p-0 text-destructive hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

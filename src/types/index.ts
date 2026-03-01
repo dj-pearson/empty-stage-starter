@@ -16,6 +16,15 @@ export interface Food {
   unit?: string;
   servings_per_container?: number;
   package_quantity?: string;
+  nutrition_info?: {
+    calories?: number;
+    protein_g?: number;
+    carbs_g?: number;
+    fat_g?: number;
+    fiber_g?: number;
+    calcium_mg?: number;
+    iron_mg?: number;
+  };
 }
 
 export interface Kid {
