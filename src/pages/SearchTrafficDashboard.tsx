@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 import { useNavigate } from "react-router-dom";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
 import { supabase } from "@/integrations/supabase/client";
@@ -151,6 +152,11 @@ export default function SearchTrafficDashboard() {
 
   return (
     <div id="main-content" className="container mx-auto py-6 space-y-6">
+      <Helmet>
+        <title>Search Traffic Analytics - EatPal</title>
+        <meta name="description" content="Unified search traffic dashboard for Google Analytics, Search Console, Bing, and Yandex" />
+        <meta name="robots" content="noindex" />
+      </Helmet>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

@@ -21,6 +21,16 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -94,6 +104,8 @@ export function PromptTemplateManager() {
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate | null>(null);
   const [selectedVersions, setSelectedVersions] = useState<PromptVersion[]>([]);
   const [usageStats, setUsageStats] = useState<Record<string, PromptUsageStats>>({});
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -251,8 +263,16 @@ export function PromptTemplateManager() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this template?')) return;
+  const requestDelete = (id: string) => {
+    setPendingDeleteId(id);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDeleteId) return;
+    const id = pendingDeleteId;
+    setShowDeleteConfirm(false);
+    setPendingDeleteId(null);
 
     try {
       const { error } = await supabase.from('prompt_templates').delete().eq('id', id);
@@ -463,7 +483,7 @@ export function PromptTemplateManager() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleDelete(template.id)}
+                              onClick={() => requestDelete(template.id)}
                               className="text-destructive hover:text-destructive"
                               title="Delete"
                             >
@@ -628,6 +648,27 @@ export function PromptTemplateManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the
+              prompt template and all its version history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Version History Dialog */}
       <Dialog open={showVersionsDialog} onOpenChange={setShowVersionsDialog}>

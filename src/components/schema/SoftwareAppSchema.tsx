@@ -82,7 +82,7 @@ export function SoftwareAppSchema({
     },
     "featureList": featureList,
     "url": "https://tryeatpal.com",
-    "screenshot": "https://tryeatpal.com/Cover.png",
+    "screenshot": "https://tryeatpal.com/Cover.webp",
     "softwareVersion": "2.0",
     "datePublished": "2024-01-01",
     "author": {

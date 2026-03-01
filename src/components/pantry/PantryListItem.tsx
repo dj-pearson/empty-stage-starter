@@ -1,7 +1,17 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Food } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Pencil, Trash2, AlertTriangle, Plus, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CATEGORY_CONFIG, getStockStatus } from "./pantryConstants";
@@ -21,6 +31,8 @@ export const PantryListItem = memo(function PantryListItem({
   onQuantityChange,
   kidAllergens,
 }: PantryListItemProps) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   const config = CATEGORY_CONFIG[food.category];
   const stockStatus = getStockStatus(food.quantity);
   const relevantAllergens =
@@ -28,6 +40,7 @@ export const PantryListItem = memo(function PantryListItem({
   const hasAllergen = relevantAllergens.length > 0;
 
   return (
+    <>
     <div
       className={cn(
         "flex items-center gap-3 px-3 py-2.5 border-b last:border-b-0 hover:bg-muted/50 transition-colors group",
@@ -49,15 +62,15 @@ export const PantryListItem = memo(function PantryListItem({
         {food.name}
       </span>
 
-      {/* Status badges */}
-      <div className="hidden sm:flex items-center gap-1 shrink-0">
+      {/* Status badges - visible on all screen sizes */}
+      <div className="flex items-center gap-1 shrink-0">
         {food.is_safe && (
-          <Badge className="bg-safe-food text-white text-[10px] px-1.5 py-0 h-[18px]">
+          <Badge className="bg-safe-food text-white text-[10px] px-1 sm:px-1.5 py-0 h-[18px]">
             Safe
           </Badge>
         )}
         {food.is_try_bite && (
-          <Badge className="bg-try-bite text-white text-[10px] px-1.5 py-0 h-[18px]">
+          <Badge className="bg-try-bite text-white text-[10px] px-1 sm:px-1.5 py-0 h-[18px]">
             Try
           </Badge>
         )}
@@ -76,7 +89,7 @@ export const PantryListItem = memo(function PantryListItem({
             const qty = food.quantity || 0;
             if (qty > 0) onQuantityChange(food.id, qty - 1);
           }}
-          className="h-6 w-6"
+          className="h-10 w-10"
           disabled={(food.quantity || 0) === 0}
           aria-label={`Decrease ${food.name}`}
         >
@@ -99,7 +112,7 @@ export const PantryListItem = memo(function PantryListItem({
               onQuantityChange(food.id, (food.quantity || 0) + 1);
             }
           }}
-          className="h-6 w-6"
+          className="h-10 w-10"
           aria-label={`Increase ${food.name}`}
         >
           <Plus className="h-3 w-3" />
@@ -117,7 +130,7 @@ export const PantryListItem = memo(function PantryListItem({
           size="icon"
           variant="ghost"
           onClick={() => onEdit(food)}
-          className="h-7 w-7"
+          className="h-10 w-10"
           aria-label={`Edit ${food.name}`}
         >
           <Pencil className="h-3 w-3" />
@@ -125,13 +138,34 @@ export const PantryListItem = memo(function PantryListItem({
         <Button
           size="icon"
           variant="ghost"
-          onClick={() => onDelete(food.id)}
-          className="h-7 w-7 text-destructive hover:text-destructive"
+          onClick={() => setShowDeleteConfirm(true)}
+          className="h-10 w-10 text-destructive hover:text-destructive"
           aria-label={`Delete ${food.name}`}
         >
           <Trash2 className="h-3 w-3" />
         </Button>
       </div>
     </div>
+
+    <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete {food.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently delete "{food.name}" from your pantry. This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => onDelete(food.id)}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 });

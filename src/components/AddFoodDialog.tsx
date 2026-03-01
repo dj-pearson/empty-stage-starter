@@ -413,7 +413,7 @@ export function AddFoodDialog({
                     variant={quantity === num ? "default" : "secondary"}
                     size="sm"
                     onClick={() => setQuantity(num)}
-                    className="h-7 px-2 text-xs"
+                    className="h-10 px-3 text-xs"
                   >
                     {num}
                   </Button>

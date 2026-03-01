@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Helmet } from "react-helmet-async";
 import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -76,6 +77,11 @@ export default function AIPlanner() {
 
   return (
     <div className="container mx-auto p-6 max-w-6xl space-y-6">
+      <Helmet>
+        <title>AI Meal Planner - EatPal</title>
+        <meta name="description" content="Generate personalized, nutritionally balanced meal plans using AI" />
+        <meta name="robots" content="noindex" />
+      </Helmet>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">

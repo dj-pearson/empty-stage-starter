@@ -19,6 +19,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Flag,
   Plus,
   Trash2,
@@ -141,6 +151,8 @@ export function FeatureFlagDashboard() {
   const [flags, setFlags] = useState<FeatureFlag[]>(() => getCachedAdminFlags() ?? []);
   const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     key: "",
     name: "",
@@ -322,10 +334,16 @@ export function FeatureFlagDashboard() {
     }
   };
 
-  const handleDeleteFlag = async (flagId: string) => {
-    if (!confirm("Are you sure you want to delete this feature flag?")) {
-      return;
-    }
+  const requestDeleteFlag = (flagId: string) => {
+    setPendingDeleteId(flagId);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteFlag = async () => {
+    if (!pendingDeleteId) return;
+    const flagId = pendingDeleteId;
+    setShowDeleteConfirm(false);
+    setPendingDeleteId(null);
 
     const targetFlag = flags.find((f) => f.id === flagId);
 
@@ -546,7 +564,7 @@ export function FeatureFlagDashboard() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => handleDeleteFlag(flag.id)}
+                    onClick={() => requestDeleteFlag(flag.id)}
                     aria-label={`Delete ${flag.name}`}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -607,6 +625,27 @@ export function FeatureFlagDashboard() {
           ))
         )}
       </div>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the
+              feature flag and remove it from all environments.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteFlag}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

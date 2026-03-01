@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
 import { supabase } from "@/integrations/supabase/client";
@@ -220,6 +221,11 @@ const Admin = () => {
 
   return (
     <SidebarProvider defaultOpen={true}>
+      <Helmet>
+        <title>Admin Panel - EatPal</title>
+        <meta name="description" content="EatPal administration panel for managing users, content, and platform settings" />
+        <meta name="robots" content="noindex" />
+      </Helmet>
       <div className="min-h-screen flex w-full">
         <AdminSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         

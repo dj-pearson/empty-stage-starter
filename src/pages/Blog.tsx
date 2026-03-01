@@ -11,6 +11,7 @@ import { logger } from "@/lib/logger";
 import { SEOHead } from "@/components/SEOHead";
 import { getPageSEO } from "@/lib/seo-config";
 import { Footer } from "@/components/Footer";
+import { NewsletterSignup } from "@/components/NewsletterSignup";
 interface BlogPost {
   id: string;
   title: string;
@@ -193,6 +194,11 @@ const Blog = () => {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* Newsletter Signup */}
+      <section className="container mx-auto px-4 pt-8 max-w-6xl">
+        <NewsletterSignup />
       </section>
 
       {/* Blog Posts */}

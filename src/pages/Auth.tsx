@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { Helmet } from "react-helmet-async";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -463,6 +464,11 @@ const Auth = () => {
 
   return (
     <>
+      <Helmet>
+        <title>Sign In or Sign Up - EatPal</title>
+        <meta name="description" content="Sign in or create an account to start planning healthy meals for your family with EatPal" />
+      </Helmet>
+
       <OnboardingDialog
         open={showOnboarding}
         onComplete={handleOnboardingComplete}
@@ -573,6 +579,12 @@ const Auth = () => {
               <p className="text-muted-foreground mb-3">
                 Start your journey to easier meal planning
               </p>
+            </div>
+
+            {/* Mobile social proof */}
+            <div className="text-center space-y-2 mb-4 md:hidden">
+              <p className="text-sm font-medium text-muted-foreground">Trusted by 2,000+ parents</p>
+              <p className="text-xs italic text-muted-foreground">"EatPal transformed our mealtimes. My son tried 3 new foods in the first week!" -- Sarah M.</p>
             </div>
 
             {/* Desktop back button */}

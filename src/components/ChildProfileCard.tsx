@@ -62,7 +62,31 @@ export function ChildProfileCard({
 }: ChildProfileCardProps) {
   const mealProgress = totalMeals > 0 ? (completedMeals / totalMeals) * 100 : 0;
   const age = calculateAge(kid.date_of_birth);
-  
+
+  // Profile completion calculation
+  // Each criterion is worth 20% for a total of 100%
+  const profileCompletion = (() => {
+    let score = 0;
+    // name is required and always present = 20%
+    if (kid.name) score += 20;
+    // age set (via date_of_birth or age field) = 20%
+    if (kid.date_of_birth || kid.age) score += 20;
+    // allergens list has items = 20%
+    if (kid.allergens && kid.allergens.length > 0) score += 20;
+    // safe foods >= 5 = 20%
+    if (safeFoodsCount >= 5) score += 20;
+    // notes/preferences filled (eating_behavior, texture_preferences, or flavor_preferences) = 20%
+    if (
+      kid.eating_behavior ||
+      (kid.texture_preferences && kid.texture_preferences.length > 0) ||
+      (kid.flavor_preferences && kid.flavor_preferences.length > 0) ||
+      (kid.helpful_strategies && kid.helpful_strategies.length > 0)
+    ) {
+      score += 20;
+    }
+    return score;
+  })();
+
   return (
     <Card className="overflow-hidden">
       <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5">
@@ -86,6 +110,23 @@ export function ChildProfileCard({
                   Last updated: {format(new Date(kid.profile_last_reviewed), "MMM d, yyyy")}
                 </p>
               )}
+              {/* Profile completion indicator */}
+              <div className="mt-2">
+                <div className="flex items-center gap-2">
+                  <Progress value={profileCompletion} className="h-1.5 w-24" />
+                  <span className={`text-xs font-medium ${profileCompletion >= 80 ? "text-primary" : "text-muted-foreground"}`}>
+                    Profile {profileCompletion}% complete
+                  </span>
+                </div>
+                {profileCompletion < 80 && (
+                  <button
+                    onClick={onCompleteProfile}
+                    className="text-xs text-primary hover:underline mt-1 font-medium"
+                  >
+                    Complete Profile
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={onEdit}>

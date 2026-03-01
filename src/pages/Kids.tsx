@@ -1,3 +1,4 @@
+import { Helmet } from "react-helmet-async";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,6 +36,11 @@ export default function Kids() {
 
   return (
     <div className="min-h-screen pt-4 pb-20 md:pt-24 bg-background">
+      <Helmet>
+        <title>My Children - EatPal</title>
+        <meta name="description" content="Manage child profiles, food preferences, and allergen information" />
+        <meta name="robots" content="noindex" />
+      </Helmet>
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
@@ -119,7 +125,7 @@ export default function Kids() {
             </Card>
           </div>
         ) : (
-          <div className="grid gap-6 grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3">
+          <div className="grid gap-6 grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3" aria-live="polite">
             {kids.map((kid) => {
               const stats = getKidStats(kid.id);
               

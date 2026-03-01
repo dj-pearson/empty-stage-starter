@@ -114,7 +114,7 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -244,7 +244,7 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -262,7 +262,7 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -317,7 +317,7 @@
         "Typecheck passes"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -332,7 +332,7 @@
         "Typecheck passes"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -383,7 +383,7 @@
         "Typecheck passes"
       ],
       "priority": 23,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -556,7 +556,7 @@
         "Typecheck passes"
       ],
       "priority": 34,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -601,7 +601,7 @@
         "Typecheck passes"
       ],
       "priority": 37,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -632,7 +632,7 @@
         "Typecheck passes"
       ],
       "priority": 39,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -795,7 +795,7 @@
         "Typecheck passes"
       ],
       "priority": 50,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -811,8 +811,8 @@
         "npm run build succeeds"
       ],
       "priority": 51,
-      "passes": false,
-      "notes": "CRITICAL: The Index.tsx page is a generic placeholder that shows 'Welcome to Your Blank App' — any visitor landing on / sees zero brand messaging, zero value proposition, and zero CTAs. This is the #1 conversion killer on the site."
+      "passes": true,
+      "notes": "CRITICAL: The Index.tsx page is a generic placeholder that shows 'Welcome to Your Blank App' \u2014 any visitor landing on / sees zero brand messaging, zero value proposition, and zero CTAs. This is the #1 conversion killer on the site."
     },
     {
       "id": "US-052",
@@ -827,7 +827,7 @@
         "npm run build succeeds"
       ],
       "priority": 52,
-      "passes": false,
+      "passes": true,
       "notes": "Pricing page has zero risk-reduction messaging. Adding trust signals and money-back guarantee typically increases conversion 15-30%."
     },
     {
@@ -843,7 +843,7 @@
         "npm run build succeeds"
       ],
       "priority": 53,
-      "passes": false,
+      "passes": true,
       "notes": "Lead magnets exist but are buried in a section users may never scroll to. Promoting them in navigation dramatically increases engagement and email capture."
     },
     {
@@ -861,8 +861,8 @@
         "npm run build succeeds"
       ],
       "priority": 54,
-      "passes": false,
-      "notes": "Blog pages have zero email capture. Blog readers are warm leads who are researching picky eating — capturing their email is a critical conversion touchpoint."
+      "passes": true,
+      "notes": "Blog pages have zero email capture. Blog readers are warm leads who are researching picky eating \u2014 capturing their email is a critical conversion touchpoint."
     },
     {
       "id": "US-055",
@@ -877,7 +877,7 @@
         "npm run build succeeds"
       ],
       "priority": 55,
-      "passes": false,
+      "passes": true,
       "notes": "Blog posts end with related articles but no conversion CTA. Every blog post is a missed conversion opportunity."
     },
     {
@@ -893,7 +893,7 @@
         "npm run build succeeds"
       ],
       "priority": 56,
-      "passes": false,
+      "passes": true,
       "notes": "Quiz launches immediately with no context. Setting expectations increases completion rates by 20-40%."
     },
     {
@@ -910,7 +910,7 @@
         "npm run build succeeds"
       ],
       "priority": 57,
-      "passes": false,
+      "passes": true,
       "notes": "FAQ page shows all questions in a flat list with no search or categorization. Users must scroll through everything to find their answer."
     },
     {
@@ -944,7 +944,7 @@
         "npm run build succeeds"
       ],
       "priority": 59,
-      "passes": false,
+      "passes": true,
       "notes": "Current onboarding only exists on the Home page and doesn't persist across the app. New users get lost after navigating away from Home."
     },
     {
@@ -961,7 +961,7 @@
         "npm run build succeeds"
       ],
       "priority": 60,
-      "passes": false,
+      "passes": true,
       "notes": "Gamification through streaks increases daily engagement by 30-50%. Currently no visible engagement hooks on the dashboard."
     },
     {
@@ -969,9 +969,9 @@
       "title": "Improve empty states across Pantry, Planner, and Grocery pages with actionable guidance",
       "description": "As a new user visiting feature pages for the first time, I want clear, encouraging empty states that tell me exactly what to do so that I don't feel lost or confused.",
       "acceptanceCriteria": [
-        "Audit empty states in src/pages/Pantry.tsx — ensure it shows: illustration/icon, 'Your pantry is empty' heading, 'Add your child's safe foods to get started with meal planning' description, prominent 'Add Food' button, and a tip: 'Start with 5-10 foods your child eats regularly'",
-        "Audit empty states in src/pages/Planner.tsx — when no meals are planned, show: 'No meals planned this week' heading, 'Create a meal plan to see it here' description, 'Generate Meal Plan' and 'Add Meal Manually' buttons",
-        "Audit empty states in src/pages/Grocery.tsx — show: 'Your grocery list is empty' heading, 'Add items from recipes or create a list manually' description, action buttons for both paths",
+        "Audit empty states in src/pages/Pantry.tsx \u2014 ensure it shows: illustration/icon, 'Your pantry is empty' heading, 'Add your child's safe foods to get started with meal planning' description, prominent 'Add Food' button, and a tip: 'Start with 5-10 foods your child eats regularly'",
+        "Audit empty states in src/pages/Planner.tsx \u2014 when no meals are planned, show: 'No meals planned this week' heading, 'Create a meal plan to see it here' description, 'Generate Meal Plan' and 'Add Meal Manually' buttons",
+        "Audit empty states in src/pages/Grocery.tsx \u2014 show: 'Your grocery list is empty' heading, 'Add items from recipes or create a list manually' description, action buttons for both paths",
         "All empty states use consistent design (canonical EmptyState component from src/components/ui/EmptyState.tsx)",
         "Typecheck passes",
         "npm run build succeeds"
@@ -993,7 +993,7 @@
         "npm run build succeeds"
       ],
       "priority": 62,
-      "passes": false,
+      "passes": true,
       "notes": "Auth page desktop has social proof but mobile version hides most of it. Mobile users represent 60%+ of traffic and see less persuasion content."
     },
     {
@@ -1009,7 +1009,7 @@
         "npm run build succeeds"
       ],
       "priority": 63,
-      "passes": false,
+      "passes": true,
       "notes": "Reading progress bars increase average time on page by 10-20%. Author bios build E-E-A-T signals for SEO."
     },
     {
@@ -1042,7 +1042,7 @@
         "npm run build succeeds"
       ],
       "priority": 65,
-      "passes": false,
+      "passes": true,
       "notes": "Contact page has no response time expectation and a generic subject field. Setting expectations reduces anxiety and repeat inquiries."
     },
     {
@@ -1058,7 +1058,7 @@
         "npm run build succeeds"
       ],
       "priority": 66,
-      "passes": false,
+      "passes": true,
       "notes": "Safety badges are hidden on mobile (hidden sm:flex). Mobile users can't see the most important food classification at a glance."
     },
     {
@@ -1092,7 +1092,7 @@
         "npm run build succeeds"
       ],
       "priority": 68,
-      "passes": false,
+      "passes": true,
       "notes": "Keyboard shortcuts exist but are completely undiscoverable. Power users who discover them become more engaged."
     },
     {
@@ -1108,7 +1108,7 @@
         "npm run build succeeds"
       ],
       "priority": 69,
-      "passes": false,
+      "passes": true,
       "notes": "Stats like 'Safe Foods' and 'Try Bites' use domain-specific terminology that new users may not understand."
     },
     {
@@ -1124,7 +1124,7 @@
         "npm run build succeeds"
       ],
       "priority": 70,
-      "passes": false,
+      "passes": true,
       "notes": "A good 404 page recovers potentially lost visitors. Current 404 page quality needs audit."
     },
     {
@@ -1174,7 +1174,7 @@
         "npm run build succeeds"
       ],
       "priority": 73,
-      "passes": false,
+      "passes": true,
       "notes": "Content at the bottom of pages gets hidden behind the mobile bottom navigation bar. Critical usability issue."
     },
     {
@@ -1190,7 +1190,7 @@
         "npm run build succeeds"
       ],
       "priority": 74,
-      "passes": false,
+      "passes": true,
       "notes": "The grocery list has a progress bar but minimal celebration or encouragement. Gamifying the shopping experience increases feature usage."
     },
     {
@@ -1199,14 +1199,14 @@
       "description": "As a parent managing child profiles, I want to see how complete each profile is so that I know what information to add for better meal recommendations.",
       "acceptanceCriteria": [
         "Add a 'Profile X% complete' progress indicator to each child card on src/pages/Kids.tsx",
-        "Calculate completeness based on: name (required), age, allergens list, safe foods count (≥5), preferences, and completed intake questionnaire",
+        "Calculate completeness based on: name (required), age, allergens list, safe foods count (\u22655), preferences, and completed intake questionnaire",
         "Show a 'Complete Profile' button for profiles under 80% completion",
         "Add tooltip explaining what fields improve recommendations",
         "Typecheck passes",
         "npm run build succeeds"
       ],
       "priority": 75,
-      "passes": false,
+      "passes": true,
       "notes": "Users don't know what data improves recommendations. Profile completion indicators guide users to provide the data that makes AI suggestions better."
     }
   ]

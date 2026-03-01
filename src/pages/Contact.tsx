@@ -4,7 +4,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Mail, MessageSquare } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ArrowLeft, Mail, MessageSquare, Clock, HelpCircle, CheckCircle2, Send } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { captureContactFormLead } from "@/lib/lead-capture";
@@ -57,6 +64,10 @@ const Contact = () => {
     }));
   };
 
+  const handleSubjectChange = (value: string) => {
+    setFormData(prev => ({ ...prev, subject: value }));
+  };
+
   return (
     <>
       <SEOHead {...seoConfig!} />
@@ -88,6 +99,12 @@ const Contact = () => {
       {/* Content */}
       <main id="main-content" className="container mx-auto px-4 py-12 max-w-5xl">
         <div className="text-center mb-12">
+          {/* Response time badge */}
+          <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-2 mb-6">
+            <Clock className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium text-primary">We respond within 24 hours on business days</span>
+          </div>
+
           <h1 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
             Contact EatPal Support - Get Help with Picky Eater Meal Planning
           </h1>
@@ -126,6 +143,19 @@ const Contact = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {/* Check FAQ first nudge */}
+              <div className="flex items-start gap-3 p-3 bg-muted/50 border rounded-lg mb-4">
+                <HelpCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    Many questions are answered in our FAQ.{" "}
+                    <Link to="/faq" className="text-primary font-medium hover:underline">
+                      Check our FAQ first
+                    </Link>
+                  </p>
+                </div>
+              </div>
+
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Name</Label>
@@ -154,14 +184,20 @@ const Contact = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="subject">Subject</Label>
-                  <Input
-                    id="subject"
-                    name="subject"
-                    placeholder="How can we help?"
-                    value={formData.subject}
-                    onChange={handleChange}
-                    required
-                  />
+                  <Select value={formData.subject} onValueChange={handleSubjectChange} required>
+                    <SelectTrigger id="subject">
+                      <SelectValue placeholder="Select a topic..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Account & Setup">Account & Setup</SelectItem>
+                      <SelectItem value="Billing & Subscription">Billing & Subscription</SelectItem>
+                      <SelectItem value="Technical Support">Technical Support</SelectItem>
+                      <SelectItem value="Feature Request">Feature Request</SelectItem>
+                      <SelectItem value="Bug Report">Bug Report</SelectItem>
+                      <SelectItem value="Partnership Inquiry">Partnership Inquiry</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
@@ -181,6 +217,31 @@ const Contact = () => {
                   {isSubmitting ? "Sending..." : "Send Message"}
                 </Button>
               </form>
+
+              {/* What happens next? */}
+              <div className="mt-6 pt-6 border-t">
+                <h4 className="text-sm font-semibold mb-3">What happens next?</h4>
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                      <Send className="h-3 w-3 text-primary" />
+                    </div>
+                    <p className="text-xs text-muted-foreground">We receive your message and send a confirmation email.</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                      <Clock className="h-3 w-3 text-primary" />
+                    </div>
+                    <p className="text-xs text-muted-foreground">A team member reviews your request within 24 hours (business days).</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                      <CheckCircle2 className="h-3 w-3 text-primary" />
+                    </div>
+                    <p className="text-xs text-muted-foreground">You receive a personalized response via email with next steps.</p>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
 

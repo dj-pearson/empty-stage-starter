@@ -163,8 +163,7 @@
   
 # Preload critical resources
 /
-  Link: </assets/fonts/inter-var.woff2>; rel=preload; as=font; type=font/woff2; crossorigin
-  Link: </Logo-Green.png>; rel=preload; as=image
+  Link: </Logo-Green.webp>; rel=preload; as=image; type=image/webp
   
 # HSTS for security
 /*

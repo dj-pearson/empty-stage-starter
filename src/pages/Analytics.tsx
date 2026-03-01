@@ -1,3 +1,4 @@
+import { Helmet } from "react-helmet-async";
 import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -135,6 +136,11 @@ export default function Analytics() {
 
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
+      <Helmet>
+        <title>Food Analytics - EatPal</title>
+        <meta name="description" content="Track meal outcomes, food preferences, and eating progress for your child" />
+        <meta name="robots" content="noindex" />
+      </Helmet>
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">

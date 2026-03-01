@@ -779,26 +779,6 @@ a[target="_blank"][aria-label]::after {
 }
 
 /* =================================================================
-   TOUCH TARGET SIZE (WCAG 2.5.5 Level AAA - 44x44px minimum)
-   ================================================================= */
-@media (pointer: coarse) {
-  button,
-  a,
-  [role="button"],
-  input[type="checkbox"],
-  input[type="radio"],
-  select {
-    min-height: 44px;
-    min-width: 44px;
-  }
-
-  /* Spacing for adjacent touch targets */
-  .touch-spacing > * + * {
-    margin-top: 8px;
-  }
-}
-
-/* =================================================================
    KEYBOARD NAVIGATION UTILITIES
    ================================================================= */
 /* Visible focus for keyboard users only */

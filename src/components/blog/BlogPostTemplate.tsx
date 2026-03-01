@@ -69,7 +69,7 @@ export function BlogPostTemplate({
   description,
   slug,
   keywords,
-  featuredImage = "https://tryeatpal.com/Cover.png",
+  featuredImage = "https://tryeatpal.com/Cover.webp",
   content,
   excerpt,
   author,

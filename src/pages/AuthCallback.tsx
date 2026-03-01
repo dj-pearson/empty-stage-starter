@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { LoadingFallback } from '@/components/LoadingFallback';
@@ -207,9 +208,18 @@ export default function AuthCallback() {
     handleCallback();
   }, [navigate, searchParams]);
 
+  const callbackHelmet = (
+    <Helmet>
+      <title>Completing Sign In - EatPal</title>
+      <meta name="description" content="Processing your authentication request" />
+      <meta name="robots" content="noindex" />
+    </Helmet>
+  );
+
   if (status === 'processing') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
+        {callbackHelmet}
         <div className="text-center">
           <LoadingFallback message="Completing sign in..." />
           <p className="text-sm text-muted-foreground mt-4">
