@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProgressDashboard } from '@/components/ProgressDashboard';
 import { AchievementsView } from '@/components/AchievementsView';
@@ -30,6 +31,11 @@ export default function Progress() {
 
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
+      <Helmet>
+        <title>Progress - EatPal</title>
+        <meta name="description" content="Track your child's eating progress, achievements, and weekly reports" />
+        <meta name="robots" content="noindex" />
+      </Helmet>
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Header */}
         <div className="mb-8">

@@ -8,6 +8,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { Brain, Plus, Trash2, CheckCircle2, Loader2, Sparkles } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -33,7 +43,8 @@ export function AISettingsManager() {
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  
+  const [deleteModelId, setDeleteModelId] = useState<string | null>(null);
+
   const [formData, setFormData] = useState({
     name: "",
     provider: "claude",
@@ -441,7 +452,7 @@ export function AISettingsManager() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => handleDeleteModel(model.id)}
+                    onClick={() => setDeleteModelId(model.id)}
                     disabled={model.is_active}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -452,6 +463,31 @@ export function AISettingsManager() {
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog open={deleteModelId !== null} onOpenChange={(open) => { if (!open) setDeleteModelId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete AI model?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the "{models.find(m => m.id === deleteModelId)?.name}" model configuration. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteModelId) {
+                  handleDeleteModel(deleteModelId);
+                  setDeleteModelId(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

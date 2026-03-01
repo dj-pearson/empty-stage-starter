@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { Helmet } from "react-helmet-async";
 import { useApp } from "@/contexts/AppContext";
 import { FoodSuccessTracker } from "@/components/FoodSuccessTracker";
 import { KidSelector } from "@/components/KidSelector";
@@ -12,6 +13,11 @@ export default function FoodTracker() {
 
   return (
     <div className="container mx-auto py-6 px-4 max-w-7xl">
+      <Helmet>
+        <title>Food Tracker - EatPal</title>
+        <meta name="description" content="Track food attempts and build your child's confidence with new foods over time" />
+        <meta name="robots" content="noindex" />
+      </Helmet>
       {/* Page Header */}
       <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">

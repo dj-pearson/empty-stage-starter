@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Helmet } from "react-helmet-async";
 import { useNavigate, Outlet, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { SupportWidget } from "@/components/SupportWidget";
@@ -8,6 +9,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { KidSelector } from "@/components/KidSelector";
 import { QuickActionMenu } from "@/components/ui/QuickActionMenu";
 import { QuickLogModal } from "@/components/QuickLogModal";
+import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { Button } from "@/components/ui/button";
 import { Moon, Sun, LogOut, Menu, Trophy } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -179,6 +181,11 @@ const Dashboard = () => {
 
   return (
     <>
+      <Helmet>
+        <title>Dashboard - EatPal</title>
+        <meta name="description" content="Manage your family's meal plans, food tracking, and nutrition insights" />
+        <meta name="robots" content="noindex" />
+      </Helmet>
       {/* Desktop Layout with Sidebar */}
       <div className="hidden md:block">
         <SidebarProvider defaultOpen={true}>
@@ -216,6 +223,9 @@ const Dashboard = () => {
                     <span className="text-xs">{navigator?.platform?.toLowerCase().includes('mac') ? '⌘' : 'Ctrl'}</span>K
                   </kbd>
                 </Button>
+
+                {/* Keyboard Shortcuts */}
+                <KeyboardShortcutsModal />
 
                 {/* Theme Toggle */}
                 <Button
@@ -438,7 +448,7 @@ const Dashboard = () => {
         </nav>
 
         {/* Mobile Content with padding */}
-        <main id="main-content-mobile" className="pt-14 pb-16" role="main" aria-label="Dashboard content">
+        <main id="main-content-mobile" className="pt-14 pb-20" role="main" aria-label="Dashboard content">
           <Outlet />
         </main>
 

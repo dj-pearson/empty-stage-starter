@@ -941,7 +941,7 @@ export function BlogCMSManager() {
                   placeholder="/blog-images/my-post-image.png or https://..."
                 />
                 <p className="text-xs text-muted-foreground">
-                  Used for social media previews. Leave empty to use Cover.png
+                  Used for social media previews. Leave empty to use Cover.webp
                   as fallback. Optimal size: 1200x630px
                 </p>
               </div>

@@ -1819,7 +1819,7 @@ export function SEOManager() {
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
     <image:image>
-      <image:loc>${baseUrl}/Cover.png</image:loc>
+      <image:loc>${baseUrl}/Cover.webp</image:loc>
       <image:title>EatPal - Kids Meal Planning for Picky Eaters</image:title>
       <image:caption>The #1 meal planning app for picky eaters and selective eating</image:caption>
     </image:image>

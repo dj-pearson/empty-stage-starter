@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -140,6 +141,11 @@ export default function InsightsDashboard() {
 
   return (
     <div className="container mx-auto p-6 max-w-7xl space-y-6">
+      <Helmet>
+        <title>Nutrition Insights - EatPal</title>
+        <meta name="description" content="Comprehensive overview of eating patterns, food group coverage, and nutrition progress" />
+        <meta name="robots" content="noindex" />
+      </Helmet>
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold flex items-center gap-2">

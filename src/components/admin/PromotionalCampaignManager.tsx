@@ -7,6 +7,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -40,7 +50,9 @@ export function PromotionalCampaignManager() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<PromotionalCampaign | null>(null);
-  
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -143,8 +155,16 @@ export function PromotionalCampaignManager() {
     setIsCreating(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this campaign?")) return;
+  const requestDelete = (id: string) => {
+    setPendingDeleteId(id);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDeleteId) return;
+    const id = pendingDeleteId;
+    setShowDeleteConfirm(false);
+    setPendingDeleteId(null);
 
     try {
       const { error } = await supabase
@@ -446,7 +466,7 @@ export function PromotionalCampaignManager() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => handleDelete(campaign.id)}
+                          onClick={() => requestDelete(campaign.id)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -459,6 +479,27 @@ export function PromotionalCampaignManager() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the
+              promotional campaign.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

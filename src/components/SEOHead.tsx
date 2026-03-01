@@ -44,7 +44,7 @@ export function SEOHead({
   keywords,
   canonicalUrl,
   ogType = "website",
-  ogImage = "https://tryeatpal.com/Cover.png",
+  ogImage = "https://tryeatpal.com/Cover.webp",
   ogImageAlt = "EatPal - AI-Powered Kids Meal Planning for Picky Eaters",
   twitterCard = "summary_large_image",
   aiPurpose,

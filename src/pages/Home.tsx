@@ -2,9 +2,9 @@ import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { Utensils, Calendar, ShoppingCart, Sparkles, Download, Upload, Trash2, Users, BarChart3, ChefHat, Target, ArrowRight, Plus } from "lucide-react";
+import { Utensils, Calendar, ShoppingCart, Sparkles, Download, Upload, Trash2, Users, BarChart3, ChefHat, Target, ArrowRight, Plus, Flame } from "lucide-react";
 import { toast } from "sonner";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 import { BackupDataSchema } from "@/lib/validations";
@@ -33,6 +33,10 @@ import { SubscriptionStatusBanner } from "@/components/SubscriptionStatusBanner"
 import { MotivationalMessage } from "@/components/MotivationalMessage";
 import { TodayMeals } from "@/components/TodayMeals";
 import { QuickLogModal } from "@/components/QuickLogModal";
+
+const OnboardingProgressBar = lazy(() =>
+  import("@/components/OnboardingProgressBar").then(m => ({ default: m.OnboardingProgressBar }))
+);
 
 export default function Home() {
   const { foods, planEntries, groceryItems, kids, recipes, activeKidId, exportData, importData, resetAllData, updatePlanEntry } = useApp();
@@ -91,6 +95,21 @@ export default function Home() {
   const isNewUser = safeFoods < 3 && kidPlanEntries.length === 0;
   const needsMoreFoods = safeFoods < 5;
   const needsMealPlan = kidPlanEntries.length === 0 && safeFoods >= 3;
+
+  // Calculate streak from planEntries
+  const streak = useMemo(() => {
+    const today = new Date();
+    let count = 0;
+    for (let d = 0; d <= 365; d++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - d);
+      const dateStr = date.toISOString().split("T")[0];
+      const hasResult = planEntries.some(e => e.date === dateStr && e.result);
+      if (hasResult) count++;
+      else if (d > 0) break; // Break on first gap (but not today)
+    }
+    return count;
+  }, [planEntries]);
 
   const handleExport = () => {
     const data = exportData();
@@ -190,6 +209,11 @@ export default function Home() {
   return (
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
       <AnimatedDashboard className="container mx-auto px-4 py-8 max-w-4xl">
+        {/* Guided onboarding progress bar */}
+        <Suspense fallback={null}>
+          <OnboardingProgressBar />
+        </Suspense>
+
         {/* Re-engagement prompt for skipped onboarding */}
         <OnboardingReengagement />
 
@@ -401,12 +425,14 @@ export default function Home() {
               label="Safe Foods"
               color="text-safe-food"
               icon={<Utensils className="w-6 h-6" />}
+              tooltip="Foods your child consistently eats"
             />
             <AnimatedStatCard
               value={tryBites}
               label="Try Bites"
               color="text-try-bite"
               icon={<Target className="w-6 h-6" />}
+              tooltip="New foods being introduced gradually"
             />
             <AnimatedStatCard
               value={recipes.length}
@@ -419,15 +445,45 @@ export default function Home() {
               label="Meals Planned"
               color="text-primary"
               icon={<Calendar className="w-6 h-6" />}
+              tooltip="Meals scheduled this week"
             />
             <AnimatedStatCard
               value={groceryItems.length}
               label="Grocery Items"
               color="text-accent"
               icon={<ShoppingCart className="w-6 h-6" />}
+              tooltip="Items on your current shopping list"
             />
           </div>
         </AnimatedPanel>
+
+        {/* Streak Counter */}
+        {streak > 0 && (
+          <AnimatedPanel>
+            <Card className="mb-8 border-orange-500/20 bg-gradient-to-r from-orange-500/5 to-amber-500/5">
+              <CardContent className="py-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center">
+                    <Flame className="h-6 w-6 text-orange-500" />
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-bold text-orange-500">{streak}</span>
+                      <span className="text-sm font-medium text-muted-foreground">day streak</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {streak >= 7
+                        ? "Amazing consistency! Keep it up!"
+                        : streak >= 3
+                          ? "Great progress! You're building a habit!"
+                          : "You're on a roll! Log meals daily to grow your streak."}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </AnimatedPanel>
+        )}
 
         {/* Action Cards with Animations */}
         <AnimatedPanel delay={0.1}>
