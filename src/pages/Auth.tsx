@@ -465,8 +465,8 @@ const Auth = () => {
   return (
     <>
       <Helmet>
-        <title>Sign In or Sign Up - EatPal</title>
-        <meta name="description" content="Sign in or create an account to start planning healthy meals for your family with EatPal" />
+        <title>Sign In - EatPal | ARFID & Picky Eater Meal Planner</title>
+        <meta name="description" content="Sign in or create your EatPal account. AI-powered meal planning built on food chaining science for families managing ARFID, extreme picky eating, and feeding disorders." />
       </Helmet>
 
       <OnboardingDialog
@@ -497,33 +497,34 @@ const Auth = () => {
             </Link>
 
             <h1 className="text-4xl font-heading font-bold text-white mb-4">
-              End Mealtime Battles Forever
+              Finally, a Meal Plan Built for ARFID and Extreme Picky Eating
             </h1>
             <p className="text-xl text-white/80 mb-10 leading-relaxed">
-              Join 2,000+ parents who've transformed picky eaters into adventurous eaters—one safe food at a time.
+              Join 2,000+ families using food chaining science—built with 200+ feeding therapists—to help
+              children go from 5 safe foods to 50+, one small step at a time.
             </p>
 
             <div className="space-y-6">
               {[
                 {
                   icon: Sparkles,
-                  title: "AI-Powered Meal Plans",
-                  description: "Get personalized weekly plans using foods your child actually eats"
+                  title: "Evidence-Based Food Chaining",
+                  description: "AI-powered meal plans grounded in the proven feeding therapy method—not guesswork"
                 },
                 {
                   icon: Calendar,
                   title: "One Try-Bite Per Day",
-                  description: "Science-backed food chaining to gently expand their palate"
-                },
-                {
-                  icon: ShoppingCart,
-                  title: "Auto Grocery Lists",
-                  description: "Never forget an ingredient again with auto-generated shopping lists"
+                  description: "Structured exposure without pressure—exactly how feeding therapists recommend"
                 },
                 {
                   icon: TrendingUp,
-                  title: "Track Real Progress",
-                  description: "See data-driven insights on what's working"
+                  title: "Track Measurable Progress",
+                  description: "See acceptance rates, exposure counts, and food chain breakthroughs over time"
+                },
+                {
+                  icon: ShoppingCart,
+                  title: "Therapy-to-Home Bridge",
+                  description: "Extend feeding therapy gains between sessions with structured home practice"
                 }
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-4">
@@ -538,9 +539,14 @@ const Auth = () => {
               ))}
             </div>
 
-            {/* Social proof */}
+            {/* ARFID-specific testimonial + social proof */}
             <div className="mt-12 pt-8 border-t border-white/20">
-              <div className="flex items-center gap-4">
+              <p className="text-white/90 italic text-sm leading-relaxed mb-4">
+                "My son was diagnosed with ARFID and only ate 6 foods. After 3 months with EatPal, he's up to 19. The
+                food chaining suggestions made all the difference."
+              </p>
+              <p className="text-white font-semibold text-sm">— Jennifer L., Mom of a child with ARFID</p>
+              <div className="flex items-center gap-4 mt-4">
                 <div className="flex -space-x-2" aria-hidden="true">
                   {[1, 2, 3, 4, 5].map((i) => (
                     <div key={i} className="w-8 h-8 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center text-xs text-white" role="presentation">
@@ -549,11 +555,8 @@ const Auth = () => {
                   ))}
                 </div>
                 <div className="text-white/80 text-sm">
-                  <span className="font-semibold text-white">2,000+</span> happy families
+                  <span className="font-semibold text-white">2,000+</span> families with ARFID & picky eating
                 </div>
-              </div>
-              <div className="mt-3 text-white/70 text-sm">
-                <span aria-hidden="true">⭐⭐⭐⭐⭐</span> <span className="text-white font-semibold">4.8/5</span> <span>average rating</span>
               </div>
             </div>
           </div>
@@ -577,14 +580,14 @@ const Auth = () => {
                 />
               </Link>
               <p className="text-muted-foreground mb-3">
-                Start your journey to easier meal planning
+                Meal planning built for ARFID and extreme picky eating
               </p>
             </div>
 
             {/* Mobile social proof */}
             <div className="text-center space-y-2 mb-4 md:hidden">
-              <p className="text-sm font-medium text-muted-foreground">Trusted by 2,000+ parents</p>
-              <p className="text-xs italic text-muted-foreground">"EatPal transformed our mealtimes. My son tried 3 new foods in the first week!" -- Sarah M.</p>
+              <p className="text-sm font-medium text-muted-foreground">Trusted by 2,000+ families with ARFID & picky eating</p>
+              <p className="text-xs italic text-muted-foreground">"My son has ARFID and went from 6 foods to 19 in 3 months using EatPal's food chaining." — Jennifer L.</p>
             </div>
 
             {/* Desktop back button */}
@@ -678,10 +681,10 @@ const Auth = () => {
               <CardContent>
                 <div className="mb-6 p-4 bg-primary/10 border border-primary/20 rounded-lg text-center">
                   <p className="text-sm font-semibold text-primary mb-1">
-                    🎉 Now Live! Start Your Free Trial
+                    Built on food chaining science for ARFID & picky eating
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Join families making mealtime easier
+                    Free to start. No credit card required.
                   </p>
                 </div>
               <Tabs defaultValue={defaultTab} className="w-full">
@@ -958,13 +961,13 @@ const Auth = () => {
 
             {/* Mobile value props */}
             <div className="lg:hidden mt-8 p-4 bg-muted/50 rounded-lg">
-              <h3 className="font-semibold text-sm mb-3 text-center">Why parents love EatPal:</h3>
+              <h3 className="font-semibold text-sm mb-3 text-center">Built for ARFID & feeding disorders:</h3>
               <div className="grid grid-cols-2 gap-3 text-xs">
                 {[
-                  "AI meal planning",
                   "Food chaining science",
-                  "Auto grocery lists",
-                  "Progress tracking"
+                  "Evidence-based progress",
+                  "Therapist-designed",
+                  "One try-bite per day"
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <CheckCircle className="h-3 w-3 text-primary shrink-0" />

@@ -196,6 +196,10 @@ const Landing = () => {
       answer: "Yes! EatPal is designed for families managing ARFID, autism spectrum feeding challenges, and extreme selective eating. Our food chaining approach aligns with evidence-based ARFID treatment protocols. Many feeding therapists recommend EatPal to their clients. The platform tracks sensory preferences, safe foods, and progress over time."
     },
     {
+      question: "My child was just diagnosed with ARFID—what should I do first?",
+      answer: "After an ARFID diagnosis, start by documenting your child's current safe foods (even if it's only 3-5). Then create a free EatPal account and add those safe foods to your child's profile. The AI will immediately suggest food chains—small, manageable steps from foods they already accept to similar new options. Many families see their first food acceptance breakthrough within 2-4 weeks. EatPal also works alongside feeding therapy, helping you extend the progress made in clinic sessions into your daily routine at home."
+    },
+    {
       question: "What ages does this work for?",
       answer: "EatPal is most effective for ages 2-12, but we have parents successfully using it for teenagers and even adults with selective eating. The food chaining methodology works at any age—it's about respecting current food preferences while gradually expanding variety through small, predictable changes."
     },
@@ -617,7 +621,7 @@ const Landing = () => {
           </div>
         </section>
 
-        {/* Benefits-Focused Features Section */}
+        {/* Three-Pillar Value Proposition Section */}
         <section id="features" className="py-24 px-4 bg-gradient-to-br from-secondary/5 to-background relative overflow-hidden">
           <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-trust-softPink/5 to-transparent pointer-events-none" />
           <div className="container mx-auto max-w-6xl relative z-10">
@@ -626,55 +630,63 @@ const Landing = () => {
                 Built for Feeding Disorders, Not Generic Meal Planning
               </h2>
               <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-                Tools designed for ARFID, extreme picky eating, and autism-related feeding challenges
+                Three pillars that set EatPal apart for families managing ARFID, selective eating, and autism-related feeding challenges
               </p>
             </div>
 
-            <div className="animate-grid grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="animate-grid grid md:grid-cols-3 gap-8">
               {[
                 {
                   icon: Brain,
-                  title: "AI Meal Suggestions",
-                  description: "Turn 'I don't know what to make' into a full week of ideas in seconds. Smart suggestions based on what your child actually eats."
-                },
-                {
-                  icon: TrendingUp,
-                  title: "Food Chaining Algorithm",
-                  description: "Science-backed suggestions for introducing new foods based on what they already like (texture, flavor, color matching)."
-                },
-                {
-                  icon: ShoppingCart,
-                  title: "Auto-Grocery Lists",
-                  description: "Never forget an ingredient again—lists organized by aisle. Shopping takes 30% less time."
-                },
-                {
-                  icon: Calendar,
-                  title: "Progress Tracking",
-                  description: "See acceptance rates, favorite foods, and nutritional balance over time. Know what's working."
-                },
-                {
-                  icon: Sparkles,
-                  title: "Works Everywhere",
-                  description: "Plan on your laptop, shop with your phone—syncs automatically across all devices."
+                  title: "Evidence-Based Progress, Not Guesswork",
+                  description: "Our AI is grounded in food chaining science—the proven feeding therapy method. It detects patterns in textures, brands, and flavors your child already accepts, then builds bridges to new foods.",
+                  bullets: [
+                    "AI-powered food chains based on your child's unique sensory profile",
+                    "70%+ prediction accuracy on which new foods your child is most likely to accept",
+                    "Progress reports backed by 100K+ mealtime data points from real families",
+                  ],
                 },
                 {
                   icon: Heart,
-                  title: "Flexible Plans",
-                  description: "Swap meals, adjust portions, add notes—it adapts to your family. No rigid meal plans."
-                }
-              ].map((feature, index) => {
-                const Icon = feature.icon;
+                  title: "Calmer, Safer-Feeling Mealtimes",
+                  description: "Replace nightly stress with a structured daily plan that makes both parents and children feel in control. Visual progress charts show the small wins adding up.",
+                  bullets: [
+                    "Structured daily meal plans with one 'try bite' per day—no pressure, no power struggles",
+                    "Visual progress charts that celebrate exposure milestones (15-20 exposures per food)",
+                    "Auto-generated grocery lists so there's always a safe fallback on the table",
+                  ],
+                },
+                {
+                  icon: Stethoscope,
+                  title: "Designed With Feeding Therapists",
+                  description: "EatPal was built alongside 200+ SLPs, OTs, and pediatric dietitians. It supports the work being done in therapy sessions and extends it into the home.",
+                  bullets: [
+                    "Supports food logs, safe-food lists, and sensory preference tracking for therapy alignment",
+                    "Optional therapist portal for shared goals, session notes, and family coordination",
+                    "Insurance-compatible progress documentation to show measurable outcomes",
+                  ],
+                },
+              ].map((pillar, index) => {
+                const Icon = pillar.icon;
                 return (
                   <div key={index} className="animate-item h-full">
-                    <Card className="h-full hover:shadow-lg transition-shadow border-primary/5 hover:border-primary/20">
+                    <Card className="h-full hover:shadow-lg transition-all hover:-translate-y-1 duration-300 border-primary/10 hover:border-primary/30">
                       <CardHeader>
-                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                          <Icon className="h-6 w-6 text-primary" />
+                        <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+                          <Icon className="h-7 w-7 text-primary" />
                         </div>
-                        <CardTitle className="text-xl text-foreground">{feature.title}</CardTitle>
+                        <CardTitle className="text-xl text-foreground">{pillar.title}</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <p className="text-muted-foreground">{feature.description}</p>
+                        <p className="text-muted-foreground mb-5">{pillar.description}</p>
+                        <ul className="space-y-3">
+                          {pillar.bullets.map((bullet, i) => (
+                            <li key={i} className="flex items-start gap-2 text-sm">
+                              <CheckCircle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                              <span className="text-muted-foreground">{bullet}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </CardContent>
                     </Card>
                   </div>

@@ -1217,7 +1217,7 @@
         "Hero headline references ARFID, extreme picky eating, and progress (e.g. 'Turn mealtime battles into steady progress, one safe bite at a time')",
         "Subheadline explicitly mentions: AI-powered meal planning, food chaining science, built for families with ARFID/extreme picky eating, collaboration with feeding therapists",
         "Primary CTA changed to 'Get Your Personalized 5-Day Plan' with subtext 'Takes 2 minutes. Tailored to your child's safe foods.'",
-        "Secondary CTA/link added: 'For Feeding Therapists →' linking to therapist section",
+        "Secondary CTA/link added: 'For Feeding Therapists \u2192' linking to therapist section",
         "Stats section updated to include therapist count (200+ feeding therapists)",
         "Typecheck passes",
         "npm run build succeeds"
@@ -1292,8 +1292,8 @@
         "npm run build succeeds"
       ],
       "priority": 80,
-      "passes": false,
-      "notes": "Three focused pillars are more effective than six generic feature cards for communicating niche positioning to high-anxiety parents."
+      "passes": true,
+      "notes": "Three focused pillars are more effective than six generic feature cards for communicating niche positioning to high-anxiety parents. [Completed 2026-03-01]"
     },
     {
       "id": "US-081",
@@ -1308,8 +1308,8 @@
         "npm run build succeeds"
       ],
       "priority": 81,
-      "passes": false,
-      "notes": "The auth page is the last touchpoint before conversion. Consistent ARFID positioning reinforces the parent's decision to sign up."
+      "passes": true,
+      "notes": "The auth page is the last touchpoint before conversion. Consistent ARFID positioning reinforces the parent's decision to sign up. [Completed 2026-03-01]"
     },
     {
       "id": "US-082",
@@ -1325,8 +1325,8 @@
         "npm run build succeeds"
       ],
       "priority": 82,
-      "passes": false,
-      "notes": "ARFID search volume is growing as the diagnosis becomes more recognized. Capturing these high-intent keywords drives qualified traffic with high conversion potential."
+      "passes": true,
+      "notes": "ARFID search volume is growing as the diagnosis becomes more recognized. Capturing these high-intent keywords drives qualified traffic with high conversion potential. [Completed 2026-03-01]"
     },
     {
       "id": "US-083",
@@ -1341,8 +1341,8 @@
         "npm run build succeeds"
       ],
       "priority": 83,
-      "passes": false,
-      "notes": "Content pillars are the backbone of organic acquisition. Each pillar targets a cluster of related keywords and drives traffic to the app signup funnel."
+      "passes": true,
+      "notes": "Content pillars are the backbone of organic acquisition. Each pillar targets a cluster of related keywords and drives traffic to the app signup funnel. [Completed 2026-03-01]"
     },
     {
       "id": "US-084",
@@ -1358,8 +1358,8 @@
         "npm run build succeeds"
       ],
       "priority": 84,
-      "passes": false,
-      "notes": "Mixed B2C/B2B pricing confuses both audiences. Clear separation helps each persona identify their plan in under 30 seconds."
+      "passes": true,
+      "notes": "Mixed B2C/B2B pricing confuses both audiences. Clear separation helps each persona identify their plan in under 30 seconds. [Completed 2026-03-01]"
     }
   ]
 }

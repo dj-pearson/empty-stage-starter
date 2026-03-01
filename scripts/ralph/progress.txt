@@ -390,14 +390,44 @@ Implemented top 4 highest-priority items to increase visibility and MRR through 
 - US-077: Clinical trust strip under hero (COMPLETED)
 - US-078: ARFID-specific problem/solution section (COMPLETED)
 - US-079: Therapist section on homepage (COMPLETED)
-- US-080: Three-pillar value proposition cards (pending)
-- US-081: Auth page ARFID messaging update (pending)
-- US-082: SEO meta tags for ARFID keyword targeting (pending)
-- US-083: Blog content pillar categories (pending)
-- US-084: Pricing page parent vs therapist positioning (pending)
+- US-080: Three-pillar value proposition cards (COMPLETED)
+- US-081: Auth page ARFID messaging update (COMPLETED)
+- US-082: SEO meta tags for ARFID keyword targeting (COMPLETED)
+- US-083: Blog content pillar categories (COMPLETED)
+- US-084: Pricing page parent vs therapist positioning (COMPLETED)
 
 ### Progress Summary
-- 4 stories completed this session (US-076, US-077, US-078, US-079)
-- Total: 54/84 stories now passing
-- Remaining: 30 stories with passes: false
+- 4 stories completed first session (US-076, US-077, US-078, US-079)
+- 5 stories completed second session (US-080, US-081, US-082, US-083, US-084)
+- Total: 59/84 stories now passing
+- Remaining: 25 stories with passes: false
+
+## 2026-03-01 - Branding Overhaul Phase 2 (US-080 through US-084)
+
+### US-080: Three-Pillar Value Proposition Cards
+- Replaced 6 generic feature cards with 3 focused pillars: Evidence-Based Progress, Calmer Mealtimes, Therapist-Designed
+- Each pillar has 3 benefit-oriented bullets
+
+### US-081: Auth Page ARFID Messaging
+- Complete auth page messaging overhaul for ARFID positioning
+- Added ARFID testimonial, updated headlines, value props, and social proof
+
+### US-082: SEO Meta Tags for ARFID
+- Updated homepage title, description, keywords for ARFID search targeting
+- Enhanced AI search metadata (aiPurpose, aiAudience, aiKeyFeatures, aiUseCases)
+- Added MedicalCondition structured data for ARFID
+- Added ARFID diagnosis FAQ for rich snippets
+
+### US-083: Blog Content Pillar Categories
+- Added 5 content pillars: ARFID 101, Food Chaining in Real Life, Meal Planning for Selective Eaters, Autism & Sensory, For Therapists
+- Updated blog filter UI with topic descriptions
+
+### US-084: Pricing Page Parent vs Therapist Positioning
+- Added dual audience section headers (For Families / For Therapists & Clinics)
+- Added audience-specific plan descriptions and badges
+- Added 2 therapist-specific FAQs
+- Updated SEO for pricing page
+
+### Build Verification
+- `npx vite build`: SUCCESS (1m 5s, no errors)
 ---

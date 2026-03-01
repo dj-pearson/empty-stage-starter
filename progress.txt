@@ -790,4 +790,73 @@ Reviewed prd_image.md branding research and conducted full site messaging audit 
 - 4 stories completed this session (US-076, US-077, US-078, US-079)
 - 9 new stories added (US-076 through US-084)
 - 5 remaining branding stories: US-080 (value pillars), US-081 (auth page), US-082 (SEO meta), US-083 (blog pillars), US-084 (pricing page)
+
+---
+
+## 2026-03-01 - Branding Overhaul Phase 2 (US-080 through US-084)
+
+Implemented the remaining 5 branding stories to complete the ARFID/food chaining niche positioning overhaul across the entire site.
+
+### US-080: Three-Pillar Value Proposition Cards
+- **File**: `src/pages/Landing.tsx` (features section)
+- Replaced 6 generic feature cards with 3 focused value pillars:
+  1. "Evidence-Based Progress, Not Guesswork" — AI grounded in food chaining, 70%+ prediction accuracy, 100K+ data points
+  2. "Calmer, Safer-Feeling Mealtimes" — structured daily plans, visual progress charts, one try-bite per day
+  3. "Designed With Feeding Therapists" — built with 200+ SLPs/OTs, therapist portal, insurance-compatible docs
+- Each pillar has 3 benefit-oriented bullet points with CheckCircle icons
+- Uses Brain, Heart, Stethoscope icons from lucide-react
+
+### US-081: Auth Page ARFID Messaging Update
+- **File**: `src/pages/Auth.tsx`
+- Changed headline from "End Mealtime Battles Forever" to "Finally, a Meal Plan Built for ARFID and Extreme Picky Eating"
+- Updated subheadline to mention food chaining science, 200+ feeding therapists, going from 5 to 50+ safe foods
+- Replaced generic value props with ARFID-specific messaging (Evidence-Based Food Chaining, Therapy-to-Home Bridge, etc.)
+- Added ARFID-specific testimonial from Jennifer L. (son with ARFID, 6 to 19 foods in 3 months)
+- Updated mobile social proof to mention ARFID specifically
+- Updated banner from "Now Live! Start Your Free Trial" to "Built on food chaining science for ARFID & picky eating"
+- Updated mobile "Why parents love EatPal" to "Built for ARFID & feeding disorders"
+- Updated meta title and description to include ARFID keywords
+
+### US-082: SEO Meta Tags for ARFID Keyword Targeting
+- **File**: `src/lib/seo-config.ts`
+- Updated homepage meta title: "EatPal: ARFID & Picky Eater Meal Planner | Food Chaining Science"
+- Updated homepage meta description to lead with ARFID positioning
+- Added ARFID-specific keywords: "ARFID meal plan for kids", "ARFID meal planner", "avoidant restrictive food intake disorder", "ARFID diagnosis help"
+- Updated AI search metadata (aiPurpose, aiAudience, aiKeyFeatures, aiUseCases) with comprehensive ARFID content
+- Added MedicalCondition structured data for ARFID in WebPage schema
+- Updated pricing page SEO: title and description now mention ARFID and therapist plans
+- Added new ARFID diagnosis FAQ to Landing.tsx for rich snippet eligibility
+
+### US-083: Blog Content Pillar Categories
+- **File**: `src/pages/Blog.tsx`
+- Added 5 content pillar categories with descriptions:
+  1. "ARFID & Feeding Disorders 101" — understanding diagnosis, treatment, when to seek help
+  2. "Food Chaining in Real Life" — practical examples, success stories, step-by-step guides
+  3. "Meal Planning for Selective Eaters" — strategies, recipes, weekly plans
+  4. "Autism & Sensory Mealtime Support" — sensory-friendly feeding strategies
+  5. "For Therapists & Clinics" — clinical insights, practice management, therapy tools
+- Updated filter section with "Browse by Topic" heading
+- Each pillar shows description when selected
+- Database categories still displayed alongside pillars for backward compatibility
+
+### US-084: Pricing Page Parent vs Therapist Positioning
+- **File**: `src/pages/Pricing.tsx`
+- Updated page title: "EatPal Pricing — Plans for Families & Feeding Therapists"
+- Added dual audience section cards: "For Families" (Users icon, primary styling) and "For Therapists & Clinics" (ShieldCheck icon, secondary styling)
+- Each audience card includes description, emphasis, and applicable plan names
+- Therapist section includes "start with 3 families" entry point messaging
+- Updated TL;DR summary to separate family vs therapist plans
+- Updated subheadline to address both parents and therapists
+- Added audience-specific descriptions to plan cards (getPlanAudienceDescription function)
+- Updated plan badges: Pro → "Most Popular for Families", Professional → "For Therapists & Clinics"
+- Added 2 therapist-specific FAQs: "Which plan is right for feeding therapists?" and "Can parents and therapists share the same account?"
+- Updated SEO config pricing title and description
+
+### Build Verification
+- `npx vite build`: SUCCESS (built in 1m 5s, no errors)
+
+### Progress Summary
+- 5 stories completed (US-080, US-081, US-082, US-083, US-084)
+- All 9 branding stories now complete (US-076 through US-084)
+- Full ARFID/food chaining niche positioning overhaul is done across: Landing, Auth, Pricing, Blog, SEO config
 ---
