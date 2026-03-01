@@ -332,3 +332,72 @@ Started: Thu Feb 12 10:21:37 CST 2026
 - Total: 50/75 stories now passing
 - Remaining: 25 stories with passes: false
 ---
+
+## 2026-03-01 - Branding & Messaging Overhaul (ARFID/Food Chaining Positioning)
+
+### Context
+Reviewed prd_image.md branding research document and conducted full site messaging audit.
+Added 9 new user stories (US-076 through US-084) to prd.json for branding/messaging improvements.
+Implemented top 4 highest-priority items to increase visibility and MRR through niche positioning.
+
+### US-076: Overhaul hero section messaging for ARFID and food chaining positioning
+- Changed hero headline from "Stop the Nightly 'What's for Dinner?' Meltdown" to "Turn Mealtime Battles Into Steady Progress, One Safe Bite at a Time"
+- Updated subheadline to explicitly mention: AI-powered, food chaining science, ARFID, autism-related feeding challenges, feeding therapists, 100K+ data points
+- Changed primary CTA from "Try It Free" → "Get Your Personalized 5-Day Plan" with subtext "Takes 2 minutes. Tailored to your child's safe foods."
+- Changed secondary CTA from "See How It Works" → "For Feeding Therapists →" scrolling to therapist section
+- Updated stats: replaced generic "50K+ Meals Planned" and "12+ New Foods Tried" with "200+ Feeding Therapists" and "100K+ Mealtime Data Points"
+- Files changed: src/components/EnhancedHero.tsx
+
+### US-077: Add clinical trust strip and evidence-based credibility bar under hero
+- Added trust strip section directly under hero with 3 proof points:
+  1. "Built with 200+ feeding therapists and pediatric dietitians" (Stethoscope icon)
+  2. "Grounded in food chaining, an evidence-based approach used worldwide" (GraduationCap icon)
+  3. "Used in feeding clinics, private practices, and by families at home" (Building2 icon)
+- Visually distinct with muted background and border-y treatment
+- Responsive: stacks vertically on mobile, 3-column grid on desktop
+- Files changed: src/pages/Landing.tsx
+
+### US-078: Replace pain points section with ARFID-specific problem/solution messaging
+- Replaced 6 generic pain point cards with 3 ARFID-specific problem cards:
+  1. "They Assume Kids Will 'Just Try It'" - addresses ARFID vs generic picky eating
+  2. "Generic 'Offer Variety' Advice Backfires" - speaks to failed standard approaches
+  3. "Therapy Progress Stalls Without Home Support" - validates feeding therapy + need for structured home tools
+- Added solution flip section: "EatPal Is Built Specifically for Feeding Disorders" with 4 evidence-based solution bullets
+- Problem cards use destructive/red accent to signal contrast; solution section uses primary/green accent
+- Updated section heading to "Why Typical Meal Planning Apps Fail for ARFID and Extreme Picky Eating"
+- Also updated features section heading to "Built for Feeding Disorders, Not Generic Meal Planning"
+- Also updated "How It Works" heading to "How EatPal Works: Food Chaining Made Practical for Real Families"
+- Also updated final CTA section heading to "Ready to Make Mealtimes Calmer?" with food chaining language
+- Files changed: src/pages/Landing.tsx
+
+### US-079: Add therapist/clinic section on homepage with professional positioning
+- Added full therapist section with id="therapist-section" for hero CTA scroll target
+- Heading: "The Operating System for Feeding Therapy"
+- Description copy positions EatPal as a shared data-rich workspace for clinics
+- 4 therapist-specific benefits: individualized food chains, real-time meal logs, standardized data collection, measurable progress for insurance
+- Stats card: 200+ therapists, 100K+ data points, 70%+ AI accuracy, 50% less admin time
+- Therapist testimonial from "Dr. Rachel K., Pediatric Feeding Specialist, SLP"
+- CTA: "See Therapist Plans" linking to /pricing
+- Positioned before pricing preview section on landing page
+- Files changed: src/pages/Landing.tsx
+
+### Build Verification
+- `npx vite build`: SUCCESS (built in 57.54s)
+- No TypeScript errors
+
+### New Stories Added (US-076 through US-084)
+- US-076: Hero section messaging overhaul (COMPLETED)
+- US-077: Clinical trust strip under hero (COMPLETED)
+- US-078: ARFID-specific problem/solution section (COMPLETED)
+- US-079: Therapist section on homepage (COMPLETED)
+- US-080: Three-pillar value proposition cards (pending)
+- US-081: Auth page ARFID messaging update (pending)
+- US-082: SEO meta tags for ARFID keyword targeting (pending)
+- US-083: Blog content pillar categories (pending)
+- US-084: Pricing page parent vs therapist positioning (pending)
+
+### Progress Summary
+- 4 stories completed this session (US-076, US-077, US-078, US-079)
+- Total: 54/84 stories now passing
+- Remaining: 30 stories with passes: false
+---

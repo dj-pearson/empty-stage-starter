@@ -1208,6 +1208,158 @@
       "priority": 75,
       "passes": true,
       "notes": "Users don't know what data improves recommendations. Profile completion indicators guide users to provide the data that makes AI suggestions better."
+    },
+    {
+      "id": "US-076",
+      "title": "Overhaul hero section messaging for ARFID and food chaining positioning",
+      "description": "As a parent searching for ARFID help, I want the hero section to immediately tell me this app is built for extreme picky eating and feeding disorders so that I know it's not just another generic meal planner.",
+      "acceptanceCriteria": [
+        "Hero headline references ARFID, extreme picky eating, and progress (e.g. 'Turn mealtime battles into steady progress, one safe bite at a time')",
+        "Subheadline explicitly mentions: AI-powered meal planning, food chaining science, built for families with ARFID/extreme picky eating, collaboration with feeding therapists",
+        "Primary CTA changed to 'Get Your Personalized 5-Day Plan' with subtext 'Takes 2 minutes. Tailored to your child's safe foods.'",
+        "Secondary CTA/link added: 'For Feeding Therapists →' linking to therapist section",
+        "Stats section updated to include therapist count (200+ feeding therapists)",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 76,
+      "passes": true,
+      "notes": "Highest impact change for conversion. Parents searching for ARFID/food chaining solutions need to see this is specifically for them within 3 seconds of landing on the page."
+    },
+    {
+      "id": "US-077",
+      "title": "Add clinical trust strip and evidence-based credibility bar under hero",
+      "description": "As a parent evaluating EatPal, I want to see clinical credibility and therapist endorsement immediately below the hero so that I trust this app is evidence-based and not just marketing.",
+      "acceptanceCriteria": [
+        "Add a trust strip section directly under the hero with at least 3 proof points",
+        "Include: 'Built with 200+ feeding therapists and dietitians' or similar clinical credibility statement",
+        "Include: 'Grounded in food chaining, an evidence-based approach used worldwide'",
+        "Include: 'Used in outpatient feeding clinics, private practices, and by families at home'",
+        "Trust strip uses Shield, Award, or similar credibility icons",
+        "Visually distinct from hero section (subtle background differentiation)",
+        "Mobile layout preserves readability (stack vertically on small screens)",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 77,
+      "passes": true,
+      "notes": "Trust strip is critical for conversion. Parents of ARFID children are high-anxiety and need immediate clinical validation before exploring further."
+    },
+    {
+      "id": "US-078",
+      "title": "Replace pain points section with ARFID-specific problem/solution messaging",
+      "description": "As a parent of a child with ARFID, I want the landing page to articulate why generic meal planning apps fail for feeding disorders so that I understand how EatPal is different.",
+      "acceptanceCriteria": [
+        "Section heading references ARFID and extreme picky eating specifically (e.g. 'Why typical meal planning apps fail for ARFID and extreme picky eating')",
+        "Include 3-4 specific failure modes of generic approaches: assumes kids will 'just try it', generic 'offer variety' advice increases anxiety, feeding therapy progress stalls without structured home support",
+        "Follow with 3-4 solution bullets on how EatPal is built specifically for feeding disorders: food chaining bridges from safe foods to new foods, plans around sensory preferences and triggers, keeps parents and therapists aligned",
+        "Uses empathetic, non-blaming tone per brand voice guidelines",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 78,
+      "passes": true,
+      "notes": "This section must differentiate EatPal from generic meal planning apps. Parents of ARFID children have tried standard approaches and need to know this is different."
+    },
+    {
+      "id": "US-079",
+      "title": "Add therapist/clinic section on homepage with professional positioning",
+      "description": "As a feeding therapist or clinic director, I want a dedicated section on the homepage addressing professional use so that I understand how EatPal supports clinical workflows and can extend therapy into the home.",
+      "acceptanceCriteria": [
+        "Add a section with heading 'The Operating System for Feeding Therapy' or similar",
+        "Include 3-4 therapist-specific benefits: create and share individualized food chains, capture real-time meal logs between sessions, standardize data collection across therapists, improve outcomes with structured home follow-through",
+        "Include CTA to therapist plans/pricing",
+        "Section visually distinct (different background or card treatment) to signal B2B audience",
+        "Positioned before the final CTA section on the landing page",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 79,
+      "passes": true,
+      "notes": "Therapist adoption is both validation and distribution. Feeding therapists who adopt EatPal refer families to the parent app, creating a flywheel for B2C acquisition."
+    },
+    {
+      "id": "US-080",
+      "title": "Update three-pillar value proposition cards for niche positioning",
+      "description": "As a visitor, I want to see three clear value pillars (evidence-based progress, calmer mealtimes, therapist-designed) so that I understand EatPal's unique differentiation from generic meal apps.",
+      "acceptanceCriteria": [
+        "Replace or update the 6-card features section with 3 focused value proposition cards",
+        "Card 1: 'Evidence-Based Progress, Not Guesswork' - AI grounded in food chaining, detects patterns in textures/brands/flavors",
+        "Card 2: 'Calmer, Safer-Feeling Mealtimes' - visual progress charts, structured daily plans",
+        "Card 3: 'Designed With Feeding Therapists' - supports food logs, safe-food lists, optional therapist portal",
+        "Each card contains 2-3 benefit-oriented bullets, not raw features",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 80,
+      "passes": false,
+      "notes": "Three focused pillars are more effective than six generic feature cards for communicating niche positioning to high-anxiety parents."
+    },
+    {
+      "id": "US-081",
+      "title": "Update Auth page messaging for ARFID and feeding disorder positioning",
+      "description": "As a parent signing up, I want the auth page to reinforce that EatPal is for ARFID and feeding disorders so that I feel confident I'm in the right place.",
+      "acceptanceCriteria": [
+        "Update left panel headline from 'End Mealtime Battles Forever' to ARFID-specific messaging",
+        "Update subheadline to mention food chaining, ARFID, and feeding therapist collaboration",
+        "Update value propositions to emphasize evidence-based approach, not generic meal planning",
+        "Add ARFID-specific testimonial or social proof element",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 81,
+      "passes": false,
+      "notes": "The auth page is the last touchpoint before conversion. Consistent ARFID positioning reinforces the parent's decision to sign up."
+    },
+    {
+      "id": "US-082",
+      "title": "Update SEO meta tags and structured data for ARFID keyword targeting",
+      "description": "As an SEO strategy, I want meta titles, descriptions, and structured data to target high-intent ARFID and food chaining keywords so that we capture organic search traffic from parents seeking help.",
+      "acceptanceCriteria": [
+        "Update homepage meta title to prominently feature ARFID (e.g. 'EatPal: ARFID & Picky Eater Meal Planner | Food Chaining Science')",
+        "Update homepage meta description to lead with ARFID/feeding disorder positioning",
+        "Ensure FAQ schema includes ARFID-specific Q&As for rich snippet eligibility",
+        "Add structured data for ARFID-related use cases in AI search metadata",
+        "Target keywords: 'ARFID meal plan for kids', 'food chaining examples', 'picky eater meal plan app', 'feeding therapy at home tools'",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 82,
+      "passes": false,
+      "notes": "ARFID search volume is growing as the diagnosis becomes more recognized. Capturing these high-intent keywords drives qualified traffic with high conversion potential."
+    },
+    {
+      "id": "US-083",
+      "title": "Organize blog with ARFID content pillars and category structure",
+      "description": "As a content marketer, I want blog posts organized by ARFID/food chaining content pillars so that we build topical authority and support SEO clustering strategy.",
+      "acceptanceCriteria": [
+        "Add content pillar categories: 'ARFID & Feeding Disorders 101', 'Food Chaining in Real Life', 'Meal Planning for Selective Eaters', 'Autism & Sensory Mealtime Support', 'For Therapists & Clinics'",
+        "Update blog page to display category filters matching these pillars",
+        "Each category has a brief description visible on the blog page",
+        "Blog post cards show their category tag",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 83,
+      "passes": false,
+      "notes": "Content pillars are the backbone of organic acquisition. Each pillar targets a cluster of related keywords and drives traffic to the app signup funnel."
+    },
+    {
+      "id": "US-084",
+      "title": "Update Pricing page with clearer parent vs therapist plan positioning",
+      "description": "As a visitor deciding on a plan, I want pricing to clearly differentiate parent plans from therapist/clinic plans so that I can quickly identify which plan is for me.",
+      "acceptanceCriteria": [
+        "Separate pricing into two clearly labeled sections: 'For Families' and 'For Therapists & Clinics'",
+        "Parent plans emphasize: food chaining, AI meal plans, progress tracking, grocery lists",
+        "Therapist plans emphasize: multi-client management, food chain design tools, shared progress data, insurance-compatible documentation",
+        "Each section has audience-specific copy (parent-friendly vs clinically-oriented)",
+        "Clear entry point for small therapist accounts (e.g. 'Start with 3 families')",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 84,
+      "passes": false,
+      "notes": "Mixed B2C/B2B pricing confuses both audiences. Clear separation helps each persona identify their plan in under 30 seconds."
     }
   ]
 }

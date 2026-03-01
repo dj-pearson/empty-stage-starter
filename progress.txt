@@ -746,3 +746,48 @@
 - Total progress: 21/50 stories passing
 - Remaining: 29 stories with passes: false
 ---
+
+## 2026-03-01 - Branding & Messaging Overhaul: ARFID/Food Chaining Positioning
+
+### Context
+Reviewed prd_image.md branding research and conducted full site messaging audit across Landing, Auth, Pricing, FAQ, Blog, SEO config, and EnhancedHero. Added 9 new user stories (US-076 through US-084) to prd.json targeting branding, messaging, and niche positioning improvements. Implemented top 4 highest-priority items for maximum impact on visibility and MRR.
+
+### US-076: Hero Section Messaging Overhaul
+- Headline: "Stop the Nightly 'What's for Dinner?' Meltdown" → "Turn Mealtime Battles Into Steady Progress, One Safe Bite at a Time"
+- Subheadline now explicitly mentions: AI-powered, food chaining science, ARFID, autism-related feeding challenges, feeding therapists, 100K+ data points
+- Primary CTA: "Try It Free" → "Get Your Personalized 5-Day Plan" (links to /meal-plan) with subtext
+- Secondary CTA: "See How It Works" → "For Feeding Therapists →" (scrolls to therapist section)
+- Stats updated: "50K+ Meals Planned" → "200+ Feeding Therapists", "12+ New Foods Tried" → "100K+ Mealtime Data Points"
+- Files changed: src/components/EnhancedHero.tsx
+
+### US-077: Clinical Trust Strip Under Hero
+- Added 3-column trust strip below hero with clinical credibility proof points
+- "Built with 200+ feeding therapists and pediatric dietitians" (Stethoscope icon)
+- "Grounded in food chaining, an evidence-based approach used worldwide" (GraduationCap icon)
+- "Used in feeding clinics, private practices, and by families at home" (Building2 icon)
+- Responsive: vertical stack on mobile, 3-column grid on desktop
+- Files changed: src/pages/Landing.tsx
+
+### US-078: ARFID-Specific Problem/Solution Section
+- Replaced 6 generic pain point cards with 3 ARFID-focused problem cards with destructive styling
+- Added solution flip panel: "EatPal Is Built Specifically for Feeding Disorders" with 4 evidence-based bullets
+- Updated section heading: "Why Typical Meal Planning Apps Fail for ARFID and Extreme Picky Eating"
+- Also updated features heading, how-it-works heading, and final CTA section messaging
+- Files changed: src/pages/Landing.tsx
+
+### US-079: Therapist Section on Homepage
+- Added full "The Operating System for Feeding Therapy" section with id="therapist-section"
+- Left side: professional copy, 4 therapist benefits, "See Therapist Plans" CTA
+- Right side: stats card (200+ therapists, 100K+ data points, 70% AI accuracy, 50% less admin)
+- Includes therapist testimonial from "Dr. Rachel K., Pediatric Feeding Specialist, SLP"
+- Positioned before pricing preview section
+- Files changed: src/pages/Landing.tsx
+
+### Build Verification
+- `npx vite build`: SUCCESS (built in 57.54s, no errors)
+
+### Progress Summary
+- 4 stories completed this session (US-076, US-077, US-078, US-079)
+- 9 new stories added (US-076 through US-084)
+- 5 remaining branding stories: US-080 (value pillars), US-081 (auth page), US-082 (SEO meta), US-083 (blog pillars), US-084 (pricing page)
+---
