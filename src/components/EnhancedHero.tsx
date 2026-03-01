@@ -172,9 +172,9 @@ export function EnhancedHero() {
   }, []);
 
   const stats: Array<{ numericValue: number; suffix: string; label: string; icon: string; decimals?: number }> = [
-    { numericValue: 2000, suffix: '+', label: 'Parents Trust EatPal', icon: '👨‍👩‍👧' },
-    { numericValue: 50000, suffix: '+', label: 'Meals Planned', icon: '🍽️' },
-    { numericValue: 12, suffix: '+', label: 'New Foods Tried', icon: '🎯' },
+    { numericValue: 2000, suffix: '+', label: 'Families Helped', icon: '👨‍👩‍👧' },
+    { numericValue: 200, suffix: '+', label: 'Feeding Therapists', icon: '🩺' },
+    { numericValue: 100, suffix: 'K+', label: 'Mealtime Data Points', icon: '📊' },
     { numericValue: 4.8, suffix: '', label: 'Parent Rating', icon: '⭐', decimals: 1 },
   ];
 
@@ -198,11 +198,11 @@ export function EnhancedHero() {
           className="text-5xl md:text-7xl font-heading font-bold mb-8 leading-tight tracking-tight"
         >
           <span className="text-foreground">
-            Stop the Nightly
+            Turn Mealtime Battles Into
           </span>
           <br />
           <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent drop-shadow-sm">
-            "What's for Dinner?" Meltdown
+            Steady Progress, One Safe Bite at a Time
           </span>
         </h1>
 
@@ -211,24 +211,29 @@ export function EnhancedHero() {
           ref={subheadlineRef}
           className="text-xl md:text-2xl text-muted-foreground mb-10 max-w-3xl mx-auto leading-relaxed font-light"
         >
-          The meal planning app that turns picky eaters into adventurous eaters—one safe food at a time.
-          Build weekly meal plans your kids will actually eat, auto-generate grocery lists, and track real progress.
+          An AI-powered meal planning app built on{' '}
+          <span className="text-foreground font-medium">food chaining science</span>{' '}
+          to help families with extreme picky eating, ARFID, and autism-related feeding challenges.
+          Created alongside feeding therapists and backed by 100K+ real mealtime data points.
         </p>
 
         {/* CTA Buttons */}
         <div
           ref={ctaRef}
-          className="flex gap-6 justify-center flex-wrap"
+          className="flex gap-6 justify-center flex-wrap items-start"
         >
-          <div className="hover:scale-105 transition-transform duration-300">
-            <Link to="/auth?tab=signup">
+          <div className="hover:scale-105 transition-transform duration-300 text-center">
+            <Link to="/meal-plan">
               <Button
                 size="lg"
                 className="gap-2 text-lg px-10 py-7 shadow-xl hover:shadow-2xl transition-all bg-primary hover:bg-primary/90 text-white rounded-full"
               >
-                Try It Free <ArrowRight className="h-5 w-5" />
+                Get Your Personalized 5-Day Plan <ArrowRight className="h-5 w-5" />
               </Button>
             </Link>
+            <p className="text-xs text-muted-foreground mt-2 font-medium">
+              Takes 2 minutes. Tailored to your child's safe foods.
+            </p>
           </div>
           <div className="hover:scale-105 transition-transform duration-300">
             <Button
@@ -237,19 +242,19 @@ export function EnhancedHero() {
               className="text-lg px-10 py-7 border-2 border-primary/20 hover:bg-primary/5 hover:border-primary/40 rounded-full backdrop-blur-sm"
               onClick={() =>
                 document
-                  .getElementById('how-it-works')
+                  .getElementById('therapist-section')
                   ?.scrollIntoView({ behavior: 'smooth' })
               }
             >
-              See How It Works
+              For Feeding Therapists →
             </Button>
           </div>
         </div>
 
         {/* Anxiety Reducer */}
         <p className="text-sm text-muted-foreground mt-6 font-medium opacity-80">
-          <span className="text-primary">Free to join</span> • No credit card
-          required • 14-day money-back guarantee
+          <span className="text-primary">Free to start</span> • No credit card
+          required • Evidence-based food chaining methodology
         </p>
 
         {/* Animated Stats - Trust Signals */}

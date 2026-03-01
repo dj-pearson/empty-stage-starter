@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +17,8 @@ import { Calculator, DollarSign, Users, MapPin, ArrowRight } from 'lucide-react'
 import { BudgetCalculatorInput, DietaryRestriction } from '@/types/budgetCalculator';
 import { calculateBudget, generateBudgetMealSuggestions } from '@/lib/budgetCalculator/calculator';
 import { v4 as uuidv4 } from 'uuid';
+import { SEOHead } from '@/components/SEOHead';
+import { getPageSEO } from '@/lib/seo-config';
 
 const US_STATES = [
   { code: 'AL', name: 'Alabama' },
@@ -178,17 +179,7 @@ export default function BudgetCalculator() {
 
   return (
     <>
-      <Helmet>
-        <title>Grocery Budget Calculator - Free USDA-Based Food Budget Estimator | TryEatPal</title>
-        <meta
-          name="description"
-          content="Calculate your family's realistic grocery budget using official USDA data. Get personalized recommendations, money-saving tips, and compare costs vs meal kits and dining out."
-        />
-        <meta
-          name="keywords"
-          content="grocery budget calculator, food budget, USDA food plan, meal planning budget, family grocery costs, food cost estimator"
-        />
-      </Helmet>
+      <SEOHead {...getPageSEO("budgetCalculator")!} />
 
       <main id="main-content" className="min-h-screen bg-gradient-to-b from-green-50 to-white py-12 px-4 sm:px-6 lg:px-8">
         <motion.div

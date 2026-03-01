@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, Sparkles, Menu, Users, ShieldCheck, FileText, Lock } from "lucide-react";
+import { Check, X, Sparkles, Menu, Users, ShieldCheck, FileText, Lock, Clock, DollarSign, Brain, Utensils } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -291,7 +291,7 @@ export default function Pricing() {
   const getPlanBadge = (planName: string) => {
     switch (planName) {
       case "Pro":
-        return <Badge variant="secondary">Popular</Badge>;
+        return <Badge variant="secondary">Most Popular for Families</Badge>;
       case "Family Plus":
         return (
           <Badge className="bg-gradient-to-r from-primary to-accent text-white">
@@ -299,7 +299,22 @@ export default function Pricing() {
           </Badge>
         );
       case "Professional":
-        return <Badge variant="outline">Enterprise</Badge>;
+        return <Badge variant="outline">For Therapists & Clinics</Badge>;
+      default:
+        return null;
+    }
+  };
+
+  const getPlanAudienceDescription = (planName: string) => {
+    switch (planName) {
+      case "Free":
+        return "Perfect for parents who want to try food chaining with one child";
+      case "Pro":
+        return "Full AI food chaining for families managing ARFID and picky eating";
+      case "Family Plus":
+        return "Multi-household support for families coordinating with therapists";
+      case "Professional":
+        return "Multi-client management, shared food chains, and insurance documentation for feeding practices";
       default:
         return null;
     }
@@ -472,27 +487,27 @@ export default function Pricing() {
 
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            EatPal Pricing - Meal Planning Plans for Picky Eaters
+            EatPal Pricing — Plans for Families & Feeding Therapists
           </h1>
 
           {/* TL;DR for GEO */}
           <div className="max-w-3xl mx-auto bg-primary/5 border-l-4 border-primary p-6 rounded-r-lg mb-6 text-left">
             <p className="text-sm font-semibold text-primary mb-2">TL;DR - Quick Pricing Summary</p>
             <p className="text-muted-foreground leading-relaxed">
-              <strong>Free Plan:</strong> 1 child, limited features. <strong>Pro Plan ($9.99/mo):</strong> Unlimited children, AI meal planning, full features.
-              <strong>Family Plus ($19.99/mo):</strong> Advanced nutrition tracking, multi-household. <strong>Professional Plan:</strong> For therapists and dietitians.
+              <strong>For Families:</strong> Free Plan (1 child) or Pro Plan ($9.99/mo) with AI food chaining, unlimited children, and progress tracking.
+              <strong> For Therapists & Clinics:</strong> Family Plus ($19.99/mo) with multi-household support or Professional Plan with full therapist portal, multi-client management, and insurance-compatible documentation.
               All plans include safe food tracking, try bites, and grocery lists. Free trial available. Cancel anytime.
             </p>
           </div>
 
           <p className="text-xl text-muted-foreground mb-8">
-            Select the perfect plan to help your family's feeding journey with picky eaters, ARFID, and selective eating
+            Whether you're a parent managing ARFID at home or a therapist coordinating feeding therapy across families, there's a plan built for you
           </p>
 
           {/* Entity markers for AI understanding */}
           <div className="sr-only">
-            Pricing for: EatPal meal planning app, picky eater subscription plans, ARFID meal planner cost,
-            family meal planning pricing, kids nutrition app subscription, feeding therapy tools pricing
+            Pricing for: EatPal meal planning app, ARFID meal planner cost for families, feeding therapy platform for therapists,
+            picky eater subscription plans, family meal planning pricing, professional feeding therapy tools pricing
           </div>
 
           {/* Billing Toggle */}
@@ -523,6 +538,34 @@ export default function Pricing() {
           </div>
         </div>
 
+        {/* Audience Section Headers */}
+        <div className="grid md:grid-cols-2 gap-8 mb-12 max-w-4xl mx-auto">
+          <div className="flex items-start gap-4 p-6 rounded-2xl bg-primary/5 border border-primary/10">
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <Users className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-xl font-heading font-bold text-foreground mb-1">For Families</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                AI-powered food chaining, daily try-bite plans, progress tracking, and grocery lists for parents managing ARFID and picky eating at home
+              </p>
+              <p className="text-xs text-primary font-medium mt-2">Free, Pro & Family Plus plans</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-4 p-6 rounded-2xl bg-secondary/50 border border-border/50">
+            <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center shrink-0">
+              <ShieldCheck className="h-6 w-6 text-foreground" />
+            </div>
+            <div>
+              <h2 className="text-xl font-heading font-bold text-foreground mb-1">For Therapists & Clinics</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Multi-client management, food chain design tools, shared progress data, and insurance-compatible documentation for feeding professionals
+              </p>
+              <p className="text-xs text-muted-foreground font-medium mt-2">Professional plan — start with 3 families</p>
+            </div>
+          </div>
+        </div>
+
         {/* Pricing Cards - Horizontal scroll on mobile, grid on desktop */}
         <div className="lg:hidden flex overflow-x-auto snap-x snap-mandatory gap-6 pb-4 -mx-4 px-4 mb-8 scrollbar-hide">
           {plans.map((plan) => {
@@ -544,6 +587,9 @@ export default function Pricing() {
 
                 <CardHeader>
                   <CardTitle className="text-2xl">{plan.name}</CardTitle>
+                  {getPlanAudienceDescription(plan.name) && (
+                    <p className="text-xs text-muted-foreground mt-1">{getPlanAudienceDescription(plan.name)}</p>
+                  )}
                   <CardDescription>
                     <div className="mt-4">
                       {plan.activeCampaign &&
@@ -754,6 +800,9 @@ export default function Pricing() {
 
                 <CardHeader>
                   <CardTitle className="text-2xl">{plan.name}</CardTitle>
+                  {getPlanAudienceDescription(plan.name) && (
+                    <p className="text-xs text-muted-foreground mt-1">{getPlanAudienceDescription(plan.name)}</p>
+                  )}
                   <CardDescription>
                     <div className="mt-4">
                       {plan.activeCampaign &&
@@ -957,6 +1006,149 @@ export default function Pricing() {
           <FeatureComparisonTable plans={plans} />
         </Suspense>
 
+        {/* Why Choose EatPal - Comparison Section */}
+        <section className="mt-16 max-w-5xl mx-auto animate-section">
+          <h2 className="text-2xl md:text-3xl font-heading font-bold text-center mb-3">
+            Why Choose EatPal?
+          </h2>
+          <p className="text-center text-muted-foreground mb-10 max-w-2xl mx-auto">
+            See how EatPal compares to other options families try for picky eaters and feeding challenges.
+          </p>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Traditional Feeding Therapy */}
+            <Card className="border-muted">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 rounded-lg bg-muted">
+                    <Clock className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                </div>
+                <CardTitle className="text-lg">Feeding Therapy</CardTitle>
+                <CardDescription>
+                  <span className="text-xl font-bold text-foreground">$150+</span>
+                  <span className="text-muted-foreground"> /session</span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>Wait lists of 3-6 months</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>Limited to 1 hour/week</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>No at-home continuity</span>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+
+            {/* Meal Kit Services */}
+            <Card className="border-muted">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 rounded-lg bg-muted">
+                    <Utensils className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                </div>
+                <CardTitle className="text-lg">Meal Kit Services</CardTitle>
+                <CardDescription>
+                  <span className="text-xl font-bold text-foreground">$200+</span>
+                  <span className="text-muted-foreground"> /month</span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>Not built for picky eaters</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>No food chaining science</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>Food waste from refused meals</span>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+
+            {/* Generic Meal Planners */}
+            <Card className="border-muted">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 rounded-lg bg-muted">
+                    <DollarSign className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                </div>
+                <CardTitle className="text-lg">Generic Planners</CardTitle>
+                <CardDescription>
+                  <span className="text-xl font-bold text-foreground">$5-15</span>
+                  <span className="text-muted-foreground"> /month</span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>No ARFID or sensory support</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>No safe food tracking</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <span>Assumes kids eat anything</span>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+
+            {/* EatPal */}
+            <Card className="border-primary shadow-lg relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                <Badge className="bg-primary text-primary-foreground font-semibold px-3">Best Value</Badge>
+              </div>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <Brain className="h-5 w-5 text-primary" />
+                  </div>
+                </div>
+                <CardTitle className="text-lg text-primary">EatPal</CardTitle>
+                <CardDescription>
+                  <span className="text-xl font-bold text-primary">$9.99</span>
+                  <span className="text-muted-foreground"> /month</span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                    <span>Built for ARFID & picky eaters</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                    <span>AI food chaining, 5 min/day</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                    <span>70%+ prediction accuracy</span>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
         {/* 30-Day Money-Back Guarantee Banner */}
         <div className="text-center py-6">
           <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-primary/10 text-primary font-medium">
@@ -982,7 +1174,7 @@ export default function Pricing() {
 
         {/* Billing FAQ */}
         <div className="max-w-2xl mx-auto py-12">
-          <h2 className="text-2xl font-bold text-center mb-6">Billing FAQ</h2>
+          <h2 className="text-2xl font-bold text-center mb-6">Pricing FAQ</h2>
           <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="q1">
               <AccordionTrigger>Can I cancel my subscription anytime?</AccordionTrigger>
@@ -1012,6 +1204,18 @@ export default function Pricing() {
               <AccordionTrigger>What happens to my data if I cancel?</AccordionTrigger>
               <AccordionContent>
                 Your data is never deleted. When you cancel, your account reverts to the Free plan at the end of your billing period. You can upgrade again anytime to restore full access to all your saved meals, recipes, and tracking history.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="q6">
+              <AccordionTrigger>Which plan is right for feeding therapists?</AccordionTrigger>
+              <AccordionContent>
+                The Professional plan is designed for SLPs, OTs, and pediatric dietitians. It includes multi-client management, food chain design tools you can share with families, progress data that syncs between therapy sessions and home, and insurance-compatible documentation. You can start with as few as 3 families and scale as your practice grows.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="q7">
+              <AccordionTrigger>Can parents and therapists share the same account?</AccordionTrigger>
+              <AccordionContent>
+                Parents and therapists have separate accounts, but they connect through shared food chains and progress data. The therapist can design food chains and set goals, while the parent logs daily meals and try bites at home. Both see the same real-time progress dashboard, keeping everyone aligned between sessions.
               </AccordionContent>
             </AccordionItem>
           </Accordion>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -91,6 +92,11 @@ export default function CheckoutSuccess() {
     : null;
 
   return (
+    <>
+    <Helmet>
+      <title>Checkout Success - EatPal</title>
+      <meta name="robots" content="noindex" />
+    </Helmet>
     <div id="main-content" className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
       <div className="w-full max-w-2xl">
         {/* Success Header */}
@@ -220,5 +226,6 @@ export default function CheckoutSuccess() {
         </p>
       </div>
     </div>
+    </>
   );
 }
