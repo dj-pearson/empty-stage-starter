@@ -15,7 +15,17 @@ services:
       - SUPABASE_DB_HOST=${SUPABASE_DB_HOST}
       - SUPABASE_DB_PORT=${SUPABASE_DB_PORT}
       - SUPABASE_DB_PASSWORD=${SUPABASE_DB_PASSWORD}
-      # OpenAI for AI functions
+      # AIServiceV2 centralized AI configuration (Coolify Team Shared)
+      - AI_DEFAULT_PROVIDER=${AI_DEFAULT_PROVIDER:-anthropic}
+      - DEFAULT_AI_MODEL=${DEFAULT_AI_MODEL:-claude-sonnet-4-5-20250929}
+      - LIGHTWEIGHT_AI_MODEL=${LIGHTWEIGHT_AI_MODEL:-claude-3-5-haiku-20241022}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - OPENAI_GLOBAL_API=${OPENAI_GLOBAL_API}
+      - AI_MAX_RETRIES=${AI_MAX_RETRIES:-3}
+      - AI_TIMEOUT_MS=${AI_TIMEOUT_MS:-30000}
+      - AI_TEMPERATURE=${AI_TEMPERATURE:-0.7}
+      - AI_ENABLE_CACHING=${AI_ENABLE_CACHING:-true}
+      # Legacy OpenAI key (used by older functions)
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       # Stripe for payment functions
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
