@@ -15,6 +15,9 @@ const Accessibility = () => {
       <Helmet>
         <title>Accessibility Statement - EatPal</title>
         <meta name="description" content="EatPal's commitment to digital accessibility. Learn about our WCAG 2.1 AA compliance, accessibility features, and how to request accommodations." />
+        <meta property="og:title" content="Accessibility Statement - EatPal" />
+        <meta property="og:description" content="EatPal's commitment to digital accessibility. WCAG 2.1 AA compliance, accessibility features, and accommodation requests." />
+        <meta property="og:type" content="website" />
       </Helmet>
 
       {/* Header */}

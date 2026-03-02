@@ -1,9 +1,14 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { SEOHead } from "@/components/SEOHead";
+import { getPageSEO } from "@/lib/seo-config";
 
 const TermsOfService = () => {
+  const seoConfig = getPageSEO("terms");
   return (
+    <>
+    <SEOHead {...seoConfig!} />
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">
@@ -267,6 +272,7 @@ const TermsOfService = () => {
         </div>
       </footer>
     </div>
+    </>
   );
 };
 

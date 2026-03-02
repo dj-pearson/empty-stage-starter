@@ -166,6 +166,7 @@ export default function ShareTarget() {
       <div className="min-h-screen flex items-center justify-center p-4 bg-background">
         <Helmet>
           <title>Sign In Required - EatPal</title>
+          <meta name="robots" content="noindex" />
         </Helmet>
         <Card className="p-6 max-w-sm w-full text-center space-y-4">
           <LogIn className="h-10 w-10 mx-auto text-primary" />
@@ -185,6 +186,7 @@ export default function ShareTarget() {
     <div className="min-h-screen flex items-center justify-center p-4 bg-background">
       <Helmet>
         <title>Add to Grocery List - EatPal</title>
+        <meta name="robots" content="noindex" />
       </Helmet>
       <Card className="p-6 max-w-lg w-full space-y-4">
         <div className="flex items-center gap-3">

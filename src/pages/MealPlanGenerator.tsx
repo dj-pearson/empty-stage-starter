@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,6 +24,8 @@ import {
 } from '@/types/mealPlanGenerator';
 import { generateMealPlan } from '@/lib/mealPlanGenerator/mealPlanGenerator';
 import { v4 as uuidv4 } from 'uuid';
+import { SEOHead } from '@/components/SEOHead';
+import { getPageSEO } from '@/lib/seo-config';
 
 const DIETARY_RESTRICTIONS: { id: DietaryRestriction; label: string }[] = [
   { id: 'vegetarian', label: 'Vegetarian' },
@@ -182,17 +183,7 @@ export default function MealPlanGenerator() {
 
   return (
     <>
-      <Helmet>
-        <title>5-Day Meal Plan Generator - Free Personalized Family Meal Plans | TryEatPal</title>
-        <meta
-          name="description"
-          content="Generate a free 5-day meal plan tailored to your family's needs. Perfect for picky eaters, dietary restrictions, and busy schedules. Includes grocery list and recipes."
-        />
-        <meta
-          name="keywords"
-          content="meal plan generator, family meal planning, picky eater meals, grocery list generator, weekly meal plan, dinner ideas"
-        />
-      </Helmet>
+      <SEOHead {...getPageSEO("mealPlan")!} />
 
       <main id="main-content" className="min-h-screen bg-gradient-to-b from-purple-50 to-white py-12 px-4 sm:px-6 lg:px-8">
         <motion.div

@@ -149,6 +149,7 @@ export default function Billing() {
       <Helmet>
         <title>Billing & Payments - EatPal</title>
         <meta name="description" content="Manage your subscription and billing" />
+        <meta name="robots" content="noindex" />
       </Helmet>
 
       <div className="container mx-auto p-6 max-w-3xl">

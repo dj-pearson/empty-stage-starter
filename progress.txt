@@ -746,3 +746,173 @@
 - Total progress: 21/50 stories passing
 - Remaining: 29 stories with passes: false
 ---
+
+## 2026-03-01 - Branding & Messaging Overhaul: ARFID/Food Chaining Positioning
+
+### Context
+Reviewed prd_image.md branding research and conducted full site messaging audit across Landing, Auth, Pricing, FAQ, Blog, SEO config, and EnhancedHero. Added 9 new user stories (US-076 through US-084) to prd.json targeting branding, messaging, and niche positioning improvements. Implemented top 4 highest-priority items for maximum impact on visibility and MRR.
+
+### US-076: Hero Section Messaging Overhaul
+- Headline: "Stop the Nightly 'What's for Dinner?' Meltdown" → "Turn Mealtime Battles Into Steady Progress, One Safe Bite at a Time"
+- Subheadline now explicitly mentions: AI-powered, food chaining science, ARFID, autism-related feeding challenges, feeding therapists, 100K+ data points
+- Primary CTA: "Try It Free" → "Get Your Personalized 5-Day Plan" (links to /meal-plan) with subtext
+- Secondary CTA: "See How It Works" → "For Feeding Therapists →" (scrolls to therapist section)
+- Stats updated: "50K+ Meals Planned" → "200+ Feeding Therapists", "12+ New Foods Tried" → "100K+ Mealtime Data Points"
+- Files changed: src/components/EnhancedHero.tsx
+
+### US-077: Clinical Trust Strip Under Hero
+- Added 3-column trust strip below hero with clinical credibility proof points
+- "Built with 200+ feeding therapists and pediatric dietitians" (Stethoscope icon)
+- "Grounded in food chaining, an evidence-based approach used worldwide" (GraduationCap icon)
+- "Used in feeding clinics, private practices, and by families at home" (Building2 icon)
+- Responsive: vertical stack on mobile, 3-column grid on desktop
+- Files changed: src/pages/Landing.tsx
+
+### US-078: ARFID-Specific Problem/Solution Section
+- Replaced 6 generic pain point cards with 3 ARFID-focused problem cards with destructive styling
+- Added solution flip panel: "EatPal Is Built Specifically for Feeding Disorders" with 4 evidence-based bullets
+- Updated section heading: "Why Typical Meal Planning Apps Fail for ARFID and Extreme Picky Eating"
+- Also updated features heading, how-it-works heading, and final CTA section messaging
+- Files changed: src/pages/Landing.tsx
+
+### US-079: Therapist Section on Homepage
+- Added full "The Operating System for Feeding Therapy" section with id="therapist-section"
+- Left side: professional copy, 4 therapist benefits, "See Therapist Plans" CTA
+- Right side: stats card (200+ therapists, 100K+ data points, 70% AI accuracy, 50% less admin)
+- Includes therapist testimonial from "Dr. Rachel K., Pediatric Feeding Specialist, SLP"
+- Positioned before pricing preview section
+- Files changed: src/pages/Landing.tsx
+
+### Build Verification
+- `npx vite build`: SUCCESS (built in 57.54s, no errors)
+
+### Progress Summary
+- 4 stories completed this session (US-076, US-077, US-078, US-079)
+- 9 new stories added (US-076 through US-084)
+- 5 remaining branding stories: US-080 (value pillars), US-081 (auth page), US-082 (SEO meta), US-083 (blog pillars), US-084 (pricing page)
+
+---
+
+## 2026-03-01 - Branding Overhaul Phase 2 (US-080 through US-084)
+
+Implemented the remaining 5 branding stories to complete the ARFID/food chaining niche positioning overhaul across the entire site.
+
+### US-080: Three-Pillar Value Proposition Cards
+- **File**: `src/pages/Landing.tsx` (features section)
+- Replaced 6 generic feature cards with 3 focused value pillars:
+  1. "Evidence-Based Progress, Not Guesswork" — AI grounded in food chaining, 70%+ prediction accuracy, 100K+ data points
+  2. "Calmer, Safer-Feeling Mealtimes" — structured daily plans, visual progress charts, one try-bite per day
+  3. "Designed With Feeding Therapists" — built with 200+ SLPs/OTs, therapist portal, insurance-compatible docs
+- Each pillar has 3 benefit-oriented bullet points with CheckCircle icons
+- Uses Brain, Heart, Stethoscope icons from lucide-react
+
+### US-081: Auth Page ARFID Messaging Update
+- **File**: `src/pages/Auth.tsx`
+- Changed headline from "End Mealtime Battles Forever" to "Finally, a Meal Plan Built for ARFID and Extreme Picky Eating"
+- Updated subheadline to mention food chaining science, 200+ feeding therapists, going from 5 to 50+ safe foods
+- Replaced generic value props with ARFID-specific messaging (Evidence-Based Food Chaining, Therapy-to-Home Bridge, etc.)
+- Added ARFID-specific testimonial from Jennifer L. (son with ARFID, 6 to 19 foods in 3 months)
+- Updated mobile social proof to mention ARFID specifically
+- Updated banner from "Now Live! Start Your Free Trial" to "Built on food chaining science for ARFID & picky eating"
+- Updated mobile "Why parents love EatPal" to "Built for ARFID & feeding disorders"
+- Updated meta title and description to include ARFID keywords
+
+### US-082: SEO Meta Tags for ARFID Keyword Targeting
+- **File**: `src/lib/seo-config.ts`
+- Updated homepage meta title: "EatPal: ARFID & Picky Eater Meal Planner | Food Chaining Science"
+- Updated homepage meta description to lead with ARFID positioning
+- Added ARFID-specific keywords: "ARFID meal plan for kids", "ARFID meal planner", "avoidant restrictive food intake disorder", "ARFID diagnosis help"
+- Updated AI search metadata (aiPurpose, aiAudience, aiKeyFeatures, aiUseCases) with comprehensive ARFID content
+- Added MedicalCondition structured data for ARFID in WebPage schema
+- Updated pricing page SEO: title and description now mention ARFID and therapist plans
+- Added new ARFID diagnosis FAQ to Landing.tsx for rich snippet eligibility
+
+### US-083: Blog Content Pillar Categories
+- **File**: `src/pages/Blog.tsx`
+- Added 5 content pillar categories with descriptions:
+  1. "ARFID & Feeding Disorders 101" — understanding diagnosis, treatment, when to seek help
+  2. "Food Chaining in Real Life" — practical examples, success stories, step-by-step guides
+  3. "Meal Planning for Selective Eaters" — strategies, recipes, weekly plans
+  4. "Autism & Sensory Mealtime Support" — sensory-friendly feeding strategies
+  5. "For Therapists & Clinics" — clinical insights, practice management, therapy tools
+- Updated filter section with "Browse by Topic" heading
+- Each pillar shows description when selected
+- Database categories still displayed alongside pillars for backward compatibility
+
+### US-084: Pricing Page Parent vs Therapist Positioning
+- **File**: `src/pages/Pricing.tsx`
+- Updated page title: "EatPal Pricing — Plans for Families & Feeding Therapists"
+- Added dual audience section cards: "For Families" (Users icon, primary styling) and "For Therapists & Clinics" (ShieldCheck icon, secondary styling)
+- Each audience card includes description, emphasis, and applicable plan names
+- Therapist section includes "start with 3 families" entry point messaging
+- Updated TL;DR summary to separate family vs therapist plans
+- Updated subheadline to address both parents and therapists
+- Added audience-specific descriptions to plan cards (getPlanAudienceDescription function)
+- Updated plan badges: Pro → "Most Popular for Families", Professional → "For Therapists & Clinics"
+- Added 2 therapist-specific FAQs: "Which plan is right for feeding therapists?" and "Can parents and therapists share the same account?"
+- Updated SEO config pricing title and description
+
+### Build Verification
+- `npx vite build`: SUCCESS (built in 1m 5s, no errors)
+
+### Progress Summary
+- 5 stories completed (US-080, US-081, US-082, US-083, US-084)
+- All 9 branding stories now complete (US-076 through US-084)
+- Full ARFID/food chaining niche positioning overhaul is done across: Landing, Auth, Pricing, Blog, SEO config
+---
+
+## 2026-03-01 - Session 3: Performance & SEO Batch (US-048, US-049, US-058, US-045, US-040)
+
+### US-048: Self-host Google Fonts for performance and privacy
+- Installed @fontsource/inter (400, 500, 600, 700) and @fontsource/nunito-sans (400, 600, 700, 800)
+- Added font CSS imports to `src/main.tsx`
+- Removed Google Fonts CDN `<link>` tags from `index.html` (lines 228-248 replaced with comment)
+- Updated CSP in `public/_headers`: removed `fonts.googleapis.com` from style-src and `fonts.gstatic.com` from font-src
+- Eliminates 2 external DNS lookups and improves privacy
+
+### US-049: Defer GSAP loading to IntersectionObserver
+- Replaced `setTimeout(initAnimations, 100)` with IntersectionObserver in `src/pages/Landing.tsx`
+- GSAP + ScrollTrigger now dynamically imported only when first `.animate-section` or `.animate-grid` enters viewport
+- Uses `rootMargin: '200px'` to preload slightly before visible
+- Includes fallback for edge case where DOM isn't ready yet (uses `setTimeout(0)` + observer)
+- Maintains `prefers-reduced-motion` check before any GSAP loading
+
+### US-058: Add comparison section to Pricing page
+- Added "Why Choose EatPal?" comparison section to `src/pages/Pricing.tsx`
+- Four comparison cards:
+  - Feeding Therapy: $150+/session (wait lists, limited hours, no home continuity)
+  - Meal Kit Services: $200+/month (not for picky eaters, no food chaining, food waste)
+  - Generic Planners: $5-15/month (no ARFID support, no safe food tracking)
+  - EatPal: $9.99/month with "Best Value" badge (ARFID built-in, AI food chaining, 70%+ accuracy)
+- Uses Card components with theme-aware styling
+- Added Clock, DollarSign, Brain, Utensils icons from lucide-react
+
+### US-045: Upgrade lead-magnet pages from Helmet to SEOHead
+- Replaced raw `<Helmet>` with `<SEOHead {...getPageSEO("key")!} />` in:
+  - `src/pages/PickyEaterQuiz.tsx` → uses "pickyEaterQuiz" config
+  - `src/pages/BudgetCalculator.tsx` → uses "budgetCalculator" config
+  - `src/pages/MealPlanGenerator.tsx` → uses "mealPlan" config
+- These pages now get full AI metadata, structured data (JSON-LD), OG tags, and canonical URLs from seo-config.ts
+- Added `noindex` to 5 dashboard pages that were missing it: MealBuilder, FoodChaining, AccessibilitySettings, AccountSettings, Billing
+
+### US-040: Add missing Helmet meta tags to all pages
+- Added Helmet with noindex to authenticated pages missing it:
+  - `src/pages/Home.tsx` - added Helmet with title, description, noindex
+  - `src/pages/CheckoutSuccess.tsx` - added Helmet with title, noindex
+  - `src/pages/ResetPassword.tsx` - added Helmet with title, description, noindex
+  - `src/pages/ShareTarget.tsx` - added noindex to both Helmet instances
+  - `src/pages/AICoach.tsx` - added noindex
+- Added SEOHead with full metadata to public pages missing it:
+  - `src/pages/PrivacyPolicy.tsx` - added SEOHead using "privacy" config from seo-config.ts
+  - `src/pages/TermsOfService.tsx` - added SEOHead using "terms" config from seo-config.ts
+- Added OG tags to public pages:
+  - `src/pages/Auth.tsx` - added og:title, og:description, og:type
+  - `src/pages/Accessibility.tsx` - added og:title, og:description, og:type
+  - `src/pages/VPAT.tsx` - added og:title, og:description, og:type
+
+### Progress Summary
+- 5 stories completed (US-048, US-049, US-058, US-045, US-040)
+- Total: 64/84 stories now passing
+- Performance: self-hosted fonts, deferred GSAP, comparison section for conversion
+- SEO: comprehensive meta tags across all 43+ pages
+---

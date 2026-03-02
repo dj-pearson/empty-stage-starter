@@ -23,6 +23,35 @@ interface BlogPost {
   category: { name: string; slug: string } | null;
 }
 
+// Content pillar categories for ARFID/food chaining topical authority
+const contentPillars = [
+  {
+    slug: "arfid-feeding-disorders",
+    name: "ARFID & Feeding Disorders 101",
+    description: "Understanding ARFID diagnosis, treatment approaches, and when to seek professional help",
+  },
+  {
+    slug: "food-chaining-in-real-life",
+    name: "Food Chaining in Real Life",
+    description: "Practical food chaining examples, success stories, and step-by-step guides for parents",
+  },
+  {
+    slug: "meal-planning-selective-eaters",
+    name: "Meal Planning for Selective Eaters",
+    description: "Strategies, recipes, and weekly plans designed for children with limited food acceptance",
+  },
+  {
+    slug: "autism-sensory-mealtime",
+    name: "Autism & Sensory Mealtime Support",
+    description: "Sensory-friendly feeding strategies for children on the autism spectrum",
+  },
+  {
+    slug: "for-therapists-clinics",
+    name: "For Therapists & Clinics",
+    description: "Clinical insights, practice management tips, and therapy tools for feeding professionals",
+  },
+];
+
 const Blog = () => {
   const seoConfig = getPageSEO("blog");
   const [posts, setPosts] = useState<BlogPost[]>([]);
@@ -171,10 +200,11 @@ const Blog = () => {
         </div>
       </section>
 
-      {/* Filters */}
-      <section className="py-6 px-4 border-b bg-secondary/5">
+      {/* Content Pillar Filters */}
+      <section className="py-8 px-4 border-b bg-secondary/5">
         <div className="container mx-auto max-w-6xl">
-          <div className="flex flex-wrap gap-2">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Browse by Topic</h2>
+          <div className="flex flex-wrap gap-2 mb-4">
             <Button
               variant={selectedCategory === "all" ? "default" : "outline"}
               size="sm"
@@ -182,17 +212,37 @@ const Blog = () => {
             >
               All Articles
             </Button>
-            {categories.map((category) => (
+            {contentPillars.map((pillar) => (
               <Button
-                key={category.id}
-                variant={selectedCategory === category.slug ? "default" : "outline"}
+                key={pillar.slug}
+                variant={selectedCategory === pillar.slug ? "default" : "outline"}
                 size="sm"
-                onClick={() => setSelectedCategory(category.slug)}
+                onClick={() => setSelectedCategory(pillar.slug)}
               >
-                {category.name}
+                {pillar.name}
               </Button>
             ))}
+            {/* Also show database categories that don't match pillars */}
+            {categories
+              .filter((cat) => !contentPillars.some((p) => p.slug === cat.slug))
+              .map((category) => (
+                <Button
+                  key={category.id}
+                  variant={selectedCategory === category.slug ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedCategory(category.slug)}
+                >
+                  {category.name}
+                </Button>
+              ))}
           </div>
+          {/* Show pillar description when selected */}
+          {selectedCategory !== "all" && (
+            <p className="text-sm text-muted-foreground">
+              {contentPillars.find((p) => p.slug === selectedCategory)?.description ||
+                categories.find((c) => c.slug === selectedCategory)?.name}
+            </p>
+          )}
         </div>
       </section>
 

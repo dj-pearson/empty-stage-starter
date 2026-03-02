@@ -110,6 +110,9 @@ const VPAT = () => {
       <Helmet>
         <title>VPAT - Accessibility Conformance Report - EatPal</title>
         <meta name="description" content="EatPal Voluntary Product Accessibility Template (VPAT) - WCAG 2.1 Level AA Conformance Report documenting accessibility compliance." />
+        <meta property="og:title" content="VPAT - Accessibility Conformance Report - EatPal" />
+        <meta property="og:description" content="WCAG 2.1 Level AA Conformance Report for EatPal meal planning platform." />
+        <meta property="og:type" content="website" />
       </Helmet>
 
       {/* Header */}

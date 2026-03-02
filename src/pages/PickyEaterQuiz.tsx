@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Helmet } from 'react-helmet-async';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +11,8 @@ import { ChevronLeft, ChevronRight, Clock, Brain, Lightbulb, Apple } from 'lucid
 import { QuizQuestion } from '@/components/quiz/QuizQuestion';
 import { v4 as uuidv4 } from 'uuid';
 import { trackQuizStart, trackQuizComplete, trackPageView } from '@/lib/conversion-tracking';
+import { SEOHead } from '@/components/SEOHead';
+import { getPageSEO } from '@/lib/seo-config';
 
 export default function PickyEaterQuiz() {
   const navigate = useNavigate();
@@ -103,18 +104,7 @@ export default function PickyEaterQuiz() {
 
   return (
     <>
-      <Helmet>
-        <title>Free Picky Eater Quiz - Discover Your Child's Food Personality | TryEatPal</title>
-        <meta
-          name="description"
-          content="Take our 2-minute quiz to understand why your child refuses food and get a personalized feeding strategy. Free results + meal plan for picky eaters."
-        />
-        <meta name="keywords" content="picky eater quiz, food personality quiz for kids, picky eater assessment, child eating personality" />
-        <meta property="og:title" content="Free Picky Eater Quiz - Discover Your Child's Food Personality" />
-        <meta property="og:description" content="Take our 2-minute quiz to understand why your child refuses food and get a personalized feeding strategy." />
-        <meta property="og:type" content="website" />
-        <meta name="twitter:card" content="summary_large_image" />
-      </Helmet>
+      <SEOHead {...getPageSEO("pickyEaterQuiz")!} />
 
       <main id="main-content" className="min-h-screen bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800">
         <div className="container max-w-4xl mx-auto px-4 py-8">

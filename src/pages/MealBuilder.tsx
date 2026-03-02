@@ -7,6 +7,7 @@ export default function MealBuilder() {
       <Helmet>
         <title>Meal Builder - EatPal</title>
         <meta name="description" content="Build fun meals and earn stars with the interactive meal builder" />
+        <meta name="robots" content="noindex" />
       </Helmet>
       <div className="container mx-auto py-6 px-4 max-w-7xl">
         <KidMealBuilder />

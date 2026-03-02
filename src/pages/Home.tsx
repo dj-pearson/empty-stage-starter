@@ -1,3 +1,4 @@
+import { Helmet } from "react-helmet-async";
 import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -207,6 +208,12 @@ export default function Home() {
   };
 
   return (
+    <>
+    <Helmet>
+      <title>Home - EatPal</title>
+      <meta name="description" content="Your EatPal dashboard - manage meals, track progress, and plan nutrition." />
+      <meta name="robots" content="noindex" />
+    </Helmet>
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
       <AnimatedDashboard className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Guided onboarding progress bar */}
@@ -609,5 +616,6 @@ export default function Home() {
         onLog={handleQuickLog}
       />
     </div>
+    </>
   );
 }

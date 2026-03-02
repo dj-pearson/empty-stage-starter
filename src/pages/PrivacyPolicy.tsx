@@ -1,9 +1,14 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { SEOHead } from "@/components/SEOHead";
+import { getPageSEO } from "@/lib/seo-config";
 
 const PrivacyPolicy = () => {
+  const seoConfig = getPageSEO("privacy");
   return (
+    <>
+    <SEOHead {...seoConfig!} />
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">
@@ -230,6 +235,7 @@ const PrivacyPolicy = () => {
         </div>
       </footer>
     </div>
+    </>
   );
 };
 

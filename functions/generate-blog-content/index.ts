@@ -1,17 +1,17 @@
 /**
- * Generate Blog Content Edge Function
+ * Generate Blog Content Edge Function (Legacy serve() pattern)
  *
- * Generates blog post content using AI (OpenAI) or returns a structured
- * template when AI is not configured.
+ * Generates brand-aligned blog post content using AI with EatPal's
+ * evidence-based, food-chaining positioning for ARFID and extreme picky eating.
  *
  * POST /generate-blog-content
  * Body: {
  *   "topic": "string",
  *   "target_keywords": ["keyword1", "keyword2"],
- *   "tone"?: "informative" | "conversational" | "professional",
+ *   "tone"?: "empathetic" | "evidence-based" | "conversational" | "direct" | "storytelling",
  *   "word_count"?: number
  * }
- * Auth: No JWT (internal use, protected by other means)
+ * Auth: JWT via Authorization header
  *
  * Response (200):
  * {
@@ -36,6 +36,18 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
+/** EatPal brand-aligned system prompt for AI content generation */
+const BRAND_SYSTEM_PROMPT = `You are an expert content writer for EatPal, an evidence-based meal planning app built on food chaining science for families dealing with extreme picky eating, ARFID (Avoidant/Restrictive Food Intake Disorder), and related feeding challenges.
+
+BRAND VOICE:
+- Calm, grounded, and hopeful — never use hype or miracle claims
+- Evidence-based — reference food chaining science confidently
+- Parent-first empathy — speak directly to caregivers
+- Non-blaming — feeding difficulties are not the parent's fault
+- Include specific food chaining examples and sensory-aware strategies
+
+Return valid JSON only.`;
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -59,8 +71,8 @@ serve(async (req) => {
     const {
       topic,
       target_keywords = [],
-      tone = 'informative',
-      word_count = 800,
+      tone = 'empathetic',
+      word_count = 1000,
     } = body;
 
     if (!topic || typeof topic !== 'string') {
@@ -74,6 +86,7 @@ serve(async (req) => {
     const safeTopic = escapeHtml(topic);
     const safeKeywords = target_keywords.map((k: string) => escapeHtml(String(k)));
 
+    const claudeApiKey = Deno.env.get('CLAUDE_API_KEY');
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
 
     let title: string;
@@ -81,12 +94,60 @@ serve(async (req) => {
     let blogBody: string;
     let generationCost = { tokens: 0, cost_cents: 0, method: 'template' };
 
-    if (openaiApiKey) {
-      // Use OpenAI for generation
-      const prompt = `Write a ${word_count}-word blog post about "${topic}" in a ${tone} tone.
+    const userPrompt = `Write a ${word_count}-word blog post about "${topic}" in a ${tone} tone for parents of children with ARFID or extreme picky eating.
 Target keywords: ${target_keywords.join(', ')}.
-Return JSON with: title, excerpt (2 sentences), body (HTML with h2, h3, p, ul, li tags).`;
+Include food chaining examples and a CTA for EatPal's 5-day personalized plan.
+Return JSON with: title, excerpt (2 sentences about feeding challenges), body (HTML with h2, h3, p, ul, li tags).`;
 
+    if (claudeApiKey) {
+      // Prefer Claude/Anthropic
+      const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': claudeApiKey,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: Deno.env.get('DEFAULT_AI_MODEL') || 'claude-sonnet-4-5-20250929',
+          system: BRAND_SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: userPrompt }],
+          max_tokens: Math.max(word_count * 2, 2000),
+          temperature: 0.7,
+        }),
+      });
+
+      if (anthropicResponse.ok) {
+        const result = await anthropicResponse.json();
+        const content = result.content?.[0]?.text ?? '';
+        const usage = result.usage ?? {};
+
+        try {
+          const jsonMatch = content.match(/\{[\s\S]*\}/);
+          const parsed = JSON.parse(
+            jsonMatch ? jsonMatch[0].replace(/,(\s*[}\]])/g, '$1') : content
+          );
+          title = parsed.title ?? `${safeTopic} - An Evidence-Based Guide`;
+          excerpt = parsed.excerpt ?? `Evidence-based strategies for families dealing with ${safeTopic} and feeding challenges.`;
+          blogBody = parsed.body ?? `<p>Content about ${safeTopic}.</p>`;
+        } catch {
+          title = `${safeTopic} - An Evidence-Based Guide`;
+          excerpt = `Evidence-based strategies for families dealing with ${safeTopic} and feeding challenges.`;
+          blogBody = `<p>${escapeHtml(content)}</p>`;
+        }
+
+        generationCost = {
+          tokens: ((usage.input_tokens ?? 0) + (usage.output_tokens ?? 0)) as number,
+          cost_cents: Math.round((((usage.input_tokens ?? 0) + (usage.output_tokens ?? 0)) / 1000000) * 15 * 100) / 100,
+          method: 'anthropic',
+        };
+      } else {
+        title = `${safeTopic} - An Evidence-Based Guide`;
+        excerpt = `Evidence-based strategies for families dealing with ${safeTopic} through food chaining science.`;
+        blogBody = generateTemplateBlogBody(safeTopic, safeKeywords);
+      }
+    } else if (openaiApiKey) {
+      // Fallback to OpenAI
       const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -96,8 +157,8 @@ Return JSON with: title, excerpt (2 sentences), body (HTML with h2, h3, p, ul, l
         body: JSON.stringify({
           model: 'gpt-4o-mini',
           messages: [
-            { role: 'system', content: 'You are a professional blog writer for a family meal planning app called EatPal. Return valid JSON only.' },
-            { role: 'user', content: prompt },
+            { role: 'system', content: BRAND_SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt },
           ],
           max_tokens: Math.max(word_count * 2, 2000),
           temperature: 0.7,
@@ -110,13 +171,16 @@ Return JSON with: title, excerpt (2 sentences), body (HTML with h2, h3, p, ul, l
         const usage = result.usage ?? {};
 
         try {
-          const parsed = JSON.parse(content);
-          title = parsed.title ?? `${safeTopic} - A Complete Guide`;
-          excerpt = parsed.excerpt ?? `Learn everything about ${safeTopic} in this comprehensive guide.`;
+          const jsonMatch = content.match(/\{[\s\S]*\}/);
+          const parsed = JSON.parse(
+            jsonMatch ? jsonMatch[0].replace(/,(\s*[}\]])/g, '$1') : content
+          );
+          title = parsed.title ?? `${safeTopic} - An Evidence-Based Guide`;
+          excerpt = parsed.excerpt ?? `Evidence-based strategies for families dealing with ${safeTopic} and feeding challenges.`;
           blogBody = parsed.body ?? `<p>Content about ${safeTopic}.</p>`;
         } catch {
-          title = `${safeTopic} - A Complete Guide`;
-          excerpt = `Learn everything about ${safeTopic} in this comprehensive guide.`;
+          title = `${safeTopic} - An Evidence-Based Guide`;
+          excerpt = `Evidence-based strategies for families dealing with ${safeTopic} and feeding challenges.`;
           blogBody = `<p>${escapeHtml(content)}</p>`;
         }
 
@@ -126,16 +190,15 @@ Return JSON with: title, excerpt (2 sentences), body (HTML with h2, h3, p, ul, l
           method: 'openai',
         };
       } else {
-        // Fallback to template if OpenAI fails
-        title = `${safeTopic} - A Complete Guide`;
-        excerpt = `Discover everything you need to know about ${safeTopic} for your family's nutrition journey.`;
-        blogBody = generateTemplateBlogBody(safeTopic, safeKeywords, tone);
+        title = `${safeTopic} - An Evidence-Based Guide`;
+        excerpt = `Evidence-based strategies for families dealing with ${safeTopic} through food chaining science.`;
+        blogBody = generateTemplateBlogBody(safeTopic, safeKeywords);
       }
     } else {
-      // Template-based generation
-      title = `${safeTopic} - A Complete Guide`;
-      excerpt = `Discover everything you need to know about ${safeTopic} for your family's nutrition journey.`;
-      blogBody = generateTemplateBlogBody(safeTopic, safeKeywords, tone);
+      // Template-based generation (no AI keys configured)
+      title = `${safeTopic} - An Evidence-Based Guide`;
+      excerpt = `Evidence-based strategies for families dealing with ${safeTopic} through food chaining science.`;
+      blogBody = generateTemplateBlogBody(safeTopic, safeKeywords);
     }
 
     const metaTags = {
@@ -164,36 +227,39 @@ Return JSON with: title, excerpt (2 sentences), body (HTML with h2, h3, p, ul, l
   }
 });
 
-function generateTemplateBlogBody(topic: string, keywords: string[], tone: string): string {
+function generateTemplateBlogBody(topic: string, keywords: string[]): string {
   const keywordsList = keywords.length > 0
     ? keywords.map((k) => `<li>${k}</li>`).join('\n')
-    : '<li>Healthy eating</li>\n<li>Family nutrition</li>';
+    : '<li>Food chaining strategies</li>\n<li>ARFID-friendly meal ideas</li>\n<li>Sensory-aware feeding tips</li>';
 
   return `
-<h2>Introduction to ${topic}</h2>
-<p>Understanding ${topic} is essential for families looking to improve their nutrition and meal planning. In this guide, we'll cover everything you need to know.</p>
+<h2>Understanding ${topic}</h2>
+<p>For families navigating ARFID, extreme picky eating, or sensory-related feeding challenges, ${topic} can feel overwhelming. You're not alone, and your child's eating difficulties are not your fault. This guide uses evidence-based food chaining principles to help you take small, safe steps forward.</p>
 
-<h2>Why ${topic} Matters</h2>
-<p>For busy parents, ${topic} can make a significant difference in daily meal preparation and overall family health.</p>
+<h2>Why This Matters for Feeding Challenges</h2>
+<p>Standard meal planning advice often assumes children will "just try it" — but for kids with ARFID or severe picky eating, that approach increases anxiety and refusals. ${topic} requires a different, more compassionate strategy grounded in food chaining science.</p>
 
-<h3>Key Benefits</h3>
+<h3>Key Strategies</h3>
 <ul>
 ${keywordsList}
 </ul>
 
-<h2>Getting Started</h2>
-<p>Here are practical steps to incorporate ${topic} into your family's routine.</p>
+<h2>Food Chaining in Practice</h2>
+<p>Food chaining works by creating tiny, manageable bridges from your child's safe foods to similar new foods. For example, if your child eats plain crackers, the next step might be crackers with a thin spread — not a completely unfamiliar food.</p>
 
-<h3>Step 1: Assess Your Current Situation</h3>
-<p>Start by evaluating where you are today and identifying areas for improvement.</p>
+<h3>Step 1: Map Your Child's Safe Foods</h3>
+<p>Start by listing every food your child currently accepts, including specific brands, textures, and temperatures. This becomes the foundation for building food chains.</p>
 
-<h3>Step 2: Create a Plan</h3>
-<p>Use EatPal's meal planning tools to create a structured approach to ${topic}.</p>
+<h3>Step 2: Identify Bridges</h3>
+<p>Look for tiny similarities between safe foods and potential new foods — same color, similar texture, or the same brand in a different flavor.</p>
 
-<h3>Step 3: Track Your Progress</h3>
-<p>Monitor your family's progress and adjust your approach as needed.</p>
+<h3>Step 3: Track Progress with EatPal</h3>
+<p>Use EatPal's AI-powered meal planning tools to generate personalized food chains based on your child's specific safe foods and sensory preferences. Our app creates 5-day plans that make food chaining practical for real family life.</p>
 
-<h2>Conclusion</h2>
-<p>${topic} doesn't have to be overwhelming. With the right tools and approach, any family can improve their nutrition and meal planning habits.</p>
+<h2>Working with Your Feeding Therapist</h2>
+<p>If your child works with a feeding therapist, sharing your EatPal data helps keep everyone aligned. Progress tracked at home gives therapists valuable insight into what's working between sessions.</p>
+
+<h2>Taking the Next Step</h2>
+<p>${topic} doesn't require perfection — it requires consistency and compassion. Every tiny step counts. Try EatPal's free 5-day personalized plan to see how food chaining can work for your family's unique situation.</p>
 `.trim();
 }

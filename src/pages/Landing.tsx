@@ -26,6 +26,10 @@ import {
   Sun,
   ArrowRight,
   CheckCircle,
+  Building2,
+  Stethoscope,
+  GraduationCap,
+  Users,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Link } from "react-router-dom";
@@ -85,9 +89,10 @@ const Landing = () => {
   // Get SEO configuration for homepage
   const seoConfig = getPageSEO("home");
 
-  // Initialize GSAP animations after component mounts (deferred)
+  // Initialize GSAP animations when first animated section enters viewport
   useEffect(() => {
     let mounted = true;
+    let observer: IntersectionObserver | null = null;
 
     const initAnimations = async () => {
       // Respect prefers-reduced-motion
@@ -140,12 +145,46 @@ const Landing = () => {
       });
     };
 
-    // Delay animation initialization to not block initial render
-    const timer = setTimeout(initAnimations, 100);
+    // Use IntersectionObserver to load GSAP only when animated sections are near viewport
+    const firstAnimatedSection = containerRef.current?.querySelector('.animate-section, .animate-grid');
+    if (firstAnimatedSection) {
+      observer = new IntersectionObserver(
+        (entries) => {
+          if (entries.some(entry => entry.isIntersecting)) {
+            observer?.disconnect();
+            initAnimations();
+          }
+        },
+        { rootMargin: '200px' } // Start loading 200px before section enters viewport
+      );
+      observer.observe(firstAnimatedSection);
+    } else {
+      // Fallback: if no animated sections found yet (SSR/hydration), defer briefly
+      const timer = setTimeout(() => {
+        const section = containerRef.current?.querySelector('.animate-section, .animate-grid');
+        if (section) {
+          observer = new IntersectionObserver(
+            (entries) => {
+              if (entries.some(entry => entry.isIntersecting)) {
+                observer?.disconnect();
+                initAnimations();
+              }
+            },
+            { rootMargin: '200px' }
+          );
+          observer.observe(section);
+        }
+      }, 0);
+      return () => {
+        mounted = false;
+        clearTimeout(timer);
+        observer?.disconnect();
+      };
+    }
 
     return () => {
       mounted = false;
-      clearTimeout(timer);
+      observer?.disconnect();
     };
   }, []);
 
@@ -190,6 +229,10 @@ const Landing = () => {
     {
       question: "Does EatPal work for ARFID (Avoidant/Restrictive Food Intake Disorder)?",
       answer: "Yes! EatPal is designed for families managing ARFID, autism spectrum feeding challenges, and extreme selective eating. Our food chaining approach aligns with evidence-based ARFID treatment protocols. Many feeding therapists recommend EatPal to their clients. The platform tracks sensory preferences, safe foods, and progress over time."
+    },
+    {
+      question: "My child was just diagnosed with ARFID—what should I do first?",
+      answer: "After an ARFID diagnosis, start by documenting your child's current safe foods (even if it's only 3-5). Then create a free EatPal account and add those safe foods to your child's profile. The AI will immediately suggest food chains—small, manageable steps from foods they already accept to similar new options. Many families see their first food acceptance breakthrough within 2-4 weeks. EatPal also works alongside feeding therapy, helping you extend the progress made in clinic sessions into your daily routine at home."
     },
     {
       question: "What ages does this work for?",
@@ -437,56 +480,79 @@ const Landing = () => {
             </Suspense>
           </div>
 
-        {/* Pain Points Section - If Mealtime Feels Like a Battle */}
+        {/* Clinical Trust Strip */}
+        <section className="py-8 px-4 bg-muted/50 border-y border-border/50">
+          <div className="container mx-auto max-w-6xl">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 items-center">
+              <div className="flex items-center gap-3 justify-center md:justify-start">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Stethoscope className="h-5 w-5 text-primary" />
+                </div>
+                <p className="text-sm text-muted-foreground leading-snug">
+                  <span className="font-semibold text-foreground">Built with 200+ feeding therapists</span>{' '}
+                  and pediatric dietitians
+                </p>
+              </div>
+              <div className="flex items-center gap-3 justify-center">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <GraduationCap className="h-5 w-5 text-primary" />
+                </div>
+                <p className="text-sm text-muted-foreground leading-snug">
+                  Grounded in{' '}
+                  <span className="font-semibold text-foreground">food chaining</span>, an evidence-based
+                  approach used worldwide
+                </p>
+              </div>
+              <div className="flex items-center gap-3 justify-center md:justify-end">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Building2 className="h-5 w-5 text-primary" />
+                </div>
+                <p className="text-sm text-muted-foreground leading-snug">
+                  Used in{' '}
+                  <span className="font-semibold text-foreground">feeding clinics</span>, private practices,
+                  and by families at home
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Pain Points Section - Why Typical Apps Fail for ARFID */}
         <section className="py-24 px-4 bg-gradient-to-b from-background to-secondary/5 relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-trust-warmOrange/10 via-transparent to-transparent pointer-events-none" />
           <div className="container mx-auto max-w-6xl relative z-10">
             <div className="animate-section text-center mb-16">
               <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
-                If Mealtime Feels Like a Battle, You're Not Alone
+                Why Typical Meal Planning Apps Fail for ARFID and Extreme Picky Eating
               </h2>
               <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-                Thousands of parents face these same challenges every single day
+                If your child eats fewer than 10 foods, standard meal apps weren't built for you
               </p>
             </div>
 
-            <div className="animate-grid grid md:grid-cols-2 lg:grid-cols-3 gap-8 mt-12">
+            {/* Problem Cards */}
+            <div className="animate-grid grid md:grid-cols-3 gap-8 mt-12">
               {[
                 {
-                  icon: "🍽️",
-                  title: "Same 5 Foods Every Week",
-                  description: "Stuck in a rotation rut, afraid to try new recipes that might get refused"
+                  icon: "❌",
+                  title: "They Assume Kids Will 'Just Try It'",
+                  description: "Standard meal apps assume kids will eat anything. ARFID and severe picky eating don't work that way—forcing new foods often increases anxiety and refusals."
                 },
                 {
-                  icon: "🛒",
-                  title: "Grocery Shopping Is Chaos",
-                  description: "No list, forgotten items, impulse buys for foods they won't eat anyway"
+                  icon: "❌",
+                  title: "Generic 'Offer Variety' Advice Backfires",
+                  description: "Parents are told to offer variety without a structured plan. For children with feeding disorders, this often leads to more stress at the table, not less."
                 },
                 {
-                  icon: "📊",
-                  title: "No Idea If It's Working",
-                  description: "Are they making progress or just getting pickier? You're flying blind."
-                },
-                {
-                  icon: "⏰",
-                  title: "Planning Takes Hours",
-                  description: "Sunday meal prep eats your entire afternoon just to avoid weeknight panic"
-                },
-                {
-                  icon: "😰",
-                  title: "The Guilt & Worry",
-                  description: "Are they getting enough nutrients? Am I failing as a parent?"
-                },
-                {
-                  icon: "🔄",
-                  title: "Dinner Battles Every Night",
-                  description: "The negotiations, tears, and 'just one bite' arguments are exhausting"
+                  icon: "❌",
+                  title: "Therapy Progress Stalls Without Home Support",
+                  description: "Feeding therapy sessions are powerful, but without structured tools at home, the gains made in clinic can plateau between appointments."
                 }
               ].map((pain, index) => (
                 <div key={index} className="animate-item h-full">
-                  <Card className="h-full hover:shadow-lg transition-all hover:-translate-y-1 duration-300 border-primary/10">
+                  <Card className="h-full hover:shadow-lg transition-all hover:-translate-y-1 duration-300 border-destructive/20 bg-destructive/5">
                     <CardHeader>
-                      <div className="text-5xl mb-4 animate-bounce-dynamic" style={{ animationDelay: `${index * 0.2}s` }}>{pain.icon}</div>
+                      <div className="text-4xl mb-4">{pain.icon}</div>
                       <CardTitle className="text-xl text-foreground">{pain.title}</CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -495,6 +561,38 @@ const Landing = () => {
                   </Card>
                 </div>
               ))}
+            </div>
+
+            {/* Solution Flip */}
+            <div className="animate-section mt-16 bg-primary/5 rounded-2xl p-8 md:p-12 border border-primary/10">
+              <h3 className="text-2xl md:text-3xl font-heading font-bold mb-8 text-primary text-center">
+                EatPal Is Built Specifically for Feeding Disorders
+              </h3>
+              <div className="grid md:grid-cols-2 gap-6">
+                {[
+                  {
+                    icon: "🔗",
+                    text: "Uses food chaining to bridge from your child's safe foods to new foods in tiny, manageable steps"
+                  },
+                  {
+                    icon: "🧠",
+                    text: "Plans meals around your child's sensory preferences and fear triggers—not generic recipes"
+                  },
+                  {
+                    icon: "🤝",
+                    text: "Keeps parents and therapists aligned with shared goals and progress tracking"
+                  },
+                  {
+                    icon: "📈",
+                    text: "Reduces daily mealtime stress by giving you a structured, evidence-based plan you can trust"
+                  }
+                ].map((item, index) => (
+                  <div key={index} className="flex items-start gap-4">
+                    <div className="text-2xl flex-shrink-0 mt-1">{item.icon}</div>
+                    <p className="text-foreground leading-relaxed">{item.text}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>
@@ -508,10 +606,10 @@ const Landing = () => {
             <div className="animate-section text-center mb-16">
               <Badge className="mb-4 bg-primary/10 text-primary border-primary px-4 py-1 text-sm">The Solution</Badge>
               <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
-                Meet EatPal: Your Meal Planning Co-Pilot for Picky Eaters
+                How EatPal Works: Food Chaining Made Practical for Real Families
               </h2>
               <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-                Built on food chaining science and loved by over 2,000 parents who've reclaimed peaceful mealtimes
+                Three simple steps to go from mealtime stress to steady, evidence-based progress
               </p>
             </div>
 
@@ -558,64 +656,72 @@ const Landing = () => {
           </div>
         </section>
 
-        {/* Benefits-Focused Features Section */}
+        {/* Three-Pillar Value Proposition Section */}
         <section id="features" className="py-24 px-4 bg-gradient-to-br from-secondary/5 to-background relative overflow-hidden">
           <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-trust-softPink/5 to-transparent pointer-events-none" />
           <div className="container mx-auto max-w-6xl relative z-10">
             <div className="animate-section text-center mb-16">
               <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
-                Everything You Need to Turn Mealtime Stress into Mealtime Success
+                Built for Feeding Disorders, Not Generic Meal Planning
               </h2>
               <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-                Built specifically for parents of picky eaters—not another generic meal planner
+                Three pillars that set EatPal apart for families managing ARFID, selective eating, and autism-related feeding challenges
               </p>
             </div>
 
-            <div className="animate-grid grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="animate-grid grid md:grid-cols-3 gap-8">
               {[
                 {
                   icon: Brain,
-                  title: "AI Meal Suggestions",
-                  description: "Turn 'I don't know what to make' into a full week of ideas in seconds. Smart suggestions based on what your child actually eats."
-                },
-                {
-                  icon: TrendingUp,
-                  title: "Food Chaining Algorithm",
-                  description: "Science-backed suggestions for introducing new foods based on what they already like (texture, flavor, color matching)."
-                },
-                {
-                  icon: ShoppingCart,
-                  title: "Auto-Grocery Lists",
-                  description: "Never forget an ingredient again—lists organized by aisle. Shopping takes 30% less time."
-                },
-                {
-                  icon: Calendar,
-                  title: "Progress Tracking",
-                  description: "See acceptance rates, favorite foods, and nutritional balance over time. Know what's working."
-                },
-                {
-                  icon: Sparkles,
-                  title: "Works Everywhere",
-                  description: "Plan on your laptop, shop with your phone—syncs automatically across all devices."
+                  title: "Evidence-Based Progress, Not Guesswork",
+                  description: "Our AI is grounded in food chaining science—the proven feeding therapy method. It detects patterns in textures, brands, and flavors your child already accepts, then builds bridges to new foods.",
+                  bullets: [
+                    "AI-powered food chains based on your child's unique sensory profile",
+                    "70%+ prediction accuracy on which new foods your child is most likely to accept",
+                    "Progress reports backed by 100K+ mealtime data points from real families",
+                  ],
                 },
                 {
                   icon: Heart,
-                  title: "Flexible Plans",
-                  description: "Swap meals, adjust portions, add notes—it adapts to your family. No rigid meal plans."
-                }
-              ].map((feature, index) => {
-                const Icon = feature.icon;
+                  title: "Calmer, Safer-Feeling Mealtimes",
+                  description: "Replace nightly stress with a structured daily plan that makes both parents and children feel in control. Visual progress charts show the small wins adding up.",
+                  bullets: [
+                    "Structured daily meal plans with one 'try bite' per day—no pressure, no power struggles",
+                    "Visual progress charts that celebrate exposure milestones (15-20 exposures per food)",
+                    "Auto-generated grocery lists so there's always a safe fallback on the table",
+                  ],
+                },
+                {
+                  icon: Stethoscope,
+                  title: "Designed With Feeding Therapists",
+                  description: "EatPal was built alongside 200+ SLPs, OTs, and pediatric dietitians. It supports the work being done in therapy sessions and extends it into the home.",
+                  bullets: [
+                    "Supports food logs, safe-food lists, and sensory preference tracking for therapy alignment",
+                    "Optional therapist portal for shared goals, session notes, and family coordination",
+                    "Insurance-compatible progress documentation to show measurable outcomes",
+                  ],
+                },
+              ].map((pillar, index) => {
+                const Icon = pillar.icon;
                 return (
                   <div key={index} className="animate-item h-full">
-                    <Card className="h-full hover:shadow-lg transition-shadow border-primary/5 hover:border-primary/20">
+                    <Card className="h-full hover:shadow-lg transition-all hover:-translate-y-1 duration-300 border-primary/10 hover:border-primary/30">
                       <CardHeader>
-                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                          <Icon className="h-6 w-6 text-primary" />
+                        <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+                          <Icon className="h-7 w-7 text-primary" />
                         </div>
-                        <CardTitle className="text-xl text-foreground">{feature.title}</CardTitle>
+                        <CardTitle className="text-xl text-foreground">{pillar.title}</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <p className="text-muted-foreground">{feature.description}</p>
+                        <p className="text-muted-foreground mb-5">{pillar.description}</p>
+                        <ul className="space-y-3">
+                          {pillar.bullets.map((bullet, i) => (
+                            <li key={i} className="flex items-start gap-2 text-sm">
+                              <CheckCircle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                              <span className="text-muted-foreground">{bullet}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </CardContent>
                     </Card>
                   </div>
@@ -784,6 +890,84 @@ const Landing = () => {
           </div>
         </section>
 
+        {/* Therapist / Clinic Section */}
+        <section id="therapist-section" className="py-24 px-4 bg-gradient-to-br from-primary/5 via-background to-secondary/5 relative overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent pointer-events-none" />
+          <div className="container mx-auto max-w-6xl relative z-10">
+            <div className="animate-section">
+              <div className="grid md:grid-cols-2 gap-12 items-center">
+                {/* Left - Copy */}
+                <div>
+                  <Badge className="mb-4 bg-primary/10 text-primary border-primary px-4 py-1 text-sm">For Professionals</Badge>
+                  <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
+                    The Operating System for Feeding Therapy
+                  </h2>
+                  <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
+                    EatPal gives feeding clinics and private practices a shared, data-rich workspace to
+                    extend therapy into the home. Replace manual spreadsheets and paper logs with AI-assisted
+                    food chains, session notes, and real-world mealtime data.
+                  </p>
+                  <ul className="space-y-4 mb-8">
+                    {[
+                      { icon: "🔗", text: "Create and share individualized food chains with families" },
+                      { icon: "📱", text: "Capture real-time meal logs and photos between sessions" },
+                      { icon: "📊", text: "Standardize data collection across therapists and locations" },
+                      { icon: "📈", text: "Show measurable progress to families and insurance payers" },
+                    ].map((item, index) => (
+                      <li key={index} className="flex items-start gap-3">
+                        <span className="text-xl flex-shrink-0 mt-0.5">{item.icon}</span>
+                        <span className="text-foreground">{item.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to="/pricing">
+                    <Button size="lg" className="gap-2">
+                      See Therapist Plans <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+
+                {/* Right - Stats/Proof */}
+                <div className="space-y-6">
+                  <Card className="bg-card border-primary/10 shadow-lg">
+                    <CardContent className="pt-6">
+                      <div className="grid grid-cols-2 gap-6">
+                        {[
+                          { value: "200+", label: "Feeding therapists & dietitians", icon: Users },
+                          { value: "100K+", label: "Behavioral data points", icon: Brain },
+                          { value: "70%+", label: "AI prediction accuracy", icon: TrendingUp },
+                          { value: "50%", label: "Less admin time reported", icon: Calendar },
+                        ].map((stat, index) => {
+                          const StatIcon = stat.icon;
+                          return (
+                            <div key={index} className="text-center p-4">
+                              <StatIcon className="h-6 w-6 text-primary mx-auto mb-2" />
+                              <div className="text-2xl font-bold text-primary">{stat.value}</div>
+                              <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-card/60 backdrop-blur-sm border-none">
+                    <CardContent className="pt-6">
+                      <p className="text-muted-foreground italic leading-relaxed">
+                        "EatPal gave us a structured way to track food chains and share progress with families.
+                        It's replaced three separate tools we were using before."
+                      </p>
+                      <div className="border-t border-primary/10 pt-3 mt-4">
+                        <p className="font-semibold text-primary text-sm">Dr. Rachel K.</p>
+                        <p className="text-xs text-muted-foreground">Pediatric Feeding Specialist, SLP</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Pricing Preview Section */}
         <section id="pricing" className="py-24 px-4 bg-gradient-to-br from-background to-secondary/10">
           <div className="container mx-auto max-w-5xl">
@@ -894,10 +1078,10 @@ const Landing = () => {
           <div className="container mx-auto max-w-4xl relative z-10">
             <div className="animate-section text-center">
               <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-white">
-                Ready to End Mealtime Battles?
+                Ready to Make Mealtimes Calmer?
               </h2>
               <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto leading-relaxed">
-                Join 2,000+ parents who've transformed chaotic dinners into peaceful family moments
+                Join 2,000+ families using food chaining science to help their children safely discover new foods
               </p>
 
               {/* Benefits list */}

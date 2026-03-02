@@ -43,39 +43,44 @@ export const coreEntities = {
 
 export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
   home: {
-    title: "EatPal: Food Chaining Meal Planner for Picky Eaters | Evidence-Based",
+    title: "EatPal: ARFID & Picky Eater Meal Planner | Food Chaining Science",
     description:
-      "The only AI-powered meal planning platform using food chaining therapy to help parents systematically expand their child's diet. Based on proven feeding therapy techniques for picky eaters, ARFID, and selective eating. Start free.",
+      "The #1 AI-powered meal planner for ARFID, extreme picky eating, and autism-related feeding challenges. Built with 200+ feeding therapists using food chaining science. Go from 5 safe foods to 50+. Start free.",
     keywords:
-      "food chaining, food chaining therapy, food chaining for picky eaters, food chaining examples, picky eater meal plan, selective eating, ARFID meal plan, safe foods picky eaters, sensory food preferences, feeding therapy at home, picky eater meal planner, AI meal planning for kids, texture progression, food acceptance prediction, evidence-based feeding therapy, ARFID treatment, autism feeding therapy, pediatric feeding disorder, try bite methodology, food chaining platform",
+      "ARFID meal plan for kids, ARFID meal planner, food chaining, food chaining therapy, food chaining for picky eaters, food chaining examples, picky eater meal plan app, selective eating disorder, feeding therapy at home tools, ARFID treatment for children, autism feeding therapy, safe foods picky eaters, sensory food preferences, picky eater meal planner, AI meal planning for kids, texture progression, food acceptance prediction, evidence-based feeding therapy, pediatric feeding disorder, try bite methodology, food chaining platform, ARFID diagnosis help, avoidant restrictive food intake disorder",
     canonicalUrl: `${baseUrl}/`,
     aiPurpose:
-      "EatPal is the only AI-powered platform that implements food chaining, the proven feeding therapy method developed by Cheri Fraker, RD and Laura Walbert, SLP. Our platform helps parents systematically expand their picky eater's diet from 5 foods to 50+ by building 'chains' from foods a child already accepts. Instead of forcing completely new foods, we make gradual changes in taste, texture, or appearance. With 10,000+ families helped and 40% average increase in accepted foods, EatPal combines evidence-based food chaining methodology with AI-powered meal planning, progress tracking, and grocery automation.",
+      "EatPal is the #1 AI-powered platform specifically designed for ARFID (Avoidant/Restrictive Food Intake Disorder), extreme picky eating, and autism-related feeding challenges. Built with 200+ feeding therapists, it implements food chaining—the proven feeding therapy method developed by Cheri Fraker, RD and Laura Walbert, SLP. EatPal helps parents systematically expand their child's diet from 5 foods to 50+ by building 'chains' from foods a child already accepts. Instead of forcing completely new foods, it makes gradual changes in taste, texture, or appearance. With 2,000+ families helped and 100K+ mealtime data points, EatPal combines evidence-based food chaining methodology with AI-powered meal planning (70%+ prediction accuracy), progress tracking, and grocery automation. It serves both parents at home and feeding therapists in clinical practice.",
     aiAudience:
-      "Parents of picky eaters seeking science-backed solutions, families managing ARFID (Avoidant/Restrictive Food Intake Disorder), caregivers of children with autism spectrum feeding issues, parents dealing with selective eating and sensory food preferences, families looking for feeding therapy techniques to use at home without a therapist, pediatric occupational therapists and dietitians recommending food chaining tools to clients",
+      "Parents of children recently diagnosed with ARFID seeking immediate meal planning help, families managing ARFID (Avoidant/Restrictive Food Intake Disorder) who need structured feeding support, caregivers of children with autism spectrum feeding challenges and sensory food issues, parents dealing with extreme picky eating (fewer than 10 accepted foods), families looking for feeding therapy techniques to use at home between therapy sessions, pediatric SLPs, OTs, and dietitians seeking a professional platform for food chaining with clients, feeding clinics wanting data-driven tools for multi-client management",
     aiKeyFeatures:
-      "AI-powered food chaining engine that automatically generates personalized food progressions based on child's safe foods and sensory preferences, 1000+ pre-built food chain examples from chicken nuggets to grilled chicken, texture progression tracking system, safe food library with allergen and sensory preference tracking, try bite methodology implementation with exposure tracking (15-20 exposures per food), automated grocery lists from meal plans, multi-child support for families with different food preferences, progress tracking showing 40% average increase in food acceptance, nutrition monitoring for limited diets, evidence-based meal planning templates",
+      "AI-powered food chaining engine specifically designed for ARFID and feeding disorders, 70%+ prediction accuracy on which new foods a child is most likely to accept, 1000+ pre-built food chain examples from chicken nuggets to grilled chicken, texture/brand/flavor pattern detection for sensory-sensitive children, try bite methodology with exposure tracking (15-20 exposures per food), professional therapist portal for shared goals and session coordination, insurance-compatible progress documentation, safe food library with allergen and sensory preference tracking, automated grocery lists from meal plans, multi-child support, progress charts showing acceptance rates over time, 100K+ behavioral data points powering AI recommendations",
     aiUseCases:
-      "Creating food chains to help child transition from chicken nuggets to grilled chicken, tracking sensory preferences (texture, taste, temperature) to guide food introductions, planning meals that include both safe foods and try bites, monitoring how many times child has been exposed to each new food (research shows 15-20 exposures needed), managing food acceptance progress for multiple picky eaters in one family, generating grocery lists with safe foods to prevent mealtime stress, finding food chaining examples for specific safe foods like mac and cheese or french fries, implementing feeding therapy techniques at home without a therapist, predicting which new foods child is most likely to accept based on current preferences and eating patterns",
+      "Getting a structured meal plan immediately after an ARFID diagnosis, creating food chains to help a child with ARFID transition from chicken nuggets to grilled chicken, tracking sensory preferences (texture, taste, temperature) to guide food introductions for autism, planning meals that include both safe foods and one try bite per day, monitoring how many times a child has been exposed to each new food (research shows 15-20 exposures needed), extending feeding therapy progress into the home between sessions, managing food acceptance progress for multiple picky eaters in one family, generating grocery lists with safe foods to prevent mealtime anxiety, finding food chaining examples for specific safe foods like mac and cheese or french fries, implementing feeding therapy techniques at home without a therapist visit, predicting which new foods a child is most likely to accept based on current sensory profile, using professional tools to coordinate feeding therapy across therapists and families",
     structuredData: [
       {
         "@type": "WebPage",
         "@id": `${baseUrl}/#webpage`,
         url: `${baseUrl}/`,
-        name: "EatPal: Food Chaining Meal Planner for Picky Eaters",
+        name: "EatPal: ARFID & Picky Eater Meal Planner | Food Chaining Science",
         description:
-          "AI-powered platform using evidence-based food chaining therapy to help parents systematically expand their child's diet",
+          "The #1 AI-powered meal planning platform for ARFID, extreme picky eating, and autism-related feeding challenges. Built with 200+ feeding therapists using food chaining science.",
         isPartOf: {
           "@id": `${baseUrl}/#website`,
         },
+        about: [
+          { "@type": "MedicalCondition", name: "Avoidant/Restrictive Food Intake Disorder (ARFID)" },
+          { "@type": "Thing", name: "Food Chaining Therapy" },
+          { "@type": "Thing", name: "Pediatric Feeding Disorders" },
+        ],
       },
     ],
   },
 
   pricing: {
-    title: "Pricing Plans for Picky Eater Meal Planning",
+    title: "EatPal Pricing - ARFID & Picky Eater Plans for Families & Therapists",
     description:
-      "Choose the perfect EatPal plan for your family. Free and premium options for AI-powered meal planning, safe food tracking, and nutrition insights for picky eaters. Start your free trial today!",
+      "Choose the perfect EatPal plan for your family or feeding practice. Free and premium options for AI-powered food chaining, ARFID meal planning, safe food tracking, and therapist tools. Start free.",
     keywords:
       "eatpal pricing, kids meal planning cost, picky eater app pricing, ARFID meal planner subscription, family meal planning plans, affordable meal planning for picky eaters, free trial meal planner",
     canonicalUrl: `${baseUrl}/pricing`,

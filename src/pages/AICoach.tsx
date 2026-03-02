@@ -7,6 +7,7 @@ export default function AICoach() {
       <Helmet>
         <title>AI Coach - EatPal</title>
         <meta name="description" content="Get personalized meal planning and nutrition advice from our AI coach" />
+        <meta name="robots" content="noindex" />
       </Helmet>
       <div className="container mx-auto py-6 px-4 max-w-7xl">
         <AIMealCoach />
