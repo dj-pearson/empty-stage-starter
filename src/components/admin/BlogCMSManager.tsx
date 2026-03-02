@@ -252,7 +252,7 @@ export function BlogCMSManager() {
       const content = socialData.content;
       const hashtagMatches =
         (content.facebook || content.twitter || "").match(/#\w+/g) || [];
-      const _hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
+      const hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
 
       const webhookPayload = {
         type: "blog_published",
@@ -262,7 +262,7 @@ export function BlogCMSManager() {
         blog_excerpt: post.excerpt,
         short_form: content.twitter || "",
         long_form: content.facebook || "",
-        hashtags: hashtags,
+        hashtags,
         published_at: new Date().toISOString(),
       };
 
@@ -279,7 +279,7 @@ export function BlogCMSManager() {
       }
     } catch (error: unknown) {
       logger.error("Error resending webhook:", error);
-      toast.error(error.message || "Failed to resend webhook");
+      toast.error((error as Error).message || "Failed to resend webhook");
     } finally {
       setResendingWebhook(null);
     }
