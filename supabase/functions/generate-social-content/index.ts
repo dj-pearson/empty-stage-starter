@@ -1,345 +1,308 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { AIServiceV2 } from "../_shared/ai-service-v2.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
+/**
+ * Content angles aligned with EatPal's brand positioning from prd_image.md.
+ * Rotated to ensure variety across posts.
+ */
+const CONTENT_ANGLES = [
+  "food chaining success story",
+  "ARFID awareness and education",
+  "mealtime stress reduction tip",
+  "sensory-friendly food suggestion",
+  "therapist-backed feeding strategy",
+  "evidence-based nutrition insight",
+  "parent encouragement and validation",
+  "safe food expansion micro-step",
+  "texture bridge between safe and new foods",
+  "calm mealtime routine idea",
+];
+
+/**
+ * Standalone topics for when no topic/title is provided.
+ * Drawn from EatPal's content pillars.
+ */
+const STANDALONE_TOPICS = [
+  "How food chaining helps kids move from chicken nuggets to real chicken",
+  "One small step: bridging from smooth yogurt to fruit-on-the-bottom",
+  "Why 'just try one bite' backfires for kids with ARFID",
+  "The difference between picky eating and a feeding disorder",
+  "Sensory-friendly swaps that make mealtime calmer",
+  "What feeding therapists want parents to know about progress",
+  "Building a safe food list that actually grows over time",
+  "Texture bridges: from crunchy to soft without the stress",
+  "How EatPal uses AI to suggest the next safe food step",
+  "Mealtime scripts that reduce pressure for anxious eaters",
+];
+
 export default async (req: Request) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { topic, contentGoal, targetAudience, title, excerpt, url, autoPublish = false, webhookUrl } = await req.json();
+    const {
+      topic,
+      contentGoal,
+      targetAudience,
+      title,
+      excerpt,
+      url,
+      autoPublish = false,
+      webhookUrl,
+    } = await req.json();
 
-    const topicToUse = topic || title || 'blog post';
-    
+    let topicToUse = topic || title;
+
+    // If no topic provided, pick from standalone topics
     if (!topicToUse) {
-      return new Response(
-        JSON.stringify({ error: 'Topic or title is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      topicToUse =
+        STANDALONE_TOPICS[
+          Math.floor(Math.random() * STANDALONE_TOPICS.length)
+        ];
+      console.log("No topic provided, using standalone:", topicToUse);
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get active AI model
-    const { data: aiModel, error: aiError } = await supabase
-      .from('ai_settings')
-      .select('*')
-      .eq('is_active', true)
-      .single();
+    // Initialize centralized AI service (reads config from env vars)
+    const aiService = new AIServiceV2();
 
-    if (aiError || !aiModel) {
-      return new Response(
-        JSON.stringify({ error: 'No active AI model configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // ─── Deduplication: Check Recent Social Posts ──────────────────────
+    const { data: recentSocial } = await supabase
+      .from("social_posts")
+      .select("title, content")
+      .order("created_at", { ascending: false })
+      .limit(10);
 
-    const apiKey = Deno.env.get(aiModel.api_key_env_var);
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: `API key not configured: ${aiModel.api_key_env_var}` }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const recentSocialTitles =
+      recentSocial?.map((p: any) => p.title) || [];
 
-    // Add randomization seed to encourage variety
-    const randomSeed = Date.now() + Math.random();
-    const perspectives = ['personal story', 'shocking statistic', 'myth-busting', 'expert tip', 'relatable humor', 'emotional confession', 'unexpected twist'];
-    const tones = ['empathetic and warm', 'bold and confident', 'humorous and light', 'honest and raw', 'inspiring and hopeful'];
-    const selectedPerspective = perspectives[Math.floor(randomSeed % perspectives.length)];
-    const selectedTone = tones[Math.floor((randomSeed * 3) % tones.length)];
+    // Select a unique content angle and tone
+    const selectedAngle =
+      CONTENT_ANGLES[Math.floor(Math.random() * CONTENT_ANGLES.length)];
 
-    const systemPrompt = `You are a viral social media content creator specializing in parenting and child nutrition. Create HIGHLY UNIQUE and DIVERSE content that stands out from typical parenting advice. Each post should feel fresh, original, and distinctly different from previous content. 
+    const tones = [
+      "empathetic and warm",
+      "confident and evidence-based",
+      "gently humorous",
+      "honest and hopeful",
+      "direct and practical",
+    ];
+    const selectedTone =
+      tones[Math.floor(Math.random() * tones.length)];
 
-CRITICAL: Avoid clichés, overused phrases, and generic parenting tropes. Think outside the box and approach topics from unexpected angles. Vary your hook styles dramatically - use questions, bold statements, surprising statistics, personal confessions, or controversial takes.`;
+    console.log(
+      `Social content angle: ${selectedAngle}, tone: ${selectedTone}`
+    );
 
-    let userPrompt = `Create a completely unique and original social media post about: ${topicToUse}
+    // ─── Generate Social Content with AIServiceV2 ─────────────────────
+    const systemPrompt = `You are EatPal's social media content creator. EatPal is an evidence-based, AI-powered meal planning app built on food chaining science for families dealing with ARFID (Avoidant/Restrictive Food Intake Disorder), extreme picky eating, and feeding challenges.
 
-UNIQUENESS REQUIREMENTS (CRITICAL):
-- Approach: Use a ${selectedPerspective} angle
-- Tone: Write in a ${selectedTone} voice
-- Opening Hook: Create a UNIQUE hook that hasn't been used before - vary between questions, bold statements, contradictions, or surprising revelations
-- Avoid: Generic phrases like "Raise your hand if...", "I was THAT mom", "Real talk", "Let's be honest", "You know what" - be more creative
-- Variety: If this is about food, focus on a SPECIFIC food item, scenario, or unique angle - not generic "picky eater" struggles
-- Randomization seed: ${randomSeed} (use this to generate different variations)`;
-    
-    if (excerpt) {
-      userPrompt += `\n\nBlog excerpt for context: ${excerpt}`;
-    }
-    
-    userPrompt += `
+BRAND VOICE:
+- Calm, hopeful, and grounded — never use hype or miracle claims
+- Empathetic and non-blaming toward parents and caregivers
+- Reference food chaining science and feeding therapy naturally
+- Use plain-language clinical terms (explain ARFID once, then use it)
+- Avoid: "Raise your hand if...", "I was THAT mom", "Real talk", "Let's be honest" and similar clichés
 
-${contentGoal ? `Content goal: ${contentGoal}` : 'Content goal: Drive website visits and increase conversions'}
-${targetAudience ? `Target audience: ${targetAudience}` : 'Target audience: Parents struggling with picky eaters and child meal planning'}
+CONTENT APPROACH:
+- Angle: ${selectedAngle}
+- Tone: ${selectedTone}
+- Each post must feel fresh, original, and specifically relevant to feeding disorders
+- Include specific, concrete examples — not vague advice
+- Always connect back to EatPal's evidence-based, food-chaining approach`;
 
-Generate engaging social media content with:
+    const linkUrl = url || "https://tryeatpal.com";
 
-1. **Title**: A compelling, attention-grabbing title that's DIFFERENT from typical parenting content patterns
-2. **Facebook Version**: 
-   - 150-250 words of engaging content
-   - Start with a UNIQUE hook (avoid overused patterns)
-   - Tell a specific story or share a specific scenario (not generic advice)
-   - Include concrete details and specific examples
-   - Provide actionable value and tips
-   - End with a clear call-to-action to visit the website
-   - Include 3-5 relevant hashtags (mix popular and niche ones)
-   - Should feel authentic and fresh
+    const userPrompt = `Create a unique social media post about: ${topicToUse}
 
-3. **Twitter Version**: 
-   - Maximum 280 characters
-   - Punchy, attention-grabbing opening that's DIFFERENT each time
-   - Single powerful tip or insight with specific details
-   - Clear call-to-action with link placeholder
-   - 2-3 hashtags
+${excerpt ? `Context/excerpt: ${excerpt}` : ""}
+${contentGoal ? `Content goal: ${contentGoal}` : "Content goal: Build brand awareness and drive website visits for EatPal"}
+${targetAudience ? `Target audience: ${targetAudience}` : "Target audience: Parents of children with ARFID, extreme picky eating, or autism-related feeding challenges"}
+
+AVOID repeating these recent post topics:
+${recentSocialTitles.slice(0, 5).map((t: string) => `- ${t}`).join("\n") || "- (none yet)"}
+
+Generate:
+1. **title**: Compelling social media headline (under 70 chars)
+
+2. **facebook**: 150-250 words
+   - Open with a unique hook about a specific feeding challenge scenario
+   - Share a specific, actionable food chaining tip or sensory-aware strategy
+   - Acknowledge the parent's struggle without blame
+   - End with CTA: "Try EatPal's free 5-day personalized plan" and include link: ${linkUrl}
+   - Include 4-5 hashtags: #EatPal #ARFID #FoodChaining + relevant ones
+
+3. **twitter**: Maximum 280 characters
+   - One punchy insight about feeding challenges or food chaining
+   - Include link: ${linkUrl}
+   - Include 2-3 hashtags
    - Must create curiosity to drive clicks
 
-Make the content:
-- Emotionally resonant but avoid clichés
-- Actionable with specific, concrete tips (not vague advice)
-- Shareable with a unique perspective worth passing along
-- Conversational but with a distinctive voice
-- Optimized for engagement through originality and surprise
-- VARIED in structure, hook style, and narrative approach
+STRICT OUTPUT: Return ONLY valid JSON (RFC 8259), no markdown, no code fences, no trailing commas:
+{"title": "...", "facebook": "...", "twitter": "..."}`;
 
-STRICT OUTPUT REQUIREMENTS:
-- Return ONLY valid strict JSON (RFC 8259 compliant)
-- Absolutely NO Markdown, NO code fences, NO comments
-- No trailing commas anywhere
-- Escape all newlines inside string values as \\n
+    console.log("Generating social content with AIServiceV2...");
 
-Format your response as JSON:
-{
-  "title": "...",
-  "facebook": "...",
-  "twitter": "..."
-}`;
-
-    // Build API request
-    const authHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    // Add Anthropic version header if using Anthropic API
-    if (aiModel.endpoint_url.includes('anthropic.com')) {
-      authHeaders['anthropic-version'] = '2023-06-01';
-    }
-
-    if (aiModel.auth_type === 'x-api-key') {
-      authHeaders['x-api-key'] = apiKey;
-    } else if (aiModel.auth_type === 'bearer') {
-      authHeaders['Authorization'] = `Bearer ${apiKey}`;
-    } else if (aiModel.auth_type === 'api-key') {
-      authHeaders['api-key'] = apiKey;
-    }
-
-    // Build provider-specific request body
-    let requestBody: any;
-    const isAnthropic = aiModel.endpoint_url.includes('anthropic.com');
-    const isOpenAI = aiModel.endpoint_url.includes('openai.com');
-
-    if (isAnthropic) {
-      // Anthropic Messages API: system is top-level and max_tokens is required
-      requestBody = {
-        model: aiModel.model_name,
-        system: systemPrompt,
-        messages: [
-          { role: 'user', content: userPrompt }
-        ],
-        max_tokens: (aiModel.max_tokens && aiModel.max_tokens > 0) ? aiModel.max_tokens : 2048,
-      };
-
-      if (aiModel.temperature !== null) {
-        requestBody.temperature = aiModel.temperature;
-      }
-      if (aiModel.additional_params) {
-        Object.assign(requestBody, aiModel.additional_params);
-      }
-    } else {
-      // OpenAI-style schema by default
-      requestBody = {
-        model: aiModel.model_name,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-      };
-
-      if (aiModel.temperature !== null) {
-        requestBody.temperature = aiModel.temperature;
-      }
-      if (aiModel.max_tokens !== null) {
-        requestBody.max_tokens = aiModel.max_tokens;
-      }
-      if (aiModel.additional_params) {
-        Object.assign(requestBody, aiModel.additional_params);
-      }
-
-      // Handle GPT-5 and newer OpenAI params per requirements
-      if (isOpenAI && /^(gpt-5|o3|o4)/.test(aiModel.model_name)) {
-        // Use max_completion_tokens and remove temperature
-        if (requestBody.max_tokens !== undefined) {
-          requestBody.max_completion_tokens = requestBody.max_tokens;
-          delete requestBody.max_tokens;
-        }
-        if ('temperature' in requestBody) {
-          delete requestBody.temperature;
-        }
-      }
-    }
-
-    console.log('Calling AI API for social content:', aiModel.endpoint_url);
-
-    const aiResponse = await fetch(aiModel.endpoint_url, {
-      method: 'POST',
-      headers: authHeaders,
-      body: JSON.stringify(requestBody),
+    const content = await aiService.generateSimpleContent(userPrompt, {
+      systemPrompt,
+      taskType: "lightweight",
+      maxTokens: 2000,
     });
-
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error('AI API error:', aiResponse.status, errorText);
-      
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ 
-            error: 'Rate limit exceeded. Please try again later.',
-            isRateLimit: true 
-          }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      if (aiResponse.status === 400 && errorText.includes('safety system')) {
-        return new Response(
-          JSON.stringify({ 
-            error: 'Content was rejected by AI safety filters. Please try rephrasing your topic or using different content.',
-            isSafetyRejection: true,
-            success: false
-          }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      return new Response(
-        JSON.stringify({ error: `AI API error: ${errorText}` }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const aiData = await aiResponse.json();
-    console.log('AI response received for social content');
-
-    let content = '';
-    if (aiData.content && Array.isArray(aiData.content)) {
-      content = aiData.content.find((c: any) => c.type === 'text')?.text || '';
-    } else if (aiData.choices && aiData.choices[0]?.message?.content) {
-      content = aiData.choices[0].message.content;
-    }
-
-    const stopReason = aiData.stop_reason || aiData.choices?.[0]?.finish_reason;
-    if (stopReason) {
-      console.log('AI stop reason:', stopReason);
-    }
 
     if (!content) {
       return new Response(
-        JSON.stringify({ error: 'No content received from AI' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "No content received from AI" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
       );
     }
 
-    // Sanitize common AI wrappers like Markdown code fences
+    // ─── Parse Response ────────────────────────────────────────────────
     let sanitized = content.trim();
-    if (sanitized.startsWith('```')) {
-      sanitized = sanitized.replace(/^```(?:json|JSON)?\n?/, '').replace(/```$/, '').trim();
+    if (sanitized.startsWith("```")) {
+      sanitized = sanitized
+        .replace(/^```(?:json|JSON)?\n?/, "")
+        .replace(/```$/, "")
+        .trim();
     }
 
-    // Parse JSON from response
     let socialContent;
     try {
       const jsonMatch = sanitized.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        let jsonStr = jsonMatch[0];
-        
-        // Clean up common JSON issues from AI responses
-        // Remove trailing commas before closing brackets/braces
-        jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
-        
+        const jsonStr = jsonMatch[0].replace(/,(\s*[}\]])/g, "$1");
         socialContent = JSON.parse(jsonStr);
       } else {
         socialContent = JSON.parse(sanitized);
       }
     } catch (e) {
-      console.error('Failed to parse AI response as JSON:', e);
-      console.error('Raw content:', sanitized.substring(0, 500));
+      console.error("Failed to parse social AI response:", e);
+      console.error("Raw:", sanitized.substring(0, 500));
       return new Response(
-        JSON.stringify({ error: 'Failed to parse AI response. The AI may have returned invalid JSON format.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          error: "Failed to parse AI response. Please try again.",
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
       );
     }
 
-    // If autoPublish is true, create and publish the post
+    // Ensure brand hashtags are present
+    if (socialContent.facebook && !socialContent.facebook.includes("#EatPal")) {
+      socialContent.facebook += "\n\n#EatPal #ARFID #FoodChaining";
+    }
+    if (socialContent.twitter && !socialContent.twitter.includes("#EatPal")) {
+      socialContent.twitter += " #EatPal #ARFID";
+    }
+
+    // Replace any link placeholders with the actual URL
+    if (socialContent.facebook) {
+      socialContent.facebook = socialContent.facebook.replace(
+        /\[link\]|\{link\}|\[URL\]|\{URL\}/gi,
+        linkUrl
+      );
+    }
+    if (socialContent.twitter) {
+      socialContent.twitter = socialContent.twitter.replace(
+        /\[link\]|\{link\}|\[URL\]|\{URL\}/gi,
+        linkUrl
+      );
+    }
+
+    // ─── Auto-Publish & Webhook ────────────────────────────────────────
     if (autoPublish) {
       try {
-        // Extract hashtags from content
-        const hashtagMatches = (socialContent.facebook || socialContent.twitter || '').match(/#\w+/g) || [];
-        const hashtags = hashtagMatches.map((tag: string) => tag.substring(1));
+        const hashtagMatches =
+          (
+            socialContent.facebook ||
+            socialContent.twitter ||
+            ""
+          ).match(/#\w+/g) || [];
+        const hashtags = hashtagMatches.map((tag: string) =>
+          tag.substring(1)
+        );
 
-        // Create the post
         const { data: postData, error: postError } = await supabase
-          .from('social_posts')
+          .from("social_posts")
           .insert([
             {
               title: socialContent.title || topicToUse,
-              content: socialContent.facebook || socialContent.twitter || '',
-              short_form_content: socialContent.twitter || '',
-              long_form_content: socialContent.facebook || '',
-              platforms: ['facebook', 'twitter', 'linkedin'],
-              status: 'published',
+              content:
+                socialContent.facebook || socialContent.twitter || "",
+              short_form_content: socialContent.twitter || "",
+              long_form_content: socialContent.facebook || "",
+              platforms: ["facebook", "twitter", "linkedin"],
+              status: "published",
               published_at: new Date().toISOString(),
-              link_url: url || 'https://tryeatpal.com',
-              hashtags: hashtags,
+              link_url: linkUrl,
+              hashtags,
             },
           ])
           .select()
           .single();
 
         if (postError) {
-          console.error('Error creating post:', postError);
+          console.error("Error saving social post:", postError);
         } else if (postData && webhookUrl) {
-          // Send to webhook
+          // Send to webhook for social media distribution
           try {
             const webhookPayload = {
-              type: 'social_post_published',
+              type: "social_post_published",
               post_id: postData.id,
-              title: socialContent.title || '',
-              short_form: socialContent.twitter || '',
-              long_form: socialContent.facebook || '',
-              url: url || 'https://tryeatpal.com',
-              hashtags: hashtags,
-              published_at: new Date().toISOString()
+              title: socialContent.title || "",
+              short_form: socialContent.twitter || "",
+              long_form: socialContent.facebook || "",
+              url: linkUrl,
+              hashtags:
+                hashtags.length > 0
+                  ? hashtags
+                  : [
+                      "EatPal",
+                      "ARFID",
+                      "FoodChaining",
+                      "FeedingTherapy",
+                    ],
+              published_at: new Date().toISOString(),
             };
 
+            console.log("Sending social webhook:", webhookUrl);
             const webhookResponse = await fetch(webhookUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify(webhookPayload),
             });
 
-            console.log('Webhook response status:', webhookResponse.status);
+            console.log(
+              "Social webhook response:",
+              webhookResponse.status
+            );
+            if (!webhookResponse.ok) {
+              console.error(
+                "Social webhook error:",
+                await webhookResponse.text()
+              );
+            }
           } catch (webhookError) {
-            console.error('Webhook error:', webhookError);
+            console.error("Social webhook error:", webhookError);
           }
         }
-      } catch (autoPublishError) {
-        console.error('Auto-publish error:', autoPublishError);
+      } catch (publishError) {
+        console.error("Auto-publish error:", publishError);
       }
     }
 
@@ -349,13 +312,16 @@ Format your response as JSON:
         content: socialContent,
         autoPublished: autoPublish,
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
-    console.error('Error in generate-social-content:', error);
+    console.error("Error in generate-social-content:", error);
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: error.message || "Internal server error" }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
     );
   }
 };

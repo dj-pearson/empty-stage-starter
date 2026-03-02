@@ -1,11 +1,70 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { AIServiceV2 } from "../_shared/ai-service-v2.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
+
+/**
+ * EatPal brand content pillars derived from prd_image.md
+ * Used to seed topic generation when no topic is provided.
+ */
+const CONTENT_PILLARS = [
+  {
+    name: "ARFID & Feeding Disorders 101",
+    topics: [
+      "ARFID vs picky eating: what parents need to know",
+      "Signs your child's eating goes beyond typical picky eating",
+      "What to expect from feeding therapy and how EatPal supports it",
+      "Understanding sensory food aversion in children",
+      "When to seek professional help for your child's eating",
+    ],
+  },
+  {
+    name: "Food Chaining in Real Life",
+    topics: [
+      "What is food chaining? A therapist-backed guide for parents",
+      "Real food chains starting from chicken nuggets",
+      "Food chains starting from mac and cheese",
+      "Food chains from yogurt to new dairy foods",
+      "Common mistakes that stall food chaining progress",
+      "Building bridges between safe foods and new foods",
+    ],
+  },
+  {
+    name: "Meal Planning for Selective Eaters",
+    topics: [
+      "Weekly grocery list for kids with ARFID who only eat beige foods",
+      "How to build a meal rotation when your child eats fewer than 10 foods",
+      "Busy-week survival plan: protecting feeding progress when life gets chaotic",
+      "Nutrition strategies when your child's diet is extremely limited",
+      "Backup meal planning for high-anxiety mealtime days",
+    ],
+  },
+  {
+    name: "Autism, Sensory Challenges & Mealtime Routines",
+    topics: [
+      "Why many autistic kids struggle with eating and what actually helps",
+      "Sensory-friendly meal routines that support food chaining",
+      "Visual supports for mealtimes: charts, timers, and scripts",
+      "Managing texture sensitivities at the dinner table",
+      "Creating a calm mealtime environment for sensory-sensitive children",
+    ],
+  },
+  {
+    name: "Therapist & Clinical Perspectives",
+    topics: [
+      "Standardizing food logs and chains across your feeding team",
+      "From spreadsheets to structured data: how clinics scale feeding therapy",
+      "ARFID care coordination: what therapists wish parents tracked",
+      "Evidence-based approaches to expanding a child's food repertoire",
+      "The role of data in modern feeding therapy",
+    ],
+  },
+];
 
 export default async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -26,13 +85,15 @@ export default async (req: Request) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get suggested title from title bank if enabled
+    // Initialize centralized AI service (reads config from env vars)
+    const aiService = new AIServiceV2();
+
+    // ─── Title Selection ───────────────────────────────────────────────
     let suggestedTitle = topic;
     let titleFromBank = false;
-    let needsAITitleGeneration = false;
-    let existingTitlesForAI: string[] = [];
 
     if (useTitleBank && !topic) {
+      // Try the title bank first
       const { data: titleData, error: titleError } = await supabase.rpc(
         "get_next_blog_title"
       );
@@ -42,41 +103,79 @@ export default async (req: Request) => {
         titleFromBank = true;
         console.log("Using title from bank:", suggestedTitle);
       } else {
-        console.log("No unused titles in bank, will generate new title with AI...");
-        needsAITitleGeneration = true;
-        
-        // Get all titles from bank to understand the style/pattern
+        // Generate a new title from our content pillars using AI
+        console.log(
+          "No unused titles in bank, generating from content pillars..."
+        );
+
         const { data: allTitles } = await supabase
           .from("blog_title_bank")
           .select("title")
           .limit(20);
-        
-        existingTitlesForAI = allTitles?.map((t: any) => t.title) || [];
+
+        const existingTitles = allTitles?.map((t: any) => t.title) || [];
+
+        // Pick a random content pillar and topic seed for inspiration
+        const pillar =
+          CONTENT_PILLARS[Math.floor(Math.random() * CONTENT_PILLARS.length)];
+        const topicSeed =
+          pillar.topics[Math.floor(Math.random() * pillar.topics.length)];
+
+        const titlePrompt = `Generate ONE unique blog post title for EatPal, an evidence-based meal planning app for families dealing with ARFID, extreme picky eating, and feeding challenges.
+
+Content pillar: "${pillar.name}"
+Topic inspiration: "${topicSeed}"
+
+Existing titles to AVOID duplicating:
+${existingTitles.slice(0, 10).map((t: string) => `- ${t}`).join("\n")}
+
+Requirements:
+- Must be relevant to families with feeding disorders, ARFID, or extreme picky eating
+- Should reference food chaining, sensory challenges, or evidence-based feeding strategies
+- Tone: calm, hopeful, evidence-based (never miracle claims or parent-blaming)
+- 50-65 characters ideal for SEO
+- Return ONLY the title text, no quotes or extra formatting`;
+
+        try {
+          const generatedTitle = await aiService.generateSimpleContent(
+            titlePrompt,
+            { taskType: "lightweight" }
+          );
+
+          if (generatedTitle) {
+            suggestedTitle = generatedTitle
+              .trim()
+              .replace(/^["']|["']$/g, "");
+            console.log("AI-generated new title:", suggestedTitle);
+
+            await supabase
+              .from("blog_title_bank")
+              .insert({ title: suggestedTitle });
+            titleFromBank = true;
+          }
+        } catch (error) {
+          console.error("Error generating title with AI:", error);
+        }
       }
     }
 
+    // Fallback title from content pillars
     if (!suggestedTitle) {
-      const today = new Date().toISOString().slice(0, 10);
-      if (keywords && String(keywords).trim().length > 0) {
-        suggestedTitle = `Fresh strategies for ${String(keywords).trim()} (${today})`;
-      } else {
-        suggestedTitle = `Practical picky eater tips for families (${today})`;
-      }
-      console.warn("No title provided; using safe fallback:", suggestedTitle);
+      const pillar =
+        CONTENT_PILLARS[Math.floor(Math.random() * CONTENT_PILLARS.length)];
+      suggestedTitle =
+        pillar.topics[Math.floor(Math.random() * pillar.topics.length)];
+      console.warn("Using content pillar fallback title:", suggestedTitle);
     }
 
-    // Check for similar titles to avoid duplicates
+    // ─── Deduplication: Title Similarity ───────────────────────────────
     const { data: similarTitles, error: similarError } = await supabase.rpc(
       "check_title_similarity",
-      {
-        new_title: suggestedTitle,
-        threshold: 0.85,
-      }
+      { new_title: suggestedTitle, threshold: 0.85 }
     );
 
     if (!similarError && similarTitles && similarTitles.length > 0) {
-      console.warn("Warning: Similar titles found:", similarTitles);
-      // If exact match (similarity > 0.95), reject
+      console.warn("Similar titles found:", similarTitles);
       if (similarTitles[0].similarity_score > 0.95) {
         return new Response(
           JSON.stringify({
@@ -91,72 +190,37 @@ export default async (req: Request) => {
       }
     }
 
-    // Get recent generation history to avoid repetitive angles
+    // ─── Content Variety: Check Generation History ─────────────────────
     const { data: recentHistory } = await supabase
       .from("blog_generation_history")
       .select("*")
       .order("generated_at", { ascending: false })
       .limit(10);
 
-    const recentTopics = recentHistory?.map((h) => h.keywords).flat() || [];
+    const recentTopics =
+      recentHistory?.map((h: any) => h.keywords).flat() || [];
     const recentTones =
-      recentHistory?.map((h) => h.tone_used).filter(Boolean) || [];
+      recentHistory?.map((h: any) => h.tone_used).filter(Boolean) || [];
     const recentPerspectives =
-      recentHistory?.map((h) => h.perspective_used).filter(Boolean) || [];
+      recentHistory?.map((h: any) => h.perspective_used).filter(Boolean) || [];
 
-    // Get active AI model or use default
-    const { data: aiModel } = await supabase
-      .from("ai_settings")
-      .select("*")
-      .eq("is_active", true)
-      .single();
-
-    // Initialize AI service (centralized configuration)
-    const aiService = new AIServiceV2();
-
-    // Generate AI title if needed (after modelConfig is defined)
-    if (needsAITitleGeneration) {
-      const titlePrompt = existingTitlesForAI.length > 0
-        ? `Generate ONE unique blog post title for parents of picky eaters. Base the style on these examples: ${existingTitlesForAI.slice(0, 5).join(", ")}. Return ONLY the title, no quotes or extra text.`
-        : `Generate ONE unique blog post title about helping parents with picky eaters. Focus on practical advice. Return ONLY the title, no quotes or extra text.`;
-      
-      try {
-        const generatedTitle = await aiService.generateContent(titlePrompt, {
-          taskType: 'lightweight',
-          temperature: 0.9,
-        });
-        
-        if (generatedTitle) {
-          suggestedTitle = generatedTitle.trim().replace(/^["']|["']$/g, "");
-          console.log("AI-generated new title:", suggestedTitle);
-          
-          // Add the new title to the bank for future use
-          await supabase.from("blog_title_bank").insert({ title: suggestedTitle });
-          titleFromBank = true;
-        }
-      } catch (error) {
-        console.error("Error generating title with AI:", error);
-      }
-    }
-
-    // Vary the writing approach to create diverse content
+    // Rotate tones and perspectives to ensure variety
     const tones = [
-      "conversational",
-      "professional",
       "empathetic",
+      "evidence-based",
+      "conversational",
       "direct",
       "storytelling",
     ];
     const perspectives = [
-      "evidence-based research",
-      "real parent stories",
-      "expert pediatric advice",
-      "practical step-by-step",
-      "myth-busting",
-      "problem-solving",
+      "parent experience and real-life scenarios",
+      "clinical evidence and research findings",
+      "practical step-by-step guidance",
+      "food chaining strategies with specific examples",
+      "therapist insights and professional advice",
+      "myth-busting common feeding misconceptions",
     ];
 
-    // Filter out recently used approaches
     const availableTones = tones.filter((t) => !recentTones.includes(t));
     const availablePerspectives = perspectives.filter(
       (p) => !recentPerspectives.includes(p)
@@ -178,144 +242,82 @@ export default async (req: Request) => {
       `Generating with tone: ${selectedTone}, perspective: ${selectedPerspective}`
     );
 
-    const systemPrompt = `You are an expert content writer specializing in parenting, child nutrition, and family wellness. 
+    // ─── AI Content Generation ─────────────────────────────────────────
+    const systemPrompt = `You are an expert content writer for EatPal, an evidence-based meal planning app built on food chaining science for families dealing with extreme picky eating, ARFID (Avoidant/Restrictive Food Intake Disorder), and related feeding challenges.
 
-WRITING STYLE FOR THIS ARTICLE:
+BRAND VOICE (strictly follow):
+- Calm, grounded, and hopeful — never use hype or miracle claims
+- Evidence-based — reference food chaining science and clinical approaches confidently
+- Parent-first empathy — speak directly to caregivers with high understanding
+- Non-blaming — clearly communicate that feeding difficulties are not the parent's fault
+- Plain-language clinical — explain terms like ARFID and food chaining simply, then use them naturally
+
+WRITING APPROACH FOR THIS ARTICLE:
 - Tone: ${selectedTone}
-- Approach: ${selectedPerspective}
-- Must be completely unique and different from generic parenting advice
-- Avoid clichés and overused phrases
-- Bring fresh insights and actionable value
+- Perspective: ${selectedPerspective}
+- Must be completely unique and provide fresh, actionable insights
+- Avoid clichés, generic parenting platitudes, and overused phrases
+- Include specific food chaining examples, sensory considerations, or therapy-aligned strategies where relevant
 
-Create comprehensive, SEO-optimized blog content that is engaging, informative, and actionable for parents.`;
+NEVER include:
+- Miracle claims ("cure picky eating in 7 days")
+- Parent-blaming language ("if you just tried harder")
+- Generic advice that ignores the reality of feeding disorders
+- Content that contradicts evidence-based feeding therapy principles`;
 
     const userPrompt = `Create a complete blog article about: ${suggestedTitle}
 
-${keywords ? `Focus on these keywords: ${keywords}` : ""}
-${
-  targetAudience
-    ? `Target audience: ${targetAudience}`
-    : "Target audience: Parents of picky eaters and young children"
-}
+${keywords ? `Focus on these keywords: ${keywords}` : "Focus on keywords relevant to ARFID, food chaining, and picky eating"}
+${targetAudience ? `Target audience: ${targetAudience}` : "Target audience: Parents of children with ARFID, extreme picky eating, or autism-related feeding challenges"}
 
-IMPORTANT UNIQUENESS REQUIREMENTS:
-- This specific title/topic must be approached from a FRESH angle
-- Avoid recently covered topics: ${recentTopics.slice(0, 10).join(", ")}
+UNIQUENESS REQUIREMENTS:
+- Approach this topic from a FRESH angle different from these recent topics: ${recentTopics.slice(0, 10).join(", ") || "none yet"}
 - Use the ${selectedTone} tone throughout
-- Frame the content through ${selectedPerspective}
-- Provide specific, actionable advice (not generic platitudes)
-- Include unique examples and scenarios
+- Frame through ${selectedPerspective}
+- Include specific, actionable food chaining examples or sensory-aware strategies
+- Reference evidence-based feeding therapy principles
 
-Generate a comprehensive blog post with the following structure:
-
-1. Title: An engaging, SEO-friendly title (60 characters max)
-2. SEO Title: Optimized meta title for search engines (60 characters max)
-3. SEO Description: Compelling meta description (150-160 characters)
-4. Excerpt: A brief summary (150-200 words) that hooks readers
+CONTENT REQUIREMENTS:
+1. Title: An engaging, SEO-friendly title (50-65 characters)
+2. SEO Title: Optimized meta title for search engines (50-60 characters)
+3. SEO Description: Compelling meta description mentioning EatPal (150-160 characters)
+4. Excerpt: A brief summary (150-200 words) that hooks parents dealing with feeding challenges
 5. Body Content:
-   - Introduction (hook the reader)
-   - Main content sections with clear headings
-   - Practical tips and actionable advice
-   - Examples and real-world scenarios
-   - Conclusion with call-to-action
+   - Opening that acknowledges the parent's struggle with empathy
+   - Main sections with clear headings covering the topic
+   - Specific food chaining examples or sensory-aware meal strategies
+   - Practical, actionable steps families can take today
+   - Mention of how EatPal's AI-powered tools support this approach
+   - Conclusion with a hopeful, encouraging call-to-action
    - Target length: ~1000-1400 words
-6. FAQ Section: 5-7 frequently asked questions with detailed answers
+6. FAQ Section: 5-7 frequently asked questions with evidence-informed answers
+
+Each article must include:
+- At least one mention of food chaining as a strategy
+- At least one reference to working with feeding therapists
+- A CTA directing readers to try EatPal's free 5-day personalized meal plan
 
 STRICT OUTPUT REQUIREMENTS:
 - Return ONLY valid strict JSON (RFC 8259 compliant)
 - Absolutely NO Markdown, NO code fences, NO comments
 - No trailing commas anywhere
 - Escape all newlines inside string values as \\n
-Format your response as JSON with EXACT keys only:
+Format:
 {
   "title": "...",
   "seo_title": "...",
   "seo_description": "...",
   "excerpt": "...",
   "body": "...",
-  "faq": [
-    {"question": "...", "answer": "..."}
-  ],
+  "faq": [{"question": "...", "answer": "..."}]
 }`;
 
-    // Build API request
-    const authHeaders: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
+    console.log("Generating blog content with AIServiceV2...");
 
-    // Add Anthropic version header if using Anthropic API
-    if (modelConfig.endpoint_url.includes("anthropic.com")) {
-      authHeaders["anthropic-version"] = "2023-06-01";
-    }
-
-    if (modelConfig.auth_type === "x-api-key") {
-      authHeaders["x-api-key"] = apiKey;
-    } else if (modelConfig.auth_type === "bearer") {
-      authHeaders["Authorization"] = `Bearer ${apiKey}`;
-    } else if (modelConfig.auth_type === "api-key") {
-      authHeaders["api-key"] = apiKey;
-    }
-
-    // Build provider-specific request body
-    let requestBody: any;
-    const isAnthropic = modelConfig.endpoint_url.includes("anthropic.com");
-    const isOpenAI = modelConfig.endpoint_url.includes("openai.com");
-
-    if (isAnthropic) {
-      // Anthropic Messages API: system is top-level and max_tokens is required
-      requestBody = {
-        model: modelConfig.model_name,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
-        max_tokens:
-          modelConfig.max_tokens && modelConfig.max_tokens > 0
-            ? modelConfig.max_tokens
-            : 16000,
-      };
-
-      if (modelConfig.temperature !== null) {
-        requestBody.temperature = modelConfig.temperature;
-      }
-      if (modelConfig.additional_params) {
-        Object.assign(requestBody, modelConfig.additional_params);
-      }
-    } else {
-      // OpenAI-style schema by default
-      requestBody = {
-        model: modelConfig.model_name,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      };
-
-      if (modelConfig.temperature !== null) {
-        requestBody.temperature = modelConfig.temperature;
-      }
-      if (modelConfig.max_tokens !== null) {
-        requestBody.max_tokens = modelConfig.max_tokens;
-      }
-      if (modelConfig.additional_params) {
-        Object.assign(requestBody, modelConfig.additional_params);
-      }
-
-      // Handle GPT-5 and newer OpenAI params per requirements
-      if (isOpenAI && /^(gpt-5|o3|o4)/.test(modelConfig.model_name)) {
-        if (requestBody.max_tokens !== undefined) {
-          requestBody.max_completion_tokens = requestBody.max_tokens;
-          delete requestBody.max_tokens;
-        }
-        if ("temperature" in requestBody) {
-          delete requestBody.temperature;
-        }
-      }
-    }
-
-    console.log("Calling AI API...");
-
-    const content = await aiService.generateContent(contentPrompt, {
+    const content = await aiService.generateSimpleContent(userPrompt, {
       systemPrompt,
-      taskType: 'standard', // Blog content generation is complex
+      taskType: "standard",
+      maxTokens: 16000,
     });
 
     if (!content) {
@@ -328,7 +330,7 @@ Format your response as JSON with EXACT keys only:
       );
     }
 
-    // Sanitize common AI wrappers like Markdown code fences
+    // ─── Parse AI Response ─────────────────────────────────────────────
     let sanitized = content.trim();
     if (sanitized.startsWith("```")) {
       sanitized = sanitized
@@ -337,114 +339,68 @@ Format your response as JSON with EXACT keys only:
         .trim();
     }
 
-    // Parse JSON from response
     let blogContent;
     try {
-      // Try to find JSON object in the response
       const jsonMatch = sanitized.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        let jsonStr = jsonMatch[0];
-
-        // Clean up common JSON issues from AI responses
-        // Remove trailing commas before closing brackets/braces
-        jsonStr = jsonStr.replace(/,(\s*[}\]])/g, "$1");
-
+        const jsonStr = jsonMatch[0].replace(/,(\s*[}\]])/g, "$1");
         blogContent = JSON.parse(jsonStr);
       } else {
         blogContent = JSON.parse(sanitized);
       }
-    } catch (e) {
-      console.error("Failed to parse AI response as JSON:", e);
-      console.error("Raw content:", sanitized.substring(0, 1000));
+    } catch (parseError) {
+      console.error("Failed to parse AI response:", parseError);
+      console.error(
+        "Raw content (first 1000 chars):",
+        sanitized.substring(0, 1000)
+      );
 
-      // Retry once with a shorter target length to avoid truncation
+      // Retry with shorter target length
       try {
-        console.log("Retrying generation with condensed length due to parse failure...");
-
-        const isAnthropicRetry = modelConfig.endpoint_url.includes("anthropic.com");
-        const isOpenAIRetry = modelConfig.endpoint_url.includes("openai.com");
-
-        const retryUserPrompt = userPrompt.replace(
+        console.log("Retrying with condensed length...");
+        const retryPrompt = userPrompt.replace(
           /Target length:\s*~?\d+\s*-\s*\d+\s*words/i,
           "Target length: ~700-900 words"
         );
 
-        const retryHeaders: Record<string, string> = { "Content-Type": "application/json" };
-        if (modelConfig.auth_type === "x-api-key") retryHeaders["x-api-key"] = apiKey;
-        else if (modelConfig.auth_type === "bearer") retryHeaders["Authorization"] = `Bearer ${apiKey}`;
-        else if (modelConfig.auth_type === "api-key") retryHeaders["api-key"] = apiKey;
-
-        let retryBody: any;
-        if (isAnthropicRetry) {
-          retryBody = {
-            model: modelConfig.model_name,
-            system: systemPrompt,
-            messages: [{ role: "user", content: retryUserPrompt }],
-            max_tokens: modelConfig.max_tokens && modelConfig.max_tokens > 0 ? Math.min(modelConfig.max_tokens, 12000) : 8000,
-          };
-          if (modelConfig.temperature !== null) retryBody.temperature = modelConfig.temperature;
-          if (modelConfig.additional_params) Object.assign(retryBody, modelConfig.additional_params);
-        } else {
-          retryBody = {
-            model: modelConfig.model_name,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: retryUserPrompt },
-            ],
-            max_tokens: modelConfig.max_tokens ?? 4000,
-          };
-          if (modelConfig.temperature !== null) retryBody.temperature = modelConfig.temperature;
-          if (modelConfig.additional_params) Object.assign(retryBody, modelConfig.additional_params);
-          if (isOpenAIRetry && /^(gpt-5|o3|o4)/.test(modelConfig.model_name)) {
-            if (retryBody.max_tokens !== undefined) {
-              retryBody.max_completion_tokens = retryBody.max_tokens;
-              delete retryBody.max_tokens;
-            }
-            if ("temperature" in retryBody) delete retryBody.temperature;
+        const retryContent = await aiService.generateSimpleContent(
+          retryPrompt,
+          {
+            systemPrompt,
+            taskType: "standard",
+            maxTokens: 8000,
           }
-        }
+        );
 
-        const retryResp = await fetch(modelConfig.endpoint_url, {
-          method: "POST",
-          headers: retryHeaders,
-          body: JSON.stringify(retryBody),
-        });
-
-        if (!retryResp.ok) {
-          const t = await retryResp.text();
-          console.error("Retry AI API error:", retryResp.status, t);
-          return new Response(
-            JSON.stringify({ error: "AI retry failed: " + t }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        const retryData = await retryResp.json();
-        let retryContent = "";
-        if (retryData.content && Array.isArray(retryData.content)) {
-          retryContent = retryData.content.find((c: any) => c.type === "text")?.text || "";
-        } else if (retryData.choices && retryData.choices[0]?.message?.content) {
-          retryContent = retryData.choices[0].message.content;
-        }
         let retrySanitized = retryContent.trim();
-        if (retrySanitized.startsWith("```") ) {
-          retrySanitized = retrySanitized.replace(/^```(?:json|JSON)?\n?/, "").replace(/```$/, "").trim();
+        if (retrySanitized.startsWith("```")) {
+          retrySanitized = retrySanitized
+            .replace(/^```(?:json|JSON)?\n?/, "")
+            .replace(/```$/, "")
+            .trim();
         }
 
         const retryMatch = retrySanitized.match(/\{[\s\S]*\}/);
-        const retryJsonStr = (retryMatch ? retryMatch[0] : retrySanitized).replace(/,(\s*[}\]])/g, "$1");
+        const retryJsonStr = (
+          retryMatch ? retryMatch[0] : retrySanitized
+        ).replace(/,(\s*[}\]])/g, "$1");
         blogContent = JSON.parse(retryJsonStr);
-        console.log("Retry succeeded with condensed content");
+        console.log("Retry succeeded");
       } catch (retryErr) {
-        console.error("Retry parse/generation failed:", retryErr);
+        console.error("Retry failed:", retryErr);
         return new Response(
-          JSON.stringify({ error: "Failed to parse AI response after retry. Please try again." }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({
+            error: "Failed to parse AI response after retry. Please try again.",
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
         );
       }
     }
 
-    // Check content hash for duplicates before saving
+    // ─── Deduplication: Content Hash Check ─────────────────────────────
     const contentHash = await supabase.rpc("generate_content_hash", {
       content_text: blogContent.body || "",
     });
@@ -452,17 +408,15 @@ Format your response as JSON with EXACT keys only:
     if (!contentHash.error && contentHash.data) {
       const { data: duplicateCheck } = await supabase.rpc(
         "check_content_similarity",
-        {
-          new_content_hash: contentHash.data,
-        }
+        { new_content_hash: contentHash.data }
       );
 
       if (duplicateCheck && duplicateCheck.length > 0) {
-        console.warn("Warning: Similar content detected:", duplicateCheck);
+        console.warn("Similar content detected:", duplicateCheck);
         return new Response(
           JSON.stringify({
             error:
-              "This content is too similar to an existing post. Please try a different topic or angle.",
+              "Content too similar to an existing post. Try a different topic or angle.",
             similar_post: duplicateCheck[0],
           }),
           {
@@ -473,7 +427,7 @@ Format your response as JSON with EXACT keys only:
       }
     }
 
-    // Log generation history for future uniqueness
+    // ─── Log Generation History ────────────────────────────────────────
     const keywordArray = keywords
       ? keywords.split(",").map((k: string) => k.trim())
       : [];
@@ -485,12 +439,10 @@ Format your response as JSON with EXACT keys only:
       perspective_used: selectedPerspective,
     });
 
-    // Always create the blog post in database
+    // ─── Save Blog Post ────────────────────────────────────────────────
     let postData: any = null;
     try {
-      console.log("Creating blog post in database...");
-
-      // Generate unique slug from title
+      // Generate unique slug
       const baseSlug = (blogContent.title || suggestedTitle)
         .toLowerCase()
         .replace(/[^a-z0-9\s-]/g, "")
@@ -499,16 +451,18 @@ Format your response as JSON with EXACT keys only:
         .replace(/^-|-$/g, "");
       let slug = baseSlug;
 
-      // Ensure slug uniqueness by appending numeric suffix when needed
-      const { data: existingSlugRows, error: existingSlugError } = await supabase
-        .from("blog_posts")
-        .select("slug")
-        .ilike("slug", `${baseSlug}%`);
+      const { data: existingSlugRows, error: existingSlugError } =
+        await supabase
+          .from("blog_posts")
+          .select("slug")
+          .ilike("slug", `${baseSlug}%`);
 
       if (existingSlugError) {
-        console.warn("Slug uniqueness check failed, proceeding with base slug:", existingSlugError);
+        console.warn("Slug uniqueness check failed:", existingSlugError);
       } else if (existingSlugRows && existingSlugRows.length > 0) {
-        const existingSet = new Set(existingSlugRows.map((r: any) => r.slug));
+        const existingSet = new Set(
+          existingSlugRows.map((r: any) => r.slug)
+        );
         if (existingSet.has(baseSlug)) {
           let i = 2;
           while (existingSet.has(`${baseSlug}-${i}`)) i++;
@@ -516,15 +470,14 @@ Format your response as JSON with EXACT keys only:
         }
       }
 
-      console.log("Final unique slug:", slug);
+      console.log("Saving blog post with slug:", slug);
 
-      // Create the blog post
       const { data: postResult, error: postError } = await supabase
         .from("blog_posts")
         .insert([
           {
             title: blogContent.title || suggestedTitle,
-            slug: slug,
+            slug,
             content: blogContent.body || "",
             excerpt: blogContent.excerpt || "",
             meta_title: blogContent.seo_title || "",
@@ -538,97 +491,161 @@ Format your response as JSON with EXACT keys only:
         .select()
         .single();
 
-      if (postError) {
-        console.error("Error creating blog post:", postError);
-        throw postError;
-      }
-
-      if (!postResult) {
-        console.error("No post data returned");
-        throw new Error("Failed to create blog post");
-      }
+      if (postError) throw postError;
+      if (!postResult) throw new Error("No post data returned");
 
       postData = postResult;
-      console.log("Blog post created successfully:", postData.id);
+      console.log("Blog post saved:", postData.id);
 
-      if (postData && autoPublish) {
+      // ─── Auto-Publish: Generate Social Content & Webhook ───────────
+      if (autoPublish) {
         const blogUrl = `https://tryeatpal.com/blog/${slug}`;
 
-        // Generate social media content about this blog using AI
         try {
-            console.log("Invoking generate-social-content function...");
+          console.log("Generating social content for blog promotion...");
 
-            const { data: socialData, error: socialError } =
-              await supabase.functions.invoke("generate-social-content", {
-                body: {
-                  topic: blogContent.title || suggestedTitle,
-                  excerpt: blogContent.excerpt || "",
-                  url: blogUrl,
-                  contentGoal: "Promote this blog post to drive website visits",
-                  targetAudience: targetAudience || "Parents of picky eaters",
-                  autoPublish: false, // We'll handle the webhook here, not in the social function
-                },
-              });
+          // Generate social content directly with AIServiceV2
+          // (avoids supabase.functions.invoke which doesn't work in self-hosted Docker)
+          const socialSystemPrompt = `You are EatPal's social media content creator. EatPal is an evidence-based, AI-powered meal planning app built on food chaining science for families dealing with ARFID, extreme picky eating, and feeding challenges.
 
-            if (socialError) {
-              console.error("Error generating social content:", socialError);
-              throw socialError;
+BRAND VOICE:
+- Calm, hopeful, evidence-based — never use miracle claims
+- Empathetic and non-blaming toward parents
+- Reference food chaining and feeding therapy naturally
+- Include a clear call-to-action to read the blog post
+
+NEVER use: "Raise your hand if...", "I was THAT mom", "Real talk", generic parenting clichés`;
+
+          const socialPrompt = `Create social media posts promoting this blog article:
+
+Title: "${blogContent.title || suggestedTitle}"
+Excerpt: "${blogContent.excerpt || ""}"
+URL: ${blogUrl}
+
+Generate:
+1. **title**: A compelling social media headline
+2. **facebook**: 150-250 words, empathetic hook about feeding challenges, specific insight from the article, CTA to read more, 3-5 hashtags including #EatPal #ARFID #FoodChaining
+3. **twitter**: Max 280 chars, punchy insight + link + 2-3 hashtags
+
+STRICT OUTPUT: Return ONLY valid JSON, no markdown, no code fences:
+{"title": "...", "facebook": "...", "twitter": "..."}`;
+
+          const socialContent = await aiService.generateSimpleContent(
+            socialPrompt,
+            {
+              systemPrompt: socialSystemPrompt,
+              taskType: "lightweight",
+              maxTokens: 2000,
             }
+          );
 
-            console.log("Social content generated successfully");
-            const socialContent = socialData?.content || {};
-
-            // Send to webhook if provided
-            if (webhookUrl) {
-              const webhookPayload = {
-                type: "blog_published",
-                blog_id: postData.id,
-                blog_title: blogContent.title || topic,
-                blog_url: blogUrl,
-                blog_slug: slug,
-                blog_excerpt: blogContent.excerpt || "",
-                short_form:
-                  socialContent.twitter ||
-                  `New blog: ${blogContent.title}\n\nRead more: ${blogUrl} #EatPal #PickyEaters #ParentingTips`,
-                long_form:
-                  socialContent.facebook ||
-                  `📝 New blog post: ${blogContent.title}\n\n${blogContent.excerpt}\n\nRead the full article: ${blogUrl}\n\n#EatPal #ParentingTips #PickyEaters`,
-                social_title: socialContent.title || blogContent.title,
-                hashtags: [
-                  "EatPal",
-                  "PickyEaters",
-                  "ParentingTips",
-                  "HealthyKids",
-                ],
-                published_at: new Date().toISOString(),
-              };
-
-              console.log("Sending to webhook:", webhookUrl);
-              const webhookResponse = await fetch(webhookUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(webhookPayload),
-              });
-
-              const webhookStatus = webhookResponse.status;
-              console.log("Webhook response status:", webhookStatus);
-
-              if (!webhookResponse.ok) {
-                const webhookText = await webhookResponse.text();
-                console.error("Webhook error response:", webhookText);
-              }
+          let parsedSocial: any = {};
+          try {
+            let socialSanitized = socialContent.trim();
+            if (socialSanitized.startsWith("```")) {
+              socialSanitized = socialSanitized
+                .replace(/^```(?:json|JSON)?\n?/, "")
+                .replace(/```$/, "")
+                .trim();
             }
-          } catch (socialError) {
+            const socialMatch = socialSanitized.match(/\{[\s\S]*\}/);
+            if (socialMatch) {
+              parsedSocial = JSON.parse(
+                socialMatch[0].replace(/,(\s*[}\]])/g, "$1")
+              );
+            } else {
+              parsedSocial = JSON.parse(socialSanitized);
+            }
+          } catch {
             console.error(
-              "Error in social content generation/webhook:",
-              socialError
+              "Failed to parse social content, using branded fallback"
             );
+            parsedSocial = {
+              title: blogContent.title || suggestedTitle,
+              twitter: `New on the EatPal blog: ${blogContent.title}\n\nEvidence-based strategies for families with picky eaters.\n\n${blogUrl}\n\n#EatPal #ARFID #FoodChaining`,
+              facebook: `New on the EatPal blog!\n\n${blogContent.excerpt || ""}\n\nRead the full article for evidence-based strategies grounded in food chaining science.\n\n${blogUrl}\n\n#EatPal #ARFID #FoodChaining #PickyEaters #FeedingTherapy`,
+            };
+          }
+
+          // Save social post to database
+          const hashtagMatches =
+            (parsedSocial.facebook || "").match(/#\w+/g) || [];
+          const hashtags = hashtagMatches.map((tag: string) =>
+            tag.substring(1)
+          );
+
+          await supabase.from("social_posts").insert([
+            {
+              title: parsedSocial.title || blogContent.title,
+              content: parsedSocial.facebook || "",
+              short_form_content: parsedSocial.twitter || "",
+              long_form_content: parsedSocial.facebook || "",
+              platforms: ["facebook", "twitter", "linkedin"],
+              status: "published",
+              published_at: new Date().toISOString(),
+              link_url: blogUrl,
+              hashtags,
+            },
+          ]);
+
+          // Send to webhook for social media distribution
+          if (webhookUrl) {
+            const webhookPayload = {
+              type: "blog_published",
+              blog_id: postData.id,
+              blog_title: blogContent.title || suggestedTitle,
+              blog_url: blogUrl,
+              blog_slug: slug,
+              blog_excerpt: blogContent.excerpt || "",
+              social_title:
+                parsedSocial.title || blogContent.title,
+              short_form:
+                parsedSocial.twitter ||
+                `New: ${blogContent.title}\n${blogUrl}\n#EatPal #ARFID #FoodChaining`,
+              long_form:
+                parsedSocial.facebook ||
+                `${blogContent.excerpt}\n\nRead more: ${blogUrl}\n\n#EatPal #ARFID #FoodChaining #FeedingTherapy`,
+              hashtags:
+                hashtags.length > 0
+                  ? hashtags
+                  : [
+                      "EatPal",
+                      "ARFID",
+                      "FoodChaining",
+                      "PickyEaters",
+                      "FeedingTherapy",
+                    ],
+              published_at: new Date().toISOString(),
+            };
+
+            console.log("Sending to webhook:", webhookUrl);
+            const webhookResponse = await fetch(webhookUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(webhookPayload),
+            });
+
+            console.log("Webhook response:", webhookResponse.status);
+            if (!webhookResponse.ok) {
+              console.error(
+                "Webhook error:",
+                await webhookResponse.text()
+              );
+            }
+          }
+        } catch (socialError) {
+          console.error(
+            "Error in social content generation/webhook:",
+            socialError
+          );
         }
       }
     } catch (saveError: any) {
       console.error("Error saving blog post:", saveError);
       return new Response(
-        JSON.stringify({ error: `Failed to save blog post: ${saveError?.message || 'Unknown error'}` }),
+        JSON.stringify({
+          error: `Failed to save blog post: ${saveError?.message || "Unknown error"}`,
+        }),
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -642,6 +659,7 @@ Format your response as JSON with EXACT keys only:
         content: blogContent,
         autoPublished: autoPublish,
         postId: postData?.id,
+        titleFromBank,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
