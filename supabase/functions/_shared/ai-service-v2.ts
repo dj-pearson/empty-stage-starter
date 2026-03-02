@@ -11,7 +11,7 @@
  * - CLAUDE_API_KEY: Anthropic API key
  * - OPENAI_GLOBAL_API: OpenAI API key (optional)
  * - AI_MAX_RETRIES: 3
- * - AI_TIMEOUT_MS: 30000
+ * - AI_TIMEOUT_MS: 120000
  * - AI_TEMPERATURE: 0.7
  * - AI_ENABLE_CACHING: true
  */
@@ -43,6 +43,7 @@ export interface AIRequest {
   maxTokens?: number;
   temperature?: number;
   model?: string;
+  timeoutMs?: number;
 }
 
 export interface AIResponse {
@@ -68,7 +69,7 @@ export class AIServiceV2 {
       claudeApiKey: Deno.env.get('CLAUDE_API_KEY'),
       openaiApiKey: Deno.env.get('OPENAI_GLOBAL_API'),
       maxRetries: parseInt(Deno.env.get('AI_MAX_RETRIES') || '3'),
-      timeoutMs: parseInt(Deno.env.get('AI_TIMEOUT_MS') || '30000'),
+      timeoutMs: parseInt(Deno.env.get('AI_TIMEOUT_MS') || '120000'),
       temperature: parseFloat(Deno.env.get('AI_TEMPERATURE') || '0.7'),
       enableCaching: Deno.env.get('AI_ENABLE_CACHING') !== 'false',
     };
@@ -95,9 +96,18 @@ export class AIServiceV2 {
 
     let lastError: Error | null = null;
 
+    // Use per-request timeout if specified, otherwise scale from team var (AI_TIMEOUT_MS).
+    // For large token requests, add 50% headroom on top of the configured timeout.
+    const baseTimeout = request.timeoutMs || this.config.timeoutMs;
+    const effectiveTimeout = request.maxTokens && request.maxTokens > 8000
+      ? Math.round(baseTimeout * 1.5)
+      : baseTimeout;
+
+    console.log(`[AIServiceV2] Timeout: ${effectiveTimeout}ms, maxTokens: ${request.maxTokens || 4000}`);
+
     for (let attempt = 1; attempt <= this.config.maxRetries; attempt++) {
       try {
-        const response = await this.makeRequest(request, modelToUse);
+        const response = await this.makeRequest(request, modelToUse, effectiveTimeout);
         return response;
       } catch (error) {
         lastError = error as Error;
@@ -165,14 +175,15 @@ export class AIServiceV2 {
   /**
    * Make the actual API request based on provider
    */
-  private async makeRequest(request: AIRequest, model: string): Promise<AIResponse> {
+  private async makeRequest(request: AIRequest, model: string, timeoutMs?: number): Promise<AIResponse> {
     const provider = this.detectProvider(model);
+    const timeout = timeoutMs || this.config.timeoutMs;
 
     switch (provider) {
       case 'claude':
-        return await this.makeClaudeRequest(request, model);
+        return await this.makeClaudeRequest(request, model, timeout);
       case 'openai':
-        return await this.makeOpenAIRequest(request, model);
+        return await this.makeOpenAIRequest(request, model, timeout);
       case 'gemini':
         return await this.makeGeminiRequest(request, model);
       default:
@@ -193,13 +204,13 @@ export class AIServiceV2 {
   /**
    * Make Claude/Anthropic API request
    */
-  private async makeClaudeRequest(request: AIRequest, model: string): Promise<AIResponse> {
+  private async makeClaudeRequest(request: AIRequest, model: string, timeoutMs?: number): Promise<AIResponse> {
     if (!this.config.claudeApiKey) {
       throw new Error('Claude API key not configured');
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs || this.config.timeoutMs);
 
     try {
       const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -243,13 +254,13 @@ export class AIServiceV2 {
   /**
    * Make OpenAI API request
    */
-  private async makeOpenAIRequest(request: AIRequest, model: string): Promise<AIResponse> {
+  private async makeOpenAIRequest(request: AIRequest, model: string, timeoutMs?: number): Promise<AIResponse> {
     if (!this.config.openaiApiKey) {
       throw new Error('OpenAI API key not configured');
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs || this.config.timeoutMs);
 
     try {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {

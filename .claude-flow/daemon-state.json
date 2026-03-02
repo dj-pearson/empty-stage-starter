@@ -1,6 +1,6 @@
 {
   "running": true,
-  "startedAt": "2026-03-01T22:41:41.021Z",
+  "startedAt": "2026-03-02T04:27:12.105Z",
   "workers": {
     "map": {
       "runCount": 55,
@@ -8,7 +8,7 @@
       "failureCount": 0,
       "averageDurationMs": 9.254545454545454,
       "lastRun": "2026-03-01T22:56:41.036Z",
-      "nextRun": "2026-03-01T22:56:41.030Z",
+      "nextRun": "2026-03-02T04:27:12.106Z",
       "isRunning": false
     },
     "audit": {
@@ -17,7 +17,7 @@
       "failureCount": 7,
       "averageDurationMs": 232.95081967213116,
       "lastRun": "2026-03-01T22:48:41.026Z",
-      "nextRun": "2026-03-01T22:58:41.027Z",
+      "nextRun": "2026-03-02T04:29:12.106Z",
       "isRunning": false
     },
     "optimize": {
@@ -26,7 +26,7 @@
       "failureCount": 6,
       "averageDurationMs": 165.04761904761912,
       "lastRun": "2026-03-01T22:50:41.026Z",
-      "nextRun": "2026-03-01T23:05:41.027Z",
+      "nextRun": "2026-03-02T04:31:12.106Z",
       "isRunning": false
     },
     "consolidate": {
@@ -35,7 +35,7 @@
       "failureCount": 0,
       "averageDurationMs": 4.481481481481481,
       "lastRun": "2026-03-01T22:48:41.032Z",
-      "nextRun": "2026-03-01T23:17:41.022Z",
+      "nextRun": "2026-03-02T04:33:12.106Z",
       "isRunning": false
     },
     "testgaps": {
@@ -44,7 +44,7 @@
       "failureCount": 5,
       "averageDurationMs": 174.5,
       "lastRun": "2026-03-01T22:54:41.025Z",
-      "nextRun": "2026-03-01T23:14:41.025Z",
+      "nextRun": "2026-03-02T04:35:12.106Z",
       "isRunning": false
     },
     "predict": {
@@ -64,8 +64,8 @@
   },
   "config": {
     "autoStart": false,
-    "logDir": "/home/user/empty-stage-starter/.claude-flow/logs",
-    "stateFile": "/home/user/empty-stage-starter/.claude-flow/daemon-state.json",
+    "logDir": "C:\\Users\\pears\\Documents\\EatPal\\empty-stage-starter\\.claude-flow\\logs",
+    "stateFile": "C:\\Users\\pears\\Documents\\EatPal\\empty-stage-starter\\.claude-flow\\daemon-state.json",
     "maxConcurrent": 2,
     "workerTimeoutMs": 300000,
     "resourceThresholds": {
@@ -131,5 +131,5 @@
       }
     ]
   },
-  "savedAt": "2026-03-01T22:56:41.036Z"
+  "savedAt": "2026-03-02T04:27:12.107Z"
 }
