@@ -95,8 +95,9 @@ const BlogPost = () => {
       // }
 
       // Fetch related posts
-      if (data.category) {
-        fetchRelatedPosts(data.id, data.category.slug);
+      const cat = Array.isArray(data.category) ? data.category[0] : data.category;
+      if (cat?.slug) {
+        fetchRelatedPosts(data.id, cat.slug);
       }
     }
     
@@ -144,11 +145,27 @@ const BlogPost = () => {
     }
   };
 
+  // Calculate word count from content for schema
+  const wordCount = useMemo(() => {
+    if (!post?.content) return undefined;
+    return post.content.split(/\s+/).filter(Boolean).length;
+  }, [post?.content]);
+
+  // Extract keywords from category and content
+  const articleKeywords = useMemo(() => {
+    const keywords = ["picky eating", "meal planning", "nutrition"];
+    const category = Array.isArray(post?.category) ? post.category[0] : post?.category;
+    if (category?.name) {
+      keywords.unshift(category.name.toLowerCase());
+    }
+    return keywords;
+  }, [post?.category]);
+
   // Detect content format and render accordingly
   const renderContent = useMemo(() => {
     if (!post) return null;
 
-    const content = post.content;
+    const content = typeof post.content === 'string' ? post.content : String(post.content || '');
     
     // Check if content is HTML (contains HTML tags)
     const hasHTMLTags = /<\/?[a-z][\s\S]*>/i.test(content);
@@ -323,20 +340,8 @@ const BlogPost = () => {
   const baseUrl = "https://tryeatpal.com";
   const articleUrl = `${baseUrl}/blog/${post.slug}`;
 
-  // Calculate word count from content for schema
-  const wordCount = useMemo(() => {
-    if (!post.content) return undefined;
-    return post.content.split(/\s+/).filter(Boolean).length;
-  }, [post.content]);
-
-  // Extract keywords from category and content
-  const articleKeywords = useMemo(() => {
-    const keywords = ["picky eating", "meal planning", "nutrition"];
-    if (post.category?.name) {
-      keywords.unshift(post.category.name.toLowerCase());
-    }
-    return keywords;
-  }, [post.category]);
+  // Normalize category (Supabase may return array for joins)
+  const category = Array.isArray(post.category) ? post.category[0] : post.category;
 
   return (
     <div id="main-content" className="min-h-screen bg-background">
@@ -354,10 +359,10 @@ const BlogPost = () => {
         ogImage={post.featured_image_url || "https://tryeatpal.com/Cover.webp"}
         ogImageAlt={post.title}
         keywords={articleKeywords.join(", ")}
-        aiPurpose={`This article from EatPal discusses ${post.category?.name || "picky eating and nutrition"}. ${post.excerpt || ""}`}
+        aiPurpose={`This article from EatPal discusses ${category?.name || "picky eating and nutrition"}. ${post.excerpt || ""}`}
         aiAudience="Parents of picky eaters, families managing ARFID, caregivers seeking nutrition guidance"
-        aiKeyFeatures={`${post.category?.name || "Nutrition"} guidance, evidence-based strategies, practical tips for families`}
-        aiUseCases={`Learning about ${post.category?.name?.toLowerCase() || "picky eating"}, finding practical meal planning tips, understanding feeding therapy approaches`}
+        aiKeyFeatures={`${category?.name || "Nutrition"} guidance, evidence-based strategies, practical tips for families`}
+        aiUseCases={`Learning about ${category?.name?.toLowerCase() || "picky eating"}, finding practical meal planning tips, understanding feeding therapy approaches`}
       />
 
       {/* Article Structured Data */}
@@ -367,7 +372,7 @@ const BlogPost = () => {
         url={articleUrl}
         imageUrl={post.featured_image_url || undefined}
         datePublished={post.published_at}
-        category={post.category?.name}
+        category={category?.name}
         keywords={articleKeywords}
         wordCount={wordCount}
         readingTimeMinutes={post.reading_time_minutes || undefined}
@@ -412,8 +417,8 @@ const BlogPost = () => {
       {/* Article Content */}
       <article className="container mx-auto px-4 py-12 max-w-4xl">
         {/* Category Badge */}
-        {post.category && (
-          <Badge className="mb-4">{post.category.name}</Badge>
+        {category?.name && (
+          <Badge className="mb-4">{category.name}</Badge>
         )}
 
         {/* Title */}

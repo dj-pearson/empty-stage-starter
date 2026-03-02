@@ -83,7 +83,11 @@ export function OptimizedImage({
   const [isInView, setIsInView] = useState(priority);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Get base path without extension
+  // Detect if the image is an external/remote URL (e.g., Supabase storage)
+  // External images won't have AVIF/WebP variants available
+  const isExternalUrl = src.startsWith('http://') || src.startsWith('https://');
+
+  // Get base path without extension (only useful for local images with format variants)
   const basePath = src.replace(/\.[^/.]+$/, '');
 
   // Intersection Observer for lazy loading
@@ -157,13 +161,15 @@ export function OptimizedImage({
       {/* Actual image - only load when in view or priority */}
       {isInView && !hasError && (
         <picture>
-          {/* AVIF - Best compression */}
-          <source srcSet={`${basePath}.avif`} type="image/avif" />
+          {/* Only try format variants for local images that may have pre-generated AVIF/WebP */}
+          {!isExternalUrl && (
+            <>
+              <source srcSet={`${basePath}.avif`} type="image/avif" />
+              <source srcSet={`${basePath}.webp`} type="image/webp" />
+            </>
+          )}
 
-          {/* WebP - Good compression, wide support */}
-          <source srcSet={`${basePath}.webp`} type="image/webp" />
-
-          {/* Fallback to original format */}
+          {/* Original format */}
           <img
             src={src}
             width={width}
@@ -172,6 +178,7 @@ export function OptimizedImage({
             fetchPriority={priority ? 'high' : undefined}
             decoding={priority ? 'sync' : 'async'}
             sizes={sizes}
+            crossOrigin={isExternalUrl ? 'anonymous' : undefined}
             onLoad={handleLoad}
             onError={handleError}
             className={cn(

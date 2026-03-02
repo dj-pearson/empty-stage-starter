@@ -111,11 +111,12 @@ const Blog = () => {
   const filterPosts = () => {
     let filtered = [...posts];
 
-    // Filter by category
+    // Filter by category (normalize: Supabase may return array for joins)
     if (selectedCategory !== "all") {
-      filtered = filtered.filter(
-        (post) => post.category?.slug === selectedCategory
-      );
+      filtered = filtered.filter((post) => {
+        const cat = Array.isArray(post.category) ? post.category[0] : post.category;
+        return cat?.slug === selectedCategory;
+      });
     }
 
     // Filter by search query
@@ -271,14 +272,17 @@ const Blog = () => {
                       <img
                         src={post.featured_image_url}
                         alt={post.title}
+                        crossOrigin="anonymous"
+                        loading="lazy"
                         className="w-full h-full object-cover"
                       />
                     </div>
                   )}
                   <CardHeader>
-                    {post.category && (
-                      <Badge className="w-fit mb-2">{post.category.name}</Badge>
-                    )}
+                    {(() => {
+                      const cat = Array.isArray(post.category) ? post.category[0] : post.category;
+                      return cat?.name ? <Badge className="w-fit mb-2">{cat.name}</Badge> : null;
+                    })()}
                     <CardTitle className="font-heading line-clamp-2">
                       {post.title}
                     </CardTitle>
