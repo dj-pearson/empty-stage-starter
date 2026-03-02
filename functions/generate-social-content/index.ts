@@ -138,7 +138,7 @@ Frame content around evidence-based feeding strategies, not generic parenting ad
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: Deno.env.get('LIGHTWEIGHT_AI_MODEL') || 'claude-3-5-haiku-20241022',
+          model: Deno.env.get('LIGHTWEIGHT_AI_MODEL') || 'claude-haiku-4-5-20251001',
           system: BRAND_SYSTEM_PROMPT,
           messages: [{ role: 'user', content: userPrompt }],
           max_tokens: 1000,

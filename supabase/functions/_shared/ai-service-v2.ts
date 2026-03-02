@@ -7,7 +7,7 @@
  * Environment Variables (Coolify Team Shared):
  * - AI_DEFAULT_PROVIDER: anthropic | openai | gemini
  * - DEFAULT_AI_MODEL: claude-sonnet-4-5-20250929
- * - LIGHTWEIGHT_AI_MODEL: claude-3-5-haiku-20241022
+ * - LIGHTWEIGHT_AI_MODEL: claude-haiku-4-5-20251001
  * - CLAUDE_API_KEY: Anthropic API key
  * - OPENAI_GLOBAL_API: OpenAI API key (optional)
  * - AI_MAX_RETRIES: 3
@@ -65,7 +65,7 @@ export class AIServiceV2 {
     this.config = {
       defaultProvider: (Deno.env.get('AI_DEFAULT_PROVIDER') || 'anthropic') as AIProvider,
       defaultModel: Deno.env.get('DEFAULT_AI_MODEL') || 'claude-sonnet-4-5-20250929',
-      lightweightModel: Deno.env.get('LIGHTWEIGHT_AI_MODEL') || 'claude-3-5-haiku-20241022',
+      lightweightModel: Deno.env.get('LIGHTWEIGHT_AI_MODEL') || 'claude-haiku-4-5-20251001',
       claudeApiKey: Deno.env.get('CLAUDE_API_KEY'),
       openaiApiKey: Deno.env.get('OPENAI_GLOBAL_API'),
       maxRetries: parseInt(Deno.env.get('AI_MAX_RETRIES') || '3'),
