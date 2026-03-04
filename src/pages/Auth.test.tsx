@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 
@@ -139,37 +139,44 @@ describe('Auth Page', () => {
     expect(document.body).toBeTruthy();
   });
 
-  it('renders authentication form', () => {
+  it('renders authentication form', async () => {
     const { container } = renderAuth();
-    // Auth page should contain form elements
-    const forms = container.querySelectorAll('form');
-    expect(forms.length).toBeGreaterThan(0);
+    // Wait for session check to complete so the auth form renders
+    await waitFor(() => {
+      const forms = container.querySelectorAll('form');
+      expect(forms.length).toBeGreaterThan(0);
+    });
   });
 
-  it('renders tab triggers for sign in and sign up', () => {
+  it('renders tab triggers for sign in and sign up', async () => {
     renderAuth();
-    // Look for tab triggers by role
-    const tabs = screen.queryAllByRole('tab');
-    expect(tabs.length).toBeGreaterThan(0);
+    await waitFor(() => {
+      const tabs = screen.queryAllByRole('tab');
+      expect(tabs.length).toBeGreaterThan(0);
+    });
   });
 
-  it('renders form inputs', () => {
+  it('renders form inputs', async () => {
     renderAuth();
-    // Auth page should have text input fields for email and password
-    const inputs = document.querySelectorAll('input');
-    expect(inputs.length).toBeGreaterThan(0);
+    await waitFor(() => {
+      const inputs = document.querySelectorAll('input');
+      expect(inputs.length).toBeGreaterThan(0);
+    });
   });
 
-  it('renders the page with accessible labels', () => {
+  it('renders the page with accessible labels', async () => {
     renderAuth();
-    // Look for Email label text or input
-    const emailLabel = screen.queryByText(/email/i) || document.querySelector('input[type="email"]');
-    expect(emailLabel).toBeTruthy();
+    await waitFor(() => {
+      const emailLabel = screen.queryByText(/email/i) || document.querySelector('input[type="email"]');
+      expect(emailLabel).toBeTruthy();
+    });
   });
 
-  it('has interactive buttons', () => {
+  it('has interactive buttons', async () => {
     renderAuth();
-    const buttons = screen.queryAllByRole('button');
-    expect(buttons.length).toBeGreaterThan(0);
+    await waitFor(() => {
+      const buttons = screen.queryAllByRole('button');
+      expect(buttons.length).toBeGreaterThan(0);
+    });
   });
 });

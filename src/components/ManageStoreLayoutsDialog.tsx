@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { assertUUID } from "@/lib/query-sanitize";
 import { toast } from "sonner";
 import { Store, MapPin, Edit, Trash2, List, GripVertical, Plus, Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -74,7 +75,7 @@ export function ManageStoreLayoutsDialog({
       const { data, error } = await supabase
         .from('store_layouts')
         .select('*')
-        .or(`user_id.eq.${userId}${householdId ? `,household_id.eq.${householdId}` : ''}`)
+        .or(`user_id.eq.${assertUUID(userId, 'userId')}${householdId ? `,household_id.eq.${assertUUID(householdId, 'householdId')}` : ''}`)
         .order('store_name', { ascending: true });
 
       if (error) throw error;

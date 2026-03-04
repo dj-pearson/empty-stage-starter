@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { assertUUID } from "@/lib/query-sanitize";
 import { toast } from "sonner";
 import { GroceryList } from "@/types";
 import { Trash2, Archive, Star, StarOff, ArchiveRestore } from "lucide-react";
@@ -65,7 +66,7 @@ export function ManageGroceryListsDialog({
         .order('name');
 
       if (householdId) {
-        query.or(`user_id.eq.${userId},household_id.eq.${householdId}`);
+        query.or(`user_id.eq.${assertUUID(userId, 'userId')},household_id.eq.${assertUUID(householdId, 'householdId')}`);
       } else {
         query.eq('user_id', userId);
       }

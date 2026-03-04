@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { assertUUID } from "@/lib/query-sanitize";
 import { RecipeCollection } from "@/types";
 import { Folder, Edit, Trash2, GripVertical, Star, Heart, Zap, Pizza, Clock, Users, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -82,7 +83,7 @@ export function ManageCollectionsDialog({
       const { data, error } = await supabase
         .from('recipe_collections')
         .select('*')
-        .or(`user_id.eq.${userId}${householdId ? `,household_id.eq.${householdId}` : ''}`)
+        .or(`user_id.eq.${assertUUID(userId, 'userId')}${householdId ? `,household_id.eq.${assertUUID(householdId, 'householdId')}` : ''}`)
         .order('sort_order', { ascending: true })
         .order('name', { ascending: true });
 

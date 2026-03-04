@@ -1,6 +1,13 @@
 import { render } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Mock ResizeObserver for Radix UI components
+vi.stubGlobal('ResizeObserver', class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+});
+
 // Mock Supabase
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {

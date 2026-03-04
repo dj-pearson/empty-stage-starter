@@ -26,6 +26,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from './logger';
+import { escapePostgRESTValue } from './query-sanitize';
 
 /**
  * Activity types
@@ -497,7 +498,7 @@ class ActivityTrackerService {
       let dbQuery = supabase
         .from('user_activity_timeline')
         .select('*')
-        .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
+        .or(`title.ilike.%${escapePostgRESTValue(query)}%,description.ilike.%${escapePostgRESTValue(query)}%`)
         .order('created_at', { ascending: false })
         .limit(options.limit || 50);
 
