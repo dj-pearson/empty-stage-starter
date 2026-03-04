@@ -1,6 +1,6 @@
 {
   "running": true,
-  "startedAt": "2026-03-02T04:27:12.105Z",
+  "startedAt": "2026-03-03T18:42:26.175Z",
   "workers": {
     "map": {
       "runCount": 78,
@@ -64,8 +64,8 @@
   },
   "config": {
     "autoStart": false,
-    "logDir": "C:\\Users\\pears\\Documents\\EatPal\\empty-stage-starter\\.claude-flow\\logs",
-    "stateFile": "C:\\Users\\pears\\Documents\\EatPal\\empty-stage-starter\\.claude-flow\\daemon-state.json",
+    "logDir": "/home/user/empty-stage-starter/.claude-flow/logs",
+    "stateFile": "/home/user/empty-stage-starter/.claude-flow/daemon-state.json",
     "maxConcurrent": 2,
     "workerTimeoutMs": 300000,
     "resourceThresholds": {

@@ -1360,6 +1360,381 @@
       "priority": 84,
       "passes": true,
       "notes": "Mixed B2C/B2B pricing confuses both audiences. Clear separation helps each persona identify their plan in under 30 seconds. [Completed 2026-03-01]"
+    },
+    {
+      "id": "US-085",
+      "title": "Centralized input sanitization middleware for all edge functions",
+      "description": "As a security engineer, I want a shared input sanitization layer applied to every edge function so that injection attacks (SQL, command, template) are blocked before reaching business logic. Shannon-style tools trace data flows from user input to dangerous sinks \u2014 this breaks those chains at the boundary.",
+      "acceptanceCriteria": [
+        "Create functions/_shared/sanitize.ts with sanitizeInput(), sanitizeSQL(), sanitizeHTML(), sanitizeCommand() utilities",
+        "All edge functions import and apply sanitizeInput() to request body/params before processing",
+        "SQL-like patterns (UNION SELECT, DROP TABLE, OR 1=1, etc.) are stripped or rejected with 400",
+        "Command injection characters (;, |, &&, $(), backticks) are escaped in any string passed to exec-like operations",
+        "Unit tests cover OWASP injection cheat sheet payloads (minimum 30 test vectors)",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Defense against Shannon's injection exploitation phase. Shannon traces data flows from input to dangerous operations \u2014 this sanitization layer breaks every flow at the boundary."
+    },
+    {
+      "id": "US-086",
+      "title": "Audit and enforce parameterized queries across all Supabase calls",
+      "description": "As a security engineer, I want every database query to use parameterized inputs (never string interpolation) so that SQL injection is structurally impossible, even if sanitization is bypassed.",
+      "acceptanceCriteria": [
+        "Grep entire codebase for string-interpolated Supabase queries (template literals in .from(), .rpc(), raw SQL)",
+        "Convert all interpolated queries to use Supabase client parameterized methods (.eq(), .in(), .filter(), etc.)",
+        "Add ESLint rule or custom lint script that flags raw SQL string concatenation/interpolation",
+        "Audit all .rpc() calls to ensure parameters are passed as function arguments, not embedded in SQL",
+        "Document findings in a SECURITY_AUDIT.md with before/after for each fix",
+        "All existing tests still pass",
+        "npm run build succeeds"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Shannon's code analysis identifies parameterized vs interpolated queries. Parameterized queries make injection structurally impossible regardless of input content."
+    },
+    {
+      "id": "US-087",
+      "title": "Implement DOMPurify sanitization on all dynamic HTML rendering",
+      "description": "As a security engineer, I want all user-generated or API-returned HTML to be sanitized through DOMPurify before rendering, so that stored and reflected XSS payloads are neutralized. Shannon tests XSS by injecting payloads through browser automation.",
+      "acceptanceCriteria": [
+        "Install and configure DOMPurify as the standard HTML sanitization library",
+        "Audit all uses of dangerouslySetInnerHTML across the codebase and wrap each with DOMPurify.sanitize()",
+        "Audit TipTap blog editor output rendering \u2014 ensure stored blog HTML is sanitized on display",
+        "Audit all locations where API response data is rendered as HTML (AI-generated content, recipe instructions, etc.)",
+        "Create a shared SafeHTML component: <SafeHTML html={content} /> that applies DOMPurify automatically",
+        "Add unit tests with OWASP XSS cheat sheet payloads (<script>, onerror, javascript:, data:text/html, SVG payloads)",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Shannon's XSS agent injects real payloads via browser automation. DOMPurify at every rendering boundary neutralizes stored, reflected, and DOM-based XSS."
+    },
+    {
+      "id": "US-088",
+      "title": "Implement strict Content Security Policy without unsafe-inline",
+      "description": "As a security engineer, I want a strict CSP that eliminates unsafe-inline and unsafe-eval so that even if an XSS payload reaches the browser, it cannot execute. This is the critical layer that makes US-035 actionable.",
+      "acceptanceCriteria": [
+        "Replace all inline <script> tags with external script files or nonce-based CSP",
+        "Replace all inline style= attributes in components with Tailwind classes or CSS modules",
+        "Configure CSP header with: default-src 'self'; script-src 'self' 'nonce-{random}'; style-src 'self' 'nonce-{random}'; img-src 'self' data: https:; connect-src 'self' https://api.tryeatpal.com https://functions.tryeatpal.com",
+        "Add CSP nonce generation to Cloudflare Pages _headers or _worker.js",
+        "Ensure Three.js, Framer Motion, GSAP, and Lottie still work under the new CSP",
+        "Add CSP violation reporting endpoint (report-uri or report-to directive)",
+        "Test in report-only mode first, then enforce after 1 week with no breakage",
+        "npm run build succeeds and all E2E tests pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Supersedes US-035. A strict CSP is the strongest browser-side XSS defense. Shannon's XSS payloads become inert even if they reach the DOM."
+    },
+    {
+      "id": "US-089",
+      "title": "Implement URL allowlist validation service for all server-side fetches",
+      "description": "As a security engineer, I want all server-side HTTP requests (fetch, axios, etc.) to pass through a URL validation service that blocks requests to internal/private IP ranges, so that SSRF attacks cannot reach internal infrastructure.",
+      "acceptanceCriteria": [
+        "Create functions/_shared/url-validator.ts with validateExternalUrl() that rejects: private IPs (10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x), IPv6 loopback/link-local, cloud metadata endpoints (169.254.169.254), file:// and other non-http(s) schemes",
+        "Resolve DNS before validation to prevent DNS rebinding attacks (resolve hostname, check resulting IP is not private)",
+        "Apply validateExternalUrl() to: parse-recipe URL fetching, update-blog-image URL fetching, any OpenAI/external API proxy calls, grocery delivery API calls",
+        "Add timeout of 10s on all external fetches to prevent slow-loris style SSRF",
+        "Unit tests cover: localhost variations (127.0.0.1, 0.0.0.0, [::1], 0x7f000001), DNS rebinding scenarios, cloud metadata endpoints, non-HTTP schemes",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Builds on US-004. Shannon's SSRF agent attempts to force internal requests through URL manipulation, DNS rebinding, and IP encoding tricks. This blocks all known SSRF bypass techniques."
+    },
+    {
+      "id": "US-090",
+      "title": "Implement CSRF protection on all state-changing operations",
+      "description": "As a security engineer, I want CSRF tokens validated on every state-changing request so that cross-origin form submissions and fetch requests cannot perform actions on behalf of authenticated users.",
+      "acceptanceCriteria": [
+        "Implement CSRF token generation and validation using Supabase session-bound tokens or a double-submit cookie pattern",
+        "All POST/PUT/DELETE edge function endpoints validate CSRF token presence and correctness",
+        "Frontend automatically attaches CSRF token to all mutating API requests via a shared fetch wrapper or Supabase client interceptor",
+        "Token rotation occurs on each session refresh",
+        "Requests without valid CSRF token return 403 Forbidden with descriptive error",
+        "Unit tests verify: missing token rejected, invalid token rejected, expired token rejected, valid token accepted",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Shannon's auth agent tests for CSRF by attempting cross-origin state-changing requests. CSRF tokens make these attacks impossible."
+    },
+    {
+      "id": "US-091",
+      "title": "Harden session management and cookie security",
+      "description": "As a security engineer, I want all session cookies to use secure attributes and sessions to be protected against fixation attacks, so that Shannon-style tools cannot hijack or replay sessions.",
+      "acceptanceCriteria": [
+        "Verify all Supabase auth cookies are set with: Secure, HttpOnly, SameSite=Lax (or Strict), Path=/",
+        "Implement session ID rotation on login (new session ID after successful authentication)",
+        "Implement session ID rotation on privilege escalation (e.g., switching to admin views)",
+        "Add absolute session timeout (24h) and idle timeout (2h) with configurable values",
+        "Invalidate all other sessions when user changes password",
+        "Add session listing in user profile so users can see/revoke active sessions",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Shannon's auth agent tests session fixation, cookie theft, and session replay. Proper session management eliminates these vectors."
+    },
+    {
+      "id": "US-092",
+      "title": "Implement progressive rate limiting and account lockout on auth endpoints",
+      "description": "As a security engineer, I want brute-force and credential stuffing attacks to be blocked by progressive rate limiting and temporary account lockouts, building on US-036 with server-side enforcement.",
+      "acceptanceCriteria": [
+        "Implement IP-based rate limiting: 5 failed attempts per minute, 20 per hour, 50 per day",
+        "Implement account-based rate limiting: 5 failed attempts trigger 15-min lockout, 10 trigger 1-hour lockout, 20 trigger 24-hour lockout with email notification",
+        "Rate limiting applies to: /auth/sign-in, /auth/sign-up, /auth/reset-password, /auth/verify-otp, all OAuth callback endpoints",
+        "Add Cloudflare rate limiting rules as first line of defense before edge functions",
+        "Return generic 'Invalid credentials' message (never reveal if email exists)",
+        "Log all failed auth attempts with IP, user-agent, timestamp for security monitoring",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Extends US-036. Shannon handles complex auth flows including 2FA. Progressive rate limiting stops brute-force and credential stuffing regardless of how sophisticated the attack tool is."
+    },
+    {
+      "id": "US-093",
+      "title": "Deploy comprehensive security headers via Cloudflare Pages",
+      "description": "As a security engineer, I want all HTTP responses to include defense-in-depth security headers so that the browser enforces multiple protection layers against common web attacks.",
+      "acceptanceCriteria": [
+        "Create or update public/_headers (Cloudflare Pages) with all security headers",
+        "Headers include: Strict-Transport-Security: max-age=31536000; includeSubDomains; preload",
+        "Headers include: X-Content-Type-Options: nosniff",
+        "Headers include: X-Frame-Options: DENY",
+        "Headers include: Referrer-Policy: strict-origin-when-cross-origin",
+        "Headers include: Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(self)",
+        "Headers include: X-XSS-Protection: 0 (disabled in favor of CSP per modern best practice)",
+        "Headers include: Cross-Origin-Opener-Policy: same-origin",
+        "Headers include: Cross-Origin-Resource-Policy: same-origin",
+        "Verify headers present on production deployment using securityheaders.com (target A+ rating)",
+        "npm run build succeeds"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Security headers are passive defenses that cost nothing at runtime. They prevent framing attacks, MIME sniffing, information leakage, and cross-origin exploitation \u2014 all vectors Shannon probes."
+    },
+    {
+      "id": "US-094",
+      "title": "Integrate SAST (Static Application Security Testing) into CI/CD pipeline",
+      "description": "As a security engineer, I want automated static analysis scanning source code for vulnerability patterns on every PR, so that dangerous data flows (the same patterns Shannon's code analysis finds) are caught before they reach production.",
+      "acceptanceCriteria": [
+        "Integrate Semgrep (open source) or CodeQL into GitHub Actions CI pipeline",
+        "Configure rules for: SQL injection sinks, XSS sinks (dangerouslySetInnerHTML, innerHTML), command injection (exec, spawn, eval), SSRF patterns (fetch/axios with user-controlled URLs), hardcoded secrets, insecure crypto usage",
+        "Create custom Semgrep rules for Supabase-specific patterns (e.g., .rpc() with interpolated strings)",
+        "Pipeline blocks PR merge on HIGH or CRITICAL severity findings",
+        "MEDIUM findings are flagged as warnings but don't block merge",
+        "Results are posted as GitHub PR review comments",
+        "Add .semgrepignore for false positive suppression with documented justifications",
+        "Document SAST setup in SECURITY.md"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Shannon's first phase is source code analysis to find data flow vulnerabilities. SAST does the same thing defensively \u2014 find and fix before an attacker does."
+    },
+    {
+      "id": "US-095",
+      "title": "Integrate DAST (Dynamic Application Security Testing) into CI/CD pipeline",
+      "description": "As a security engineer, I want automated dynamic scanning that tests the running application for vulnerabilities on every deployment to staging, mirroring what Shannon does but running continuously as a defender.",
+      "acceptanceCriteria": [
+        "Integrate OWASP ZAP (open source) or Nuclei into CI/CD pipeline targeting staging environment",
+        "Configure active scan policies for: injection testing, XSS testing, SSRF testing, authentication testing, security header validation",
+        "Run DAST scan against staging after every deployment (not on every PR \u2014 only on staging deploy)",
+        "HIGH severity findings create GitHub issues automatically with reproduction steps",
+        "CRITICAL findings trigger Slack/email alert to security team and block promotion to production",
+        "Scan completes in under 30 minutes (configure scan policy for speed vs depth tradeoff)",
+        "Monthly full-depth scan scheduled via cron with comprehensive report",
+        "Document DAST setup and findings review process in SECURITY.md"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "This is essentially running our own Shannon-lite continuously. DAST tools test the running app with real attacks \u2014 exactly what Shannon does. Running this ourselves means we find issues before attackers do."
+    },
+    {
+      "id": "US-096",
+      "title": "Automated dependency vulnerability scanning with blocking policy",
+      "description": "As a security engineer, I want every npm dependency scanned for known CVEs on every install and PR, so that vulnerable libraries (which Shannon can exploit) are caught before deployment.",
+      "acceptanceCriteria": [
+        "Integrate npm audit or Snyk into GitHub Actions CI pipeline",
+        "Pipeline blocks merge on CRITICAL severity vulnerabilities in production dependencies",
+        "HIGH severity vulnerabilities generate warnings and create tracking issues",
+        "Configure allowlist for known false positives with documented justifications and expiry dates",
+        "Add scheduled weekly full scan that catches newly disclosed CVEs in existing dependencies",
+        "Pin all production dependencies to exact versions in package.json (remove ^ and ~ prefixes)",
+        "Add Dependabot or Renovate for automated dependency update PRs",
+        "Typecheck passes after any dependency updates"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Shannon benefits from known CVEs in dependencies. Automated scanning ensures we patch before exploitation."
+    },
+    {
+      "id": "US-097",
+      "title": "Create internal security testing playbook with Shannon-aligned attack scenarios",
+      "description": "As a security engineer, I want a documented and executable pentest playbook that covers every attack vector Shannon uses, so that our team can self-test using the same methodology before an attacker does.",
+      "acceptanceCriteria": [
+        "Create scripts/security-tests/ directory with executable test scripts",
+        "Injection test suite: 50+ SQL injection payloads tested against all edge function endpoints that accept user input",
+        "XSS test suite: 50+ XSS payloads tested against all pages that render dynamic content (blog posts, recipe names, kid names, food names, AI-generated content)",
+        "SSRF test suite: 20+ SSRF payloads tested against parse-recipe, update-blog-image, and any URL-accepting endpoints",
+        "Auth test suite: Tests for session fixation, CSRF, privilege escalation, IDOR (Insecure Direct Object Reference), JWT manipulation",
+        "Each test script outputs PASS/FAIL with reproduction curl commands for failures",
+        "Add npm run test:security script that runs the full playbook",
+        "Playbook runs in under 15 minutes against a local or staging instance",
+        "Document each test's purpose and expected behavior in inline comments"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "This is our internal Shannon. Instead of waiting for external pentests, we continuously validate our own defenses using the same attack patterns Shannon employs."
+    },
+    {
+      "id": "US-098",
+      "title": "Configure Cloudflare WAF rules for OWASP top-10 attack patterns",
+      "description": "As a security engineer, I want Cloudflare WAF rules blocking known attack patterns at the edge, so that malicious requests are stopped before they reach our application servers or edge functions.",
+      "acceptanceCriteria": [
+        "Enable Cloudflare Managed Ruleset for OWASP top-10 categories",
+        "Configure custom WAF rules to block: SQL injection patterns in query strings and request bodies, XSS payloads in all input fields, command injection patterns, path traversal attempts (../), large request bodies (>1MB except for image uploads)",
+        "Set WAF to 'challenge' mode for first 2 weeks to identify false positives, then switch to 'block'",
+        "Create WAF exception rules for legitimate use cases (e.g., blog editor HTML content, recipe instruction formatting)",
+        "Configure rate limiting rules: 100 requests/minute per IP for API endpoints, 10 requests/minute per IP for auth endpoints",
+        "Enable Bot Fight Mode for automated attack tool detection",
+        "Document WAF configuration and exception rationale in SECURITY.md"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "WAF is the first line of defense \u2014 it blocks Shannon-style attacks at the network edge before they reach application code. Combined with application-level defenses, this creates defense in depth."
+    },
+    {
+      "id": "US-099",
+      "title": "Implement security event monitoring and real-time alerting",
+      "description": "As a security engineer, I want all security-relevant events logged and monitored with real-time alerting, so that active attacks (like Shannon running against our app) are detected and responded to within minutes.",
+      "acceptanceCriteria": [
+        "Create a security_events table in Supabase to log: failed auth attempts, rate limit triggers, WAF blocks, CSRF validation failures, input sanitization rejections, suspicious user-agent patterns, unusual API usage patterns",
+        "Each event includes: timestamp, IP address, user_id (if authenticated), event_type, severity, request_path, request_method, user_agent, geo_location",
+        "Implement real-time alerting thresholds: >10 failed auths from same IP in 5 minutes \u2192 alert, >5 injection attempts from same IP in 1 minute \u2192 alert + auto-block, >3 SSRF attempts from any IP \u2192 alert + auto-block",
+        "Alert delivery via: Sentry (error tracking), email notification to security team, Slack webhook (if configured)",
+        "Add admin dashboard widget showing security events timeline and top blocked IPs",
+        "Implement auto-block: IPs triggering CRITICAL alerts are added to Cloudflare blocklist via API for 24 hours",
+        "Retain security events for 90 days minimum",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Shannon runs for 1-1.5 hours generating hundreds of attack requests. Real-time monitoring would detect this pattern within minutes and auto-block the attacker IP."
+    },
+    {
+      "id": "US-100",
+      "title": "Add bot detection and browser fingerprinting for automated attack prevention",
+      "description": "As a security engineer, I want automated browser-based attacks (like Shannon's headless Chrome exploitation) to be detected and challenged, so that automated pentesting tools cannot complete exploitation flows undetected.",
+      "acceptanceCriteria": [
+        "Integrate Cloudflare Turnstile (free CAPTCHA alternative) on: login form, sign-up form, password reset form, contact/feedback forms",
+        "Implement browser fingerprinting checks on sensitive actions: detect headless Chrome indicators (navigator.webdriver, missing plugins, automation flags), detect rapid sequential form submissions (>3 submissions in 10 seconds), detect non-human mouse movement patterns on critical forms",
+        "Add honeypot fields (hidden form fields) to all public-facing forms \u2014 submissions with filled honeypot fields are silently rejected",
+        "Implement progressive challenges: first suspicious request gets Turnstile challenge, second gets rate limited, third gets IP blocked for 1 hour",
+        "Log all bot detection events to security_events table from US-099",
+        "Ensure accessibility: all CAPTCHA alternatives must be screen-reader accessible",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Shannon uses headless browser automation for exploitation. Bot detection and browser fingerprinting add friction that forces attackers to use more sophisticated (and detectable) evasion techniques."
+    },
+    {
+      "id": "US-101",
+      "title": "Remove debug endpoints, development artifacts, and source maps from production builds",
+      "description": "As a security engineer, I want all debug endpoints, development-only routes, verbose error messages, and source maps removed from production builds, so that Shannon-style tools cannot use them for reconnaissance.",
+      "acceptanceCriteria": [
+        "Audit and remove or gate all development-only routes behind VITE_ENV !== 'production' check",
+        "Ensure production error boundaries show generic messages (never stack traces, SQL errors, or internal paths)",
+        "Verify source maps are NOT deployed to public CDN (only uploaded to Sentry for error tracking)",
+        "Remove any console.log/console.error calls from production bundle (configure Vite/Terser to strip them)",
+        "Ensure /openapi.json and any API documentation endpoints are not publicly accessible in production",
+        "Verify no .env.example or configuration files with comments about infrastructure are in the public/ directory",
+        "Add build-time check that flags any development artifacts in the production bundle",
+        "npm run build succeeds and output contains no console.log statements"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Shannon's reconnaissance phase uses source code analysis. Removing debug artifacts, source maps, and verbose errors reduces the information available to attackers during their discovery phase."
+    },
+    {
+      "id": "US-102",
+      "title": "Implement strict API schema validation on all edge function endpoints",
+      "description": "As a security engineer, I want every edge function to validate request payloads against a strict Zod schema, rejecting any unexpected fields or types, so that type confusion and unexpected input attacks are blocked.",
+      "acceptanceCriteria": [
+        "Create Zod schemas for every edge function's expected input in functions/_shared/schemas/",
+        "Every edge function validates request body against its schema as the first operation after auth check",
+        "Invalid requests return 400 with a generic 'Invalid request' message (no schema details in response)",
+        "Schema validation strips unknown/extra fields (prevent prototype pollution and mass assignment)",
+        "Add maximum string length limits to all text fields (e.g., name: 200 chars, description: 5000 chars, URL: 2048 chars)",
+        "Add maximum array length limits to all array fields (prevent resource exhaustion)",
+        "Add maximum nesting depth to all object fields (prevent JSON parsing DoS)",
+        "Unit tests verify each schema rejects malformed input",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Strict schema validation is the most effective input defense. Shannon tests with unexpected types, extra fields, and oversized payloads. Zod schemas reject all of these structurally."
+    },
+    {
+      "id": "US-103",
+      "title": "Implement Subresource Integrity (SRI) for all external scripts and stylesheets",
+      "description": "As a security engineer, I want all externally-loaded scripts and stylesheets to use SRI hashes, so that CDN compromise or supply chain attacks cannot inject malicious code.",
+      "acceptanceCriteria": [
+        "Audit all <script> and <link> tags that load resources from external CDNs",
+        "Add integrity= attribute with SHA-384 or SHA-512 hash to each external resource",
+        "Add crossorigin='anonymous' attribute alongside SRI attributes",
+        "Configure Vite build to generate SRI hashes for all chunk files",
+        "Add build-time validation that all external resources have SRI hashes",
+        "Document any external resources that cannot use SRI (e.g., dynamic APIs) with risk justification",
+        "npm run build succeeds"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "SRI prevents supply chain attacks where a compromised CDN serves malicious scripts. While Shannon doesn't directly test this, it's a defense-in-depth measure against code injection via third-party resources."
+    },
+    {
+      "id": "US-104",
+      "title": "Implement IDOR (Insecure Direct Object Reference) protection audit",
+      "description": "As a security engineer, I want every API endpoint that accesses user resources to verify ownership through RLS or explicit checks, so that users cannot access other users' data by manipulating IDs.",
+      "acceptanceCriteria": [
+        "Audit all edge functions that accept record IDs (food_id, kid_id, recipe_id, plan_entry_id, grocery_item_id, etc.)",
+        "Verify each endpoint either: relies on RLS policy that filters by auth.uid(), or explicitly checks resource ownership before returning/modifying data",
+        "Test each endpoint with valid auth token but another user's resource IDs \u2014 all must return 403 or empty result",
+        "Audit all Supabase .select() calls in frontend to ensure they include user_id filter (defense in depth beyond RLS)",
+        "Add integration tests that create two test users and verify cross-user access is impossible for all resource types",
+        "Document IDOR audit findings and fixes",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Shannon's auth agent specifically tests for authorization bypass by manipulating resource identifiers. IDOR is one of the most common and impactful web vulnerabilities."
+    },
+    {
+      "id": "US-105",
+      "title": "Implement security regression test suite that runs on every PR",
+      "description": "As a security engineer, I want a dedicated security test suite that runs automatically on every pull request, ensuring that previously fixed vulnerabilities cannot be reintroduced.",
+      "acceptanceCriteria": [
+        "Create src/test/security/ directory with dedicated security test files",
+        "Test file for each fixed vulnerability: injection-prevention.test.ts, xss-prevention.test.ts, ssrf-prevention.test.ts, auth-bypass-prevention.test.ts, csrf-protection.test.ts, idor-protection.test.ts",
+        "Each test file reproduces the original attack vector and verifies it is blocked",
+        "Add npm run test:security:unit that runs only security tests (fast, no external dependencies)",
+        "Integrate into GitHub Actions CI \u2014 security tests run on every PR alongside regular tests",
+        "Security test failures block PR merge (required status check)",
+        "Add test coverage for every US-085 through US-104 acceptance criterion that can be unit tested",
+        "Minimum 100 security test cases across all files",
+        "All tests pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "The ultimate defense against regression. Shannon finds vulnerabilities that were previously fixed but reintroduced. This test suite ensures every fix is permanent."
     }
   ]
 }
