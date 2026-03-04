@@ -131,7 +131,7 @@
         "All existing tests pass"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -812,7 +812,7 @@
       ],
       "priority": 51,
       "passes": true,
-      "notes": "CRITICAL: The Index.tsx page is a generic placeholder that shows 'Welcome to Your Blank App' \u2014 any visitor landing on / sees zero brand messaging, zero value proposition, and zero CTAs. This is the #1 conversion killer on the site."
+      "notes": "CRITICAL: The Index.tsx page is a generic placeholder that shows 'Welcome to Your Blank App' — any visitor landing on / sees zero brand messaging, zero value proposition, and zero CTAs. This is the #1 conversion killer on the site."
     },
     {
       "id": "US-052",
@@ -862,7 +862,7 @@
       ],
       "priority": 54,
       "passes": true,
-      "notes": "Blog pages have zero email capture. Blog readers are warm leads who are researching picky eating \u2014 capturing their email is a critical conversion touchpoint."
+      "notes": "Blog pages have zero email capture. Blog readers are warm leads who are researching picky eating — capturing their email is a critical conversion touchpoint."
     },
     {
       "id": "US-055",
@@ -969,9 +969,9 @@
       "title": "Improve empty states across Pantry, Planner, and Grocery pages with actionable guidance",
       "description": "As a new user visiting feature pages for the first time, I want clear, encouraging empty states that tell me exactly what to do so that I don't feel lost or confused.",
       "acceptanceCriteria": [
-        "Audit empty states in src/pages/Pantry.tsx \u2014 ensure it shows: illustration/icon, 'Your pantry is empty' heading, 'Add your child's safe foods to get started with meal planning' description, prominent 'Add Food' button, and a tip: 'Start with 5-10 foods your child eats regularly'",
-        "Audit empty states in src/pages/Planner.tsx \u2014 when no meals are planned, show: 'No meals planned this week' heading, 'Create a meal plan to see it here' description, 'Generate Meal Plan' and 'Add Meal Manually' buttons",
-        "Audit empty states in src/pages/Grocery.tsx \u2014 show: 'Your grocery list is empty' heading, 'Add items from recipes or create a list manually' description, action buttons for both paths",
+        "Audit empty states in src/pages/Pantry.tsx — ensure it shows: illustration/icon, 'Your pantry is empty' heading, 'Add your child's safe foods to get started with meal planning' description, prominent 'Add Food' button, and a tip: 'Start with 5-10 foods your child eats regularly'",
+        "Audit empty states in src/pages/Planner.tsx — when no meals are planned, show: 'No meals planned this week' heading, 'Create a meal plan to see it here' description, 'Generate Meal Plan' and 'Add Meal Manually' buttons",
+        "Audit empty states in src/pages/Grocery.tsx — show: 'Your grocery list is empty' heading, 'Add items from recipes or create a list manually' description, action buttons for both paths",
         "All empty states use consistent design (canonical EmptyState component from src/components/ui/EmptyState.tsx)",
         "Typecheck passes",
         "npm run build succeeds"
@@ -1199,7 +1199,7 @@
       "description": "As a parent managing child profiles, I want to see how complete each profile is so that I know what information to add for better meal recommendations.",
       "acceptanceCriteria": [
         "Add a 'Profile X% complete' progress indicator to each child card on src/pages/Kids.tsx",
-        "Calculate completeness based on: name (required), age, allergens list, safe foods count (\u22655), preferences, and completed intake questionnaire",
+        "Calculate completeness based on: name (required), age, allergens list, safe foods count (≥5), preferences, and completed intake questionnaire",
         "Show a 'Complete Profile' button for profiles under 80% completion",
         "Add tooltip explaining what fields improve recommendations",
         "Typecheck passes",
@@ -1217,7 +1217,7 @@
         "Hero headline references ARFID, extreme picky eating, and progress (e.g. 'Turn mealtime battles into steady progress, one safe bite at a time')",
         "Subheadline explicitly mentions: AI-powered meal planning, food chaining science, built for families with ARFID/extreme picky eating, collaboration with feeding therapists",
         "Primary CTA changed to 'Get Your Personalized 5-Day Plan' with subtext 'Takes 2 minutes. Tailored to your child's safe foods.'",
-        "Secondary CTA/link added: 'For Feeding Therapists \u2192' linking to therapist section",
+        "Secondary CTA/link added: 'For Feeding Therapists →' linking to therapist section",
         "Stats section updated to include therapist count (200+ feeding therapists)",
         "Typecheck passes",
         "npm run build succeeds"
@@ -1364,7 +1364,7 @@
     {
       "id": "US-085",
       "title": "Centralized input sanitization middleware for all edge functions",
-      "description": "As a security engineer, I want a shared input sanitization layer applied to every edge function so that injection attacks (SQL, command, template) are blocked before reaching business logic. Shannon-style tools trace data flows from user input to dangerous sinks \u2014 this breaks those chains at the boundary.",
+      "description": "As a security engineer, I want a shared input sanitization layer applied to every edge function so that injection attacks (SQL, command, template) are blocked before reaching business logic. Shannon-style tools trace data flows from user input to dangerous sinks — this breaks those chains at the boundary.",
       "acceptanceCriteria": [
         "Create functions/_shared/sanitize.ts with sanitizeInput(), sanitizeSQL(), sanitizeHTML(), sanitizeCommand() utilities",
         "All edge functions import and apply sanitizeInput() to request body/params before processing",
@@ -1375,8 +1375,8 @@
         "npm run build succeeds"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Defense against Shannon's injection exploitation phase. Shannon traces data flows from input to dangerous operations \u2014 this sanitization layer breaks every flow at the boundary."
+      "passes": true,
+      "notes": "Defense against Shannon's injection exploitation phase. Shannon traces data flows from input to dangerous operations — this sanitization layer breaks every flow at the boundary."
     },
     {
       "id": "US-086",
@@ -1392,7 +1392,7 @@
         "npm run build succeeds"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Shannon's code analysis identifies parameterized vs interpolated queries. Parameterized queries make injection structurally impossible regardless of input content."
     },
     {
@@ -1402,7 +1402,7 @@
       "acceptanceCriteria": [
         "Install and configure DOMPurify as the standard HTML sanitization library",
         "Audit all uses of dangerouslySetInnerHTML across the codebase and wrap each with DOMPurify.sanitize()",
-        "Audit TipTap blog editor output rendering \u2014 ensure stored blog HTML is sanitized on display",
+        "Audit TipTap blog editor output rendering — ensure stored blog HTML is sanitized on display",
         "Audit all locations where API response data is rendered as HTML (AI-generated content, recipe instructions, etc.)",
         "Create a shared SafeHTML component: <SafeHTML html={content} /> that applies DOMPurify automatically",
         "Add unit tests with OWASP XSS cheat sheet payloads (<script>, onerror, javascript:, data:text/html, SVG payloads)",
@@ -1410,7 +1410,7 @@
         "npm run build succeeds"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Shannon's XSS agent injects real payloads via browser automation. DOMPurify at every rendering boundary neutralizes stored, reflected, and DOM-based XSS."
     },
     {
@@ -1428,7 +1428,7 @@
         "npm run build succeeds and all E2E tests pass"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Supersedes US-035. A strict CSP is the strongest browser-side XSS defense. Shannon's XSS payloads become inert even if they reach the DOM."
     },
     {
@@ -1445,7 +1445,7 @@
         "npm run build succeeds"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Builds on US-004. Shannon's SSRF agent attempts to force internal requests through URL manipulation, DNS rebinding, and IP encoding tricks. This blocks all known SSRF bypass techniques."
     },
     {
@@ -1462,7 +1462,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Shannon's auth agent tests for CSRF by attempting cross-origin state-changing requests. CSRF tokens make these attacks impossible."
     },
     {
@@ -1479,7 +1479,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Shannon's auth agent tests session fixation, cookie theft, and session replay. Proper session management eliminates these vectors."
     },
     {
@@ -1496,7 +1496,7 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Extends US-036. Shannon handles complex auth flows including 2FA. Progressive rate limiting stops brute-force and credential stuffing regardless of how sophisticated the attack tool is."
     },
     {
@@ -1517,8 +1517,8 @@
         "npm run build succeeds"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Security headers are passive defenses that cost nothing at runtime. They prevent framing attacks, MIME sniffing, information leakage, and cross-origin exploitation \u2014 all vectors Shannon probes."
+      "passes": true,
+      "notes": "Security headers are passive defenses that cost nothing at runtime. They prevent framing attacks, MIME sniffing, information leakage, and cross-origin exploitation — all vectors Shannon probes."
     },
     {
       "id": "US-094",
@@ -1535,8 +1535,8 @@
         "Document SAST setup in SECURITY.md"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Shannon's first phase is source code analysis to find data flow vulnerabilities. SAST does the same thing defensively \u2014 find and fix before an attacker does."
+      "passes": true,
+      "notes": "Shannon's first phase is source code analysis to find data flow vulnerabilities. SAST does the same thing defensively — find and fix before an attacker does."
     },
     {
       "id": "US-095",
@@ -1545,7 +1545,7 @@
       "acceptanceCriteria": [
         "Integrate OWASP ZAP (open source) or Nuclei into CI/CD pipeline targeting staging environment",
         "Configure active scan policies for: injection testing, XSS testing, SSRF testing, authentication testing, security header validation",
-        "Run DAST scan against staging after every deployment (not on every PR \u2014 only on staging deploy)",
+        "Run DAST scan against staging after every deployment (not on every PR — only on staging deploy)",
         "HIGH severity findings create GitHub issues automatically with reproduction steps",
         "CRITICAL findings trigger Slack/email alert to security team and block promotion to production",
         "Scan completes in under 30 minutes (configure scan policy for speed vs depth tradeoff)",
@@ -1553,8 +1553,8 @@
         "Document DAST setup and findings review process in SECURITY.md"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "This is essentially running our own Shannon-lite continuously. DAST tools test the running app with real attacks \u2014 exactly what Shannon does. Running this ourselves means we find issues before attackers do."
+      "passes": true,
+      "notes": "This is essentially running our own Shannon-lite continuously. DAST tools test the running app with real attacks — exactly what Shannon does. Running this ourselves means we find issues before attackers do."
     },
     {
       "id": "US-096",
@@ -1571,7 +1571,7 @@
         "Typecheck passes after any dependency updates"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Shannon benefits from known CVEs in dependencies. Automated scanning ensures we patch before exploitation."
     },
     {
@@ -1590,7 +1590,7 @@
         "Document each test's purpose and expected behavior in inline comments"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "This is our internal Shannon. Instead of waiting for external pentests, we continuously validate our own defenses using the same attack patterns Shannon employs."
     },
     {
@@ -1607,8 +1607,8 @@
         "Document WAF configuration and exception rationale in SECURITY.md"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "WAF is the first line of defense \u2014 it blocks Shannon-style attacks at the network edge before they reach application code. Combined with application-level defenses, this creates defense in depth."
+      "passes": true,
+      "notes": "WAF is the first line of defense — it blocks Shannon-style attacks at the network edge before they reach application code. Combined with application-level defenses, this creates defense in depth."
     },
     {
       "id": "US-099",
@@ -1617,7 +1617,7 @@
       "acceptanceCriteria": [
         "Create a security_events table in Supabase to log: failed auth attempts, rate limit triggers, WAF blocks, CSRF validation failures, input sanitization rejections, suspicious user-agent patterns, unusual API usage patterns",
         "Each event includes: timestamp, IP address, user_id (if authenticated), event_type, severity, request_path, request_method, user_agent, geo_location",
-        "Implement real-time alerting thresholds: >10 failed auths from same IP in 5 minutes \u2192 alert, >5 injection attempts from same IP in 1 minute \u2192 alert + auto-block, >3 SSRF attempts from any IP \u2192 alert + auto-block",
+        "Implement real-time alerting thresholds: >10 failed auths from same IP in 5 minutes → alert, >5 injection attempts from same IP in 1 minute → alert + auto-block, >3 SSRF attempts from any IP → alert + auto-block",
         "Alert delivery via: Sentry (error tracking), email notification to security team, Slack webhook (if configured)",
         "Add admin dashboard widget showing security events timeline and top blocked IPs",
         "Implement auto-block: IPs triggering CRITICAL alerts are added to Cloudflare blocklist via API for 24 hours",
@@ -1625,7 +1625,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Shannon runs for 1-1.5 hours generating hundreds of attack requests. Real-time monitoring would detect this pattern within minutes and auto-block the attacker IP."
     },
     {
@@ -1635,7 +1635,7 @@
       "acceptanceCriteria": [
         "Integrate Cloudflare Turnstile (free CAPTCHA alternative) on: login form, sign-up form, password reset form, contact/feedback forms",
         "Implement browser fingerprinting checks on sensitive actions: detect headless Chrome indicators (navigator.webdriver, missing plugins, automation flags), detect rapid sequential form submissions (>3 submissions in 10 seconds), detect non-human mouse movement patterns on critical forms",
-        "Add honeypot fields (hidden form fields) to all public-facing forms \u2014 submissions with filled honeypot fields are silently rejected",
+        "Add honeypot fields (hidden form fields) to all public-facing forms — submissions with filled honeypot fields are silently rejected",
         "Implement progressive challenges: first suspicious request gets Turnstile challenge, second gets rate limited, third gets IP blocked for 1 hour",
         "Log all bot detection events to security_events table from US-099",
         "Ensure accessibility: all CAPTCHA alternatives must be screen-reader accessible",
@@ -1643,7 +1643,7 @@
         "npm run build succeeds"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Shannon uses headless browser automation for exploitation. Bot detection and browser fingerprinting add friction that forces attackers to use more sophisticated (and detectable) evasion techniques."
     },
     {
@@ -1661,7 +1661,7 @@
         "npm run build succeeds and output contains no console.log statements"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Shannon's reconnaissance phase uses source code analysis. Removing debug artifacts, source maps, and verbose errors reduces the information available to attackers during their discovery phase."
     },
     {
@@ -1680,7 +1680,7 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Strict schema validation is the most effective input defense. Shannon tests with unexpected types, extra fields, and oversized payloads. Zod schemas reject all of these structurally."
     },
     {
@@ -1697,7 +1697,7 @@
         "npm run build succeeds"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "SRI prevents supply chain attacks where a compromised CDN serves malicious scripts. While Shannon doesn't directly test this, it's a defense-in-depth measure against code injection via third-party resources."
     },
     {
@@ -1707,14 +1707,14 @@
       "acceptanceCriteria": [
         "Audit all edge functions that accept record IDs (food_id, kid_id, recipe_id, plan_entry_id, grocery_item_id, etc.)",
         "Verify each endpoint either: relies on RLS policy that filters by auth.uid(), or explicitly checks resource ownership before returning/modifying data",
-        "Test each endpoint with valid auth token but another user's resource IDs \u2014 all must return 403 or empty result",
+        "Test each endpoint with valid auth token but another user's resource IDs — all must return 403 or empty result",
         "Audit all Supabase .select() calls in frontend to ensure they include user_id filter (defense in depth beyond RLS)",
         "Add integration tests that create two test users and verify cross-user access is impossible for all resource types",
         "Document IDOR audit findings and fixes",
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Shannon's auth agent specifically tests for authorization bypass by manipulating resource identifiers. IDOR is one of the most common and impactful web vulnerabilities."
     },
     {
@@ -1726,14 +1726,14 @@
         "Test file for each fixed vulnerability: injection-prevention.test.ts, xss-prevention.test.ts, ssrf-prevention.test.ts, auth-bypass-prevention.test.ts, csrf-protection.test.ts, idor-protection.test.ts",
         "Each test file reproduces the original attack vector and verifies it is blocked",
         "Add npm run test:security:unit that runs only security tests (fast, no external dependencies)",
-        "Integrate into GitHub Actions CI \u2014 security tests run on every PR alongside regular tests",
+        "Integrate into GitHub Actions CI — security tests run on every PR alongside regular tests",
         "Security test failures block PR merge (required status check)",
         "Add test coverage for every US-085 through US-104 acceptance criterion that can be unit tested",
         "Minimum 100 security test cases across all files",
         "All tests pass"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "The ultimate defense against regression. Shannon finds vulnerabilities that were previously fixed but reintroduced. This test suite ensures every fix is permanent."
     }
   ]

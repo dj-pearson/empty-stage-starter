@@ -9,6 +9,16 @@ const STORAGE_KEY = 'eatpal_rate_limits';
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
+/**
+ * Progressive lockout tiers.
+ * After hitting the base limit, repeated failures trigger longer lockouts.
+ */
+const LOCKOUT_TIERS = [
+  { threshold: 5, durationMs: 15 * 60 * 1000 },   // 5 fails → 15 min lockout
+  { threshold: 10, durationMs: 60 * 60 * 1000 },   // 10 fails → 1 hour lockout
+  { threshold: 20, durationMs: 24 * 60 * 60 * 1000 }, // 20 fails → 24 hour lockout
+] as const;
+
 interface RateLimitEntry {
   attempts: number[];
 }
@@ -95,6 +105,30 @@ export function clearRateLimit(email: string, action = 'login'): void {
   const key = getKey(email, action);
   delete store[key];
   saveStore(store);
+}
+
+/**
+ * Get the progressive lockout duration based on total failed attempts.
+ * Returns the lockout duration for the highest matching tier.
+ */
+export function getLockoutDuration(totalAttempts: number): number {
+  let duration = WINDOW_MS; // default 15 min
+  for (const tier of LOCKOUT_TIERS) {
+    if (totalAttempts >= tier.threshold) {
+      duration = tier.durationMs;
+    }
+  }
+  return duration;
+}
+
+/**
+ * Get the current lockout tier label for display.
+ */
+export function getLockoutTierLabel(totalAttempts: number): string {
+  if (totalAttempts >= 20) return '24-hour lockout';
+  if (totalAttempts >= 10) return '1-hour lockout';
+  if (totalAttempts >= 5) return '15-minute lockout';
+  return '';
 }
 
 /**

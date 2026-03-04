@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { GroceryList } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { logger } from "@/lib/logger";
+import { assertUUID } from "@/lib/query-sanitize";
 
 interface GroceryListSelectorProps {
   userId: string;
@@ -46,7 +47,7 @@ export function GroceryListSelector({
 
         // Filter by user_id or household_id
         if (householdId) {
-          query.or(`user_id.eq.${userId},household_id.eq.${householdId}`);
+          query.or(`user_id.eq.${assertUUID(userId, 'userId')},household_id.eq.${assertUUID(householdId, 'householdId')}`);
         } else {
           query.eq('user_id', userId);
         }

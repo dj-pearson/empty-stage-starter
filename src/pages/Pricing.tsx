@@ -1,5 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { assertISODate } from "@/lib/query-sanitize";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import {
   Card,
@@ -129,7 +130,7 @@ export default function Pricing() {
         .select("*")
         .eq("is_active", true)
         .lte("start_date", new Date().toISOString())
-        .or(`end_date.is.null,end_date.gte.${new Date().toISOString()}`);
+        .or(`end_date.is.null,end_date.gte.${assertISODate(new Date().toISOString())}`);
 
       const plansWithDiscounts = (data || []).map((plan) => {
         const planData: PlanWithDiscount = {

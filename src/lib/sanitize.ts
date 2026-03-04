@@ -210,6 +210,37 @@ export function sanitizeUrl(dirty: string): string {
  * @param obj - Object with potentially unsafe string values
  * @returns New object with all string values sanitized as plain text
  */
+/**
+ * Escape a value for safe use in PostgREST filter strings (.or(), .filter(), etc.).
+ *
+ * PostgREST filter strings use commas to separate conditions and periods to
+ * separate column.operator.value triples. Unescaped user input in these strings
+ * can alter filter logic (filter injection).
+ *
+ * This function wraps the value in double quotes and escapes internal quotes,
+ * following PostgREST's quoted-value syntax.
+ *
+ * @param value - The raw value to embed in a PostgREST filter string
+ * @returns The escaped value safe for interpolation into filter strings
+ */
+export function escapeFilterValue(value: string): string {
+  if (!value) return '""';
+  // PostgREST supports double-quoted values where internal quotes are doubled
+  const escaped = value.replace(/"/g, '""');
+  return `"${escaped}"`;
+}
+
+/**
+ * Validate that a string is a valid UUID v4 format.
+ * Use before interpolating IDs into PostgREST filter strings.
+ *
+ * @param value - The string to validate
+ * @returns true if the value is a valid UUID
+ */
+export function isValidUUID(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 export function sanitizeObject<T extends Record<string, unknown>>(obj: T): T {
   const result = {} as Record<string, unknown>;
 

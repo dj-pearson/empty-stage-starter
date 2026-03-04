@@ -46,6 +46,7 @@ import {
 import { toast } from "sonner";
 import { Recipe, RecipeCollection, MealSlot } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
+import { assertUUID } from "@/lib/query-sanitize";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -176,7 +177,7 @@ export default function Recipes() {
       const { data, error } = await supabase
         .from('recipe_collections')
         .select('*')
-        .or(`user_id.eq.${userId}${householdId ? `,household_id.eq.${householdId}` : ''}`)
+        .or(`user_id.eq.${assertUUID(userId, 'userId')}${householdId ? `,household_id.eq.${assertUUID(householdId, 'householdId')}` : ''}`)
         .order('sort_order', { ascending: true })
         .order('name', { ascending: true });
       if (error) throw error;
