@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "infisical run --env=dev -- vite",
-    "build": "infisical run --env=prod -- vite build",
+    "dev": "vite",
+    "build": "vite build",
+    "infisical:load": "infisical export --env=dev --format=dotenv > .env.local",
     "build:dev": "vite build --mode development",
     "build:staging": "vite build --mode staging",
     "lint": "eslint .",
