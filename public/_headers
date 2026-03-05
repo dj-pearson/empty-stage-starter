@@ -24,13 +24,10 @@
   # DNS prefetch control
   X-DNS-Prefetch-Control: on
 
-  # Expect-CT header (Certificate Transparency)
-  Expect-CT: max-age=86400, enforce
-  
-  # Content Security Policy (Enhanced - Phase 1)
-  # Note: 'unsafe-inline' and 'unsafe-eval' still present for compatibility
-  # TODO Phase 2: Remove 'unsafe-inline' with nonce-based CSP
-  # TODO Phase 3: Remove 'unsafe-eval' by refactoring dependencies
+  # Content Security Policy
+  # 'unsafe-inline' required for Vite's injected styles and inline <script> tags in SSR/SPA
+  # 'unsafe-eval' scoped to Three.js/shader compilation requirement (used on landing page only)
+  # Cloudflare Pages does not support nonce-based CSP without Workers middleware
   # Self-hosted Supabase: api.tryeatpal.com, functions.tryeatpal.com
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://js.stripe.com https://*.tryeatpal.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https: blob:; connect-src 'self' https://www.google-analytics.com https://api.tryeatpal.com https://functions.tryeatpal.com wss://api.tryeatpal.com https://api.stripe.com https://*.sentry.io; frame-src 'self' https://js.stripe.com https://hooks.stripe.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests; block-all-mixed-content;
 

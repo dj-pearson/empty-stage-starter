@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,21 +7,21 @@ import { TrendingUp, TrendingDown, Users, Eye, MousePointerClick, Activity } fro
 
 interface Props {
   dateRange: { from: Date; to: Date };
-  connections: any[];
+  connections: Record<string, unknown>[];
 }
 
 interface MetricCard {
   title: string;
   value: string;
   change: number;
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
   color: string;
 }
 
 export function TrafficOverview({ dateRange, connections }: Props) {
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<MetricCard[]>([]);
-  const [chartData, setChartData] = useState<any[]>([]);
+  const [chartData, setChartData] = useState<Record<string, unknown>[]>([]);
 
   useEffect(() => {
     if (connections.length > 0) {
@@ -51,7 +50,7 @@ export function TrafficOverview({ dateRange, connections }: Props) {
 
       // Aggregate data by date
       const aggregatedByDate = new Map();
-      data?.forEach((row: any) => {
+      data?.forEach((row: Record<string, unknown>) => {
         const date = row.date;
         if (!aggregatedByDate.has(date)) {
           aggregatedByDate.set(date, {
@@ -76,7 +75,7 @@ export function TrafficOverview({ dateRange, connections }: Props) {
       });
 
       // Calculate chart data
-      const chartDataArray = Array.from(aggregatedByDate.values()).map((day: any) => ({
+      const chartDataArray = Array.from(aggregatedByDate.values()).map((day: Record<string, unknown>) => ({
         date: format(new Date(day.date), "MMM d"),
         sessions: day.sessions,
         users: day.users,
@@ -102,7 +101,7 @@ export function TrafficOverview({ dateRange, connections }: Props) {
       const firstHalf = chartDataArray.slice(0, midpoint);
       const secondHalf = chartDataArray.slice(midpoint);
 
-      const calculateChange = (firstHalf: any[], secondHalf: any[], key: string) => {
+      const calculateChange = (firstHalf: Record<string, number>[], secondHalf: Record<string, number>[], key: string) => {
         const firstSum = firstHalf.reduce((sum, day) => sum + day[key], 0);
         const secondSum = secondHalf.reduce((sum, day) => sum + day[key], 0);
         if (firstSum === 0) return 0;
@@ -139,7 +138,7 @@ export function TrafficOverview({ dateRange, connections }: Props) {
           color: "text-orange-600",
         },
       ]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching traffic overview:", error);
     } finally {
       setLoading(false);

@@ -1,4 +1,3 @@
-// @ts-nocheck - Database tables require migrations to be approved
 import { supabase } from '@/integrations/supabase/client';
 
 export interface DNSRecord {
@@ -25,7 +24,7 @@ export interface DomainVerificationResult {
  * @param verificationToken - The unique verification token
  * @returns Object containing required DNS records
  */
-export function generateDNSRecords(domain: string, verificationToken: string): {
+export function generateDNSRecords(_domain: string, verificationToken: string): {
   verification: DNSRecord;
   cname: DNSRecord;
   www_cname: DNSRecord;
@@ -102,11 +101,11 @@ export async function verifyDomainDNS(
       };
     }
 
-    const result = await response.json();
+    const result: { success?: boolean; message?: string; verified?: boolean; details?: DomainVerificationResult['details'] } = await response.json();
     return {
-      success: result.success,
+      success: result.success ?? false,
       message: result.message || 'DNS verification completed.',
-      verified: result.verified,
+      verified: result.verified ?? false,
       details: result.details,
     };
   } catch (error) {
@@ -139,11 +138,7 @@ export async function updateDomainVerificationStatus(
   verified: boolean
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const updates: {
-      status: 'verified' | 'failed';
-      verified_at?: string;
-      ssl_certificate_status?: string;
-    } = {
+    const updates: Record<string, unknown> = {
       status: verified ? 'verified' : 'failed',
     };
 
@@ -152,19 +147,20 @@ export async function updateDomainVerificationStatus(
       updates.ssl_certificate_status = 'issued'; // In production, this would trigger SSL cert provisioning
     }
 
-    const { error } = await supabase
-      .from('professional_custom_domains')
-      .update(updates)
-      .eq('id', domainId);
+    // professional_custom_domains table is not in generated types yet
+    const { error } = await (supabase
+      .from('professional_custom_domains' as 'user_subscriptions')
+      .update(updates as never)
+      .eq('id' as never, domainId as never) as unknown as Promise<{ error: { message: string } | null }>);
 
-    if (error) throw error;
+    if (error) throw new Error(error.message);
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating domain status:', error);
     return {
       success: false,
-      error: error.message || 'Failed to update domain status',
+      error: error instanceof Error ? error.message : 'Failed to update domain status',
     };
   }
 }
@@ -201,7 +197,7 @@ export function extractDomain(url: string): string {
     domain = domain.split(':')[0];
 
     return domain.toLowerCase();
-  } catch (error) {
+  } catch {
     return url;
   }
 }
@@ -229,15 +225,16 @@ export function isSSLCertificateValid(expiresAt: string | null): boolean {
  * @param userId - The user's ID
  * @returns Domain configuration or null
  */
-export async function getUserCustomDomain(userId: string) {
+export async function getUserCustomDomain(userId: string): Promise<Record<string, unknown> | null> {
   try {
-    const { data, error } = await supabase
-      .from('professional_custom_domains')
+    // professional_custom_domains table is not in generated types yet
+    const { data, error } = await (supabase
+      .from('professional_custom_domains' as 'user_subscriptions')
       .select('*')
       .eq('user_id', userId)
-      .maybeSingle();
+      .maybeSingle() as unknown as Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>);
 
-    if (error) throw error;
+    if (error) throw new Error(error.message);
     return data;
   } catch (error) {
     console.error('Error fetching custom domain:', error);
@@ -250,16 +247,16 @@ export async function getUserCustomDomain(userId: string) {
  * @param userId - The user's ID
  * @returns Brand settings or null
  */
-export async function getUserBrandSettings(userId: string) {
+export async function getUserBrandSettings(userId: string): Promise<Record<string, unknown> | null> {
   try {
-    // @ts-ignore - professional_brand_settings table exists but types not yet regenerated
-    const { data, error } = await supabase
-      .from('professional_brand_settings')
+    // professional_brand_settings table is not in generated types yet
+    const { data, error } = await (supabase
+      .from('professional_brand_settings' as 'user_subscriptions')
       .select('*')
       .eq('user_id', userId)
-      .maybeSingle();
+      .maybeSingle() as unknown as Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>);
 
-    if (error) throw error;
+    if (error) throw new Error(error.message);
     return data;
   } catch (error) {
     console.error('Error fetching brand settings:', error);

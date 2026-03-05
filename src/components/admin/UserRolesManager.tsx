@@ -13,7 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Shield, ShieldOff } from "lucide-react";
 
 type UserRole = {
@@ -39,11 +39,7 @@ export const UserRolesManager = () => {
       .order("created_at", { ascending: false });
 
     if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to fetch user roles",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to fetch user roles" });
     } else {
       setRoles(data || []);
     }
@@ -66,16 +62,9 @@ export const UserRolesManager = () => {
       .eq("id", roleId);
 
     if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to remove admin role",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to remove admin role" });
     } else {
-      toast({
-        title: "Success",
-        description: "Admin role removed successfully",
-      });
+      toast.success("Success", { description: "Admin role removed successfully" });
       fetchUserRoles();
     }
   };

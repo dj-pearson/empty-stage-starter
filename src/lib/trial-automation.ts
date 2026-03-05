@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from "@/integrations/supabase/client";
 import { triggerEmailSequence } from "./email-automation";
 import { logger } from "@/lib/logger";
@@ -47,8 +46,8 @@ export async function initializeTrialAutomation(
       .upsert([{
         email: userEmail,
         full_name: userName || null,
-        source: 'trial_signup',
-        status: 'qualified',
+        source: 'trial_signup' as const,
+        status: 'qualified' as const,
         converted_user_id: userId,
         metadata: {
           trial_started: true,
@@ -76,7 +75,7 @@ export async function initializeTrialAutomation(
     return { success: true };
   } catch (error: unknown) {
     logger.error('Error in initializeTrialAutomation:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -86,7 +85,7 @@ export async function initializeTrialAutomation(
 export async function trackTrialActivity(
   userId: string,
   activityType: 'login' | 'kid_added' | 'meal_logged' | 'recipe_created' | 'feature_used',
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ): Promise<void> {
   try {
     // Update lead metadata with activity
@@ -97,7 +96,7 @@ export async function trackTrialActivity(
       .maybeSingle();
 
     if (lead) {
-      const currentMetadata = (lead.metadata as Record<string, any>) || {};
+      const currentMetadata = (lead.metadata as Record<string, unknown>) || {};
       const activityCounts = (currentMetadata.activity_counts as Record<string, number>) || {};
 
       activityCounts[activityType] = (activityCounts[activityType] || 0) + 1;
@@ -111,7 +110,7 @@ export async function trackTrialActivity(
             last_activity: new Date().toISOString(),
             last_activity_type: activityType,
             ...metadata,
-          } as any,
+          },
           last_contacted_at: new Date().toISOString(),
         })
         .eq('id', lead.id);
@@ -130,7 +129,7 @@ export async function trackTrialActivity(
 async function triggerTrialInterventions(
   userId: string,
   activityType: string,
-  metadata?: Record<string, any>
+  _metadata?: Record<string, unknown>
 ): Promise<void> {
   try {
     const { data: subscription } = await supabase
@@ -143,11 +142,11 @@ async function triggerTrialInterventions(
     if (!subscription) return;
 
     const daysSinceTrial = Math.floor(
-      (Date.now() - new Date(subscription.created_at).getTime()) / (1000 * 60 * 60 * 24)
+      (Date.now() - new Date(subscription.created_at ?? '').getTime()) / (1000 * 60 * 60 * 24)
     );
 
     const daysUntilEnd = Math.floor(
-      (new Date(subscription.current_period_end).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+      (new Date(subscription.current_period_end ?? '').getTime() - Date.now()) / (1000 * 60 * 60 * 24)
     );
 
     // Get user profile
@@ -162,6 +161,8 @@ async function triggerTrialInterventions(
     const userEmail = authUser?.user?.email;
     if (!userEmail) return;
 
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://tryeatpal.com';
+
     // Intervention: Low activity after 3 days
     if (daysSinceTrial >= 3 && activityType === 'login') {
       const { data: lead } = await supabase
@@ -170,8 +171,10 @@ async function triggerTrialInterventions(
         .eq('converted_user_id', userId)
         .single();
 
-      const activityCounts = (lead?.metadata as Record<string, any>)?.activity_counts || {};
-      const totalActivity = Object.values(activityCounts).reduce((a: any, b: any) => a + b, 0) as number;
+      const activityCounts = (lead?.metadata as Record<string, unknown>)?.activity_counts as Record<string, number> | undefined;
+      const totalActivity = activityCounts
+        ? Object.values(activityCounts).reduce((a, b) => a + b, 0)
+        : 0;
 
       if (totalActivity < 3) {
         // Send "need help?" email
@@ -180,7 +183,7 @@ async function triggerTrialInterventions(
           .insert([{
             to_email: userEmail,
             subject: `Need help getting started with EatPal, ${profile?.full_name?.split(' ')[0] || 'there'}?`,
-            html_body: generateNeedHelpEmail(profile?.full_name),
+            html_body: generateNeedHelpEmail(profile?.full_name ?? undefined, origin),
             scheduled_for: new Date().toISOString(),
             priority: 8,
             template_key: 'trial_help',
@@ -196,7 +199,7 @@ async function triggerTrialInterventions(
         .eq('converted_user_id', userId)
         .single();
 
-      const mealCount = ((lead?.metadata as Record<string, any>)?.activity_counts as Record<string, number>)?.meal_logged || 0;
+      const mealCount = ((lead?.metadata as Record<string, unknown>)?.activity_counts as Record<string, number> | undefined)?.meal_logged || 0;
 
       if (mealCount >= 10) {
         // Send upgrade offer
@@ -205,7 +208,7 @@ async function triggerTrialInterventions(
           .insert([{
             to_email: userEmail,
             subject: `You're a power user! Upgrade to unlock more`,
-            html_body: generatePowerUserEmail(profile?.full_name, mealCount),
+            html_body: generatePowerUserEmail(profile?.full_name ?? undefined, mealCount, origin),
             scheduled_for: new Date().toISOString(),
             priority: 9,
             template_key: 'power_user',
@@ -220,7 +223,7 @@ async function triggerTrialInterventions(
         .insert([{
           to_email: userEmail,
           subject: `Your EatPal trial ends in 3 days`,
-          html_body: generateTrialEndingEmail(profile?.full_name, 3),
+          html_body: generateTrialEndingEmail(profile?.full_name ?? undefined, 3, false, origin),
           scheduled_for: new Date().toISOString(),
           priority: 10,
           template_key: 'trial_ending_3d',
@@ -234,7 +237,7 @@ async function triggerTrialInterventions(
         .insert([{
           to_email: userEmail,
           subject: `Last chance: Your trial ends tomorrow!`,
-          html_body: generateTrialEndingEmail(profile?.full_name, 1, true),
+          html_body: generateTrialEndingEmail(profile?.full_name ?? undefined, 1, true, origin),
           scheduled_for: new Date().toISOString(),
           priority: 10,
           template_key: 'trial_ending_1d',
@@ -257,7 +260,7 @@ export async function handleTrialConversion(
     const { error: leadError } = await supabase
       .from('leads')
       .update({
-        status: 'converted',
+        status: 'converted' as const,
         converted_at: new Date().toISOString(),
         metadata: {
           subscription_id: subscriptionId,
@@ -283,8 +286,11 @@ export async function handleTrialConversion(
       // Cancel trial-related sequences
       if (enrollments && enrollments.length > 0) {
         const trialEnrollmentIds = enrollments
-          .filter((e: any) => e.sequence?.trigger_event === 'trial_start' || e.sequence?.trigger_event === 'trial_ending')
-          .map((e: any) => e.id);
+          .filter((e) => {
+            const seq = e.sequence as unknown as { trigger_event: string } | null;
+            return seq?.trigger_event === 'trial_start' || seq?.trigger_event === 'trial_ending';
+          })
+          .map((e) => e.id);
 
         if (trialEnrollmentIds.length > 0) {
           await supabase
@@ -314,7 +320,7 @@ export async function handleTrialConversion(
       .single();
 
     await createAdminNotification({
-      title: 'Trial Converted! 🎉',
+      title: 'Trial Converted!',
       message: `${profile?.full_name || 'User'} upgraded to paid subscription`,
       severity: 'high',
       category: 'conversions',
@@ -348,7 +354,7 @@ export async function handleTrialConversion(
     return { success: true };
   } catch (error: unknown) {
     logger.error('Error in handleTrialConversion:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -364,7 +370,7 @@ export async function handleSubscriptionCancellation(
     await supabase
       .from('leads')
       .update({
-        status: 'lost',
+        status: 'lost' as const,
         notes: reason ? `Cancellation reason: ${reason}` : 'Subscription canceled',
       })
       .eq('converted_user_id', userId);
@@ -392,12 +398,12 @@ export async function handleSubscriptionCancellation(
     return { success: true };
   } catch (error: unknown) {
     logger.error('Error in handleSubscriptionCancellation:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
 // Email template generators
-function generateNeedHelpEmail(userName?: string): string {
+function generateNeedHelpEmail(userName: string | undefined, origin: string): string {
   const firstName = userName?.split(' ')[0] || 'there';
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -410,7 +416,7 @@ function generateNeedHelpEmail(userName?: string): string {
         <li>Explore our meal planning features</li>
       </ol>
       <div style="text-align: center; margin: 30px 0;">
-        <a href="${window.location.origin}/dashboard"
+        <a href="${origin}/dashboard"
            style="background-color: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block;">
           Continue to Dashboard
         </a>
@@ -421,11 +427,11 @@ function generateNeedHelpEmail(userName?: string): string {
   `;
 }
 
-function generatePowerUserEmail(userName: string | undefined, mealCount: number): string {
+function generatePowerUserEmail(userName: string | undefined, mealCount: number, origin: string): string {
   const firstName = userName?.split(' ')[0] || 'there';
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #10b981;">You're crushing it, ${firstName}! 🎉</h2>
+      <h2 style="color: #10b981;">You're crushing it, ${firstName}!</h2>
       <p>You've logged <strong>${mealCount} meals</strong> already - that's amazing!</p>
       <p>Ready to unlock even more features?</p>
       <ul style="line-height: 1.8;">
@@ -435,7 +441,7 @@ function generatePowerUserEmail(userName: string | undefined, mealCount: number)
         <li>Priority support</li>
       </ul>
       <div style="text-align: center; margin: 30px 0;">
-        <a href="${window.location.origin}/pricing"
+        <a href="${origin}/pricing"
            style="background-color: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block;">
           Upgrade Now - 20% Off
         </a>
@@ -449,7 +455,8 @@ function generatePowerUserEmail(userName: string | undefined, mealCount: number)
 function generateTrialEndingEmail(
   userName: string | undefined,
   daysLeft: number,
-  urgent: boolean = false
+  urgent: boolean = false,
+  origin: string
 ): string {
   const firstName = userName?.split(' ')[0] || 'there';
   const urgencyText = urgent ? 'LAST CHANCE: ' : '';
@@ -461,7 +468,7 @@ function generateTrialEndingEmail(
       <p>Your free trial of EatPal is ending soon. Don't lose access to your meal plans and progress!</p>
       ${urgent ? '<p style="color: #ef4444; font-weight: bold;">Upgrade today to keep all your data and continue your journey.</p>' : ''}
       <div style="text-align: center; margin: 30px 0;">
-        <a href="${window.location.origin}/pricing"
+        <a href="${origin}/pricing"
            style="background-color: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-size: 18px;">
           Upgrade to Continue
         </a>

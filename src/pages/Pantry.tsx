@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
-import { motion, AnimatePresence } from "framer-motion";
+// CSS animations used instead of framer-motion for list rendering performance
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useApp } from "@/contexts/AppContext";
 import { FoodCard } from "@/components/FoodCard";
 import { AddFoodDialog } from "@/components/AddFoodDialog";
@@ -65,7 +66,7 @@ import {
 } from "lucide-react";
 import { Food, FoodCategory } from "@/types";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { starterFoods } from "@/lib/starterFoods";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { PullToRefreshIndicator } from "@/components/PullToRefreshIndicator";
@@ -95,7 +96,6 @@ export default function Pantry() {
     activeKidId,
     refreshFoods,
   } = useApp();
-  const { toast } = useToast();
   const isMobile = useIsMobile();
 
   // Dialog states
@@ -108,6 +108,7 @@ export default function Pantry() {
   const [imageCaptureOpen, setImageCaptureOpen] = useState(false);
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(50);
 
   // View states
   const [searchQuery, setSearchQuery] = useState("");
@@ -175,10 +176,7 @@ export default function Pantry() {
         await refreshFoods();
       }
       haptic.success();
-      toast({
-        title: "Refreshed",
-        description: "Pantry updated with latest data",
-      });
+      toast("Refreshed", { description: "Pantry updated with latest data" });
     },
     enabled: isMobile,
   });
@@ -260,6 +258,25 @@ export default function Pantry() {
     return result;
   }, [foods, debouncedSearchQuery, categoryFilter, stockFilter, sortBy]);
 
+  // Paginate: show only visibleCount items (load-more pattern)
+  const displayedFoods = useMemo(() => processedFoods.slice(0, visibleCount), [processedFoods, visibleCount]);
+  const hasMoreFoods = processedFoods.length > visibleCount;
+
+  // Reset visible count when filters change
+  useEffect(() => {
+    setVisibleCount(50);
+  }, [debouncedSearchQuery, categoryFilter, stockFilter, sortBy]);
+
+  // Virtualization for list view (skip for small lists under 50 items)
+  const listParentRef = useRef<HTMLDivElement>(null);
+  const useVirtual = displayedFoods.length >= 50 && viewMode === "list";
+  const virtualizer = useVirtualizer({
+    count: useVirtual ? displayedFoods.length : 0,
+    getScrollElement: () => listParentRef.current,
+    estimateSize: () => 64,
+    overscan: 10,
+  });
+
   // Grouped by category (for "all" view without search)
   const groupedFoods = useMemo(() => {
     const groups: Record<string, Food[]> = {};
@@ -306,18 +323,9 @@ export default function Pantry() {
       if (error) throw error;
       if (data?.error) {
         if (data.error.includes("Rate limits")) {
-          toast({
-            title: "Rate Limit Reached",
-            description: "Please try again in a few moments.",
-            variant: "destructive",
-          });
+          toast.error("Rate Limit Reached", { description: "Please try again in a few moments." });
         } else if (data.error.includes("Payment required")) {
-          toast({
-            title: "Credits Required",
-            description:
-              "Please add credits to your workspace to continue using AI features.",
-            variant: "destructive",
-          });
+          toast.error("Credits Required", { description: "Please add credits to your workspace to continue using AI features." });
         } else {
           throw new Error(data.error);
         }
@@ -327,11 +335,7 @@ export default function Pantry() {
       }
     } catch (error) {
       logger.error("Error getting suggestions:", error);
-      toast({
-        title: "Error",
-        description: "Failed to get AI suggestions. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to get AI suggestions. Please try again." });
       setSuggestions([]);
     } finally {
       setIsLoadingSuggestions(false);
@@ -345,10 +349,7 @@ export default function Pantry() {
       is_safe: false,
       is_try_bite: true,
     });
-    toast({
-      title: "Food Added",
-      description: `${suggestion.name} has been added to your pantry as a try bite food.`,
-    });
+    toast.success("Food Added", { description: `${suggestion.name} has been added to your pantry as a try bite food.` });
   };
 
   const handleEdit = useCallback((food: Food) => {
@@ -394,10 +395,7 @@ export default function Pantry() {
         addedCount++;
       }
     });
-    toast({
-      title: "Starter List Loaded",
-      description: `${addedCount} foods added to your pantry!`,
-    });
+    toast("Starter List Loaded", { description: `${addedCount} foods added to your pantry!` });
   };
 
   const handleFoodIdentified = (foodData: any) => {
@@ -412,10 +410,7 @@ export default function Pantry() {
       const newQuantity =
         (existingFood.quantity || 0) + (foodData.quantity || 1);
       updateFood(existingFood.id, { ...existingFood, quantity: newQuantity });
-      toast({
-        title: "Quantity Updated",
-        description: `Added ${foodData.quantity || 1} to existing ${foodData.name}. Total: ${newQuantity}`,
-      });
+      toast.success("Quantity Updated", { description: `Added ${foodData.quantity || 1} to existing ${foodData.name}. Total: ${newQuantity}` });
     } else {
       addFood({
         name: foodData.name,
@@ -425,35 +420,21 @@ export default function Pantry() {
         quantity: foodData.quantity || 1,
         package_quantity: foodData.servingSize || undefined,
       });
-      toast({
-        title: "Food Added from Photo",
-        description: `${foodData.name} has been added to your pantry!`,
-      });
+      toast.success("Food Added from Photo", { description: `${foodData.name} has been added to your pantry!` });
     }
   };
 
   const handleBulkAdd = async (newFoods: Omit<Food, "id">[]) => {
     if (!addFoods) {
-      toast({
-        title: "Error",
-        description: "Bulk add feature is not available",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Bulk add feature is not available" });
       return;
     }
     try {
       await addFoods(newFoods);
-      toast({
-        title: "Foods Added",
-        description: `${newFoods.length} food${newFoods.length !== 1 ? "s" : ""} added to your pantry!`,
-      });
+      toast.success("Foods Added", { description: `${newFoods.length} food${newFoods.length !== 1 ? "s" : ""} added to your pantry` });
     } catch (error) {
       logger.error("Error bulk adding foods:", error);
-      toast({
-        title: "Error",
-        description: "Failed to add foods. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to add foods. Please try again." });
     }
   };
 
@@ -819,10 +800,8 @@ export default function Pantry() {
           {(stockStats.outOfStock > 0 || stockStats.lowStock > 0) &&
             stockFilter === "all" &&
             !debouncedSearchQuery && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800"
+              <div
+                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800 animate-in fade-in slide-in-from-top-2 duration-300"
               >
                 <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -855,7 +834,7 @@ export default function Pantry() {
                   View
                   <ChevronRight className="h-3 w-3 ml-1" />
                 </Button>
-              </motion.div>
+              </div>
             )}
 
           {/* === STATS === */}
@@ -939,25 +918,13 @@ export default function Pantry() {
             </div>
           ) : (
             /* Flat filtered/sorted view */
-            <AnimatePresence mode="popLayout">
-              {viewMode === "grid" ? (
-                <motion.div
-                  key="grid"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3"
+            {viewMode === "grid" ? (
+                <div
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 animate-in fade-in duration-200"
                   aria-live="polite"
                 >
-                  {processedFoods.map((food) => (
-                    <motion.div
-                      key={food.id}
-                      layout
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ duration: 0.15 }}
-                    >
+                  {displayedFoods.map((food) => (
+                    <div key={food.id} className="animate-in fade-in zoom-in-95 duration-150">
                       <FoodCard
                         food={food}
                         onEdit={handleEdit}
@@ -965,38 +932,80 @@ export default function Pantry() {
                         onQuantityChange={handleQuantityChange}
                         kidAllergens={uniqueKidAllergens}
                       />
-                    </motion.div>
+                    </div>
                   ))}
-                </motion.div>
+                </div>
               ) : (
-                <motion.div
-                  key="list"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="border rounded-xl overflow-hidden divide-y"
-                  aria-live="polite"
-                >
-                  {processedFoods.map((food) => (
-                    <PantryListItem
-                      key={food.id}
-                      food={food}
-                      onEdit={handleEdit}
-                      onDelete={deleteFood}
-                      onQuantityChange={handleQuantityChange}
-                      kidAllergens={uniqueKidAllergens}
-                    />
-                  ))}
-                </motion.div>
+                {useVirtual ? (
+                  <div
+                    ref={listParentRef}
+                    className="border rounded-xl overflow-auto animate-in fade-in duration-200"
+                    style={{ maxHeight: "70vh" }}
+                    aria-live="polite"
+                  >
+                    <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
+                      {virtualizer.getVirtualItems().map((virtualRow) => {
+                        const food = displayedFoods[virtualRow.index];
+                        return (
+                          <div
+                            key={food.id}
+                            style={{
+                              position: "absolute",
+                              top: 0,
+                              left: 0,
+                              width: "100%",
+                              transform: `translateY(${virtualRow.start}px)`,
+                            }}
+                          >
+                            <PantryListItem
+                              food={food}
+                              onEdit={handleEdit}
+                              onDelete={deleteFood}
+                              onQuantityChange={handleQuantityChange}
+                              kidAllergens={uniqueKidAllergens}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="border rounded-xl overflow-hidden divide-y animate-in fade-in duration-200"
+                    aria-live="polite"
+                  >
+                    {displayedFoods.map((food) => (
+                      <PantryListItem
+                        key={food.id}
+                        food={food}
+                        onEdit={handleEdit}
+                        onDelete={deleteFood}
+                        onQuantityChange={handleQuantityChange}
+                        kidAllergens={uniqueKidAllergens}
+                      />
+                    ))}
+                  </div>
+                )}
               )}
-            </AnimatePresence>
+          )}
+
+          {/* Load more button */}
+          {hasMoreFoods && (
+            <div className="flex justify-center py-4">
+              <Button
+                variant="outline"
+                onClick={() => setVisibleCount(prev => prev + 50)}
+              >
+                Load More ({processedFoods.length - visibleCount} remaining)
+              </Button>
+            </div>
           )}
 
           {/* Result count when filtering */}
           {(debouncedSearchQuery || categoryFilter !== "all") &&
             processedFoods.length > 0 && (
               <p className="text-center text-sm text-muted-foreground pb-4">
-                Showing {processedFoods.length} of {foods.length} items
+                Showing {Math.min(visibleCount, processedFoods.length)} of {processedFoods.length} matching items ({foods.length} total)
               </p>
             )}
         </div>
@@ -1140,11 +1149,8 @@ function EmptyPantryState({
   onGetSuggestions: () => void;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="max-w-3xl mx-auto"
+    <div
+      className="max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-400"
     >
       <div className="text-center mb-8">
         <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
@@ -1232,16 +1238,14 @@ function EmptyPantryState({
           </li>
         </ul>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
 function FilteredEmptyState({ onClear }: { onClear: () => void }) {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="text-center py-16"
+    <div
+      className="text-center py-16 animate-in fade-in duration-200"
     >
       <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mx-auto mb-4">
         <Search className="h-6 w-6 text-muted-foreground" />
@@ -1252,6 +1256,6 @@ function FilteredEmptyState({ onClear }: { onClear: () => void }) {
       <Button variant="outline" onClick={onClear}>
         Clear Filters
       </Button>
-    </motion.div>
+    </div>
   );
 }

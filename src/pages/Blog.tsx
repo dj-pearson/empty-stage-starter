@@ -12,6 +12,7 @@ import { SEOHead } from "@/components/SEOHead";
 import { getPageSEO } from "@/lib/seo-config";
 import { Footer } from "@/components/Footer";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
+import { BreadcrumbNavigation } from "@/components/BreadcrumbNavigation";
 interface BlogPost {
   id: string;
   title: string;
@@ -159,6 +160,15 @@ const Blog = () => {
         </div>
       </header>
 
+      <div className="container mx-auto px-4 pt-4">
+        <BreadcrumbNavigation
+          items={[
+            { name: "Home", url: "/" },
+            { name: "Blog", url: "/blog" },
+          ]}
+        />
+      </div>
+
       {/* Hero Section */}
       <section className="py-16 px-4 bg-gradient-to-b from-background to-secondary/10">
         <div className="container mx-auto max-w-4xl text-center">
@@ -293,7 +303,11 @@ const Blog = () => {
                     )}
                   </CardHeader>
                   <CardContent>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <User className="h-4 w-4" />
+                        <span>EatPal Team</span>
+                      </div>
                       <div className="flex items-center gap-1">
                         <Calendar className="h-4 w-4" />
                         <span>{format(new Date(post.published_at), "MMM d, yyyy")}</span>

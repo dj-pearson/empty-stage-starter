@@ -32,7 +32,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -254,11 +254,7 @@ export function LiveActivityFeed() {
       setTableAvailable(true);
     } catch (err: unknown) {
       console.error("Error loading activity feed:", err);
-      toast({
-        title: "Error loading activity feed",
-        description: getErrorMessage(err),
-        variant: "destructive",
-      });
+      toast.error("Error loading activity feed", { description: getErrorMessage(err) });
     } finally {
       setLoading(false);
     }
@@ -368,10 +364,7 @@ export function LiveActivityFeed() {
     a.click();
     URL.revokeObjectURL(url);
 
-    toast({
-      title: "Export successful",
-      description: `Exported ${filtered.length} activities to CSV`,
-    });
+    toast.success("Export successful", { description: `Exported ${filtered.length} activities to CSV` });
   };
 
   // --------------------------------------------------

@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ShieldCheck, Search, ScanBarcode, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 
 interface ProductSafetyCheckerProps {
@@ -44,11 +44,8 @@ export function ProductSafetyChecker({ kidName, kidAllergens }: ProductSafetyChe
 
   const handleScan = async () => {
     // Native scanning not yet implemented - show user message
-    toast({
-      title: "Scanning unavailable",
-      description: "Please enter the barcode number manually or use the search feature.",
-      variant: "default",
-    });
+    toast("Scanning unavailable", { description: "Please enter the barcode number manually or use the search feature.",
+      variant: "default" });
     setIsScanning(false);
   };
 
@@ -110,31 +107,16 @@ export function ProductSafetyChecker({ kidName, kidAllergens }: ProductSafetyChe
         });
 
         if (matchingAllergens.length > 0) {
-          toast({
-            title: "⚠️ ALLERGEN WARNING",
-            description: `This product contains ${matchingAllergens.join(', ')} which ${kidName} is allergic to!`,
-            variant: "destructive",
-          });
+          toast.error("⚠️ ALLERGEN WARNING", { description: `This product contains ${matchingAllergens.join(' });
         } else {
-          toast({
-            title: "✅ Safe Product",
-            description: `No allergen conflicts found for ${kidName}`,
-          });
+          toast("✅ Safe Product", { description: `No allergen conflicts found for ${kidName}` });
         }
       } else {
-        toast({
-          title: "Product not found",
-          description: "Try searching by product name or scan the barcode",
-          variant: "destructive",
-        });
+        toast.error("Product not found", { description: "Try searching by product name or scan the barcode" });
       }
     } catch (error) {
       logger.error('Lookup error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to lookup product. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to lookup product. Please try again." });
     } finally {
       setIsSearching(false);
     }

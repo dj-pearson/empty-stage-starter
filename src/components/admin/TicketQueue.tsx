@@ -1,4 +1,3 @@
-// @ts-nocheck - Admin tables not yet in generated types
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
@@ -31,7 +30,7 @@ import {
   Send,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface SupportTicket {
   id: string;
@@ -45,7 +44,7 @@ interface SupportTicket {
   category: "bug" | "feature_request" | "question" | "billing" | "other";
   assigned_to: string | null;
   assigned_to_name: string | null;
-  context: Record<string, any>;
+  context: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
@@ -131,11 +130,7 @@ export function TicketQueue() {
       if (error) throw error;
       setTickets(data || []);
     } catch (error: unknown) {
-      toast({
-        title: "Error loading tickets",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error("Error loading tickets", { description: error instanceof Error ? error.message : "Unknown error" });
     } finally {
       setLoading(false);
     }
@@ -166,11 +161,7 @@ export function TicketQueue() {
 
       setMessages(flattenedMessages);
     } catch (error: unknown) {
-      toast({
-        title: "Error loading messages",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error("Error loading messages", { description: error instanceof Error ? error.message : "Unknown error" });
     }
   };
 
@@ -192,19 +183,12 @@ export function TicketQueue() {
       if (error) throw error;
 
       setTickets((prev) =>
-        prev.map((t) => (t.id === ticketId ? { ...t, status: newStatus as any } : t))
+        prev.map((t) => (t.id === ticketId ? { ...t, status: newStatus as SupportTicket["status"] } : t))
       );
 
-      toast({
-        title: "Ticket updated",
-        description: `Status changed to ${newStatus}`,
-      });
+      toast.success("Ticket updated", { description: `Status changed to ${newStatus}` });
     } catch (error: unknown) {
-      toast({
-        title: "Error updating ticket",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error("Error updating ticket", { description: error instanceof Error ? error.message : "Unknown error" });
     }
   };
 
@@ -226,16 +210,9 @@ export function TicketQueue() {
       setNewMessage("");
       fetchMessages(selectedTicket.id);
 
-      toast({
-        title: "Message sent",
-        description: isInternal ? "Internal note added" : "Reply sent to user",
-      });
+      toast.success("Message sent", { description: isInternal ? "Internal note added" : "Reply sent to user" });
     } catch (error: unknown) {
-      toast({
-        title: "Error sending message",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error("Error sending message", { description: error instanceof Error ? error.message : "Unknown error" });
     }
   };
 

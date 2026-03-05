@@ -33,6 +33,32 @@ export interface BreadcrumbNavigationProps {
  * />
  * ```
  */
+/**
+ * Auto-generate breadcrumb items from pathname
+ */
+export function generateBreadcrumbsFromPath(
+  pathname: string,
+  customLabels?: Record<string, string>
+): BreadcrumbItem[] {
+  const cleanPath = pathname.replace(/^\/|\/$/g, "");
+  const segments = cleanPath.split("/").filter(Boolean);
+
+  const items: BreadcrumbItem[] = [{ name: "Home", url: "/" }];
+  let currentPath = "";
+
+  segments.forEach((segment) => {
+    currentPath += `/${segment}`;
+    const defaultLabel = segment
+      .split("-")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+    const label = customLabels?.[segment] || defaultLabel;
+    items.push({ name: label, url: currentPath });
+  });
+
+  return items;
+}
+
 export function BreadcrumbNavigation({
   items,
   className,

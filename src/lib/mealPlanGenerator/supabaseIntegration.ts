@@ -2,7 +2,6 @@
  * Supabase Integration for Meal Plan Generator
  * Handles database operations for meal plans and lead capture
  */
-// @ts-nocheck - Database tables require migrations to be approved
 
 import { supabase } from '@/lib/supabase';
 import { MealPlanInput, MealPlanResult } from '@/types/mealPlanGenerator';
@@ -22,7 +21,6 @@ export async function saveMealPlanGeneration(
   mealPlan: MealPlanResult
 ): Promise<string> {
   try {
-    // @ts-ignore - meal_plan_generations table exists but types not yet regenerated
     const { data, error } = await supabase
       .from('meal_plan_generations')
       .insert({
@@ -292,7 +290,7 @@ async function trackMealPlanAnalytics(event: {
   toolName: string;
   sessionId: string;
   eventType: string;
-  eventData?: Record<string, any>;
+  eventData?: Record<string, unknown>;
   timeOnPageSeconds?: number;
   deviceType?: string;
   abTestVariant?: string;
@@ -355,9 +353,9 @@ export async function getMealPlanAnalyticsSummary(): Promise<{
       .select('total_estimated_cost, family_size');
 
     const averageCost =
-      avgData?.reduce((sum, g) => sum + g.total_estimated_cost, 0) / (avgData?.length || 1) || 0;
+      (avgData?.reduce((sum, g) => sum + (g.total_estimated_cost ?? 0), 0) ?? 0) / (avgData?.length || 1) || 0;
     const averageFamilySize =
-      avgData?.reduce((sum, g) => sum + g.family_size, 0) / (avgData?.length || 1) || 0;
+      (avgData?.reduce((sum, g) => sum + (g.family_size ?? 0), 0) ?? 0) / (avgData?.length || 1) || 0;
 
     // Get download rate
     const { count: downloadsCount } = await supabase
@@ -405,7 +403,15 @@ export async function getMealPlanAnalyticsSummary(): Promise<{
         totalGenerations && downloadsCount ? (downloadsCount / totalGenerations) * 100 : 0,
       trialStartRate: emailsCaptured && trialsCount ? (trialsCount / emailsCaptured) * 100 : 0,
       topPickyEaterLevels,
-      recentLeads: recentLeads || [],
+      recentLeads: (recentLeads || []) as Array<{
+        id: string;
+        email: string;
+        name: string | null;
+        estimated_weekly_cost: number;
+        family_size: number;
+        created_at: string;
+        trial_started: boolean;
+      }>,
     };
   } catch (error) {
     console.error('Failed to get meal plan analytics summary:', error);

@@ -15,6 +15,7 @@ import { SEOHead } from "@/components/SEOHead";
 import { ArticleSchema } from "@/components/schema/ArticleSchema";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
+import { BreadcrumbNavigation } from "@/components/BreadcrumbNavigation";
 
 interface BlogPostData {
   id: string;
@@ -401,6 +402,16 @@ const BlogPost = () => {
           </Link>
         </div>
       </header>
+
+      <div className="container mx-auto px-4 pt-4">
+        <BreadcrumbNavigation
+          items={[
+            { name: "Home", url: "/" },
+            { name: "Blog", url: "/blog" },
+            { name: post.title, url: `/blog/${post.slug}` },
+          ]}
+        />
+      </div>
 
       {/* Article Hero - Priority loading for LCP optimization */}
       {post.featured_image_url && (

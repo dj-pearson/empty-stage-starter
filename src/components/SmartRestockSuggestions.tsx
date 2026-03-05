@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -60,9 +59,10 @@ export function SmartRestockSuggestions({
       if (error) {
         logger.error('Error loading restock suggestions:', error);
       } else if (data) {
-        setSuggestions(data.map((item: unknown) => ({
+        setSuggestions(data.map((item) => ({
           ...item,
-          priority: item.priority as 'low' | 'medium' | 'high'
+          priority: item.priority as 'low' | 'medium' | 'high',
+          category: item.category as FoodCategory,
         })));
       }
     } catch (err) {

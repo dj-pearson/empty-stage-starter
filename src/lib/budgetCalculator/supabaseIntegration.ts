@@ -2,7 +2,6 @@
  * Supabase Integration for Budget Calculator
  * Handles database operations for budget calculations and lead capture
  */
-// @ts-nocheck - Database tables require migrations to be approved
 
 import { supabase } from '@/lib/supabase';
 import {
@@ -10,7 +9,6 @@ import {
   BudgetCalculation,
   BudgetEmailCaptureData,
   BudgetAnalyticsEvent,
-  BudgetEventType,
 } from '@/types/budgetCalculator';
 
 /**
@@ -22,7 +20,6 @@ export async function saveBudgetCalculation(
   calculation: BudgetCalculation
 ): Promise<string> {
   try {
-    // @ts-ignore - budget_calculations table exists but types not yet regenerated
     const { data, error } = await supabase
       .from('budget_calculations')
       .insert({
@@ -343,10 +340,10 @@ export async function getBudgetAnalyticsSummary(): Promise<{
       .select('recommended_monthly_budget, family_size');
 
     const averageBudget =
-      avgData?.reduce((sum, c) => sum + c.recommended_monthly_budget, 0) / (avgData?.length || 1) ||
+      (avgData?.reduce((sum, c) => sum + (c.recommended_monthly_budget ?? 0), 0) ?? 0) / (avgData?.length || 1) ||
       0;
     const averageFamilySize =
-      avgData?.reduce((sum, c) => sum + c.family_size, 0) / (avgData?.length || 1) || 0;
+      (avgData?.reduce((sum, c) => sum + (c.family_size ?? 0), 0) ?? 0) / (avgData?.length || 1) || 0;
 
     // Get download rate
     const { count: downloadsCount } = await supabase
@@ -398,7 +395,15 @@ export async function getBudgetAnalyticsSummary(): Promise<{
       trialStartRate:
         emailsCaptured && trialsCount ? (trialsCount / emailsCaptured) * 100 : 0,
       topStates,
-      recentLeads: recentLeads || [],
+      recentLeads: (recentLeads || []) as Array<{
+        id: string;
+        email: string;
+        name: string | null;
+        monthly_budget: number;
+        family_size: number;
+        created_at: string;
+        trial_started: boolean;
+      }>,
     };
   } catch (error) {
     console.error('Failed to get budget analytics summary:', error);

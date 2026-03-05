@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Brain, Plus, Trash2, CheckCircle2, Loader2, Sparkles } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { logger } from "@/lib/logger";
@@ -71,11 +71,7 @@ export function AISettingsManager() {
       setModels((data as unknown as AIModel[]) || []);
     } catch (error) {
       logger.error('Error fetching AI models:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load AI model settings",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to load AI model settings" });
     } finally {
       setIsLoading(false);
     }
@@ -98,28 +94,17 @@ export function AISettingsManager() {
       if (error) throw error;
 
       await fetchModels();
-      toast({
-        title: "Model activated",
-        description: "AI model has been set as active",
-      });
+      toast("Model activated", { description: "AI model has been set as active" });
     } catch (error) {
       logger.error('Error setting active model:', error);
-      toast({
-        title: "Error",
-        description: "Failed to activate model",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to activate model" });
     }
   };
 
   const handleTestModel = async () => {
     const activeModel = models.find(m => m.is_active);
     if (!activeModel) {
-      toast({
-        title: "No active model",
-        description: "Please select an active model first",
-        variant: "destructive",
-      });
+      toast.error("No active model", { description: "Please select an active model first" });
       return;
     }
 
@@ -136,27 +121,16 @@ export function AISettingsManager() {
 
       if (data.error) {
         setTestResult({ success: false, message: data.error });
-        toast({
-          title: "Test failed",
-          description: data.error,
-          variant: "destructive",
-        });
+        toast.error("Test failed", { description: data.error });
       } else {
         setTestResult({ success: true, message: data.response });
-        toast({
-          title: "Test successful",
-          description: "AI model is responding correctly",
-        });
+        toast.success("Test successful", { description: "AI model is responding correctly" });
       }
     } catch (error: unknown) {
       logger.error('Error testing model:', error);
       const msg = error instanceof Error ? error.message : 'Failed to test AI model';
       setTestResult({ success: false, message: msg });
-      toast({
-        title: "Test failed",
-        description: msg,
-        variant: "destructive",
-      });
+      toast.error("Test failed", { description: msg });
     } finally {
       setIsTesting(false);
     }
@@ -185,18 +159,11 @@ export function AISettingsManager() {
         max_tokens: 4096,
       });
 
-      toast({
-        title: "Model added",
-        description: "AI model configuration has been saved",
-      });
+      toast.success("Model added", { description: "AI model configuration has been saved" });
     } catch (error: unknown) {
       logger.error('Error adding model:', error);
       const msg = error instanceof Error ? error.message : 'Failed to add model';
-      toast({
-        title: "Error",
-        description: msg,
-        variant: "destructive",
-      });
+      toast.error("Error", { description: msg });
     }
   };
 
@@ -210,18 +177,11 @@ export function AISettingsManager() {
       if (error) throw error;
 
       await fetchModels();
-      toast({
-        title: "Model deleted",
-        description: "AI model configuration has been removed",
-      });
+      toast.success("Model deleted", { description: "AI model configuration has been removed" });
     } catch (error: unknown) {
       logger.error('Error deleting model:', error);
       const msg = error instanceof Error ? error.message : 'Failed to delete model';
-      toast({
-        title: "Error",
-        description: msg,
-        variant: "destructive",
-      });
+      toast.error("Error", { description: msg });
     }
   };
 

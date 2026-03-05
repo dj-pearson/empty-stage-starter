@@ -1,15 +1,17 @@
-// @ts-nocheck
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
+import type { Database } from "@/integrations/supabase/types";
+
+type LeadSource = Database["public"]["Enums"]["lead_source"];
 
 export interface LeadCaptureData {
   email: string;
   full_name?: string;
   phone?: string;
-  source: 'landing_page' | 'signup_form' | 'trial_signup' | 'newsletter' | 'contact_form' | 'referral' | 'social_media' | 'organic_search' | 'paid_ad' | 'other';
+  source: LeadSource;
   campaign_id?: string;
   notes?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   subject?: string; // For contact forms
 }
 
@@ -48,7 +50,7 @@ export async function captureLeadWithAutomation(
       // Lead exists, update their information and add new interaction
       leadId = existingLead.id;
 
-      const updateData: any = {
+      const updateData: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
         last_contacted_at: new Date().toISOString(),
       };
@@ -87,11 +89,11 @@ export async function captureLeadWithAutomation(
           .single();
 
         updateData.metadata = {
-          ...(currentLead?.metadata as Record<string, any> || {}),
+          ...((currentLead?.metadata as Record<string, unknown>) || {}),
           ...data.metadata,
           last_source: data.source,
           last_contact_date: new Date().toISOString(),
-        } as any;
+        };
       }
 
       const { error: updateError } = await supabase
@@ -105,7 +107,7 @@ export async function captureLeadWithAutomation(
       }
     } else {
       // Create new lead
-      const leadData: any = {
+      const leadData: Database["public"]["Tables"]["leads"]["Insert"] = {
         email: data.email,
         full_name: data.full_name || null,
         phone: data.phone || null,
@@ -138,7 +140,7 @@ export async function captureLeadWithAutomation(
     }
 
     // Create lead interaction record
-    const interactionData: any = {
+    const interactionData: Database["public"]["Tables"]["lead_interactions"]["Insert"] = {
       lead_id: leadId,
       interaction_type: data.source === 'contact_form' ? 'form_submission' : 'lead_capture',
       subject: data.subject || `Lead captured via ${data.source}`,
@@ -181,7 +183,7 @@ export async function captureLeadWithAutomation(
     logger.error('Error in captureLeadWithAutomation:', error);
     return {
       success: false,
-      error: error.message || 'Unknown error occurred',
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
     };
   }
 }
@@ -201,6 +203,7 @@ async function queueWelcomeEmail(
     let textBody = '';
 
     const firstName = name?.split(' ')[0] || 'there';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://tryeatpal.com';
 
     if (source === 'contact_form') {
       subject = `Thanks for reaching out, ${firstName}!`;
@@ -211,7 +214,7 @@ async function queueWelcomeEmail(
           <p>We received your message and our team will get back to you within 24-48 hours.</p>
           <p>In the meantime, did you know you can start using EatPal right away with a free trial?</p>
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${window.location.origin}/auth"
+            <a href="${origin}/auth"
                style="background-color: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block;">
               Start Free Trial
             </a>
@@ -220,7 +223,7 @@ async function queueWelcomeEmail(
           <p>Best regards,<br>The EatPal Team</p>
         </div>
       `;
-      textBody = `Hi ${firstName},\n\nWe received your message and our team will get back to you within 24-48 hours.\n\nIn the meantime, you can start using EatPal with a free trial at ${window.location.origin}/auth\n\nBest regards,\nThe EatPal Team`;
+      textBody = `Hi ${firstName},\n\nWe received your message and our team will get back to you within 24-48 hours.\n\nIn the meantime, you can start using EatPal with a free trial at ${origin}/auth\n\nBest regards,\nThe EatPal Team`;
     } else if (source === 'newsletter') {
       subject = `Welcome to the EatPal community, ${firstName}!`;
       htmlBody = `
@@ -230,7 +233,7 @@ async function queueWelcomeEmail(
           <p>Thanks for subscribing to our newsletter. You'll receive tips, recipes, and updates about helping picky eaters.</p>
           <p>Want to dive deeper? Start your free trial today!</p>
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${window.location.origin}/auth"
+            <a href="${origin}/auth"
                style="background-color: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block;">
               Try EatPal Free
             </a>
@@ -238,7 +241,7 @@ async function queueWelcomeEmail(
           <p>Best regards,<br>The EatPal Team</p>
         </div>
       `;
-      textBody = `Hi ${firstName},\n\nThanks for subscribing to our newsletter. You'll receive tips and updates about helping picky eaters.\n\nStart your free trial: ${window.location.origin}/auth\n\nBest regards,\nThe EatPal Team`;
+      textBody = `Hi ${firstName},\n\nThanks for subscribing to our newsletter. You'll receive tips and updates about helping picky eaters.\n\nStart your free trial: ${origin}/auth\n\nBest regards,\nThe EatPal Team`;
     } else {
       // Generic welcome for other sources
       subject = `Welcome to EatPal, ${firstName}!`;
@@ -248,7 +251,7 @@ async function queueWelcomeEmail(
           <p>Hi ${firstName},</p>
           <p>We're excited to help you and your family with meal planning for picky eaters.</p>
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${window.location.origin}/auth"
+            <a href="${origin}/auth"
                style="background-color: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block;">
               Get Started
             </a>
@@ -256,7 +259,7 @@ async function queueWelcomeEmail(
           <p>Best regards,<br>The EatPal Team</p>
         </div>
       `;
-      textBody = `Hi ${firstName},\n\nThanks for your interest in EatPal!\n\nGet started: ${window.location.origin}/auth\n\nBest regards,\nThe EatPal Team`;
+      textBody = `Hi ${firstName},\n\nThanks for your interest in EatPal!\n\nGet started: ${origin}/auth\n\nBest regards,\nThe EatPal Team`;
     }
 
     // Insert into email queue
@@ -340,14 +343,17 @@ export async function findOrCreateCampaignFromUTM(
 
     // Create new campaign if it doesn't exist
     const campaignName = utmParams.utm_campaign || `${utmParams.utm_source}_campaign`;
+    const campaignSource: LeadSource =
+      utmParams.utm_source === 'google' ? 'organic_search' :
+      utmParams.utm_source === 'facebook' ? 'social_media' :
+      'other';
+
     const { data: newCampaign, error } = await supabase
       .from('campaigns')
       .insert([{
         name: campaignName,
         description: `Auto-created from UTM parameters`,
-        source: utmParams.utm_source === 'google' ? 'organic_search' as const :
-                utmParams.utm_source === 'facebook' ? 'social_media' as const :
-                'other' as const,
+        source: campaignSource,
         utm_campaign: utmParams.utm_campaign || null,
         utm_source: utmParams.utm_source || null,
         utm_medium: utmParams.utm_medium || null,
@@ -391,7 +397,7 @@ export async function captureContactFormLead(
     metadata: {
       ...utmParams,
       form_type: 'contact_us',
-      page_url: window.location.href,
+      page_url: typeof window !== 'undefined' ? window.location.href : '',
     },
   });
 }
@@ -414,7 +420,7 @@ export async function captureNewsletterLead(
     metadata: {
       ...utmParams,
       form_type: 'newsletter_signup',
-      page_url: window.location.href,
+      page_url: typeof window !== 'undefined' ? window.location.href : '',
     },
   });
 }

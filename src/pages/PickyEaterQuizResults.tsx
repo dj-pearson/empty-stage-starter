@@ -18,6 +18,7 @@ import { SampleMealsCarousel } from '@/components/quiz/SampleMealsCarousel';
 import { ProgressPathway } from '@/components/quiz/ProgressPathway';
 import { EmailCaptureModal } from '@/components/quiz/EmailCaptureModal';
 import { ShareButtons } from '@/components/quiz/ShareButtons';
+import { BreadcrumbNavigation } from '@/components/BreadcrumbNavigation';
 import { downloadPDFReport } from '@/lib/quiz/pdfGenerator';
 import { saveQuizResponse, trackQuizAnalytics, trackPDFDownload } from '@/lib/quiz/supabaseIntegration';
 import { getSyncStorage } from '@/lib/platform';
@@ -187,6 +188,14 @@ export default function PickyEaterQuizResults() {
 
       <div id="main-content" className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
         <div className="container max-w-6xl mx-auto px-4 py-12">
+          <BreadcrumbNavigation
+            items={[
+              { name: "Home", url: "/" },
+              { name: "Picky Eater Quiz", url: "/picky-eater-quiz" },
+              { name: "Results", url: "/picky-eater-quiz/results" },
+            ]}
+            className="mb-8"
+          />
           {/* Hero Section */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}

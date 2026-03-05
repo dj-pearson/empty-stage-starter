@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 /**
  * useAdminCheck - Hook for verifying admin role permissions
@@ -24,11 +24,7 @@ export const useAdminCheck = () => {
 
         // ProtectedRoute ensures user exists, but double-check for safety
         if (!user) {
-          toast({
-            title: "Access Denied",
-            description: "Authentication required.",
-            variant: "destructive",
-          });
+          toast.error("Access Denied", { description: "Authentication required." });
           navigate("/");
           return;
         }
@@ -41,22 +37,14 @@ export const useAdminCheck = () => {
           .maybeSingle();
 
         if (error) {
-          toast({
-            title: "Error",
-            description: "Failed to verify admin permissions. Please try again.",
-            variant: "destructive",
-          });
+          toast.error("Error", { description: "Failed to verify admin permissions. Please try again." });
           setIsAdmin(false);
           navigate("/");
         } else {
           setIsAdmin(!!data);
 
           if (!data) {
-            toast({
-              title: "Access Denied",
-              description: "You don't have admin permissions.",
-              variant: "destructive",
-            });
+            toast.error("Access Denied", { description: "You don't have admin permissions." });
             navigate("/");
           }
         }

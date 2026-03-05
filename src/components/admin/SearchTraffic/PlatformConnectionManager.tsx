@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -14,7 +13,7 @@ interface Platform {
   name: string;
   platform: string;
   description: string;
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
   color: string;
 }
 
@@ -59,7 +58,7 @@ interface Props {
 }
 
 export function PlatformConnectionManager({ open, onClose }: Props) {
-  const [connections, setConnections] = useState<any[]>([]);
+  const [connections, setConnections] = useState<Record<string, unknown>[]>([]);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [_loading, setLoading] = useState(true);
 
@@ -83,7 +82,7 @@ export function PlatformConnectionManager({ open, onClose }: Props) {
 
       if (error) throw error;
       setConnections(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching connections:", error);
       toast.error("Failed to load connections");
     } finally {
@@ -136,9 +135,9 @@ export function PlatformConnectionManager({ open, onClose }: Props) {
 
       // Open OAuth flow in popup or redirect
       window.location.href = authUrl;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error connecting platform:", error);
-      toast.error(error.message || "Failed to connect platform");
+      toast.error((error instanceof Error ? error.message : undefined) || "Failed to connect platform");
     } finally {
       setConnecting(null);
     }
@@ -178,9 +177,9 @@ export function PlatformConnectionManager({ open, onClose }: Props) {
 
       toast.success("Platform disconnected successfully");
       fetchConnections();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error disconnecting platform:", error);
-      toast.error(error.message || "Failed to disconnect platform");
+      toast.error((error instanceof Error ? error.message : undefined) || "Failed to disconnect platform");
     }
   };
 

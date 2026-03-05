@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -9,6 +8,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { MapPin, Award, Users } from "lucide-react";
 import { logger } from "@/lib/logger";
+
+interface UserContributionStats {
+  helped_families_count?: number;
+  total_contributions?: number;
+}
+
+interface StoreContribution {
+  id: string;
+  aisle_number: string | null;
+  aisle_name: string | null;
+  contribution_count: number;
+  last_contributed_at: string | null;
+}
 
 interface AisleContributionDialogProps {
   open: boolean;
@@ -30,7 +42,7 @@ export function AisleContributionDialog({
   const [aisleNumber, setAisleNumber] = useState("");
   const [aisleName, setAisleName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [userStats, setUserStats] = useState<any>(null);
+  const [userStats, setUserStats] = useState<UserContributionStats | null>(null);
 
   // Load user stats when dialog opens
   useEffect(() => {
@@ -38,11 +50,11 @@ export function AisleContributionDialog({
       if (!userId) return;
 
       try {
-        const { data } = await supabase
-          .from('user_contribution_stats')
+        const { data } = await (supabase
+          .from('user_contribution_stats' as unknown as 'profiles')
           .select('*')
           .eq('user_id', userId)
-          .maybeSingle();
+          .maybeSingle() as unknown as Promise<{ data: UserContributionStats | null }>);
 
         setUserStats(data);
       } catch (error) {
@@ -57,7 +69,7 @@ export function AisleContributionDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!userId || !storeLayoutId) {
       toast.error("Missing required information");
       return;
@@ -71,45 +83,45 @@ export function AisleContributionDialog({
     setIsSubmitting(true);
     try {
       // Check if contribution already exists
-      const { data: existing } = await supabase
-        .from('user_store_contributions')
+      const { data: existing } = await (supabase
+        .from('user_store_contributions' as unknown as 'profiles')
         .select('*')
         .eq('user_id', userId)
         .eq('store_layout_id', storeLayoutId)
         .eq('food_item_name', itemName)
-        .maybeSingle();
+        .maybeSingle() as unknown as Promise<{ data: StoreContribution | null }>);
 
       if (existing) {
         // Update existing contribution
-        const { error } = await supabase
-          .from('user_store_contributions')
+        const { error } = await (supabase
+          .from('user_store_contributions' as unknown as 'profiles')
           .update({
             aisle_number: aisleNumber || existing.aisle_number,
             aisle_name: aisleName || existing.aisle_name,
             contribution_count: existing.contribution_count + 1,
             last_contributed_at: new Date().toISOString(),
           })
-          .eq('id', existing.id);
+          .eq('id', existing.id) as unknown as Promise<{ error: { message: string } | null }>);
 
         if (error) throw error;
       } else {
         // Create new contribution
-        const { error } = await supabase
-          .from('user_store_contributions')
+        const { error } = await (supabase
+          .from('user_store_contributions' as unknown as 'profiles')
           .insert([{
             user_id: userId,
             store_layout_id: storeLayoutId,
             food_item_name: itemName,
             aisle_number: aisleNumber || null,
             aisle_name: aisleName || null,
-          }]);
+          }]) as unknown as Promise<{ error: { message: string } | null }>);
 
         if (error) throw error;
       }
 
       // Create food_aisle_mapping if doesn't exist
-      const { error: mappingError } = await supabase
-        .from('food_aisle_mappings')
+      const { error: mappingError } = await (supabase
+        .from('food_aisle_mappings' as unknown as 'profiles')
         .insert([{
           store_layout_id: storeLayoutId,
           food_item_name: itemName,
@@ -119,14 +131,14 @@ export function AisleContributionDialog({
           validation_count: 1,
         }])
         .select()
-        .maybeSingle();
+        .maybeSingle() as unknown as Promise<{ error: { message: string } | null }>);
 
       // Ignore conflict error - mapping already exists
       if (mappingError && !mappingError.message.includes('duplicate')) {
         throw mappingError;
       }
 
-      toast.success("Thanks for contributing! 🎉", {
+      toast.success("Thanks for contributing!", {
         description: "You're helping other families shop more efficiently"
       });
 
@@ -197,7 +209,7 @@ export function AisleContributionDialog({
             <p className="text-xs text-muted-foreground flex items-center gap-2">
               <Users className="h-4 w-4" />
               <span>
-                <strong>Community-Powered:</strong> Your contribution will help other families 
+                <strong>Community-Powered:</strong> Your contribution will help other families
                 find items faster. Multiple confirmations increase accuracy!
               </span>
             </p>

@@ -6,7 +6,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescri
 import { KidSelector } from "@/components/KidSelector";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { Separator } from "@/components/ui/separator";
 import { loginHistory } from "@/lib/login-history";
@@ -30,7 +30,6 @@ const baseNavItems = [
 export function Navigation() {
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
-  const { toast } = useToast();
   const [isAdmin, setIsAdmin] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
@@ -61,10 +60,7 @@ export function Navigation() {
     }
 
     await supabase.auth.signOut();
-    toast({
-      title: "Signed out",
-      description: "You have been signed out successfully.",
-    });
+    toast("Signed out", { description: "You have been signed out successfully." });
     navigate("/");
   };
 
@@ -448,6 +444,21 @@ export function Navigation() {
 
                 {/* Actions */}
                 <div className="mt-6 pt-4 border-t space-y-1">
+                  <NavLink
+                    to="/dashboard/settings"
+                    onClick={closeMobileMenu}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground hover:bg-muted"
+                      )
+                    }
+                  >
+                    <Users className="h-5 w-5 shrink-0" aria-hidden="true" />
+                    <span>Account Settings</span>
+                  </NavLink>
                   <NavLink
                     to="/dashboard/accessibility-settings"
                     onClick={closeMobileMenu}

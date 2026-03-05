@@ -2,7 +2,6 @@
  * PDF Generator for Budget Calculator
  * Creates comprehensive budget report PDFs
  */
-// @ts-nocheck - Database tables require migrations to be approved
 
 import jsPDF from 'jspdf';
 import {
@@ -203,7 +202,7 @@ export async function generateBudgetPDFReport(
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(16, 185, 129);
-  const annualText = `💰 That's ${formatCurrency(calculation.annualSavings)} saved per year by meal planning at home!`;
+  const annualText = `That's ${formatCurrency(calculation.annualSavings)} saved per year by meal planning at home!`;
   doc.text(annualText, pageWidth / 2, yPos, { align: 'center' });
 
   yPos += 20;
@@ -243,11 +242,11 @@ export async function generateBudgetPDFReport(
   yPos += 10;
 
   // Plan levels table
-  const plans = [
+  const plans: Array<{ name: string; cost: number; color: [number, number, number] }> = [
     { name: 'Thrifty Plan', cost: calculation.thriftyPlanBudget, color: [34, 197, 94] },
     { name: 'Low-Cost Plan', cost: calculation.lowCostPlanBudget, color: [59, 130, 246] },
     {
-      name: 'Moderate Cost Plan ⭐',
+      name: 'Moderate Cost Plan',
       cost: calculation.moderatePlanBudget,
       color: [139, 92, 246],
     },
@@ -262,7 +261,7 @@ export async function generateBudgetPDFReport(
 
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...plan.color);
+    doc.setTextColor(plan.color[0], plan.color[1], plan.color[2]);
     doc.text(plan.name, margin + 10, yPos + 10);
 
     doc.setFont('helvetica', 'bold');
@@ -296,7 +295,12 @@ export async function generateBudgetPDFReport(
   );
   yPos += 15;
 
-  const weeklyItems = [
+  const weeklyItems: Array<{
+    category: string;
+    amount: number;
+    percent: number;
+    color: [number, number, number];
+  }> = [
     {
       category: 'Main Groceries',
       amount: calculation.weeklyBreakdown.groceries,
@@ -327,7 +331,7 @@ export async function generateBudgetPDFReport(
     checkNewPage(25);
 
     // Category bar
-    doc.setFillColor(...item.color);
+    doc.setFillColor(item.color[0], item.color[1], item.color[2]);
     const barWidth = (contentWidth - 100) * (item.percent / 100);
     doc.roundedRect(margin, yPos, barWidth, 12, 2, 2, 'F');
 
@@ -361,9 +365,9 @@ export async function generateBudgetPDFReport(
   yPos += 15;
 
   const tipSections = [
-    { title: 'Budget Strategies', tips: calculation.budgetTips, icon: '💰' },
-    { title: 'Reduce Food Waste', tips: calculation.wasteReductionTips, icon: '♻️' },
-    { title: 'Meal Prep Hacks', tips: calculation.mealPrepTips, icon: '🍱' },
+    { title: 'Budget Strategies', tips: calculation.budgetTips, icon: 'Budget' },
+    { title: 'Reduce Food Waste', tips: calculation.wasteReductionTips, icon: 'Recycle' },
+    { title: 'Meal Prep Hacks', tips: calculation.mealPrepTips, icon: 'Prep' },
   ];
 
   const tipsToShow = options.includeFullTips !== false ? 999 : 5;
@@ -374,7 +378,7 @@ export async function generateBudgetPDFReport(
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(16, 185, 129);
-    doc.text(`${section.icon} ${section.title}`, margin, yPos);
+    doc.text(`${section.icon} - ${section.title}`, margin, yPos);
     yPos += 10;
 
     section.tips.slice(0, tipsToShow).forEach((tip, index) => {
@@ -446,7 +450,7 @@ export async function generateBudgetPDFReport(
       // Prep time and servings
       doc.setFontSize(9);
       doc.text(
-        `⏱ ${meal.prepTime} min | 🍽 ${meal.servings} servings | Total: ${formatCurrency(
+        `${meal.prepTime} min | ${meal.servings} servings | Total: ${formatCurrency(
           meal.totalCost
         )}`,
         margin + 8,
