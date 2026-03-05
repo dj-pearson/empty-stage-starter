@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -13,12 +13,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Calculator, DollarSign, Users, MapPin, ArrowRight } from 'lucide-react';
+import { Calculator, Clock, DollarSign, Users, MapPin, ArrowRight } from 'lucide-react';
 import { BudgetCalculatorInput, DietaryRestriction } from '@/types/budgetCalculator';
 import { calculateBudget, generateBudgetMealSuggestions } from '@/lib/budgetCalculator/calculator';
 import { v4 as uuidv4 } from 'uuid';
 import { SEOHead } from '@/components/SEOHead';
 import { getPageSEO } from '@/lib/seo-config';
+import { toast } from 'sonner';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+
+const BUDGET_CALC_DRAFT_KEY = 'eatpal-budget-calc-draft';
 
 const US_STATES = [
   { code: 'AL', name: 'Alabama' },
@@ -83,21 +87,80 @@ const DIETARY_RESTRICTIONS: { id: DietaryRestriction; label: string; description
   { id: 'kosher', label: 'Kosher', description: 'Jewish dietary laws' },
 ];
 
+const DEFAULT_BUDGET_FORM: Partial<BudgetCalculatorInput> = {
+  familySize: 4,
+  adults: 2,
+  children: 2,
+  state: '',
+  zipCode: '',
+  dietaryRestrictions: [],
+};
+
+function getBudgetMilestoneText(percentage: number): string | null {
+  if (percentage === 100) return 'All set! Ready to calculate your budget.';
+  if (percentage >= 67) return 'Almost done! Just a little more.';
+  if (percentage >= 34) return 'Great progress! You are halfway there.';
+  return null;
+}
+
 export default function BudgetCalculator() {
   const navigate = useNavigate();
   const [sessionId] = useState(() => uuidv4());
+  const prefersReducedMotion = useReducedMotion();
 
-  const [formData, setFormData] = useState<Partial<BudgetCalculatorInput>>({
-    familySize: 4,
-    adults: 2,
-    children: 2,
-    state: '',
-    zipCode: '',
-    dietaryRestrictions: [],
+  const [formData, setFormData] = useState<Partial<BudgetCalculatorInput>>(() => {
+    try {
+      const saved = localStorage.getItem(BUDGET_CALC_DRAFT_KEY);
+      if (saved) {
+        return JSON.parse(saved) as Partial<BudgetCalculatorInput>;
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    return DEFAULT_BUDGET_FORM;
+  });
+
+  const [showResumeBanner, setShowResumeBanner] = useState(() => {
+    try {
+      return localStorage.getItem(BUDGET_CALC_DRAFT_KEY) !== null;
+    } catch {
+      return false;
+    }
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Calculate form completion progress based on required fields
+  const progressInfo = useMemo(() => {
+    const totalRequired = 3;
+    let filled = 0;
+
+    if (formData.adults && formData.adults > 0) filled++;
+    if (formData.children !== undefined && formData.children !== null && formData.children >= 0) filled++;
+    if (formData.state) filled++;
+
+    const percentage = Math.round((filled / totalRequired) * 100);
+    const milestone = getBudgetMilestoneText(percentage);
+
+    return { percentage, milestone };
+  }, [formData.adults, formData.children, formData.state]);
+
+  // Auto-save form data to localStorage on every change
+  useEffect(() => {
+    try {
+      localStorage.setItem(BUDGET_CALC_DRAFT_KEY, JSON.stringify(formData));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [formData]);
+
+  const handleStartFresh = () => {
+    localStorage.removeItem(BUDGET_CALC_DRAFT_KEY);
+    setFormData(DEFAULT_BUDGET_FORM);
+    setShowResumeBanner(false);
+    toast.success('Started a fresh form');
+  };
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -150,6 +213,9 @@ export default function BudgetCalculator() {
         input.familySize,
         input.dietaryRestrictions
       );
+
+      // Clear saved draft on successful calculation
+      localStorage.removeItem(BUDGET_CALC_DRAFT_KEY);
 
       // Navigate to results with data
       navigate('/budget-calculator/results', {
@@ -204,6 +270,23 @@ export default function BudgetCalculator() {
             </p>
           </div>
 
+          {/* Resume Banner */}
+          {showResumeBanner && (
+            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
+              <p className="text-sm text-green-800 font-medium">
+                Resume where you left off? Your previous form data has been restored.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleStartFresh}
+                className="ml-4 shrink-0"
+              >
+                Start Fresh
+              </Button>
+            </div>
+          )}
+
           {/* Benefits */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
             <Card>
@@ -238,6 +321,40 @@ export default function BudgetCalculator() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {/* Progress Indicator */}
+              <div className="mb-8 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 flex items-center gap-1">
+                    <Clock className="w-4 h-4" />
+                    About 3 minutes to complete
+                  </span>
+                  <span className="font-medium text-gray-700">
+                    {progressInfo.percentage}% complete
+                  </span>
+                </div>
+                <div
+                  className="w-full h-2 bg-muted rounded-full overflow-hidden"
+                  role="progressbar"
+                  aria-valuenow={progressInfo.percentage}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Form completion progress"
+                >
+                  <div
+                    className="h-full bg-primary rounded-full"
+                    style={{
+                      width: `${progressInfo.percentage}%`,
+                      transition: prefersReducedMotion ? 'none' : 'width 0.4s ease-in-out',
+                    }}
+                  />
+                </div>
+                {progressInfo.milestone && (
+                  <p className="text-sm text-green-600 font-medium">
+                    {progressInfo.milestone}
+                  </p>
+                )}
+              </div>
+
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Family Composition */}
                 <div className="space-y-4">

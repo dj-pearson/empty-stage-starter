@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,7 +30,7 @@ interface AIAnalysis {
   suggested_response: string;
   similar_ticket_ids: string[];
   similarity_scores: number[];
-  auto_gathered_context: any;
+  auto_gathered_context: Record<string, unknown>;
   sentiment: 'positive' | 'neutral' | 'negative' | 'frustrated';
   sentiment_score: number;
   urgency_score: number;
@@ -119,9 +118,9 @@ export function AITicketAnalysis({ ticketId }: { ticketId: string }) {
 
       toast.success('Ticket analyzed successfully');
       await loadAnalysis();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error analyzing ticket:', error);
-      toast.error('Failed to analyze ticket: ' + error.message);
+      toast.error('Failed to analyze ticket: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setAnalyzing(false);
     }
@@ -394,7 +393,7 @@ export function AITicketAnalysis({ ticketId }: { ticketId: string }) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {analysis.auto_gathered_context.recent_errors.map((error: any, index: number) => (
+            {analysis.auto_gathered_context.recent_errors.map((error: Record<string, unknown>, index: number) => (
               <div key={index} className="p-2 bg-red-50 border border-red-200 rounded text-xs">
                 <p className="font-medium text-red-900">{error.activity_type}</p>
                 <p className="text-red-700">{error.description}</p>

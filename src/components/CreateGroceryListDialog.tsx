@@ -176,7 +176,7 @@ export function CreateGroceryListDialog({
                 }
               }}
               placeholder="e.g., Weekly Groceries, Costco Run"
-              className={errors.name ? "border-red-500" : ""}
+              className={errors.name ? "border-destructive" : ""}
               aria-invalid={!!errors.name}
               aria-describedby={errors.name ? "name-error" : undefined}
               autoFocus

@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { FoodCategory } from "@/types";
 import { logger } from "@/lib/logger";
 
@@ -38,7 +38,6 @@ interface ImageFoodCaptureProps {
 }
 
 export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: ImageFoodCaptureProps) {
-  const { toast } = useToast();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [identifiedFood, setIdentifiedFood] = useState<FoodIdentification | null>(null);
@@ -111,11 +110,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
       logger.debug('Html5Qrcode camera started on device:', back.label || back.id);
     } catch (error) {
       logger.error('Error starting camera with Html5Qrcode:', error);
-      toast({
-        title: "Camera Error",
-        description: (error instanceof Error ? error.message : 'Unable to access camera') + (isEmbedded ? ' (embedded preview may restrict camera; open in a new tab if issues persist)' : ''),
-        variant: "destructive",
-      });
+      toast.error("Camera Error", { description: (error instanceof Error ? error.message : 'Unable to access camera') + (isEmbedded ? ' (embedded preview may restrict camera; open in a new tab if issues persist)' : '') });
       setShowCamera(false);
     }
   };
@@ -142,22 +137,14 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
     const videoEl = document.querySelector('#food-camera video') as HTMLVideoElement | null;
     if (!videoEl) {
       logger.error('No video element found in scanner container');
-      toast({
-        title: "Camera Not Ready",
-        description: "Please wait for the camera to fully load",
-        variant: "destructive",
-      });
+      toast.error("Camera Not Ready", { description: "Please wait for the camera to fully load" });
       return;
     }
 
     logger.debug('Video dimensions:', videoEl.videoWidth, 'x', videoEl.videoHeight);
 
     if (videoEl.videoWidth === 0 || videoEl.videoHeight === 0) {
-      toast({
-        title: "Camera Not Ready",
-        description: "Please wait for the camera to fully load",
-        variant: "destructive",
-      });
+      toast.error("Camera Not Ready", { description: "Please wait for the camera to fully load" });
       return;
     }
 
@@ -206,18 +193,12 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
         setEditedServingSize(data.foodData.servingSize);
         setEditedQuantity(String(data.foodData.quantity || 1));
         setEditedVariety(data.foodData.variety || "");
-        toast({
-          title: "Food Identified!",
-          description: `Found: ${data.foodData.name}${data.foodData.variety ? ` (${data.foodData.variety})` : ''} (${data.foodData.confidence}% confident)`,
+        toast("Food Identified!", { description: `Found: ${data.foodData.name}${data.foodData.variety ? ` })` : ''} (${data.foodData.confidence}% confident)`,
         });
       }
     } catch (error) {
       logger.error('Error analyzing image:', error);
-      toast({
-        title: "Analysis Failed",
-        description: error instanceof Error ? error.message : "Failed to identify food from image",
-        variant: "destructive",
-      });
+      toast.error("Analysis Failed", { description: error instanceof Error ? error.message : "Failed to identify food from image" });
     } finally {
       setIsAnalyzing(false);
     }
@@ -227,11 +208,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
     if (!identifiedFood) return;
     const qtyNum = parseInt(editedQuantity);
     if (!editedQuantity || isNaN(qtyNum) || qtyNum < 1) {
-      toast({
-        title: "Quantity required",
-        description: "Please enter a valid quantity (1 or more).",
-        variant: "destructive",
-      });
+      toast.error("Quantity required", { description: "Please enter a valid quantity (1 or more)." });
       return;
     }
     

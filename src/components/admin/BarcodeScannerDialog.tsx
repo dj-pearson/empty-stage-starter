@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Scan, AlertCircle, CheckCircle2, Loader2, Minus, Plus, Package2 } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { logger } from "@/lib/logger";
 
@@ -179,11 +179,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
       document.body.classList.remove('scanner-active');
       const embeddedMsg = isEmbedded ? ' (embedded preview blocks camera — open in new tab)' : '';
       setError((err instanceof Error ? err.message : 'Failed to start web scanner') + embeddedMsg);
-      toast({
-        title: 'Scan failed',
-        description: 'Unable to access camera. Check permissions' + embeddedMsg + '.',
-        variant: 'destructive',
-      });
+      toast.error('Scan failed', { description: 'Unable to access camera. Check permissions' + embeddedMsg + '.' });
       setIsScanning(false);
     }
   };
@@ -205,11 +201,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
     setUseNativeScanner(false);
     setIsScanning(false);
     setError(errorMsg);
-    toast({
-      title: 'Scan failed',
-      description: errorMsg,
-      variant: 'destructive',
-    });
+    toast.error('Scan failed', { description: errorMsg });
   };
 
   const handleNativeScanCancel = () => {
@@ -251,32 +243,18 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
         if (data.food.in_pantry) {
           setQuantity((data.food.existing_quantity || 0) + 1);
           setUnit(data.food.existing_unit || 'packages');
-          toast({
-            title: "Already in your pantry!",
-            description: `${data.food.name} - Current stock: ${data.food.existing_quantity} ${data.food.existing_unit}`,
-          });
+          toast.error("Already in your pantry!", { description: `${data.food.name} - Current stock: ${data.food.existing_quantity} ${data.food.existing_unit}` });
         } else {
-          toast({
-            title: "Product found!",
-            description: `Found ${data.food.name} in ${data.food.source}`,
-          });
+          toast("Product found!", { description: `Found ${data.food.name} in ${data.food.source}` });
         }
       } else {
         setError(data.error || "Product not found in any database");
-        toast({
-          title: "Product not found",
-          description: "Please add this product manually",
-          variant: "destructive",
-        });
+        toast.error("Product not found", { description: "Please add this product manually" });
       }
     } catch (err) {
       logger.error('Lookup error:', err);
       setError(err instanceof Error ? err.message : "Failed to lookup product");
-      toast({
-        title: "Lookup failed",
-        description: "Unable to find product information",
-        variant: "destructive",
-      });
+      toast.error("Lookup failed", { description: "Unable to find product information" });
     } finally {
       setIsLookingUp(false);
     }
@@ -338,10 +316,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
           if (error) throw error;
         }
 
-        toast({
-          title: "Food Added",
-          description: `${scannedFood.name} has been added to your pantry.`,
-        });
+        toast.success("Food Added", { description: `${scannedFood.name} has been added to your pantry.` });
 
         onFoodAdded?.();
       } else {
@@ -366,10 +341,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
 
         if (error) throw error;
 
-        toast({
-          title: "Success",
-          description: `${scannedFood.name} added to nutrition database`,
-        });
+        toast.success("Success", { description: `${scannedFood.name} added to nutrition database` });
 
         onFoodAdded?.();
       }
@@ -379,11 +351,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
       setError(null);
     } catch (err) {
       logger.error('Add error:', err);
-      toast({
-        title: "Failed to add",
-        description: err instanceof Error ? err.message : "Unable to add to database",
-        variant: "destructive",
-      });
+      toast.error("Failed to add", { description: err instanceof Error ? err.message : "Unable to add to database" });
     }
   };
 

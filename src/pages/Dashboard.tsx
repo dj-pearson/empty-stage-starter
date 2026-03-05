@@ -13,7 +13,7 @@ import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { Button } from "@/components/ui/button";
 import { Moon, Sun, LogOut, Menu, Trophy } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useWhiteLabelTheme } from "@/hooks/useWhiteLabelTheme";
 import {
   Sheet,
@@ -72,18 +72,13 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { theme, setTheme } = useTheme();
-  const { toast } = useToast();
-
   // Apply white-label theme for Professional subscribers
   useWhiteLabelTheme();
 
   // Handle checkout=success query param (fallback for legacy redirect)
   useEffect(() => {
     if (searchParams.get("checkout") === "success") {
-      toast({
-        title: "🎉 Subscription activated!",
-        description: "Your plan is now active. Enjoy your premium features!",
-      });
+      toast("🎉 Subscription activated!", { description: "Your plan is now active. Enjoy your premium features!" });
       // Clean up the query param
       searchParams.delete("checkout");
       setSearchParams(searchParams, { replace: true });
@@ -132,10 +127,7 @@ const Dashboard = () => {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    toast({
-      title: "Signed out",
-      description: "You have been signed out successfully.",
-    });
+    toast("Signed out", { description: "You have been signed out successfully." });
     navigate("/");
   };
 
@@ -173,10 +165,7 @@ const Dashboard = () => {
   ];
 
   const handleQuickLog = async (result: 'ate' | 'tasted' | 'refused', notes?: string) => {
-    toast({
-      title: "Meal logged!",
-      description: `Meal marked as ${result}`,
-    });
+    toast("Meal logged!", { description: `Meal marked as ${result}` });
   };
 
   return (

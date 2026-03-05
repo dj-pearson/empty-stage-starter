@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -11,7 +10,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Upload, Download, AlertCircle } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { logger } from "@/lib/logger";
 
@@ -53,10 +52,7 @@ Almonds,Snack,1 oz,16 oz,16,almonds,164,6,6,14,tree nuts`;
     a.download = "nutrition-import-template.csv";
     a.click();
     URL.revokeObjectURL(url);
-    toast({
-      title: "Template downloaded",
-      description: "Use this CSV template to import nutrition data",
-    });
+    toast("Template downloaded", { description: "Use this CSV template to import nutrition data" });
   };
 
   const parseCsv = (text: string): NutritionCsvRow[] => {
@@ -122,23 +118,12 @@ Almonds,Snack,1 oz,16 oz,16,almonds,164,6,6,14,tree nuts`;
         setPreview(parsedRows);
         
         if (parsedRows.length === 0) {
-          toast({
-            title: "No valid data",
-            description: "No valid nutrition items found in CSV",
-            variant: "destructive",
-          });
+          toast.error("No valid data", { description: "No valid nutrition items found in CSV" });
         } else {
-          toast({
-            title: "CSV parsed",
-            description: `Found ${parsedRows.length} valid nutrition items`,
-          });
+          toast("CSV parsed", { description: `Found ${parsedRows.length} valid nutrition items` });
         }
       } catch (error) {
-        toast({
-          title: "Parse error",
-          description: error instanceof Error ? error.message : "Failed to parse CSV",
-          variant: "destructive",
-        });
+        toast.error("Parse error", { description: error instanceof Error ? error.message : "Failed to parse CSV" });
         setErrors([error instanceof Error ? error.message : "Unknown error"]);
       }
     };
@@ -147,11 +132,7 @@ Almonds,Snack,1 oz,16 oz,16,almonds,164,6,6,14,tree nuts`;
 
   const handleImport = async () => {
     if (preview.length === 0) {
-      toast({
-        title: "Nothing to import",
-        description: "No nutrition items to import",
-        variant: "destructive",
-      });
+      toast.error("Nothing to import", { description: "No nutrition items to import" });
       return;
     }
 
@@ -186,10 +167,7 @@ Almonds,Snack,1 oz,16 oz,16,almonds,164,6,6,14,tree nuts`;
         throw error;
       }
 
-      toast({
-        title: "Import successful",
-        description: `Imported ${nutritionData.length} nutrition items`,
-      });
+      toast.success("Import successful", { description: `Imported ${nutritionData.length} nutrition items` });
 
       setOpen(false);
       setPreview([]);
@@ -197,11 +175,7 @@ Almonds,Snack,1 oz,16 oz,16,almonds,164,6,6,14,tree nuts`;
       onImportComplete();
     } catch (error) {
       logger.error("Import error:", error);
-      toast({
-        title: "Import failed",
-        description: error instanceof Error ? error.message : "Failed to import nutrition data",
-        variant: "destructive",
-      });
+      toast.error("Import failed", { description: error instanceof Error ? error.message : "Failed to import nutrition data" });
     } finally {
       setIsImporting(false);
     }

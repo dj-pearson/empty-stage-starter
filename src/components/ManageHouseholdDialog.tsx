@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { logger } from "@/lib/logger";
 
 interface HouseholdMember {
   id: string;
@@ -34,7 +34,7 @@ interface HouseholdMember {
   joined_at: string;
   profiles: {
     full_name: string;
-  };
+  } | null;
 }
 
 interface Invitation {
@@ -101,7 +101,7 @@ export function ManageHouseholdDialog() {
         .eq("household_id", memberData.household_id);
 
       if (membersData) {
-        setMembers(membersData as any);
+        setMembers(membersData as unknown as HouseholdMember[]);
       }
 
       // Get pending invitations
@@ -112,7 +112,7 @@ export function ManageHouseholdDialog() {
         .gt("expires_at", new Date().toISOString());
 
       if (invitesData) {
-        setInvitations(invitesData);
+        setInvitations(invitesData as unknown as Invitation[]);
       }
     } catch (error) {
       logger.error("Error loading household:", error);
@@ -143,7 +143,8 @@ export function ManageHouseholdDialog() {
       loadHouseholdData();
     } catch (error: unknown) {
       logger.error("Error sending invitation:", error);
-      if (error.code === '23505') {
+      const pgError = error as { code?: string };
+      if (pgError.code === '23505') {
         toast.error("This email has already been invited");
       } else {
         toast.error("Failed to send invitation");

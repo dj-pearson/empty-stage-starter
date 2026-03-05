@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
@@ -38,6 +37,17 @@ export interface BackupConfig {
   email_notifications: boolean;
 }
 
+interface BackupEdgeFunctionResponse {
+  success: boolean;
+  error?: string;
+  original_size: number;
+  compressed_size: number;
+  compression_ratio: number;
+  data?: string;
+  download_filename: string;
+  backup_id: string;
+}
+
 /**
  * Create a manual backup of user data
  * @param download - If true, downloads the backup file
@@ -58,7 +68,7 @@ export async function createBackup(download: boolean = true): Promise<{
 
     toast.info("Creating backup...", { description: "This may take a moment" });
 
-    const { data, error } = await invokeEdgeFunction("backup-user-data", {
+    const { data, error } = await invokeEdgeFunction<BackupEdgeFunctionResponse>("backup-user-data", {
       body: {
         backupType: download ? "export" : "manual",
       },
@@ -70,9 +80,9 @@ export async function createBackup(download: boolean = true): Promise<{
       return { success: false, error: error.message };
     }
 
-    if (!data.success) {
-      toast.error("Backup failed", { description: data.error });
-      return { success: false, error: data.error };
+    if (!data || !data.success) {
+      toast.error("Backup failed", { description: data?.error });
+      return { success: false, error: data?.error };
     }
 
     // Show success message
@@ -146,7 +156,7 @@ export async function getBackupHistory(limit: number = 10): Promise<BackupLog[]>
 
     if (!user) return [];
 
-const { data, error } = await supabase
+    const { data, error } = await supabase
       .from("backup_logs")
       .select("*")
       .eq("user_id", user.id)
@@ -158,7 +168,7 @@ const { data, error } = await supabase
       return [];
     }
 
-    return data as BackupLog[];
+    return data as unknown as BackupLog[];
   } catch (error) {
     logger.error("Failed to fetch backup history:", error);
     return [];
@@ -175,7 +185,7 @@ export async function getBackupConfig(): Promise<BackupConfig | null> {
 
     if (!user) return null;
 
-const { data, error } = await supabase
+    const { data, error } = await supabase
       .from("backup_config")
       .select("*")
       .eq("user_id", user.id)
@@ -187,12 +197,12 @@ const { data, error } = await supabase
     }
 
     return {
-      enabled: data.enabled,
-      frequency: data.frequency,
-      retention_days: data.retention_days,
-      last_backup_at: data.last_backup_at,
-      next_backup_at: data.next_backup_at,
-      email_notifications: data.email_notifications,
+      enabled: data.enabled ?? false,
+      frequency: data.frequency ?? 'weekly',
+      retention_days: data.retention_days ?? 30,
+      last_backup_at: data.last_backup_at ?? undefined,
+      next_backup_at: data.next_backup_at ?? undefined,
+      email_notifications: data.email_notifications ?? false,
     };
   } catch (error) {
     logger.error("Failed to fetch backup config:", error);
@@ -216,7 +226,7 @@ export async function updateBackupConfig(
       return false;
     }
 
-const { error } = await supabase
+    const { error } = await supabase
       .from("backup_config")
       .upsert({
         user_id: user.id,

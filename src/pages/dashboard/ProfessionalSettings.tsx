@@ -20,7 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { AlertCircle, CheckCircle2, Clock, Globe, Palette, Copy, ExternalLink, Sparkles } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface CustomDomain {
   id: string;
@@ -64,8 +64,6 @@ export default function ProfessionalSettings() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [showRemoveDomainConfirm, setShowRemoveDomainConfirm] = useState(false);
-  const { toast } = useToast();
-
   useEffect(() => {
     loadSettings();
   }, []);
@@ -92,11 +90,7 @@ export default function ProfessionalSettings() {
       if (domainRes.data) setCustomDomain(domainRes.data);
       if (brandRes.data) setBrandSettings(brandRes.data);
     } catch (error: any) {
-      toast({
-        title: "Error loading settings",
-        description: error.message || "Failed to load your professional settings",
-        variant: "destructive",
-      });
+      toast.error("Error loading settings", { description: error.message || "Failed to load your professional settings" });
     } finally {
       setLoading(false);
     }
@@ -109,11 +103,8 @@ export default function ProfessionalSettings() {
     // Basic domain validation
     const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*(\.[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*)*\.[a-zA-Z]{2,}$/;
     if (!domainRegex.test(newDomain)) {
-      toast({
-        title: "Invalid domain",
-        description: "Please enter a valid domain name (e.g., example.com)",
-        variant: "destructive",
-      });
+      toast.error("Invalid domain", { description: "Please enter a valid domain name (e.g., example.com)",
+        variant: "destructive" });
       return;
     }
 
@@ -136,16 +127,9 @@ export default function ProfessionalSettings() {
 
       setCustomDomain(data);
       setNewDomain("");
-      toast({
-        title: "Domain added",
-        description: "Please verify your domain ownership by updating DNS records",
-      });
+      toast.success("Domain added", { description: "Please verify your domain ownership by updating DNS records" });
     } catch (error: any) {
-      toast({
-        title: "Error adding domain",
-        description: error.message || "Failed to add custom domain",
-        variant: "destructive",
-      });
+      toast.error("Error adding domain", { description: error.message || "Failed to add custom domain" });
     } finally {
       setActionLoading(false);
     }
@@ -169,16 +153,9 @@ export default function ProfessionalSettings() {
       if (error) throw error;
 
       await loadSettings();
-      toast({
-        title: "Domain verified",
-        description: "Your custom domain has been successfully verified!",
-      });
+      toast.success("Domain verified", { description: "Your custom domain has been successfully verified!" });
     } catch (error: any) {
-      toast({
-        title: "Verification failed",
-        description: error.message || "DNS records not found. Please ensure you've added the records correctly.",
-        variant: "destructive",
-      });
+      toast.error("Verification failed", { description: error.message || "DNS records not found. Please ensure you've added the records correctly." });
     } finally {
       setActionLoading(false);
     }
@@ -203,16 +180,9 @@ export default function ProfessionalSettings() {
       if (error) throw error;
 
       setCustomDomain(null);
-      toast({
-        title: "Domain removed",
-        description: "Your custom domain has been removed",
-      });
+      toast.success("Domain removed", { description: "Your custom domain has been removed" });
     } catch (error: any) {
-      toast({
-        title: "Error removing domain",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error("Error removing domain", { description: error.message });
     } finally {
       setActionLoading(false);
     }
@@ -451,15 +421,11 @@ export default function ProfessionalSettings() {
 
 // Component for DNS verification instructions
 function DNSVerificationInstructions({ domain }: { domain: CustomDomain }) {
-  const { toast } = useToast();
   const dnsRecords = domain.dns_records || {};
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
-    toast({
-      title: "Copied!",
-      description: `${label} copied to clipboard`,
-    });
+    toast.success("Copied!", { description: `${label} copied to clipboard` });
   };
 
   return (
@@ -607,8 +573,6 @@ function BrandCustomizationForm({
     }
   );
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
-
   const handleSave = async () => {
     try {
       setLoading(true);
@@ -641,16 +605,9 @@ function BrandCustomizationForm({
         onUpdate(data);
       }
 
-      toast({
-        title: "Brand settings saved",
-        description: "Your customizations have been applied successfully",
-      });
+      toast.success("Brand settings saved", { description: "Your customizations have been applied successfully" });
     } catch (error: any) {
-      toast({
-        title: "Error saving settings",
-        description: error.message || "Failed to save brand settings",
-        variant: "destructive",
-      });
+      toast.error("Error saving settings", { description: error.message || "Failed to save brand settings" });
     } finally {
       setLoading(false);
     }

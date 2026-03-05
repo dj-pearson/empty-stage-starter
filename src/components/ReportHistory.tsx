@@ -1,4 +1,3 @@
-// @ts-nocheck - Database tables require migrations to be approved
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +31,18 @@ interface Report {
   viewed_at?: string;
 }
 
+interface Insight {
+  id: string;
+  report_id: string;
+  priority: number;
+  [key: string]: unknown;
+}
+
+interface FullReport extends Report {
+  household_id: string;
+  [key: string]: unknown;
+}
+
 interface ReportHistoryProps {
   householdId: string;
   className?: string;
@@ -41,9 +52,9 @@ export function ReportHistory({ householdId, className }: ReportHistoryProps) {
   const [reports, setReports] = useState<Report[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [selectedReport, setSelectedReport] = useState<any>(null);
+  const [selectedReport, setSelectedReport] = useState<FullReport | null>(null);
   const [showReportDialog, setShowReportDialog] = useState(false);
-  const [insights, setInsights] = useState<any[]>([]);
+  const [insights, setInsights] = useState<Insight[]>([]);
 
   useEffect(() => {
     loadReports();
@@ -61,7 +72,7 @@ export function ReportHistory({ householdId, className }: ReportHistoryProps) {
 
       if (error) throw error;
 
-      setReports(data || []);
+      setReports((data as unknown as Report[]) || []);
     } catch (error) {
       console.error('Error loading reports:', error);
       toast.error('Failed to load reports');
@@ -117,12 +128,12 @@ export function ReportHistory({ householdId, className }: ReportHistoryProps) {
 
       if (insightsError) throw insightsError;
 
-      setSelectedReport(report);
-      setInsights(insightsData || []);
+      setSelectedReport(report as unknown as FullReport);
+      setInsights((insightsData as unknown as Insight[]) || []);
       setShowReportDialog(true);
 
       // Mark as viewed
-      if (!report.viewed_at) {
+      if (report && !(report as unknown as FullReport).viewed_at) {
         await supabase
           .from('weekly_reports')
           .update({ viewed_at: new Date().toISOString(), status: 'viewed' })
@@ -215,8 +226,8 @@ export function ReportHistory({ householdId, className }: ReportHistoryProps) {
           </DialogHeader>
           {selectedReport && (
             <WeeklyReportCard
-              report={selectedReport}
-              insights={insights}
+              report={selectedReport as unknown as Parameters<typeof WeeklyReportCard>[0]['report']}
+              insights={insights as unknown as Parameters<typeof WeeklyReportCard>[0]['insights']}
               detailed={true}
             />
           )}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,10 @@ import { generateMealPlan } from '@/lib/mealPlanGenerator/mealPlanGenerator';
 import { v4 as uuidv4 } from 'uuid';
 import { SEOHead } from '@/components/SEOHead';
 import { getPageSEO } from '@/lib/seo-config';
+import { toast } from 'sonner';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+
+const MEAL_PLAN_DRAFT_KEY = 'eatpal-meal-plan-draft';
 
 const DIETARY_RESTRICTIONS: { id: DietaryRestriction; label: string }[] = [
   { id: 'vegetarian', label: 'Vegetarian' },
@@ -63,25 +67,93 @@ const KITCHEN_EQUIPMENT: { id: KitchenEquipment; label: string }[] = [
   { id: 'grill', label: 'Grill' },
 ];
 
+const DEFAULT_MEAL_PLAN_FORM: Partial<MealPlanInput> = {
+  familySize: 4,
+  adults: 2,
+  children: 2,
+  childrenAges: [6, 9],
+  dietaryRestrictions: [],
+  allergies: [],
+  pickyEaterLevel: 'moderate',
+  cookingTimeAvailable: 45,
+  cookingSkillLevel: 'intermediate',
+  kitchenEquipment: [],
+};
+
+function getMealPlanMilestoneText(percentage: number): string | null {
+  if (percentage === 100) return 'All set! Ready to generate your plan.';
+  if (percentage >= 80) return 'Almost done! Just a little more.';
+  if (percentage >= 50) return 'Halfway there! Keep going.';
+  if (percentage >= 25) return 'Great start! You are making progress.';
+  return null;
+}
+
 export default function MealPlanGenerator() {
   const navigate = useNavigate();
   const [sessionId] = useState(() => uuidv4());
+  const prefersReducedMotion = useReducedMotion();
 
-  const [formData, setFormData] = useState<Partial<MealPlanInput>>({
-    familySize: 4,
-    adults: 2,
-    children: 2,
-    childrenAges: [6, 9],
-    dietaryRestrictions: [],
-    allergies: [],
-    pickyEaterLevel: 'moderate',
-    cookingTimeAvailable: 45,
-    cookingSkillLevel: 'intermediate',
-    kitchenEquipment: [],
+  const [formData, setFormData] = useState<Partial<MealPlanInput>>(() => {
+    try {
+      const saved = localStorage.getItem(MEAL_PLAN_DRAFT_KEY);
+      if (saved) {
+        return JSON.parse(saved) as Partial<MealPlanInput>;
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    return DEFAULT_MEAL_PLAN_FORM;
+  });
+
+  const [showResumeBanner, setShowResumeBanner] = useState(() => {
+    try {
+      return localStorage.getItem(MEAL_PLAN_DRAFT_KEY) !== null;
+    } catch {
+      return false;
+    }
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Calculate form completion progress based on required fields
+  const progressInfo = useMemo(() => {
+    const totalRequired = 5;
+    let filled = 0;
+
+    if (formData.adults && formData.adults > 0) filled++;
+    if (formData.children !== undefined && formData.children !== null && formData.children >= 0) filled++;
+    if (formData.pickyEaterLevel) filled++;
+    if (formData.cookingTimeAvailable && formData.cookingTimeAvailable >= 10) filled++;
+    if (formData.cookingSkillLevel) filled++;
+
+    const percentage = Math.round((filled / totalRequired) * 100);
+    const milestone = getMealPlanMilestoneText(percentage);
+
+    return { percentage, milestone };
+  }, [
+    formData.adults,
+    formData.children,
+    formData.pickyEaterLevel,
+    formData.cookingTimeAvailable,
+    formData.cookingSkillLevel,
+  ]);
+
+  // Auto-save form data to localStorage on every change
+  useEffect(() => {
+    try {
+      localStorage.setItem(MEAL_PLAN_DRAFT_KEY, JSON.stringify(formData));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [formData]);
+
+  const handleStartFresh = () => {
+    localStorage.removeItem(MEAL_PLAN_DRAFT_KEY);
+    setFormData(DEFAULT_MEAL_PLAN_FORM);
+    setShowResumeBanner(false);
+    toast.success('Started a fresh form');
+  };
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -242,6 +314,40 @@ export default function MealPlanGenerator() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {/* Progress Indicator */}
+              <div className="mb-8 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 flex items-center gap-1">
+                    <Clock className="w-4 h-4" />
+                    About 5 minutes to complete
+                  </span>
+                  <span className="font-medium text-gray-700">
+                    {progressInfo.percentage}% complete
+                  </span>
+                </div>
+                <div
+                  className="w-full h-2 bg-muted rounded-full overflow-hidden"
+                  role="progressbar"
+                  aria-valuenow={progressInfo.percentage}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Form completion progress"
+                >
+                  <div
+                    className="h-full bg-primary rounded-full"
+                    style={{
+                      width: `${progressInfo.percentage}%`,
+                      transition: prefersReducedMotion ? 'none' : 'width 0.4s ease-in-out',
+                    }}
+                  />
+                </div>
+                {progressInfo.milestone && (
+                  <p className="text-sm text-purple-600 font-medium">
+                    {progressInfo.milestone}
+                  </p>
+                )}
+              </div>
+
               <form onSubmit={handleSubmit} className="space-y-8">
                 {/* Family Composition */}
                 <div className="space-y-4">

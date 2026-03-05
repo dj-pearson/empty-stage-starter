@@ -1,4 +1,3 @@
-// @ts-nocheck - Database tables require migrations to be approved
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,9 +11,32 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
+interface MealSuggestion {
+  id: string;
+  recipe_id: string;
+  recipe_name: string;
+  recipe_description: string;
+  recipe_image: string;
+  reasoning: string;
+  confidence_score: number;
+  predicted_kid_approval: number;
+  match_factors: string[];
+  estimated_prep_time: number;
+  estimated_cook_time: number;
+  difficulty: string;
+  meal_slot: string;
+  [key: string]: unknown;
+}
+
+interface Kid {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+}
+
 interface QuickSuggestionsPanelProps {
   householdId: string;
-  kids: any[];
+  kids: Kid[];
   onSuggestionAccepted?: () => void;
   className?: string;
 }
@@ -25,7 +47,7 @@ export function QuickSuggestionsPanel({
   onSuggestionAccepted,
   className,
 }: QuickSuggestionsPanelProps) {
-  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [suggestions, setSuggestions] = useState<MealSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [mealSlotFilter, setMealSlotFilter] = useState<string>("all");
@@ -38,7 +60,6 @@ export function QuickSuggestionsPanel({
   const loadSuggestions = async () => {
     try {
       setIsLoading(true);
-      // @ts-ignore - active_suggestions table exists but types not yet regenerated
       const { data, error } = await supabase
         .from('active_suggestions')
         .select('*')
@@ -48,7 +69,7 @@ export function QuickSuggestionsPanel({
 
       if (error) throw error;
 
-      setSuggestions(data || []);
+      setSuggestions((data as unknown as MealSuggestion[]) || []);
     } catch (error) {
       console.error('Error loading suggestions:', error);
       toast.error('Failed to load suggestions');
@@ -61,7 +82,7 @@ export function QuickSuggestionsPanel({
     try {
       setIsGenerating(true);
 
-      const { data, error } = await invokeEdgeFunction<{ suggestions: any[] }>('generate-meal-suggestions', {
+      const { data, error } = await invokeEdgeFunction<{ suggestions: MealSuggestion[] }>('generate-meal-suggestions', {
         body: {
           householdId,
           mealSlot: mealSlotFilter === 'all' ? undefined : mealSlotFilter,
@@ -84,7 +105,7 @@ export function QuickSuggestionsPanel({
     }
   };
 
-  const handleAccept = async (suggestion: any) => {
+  const handleAccept = async (suggestion: MealSuggestion) => {
     try {
       // Get kid IDs to add meal for
       const kidIds = kids.map(k => k.id);
@@ -106,7 +127,7 @@ export function QuickSuggestionsPanel({
     }
   };
 
-  const handleReject = async (suggestion: any) => {
+  const handleReject = async (suggestion: MealSuggestion) => {
     try {
       const { error } = await supabase.rpc('reject_meal_suggestion', {
         p_suggestion_id: suggestion.id,

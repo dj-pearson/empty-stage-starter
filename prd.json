@@ -195,7 +195,7 @@
         "npm run build succeeds"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -211,8 +211,8 @@
         "All existing tests pass"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Debounced storage save with 500ms delay. Functional updater pattern applied in US-012. Batched recipe migration to bulk insert. Date-range filtering already present in data load."
     },
     {
       "id": "US-014",
@@ -227,8 +227,8 @@
         "All existing tests pass"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added .limit(500) to foods/grocery queries, .limit(200) to recipes. Added load-more pagination to Pantry page with visibleCount state and displayedFoods memo. Plan entries date-range filtering already in place. Kept select('*') for safety due to as-unknown casts."
     },
     {
       "id": "US-015",
@@ -295,8 +295,8 @@
         "All existing tests pass"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migrated all 23 files from use-toast to sonner. Removed shadcn Toaster from App.tsx. Deleted use-toast.ts and toaster.tsx."
     },
     {
       "id": "US-019",
@@ -417,8 +417,8 @@
         "Typecheck passes"
       ],
       "priority": 25,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Rewrote src/components/EmptyState.tsx to re-export canonical ui/EmptyState and use Lucide icons (BookOpen, Package, ClipboardList, CalendarDays, Users, Search) for all specialized variants. No imports needed updating as variants weren't imported elsewhere."
     },
     {
       "id": "US-026",
@@ -434,8 +434,8 @@
         "Typecheck passes"
       ],
       "priority": 26,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Kept BreadcrumbNavigation.tsx (uses BreadcrumbSchema for JSON-LD). Added generateBreadcrumbsFromPath utility. Deleted redundant Breadcrumbs.tsx. Added breadcrumbs to Blog, BlogPost, and PickyEaterQuizResults pages."
     },
     {
       "id": "US-027",
@@ -468,8 +468,8 @@
         "Typecheck passes"
       ],
       "priority": 28,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added inline field-level error to ManageKidsDialog with nameError state. Migrated AddFoodDialog, BulkAddFoodDialog, CreateGroceryListDialog, CreateCollectionDialog, AnimatedFormInputs from text-red-500/border-red-500 to text-destructive/border-destructive."
     },
     {
       "id": "US-029",
@@ -482,8 +482,8 @@
         "Typecheck passes"
       ],
       "priority": 29,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added Account Settings link to mobile menu in Navigation.tsx. Updated all CommandPalette navigations from convenience aliases (/kids, /pantry, etc.) to canonical /dashboard/* paths."
     },
     {
       "id": "US-030",
@@ -528,8 +528,8 @@
         "Typecheck passes"
       ],
       "priority": 32,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Removed framer-motion import from Pantry.tsx. Replaced motion.div, AnimatePresence with CSS animate-in classes (fade-in, zoom-in-95, slide-in-from-bottom/top). Kept framer-motion for complex pages."
     },
     {
       "id": "US-033",
@@ -571,8 +571,8 @@
         "Verify the app still loads correctly with the tightened CSP"
       ],
       "priority": 35,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Removed deprecated Expect-CT header. Documented why unsafe-eval needed (Three.js shader compilation) and why unsafe-inline needed (Vite styles, no nonce support on Cloudflare Pages). CSP comments updated with clear rationale."
     },
     {
       "id": "US-036",
@@ -586,8 +586,8 @@
         "Typecheck passes"
       ],
       "priority": 36,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added supabase.rpc('check_rate_limit') call before signInWithPassword. Falls through gracefully if RPC doesn't exist. Client-side rate limiter kept as UX enhancement."
     },
     {
       "id": "US-037",
@@ -977,8 +977,8 @@
         "npm run build succeeds"
       ],
       "priority": 61,
-      "passes": false,
-      "notes": "Poor empty states are the #1 cause of user drop-off in the first session. Users who don't know what to do next leave and don't come back."
+      "passes": true,
+      "notes": "Pantry has rich EmptyPantryState with 3 action cards (Quick Start, Add Manually, AI Suggestions) plus tips. Grocery has icon + heading + description + Add Item and Sync from Meal Plan buttons. Planner shows No Children state with icon and CTA. Canonical EmptyState component available for all new states."
     },
     {
       "id": "US-062",
@@ -1140,8 +1140,8 @@
         "npm run build succeeds"
       ],
       "priority": 71,
-      "passes": false,
-      "notes": "Mobile Planner is missing key features that desktop users have. This creates a frustrating experience for the 60%+ of users on mobile."
+      "passes": true,
+      "notes": "MobileMealPlanner already had MoreHorizontal dropdown with Copy Week and Clear Week. Added onSaveTemplate and onOpenTemplateGallery props from Planner.tsx. Added Suspense-wrapped template dialogs to mobile return."
     },
     {
       "id": "US-072",
@@ -1157,8 +1157,8 @@
         "npm run build succeeds"
       ],
       "priority": 72,
-      "passes": false,
-      "notes": "Blog cards show minimal metadata. Reading time and categories help users choose content, increasing engagement and time on site."
+      "passes": true,
+      "notes": "Blog cards already had reading_time_minutes and category badges. Added author name (EatPal Team default) with User icon. Added flex-wrap for responsive layout."
     },
     {
       "id": "US-073",

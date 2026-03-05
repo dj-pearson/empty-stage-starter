@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -77,8 +76,9 @@ export function NotificationBell() {
 
       if (error) throw error;
 
-      setNotifications((data as unknown) || []);
-      setUnreadCount((data as unknown)?.filter((n) => !n.is_read).length || 0);
+      const notifications = (data as unknown as Notification[]) || [];
+      setNotifications(notifications);
+      setUnreadCount(notifications.filter((n) => !n.is_read).length);
     } catch (error: unknown) {
       logger.error("Error fetching notifications:", error);
     } finally {

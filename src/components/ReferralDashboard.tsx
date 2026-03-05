@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Copy, Share2, Gift, Users, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -115,7 +115,7 @@ export function ReferralDashboard() {
       setRewards(rewardData || []);
     } catch (error: unknown) {
       logger.error("Error loading referral data:", error);
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast.error("Error", { description: error.message });
     } finally {
       setLoading(false);
     }
@@ -129,7 +129,7 @@ export function ReferralDashboard() {
 
   const copyReferralLink = () => {
     navigator.clipboard.writeText(getReferralUrl());
-    toast({ title: "Copied!", description: "Referral link copied to clipboard" });
+    toast.success("Copied!", { description: "Referral link copied to clipboard" });
   };
 
   const shareReferralLink = async () => {

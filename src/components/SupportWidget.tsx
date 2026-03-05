@@ -20,7 +20,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { HelpCircle, Send } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export function SupportWidget() {
   const [isOpen, setIsOpen] = useState(false);
@@ -40,11 +40,7 @@ export function SupportWidget() {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) {
-        toast({
-          title: "Authentication required",
-          description: "Please sign in to submit a support ticket",
-          variant: "destructive",
-        });
+        toast.error("Authentication required", { description: "Please sign in to submit a support ticket" });
         return;
       }
 
@@ -69,10 +65,7 @@ export function SupportWidget() {
 
       if (ticketError) throw ticketError;
 
-      toast({
-        title: "Ticket submitted!",
-        description: "We'll respond to your ticket within 24 hours",
-      });
+      toast("Ticket submitted!", { description: "We'll respond to your ticket within 24 hours" });
 
       // Reset form
       setFormData({
@@ -83,11 +76,7 @@ export function SupportWidget() {
       });
       setIsOpen(false);
     } catch (error: unknown) {
-      toast({
-        title: "Error submitting ticket",
-        description: error instanceof Error ? error.message : "Failed to submit support ticket",
-        variant: "destructive",
-      });
+      toast.error("Error submitting ticket", { description: error instanceof Error ? error.message : "Failed to submit support ticket" });
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 import type { EmailTemplate } from "@/types/marketing-types";
@@ -17,7 +16,7 @@ export interface EmailSequence {
   name: string;
   description?: string;
   trigger_event: string;
-  trigger_conditions: Record<string, any>;
+  trigger_conditions: Record<string, unknown>;
   is_active: boolean;
 }
 
@@ -41,13 +40,11 @@ export async function triggerEmailSequence(
     leadId?: string;
     sequenceId?: string;
     triggerEvent?: EmailTriggerEvent;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }
 ): Promise<{ success: boolean; enrollment_id?: string; error?: string }> {
   try {
-    // Note: enroll_in_email_sequence function exists but may not be in types yet
-    // This is a database function call
-    const { data, error } = await supabase.rpc('enroll_in_email_sequence' as any, {
+    const { data, error } = await supabase.rpc('enroll_in_email_sequence', {
       p_user_id: params.userId || null,
       p_lead_id: params.leadId || null,
       p_sequence_id: params.sequenceId || null,
@@ -60,10 +57,10 @@ export async function triggerEmailSequence(
       return { success: false, error: error.message };
     }
 
-    return { success: true, enrollment_id: data as string || undefined };
+    return { success: true, enrollment_id: (data as string) || undefined };
   } catch (error: unknown) {
     logger.error('Error in triggerEmailSequence:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -87,7 +84,7 @@ export async function cancelEmailSequence(
     return { success: true };
   } catch (error: unknown) {
     logger.error('Error in cancelEmailSequence:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -126,20 +123,30 @@ export async function getUserEmailSequences(
 
     // Map to EmailSequence format
     const sequences: EmailSequence[] = (enrollments || [])
-      .filter((e: any) => e.sequence)
-      .map((e: any) => ({
-        id: e.sequence.id,
-        name: e.sequence.name,
-        description: e.sequence.description,
-        trigger_event: e.sequence.trigger_event,
-        trigger_conditions: e.sequence.trigger_conditions || {},
-        is_active: e.sequence.is_active,
-      }));
+      .filter((e) => e.sequence)
+      .map((e) => {
+        const seq = e.sequence as unknown as {
+          id: string;
+          name: string;
+          description: string | null;
+          trigger_event: string;
+          trigger_conditions: Record<string, unknown> | null;
+          is_active: boolean;
+        };
+        return {
+          id: seq.id,
+          name: seq.name,
+          description: seq.description ?? undefined,
+          trigger_event: seq.trigger_event,
+          trigger_conditions: seq.trigger_conditions || {},
+          is_active: seq.is_active,
+        };
+      });
 
     return { sequences };
   } catch (error: unknown) {
     logger.error('Error in getUserEmailSequences:', error);
-    return { sequences: [], error: error.message };
+    return { sequences: [], error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -153,7 +160,7 @@ export async function scheduleEmail(params: {
   textBody?: string;
   sendAt?: Date;
   priority?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }): Promise<{ success: boolean; email_id?: string; error?: string }> {
   try {
     const { data, error } = await supabase
@@ -180,7 +187,7 @@ export async function scheduleEmail(params: {
     return { success: true, email_id: data.id };
   } catch (error: unknown) {
     logger.error('Error in scheduleEmail:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -190,7 +197,7 @@ export async function scheduleEmail(params: {
 export async function trackEmailEvent(
   emailId: string,
   eventType: 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'complained',
-  eventData?: Record<string, any>
+  eventData?: Record<string, unknown>
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const { error } = await supabase
@@ -220,7 +227,7 @@ export async function trackEmailEvent(
     return { success: true };
   } catch (error: unknown) {
     logger.error('Error in trackEmailEvent:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -242,10 +249,10 @@ export async function getEmailTemplates(): Promise<{
       return { templates: [], error: error.message };
     }
 
-    return { templates: data || [] };
+    return { templates: (data || []) as unknown as EmailTemplate[] };
   } catch (error: unknown) {
     logger.error('Error in getEmailTemplates:', error);
-    return { templates: [], error: error.message };
+    return { templates: [], error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -271,7 +278,7 @@ export async function createEmailTemplate(params: {
         html_body: params.html_template,
         text_body: params.text_template || null,
         category: params.category || 'general',
-        variables: params.variables || {},
+        variables: params.variables || [],
       }])
       .select('id')
       .single();
@@ -284,7 +291,7 @@ export async function createEmailTemplate(params: {
     return { success: true, template_id: data.id };
   } catch (error: unknown) {
     logger.error('Error in createEmailTemplate:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -309,9 +316,6 @@ export async function getEmailMetrics(params?: {
   error?: string;
 }> {
   try {
-    // This would need a custom RPC function for optimal performance
-    // For now, we'll do basic client-side aggregation
-
     let query = supabase
       .from('automation_email_queue')
       .select('id, status, sent_at');
@@ -380,7 +384,7 @@ export async function getEmailMetrics(params?: {
         click_rate: 0,
         bounce_rate: 0,
       },
-      error: error.message,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
@@ -390,7 +394,7 @@ export async function getEmailMetrics(params?: {
  */
 export function replaceEmailVariables(
   template: string,
-  variables: Record<string, any>
+  variables: Record<string, string>
 ): string {
   let result = template;
 

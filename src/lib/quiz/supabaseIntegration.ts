@@ -2,13 +2,11 @@
  * Supabase Integration for Quiz Tool
  * Handles all database operations for quiz responses, leads, and analytics
  */
-// @ts-nocheck - Database tables require migrations to be approved
 
 import { supabase } from '@/lib/supabase';
 import {
   QuizAnswers,
   PersonalityType,
-  QuizResponse,
   QuizAnalyticsEvent,
   EmailCaptureData
 } from '@/types/quiz';
@@ -31,15 +29,14 @@ export async function saveQuizResponse(
   abTestVariant?: string
 ): Promise<string> {
   try {
-    // @ts-ignore - quiz_responses table exists but types not yet regenerated
     const { data, error } = await supabase
       .from('quiz_responses')
       .insert({
         session_id: sessionId,
-        answers: answers,
+        answers: answers as Record<string, unknown>,
         personality_type: personalityType,
         secondary_type: secondaryType,
-        scores: scores,
+        scores: scores as Record<string, unknown>,
         completion_time_seconds: completionTimeSeconds,
         utm_source: utmParams?.source,
         utm_medium: utmParams?.medium,
@@ -119,7 +116,7 @@ export async function trackQuizAnalytics(
         session_id: event.sessionId,
         quiz_response_id: event.quizResponseId,
         event_type: event.eventType,
-        event_data: event.eventData,
+        event_data: event.eventData as Record<string, unknown>,
         current_step: event.currentStep,
         total_steps: event.totalSteps,
         time_on_page_seconds: event.timeOnPageSeconds,
@@ -206,17 +203,23 @@ export async function getQuizAnalyticsSummary(
 
     if (error) throw error;
 
+    const responses = data || [];
+
     // Calculate metrics
-    const totalResponses = data.length;
-    const completedResponses = data.filter(r => r.completion_time_seconds).length;
-    const emailCaptureRate = data.filter(r => r.email_captured).length / totalResponses;
-    const pdfDownloadRate = data.filter(r => r.pdf_downloaded).length / totalResponses;
-    const socialShareRate = data.filter(r => r.shared_social).length / totalResponses;
-    const avgCompletionTime = data.reduce((sum, r) => sum + (r.completion_time_seconds || 0), 0) / completedResponses;
+    const totalResponses = responses.length;
+    const completedResponses = responses.filter(r => r.completion_time_seconds).length;
+    const emailCaptureRate = totalResponses > 0 ? responses.filter(r => r.email_captured).length / totalResponses : 0;
+    const pdfDownloadRate = totalResponses > 0 ? responses.filter(r => r.pdf_downloaded).length / totalResponses : 0;
+    const socialShareRate = totalResponses > 0 ? responses.filter(r => r.shared_social).length / totalResponses : 0;
+    const avgCompletionTime = completedResponses > 0
+      ? responses.reduce((sum, r) => sum + (r.completion_time_seconds || 0), 0) / completedResponses
+      : 0;
 
     // Personality type distribution
-    const personalityDistribution = data.reduce((acc, r) => {
-      acc[r.personality_type] = (acc[r.personality_type] || 0) + 1;
+    const personalityDistribution = responses.reduce((acc, r) => {
+      if (r.personality_type) {
+        acc[r.personality_type] = (acc[r.personality_type] || 0) + 1;
+      }
       return acc;
     }, {} as Record<string, number>);
 
@@ -264,7 +267,7 @@ export async function updateEmailSequence(
   action: 'sent' | 'opened' | 'clicked'
 ): Promise<void> {
   try {
-    const updates: Record<string, any> = {};
+    const updates: Record<string, unknown> = {};
 
     if (action === 'sent') {
       updates[`email_${emailNumber}_sent_at`] = new Date().toISOString();
@@ -337,10 +340,11 @@ export async function trackReferral(
         referred_email: referredEmail,
       });
 
-    // Increment referral count
-    await supabase.rpc('increment_referral_count', {
-      referrer_email_param: referrerData.email
-    });
+    // Increment referral count - RPC not in generated types, cast through unknown
+    await (supabase.rpc as unknown as (fn: string, params: Record<string, unknown>) => Promise<unknown>)(
+      'increment_referral_count',
+      { referrer_email_param: referrerData.email }
+    );
   } catch (error) {
     console.error('Error tracking referral:', error);
   }

@@ -1,4 +1,3 @@
-// @ts-nocheck - Admin tables not yet in generated types
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -37,7 +36,7 @@ import {
   RefreshCw,
   BarChart3,
 } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -181,11 +180,7 @@ export function FeatureFlagDashboard() {
       if (cached && cached.length > 0) {
         setFlags(cached);
       }
-      toast({
-        title: "Error loading feature flags",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast.error("Error loading feature flags", { description: getErrorMessage(error) });
     } finally {
       setLoading(false);
     }
@@ -220,10 +215,7 @@ export function FeatureFlagDashboard() {
 
       if (error) throw error;
 
-      toast({
-        title: "Feature flag updated",
-        description: `Flag has been ${newEnabled ? "enabled" : "disabled"}`,
-      });
+      toast.success("Feature flag updated", { description: `Flag has been ${newEnabled ? "enabled" : "disabled"}` });
     } catch (error: unknown) {
       // Revert optimistic update on failure
       setFlags((prev) => {
@@ -237,11 +229,7 @@ export function FeatureFlagDashboard() {
         syncFlagToHookCache(targetFlag.key, currentEnabled);
       }
 
-      toast({
-        title: "Error updating feature flag",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast.error("Error updating feature flag", { description: getErrorMessage(error) });
     }
   };
 
@@ -266,10 +254,7 @@ export function FeatureFlagDashboard() {
 
       if (error) throw error;
 
-      toast({
-        title: "Rollout percentage updated",
-        description: `Rollout set to ${percentage}%`,
-      });
+      toast.success("Rollout percentage updated", { description: `Rollout set to ${percentage}%` });
     } catch (error: unknown) {
       // Revert on failure
       setFlags((prev) => {
@@ -282,11 +267,7 @@ export function FeatureFlagDashboard() {
         return reverted;
       });
 
-      toast({
-        title: "Error updating rollout",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast.error("Error updating rollout", { description: getErrorMessage(error) });
     }
   };
 
@@ -311,10 +292,7 @@ export function FeatureFlagDashboard() {
       const flagKey = formData.key.toLowerCase().replace(/\s+/g, "_");
       syncFlagToHookCache(flagKey, formData.enabled);
 
-      toast({
-        title: "Feature flag created",
-        description: "The new feature flag has been created successfully",
-      });
+      toast.success("Feature flag created", { description: "The new feature flag has been created successfully" });
 
       setIsCreateDialogOpen(false);
       setFormData({
@@ -326,11 +304,7 @@ export function FeatureFlagDashboard() {
       });
       fetchFlags();
     } catch (error: unknown) {
-      toast({
-        title: "Error creating feature flag",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast.error("Error creating feature flag", { description: getErrorMessage(error) });
     }
   };
 
@@ -366,16 +340,9 @@ export function FeatureFlagDashboard() {
         removeFlagFromHookCache(targetFlag.key);
       }
 
-      toast({
-        title: "Feature flag deleted",
-        description: "The feature flag has been removed",
-      });
+      toast.success("Feature flag deleted", { description: "The feature flag has been removed" });
     } catch (error: unknown) {
-      toast({
-        title: "Error deleting feature flag",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast.error("Error deleting feature flag", { description: getErrorMessage(error) });
     }
   };
 

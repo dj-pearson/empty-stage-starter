@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
@@ -134,7 +133,7 @@ export function SocialMediaManager() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setPosts((data || []) as any);
+      setPosts((data || []) as unknown as SocialPost[]);
     } catch (error) {
       logger.error("Error loading posts:", error);
       toast.error("Failed to load posts");
@@ -151,7 +150,7 @@ export function SocialMediaManager() {
         .order("platform");
 
       if (error) throw error;
-      setAccounts((data || []) as any);
+      setAccounts((data || []) as unknown as SocialAccount[]);
     } catch (error) {
       logger.error("Error loading accounts:", error);
     }
@@ -191,7 +190,7 @@ export function SocialMediaManager() {
           content: postForm.content,
           short_form_content: postForm.short_form_content || null,
           long_form_content: postForm.long_form_content || null,
-          platforms: postForm.platforms as any,
+          platforms: postForm.platforms as unknown as string[],
           status: postForm.schedule_now ? "draft" : "scheduled",
           scheduled_for: scheduledFor,
           link_url: postForm.link_url || null,
@@ -256,7 +255,7 @@ export function SocialMediaManager() {
         await supabase.from("webhook_logs").insert([
           {
             post_id: postId,
-            platform: 'facebook' as any, // Use a default platform for logging
+            platform: 'facebook' as unknown as string, // Use a default platform for logging
             webhook_url: globalAccount.webhook_url,
             request_payload: webhookPayload,
             response_status: response.status,
@@ -349,7 +348,7 @@ export function SocialMediaManager() {
       toast.success("Post resent to webhook!");
     } catch (error: unknown) {
       logger.error("Error resending to webhook:", error);
-      toast.error(error.message || "Failed to resend to webhook");
+      toast.error((error instanceof Error ? error.message : undefined) || "Failed to resend to webhook");
     }
   };
 
@@ -369,7 +368,7 @@ export function SocialMediaManager() {
 
       const { data, error } = await supabase.from("social_accounts").insert([
         {
-          platform: accountForm.platform as any,
+          platform: accountForm.platform as unknown as string,
           account_name: accountForm.account_name || "Global Webhook",
           webhook_url: accountForm.webhook_url || null,
           is_active: true,
@@ -389,7 +388,7 @@ export function SocialMediaManager() {
       loadAccounts();
     } catch (error: unknown) {
       logger.error("Error saving webhook account:", error);
-      toast.error(error.message || "Failed to save webhook");
+      toast.error((error instanceof Error ? error.message : undefined) || "Failed to save webhook");
     }
   };
 
@@ -481,7 +480,7 @@ export function SocialMediaManager() {
       }
     } catch (error: unknown) {
       logger.error("Error generating AI content:", error);
-      toast.error(error.message || "Failed to generate content");
+      toast.error((error instanceof Error ? error.message : undefined) || "Failed to generate content");
     } finally {
       setAiGenerating(false);
     }

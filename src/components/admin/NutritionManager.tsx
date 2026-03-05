@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Search, Scan } from "lucide-react";
 import { NutritionImportDialog } from "./NutritionImportDialog";
 import { BarcodeScannerDialog } from "./BarcodeScannerDialog";
@@ -84,11 +84,7 @@ export const NutritionManager = () => {
       .order("name");
 
     if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to fetch nutrition items",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to fetch nutrition items" });
     } else {
       setItems(data || []);
     }
@@ -118,16 +114,9 @@ export const NutritionManager = () => {
         .eq("id", editingItem.id);
 
       if (error) {
-        toast({
-          title: "Error",
-          description: "Failed to update nutrition item",
-          variant: "destructive",
-        });
+        toast.error("Error", { description: "Failed to update nutrition item" });
       } else {
-        toast({
-          title: "Success",
-          description: "Nutrition item updated successfully",
-        });
+        toast.success("Success", { description: "Nutrition item updated successfully" });
         fetchNutritionItems();
         handleCloseDialog();
       }
@@ -139,16 +128,9 @@ export const NutritionManager = () => {
         .insert({ ...nutritionData, created_by: user?.id });
 
       if (error) {
-        toast({
-          title: "Error",
-          description: "Failed to create nutrition item",
-          variant: "destructive",
-        });
+        toast.error("Error", { description: "Failed to create nutrition item" });
       } else {
-        toast({
-          title: "Success",
-          description: "Nutrition item created successfully",
-        });
+        toast.success("Success", { description: "Nutrition item created successfully" });
         fetchNutritionItems();
         handleCloseDialog();
       }
@@ -169,16 +151,9 @@ export const NutritionManager = () => {
     const { error } = await supabase.from("nutrition").delete().eq("id", id);
 
     if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete nutrition item",
-        variant: "destructive",
-      });
+      toast.error("Error", { description: "Failed to delete nutrition item" });
     } else {
-      toast({
-        title: "Success",
-        description: "Nutrition item deleted successfully",
-      });
+      toast.success("Success", { description: "Nutrition item deleted successfully" });
       fetchNutritionItems();
     }
   };

@@ -22,7 +22,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -175,11 +175,7 @@ export function AlertManager() {
       if (error) throw error;
       setAlerts((data as unknown as Alert[]) || []);
     } catch (error: unknown) {
-      toast({
-        title: "Error loading alerts",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast.error("Error loading alerts", { description: getErrorMessage(error) });
     } finally {
       setLoading(false);
     }
@@ -224,11 +220,7 @@ export function AlertManager() {
 
           // Show toast for critical alerts
           if (newAlert.severity === "critical") {
-            toast({
-              title: newAlert.title,
-              description: newAlert.message,
-              variant: "destructive",
-            });
+            toast.error(newAlert.title, { description: newAlert.message });
           }
         }
       )
@@ -242,19 +234,11 @@ export function AlertManager() {
 
   const createAlertRule = async () => {
     if (!newRule.alert_type) {
-      toast({
-        title: "Validation error",
-        description: "Please select an alert type.",
-        variant: "destructive",
-      });
+      toast.error("Validation error", { description: "Please select an alert type." });
       return;
     }
     if (newRule.threshold <= 0) {
-      toast({
-        title: "Validation error",
-        description: "Threshold must be a positive number.",
-        variant: "destructive",
-      });
+      toast.error("Validation error", { description: "Threshold must be a positive number." });
       return;
     }
 
@@ -269,16 +253,12 @@ export function AlertManager() {
         },
       ]);
       if (error) throw error;
-      toast({ title: "Alert rule created successfully" });
+      toast.success("Alert rule created successfully");
       setShowCreateRule(false);
       setNewRule({ alert_type: "", threshold: 0, notification_channel: "in_app" });
       fetchAlertRules();
     } catch (error: unknown) {
-      toast({
-        title: "Error creating rule",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast.error("Error creating rule", { description: getErrorMessage(error) });
     }
   };
 
@@ -293,15 +273,9 @@ export function AlertManager() {
       setAlertRules((prev) =>
         prev.map((r) => (r.id === ruleId ? { ...r, is_active: !isActive } : r))
       );
-      toast({
-        title: `Alert rule ${!isActive ? "activated" : "deactivated"}`,
-      });
+      toast.success(`Alert rule ${!isActive ? "activated" : "deactivated"}`);
     } catch (error: unknown) {
-      toast({
-        title: "Error toggling rule",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast.error("Error toggling rule", { description: getErrorMessage(error) });
     }
   };
 
@@ -315,13 +289,9 @@ export function AlertManager() {
         .eq("id", ruleId);
       if (error) throw error;
       setAlertRules((prev) => prev.filter((r) => r.id !== ruleId));
-      toast({ title: "Alert rule deleted" });
+      toast.success("Alert rule deleted");
     } catch (error: unknown) {
-      toast({
-        title: "Error deleting rule",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast.error("Error deleting rule", { description: getErrorMessage(error) });
     } finally {
       setDeletingRuleId(null);
     }
@@ -340,11 +310,7 @@ export function AlertManager() {
         prev.map((alert) => (alert.id === alertId ? { ...alert, is_read: true } : alert))
       );
     } catch (error: unknown) {
-      toast({
-        title: "Error marking alert as read",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast.error("Error marking alert as read", { description: getErrorMessage(error) });
     }
   };
 
@@ -379,18 +345,11 @@ export function AlertManager() {
         )
       );
 
-      toast({
-        title: "Alert resolved",
-        description: "The alert has been marked as resolved.",
-      });
+      toast.success("Alert resolved", { description: "The alert has been marked as resolved." });
 
       setSelectedAlert(null);
     } catch (error: unknown) {
-      toast({
-        title: "Error resolving alert",
-        description: getErrorMessage(error),
-        variant: "destructive",
-      });
+      toast.error("Error resolving alert", { description: getErrorMessage(error) });
     }
   };
 

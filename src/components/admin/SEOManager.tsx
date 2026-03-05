@@ -1,5 +1,14 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
+import type {
+  CrawlResultsSummary,
+  ImageResultsSummary,
+  RedirectAnalysisResults,
+  DuplicateAnalysisResults,
+  SecurityAnalysisResults,
+  LinkStructureResults as LinkStructureResultsType,
+  MobileAnalysisResults,
+  PerformanceBudgetResults,
+} from "@/types/seo-types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -153,49 +162,49 @@ export function SEOManager() {
   const [newKeyword, setNewKeyword] = useState("");
   const [competitorUrl, setCompetitorUrl] = useState("");
   const [isAutoHealing, setIsAutoHealing] = useState(false);
-  const [competitorResults, setCompetitorResults] = useState<any[]>([]);
+  const [competitorResults, setCompetitorResults] = useState<Record<string, unknown>[]>([]);
   const [isAnalyzingCompetitor, setIsAnalyzingCompetitor] = useState(false);
   const [activeTab, setActiveTab] = useState("audit");
   const [currentAuditId, setCurrentAuditId] = useState<string | null>(null);
-  const [fixSuggestions, setFixSuggestions] = useState<any[]>([]);
+  const [fixSuggestions, setFixSuggestions] = useState<Record<string, unknown>[]>([]);
   const [isApplyingFixes, setIsApplyingFixes] = useState(false);
 
   // Google Search Console state
   const [gscConnected, setGscConnected] = useState(false);
-  const [gscProperties, setGscProperties] = useState<any[]>([]);
+  const [gscProperties, setGscProperties] = useState<Record<string, unknown>[]>([]);
   const [selectedProperty, setSelectedProperty] = useState<string>("");
   const [isSyncingGSC, setIsSyncingGSC] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [isConnectingGSC, setIsConnectingGSC] = useState(false);
 
   // Monitoring & Alerts state
-  const [alerts, setAlerts] = useState<any[]>([]);
-  const [alertRules, setAlertRules] = useState<any[]>([]);
-  const [schedules, setSchedules] = useState<any[]>([]);
-  const [notificationPrefs, setNotificationPrefs] = useState<any>(null);
+  const [alerts, setAlerts] = useState<Record<string, unknown>[]>([]);
+  const [alertRules, setAlertRules] = useState<Record<string, unknown>[]>([]);
+  const [schedules, setSchedules] = useState<Record<string, unknown>[]>([]);
+  const [notificationPrefs, setNotificationPrefs] = useState<Record<string, unknown> | null>(null);
   const [activeAlertsCount, setActiveAlertsCount] = useState(0);
   const [isLoadingMonitoring, setIsLoadingMonitoring] = useState(false);
 
   // New SEO features state
-  const [crawlResults, setCrawlResults] = useState<any>(null);
-  const [imageResults, setImageResults] = useState<any>(null);
-  const [redirectResults, setRedirectResults] = useState<any>(null);
-  const [duplicateResults, setDuplicateResults] = useState<any>(null);
-  const [securityResults, setSecurityResults] = useState<any>(null);
-  const [linkStructureResults, setLinkStructureResults] = useState<any>(null);
-  const [mobileResults, setMobileResults] = useState<any>(null);
-  const [budgetResults, setBudgetResults] = useState<any>(null);
+  const [crawlResults, setCrawlResults] = useState<CrawlResultsSummary | null>(null);
+  const [imageResults, setImageResults] = useState<ImageResultsSummary | null>(null);
+  const [redirectResults, setRedirectResults] = useState<RedirectAnalysisResults | null>(null);
+  const [duplicateResults, setDuplicateResults] = useState<DuplicateAnalysisResults | null>(null);
+  const [securityResults, setSecurityResults] = useState<SecurityAnalysisResults | null>(null);
+  const [linkStructureResults, setLinkStructureResults] = useState<LinkStructureResultsType | null>(null);
+  const [mobileResults, setMobileResults] = useState<MobileAnalysisResults | null>(null);
+  const [budgetResults, setBudgetResults] = useState<PerformanceBudgetResults | null>(null);
 
   // Additional operation results state
-  const [brokenLinksResults, setBrokenLinksResults] = useState<any>(null);
-  const [contentAnalysisResults, setContentAnalysisResults] = useState<any>(null);
-  const [blogPostsAnalysisResults, setBlogPostsAnalysisResults] = useState<any>(null);
-  const [structuredDataValidationResults, setStructuredDataValidationResults] = useState<any>(null);
-  const [coreWebVitalsResults, setCoreWebVitalsResults] = useState<any>(null);
-  const [backlinksResults, setBacklinksResults] = useState<any[]>([]);
-  const [gscSyncResults, setGscSyncResults] = useState<any>(null);
-  const [autoHealingResults, setAutoHealingResults] = useState<any>(null);
-  const [fixesAppliedResults, setFixesAppliedResults] = useState<any>(null);
+  const [brokenLinksResults, setBrokenLinksResults] = useState<Record<string, unknown> | null>(null);
+  const [contentAnalysisResults, setContentAnalysisResults] = useState<Record<string, unknown> | null>(null);
+  const [blogPostsAnalysisResults, setBlogPostsAnalysisResults] = useState<Record<string, unknown> | null>(null);
+  const [structuredDataValidationResults, setStructuredDataValidationResults] = useState<Record<string, unknown> | null>(null);
+  const [coreWebVitalsResults, setCoreWebVitalsResults] = useState<Record<string, unknown> | null>(null);
+  const [backlinksResults, setBacklinksResults] = useState<Record<string, unknown>[]>([]);
+  const [gscSyncResults, setGscSyncResults] = useState<Record<string, unknown> | null>(null);
+  const [autoHealingResults, setAutoHealingResults] = useState<Record<string, unknown> | null>(null);
+  const [fixesAppliedResults, setFixesAppliedResults] = useState<Record<string, unknown> | null>(null);
 
   // Loading states for operations
   const [isScanningBrokenLinks, setIsScanningBrokenLinks] = useState(false);
@@ -234,7 +243,7 @@ export function SEOManager() {
 
   const loadTrackedKeywords = async () => {
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('seo_keywords')
         .select('*')
         .order('priority', { ascending: false });
@@ -267,7 +276,7 @@ export function SEOManager() {
 
   const loadCompetitorAnalysis = async () => {
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('seo_competitor_analysis')
         .select('*')
         .eq('is_active', true)
@@ -292,7 +301,7 @@ export function SEOManager() {
 
   const loadPageAnalysis = async () => {
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('seo_page_scores')
         .select('*')
         .order('overall_score', { ascending: false })
@@ -2925,7 +2934,7 @@ RESTful API available for integrations. Contact for API access.
                               Technical
                             </h4>
                             <div className="space-y-1">
-                              {competitor.analysis.technical.map((item: any, i: number) => (
+                              {competitor.analysis.technical.map((item: Record<string, unknown>, i: number) => (
                                 <div key={i} className="flex items-center gap-2 text-xs">
                                   {getStatusIcon(item.status)}
                                   <span className="truncate">{item.item}</span>
@@ -2941,7 +2950,7 @@ RESTful API available for integrations. Contact for API access.
                               On-Page
                             </h4>
                             <div className="space-y-1">
-                              {competitor.analysis.onPage.map((item: any, i: number) => (
+                              {competitor.analysis.onPage.map((item: Record<string, unknown>, i: number) => (
                                 <div key={i} className="flex items-center gap-2 text-xs">
                                   {getStatusIcon(item.status)}
                                   <span className="truncate">{item.item}</span>
@@ -2957,7 +2966,7 @@ RESTful API available for integrations. Contact for API access.
                               Mobile
                             </h4>
                             <div className="space-y-1">
-                              {competitor.analysis.mobile.map((item: any, i: number) => (
+                              {competitor.analysis.mobile.map((item: Record<string, unknown>, i: number) => (
                                 <div key={i} className="flex items-center gap-2 text-xs">
                                   {getStatusIcon(item.status)}
                                   <span className="truncate">{item.item}</span>
@@ -2973,7 +2982,7 @@ RESTful API available for integrations. Contact for API access.
                               Content
                             </h4>
                             <div className="space-y-1">
-                              {competitor.analysis.content.map((item: any, i: number) => (
+                              {competitor.analysis.content.map((item: Record<string, unknown>, i: number) => (
                                 <div key={i} className="flex items-center gap-2 text-xs">
                                   {getStatusIcon(item.status)}
                                   <span className="truncate">{item.item}</span>
@@ -3644,7 +3653,7 @@ RESTful API available for integrations. Contact for API access.
                           {structuredDataValidationResults.data.issues && structuredDataValidationResults.data.issues.length > 0 && (
                             <div className="mt-4 space-y-2">
                               <h5 className="font-semibold text-sm text-red-900">Issues:</h5>
-                              {structuredDataValidationResults.data.issues.map((issue: any, idx: number) => (
+                              {structuredDataValidationResults.data.issues.map((issue: Record<string, unknown>, idx: number) => (
                                 <div key={idx} className="bg-red-100 rounded p-2 text-sm">
                                   <span className="font-semibold text-red-900">[{issue.severity}]</span>{' '}
                                   <span className="text-red-800">{issue.message}</span>
@@ -4430,7 +4439,7 @@ RESTful API available for integrations. Contact for API access.
               {backlinksResults && backlinksResults.length > 0 && (
                 <div className="mt-4 space-y-2">
                   <h5 className="font-semibold text-sm">Recent Backlink Actions:</h5>
-                  {backlinksResults.slice(0, 5).map((result: any, idx: number) => (
+                  {backlinksResults.slice(0, 5).map((result: Record<string, unknown>, idx: number) => (
                     <div key={idx}>
                       {result.success ? (
                         <div className="rounded-lg border border-green-200 bg-green-50 p-3">
@@ -4564,7 +4573,7 @@ RESTful API available for integrations. Contact for API access.
                           Broken Links Found
                         </h4>
                         <div className="space-y-2 max-h-96 overflow-y-auto">
-                          {brokenLinksResults.brokenLinks.map((link: any, index: number) => (
+                          {brokenLinksResults.brokenLinks.map((link: Record<string, unknown>, index: number) => (
                             <div key={index} className="p-3 rounded-lg border bg-card space-y-1">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
@@ -4772,7 +4781,7 @@ RESTful API available for integrations. Contact for API access.
                           Improvement Suggestions ({contentAnalysisResults.suggestions.length})
                         </h4>
                         <div className="space-y-2 max-h-64 overflow-y-auto">
-                          {contentAnalysisResults.suggestions.map((suggestion: any, index: number) => (
+                          {contentAnalysisResults.suggestions.map((suggestion: Record<string, unknown>, index: number) => (
                             <div key={index} className="p-3 rounded-lg border bg-card flex items-start gap-3">
                               <Badge variant={
                                 suggestion.priority === 'high' ? 'destructive' :

@@ -2,7 +2,6 @@
  * Quiz Analytics Dashboard for Admin
  * Shows key metrics and performance data for the picky eater quiz
  */
-// @ts-nocheck - Database tables require migrations to be approved
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -45,7 +44,6 @@ export function QuizAnalyticsDashboard() {
 
   const loadData = async () => {
     try {
-      // @ts-ignore - quiz_responses table exists but types not yet regenerated
       setRefreshing(true);
       const [summary, recentLeads] = await Promise.all([
         getQuizAnalyticsSummary(),

@@ -308,13 +308,13 @@ export function AddFoodDialog({
                 }
               }}
               placeholder="e.g., Chicken Nuggets"
-              className={nameError ? "border-red-500 focus-visible:ring-red-500" : ""}
+              className={nameError ? "border-destructive focus-visible:ring-destructive" : ""}
               aria-invalid={!!nameError}
               aria-describedby={nameError ? "name-error" : undefined}
               autoFocus
             />
             {nameError && (
-              <p id="name-error" className="text-sm text-red-500 mt-1">
+              <p id="name-error" className="text-sm text-destructive mt-1">
                 {nameError}
               </p>
             )}

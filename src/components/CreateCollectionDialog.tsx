@@ -240,7 +240,7 @@ export function CreateCollectionDialog({
                 }
               }}
               placeholder="e.g., Weeknight Dinners, Kid Favorites"
-              className={errors.name ? "border-red-500" : ""}
+              className={errors.name ? "border-destructive" : ""}
               aria-invalid={!!errors.name}
               aria-describedby={errors.name ? "name-error" : undefined}
               autoFocus

@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Eye, EyeOff, CheckCircle, Sparkles, Calendar, ShoppingCart, TrendingUp, XCircle, AlertCircle, Mail, ArrowLeft } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
@@ -88,8 +88,6 @@ const Auth = () => {
   const [resendCooldown, setResendCooldown] = useState(0);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { toast } = useToast();
-
   // Real-time email validation
   const emailValidation = useMemo(() => {
     if (!email || !emailTouched) return { isValid: null, error: null };
@@ -216,32 +214,20 @@ const Auth = () => {
     // Validate email format
     const emailValidation = EmailSchema.safeParse(email);
     if (!emailValidation.success) {
-      toast({
-        title: "Invalid Email",
-        description: emailValidation.error.errors[0].message,
-        variant: "destructive",
-      });
+      toast.error("Invalid Email", { description: emailValidation.error.errors[0].message });
       return;
     }
 
     // Validate password strength
     const passwordValidation = PasswordSchema.safeParse(password);
     if (!passwordValidation.success) {
-      toast({
-        title: "Weak Password",
-        description: passwordValidation.error.errors[0].message,
-        variant: "destructive",
-      });
+      toast.error("Weak Password", { description: passwordValidation.error.errors[0].message });
       return;
     }
 
     // Validate passwords match
     if (password !== confirmPassword) {
-      toast({
-        title: "Passwords Don't Match",
-        description: "Please make sure both passwords are the same.",
-        variant: "destructive",
-      });
+      toast.error("Passwords Don't Match", { description: "Please make sure both passwords are the same." });
       return;
     }
 
@@ -258,20 +244,13 @@ const Auth = () => {
     setLoading(false);
 
     if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error("Error", { description: error.message });
     } else {
       // Show OTP verification screen
       setPendingEmail(email);
       setShowOtpVerification(true);
       setResendCooldown(60);
-      toast({
-        title: "Check your email!",
-        description: "We've sent a 6-digit verification code to your email.",
-      });
+      toast("Check your email!", { description: "We've sent a 6-digit verification code to your email." });
     }
   };
 
@@ -279,11 +258,7 @@ const Auth = () => {
     e.preventDefault();
 
     if (otpCode.length !== 6) {
-      toast({
-        title: "Invalid Code",
-        description: "Please enter the 6-digit code from your email.",
-        variant: "destructive",
-      });
+      toast.error("Invalid Code", { description: "Please enter the 6-digit code from your email." });
       return;
     }
 
@@ -300,11 +275,7 @@ const Auth = () => {
     if (error) {
       // Log failed OTP verification
       loginHistory.logFailedLogin(pendingEmail, 'otp', error.message);
-      toast({
-        title: "Verification Failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error("Verification Failed", { description: error.message });
     } else {
       // Log successful OTP login
       if (data.user) {
@@ -312,10 +283,7 @@ const Auth = () => {
         // Track signup in conversion funnel
         trackSignup('email');
       }
-      toast({
-        title: "Email Verified!",
-        description: "Your account has been confirmed. Welcome to EatPal!",
-      });
+      toast.success("Email Verified!", { description: "Your account has been confirmed. Welcome to EatPal!" });
       // The onAuthStateChange listener will handle the redirect
     }
   };
@@ -333,17 +301,10 @@ const Auth = () => {
     setLoading(false);
 
     if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error("Error", { description: error.message });
     } else {
       setResendCooldown(60);
-      toast({
-        title: "Code Resent",
-        description: "A new verification code has been sent to your email.",
-      });
+      toast.success("Code Resent", { description: "A new verification code has been sent to your email." });
     }
   };
 
@@ -356,18 +317,31 @@ const Auth = () => {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Check rate limit before attempting login
+    // Client-side rate limit check (fast UX feedback)
     const rateCheck = checkRateLimit(email);
     if (!rateCheck.allowed) {
-      toast({
-        title: "Too many attempts",
-        description: `Please try again in ${formatRetryAfter(rateCheck.retryAfterMs)}.`,
-        variant: "destructive",
-      });
+      toast.error("Too many attempts", { description: `Please try again in ${formatRetryAfter(rateCheck.retryAfterMs)}.` });
       return;
     }
 
     setLoading(true);
+
+    // Server-side rate limit check (authoritative enforcement)
+    try {
+      const { data: rlData, error: rlError } = await supabase.rpc('check_rate_limit', {
+        p_identifier: email,
+        p_action: 'login',
+        p_max_attempts: 5,
+        p_window_seconds: 900,
+      });
+      if (!rlError && rlData === false) {
+        setLoading(false);
+        toast.error("Account temporarily locked", { description: "Too many failed attempts. Please try again in 15 minutes." });
+        return;
+      }
+    } catch {
+      // If RPC doesn't exist or fails, fall through to client-side enforcement
+    }
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -387,11 +361,7 @@ const Auth = () => {
         ? ` ${updatedCheck.remaining} attempt${updatedCheck.remaining === 1 ? '' : 's'} remaining.`
         : '';
 
-      toast({
-        title: "Error",
-        description: `${error.message}${remainingMsg}`,
-        variant: "destructive",
-      });
+      toast.error("Error", { description: `${error.message}${remainingMsg}` });
     } else if (data.user) {
       // Clear rate limit on successful login
       clearRateLimit(email);
@@ -434,11 +404,8 @@ const Auth = () => {
       const checkResponse = await fetch(`${functionsUrl}/oauth-proxy`, { method: 'HEAD' });
       if (!checkResponse.ok && checkResponse.status === 404) {
         // Edge function not deployed yet - show helpful error
-        toast({
-          title: "OAuth Not Available",
-          description: "The OAuth service is being set up. Please try email/password sign-in for now, or try again later.",
-          variant: "destructive",
-        });
+        toast.error("OAuth Not Available", { description: "The OAuth service is being set up. Please try email/password sign-in for now, or try again later.",
+          variant: "destructive" });
         return;
       }
     } catch (e) {

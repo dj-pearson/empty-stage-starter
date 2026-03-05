@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
@@ -69,7 +68,7 @@ export function BlogCMSManager() {
   const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [generatingSocial, setGeneratingSocial] = useState<string | null>(null);
-  const [socialContent, setSocialContent] = useState<any>(null);
+  const [socialContent, setSocialContent] = useState<Record<string, string> | null>(null);
   const [showSocialDialog, setShowSocialDialog] = useState(false);
   const [showWebhookDialog, setShowWebhookDialog] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState("");
@@ -77,8 +76,8 @@ export function BlogCMSManager() {
   const [resendingWebhook, setResendingWebhook] = useState<string | null>(null);
 
   // Title bank management
-  const [titleBankInsights, setTitleBankInsights] = useState<any>(null);
-  const [titleSuggestions, setTitleSuggestions] = useState<any[]>([]);
+  const [titleBankInsights, setTitleBankInsights] = useState<Record<string, unknown> | null>(null);
+  const [titleSuggestions, setTitleSuggestions] = useState<Record<string, unknown>[]>([]);
   const [loadingTitleBank, setLoadingTitleBank] = useState(false);
   const [showTitleBankDialog, setShowTitleBankDialog] = useState(false);
   const [useTitleBank, setUseTitleBank] = useState(true);
@@ -93,7 +92,7 @@ export function BlogCMSManager() {
   const loadTitleBankInsights = async () => {
     try {
       const { data, error } = await supabase.rpc(
-        "get_blog_generation_insights" as any
+        "get_blog_generation_insights" as string
       );
       if (error) {
         logger.warn('get_blog_generation_insights RPC not found:', error);
@@ -109,7 +108,7 @@ export function BlogCMSManager() {
           await handlePopulateTitleBank();
           // Reload insights after import
           const { data: data2 } = await supabase.rpc(
-            "get_blog_generation_insights" as any
+            "get_blog_generation_insights" as string
           );
           if (Array.isArray(data2) && data2.length > 0) {
             setTitleBankInsights(data2[0]);
@@ -124,7 +123,7 @@ export function BlogCMSManager() {
   const loadTitleSuggestions = async () => {
     try {
       const { data, error } = await supabase.rpc(
-        "get_diverse_title_suggestions" as any,
+        "get_diverse_title_suggestions" as string,
         { count: 10 }
       );
       if (error) throw error;
@@ -173,7 +172,7 @@ export function BlogCMSManager() {
       }
     } catch (error: unknown) {
       logger.error("Error populating title bank:", error);
-      toast.error(error.message || "Failed to populate title bank");
+      toast.error((error instanceof Error ? error.message : undefined) || "Failed to populate title bank");
     } finally {
       setLoadingTitleBank(false);
     }
@@ -214,7 +213,7 @@ export function BlogCMSManager() {
       }
     } catch (error: unknown) {
       logger.error("Error testing webhook:", error);
-      toast.error(error.message || "Failed to send test webhook");
+      toast.error((error instanceof Error ? error.message : undefined) || "Failed to send test webhook");
     } finally {
       setTestingWebhook(false);
     }
@@ -295,7 +294,7 @@ export function BlogCMSManager() {
       setPosts(data || []);
     } catch (error: unknown) {
       logger.error("Error loading posts:", error);
-      toast.error(error.message);
+      toast.error(error instanceof Error ? error.message : "An error occurred");
     }
   };
 
@@ -410,7 +409,7 @@ export function BlogCMSManager() {
       }
     } catch (error: unknown) {
       logger.error("Error generating AI content:", error);
-      toast.error(error.message || "Failed to generate content");
+      toast.error((error instanceof Error ? error.message : undefined) || "Failed to generate content");
     } finally {
       setAiGenerating(false);
     }
@@ -445,7 +444,7 @@ export function BlogCMSManager() {
       loadPosts();
     } catch (error: unknown) {
       logger.error("Error updating post:", error);
-      toast.error(error.message || "Failed to update post");
+      toast.error((error instanceof Error ? error.message : undefined) || "Failed to update post");
     }
   };
 
@@ -478,7 +477,7 @@ export function BlogCMSManager() {
       toast.success("Social media posts generated!");
     } catch (error: unknown) {
       logger.error("Error generating social content:", error);
-      toast.error(error.message || "Failed to generate social posts");
+      toast.error((error instanceof Error ? error.message : undefined) || "Failed to generate social posts");
     } finally {
       setGeneratingSocial(null);
     }
@@ -557,7 +556,7 @@ export function BlogCMSManager() {
       loadPosts();
     } catch (error: unknown) {
       logger.error("Error publishing post:", error);
-      toast.error(error.message || "Failed to publish post");
+      toast.error((error instanceof Error ? error.message : undefined) || "Failed to publish post");
     }
   };
 
@@ -573,7 +572,7 @@ export function BlogCMSManager() {
       loadPosts();
     } catch (error: unknown) {
       logger.error("Error unpublishing post:", error);
-      toast.error(error.message || "Failed to unpublish post");
+      toast.error((error instanceof Error ? error.message : undefined) || "Failed to unpublish post");
     }
   };
 

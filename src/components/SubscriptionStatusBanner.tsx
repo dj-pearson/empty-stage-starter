@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -60,15 +59,16 @@ export function SubscriptionStatusBanner() {
         .maybeSingle();
 
       if (userSub && userSub.plan) {
+        const plan = userSub.plan as unknown as { id: string; name: string };
         const subStatus: SubscriptionStatus = {
-          plan_name: (userSub.plan as any).name,
-          status: userSub.status as any,
+          plan_name: plan.name,
+          status: userSub.status as SubscriptionStatus["status"],
           trial_end_date: userSub.status === "trialing" ? userSub.current_period_end : userSub.trial_end,
           current_period_end: userSub.current_period_end,
-          cancel_at_period_end: userSub.cancel_at_period_end,
-          plan_id: (userSub.plan as any).id,
-          is_complementary: userSub.is_complementary || false,
-          complementary_subscription_id: userSub.complementary_subscription_id || null,
+          cancel_at_period_end: userSub.cancel_at_period_end ?? false,
+          plan_id: plan.id,
+          is_complementary: userSub.is_complementary ?? false,
+          complementary_subscription_id: userSub.complementary_subscription_id ?? null,
         };
 
         setSubscription(subStatus);

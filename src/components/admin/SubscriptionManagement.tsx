@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -169,7 +168,7 @@ export function SubscriptionManagement() {
         .in("id", userIds);
 
       // Get auth users for emails (requires service_role key)
-      let authUsers: any[] = [];
+      let authUsers: { id: string; email?: string }[] = [];
       try {
         const { data } = await supabase.auth.admin.listUsers();
         authUsers = data.users || [];
@@ -222,7 +221,7 @@ export function SubscriptionManagement() {
       // Calculate MRR (Monthly Recurring Revenue)
       const mrr = subs
         ?.filter((s) => s.status === "active")
-        .reduce((sum, s) => sum + ((s.plan as any)?.price_monthly || 0), 0) || 0;
+        .reduce((sum, s) => sum + (((s.plan as Record<string, unknown>)?.price_monthly as number) || 0), 0) || 0;
 
       setStats({
         total_subscriptions: subs?.length || 0,

@@ -1,4 +1,3 @@
-// @ts-nocheck - Database tables require migrations to be approved
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
@@ -35,17 +34,17 @@ export function useWhiteLabelTheme() {
           .maybeSingle();
 
         // Only apply custom theme for Professional users
-        if (subscriptionData?.subscription_plans?.name !== 'Professional') {
+        const plans = subscriptionData?.subscription_plans as unknown as { name: string } | null;
+        if (plans?.name !== 'Professional') {
           return;
         }
 
-        // Fetch brand settings
-        // @ts-ignore - professional_brand_settings table exists but types not yet regenerated
-        const { data: brandSettings } = await supabase
-          .from('professional_brand_settings')
+        // Fetch brand settings - table not in generated types yet
+        const { data: brandSettings } = await (supabase
+          .from('professional_brand_settings' as 'user_subscriptions')
           .select('*')
           .eq('user_id', user.id)
-          .maybeSingle();
+          .maybeSingle() as unknown as Promise<{ data: BrandSettings | null; error: unknown }>);
 
         if (brandSettings) {
           applyThemeColors(brandSettings);
@@ -96,9 +95,9 @@ function hexToHSL(hex: string): string {
   hex = hex.replace('#', '');
 
   // Convert hex to RGB
-  let r = parseInt(hex.slice(0, 2), 16) / 255;
-  let g = parseInt(hex.slice(2, 4), 16) / 255;
-  let b = parseInt(hex.slice(4, 6), 16) / 255;
+  const r = parseInt(hex.slice(0, 2), 16) / 255;
+  const g = parseInt(hex.slice(2, 4), 16) / 255;
+  const b = parseInt(hex.slice(4, 6), 16) / 255;
 
   // Find max and min values
   const max = Math.max(r, g, b);

@@ -100,7 +100,7 @@ export function CommandPalette() {
         label: "Go to Home",
         icon: Home,
         action: () => {
-          navigate("/");
+          navigate("/dashboard");
           setOpen(false);
         },
         keywords: ["dashboard", "main"],
@@ -111,7 +111,7 @@ export function CommandPalette() {
         label: "Go to Kids",
         icon: Users,
         action: () => {
-          navigate("/kids");
+          navigate("/dashboard/kids");
           setOpen(false);
         },
         keywords: ["children", "profiles"],
@@ -122,7 +122,7 @@ export function CommandPalette() {
         label: "Go to Pantry",
         icon: UtensilsCrossed,
         action: () => {
-          navigate("/pantry");
+          navigate("/dashboard/pantry");
           setOpen(false);
         },
         keywords: ["food", "inventory"],
@@ -133,7 +133,7 @@ export function CommandPalette() {
         label: "Go to Recipes",
         icon: BookOpen,
         action: () => {
-          navigate("/recipes");
+          navigate("/dashboard/recipes");
           setOpen(false);
         },
         keywords: ["meals", "cooking"],
@@ -144,7 +144,7 @@ export function CommandPalette() {
         label: "Go to Meal Planner",
         icon: Calendar,
         action: () => {
-          navigate("/planner");
+          navigate("/dashboard/planner");
           setOpen(false);
         },
         keywords: ["calendar", "schedule", "meals"],
@@ -155,7 +155,7 @@ export function CommandPalette() {
         label: "Go to AI Planner",
         icon: Sparkles,
         action: () => {
-          navigate("/ai-planner");
+          navigate("/dashboard/ai-planner");
           setOpen(false);
         },
         keywords: ["artificial intelligence", "auto", "smart"],
@@ -166,7 +166,7 @@ export function CommandPalette() {
         label: "Go to Insights",
         icon: BarChart3,
         action: () => {
-          navigate("/insights");
+          navigate("/dashboard/insights");
           setOpen(false);
         },
         keywords: ["analytics", "stats", "data"],
@@ -177,7 +177,7 @@ export function CommandPalette() {
         label: "Go to Grocery Lists",
         icon: ShoppingCart,
         action: () => {
-          navigate("/grocery");
+          navigate("/dashboard/grocery");
           setOpen(false);
         },
         keywords: ["shopping", "list"],
@@ -188,7 +188,7 @@ export function CommandPalette() {
         label: "Go to Food Tracker",
         icon: Apple,
         action: () => {
-          navigate("/food-tracker");
+          navigate("/dashboard/food-tracker");
           setOpen(false);
         },
         keywords: ["tracking", "log"],
@@ -199,7 +199,7 @@ export function CommandPalette() {
         label: "Go to AI Coach",
         icon: Bot,
         action: () => {
-          navigate("/ai-coach");
+          navigate("/dashboard/ai-coach");
           setOpen(false);
         },
         keywords: ["assistant", "help", "chat"],
@@ -212,7 +212,7 @@ export function CommandPalette() {
         label: "Add Child Profile",
         icon: Plus,
         action: () => {
-          navigate("/kids");
+          navigate("/dashboard/kids");
           setOpen(false);
           // Trigger add child dialog
         },
@@ -224,7 +224,7 @@ export function CommandPalette() {
         label: "Add New Recipe",
         icon: Plus,
         action: () => {
-          navigate("/recipes");
+          navigate("/dashboard/recipes");
           setOpen(false);
         },
         keywords: ["new", "create", "meal"],
@@ -235,7 +235,7 @@ export function CommandPalette() {
         label: "Add to Pantry",
         icon: Plus,
         action: () => {
-          navigate("/pantry");
+          navigate("/dashboard/pantry");
           setOpen(false);
         },
         keywords: ["new", "food", "item"],
@@ -246,7 +246,7 @@ export function CommandPalette() {
         label: "Create Grocery List",
         icon: Plus,
         action: () => {
-          navigate("/grocery");
+          navigate("/dashboard/grocery");
           setOpen(false);
         },
         keywords: ["new", "shopping"],
@@ -414,7 +414,7 @@ export function CommandPalette() {
             {dataResults.foods.length > 0 && (
               <CommandGroup heading="Foods">
                 {dataResults.foods.map((food) => (
-                  <CommandItem key={food.id} onSelect={() => { saveRecentSearch(searchQuery); navigate("/pantry"); setOpen(false); }}>
+                  <CommandItem key={food.id} onSelect={() => { saveRecentSearch(searchQuery); navigate("/dashboard/pantry"); setOpen(false); }}>
                     <Apple className="mr-2 h-4 w-4 text-green-500" />
                     <span>{food.name}</span>
                     {food.category && <span className="ml-auto text-xs text-muted-foreground">{food.category}</span>}
@@ -425,7 +425,7 @@ export function CommandPalette() {
             {dataResults.recipes.length > 0 && (
               <CommandGroup heading="Recipes">
                 {dataResults.recipes.map((recipe) => (
-                  <CommandItem key={recipe.id} onSelect={() => { saveRecentSearch(searchQuery); navigate("/recipes"); setOpen(false); }}>
+                  <CommandItem key={recipe.id} onSelect={() => { saveRecentSearch(searchQuery); navigate("/dashboard/recipes"); setOpen(false); }}>
                     <BookOpen className="mr-2 h-4 w-4 text-orange-500" />
                     <span>{recipe.name}</span>
                   </CommandItem>
@@ -435,7 +435,7 @@ export function CommandPalette() {
             {dataResults.kids.length > 0 && (
               <CommandGroup heading="Kids">
                 {dataResults.kids.map((kid) => (
-                  <CommandItem key={kid.id} onSelect={() => { saveRecentSearch(searchQuery); navigate("/kids"); setOpen(false); }}>
+                  <CommandItem key={kid.id} onSelect={() => { saveRecentSearch(searchQuery); navigate("/dashboard/kids"); setOpen(false); }}>
                     <Users className="mr-2 h-4 w-4 text-blue-500" />
                     <span>{kid.name}</span>
                   </CommandItem>
@@ -447,7 +447,7 @@ export function CommandPalette() {
                 {dataResults.plans.map((plan) => {
                   const food = foods.find(f => f.id === plan.food_id);
                   return (
-                    <CommandItem key={plan.id} onSelect={() => { saveRecentSearch(searchQuery); navigate("/planner"); setOpen(false); }}>
+                    <CommandItem key={plan.id} onSelect={() => { saveRecentSearch(searchQuery); navigate("/dashboard/planner"); setOpen(false); }}>
                       <Calendar className="mr-2 h-4 w-4 text-purple-500" />
                       <span>{food?.name || "Planned meal"}</span>
                       {plan.date && <span className="ml-auto text-xs text-muted-foreground">{plan.date}</span>}

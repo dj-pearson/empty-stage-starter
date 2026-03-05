@@ -542,9 +542,32 @@ export default function Planner() {
               onThisWeek={handleThisWeek}
               onCopyWeek={handleCopyWeek}
               onClearWeek={handleClearWeek}
+              onSaveTemplate={() => setShowSaveTemplate(true)}
+              onOpenTemplateGallery={() => setShowTemplateGallery(true)}
             />
           </div>
         </div>
+
+        <Suspense fallback={null}>
+          {showSaveTemplate && (
+            <SaveMealPlanTemplateDialog
+              open={showSaveTemplate}
+              onOpenChange={setShowSaveTemplate}
+              weekStart={format(currentWeekStart, "yyyy-MM-dd")}
+              kidId={activeKidId}
+            />
+          )}
+          {showTemplateGallery && (
+            <MealPlanTemplateGallery
+              open={showTemplateGallery}
+              onOpenChange={setShowTemplateGallery}
+              onApply={() => {
+                setShowTemplateGallery(false);
+                toast.success("Template applied to planner");
+              }}
+            />
+          )}
+        </Suspense>
       </div>
     );
   }

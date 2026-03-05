@@ -68,7 +68,7 @@ export const AnimatedInput = forwardRef<HTMLInputElement, AnimatedInputProps>(
             }}
             className={cn(
               'pt-6 transition-all duration-200',
-              error && 'border-red-500 focus-visible:ring-red-500',
+              error && 'border-destructive focus-visible:ring-destructive',
               isValid && 'border-green-500 focus-visible:ring-green-500',
               className
             )}
@@ -121,7 +121,7 @@ export const AnimatedInput = forwardRef<HTMLInputElement, AnimatedInputProps>(
                 }}
                 className="absolute right-3 top-1/2 -translate-y-1/2"
               >
-                <AlertCircle className="w-5 h-5 text-red-500" />
+                <AlertCircle className="w-5 h-5 text-destructive" />
               </m.div>
             ) : null}
           </AnimatePresence>
@@ -137,7 +137,7 @@ export const AnimatedInput = forwardRef<HTMLInputElement, AnimatedInputProps>(
                 transition={{ duration: shouldReduceMotion ? 0 : 0.2 }}
                 className={cn(
                   'mt-1.5 text-sm',
-                  error ? 'text-red-500' : 'text-muted-foreground'
+                  error ? 'text-destructive' : 'text-muted-foreground'
                 )}
               >
                 {error || helperText}
@@ -213,7 +213,7 @@ export const AnimatedTextarea = forwardRef<
           }}
           className={cn(
             'pt-6 resize-none transition-all duration-200',
-            error && 'border-red-500 focus-visible:ring-red-500',
+            error && 'border-destructive focus-visible:ring-destructive',
             isValid && 'border-green-500 focus-visible:ring-green-500',
             className
           )}
@@ -245,7 +245,7 @@ export const AnimatedTextarea = forwardRef<
               transition={{ duration: shouldReduceMotion ? 0 : 0.3 }}
               className="absolute right-3 top-3"
             >
-              <AlertCircle className="w-5 h-5 text-red-500" />
+              <AlertCircle className="w-5 h-5 text-destructive" />
             </m.div>
           ) : null}
         </AnimatePresence>
@@ -261,7 +261,7 @@ export const AnimatedTextarea = forwardRef<
               transition={{ duration: shouldReduceMotion ? 0 : 0.2 }}
               className={cn(
                 'mt-1.5 text-sm',
-                error ? 'text-red-500' : 'text-muted-foreground'
+                error ? 'text-destructive' : 'text-muted-foreground'
               )}
             >
               {error || helperText}

@@ -18,7 +18,7 @@ import {
   Users,
   Clock,
 } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -289,11 +289,7 @@ export function SystemHealthDashboard() {
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Unknown error occurred";
-      toast({
-        title: "Error loading system health",
-        description: message,
-        variant: "destructive",
-      });
+      toast.error("Error loading system health", { description: message });
       // Fall back to demo data on any error
       setMetrics({ ...DEMO_METRICS });
       setErrorTrend(buildDemoErrorTrend());

@@ -89,6 +89,7 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
   });
   const [uploading, setUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [nameError, setNameError] = useState("");
   const formRef = useRef<HTMLDivElement>(null);
   
   // For date picker navigation
@@ -101,9 +102,10 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
-      toast.error("Please enter a name");
+      setNameError("Please enter a name");
       return;
     }
+    setNameError("");
 
     setIsSubmitting(true);
     try {
@@ -296,10 +298,19 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, name: e.target.value });
+                    if (nameError && e.target.value.trim()) setNameError("");
+                  }}
                   placeholder="Enter name"
                   autoFocus
+                  aria-invalid={!!nameError}
+                  aria-describedby={nameError ? "name-error" : undefined}
+                  className={nameError ? "border-destructive focus-visible:ring-destructive" : ""}
                 />
+                {nameError && (
+                  <p id="name-error" className="text-sm text-destructive mt-1">{nameError}</p>
+                )}
               </div>
 
               <div className="space-y-2">

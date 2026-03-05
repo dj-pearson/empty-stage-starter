@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Gift, TrendingUp, Users, Award } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -68,7 +67,7 @@ export function ReferralProgramManager() {
       }
     } catch (error: unknown) {
       logger.error("Error loading configs:", error);
-      toast({ title: "Error loading configs", description: error.message, variant: "destructive" });
+      toast.error("Error loading configs", { description: error.message });
     } finally {
       setLoading(false);
     }
@@ -143,11 +142,11 @@ export function ReferralProgramManager() {
 
       if (error) throw error;
 
-      toast({ title: "Success", description: "Referral program config updated" });
+      toast.success("Success", { description: "Referral program config updated" });
       loadConfigs();
     } catch (error: unknown) {
       logger.error("Error saving config:", error);
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast.error("Error", { description: error.message });
     }
   };
 

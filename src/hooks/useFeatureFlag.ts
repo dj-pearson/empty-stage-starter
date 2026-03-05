@@ -1,4 +1,3 @@
-// @ts-nocheck - Feature flag functions not yet in generated types
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -14,11 +13,16 @@ const FLAG_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 // Cache helpers
 // ---------------------------------------------------------------------------
 
+interface FlagCache {
+  flags: Record<string, boolean>;
+  timestamp: number;
+}
+
 function getCachedFlag(flagKey: string): boolean | null {
   try {
     const cached = localStorage.getItem(FLAG_CACHE_KEY);
     if (!cached) return null;
-    const parsed = JSON.parse(cached);
+    const parsed: FlagCache = JSON.parse(cached);
     if (Date.now() - parsed.timestamp > FLAG_CACHE_TTL) return null;
     return parsed.flags?.[flagKey] ?? null;
   } catch {
@@ -29,7 +33,7 @@ function getCachedFlag(flagKey: string): boolean | null {
 function setCachedFlag(flagKey: string, value: boolean): void {
   try {
     const cached = localStorage.getItem(FLAG_CACHE_KEY);
-    const parsed = cached ? JSON.parse(cached) : { flags: {}, timestamp: Date.now() };
+    const parsed: FlagCache = cached ? JSON.parse(cached) : { flags: {}, timestamp: Date.now() };
     parsed.flags[flagKey] = value;
     parsed.timestamp = Date.now();
     localStorage.setItem(FLAG_CACHE_KEY, JSON.stringify(parsed));
@@ -41,7 +45,7 @@ function setCachedFlag(flagKey: string, value: boolean): void {
 function setCachedFlags(flagsObj: Record<string, boolean>): void {
   try {
     const cached = localStorage.getItem(FLAG_CACHE_KEY);
-    const parsed = cached ? JSON.parse(cached) : { flags: {}, timestamp: Date.now() };
+    const parsed: FlagCache = cached ? JSON.parse(cached) : { flags: {}, timestamp: Date.now() };
     Object.assign(parsed.flags, flagsObj);
     parsed.timestamp = Date.now();
     localStorage.setItem(FLAG_CACHE_KEY, JSON.stringify(parsed));
@@ -54,7 +58,7 @@ function getAllCachedFlags(): Record<string, boolean> | null {
   try {
     const cached = localStorage.getItem(FLAG_CACHE_KEY);
     if (!cached) return null;
-    const parsed = JSON.parse(cached);
+    const parsed: FlagCache = JSON.parse(cached);
     if (Date.now() - parsed.timestamp > FLAG_CACHE_TTL) return null;
     return parsed.flags ?? null;
   } catch {
@@ -63,7 +67,7 @@ function getAllCachedFlags(): Record<string, boolean> | null {
 }
 
 // ---------------------------------------------------------------------------
-// useFeatureFlag – single flag check
+// useFeatureFlag -- single flag check
 // ---------------------------------------------------------------------------
 
 /**
@@ -122,13 +126,13 @@ export function useFeatureFlag(flagKey: string, defaultValue: boolean = false): 
           .maybeSingle();
 
         if (!queryError && flagRow) {
-          let result = flagRow.enabled;
+          let result = flagRow.enabled ?? false;
 
           // Client-side rollout: use a deterministic hash of user ID + flag key
-          if (result && flagRow.rollout_percentage < 100) {
+          if (result && (flagRow.rollout_percentage ?? 100) < 100) {
             const hash = simpleHash(user.id + flagKey);
             const bucket = hash % 100;
-            result = bucket < flagRow.rollout_percentage;
+            result = bucket < (flagRow.rollout_percentage ?? 100);
           }
 
           setIsEnabled(result);
@@ -156,7 +160,7 @@ export function useFeatureFlag(flagKey: string, defaultValue: boolean = false): 
 }
 
 // ---------------------------------------------------------------------------
-// useFeatureFlags – all flags for the current user
+// useFeatureFlags -- all flags for the current user
 // ---------------------------------------------------------------------------
 
 /**
@@ -215,13 +219,13 @@ export function useFeatureFlags(): {
 
         if (!queryError && allFlags) {
           const flagsObject: Record<string, boolean> = {};
-          (allFlags as Array<{ key: string; enabled: boolean; rollout_percentage: number }>).forEach((flag) => {
-            let result = flag.enabled;
+          allFlags.forEach((flag) => {
+            let result = flag.enabled ?? false;
             // For rollout, use a deterministic hash with user ID
-            if (result && flag.rollout_percentage < 100) {
+            if (result && (flag.rollout_percentage ?? 100) < 100) {
               const hash = simpleHash(user.id + flag.key);
               const bucket = hash % 100;
-              result = bucket < flag.rollout_percentage;
+              result = bucket < (flag.rollout_percentage ?? 100);
             }
             flagsObject[flag.key] = result;
           });
