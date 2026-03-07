@@ -295,9 +295,10 @@ const Landing = () => {
                 <img
                   src="/Logo-Green.png"
                   alt="EatPal"
-                  className="h-8"
+                  className="h-8 w-auto"
                   width="120"
                   height="32"
+                  fetchPriority="high"
                 />
               </picture>
               <picture className="hidden dark:block">
@@ -305,9 +306,10 @@ const Landing = () => {
                 <img
                   src="/Logo-White.png"
                   alt="EatPal"
-                  className="h-8"
+                  className="h-8 w-auto"
                   width="120"
                   height="32"
+                  fetchPriority="high"
                 />
               </picture>
             </Link>

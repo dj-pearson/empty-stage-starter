@@ -68,10 +68,11 @@
     <!-- Fonts are self-hosted via @fontsource packages (imported in main.tsx) -->
     <!-- No external font CDN requests needed - improves performance and privacy -->
 
-    <!-- Preconnect to Supabase API for faster data fetching -->
+    <!-- Preconnect to critical third-party origins -->
     <link rel="preconnect" href="https://api.tryeatpal.com" crossorigin>
     <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin>
     <link rel="dns-prefetch" href="https://www.googletagmanager.com">
+    <link rel="dns-prefetch" href="https://analytics.google.com">
 
     <!-- Prefetch common routes for faster navigation -->
     <link rel="prefetch" href="/pricing" as="document">
@@ -123,26 +124,30 @@
     </noscript>
     <script type="module" src="/src/main.tsx"></script>
 
-    <!-- Google Analytics - Deferred loading to not block initial render -->
+    <!-- Google Analytics - Deferred to user interaction or 5s to avoid blocking LCP/FCP -->
     <script>
-      // Load Google Analytics after page becomes interactive
       if (typeof window !== 'undefined') {
-        window.addEventListener('load', function() {
-          setTimeout(function() {
-            var script = document.createElement('script');
-            script.src = 'https://www.googletagmanager.com/gtag/js?id=G-H6792J1CQT';
-            script.async = true;
-            document.head.appendChild(script);
-
-            script.onload = function() {
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              window.gtag = gtag;
-              gtag('js', new Date());
-              gtag('config', 'G-H6792J1CQT');
-            };
-          }, 2000); // Delay 2 seconds after load
-        });
+        var gaLoaded = false;
+        function loadGA() {
+          if (gaLoaded) return;
+          gaLoaded = true;
+          var script = document.createElement('script');
+          script.src = 'https://www.googletagmanager.com/gtag/js?id=G-H6792J1CQT';
+          script.async = true;
+          document.head.appendChild(script);
+          script.onload = function() {
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            window.gtag = gtag;
+            gtag('js', new Date());
+            gtag('config', 'G-H6792J1CQT');
+          };
+        }
+        // Load on first user interaction or after 5 seconds
+        window.addEventListener('click', loadGA, { once: true });
+        window.addEventListener('scroll', loadGA, { once: true });
+        window.addEventListener('keydown', loadGA, { once: true });
+        setTimeout(loadGA, 5000);
       }
     </script>
   </body>
