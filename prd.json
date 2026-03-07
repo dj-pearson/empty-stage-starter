@@ -812,7 +812,7 @@
       ],
       "priority": 51,
       "passes": true,
-      "notes": "CRITICAL: The Index.tsx page is a generic placeholder that shows 'Welcome to Your Blank App' — any visitor landing on / sees zero brand messaging, zero value proposition, and zero CTAs. This is the #1 conversion killer on the site."
+      "notes": "CRITICAL: The Index.tsx page is a generic placeholder that shows 'Welcome to Your Blank App' \u2014 any visitor landing on / sees zero brand messaging, zero value proposition, and zero CTAs. This is the #1 conversion killer on the site."
     },
     {
       "id": "US-052",
@@ -862,7 +862,7 @@
       ],
       "priority": 54,
       "passes": true,
-      "notes": "Blog pages have zero email capture. Blog readers are warm leads who are researching picky eating — capturing their email is a critical conversion touchpoint."
+      "notes": "Blog pages have zero email capture. Blog readers are warm leads who are researching picky eating \u2014 capturing their email is a critical conversion touchpoint."
     },
     {
       "id": "US-055",
@@ -969,9 +969,9 @@
       "title": "Improve empty states across Pantry, Planner, and Grocery pages with actionable guidance",
       "description": "As a new user visiting feature pages for the first time, I want clear, encouraging empty states that tell me exactly what to do so that I don't feel lost or confused.",
       "acceptanceCriteria": [
-        "Audit empty states in src/pages/Pantry.tsx — ensure it shows: illustration/icon, 'Your pantry is empty' heading, 'Add your child's safe foods to get started with meal planning' description, prominent 'Add Food' button, and a tip: 'Start with 5-10 foods your child eats regularly'",
-        "Audit empty states in src/pages/Planner.tsx — when no meals are planned, show: 'No meals planned this week' heading, 'Create a meal plan to see it here' description, 'Generate Meal Plan' and 'Add Meal Manually' buttons",
-        "Audit empty states in src/pages/Grocery.tsx — show: 'Your grocery list is empty' heading, 'Add items from recipes or create a list manually' description, action buttons for both paths",
+        "Audit empty states in src/pages/Pantry.tsx \u2014 ensure it shows: illustration/icon, 'Your pantry is empty' heading, 'Add your child's safe foods to get started with meal planning' description, prominent 'Add Food' button, and a tip: 'Start with 5-10 foods your child eats regularly'",
+        "Audit empty states in src/pages/Planner.tsx \u2014 when no meals are planned, show: 'No meals planned this week' heading, 'Create a meal plan to see it here' description, 'Generate Meal Plan' and 'Add Meal Manually' buttons",
+        "Audit empty states in src/pages/Grocery.tsx \u2014 show: 'Your grocery list is empty' heading, 'Add items from recipes or create a list manually' description, action buttons for both paths",
         "All empty states use consistent design (canonical EmptyState component from src/components/ui/EmptyState.tsx)",
         "Typecheck passes",
         "npm run build succeeds"
@@ -1199,7 +1199,7 @@
       "description": "As a parent managing child profiles, I want to see how complete each profile is so that I know what information to add for better meal recommendations.",
       "acceptanceCriteria": [
         "Add a 'Profile X% complete' progress indicator to each child card on src/pages/Kids.tsx",
-        "Calculate completeness based on: name (required), age, allergens list, safe foods count (≥5), preferences, and completed intake questionnaire",
+        "Calculate completeness based on: name (required), age, allergens list, safe foods count (\u22655), preferences, and completed intake questionnaire",
         "Show a 'Complete Profile' button for profiles under 80% completion",
         "Add tooltip explaining what fields improve recommendations",
         "Typecheck passes",
@@ -1217,7 +1217,7 @@
         "Hero headline references ARFID, extreme picky eating, and progress (e.g. 'Turn mealtime battles into steady progress, one safe bite at a time')",
         "Subheadline explicitly mentions: AI-powered meal planning, food chaining science, built for families with ARFID/extreme picky eating, collaboration with feeding therapists",
         "Primary CTA changed to 'Get Your Personalized 5-Day Plan' with subtext 'Takes 2 minutes. Tailored to your child's safe foods.'",
-        "Secondary CTA/link added: 'For Feeding Therapists →' linking to therapist section",
+        "Secondary CTA/link added: 'For Feeding Therapists \u2192' linking to therapist section",
         "Stats section updated to include therapist count (200+ feeding therapists)",
         "Typecheck passes",
         "npm run build succeeds"
@@ -1364,7 +1364,7 @@
     {
       "id": "US-085",
       "title": "Centralized input sanitization middleware for all edge functions",
-      "description": "As a security engineer, I want a shared input sanitization layer applied to every edge function so that injection attacks (SQL, command, template) are blocked before reaching business logic. Shannon-style tools trace data flows from user input to dangerous sinks — this breaks those chains at the boundary.",
+      "description": "As a security engineer, I want a shared input sanitization layer applied to every edge function so that injection attacks (SQL, command, template) are blocked before reaching business logic. Shannon-style tools trace data flows from user input to dangerous sinks \u2014 this breaks those chains at the boundary.",
       "acceptanceCriteria": [
         "Create functions/_shared/sanitize.ts with sanitizeInput(), sanitizeSQL(), sanitizeHTML(), sanitizeCommand() utilities",
         "All edge functions import and apply sanitizeInput() to request body/params before processing",
@@ -1376,7 +1376,7 @@
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Defense against Shannon's injection exploitation phase. Shannon traces data flows from input to dangerous operations — this sanitization layer breaks every flow at the boundary."
+      "notes": "Defense against Shannon's injection exploitation phase. Shannon traces data flows from input to dangerous operations \u2014 this sanitization layer breaks every flow at the boundary."
     },
     {
       "id": "US-086",
@@ -1402,7 +1402,7 @@
       "acceptanceCriteria": [
         "Install and configure DOMPurify as the standard HTML sanitization library",
         "Audit all uses of dangerouslySetInnerHTML across the codebase and wrap each with DOMPurify.sanitize()",
-        "Audit TipTap blog editor output rendering — ensure stored blog HTML is sanitized on display",
+        "Audit TipTap blog editor output rendering \u2014 ensure stored blog HTML is sanitized on display",
         "Audit all locations where API response data is rendered as HTML (AI-generated content, recipe instructions, etc.)",
         "Create a shared SafeHTML component: <SafeHTML html={content} /> that applies DOMPurify automatically",
         "Add unit tests with OWASP XSS cheat sheet payloads (<script>, onerror, javascript:, data:text/html, SVG payloads)",
@@ -1518,7 +1518,7 @@
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Security headers are passive defenses that cost nothing at runtime. They prevent framing attacks, MIME sniffing, information leakage, and cross-origin exploitation — all vectors Shannon probes."
+      "notes": "Security headers are passive defenses that cost nothing at runtime. They prevent framing attacks, MIME sniffing, information leakage, and cross-origin exploitation \u2014 all vectors Shannon probes."
     },
     {
       "id": "US-094",
@@ -1536,7 +1536,7 @@
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Shannon's first phase is source code analysis to find data flow vulnerabilities. SAST does the same thing defensively — find and fix before an attacker does."
+      "notes": "Shannon's first phase is source code analysis to find data flow vulnerabilities. SAST does the same thing defensively \u2014 find and fix before an attacker does."
     },
     {
       "id": "US-095",
@@ -1545,7 +1545,7 @@
       "acceptanceCriteria": [
         "Integrate OWASP ZAP (open source) or Nuclei into CI/CD pipeline targeting staging environment",
         "Configure active scan policies for: injection testing, XSS testing, SSRF testing, authentication testing, security header validation",
-        "Run DAST scan against staging after every deployment (not on every PR — only on staging deploy)",
+        "Run DAST scan against staging after every deployment (not on every PR \u2014 only on staging deploy)",
         "HIGH severity findings create GitHub issues automatically with reproduction steps",
         "CRITICAL findings trigger Slack/email alert to security team and block promotion to production",
         "Scan completes in under 30 minutes (configure scan policy for speed vs depth tradeoff)",
@@ -1554,7 +1554,7 @@
       ],
       "priority": 2,
       "passes": true,
-      "notes": "This is essentially running our own Shannon-lite continuously. DAST tools test the running app with real attacks — exactly what Shannon does. Running this ourselves means we find issues before attackers do."
+      "notes": "This is essentially running our own Shannon-lite continuously. DAST tools test the running app with real attacks \u2014 exactly what Shannon does. Running this ourselves means we find issues before attackers do."
     },
     {
       "id": "US-096",
@@ -1608,7 +1608,7 @@
       ],
       "priority": 2,
       "passes": true,
-      "notes": "WAF is the first line of defense — it blocks Shannon-style attacks at the network edge before they reach application code. Combined with application-level defenses, this creates defense in depth."
+      "notes": "WAF is the first line of defense \u2014 it blocks Shannon-style attacks at the network edge before they reach application code. Combined with application-level defenses, this creates defense in depth."
     },
     {
       "id": "US-099",
@@ -1617,7 +1617,7 @@
       "acceptanceCriteria": [
         "Create a security_events table in Supabase to log: failed auth attempts, rate limit triggers, WAF blocks, CSRF validation failures, input sanitization rejections, suspicious user-agent patterns, unusual API usage patterns",
         "Each event includes: timestamp, IP address, user_id (if authenticated), event_type, severity, request_path, request_method, user_agent, geo_location",
-        "Implement real-time alerting thresholds: >10 failed auths from same IP in 5 minutes → alert, >5 injection attempts from same IP in 1 minute → alert + auto-block, >3 SSRF attempts from any IP → alert + auto-block",
+        "Implement real-time alerting thresholds: >10 failed auths from same IP in 5 minutes \u2192 alert, >5 injection attempts from same IP in 1 minute \u2192 alert + auto-block, >3 SSRF attempts from any IP \u2192 alert + auto-block",
         "Alert delivery via: Sentry (error tracking), email notification to security team, Slack webhook (if configured)",
         "Add admin dashboard widget showing security events timeline and top blocked IPs",
         "Implement auto-block: IPs triggering CRITICAL alerts are added to Cloudflare blocklist via API for 24 hours",
@@ -1635,7 +1635,7 @@
       "acceptanceCriteria": [
         "Integrate Cloudflare Turnstile (free CAPTCHA alternative) on: login form, sign-up form, password reset form, contact/feedback forms",
         "Implement browser fingerprinting checks on sensitive actions: detect headless Chrome indicators (navigator.webdriver, missing plugins, automation flags), detect rapid sequential form submissions (>3 submissions in 10 seconds), detect non-human mouse movement patterns on critical forms",
-        "Add honeypot fields (hidden form fields) to all public-facing forms — submissions with filled honeypot fields are silently rejected",
+        "Add honeypot fields (hidden form fields) to all public-facing forms \u2014 submissions with filled honeypot fields are silently rejected",
         "Implement progressive challenges: first suspicious request gets Turnstile challenge, second gets rate limited, third gets IP blocked for 1 hour",
         "Log all bot detection events to security_events table from US-099",
         "Ensure accessibility: all CAPTCHA alternatives must be screen-reader accessible",
@@ -1707,7 +1707,7 @@
       "acceptanceCriteria": [
         "Audit all edge functions that accept record IDs (food_id, kid_id, recipe_id, plan_entry_id, grocery_item_id, etc.)",
         "Verify each endpoint either: relies on RLS policy that filters by auth.uid(), or explicitly checks resource ownership before returning/modifying data",
-        "Test each endpoint with valid auth token but another user's resource IDs — all must return 403 or empty result",
+        "Test each endpoint with valid auth token but another user's resource IDs \u2014 all must return 403 or empty result",
         "Audit all Supabase .select() calls in frontend to ensure they include user_id filter (defense in depth beyond RLS)",
         "Add integration tests that create two test users and verify cross-user access is impossible for all resource types",
         "Document IDOR audit findings and fixes",
@@ -1726,7 +1726,7 @@
         "Test file for each fixed vulnerability: injection-prevention.test.ts, xss-prevention.test.ts, ssrf-prevention.test.ts, auth-bypass-prevention.test.ts, csrf-protection.test.ts, idor-protection.test.ts",
         "Each test file reproduces the original attack vector and verifies it is blocked",
         "Add npm run test:security:unit that runs only security tests (fast, no external dependencies)",
-        "Integrate into GitHub Actions CI — security tests run on every PR alongside regular tests",
+        "Integrate into GitHub Actions CI \u2014 security tests run on every PR alongside regular tests",
         "Security test failures block PR merge (required status check)",
         "Add test coverage for every US-085 through US-104 acceptance criterion that can be unit tested",
         "Minimum 100 security test cases across all files",
@@ -1735,6 +1735,210 @@
       "priority": 1,
       "passes": true,
       "notes": "The ultimate defense against regression. Shannon finds vulnerabilities that were previously fixed but reintroduced. This test suite ensures every fix is permanent."
+    },
+    {
+      "id": "US-106",
+      "title": "Add explicit width/height attributes to all logo <img> tags to prevent CLS",
+      "description": "As a user on a slow connection, I want images to have reserved space before loading so that the page layout doesn't shift as images load (Cumulative Layout Shift).",
+      "acceptanceCriteria": [
+        "Add width and height attributes to <img> tags in src/components/Footer.tsx (both Logo-Green.png and Logo-White.png, h-8 = 32px height, calculate proportional width)",
+        "Add width and height attributes to <img> tags in src/components/Navigation.tsx (both Logo-Green.png and Logo-White.png)",
+        "Add width and height attributes to <img> tags in src/pages/Auth.tsx (both Logo-Green.png and Logo-White.png, h-10 = 40px)",
+        "Add width and height attributes to <img> tags in src/components/AppSidebar.tsx",
+        "Add width and height attributes to <img> in src/components/AppInstallPrompt.tsx",
+        "Verify no visual regressions in light and dark mode",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "CRITICAL: Missing width/height on images is one of the top CLS contributors flagged by PageSpeed Insights. Every img tag without explicit dimensions causes layout shift when the image loads."
+    },
+    {
+      "id": "US-107",
+      "title": "Use <picture> elements with WebP sources for logos in Footer, Navigation, Auth, and AppSidebar",
+      "description": "As a mobile user, I want optimized image formats served so that pages load faster and use less bandwidth (Logo-Green.png is 261KB vs Logo-Green.webp at 28KB).",
+      "acceptanceCriteria": [
+        "Replace bare <img src='Logo-Green.png'> with <picture><source srcSet='Logo-Green.webp' type='image/webp' /><img src='Logo-Green.png' ...></picture> in src/components/Footer.tsx",
+        "Apply the same <picture> pattern for Logo-White.png/Logo-White.webp in Footer.tsx",
+        "Apply the same <picture> pattern in src/components/Navigation.tsx for both logos",
+        "Apply the same <picture> pattern in src/pages/Auth.tsx for both logos",
+        "Apply the same <picture> pattern in src/components/AppSidebar.tsx for both logos",
+        "Verify WebP files exist in public/ directory: Logo-Green.webp, Logo-White.webp",
+        "Verify no visual regressions in light and dark mode",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "CRITICAL: Logo-Green.png is 261KB while Logo-Green.webp is only 28KB (89% smaller). The Footer and Navigation are on every page, so serving PNGs wastes ~466KB per page load on every page of the site. This is one of the biggest quick wins for PageSpeed."
+    },
+    {
+      "id": "US-108",
+      "title": "Add fetchpriority='high' to LCP hero image/element and optimize hero loading",
+      "description": "As a first-time visitor, I want the hero section to appear as fast as possible so that I see the value proposition without waiting (improves Largest Contentful Paint).",
+      "acceptanceCriteria": [
+        "Identify the LCP element in the EnhancedHero component and add fetchpriority='high' if it's an image",
+        "Ensure the hero text content renders immediately without waiting for lazy-loaded components",
+        "Add a preload link in index.html for the hero background image if one exists",
+        "Verify the HeroSkeleton fallback renders instantly with correct dimensions to prevent CLS",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "LCP is one of the three Core Web Vitals. The hero section is the LCP element for most landing pages. Prioritizing its load can improve the LCP score significantly."
+    },
+    {
+      "id": "US-109",
+      "title": "Optimize font loading strategy to reduce render-blocking CSS",
+      "description": "As a mobile user on a slow connection, I want fonts to load without blocking the initial render so that I see content faster (improves First Contentful Paint and LCP).",
+      "acceptanceCriteria": [
+        "Evaluate the 8 @fontsource imports in src/main.tsx (4 Inter weights + 4 Nunito Sans weights) for render-blocking impact",
+        "Reduce font weights to only those actively used above the fold (Inter 400/600/700, Nunito Sans 700) and lazy-load the rest",
+        "Add font-display: swap to any custom @font-face declarations to prevent invisible text during load (FOIT)",
+        "Consider using font-display: optional for non-critical weights to prevent layout shift",
+        "Verify fonts render correctly and there is no flash of unstyled text (FOUT) or invisible text",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "PageSpeed Insights flags render-blocking resources as a top performance issue. Each font CSS file is a render-blocking resource that delays First Contentful Paint. Reducing from 8 to 4-5 critical font weights can save 100-200ms on mobile."
+    },
+    {
+      "id": "US-110",
+      "title": "Add content-visibility: auto to below-fold landing page sections for faster rendering",
+      "description": "As a mobile user, I want the browser to skip rendering off-screen content until I scroll to it, so that the initial page load is faster (reduces Total Blocking Time).",
+      "acceptanceCriteria": [
+        "Add content-visibility: auto with appropriate contain-intrinsic-size to sections below the hero in Landing.tsx (Pain Points, How It Works, Features, Testimonials, Free Tools, FAQ, CTA sections)",
+        "Set contain-intrinsic-size to approximate heights for each section to prevent scroll bar jumping",
+        "Create a utility CSS class like .cv-auto in index.css or mobile-first.css for reuse",
+        "Verify scroll behavior works correctly and sections render as the user scrolls",
+        "Test on mobile viewport sizes to ensure no layout issues",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "content-visibility: auto is a CSS containment property that tells the browser to skip rendering off-screen elements. This can dramatically reduce initial rendering time for long pages like the Landing page with 10+ sections. Google's own performance guidelines recommend this."
+    },
+    {
+      "id": "US-111",
+      "title": "Reduce index.html inline JSON-LD structured data payload size",
+      "description": "As a visitor loading the page, I want the initial HTML payload to be as small as possible so that the browser can start parsing and rendering sooner.",
+      "acceptanceCriteria": [
+        "Minify the inline JSON-LD script in index.html by removing unnecessary whitespace and newlines",
+        "Keep the JSON-LD semantically identical (same @context, @graph structure)",
+        "Verify structured data is still valid using Google's Rich Results Test format",
+        "Verify the FAQ schema entries are preserved correctly",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "The index.html has ~160 lines of formatted JSON-LD structured data. Minifying this reduces the HTML payload size by several KB, which helps with Time to First Byte and First Contentful Paint, especially on mobile networks."
+    },
+    {
+      "id": "US-112",
+      "title": "Defer non-critical third-party scripts and reduce main thread blocking time",
+      "description": "As a mobile user, I want the page to be interactive as quickly as possible by deferring non-essential JavaScript execution (improves Total Blocking Time and Time to Interactive).",
+      "acceptanceCriteria": [
+        "Verify Google Analytics script in index.html continues to load after 2-second delay (already implemented, confirm no regression)",
+        "Audit src/main.tsx for synchronous operations that block rendering: validateEnv(), initializeSentry()",
+        "Move Sentry initialization to after first render using requestIdleCallback or setTimeout",
+        "Move validateEnv() to only run in development mode or make it non-blocking",
+        "Verify Web Vitals initialization remains non-blocking (already async, confirm)",
+        "Measure improvement: main thread blocking time should decrease",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Total Blocking Time (TBT) directly impacts PageSpeed Performance score. Every synchronous operation in the critical path (before first render) adds to TBT. Sentry init and env validation are not needed before first paint."
+    },
+    {
+      "id": "US-113",
+      "title": "Add preconnect hints for all critical third-party origins",
+      "description": "As a visitor, I want DNS lookups, TCP connections, and TLS handshakes for third-party services to start early so that subsequent requests are faster.",
+      "acceptanceCriteria": [
+        "Verify preconnect to api.tryeatpal.com exists in index.html (already present)",
+        "Add <link rel='preconnect' href='https://www.googletagmanager.com'> alongside the existing dns-prefetch",
+        "If Sentry DSN is configured, add preconnect for the Sentry ingest domain",
+        "If Stripe is used on any page, add dns-prefetch for js.stripe.com",
+        "Verify preconnect links have crossorigin attribute where needed",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Preconnect saves 100-300ms per third-party origin on mobile by starting DNS+TCP+TLS early. dns-prefetch only does DNS resolution, while preconnect does the full connection setup."
+    },
+    {
+      "id": "US-114",
+      "title": "Optimize Tailwind CSS output by purging unused styles",
+      "description": "As a mobile user, I want the CSS file to be as small as possible so that the page renders faster (reduces render-blocking CSS).",
+      "acceptanceCriteria": [
+        "Verify Tailwind CSS purge/content configuration in tailwind.config.ts covers all template files",
+        "Check if there are any CSS files with unused styles that can be removed",
+        "Verify the production build tree-shakes unused Tailwind utilities",
+        "Check for duplicate CSS rules or redundant style definitions",
+        "Measure the CSS bundle size before and after",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Unused CSS is a common PageSpeed flag. Tailwind's JIT mode should handle this, but misconfigured content paths can result in all utilities being included. Worth auditing."
+    },
+    {
+      "id": "US-115",
+      "title": "Add loading='lazy' and decoding='async' to all below-fold images",
+      "description": "As a mobile user, I want images that are not visible on initial load to be deferred so that the browser prioritizes above-fold content (improves LCP and reduces bandwidth).",
+      "acceptanceCriteria": [
+        "Add loading='lazy' and decoding='async' to all <img> tags in below-fold components (testimonial images, feature screenshots, blog post images)",
+        "Do NOT add loading='lazy' to above-fold images (hero images, header logos) as this hurts LCP",
+        "Add decoding='async' to images in Footer.tsx, Blog.tsx, BlogPost.tsx",
+        "Verify no above-fold images are accidentally lazy-loaded",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "loading='lazy' tells the browser to defer loading images until they are near the viewport. decoding='async' prevents image decoding from blocking the main thread. Both are quick wins for PageSpeed."
+    },
+    {
+      "id": "US-116",
+      "title": "Implement resource hints for critical navigation paths",
+      "description": "As a visitor navigating the site, I want common next-page resources to be prefetched so that page transitions feel instant.",
+      "acceptanceCriteria": [
+        "Verify existing prefetch hints in index.html for /pricing and /auth are working correctly",
+        "Add <link rel='prefetch'> for the /blog page route chunk (commonly visited from landing page)",
+        "Consider adding modulepreload for vendor-react and vendor-router chunks since they're needed on every page",
+        "Verify prefetch hints don't compete with critical resource loading on mobile",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Resource hints like prefetch and modulepreload can make navigation feel instant by pre-loading resources the user is likely to need next. Low priority since it doesn't affect initial load score."
+    },
+    {
+      "id": "US-117",
+      "title": "Add meta description length optimization and heading hierarchy fixes for SEO",
+      "description": "As a search engine crawler, I want properly structured heading hierarchy and optimized meta descriptions so that the page ranks better and has better click-through rates.",
+      "acceptanceCriteria": [
+        "Verify the meta description in index.html is between 150-160 characters (currently ~350+ chars which may be truncated)",
+        "Audit the Landing.tsx heading hierarchy: ensure there is exactly one <h1> element",
+        "Verify heading levels don't skip (e.g., h1 -> h3 without h2)",
+        "Check that all anchor links have descriptive text (no 'click here' or empty text)",
+        "Verify all pages have unique <title> tags via Helmet",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "SEO is one of the four PageSpeed Insights categories. Google truncates meta descriptions over ~155 characters. Proper heading hierarchy helps search engines understand page structure."
     }
   ]
 }

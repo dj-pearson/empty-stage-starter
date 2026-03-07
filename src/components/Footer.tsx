@@ -7,16 +7,30 @@ export const Footer = () => {
         <nav className="grid grid-cols-2 md:grid-cols-5 gap-8" aria-label="Footer navigation">
           <div className="col-span-2 md:col-span-1">
             <Link to="/" className="flex items-center gap-2 mb-4">
-              <img
-                src="/Logo-Green.png"
-                alt="EatPal"
-                className="h-8 block dark:hidden"
-              />
-              <img
-                src="/Logo-White.png"
-                alt="EatPal"
-                className="h-8 hidden dark:block"
-              />
+              <picture className="block dark:hidden">
+                <source srcSet="/Logo-Green.webp" type="image/webp" />
+                <img
+                  src="/Logo-Green.png"
+                  alt="EatPal"
+                  className="h-8"
+                  width="120"
+                  height="32"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </picture>
+              <picture className="hidden dark:block">
+                <source srcSet="/Logo-White.webp" type="image/webp" />
+                <img
+                  src="/Logo-White.png"
+                  alt="EatPal"
+                  className="h-8"
+                  width="120"
+                  height="32"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </picture>
             </Link>
             <p className="text-sm text-muted-foreground leading-relaxed">
               Making meal planning simple and stress-free for families with picky eaters.

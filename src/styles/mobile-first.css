@@ -755,3 +755,12 @@ html {
     display: none;
   }
 }
+
+/* ==========================================================================
+   Content Visibility - Skip rendering off-screen sections for faster load
+   ========================================================================== */
+
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 600px;
+}

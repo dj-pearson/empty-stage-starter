@@ -421,8 +421,14 @@ const Auth = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted">
         <div className="animate-pulse flex flex-col items-center gap-3">
-          <img src="/Logo-Green.png" alt="EatPal" className="h-10 block dark:hidden" />
-          <img src="/Logo-White.png" alt="EatPal" className="h-10 hidden dark:block" />
+          <picture className="block dark:hidden">
+            <source srcSet="/Logo-Green.webp" type="image/webp" />
+            <img src="/Logo-Green.png" alt="EatPal" className="h-10" width="150" height="40" />
+          </picture>
+          <picture className="hidden dark:block">
+            <source srcSet="/Logo-White.webp" type="image/webp" />
+            <img src="/Logo-White.png" alt="EatPal" className="h-10" width="150" height="40" />
+          </picture>
           <p className="text-sm text-muted-foreground">Loading...</p>
         </div>
       </div>
