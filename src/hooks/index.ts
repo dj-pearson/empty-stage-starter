@@ -107,6 +107,10 @@ export type { RecipeSortOption, RecipeViewMode, RecipeQuickFilter } from './useR
 // Real-time Subscriptions
 export { useRealtimeSubscription, getActiveSubscriptions, registerSubscription, unregisterSubscription } from './useRealtimeSubscription';
 
+// INP (Interaction to Next Paint) Monitoring
+export { useINPMonitor } from './useINPMonitor';
+export type { UseINPMonitorResult } from './useINPMonitor';
+
 // Re-export types
 export type { WindowSize } from './useWindowSize';
 export type { UseIntersectionObserverOptions } from './useIntersectionObserver';
