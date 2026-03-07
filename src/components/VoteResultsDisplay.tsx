@@ -1,4 +1,3 @@
-// @ts-nocheck - Database tables require migrations to be approved
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -85,8 +84,7 @@ export function VoteResultsDisplay({
 
   const loadVotes = async () => {
     try {
-      // @ts-ignore - meal_votes table exists but types not yet regenerated
-      let query = supabase.from('meal_votes').select(`
+      let query = (supabase as any).from('meal_votes').select(`
         kid_id,
         vote,
         vote_emoji,
@@ -106,7 +104,7 @@ export function VoteResultsDisplay({
           .eq('meal_slot', mealSlot);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await query as { data: any[] | null; error: any };
 
       if (error) throw error;
 

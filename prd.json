@@ -497,8 +497,8 @@
         "npm run build succeeds"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Removed @ts-nocheck from VoteResultsDisplay.tsx, ReferralDashboard.tsx, ProfessionalSettings.tsx (last 3 files). Used (supabase as any) casts for tables not in generated types (meal_votes, referral_codes, referral_program_config, referrals, referral_rewards, professional_custom_domains, professional_brand_settings) with proper type assertions. Fixed error.message on unknown type. npx tsc --noEmit passes with zero errors."
     },
     {
       "id": "US-031",
@@ -513,8 +513,8 @@
         "Typecheck passes"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added @tanstack/react-virtual (already installed) virtualization to Pantry.tsx (list view, 64px row height, 10 overscan) and Grocery.tsx (category-grouped rows with variable height estimation). Both skip virtualization for lists under 50 items. Maintains existing filter/search/sort functionality."
     },
     {
       "id": "US-032",
@@ -734,8 +734,8 @@
         "Typecheck passes"
       ],
       "priority": 46,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Fixed Cover.png reference to Cover.webp in sitemap.xml. Removed nonexistent llms.txt entry. Added missing routes to edge function fallback sitemap: /accessibility/vpat, /picky-eater-quiz/results, /budget-calculator/results, /meal-plan/results. All sitemap URLs now match routes in App.tsx."
     },
     {
       "id": "US-047",
@@ -1026,8 +1026,8 @@
         "npm run build succeeds"
       ],
       "priority": 64,
-      "passes": false,
-      "notes": "Long forms on mobile have high abandonment. Auto-save prevents frustration and increases completion rates."
+      "passes": true,
+      "notes": "MealPlanGenerator: Added localStorage.removeItem on successful submission and resume banner UI with Start Fresh button. BudgetCalculator: Fixed resume banner from hardcoded green colors to theme-aware classes (bg-card, border-border, text-foreground). Both forms already had auto-save useEffect, showResumeBanner state, and handleStartFresh."
     },
     {
       "id": "US-065",

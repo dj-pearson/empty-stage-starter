@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Helmet } from "react-helmet-async";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
@@ -497,6 +498,37 @@ export default function Grocery() {
     return groups;
   }, [activeItems, groupBy]);
 
+  // Virtualization for large grocery lists (>50 items)
+  // Flatten grouped items into rows: each row is either a group header or an item
+  type VirtualRow =
+    | { type: "header"; group: string; count: number }
+    | { type: "item"; item: GroceryItem; group: string };
+
+  const flattenedRows = useMemo<VirtualRow[]>(() => {
+    const rows: VirtualRow[] = [];
+    for (const [group, items] of Object.entries(activeItemsByGroup)) {
+      if (items.length === 0) continue;
+      rows.push({ type: "header", group, count: items.length });
+      for (const item of items) {
+        rows.push({ type: "item", item, group });
+      }
+    }
+    return rows;
+  }, [activeItemsByGroup]);
+
+  const useVirtualGrocery = activeItems.length > 50;
+  const groceryListParentRef = useRef<HTMLDivElement>(null);
+  const groceryVirtualizer = useVirtualizer({
+    count: useVirtualGrocery ? flattenedRows.length : 0,
+    getScrollElement: () => groceryListParentRef.current,
+    estimateSize: (index) => {
+      if (!useVirtualGrocery) return 0;
+      const row = flattenedRows[index];
+      return row.type === "header" ? 48 : 56;
+    },
+    overscan: 10,
+  });
+
   const isEmpty = activeItems.length === 0 && purchasedItems.length === 0;
 
   return (
@@ -691,6 +723,126 @@ export default function Grocery() {
 
             {/* ─── Active Shopping Items ─── */}
             {activeItems.length > 0 ? (
+              useVirtualGrocery ? (
+              /* Virtualized rendering for large lists (>50 items) */
+              <div
+                ref={groceryListParentRef}
+                className="mb-6 overflow-auto rounded-xl border"
+                style={{ maxHeight: "70vh" }}
+                aria-live="polite"
+              >
+                <div
+                  style={{
+                    height: `${groceryVirtualizer.getTotalSize()}px`,
+                    position: "relative",
+                  }}
+                >
+                  {groceryVirtualizer.getVirtualItems().map((virtualRow) => {
+                    const row = flattenedRows[virtualRow.index];
+                    if (row.type === "header") {
+                      return (
+                        <div
+                          key={`header-${row.group}`}
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            width: "100%",
+                            height: `${virtualRow.size}px`,
+                            transform: `translateY(${virtualRow.start}px)`,
+                          }}
+                          className="px-4 py-3 bg-muted/30 border-b flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm">{row.group}</span>
+                            <Badge variant="secondary" className="text-xs px-1.5 py-0">
+                              {row.count}
+                            </Badge>
+                          </div>
+                        </div>
+                      );
+                    }
+                    const item = row.item;
+                    return (
+                      <div
+                        key={item.id}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "100%",
+                          transform: `translateY(${virtualRow.start}px)`,
+                        }}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors group border-b"
+                      >
+                        <Checkbox
+                          checked={false}
+                          onCheckedChange={() => handleToggleItem(item.id)}
+                          className="shrink-0"
+                        />
+                        {item.photo_url && (
+                          <img
+                            src={item.photo_url}
+                            alt={item.name}
+                            className="w-10 h-10 object-cover rounded-md border shrink-0"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{item.name}</p>
+                          {item.brand_preference && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {item.brand_preference}
+                            </p>
+                          )}
+                          {item.notes && (
+                            <p className="text-xs text-muted-foreground italic truncate">
+                              {item.notes}
+                            </p>
+                          )}
+                          {item.barcode && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Barcode className="h-3 w-3" />
+                              <span className="truncate">{item.barcode}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => handleQuantityChange(item.id, -1)}
+                            disabled={item.quantity <= 1}
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="text-sm font-medium w-16 text-center tabular-nums">
+                            {item.quantity} {item.unit}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => handleQuantityChange(item.id, 1)}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                          onClick={() => handleDeleteItem(item.id)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              ) : (
+              /* Non-virtualized rendering for small lists (<=50 items) */
               <div className="space-y-3 mb-6" aria-live="polite">
                 {Object.entries(activeItemsByGroup).map(([group, items]) => {
                   if (items.length === 0) return null;
@@ -787,6 +939,7 @@ export default function Grocery() {
                   );
                 })}
               </div>
+            )
             ) : purchasedItems.length > 0 ? (
               /* All items purchased celebration */
               <Card className="p-8 text-center mb-6 border-primary/20 bg-primary/5">

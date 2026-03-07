@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Helmet } from "react-helmet-async";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -73,22 +72,21 @@ export default function ProfessionalSettings() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // @ts-ignore - professional tables exist but types not yet regenerated
       const [domainRes, brandRes] = await Promise.all([
-        supabase
+        (supabase as any)
           .from("professional_custom_domains")
           .select("*")
           .eq("user_id", user.id)
           .maybeSingle(),
-        supabase
+        (supabase as any)
           .from("professional_brand_settings")
           .select("*")
           .eq("user_id", user.id)
           .maybeSingle(),
       ]);
 
-      if (domainRes.data) setCustomDomain(domainRes.data);
-      if (brandRes.data) setBrandSettings(brandRes.data);
+      if (domainRes.data) setCustomDomain(domainRes.data as CustomDomain);
+      if (brandRes.data) setBrandSettings(brandRes.data as BrandSettings);
     } catch (error: any) {
       toast.error("Error loading settings", { description: error.message || "Failed to load your professional settings" });
     } finally {
@@ -103,8 +101,7 @@ export default function ProfessionalSettings() {
     // Basic domain validation
     const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*(\.[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*)*\.[a-zA-Z]{2,}$/;
     if (!domainRegex.test(newDomain)) {
-      toast.error("Invalid domain", { description: "Please enter a valid domain name (e.g., example.com)",
-        variant: "destructive" });
+      toast.error("Invalid domain", { description: "Please enter a valid domain name (e.g., example.com)" });
       return;
     }
 
