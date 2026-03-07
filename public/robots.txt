@@ -1,6 +1,6 @@
 # EatPal - Kids Meal Planning for Picky Eaters
 # Optimized for Traditional & AI Search Engines
-# Last Updated: 2026-02-08
+# Last Updated: 2026-03-07
 
 # ===========================================
 # Traditional Search Engine Crawlers
@@ -112,6 +112,26 @@ Disallow: /
 User-agent: Bytespider
 Disallow: /
 
+# Amazon Alexa (training scraper)
+User-agent: Amazonbot
+Disallow: /
+
+# SemrushBot (non-essential crawler)
+User-agent: SemrushBot
+Disallow: /
+
+# AhrefsBot (non-essential crawler)
+User-agent: AhrefsBot
+Disallow: /
+
+# MJ12bot / Majestic (non-essential crawler)
+User-agent: MJ12bot
+Disallow: /
+
+# DataForSEO (non-essential scraper)
+User-agent: DataForSeoBot
+Disallow: /
+
 # ===========================================
 # Social Media & Preview Crawlers
 # ===========================================
@@ -146,7 +166,7 @@ User-agent: *
 Allow: /
 Crawl-delay: 2
 
-# Block protected and private routes from all crawlers
+# Block protected, private, and thin content routes from all crawlers
 Disallow: /admin/
 Disallow: /admin-dashboard/
 Disallow: /api/
@@ -155,6 +175,13 @@ Disallow: /_next/
 Disallow: /auth/
 Disallow: /seo-dashboard/
 Disallow: /search-traffic/
+Disallow: /oauth/
+Disallow: /checkout-success
+Disallow: /share-target
+Disallow: /search?
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
 
 # Allow public pages explicitly
 Allow: /
@@ -175,6 +202,7 @@ Sitemap: https://tryeatpal.com/sitemap-index.xml
 # AI/LLM information file
 # See https://tryeatpal.com/llms.txt for AI data usage guidelines
 # See https://tryeatpal.com/llms-full.txt for comprehensive documentation
+# See https://tryeatpal.com/ai-policy.txt for AI content attribution policy
 
 # Host (preferred domain)
 Host: https://tryeatpal.com

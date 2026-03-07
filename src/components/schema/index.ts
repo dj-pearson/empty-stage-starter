@@ -52,3 +52,18 @@ export type {
   GEOQuestionBlockProps,
   GEOStatisticProps,
 } from './GEOContent';
+
+export { ProductSchema } from './ProductSchema';
+export type { ProductSchemaProps, ProductOffer, ProductRating } from './ProductSchema';
+
+export { LocalBusinessSchema } from './LocalBusinessSchema';
+export type { LocalBusinessSchemaProps, BusinessHours } from './LocalBusinessSchema';
+
+export { ServiceSchema } from './ServiceSchema';
+export type { ServiceSchemaProps, ServiceOffer } from './ServiceSchema';
+
+export { MedicalWebPageSchema } from './MedicalWebPageSchema';
+export type { MedicalWebPageSchemaProps } from './MedicalWebPageSchema';
+
+export { IndexPruningMeta, shouldNoindex, NOINDEX_PATTERNS } from './IndexPruningMeta';
+export type { IndexPruningMetaProps, NoindexReason } from './IndexPruningMeta';
