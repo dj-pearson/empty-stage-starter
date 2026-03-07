@@ -115,10 +115,34 @@ export async function onRequest(context: { env: { VITE_SUPABASE_URL?: string; VI
     <priority>0.4</priority>
   </url>
   <url>
+    <loc>https://tryeatpal.com/accessibility/vpat</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://tryeatpal.com/api/docs</loc>
     <lastmod>${today}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://tryeatpal.com/picky-eater-quiz/results</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://tryeatpal.com/budget-calculator/results</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://tryeatpal.com/meal-plan/results</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
   </url>
 </urlset>`;
 

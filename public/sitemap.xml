@@ -12,7 +12,7 @@
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
     <image:image>
-      <image:loc>https://tryeatpal.com/Cover.png</image:loc>
+      <image:loc>https://tryeatpal.com/Cover.webp</image:loc>
       <image:title>EatPal - AI-Powered Food Chaining Meal Planner for Picky Eaters</image:title>
       <image:caption>Evidence-based meal planning platform using food chaining therapy to help picky eaters expand their diet</image:caption>
     </image:image>
@@ -137,14 +137,6 @@
     <lastmod>2026-03-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
-  </url>
-
-  <!-- AI/LLM Information Files -->
-  <url>
-    <loc>https://tryeatpal.com/llms.txt</loc>
-    <lastmod>2026-03-05</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.3</priority>
   </url>
 
 </urlset>

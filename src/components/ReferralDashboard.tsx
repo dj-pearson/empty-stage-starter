@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -75,47 +74,48 @@ export function ReferralDashboard() {
       setUserTier(tier);
 
       // Load referral code
-      const { data: codeData } = await supabase
+      const { data: codeData } = await (supabase as any)
         .from("referral_codes")
         .select("*")
         .eq("user_id", user.id)
-        .single();
+        .single() as { data: ReferralCode | null };
 
       setReferralCode(codeData);
 
       // Load active config for user's tier
-      const { data: configData } = await supabase
+      const { data: configData } = await (supabase as any)
         .from("referral_program_config")
         .select("*")
         .eq("tier", tier)
         .eq("is_active", true)
-        .single();
+        .single() as { data: ReferralConfig | null };
 
       setConfig(configData);
 
       // Load user's referrals
-      const { data: referralData } = await supabase
+      const { data: referralData } = await (supabase as any)
         .from("referrals")
         .select(`
           *,
           profiles!inner(full_name)
         `)
         .eq("referrer_id", user.id)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }) as { data: Referral[] | null };
 
-      setReferrals(referralData as any || []);
+      setReferrals(referralData || []);
 
       // Load user's rewards
-      const { data: rewardData } = await supabase
+      const { data: rewardData } = await (supabase as any)
         .from("referral_rewards")
         .select("*")
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }) as { data: Reward[] | null };
 
       setRewards(rewardData || []);
     } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to load referral data";
       logger.error("Error loading referral data:", error);
-      toast.error("Error", { description: error.message });
+      toast.error("Error", { description: message });
     } finally {
       setLoading(false);
     }

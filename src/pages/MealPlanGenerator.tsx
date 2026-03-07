@@ -213,6 +213,9 @@ export default function MealPlanGenerator() {
       // Generate meal plan
       const mealPlan = generateMealPlan(input, sessionId);
 
+      // Clear saved draft on successful generation
+      localStorage.removeItem(MEAL_PLAN_DRAFT_KEY);
+
       // Navigate to results
       navigate('/meal-plan/results', {
         state: {
@@ -279,6 +282,23 @@ export default function MealPlanGenerator() {
               needs - including picky eaters!
             </p>
           </div>
+
+          {/* Resume Banner */}
+          {showResumeBanner && (
+            <div className="mb-6 p-4 bg-card border border-border rounded-lg flex items-center justify-between">
+              <p className="text-sm text-foreground font-medium">
+                Resume where you left off? Your previous form data has been restored.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleStartFresh}
+                className="ml-4 shrink-0"
+              >
+                Start Fresh
+              </Button>
+            </div>
+          )}
 
           {/* Benefits */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">

@@ -272,8 +272,8 @@ export default function BudgetCalculator() {
 
           {/* Resume Banner */}
           {showResumeBanner && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
-              <p className="text-sm text-green-800 font-medium">
+            <div className="mb-6 p-4 bg-card border border-border rounded-lg flex items-center justify-between">
+              <p className="text-sm text-foreground font-medium">
                 Resume where you left off? Your previous form data has been restored.
               </p>
               <Button
