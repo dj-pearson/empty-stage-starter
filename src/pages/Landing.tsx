@@ -295,9 +295,10 @@ const Landing = () => {
                 <img
                   src="/Logo-Green.png"
                   alt="EatPal"
-                  className="h-8"
+                  className="h-8 w-auto"
                   width="120"
                   height="32"
+                  fetchPriority="high"
                 />
               </picture>
               <picture className="hidden dark:block">
@@ -305,9 +306,10 @@ const Landing = () => {
                 <img
                   src="/Logo-White.png"
                   alt="EatPal"
-                  className="h-8"
+                  className="h-8 w-auto"
                   width="120"
                   height="32"
+                  fetchPriority="high"
                 />
               </picture>
             </Link>
@@ -518,7 +520,7 @@ const Landing = () => {
         </section>
 
         {/* Pain Points Section - Why Typical Apps Fail for ARFID */}
-        <section className="py-24 px-4 bg-gradient-to-b from-background to-secondary/5 relative overflow-hidden">
+        <section className="cv-auto py-24 px-4 bg-gradient-to-b from-background to-secondary/5 relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-trust-warmOrange/10 via-transparent to-transparent pointer-events-none" />
           <div className="container mx-auto max-w-6xl relative z-10">
             <div className="animate-section text-center mb-16">
@@ -598,7 +600,7 @@ const Landing = () => {
         </section>
 
         {/* Solution Section - Meet EatPal */}
-        <section id="how-it-works" className="py-24 px-4 bg-gradient-to-br from-primary/5 to-secondary/10 relative">
+        <section id="how-it-works" className="cv-auto py-24 px-4 bg-gradient-to-br from-primary/5 to-secondary/10 relative">
           <Suspense fallback={null}>
             <ParallaxBackground className="opacity-50" />
           </Suspense>
@@ -657,7 +659,7 @@ const Landing = () => {
         </section>
 
         {/* Three-Pillar Value Proposition Section */}
-        <section id="features" className="py-24 px-4 bg-gradient-to-br from-secondary/5 to-background relative overflow-hidden">
+        <section id="features" className="cv-auto py-24 px-4 bg-gradient-to-br from-secondary/5 to-background relative overflow-hidden">
           <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-trust-softPink/5 to-transparent pointer-events-none" />
           <div className="container mx-auto max-w-6xl relative z-10">
             <div className="animate-section text-center mb-16">
@@ -732,7 +734,7 @@ const Landing = () => {
         </section>
 
         {/* Social Proof / Testimonials Section */}
-        <section className="py-24 px-4 bg-gradient-to-br from-primary/5 to-secondary/10">
+        <section className="cv-auto py-24 px-4 bg-gradient-to-br from-primary/5 to-secondary/10">
           <div className="container mx-auto max-w-6xl">
             <div className="animate-section text-center mb-16">
               <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
@@ -798,7 +800,7 @@ const Landing = () => {
         </section>
 
         {/* FAQ Section with enhanced content for SEO */}
-        <section className="py-24 px-4 bg-gradient-to-br from-secondary/5 to-background">
+        <section className="cv-auto py-24 px-4 bg-gradient-to-br from-secondary/5 to-background">
           <div className="container mx-auto max-w-4xl">
             <div className="animate-section text-center mb-16">
               <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
@@ -827,7 +829,7 @@ const Landing = () => {
         </section>
 
         {/* Free Tools Section - Lead Magnets */}
-        <section id="free-tools" className="py-24 px-4 relative">
+        <section id="free-tools" className="cv-auto py-24 px-4 relative">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent pointer-events-none" />
           <div className="container mx-auto max-w-6xl relative z-10">
             <div className="animate-section text-center mb-16">
@@ -891,7 +893,7 @@ const Landing = () => {
         </section>
 
         {/* Therapist / Clinic Section */}
-        <section id="therapist-section" className="py-24 px-4 bg-gradient-to-br from-primary/5 via-background to-secondary/5 relative overflow-hidden">
+        <section id="therapist-section" className="cv-auto py-24 px-4 bg-gradient-to-br from-primary/5 via-background to-secondary/5 relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent pointer-events-none" />
           <div className="container mx-auto max-w-6xl relative z-10">
             <div className="animate-section">
@@ -969,7 +971,7 @@ const Landing = () => {
         </section>
 
         {/* Pricing Preview Section */}
-        <section id="pricing" className="py-24 px-4 bg-gradient-to-br from-background to-secondary/10">
+        <section id="pricing" className="cv-auto py-24 px-4 bg-gradient-to-br from-background to-secondary/10">
           <div className="container mx-auto max-w-5xl">
             <div className="animate-section text-center mb-12">
               <Badge className="mb-4 bg-primary/10 text-primary border-primary px-4 py-1 text-sm">
@@ -1069,7 +1071,7 @@ const Landing = () => {
         </section>
 
         {/* Final CTA Section - Get Started */}
-        <section id="get-started" className="py-24 px-4 bg-gradient-to-br from-primary to-primary/80 relative overflow-hidden">
+        <section id="get-started" className="cv-auto py-24 px-4 bg-gradient-to-br from-primary to-primary/80 relative overflow-hidden">
           {/* Background decoration */}
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white/10 via-transparent to-transparent pointer-events-none" />
           <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-white/5 rounded-full blur-3xl" />

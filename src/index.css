@@ -2,7 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+/* Force font-display: swap on all @fontsource fonts to prevent FOIT */
+@font-face {
+  font-family: 'Inter';
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Nunito Sans';
+  font-display: swap;
+}
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here.
 All colors MUST be HSL.
 */
 

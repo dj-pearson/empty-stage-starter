@@ -918,7 +918,7 @@ export default function Pantry() {
             </div>
           ) : (
             /* Flat filtered/sorted view */
-            {viewMode === "grid" ? (
+            viewMode === "grid" ? (
                 <div
                   className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 animate-in fade-in duration-200"
                   aria-live="polite"
@@ -936,7 +936,7 @@ export default function Pantry() {
                   ))}
                 </div>
               ) : (
-                {useVirtual ? (
+                useVirtual ? (
                   <div
                     ref={listParentRef}
                     className="border rounded-xl overflow-auto animate-in fade-in duration-200"
@@ -985,8 +985,8 @@ export default function Pantry() {
                       />
                     ))}
                   </div>
-                )}
-              )}
+                )
+              )
           )}
 
           {/* Load more button */}

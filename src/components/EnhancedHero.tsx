@@ -1,10 +1,14 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
-import { LazyFoodOrbit } from '@/components/LazyFoodOrbit';
 import { Link } from 'react-router-dom';
 import { useInView } from '@/hooks/useInView';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+
+// Dynamic import: Three.js bundle (~250KB) only loads on desktop viewports
+const LazyFoodOrbit = lazy(() =>
+  import('@/components/LazyFoodOrbit').then(m => ({ default: m.LazyFoodOrbit }))
+);
 
 // Dynamically import GSAP only when needed (deferred loading)
 let gsapModule: typeof import("gsap") | null = null;
@@ -162,12 +166,22 @@ export function EnhancedHero() {
       });
     };
 
-    // Delay animation initialization to not block initial render
-    const timer = setTimeout(initAnimations, 100);
+    // Defer animation initialization until browser is idle to avoid blocking LCP
+    let idleHandle: number | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    if ('requestIdleCallback' in window) {
+      idleHandle = (window as any).requestIdleCallback(initAnimations, { timeout: 3000 });
+    } else {
+      timer = setTimeout(initAnimations, 1000);
+    }
 
     return () => {
       mounted = false;
-      clearTimeout(timer);
+      if (idleHandle !== undefined && 'cancelIdleCallback' in window) {
+        (window as any).cancelIdleCallback(idleHandle);
+      }
+      if (timer !== undefined) clearTimeout(timer);
     };
   }, []);
 
@@ -180,9 +194,11 @@ export function EnhancedHero() {
 
   return (
     <section ref={containerRef} className="relative py-20 bg-gradient-to-b from-background via-trust-softPink/5 to-secondary/10 overflow-hidden min-h-[85vh] flex items-center">
-      {/* 3D Food Orbit Background (Desktop Only) - Lazy Loaded */}
+      {/* 3D Food Orbit Background (Desktop Only) - Lazy Loaded + Code Split */}
       <div className="absolute inset-0 z-0 opacity-80 hidden md:block">
-        <LazyFoodOrbit className="w-full h-full" />
+        <Suspense fallback={<div className="w-full h-full" />}>
+          <LazyFoodOrbit className="w-full h-full" />
+        </Suspense>
       </div>
 
       {/* Decorative background elements - Optimized CSS/GSAP */}

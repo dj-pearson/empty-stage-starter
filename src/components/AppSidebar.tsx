@@ -108,16 +108,26 @@ export function AppSidebar() {
       <SidebarHeader className="border-b border-border px-4 py-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <img 
-              src="/Logo-Green.png" 
-              alt="EatPal" 
-              className="h-8 block dark:hidden"
-            />
-            <img 
-              src="/Logo-White.png" 
-              alt="EatPal" 
-              className="h-8 hidden dark:block"
-            />
+            <picture className="block dark:hidden">
+              <source srcSet="/Logo-Green.webp" type="image/webp" />
+              <img
+                src="/Logo-Green.png"
+                alt="EatPal"
+                className="h-8"
+                width="120"
+                height="32"
+              />
+            </picture>
+            <picture className="hidden dark:block">
+              <source srcSet="/Logo-White.webp" type="image/webp" />
+              <img
+                src="/Logo-White.png"
+                alt="EatPal"
+                className="h-8"
+                width="120"
+                height="32"
+              />
+            </picture>
           </div>
         </div>
         {!isCollapsed && (

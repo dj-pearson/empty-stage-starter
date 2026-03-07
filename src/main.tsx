@@ -9,15 +9,25 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 
-// Self-hosted fonts (replaces Google Fonts CDN for performance and privacy)
+// Only load the 2 most critical font weights eagerly (body + heading bold)
 import "@fontsource/inter/400.css";
-import "@fontsource/inter/500.css";
-import "@fontsource/inter/600.css";
-import "@fontsource/inter/700.css";
-import "@fontsource/nunito-sans/400.css";
-import "@fontsource/nunito-sans/600.css";
 import "@fontsource/nunito-sans/700.css";
-import "@fontsource/nunito-sans/800.css";
+
+// All other font weights loaded after first paint
+const loadDeferredFonts = () => {
+  import("@fontsource/inter/500.css");
+  import("@fontsource/inter/600.css");
+  import("@fontsource/inter/700.css");
+  import("@fontsource/nunito-sans/400.css");
+  import("@fontsource/nunito-sans/600.css");
+  import("@fontsource/nunito-sans/800.css");
+};
+
+if ('requestIdleCallback' in window) {
+  (window as any).requestIdleCallback(loadDeferredFonts, { timeout: 3000 });
+} else {
+  setTimeout(loadDeferredFonts, 100);
+}
 
 import "./index.css";
 import "./styles/mobile-first.css";
@@ -26,8 +36,10 @@ import { initializeSentry } from "./lib/sentry";
 import { validateEnv } from "./lib/env";
 import { initWebVitals } from "./lib/webVitals";
 
-// Validate environment variables before anything else
-validateEnv();
+// Validate environment variables (dev only, non-blocking)
+if (import.meta.env.DEV) {
+  validateEnv();
+}
 
 // Debug logging helper - only logs in development
 const debugLog = (message: string, ...args: unknown[]) => {
@@ -50,13 +62,20 @@ debugLog('Environment:', import.meta.env.MODE);
 debugLog('Sentry DSN configured:', !!import.meta.env.VITE_SENTRY_DSN);
 debugLog('Supabase URL configured:', !!import.meta.env.VITE_SUPABASE_URL);
 
-// Initialize Sentry before anything else
-try {
-  initializeSentry();
-  debugLog('Sentry initialized successfully');
-} catch (error) {
-  // Always log Sentry init errors - important for production debugging
-  console.warn('[EatPal] Sentry initialization failed:', error);
+// Defer Sentry initialization to after first render to reduce TBT
+const initSentryDeferred = () => {
+  try {
+    initializeSentry();
+    debugLog('Sentry initialized successfully');
+  } catch (error) {
+    console.warn('[EatPal] Sentry initialization failed:', error);
+  }
+};
+
+if ('requestIdleCallback' in window) {
+  (window as any).requestIdleCallback(initSentryDeferred, { timeout: 4000 });
+} else {
+  setTimeout(initSentryDeferred, 50);
 }
 
 // Wrap in global ErrorBoundary for crash recovery

@@ -93,16 +93,26 @@ export function Navigation() {
           <div className="flex justify-between items-center h-16 px-4">
             {/* Logo */}
             <div className="flex items-center gap-2">
-              <img 
-                src="/Logo-Green.png" 
-                alt="EatPal" 
-                className="h-8 block dark:hidden"
-              />
-              <img 
-                src="/Logo-White.png" 
-                alt="EatPal" 
-                className="h-8 hidden dark:block"
-              />
+              <picture className="block dark:hidden">
+                <source srcSet="/Logo-Green.webp" type="image/webp" />
+                <img
+                  src="/Logo-Green.png"
+                  alt="EatPal"
+                  className="h-8"
+                  width="120"
+                  height="32"
+                />
+              </picture>
+              <picture className="hidden dark:block">
+                <source srcSet="/Logo-White.webp" type="image/webp" />
+                <img
+                  src="/Logo-White.png"
+                  alt="EatPal"
+                  className="h-8"
+                  width="120"
+                  height="32"
+                />
+              </picture>
             </div>
 
             {/* Center Navigation */}
@@ -175,16 +185,26 @@ export function Navigation() {
         <div className="flex justify-between items-center h-14 px-4">
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <img 
-              src="/Logo-Green.png" 
-              alt="EatPal" 
-              className="h-7 block dark:hidden"
-            />
-            <img 
-              src="/Logo-White.png" 
-              alt="EatPal" 
-              className="h-7 hidden dark:block"
-            />
+            <picture className="block dark:hidden">
+              <source srcSet="/Logo-Green.webp" type="image/webp" />
+              <img
+                src="/Logo-Green.png"
+                alt="EatPal"
+                className="h-7"
+                width="105"
+                height="28"
+              />
+            </picture>
+            <picture className="hidden dark:block">
+              <source srcSet="/Logo-White.webp" type="image/webp" />
+              <img
+                src="/Logo-White.png"
+                alt="EatPal"
+                className="h-7"
+                width="105"
+                height="28"
+              />
+            </picture>
           </div>
 
           {/* Mobile Menu Button */}
