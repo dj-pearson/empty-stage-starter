@@ -85,7 +85,7 @@ export default function MealPlanGeneratorResults() {
         />
       </Helmet>
 
-      <div id="main-content" className="min-h-screen bg-gradient-to-b from-purple-50 to-white py-12 px-4 sm:px-6 lg:px-8">
+      <div id="main-content" className="min-h-screen bg-gradient-to-b from-primary/5 to-background py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           {/* Back Button */}
           <Link to="/meal-plan">
@@ -103,14 +103,14 @@ export default function MealPlanGeneratorResults() {
             className="text-center mb-10"
           >
             <div className="flex justify-center mb-4">
-              <div className="p-4 bg-purple-100 rounded-full">
-                <ChefHat className="w-12 h-12 text-purple-600" />
+              <div className="p-4 bg-primary/10 rounded-full">
+                <ChefHat className="w-12 h-12 text-primary" />
               </div>
             </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            <h1 className="text-4xl font-bold text-foreground mb-4">
               Your 5-Day Meal Plan is Ready!
             </h1>
-            <p className="text-xl text-gray-600">
+            <p className="text-xl text-muted-foreground">
               Personalized for your family of {input.familySize}
             </p>
           </motion.div>
@@ -122,15 +122,15 @@ export default function MealPlanGeneratorResults() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
             >
-              <Card className="border-2 border-purple-500">
+              <Card className="border-2 border-primary">
                 <CardHeader className="pb-3">
                   <CardDescription>Total Estimated Cost</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-purple-600">
+                  <div className="text-3xl font-bold text-primary">
                     {formatCurrency(mealPlan.totalEstimatedCost)}
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">For 5 dinners</p>
+                  <p className="text-sm text-muted-foreground mt-1">For 5 dinners</p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -145,10 +145,10 @@ export default function MealPlanGeneratorResults() {
                   <CardDescription>Avg Cost Per Meal</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-gray-900">
+                  <div className="text-3xl font-bold text-foreground">
                     {formatCurrency(mealPlan.averageCostPerMeal)}
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">Per dinner</p>
+                  <p className="text-sm text-muted-foreground mt-1">Per dinner</p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -163,10 +163,10 @@ export default function MealPlanGeneratorResults() {
                   <CardDescription>Avg Time Per Meal</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-gray-900">
+                  <div className="text-3xl font-bold text-foreground">
                     {Math.round(mealPlan.averageTimePerMeal)} min
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">Prep + cook time</p>
+                  <p className="text-sm text-muted-foreground mt-1">Prep + cook time</p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -181,10 +181,10 @@ export default function MealPlanGeneratorResults() {
                   <CardDescription>Grocery Items</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-gray-900">
+                  <div className="text-3xl font-bold text-foreground">
                     {mealPlan.groceryList.items.length}
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">Unique ingredients</p>
+                  <p className="text-sm text-muted-foreground mt-1">Unique ingredients</p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -235,14 +235,14 @@ export default function MealPlanGeneratorResults() {
                           </CardDescription>
                         </div>
                         <div className="text-right">
-                          <div className="text-2xl font-bold text-purple-600">
+                          <div className="text-2xl font-bold text-primary">
                             {formatCurrency(meal.estimatedCost)}
                           </div>
-                          <div className="text-sm text-gray-500">total cost</div>
+                          <div className="text-sm text-muted-foreground">total cost</div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-4 mt-4 text-sm text-gray-600">
+                      <div className="flex items-center gap-4 mt-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Clock className="w-4 h-4" />
                           <span>Prep: {meal.prepTime} min</span>
@@ -260,11 +260,11 @@ export default function MealPlanGeneratorResults() {
 
                     <CardContent className="space-y-6">
                       {/* Why It Works */}
-                      <div className="p-4 bg-purple-50 rounded-lg">
-                        <h4 className="font-semibold text-purple-900 mb-2">
+                      <div className="p-4 bg-primary/5 rounded-lg">
+                        <h4 className="font-semibold text-foreground mb-2">
                           🎯 Why This Works for Picky Eaters:
                         </h4>
-                        <p className="text-sm text-purple-800">{meal.whyItWorks}</p>
+                        <p className="text-sm text-muted-foreground">{meal.whyItWorks}</p>
                       </div>
 
                       {/* Ingredients */}
@@ -277,7 +277,7 @@ export default function MealPlanGeneratorResults() {
                           {meal.ingredients.map((ing, idx) => (
                             <div
                               key={idx}
-                              className="flex items-center justify-between p-2 bg-gray-50 rounded"
+                              className="flex items-center justify-between p-2 bg-muted rounded"
                             >
                               <span className="text-sm">
                                 {ing.amount} {ing.unit} {ing.name}
@@ -296,10 +296,10 @@ export default function MealPlanGeneratorResults() {
                         <ol className="space-y-3">
                           {meal.instructions.map((step, idx) => (
                             <li key={idx} className="flex gap-3">
-                              <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 bg-purple-100 text-purple-700 rounded-full text-sm font-semibold">
+                              <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 bg-primary/10 text-primary rounded-full text-sm font-semibold">
                                 {idx + 1}
                               </span>
-                              <span className="text-sm text-gray-700 pt-0.5">{step}</span>
+                              <span className="text-sm text-muted-foreground pt-0.5">{step}</span>
                             </li>
                           ))}
                         </ol>
@@ -311,8 +311,8 @@ export default function MealPlanGeneratorResults() {
                           <h4 className="font-semibold mb-3">👶 Kid-Friendly Tips</h4>
                           <ul className="space-y-2">
                             {meal.kidFriendlyTips.map((tip, idx) => (
-                              <li key={idx} className="flex gap-2 text-sm text-gray-700">
-                                <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                              <li key={idx} className="flex gap-2 text-sm text-muted-foreground">
+                                <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
                                 <span>{tip}</span>
                               </li>
                             ))}
@@ -326,8 +326,8 @@ export default function MealPlanGeneratorResults() {
                           <h4 className="font-semibold mb-3">♻️ Leftover Ideas</h4>
                           <ul className="space-y-2">
                             {meal.leftoverIdeas.map((idea, idx) => (
-                              <li key={idx} className="flex gap-2 text-sm text-gray-700">
-                                <span className="text-purple-600">•</span>
+                              <li key={idx} className="flex gap-2 text-sm text-muted-foreground">
+                                <span className="text-primary">•</span>
                                 <span>{idea}</span>
                               </li>
                             ))}
@@ -355,14 +355,14 @@ export default function MealPlanGeneratorResults() {
                     {mealPlan.groceryList.organizedByStore.map((section) => (
                       <div key={section.aisle}>
                         <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                          <ShoppingCart className="w-5 h-5 text-purple-600" />
+                          <ShoppingCart className="w-5 h-5 text-primary" />
                           {section.aisle}
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                           {section.items.map((item, idx) => (
                             <div
                               key={idx}
-                              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                              className="flex items-center justify-between p-3 bg-muted rounded-lg hover:bg-muted/80 transition-colors"
                             >
                               <div className="flex-1">
                                 <div className="font-medium text-sm">
@@ -372,7 +372,7 @@ export default function MealPlanGeneratorResults() {
                                   Used in: Day {item.usedInMeals.join(', ')}
                                 </div>
                               </div>
-                              <div className="text-sm font-semibold text-gray-900">
+                              <div className="text-sm font-semibold text-foreground">
                                 {formatCurrency(item.estimatedCost)}
                               </div>
                             </div>
@@ -391,7 +391,7 @@ export default function MealPlanGeneratorResults() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-purple-600" />
+                    <Calendar className="w-5 h-5 text-primary" />
                     Prep-Ahead Tips
                   </CardTitle>
                 </CardHeader>
@@ -399,8 +399,8 @@ export default function MealPlanGeneratorResults() {
                   <ul className="space-y-3">
                     {mealPlan.prepAheadTips.map((tip, idx) => (
                       <li key={idx} className="flex items-start gap-2">
-                        <CheckCircle2 className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm text-gray-700">{tip}</span>
+                        <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                        <span className="text-sm text-muted-foreground">{tip}</span>
                       </li>
                     ))}
                   </ul>
@@ -411,7 +411,7 @@ export default function MealPlanGeneratorResults() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-blue-600" />
+                    <Clock className="w-5 h-5 text-primary" />
                     Time-Saving Tips
                   </CardTitle>
                 </CardHeader>
@@ -419,8 +419,8 @@ export default function MealPlanGeneratorResults() {
                   <ul className="space-y-3">
                     {mealPlan.timeSavingTips.map((tip, idx) => (
                       <li key={idx} className="flex items-start gap-2">
-                        <CheckCircle2 className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm text-gray-700">{tip}</span>
+                        <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                        <span className="text-sm text-muted-foreground">{tip}</span>
                       </li>
                     ))}
                   </ul>
@@ -431,7 +431,7 @@ export default function MealPlanGeneratorResults() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <DollarSign className="w-5 h-5 text-green-600" />
+                    <DollarSign className="w-5 h-5 text-primary" />
                     Budget Tips
                   </CardTitle>
                 </CardHeader>
@@ -439,8 +439,8 @@ export default function MealPlanGeneratorResults() {
                   <ul className="space-y-3">
                     {mealPlan.budgetTips.map((tip, idx) => (
                       <li key={idx} className="flex items-start gap-2">
-                        <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm text-gray-700">{tip}</span>
+                        <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                        <span className="text-sm text-muted-foreground">{tip}</span>
                       </li>
                     ))}
                   </ul>
@@ -451,7 +451,7 @@ export default function MealPlanGeneratorResults() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <ChefHat className="w-5 h-5 text-orange-600" />
+                    <ChefHat className="w-5 h-5 text-primary" />
                     Picky Eater Tips
                   </CardTitle>
                 </CardHeader>
@@ -459,8 +459,8 @@ export default function MealPlanGeneratorResults() {
                   <ul className="space-y-3">
                     {mealPlan.pickyEaterTips.map((tip, idx) => (
                       <li key={idx} className="flex items-start gap-2">
-                        <CheckCircle2 className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm text-gray-700">{tip}</span>
+                        <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                        <span className="text-sm text-muted-foreground">{tip}</span>
                       </li>
                     ))}
                   </ul>
@@ -470,7 +470,7 @@ export default function MealPlanGeneratorResults() {
           </Tabs>
 
           {/* CTA Section */}
-          <Card className="bg-gradient-to-r from-purple-500 to-pink-500 text-white mt-10">
+          <Card className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground mt-10">
             <CardContent className="pt-6">
               <div className="text-center space-y-4">
                 <h2 className="text-3xl font-bold">
@@ -488,7 +488,7 @@ export default function MealPlanGeneratorResults() {
                   <Button
                     size="lg"
                     variant="outline"
-                    className="bg-white text-purple-600 hover:bg-gray-100"
+                    className="bg-background text-primary hover:bg-muted"
                     onClick={() => setShowEmailModal(true)}
                   >
                     Start Free Trial
@@ -500,7 +500,7 @@ export default function MealPlanGeneratorResults() {
 
           {/* Share Section */}
           <div className="text-center mt-6">
-            <p className="text-gray-600 mb-4">
+            <p className="text-muted-foreground mb-4">
               Found this helpful? Share with friends and family!
             </p>
             <Button variant="outline" onClick={() => setShowEmailModal(true)}>

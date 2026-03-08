@@ -260,7 +260,7 @@ export default function MealPlanGenerator() {
     <>
       <SEOHead {...getPageSEO("mealPlan")!} />
 
-      <main id="main-content" className="min-h-screen bg-gradient-to-b from-purple-50 to-white py-12 px-4 sm:px-6 lg:px-8">
+      <main id="main-content" className="min-h-screen bg-gradient-to-b from-primary/5 to-background py-12 px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -270,14 +270,14 @@ export default function MealPlanGenerator() {
           {/* Header */}
           <div className="text-center mb-10">
             <div className="flex justify-center mb-4">
-              <div className="p-4 bg-purple-100 rounded-full">
-                <ChefHat className="w-12 h-12 text-purple-600" />
+              <div className="p-4 bg-primary/10 rounded-full">
+                <ChefHat className="w-12 h-12 text-primary" />
               </div>
             </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            <h1 className="text-4xl font-bold text-foreground mb-4">
               5-Day Meal Plan Generator
             </h1>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Get a personalized meal plan with recipes and grocery list tailored to your family's
               needs - including picky eaters!
             </p>
@@ -304,23 +304,23 @@ export default function MealPlanGenerator() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
             <Card>
               <CardContent className="pt-6 text-center">
-                <Utensils className="w-8 h-8 text-purple-600 mx-auto mb-2" />
+                <Utensils className="w-8 h-8 text-primary mx-auto mb-2" />
                 <h3 className="font-semibold mb-1">Picky Eater Friendly</h3>
-                <p className="text-sm text-gray-600">Meals your kids will actually eat</p>
+                <p className="text-sm text-muted-foreground">Meals your kids will actually eat</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-6 text-center">
-                <Clock className="w-8 h-8 text-purple-600 mx-auto mb-2" />
+                <Clock className="w-8 h-8 text-primary mx-auto mb-2" />
                 <h3 className="font-semibold mb-1">Time Saving</h3>
-                <p className="text-sm text-gray-600">Meals that fit your schedule</p>
+                <p className="text-sm text-muted-foreground">Meals that fit your schedule</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-6 text-center">
-                <Users className="w-8 h-8 text-purple-600 mx-auto mb-2" />
+                <Users className="w-8 h-8 text-primary mx-auto mb-2" />
                 <h3 className="font-semibold mb-1">Family Sized</h3>
-                <p className="text-sm text-gray-600">Scaled to your family</p>
+                <p className="text-sm text-muted-foreground">Scaled to your family</p>
               </CardContent>
             </Card>
           </div>
@@ -337,11 +337,11 @@ export default function MealPlanGenerator() {
               {/* Progress Indicator */}
               <div className="mb-8 space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 flex items-center gap-1">
+                  <span className="text-muted-foreground flex items-center gap-1">
                     <Clock className="w-4 h-4" />
                     About 5 minutes to complete
                   </span>
-                  <span className="font-medium text-gray-700">
+                  <span className="font-medium text-foreground">
                     {progressInfo.percentage}% complete
                   </span>
                 </div>
@@ -362,7 +362,7 @@ export default function MealPlanGenerator() {
                   />
                 </div>
                 {progressInfo.milestone && (
-                  <p className="text-sm text-purple-600 font-medium">
+                  <p className="text-sm text-primary font-medium">
                     {progressInfo.milestone}
                   </p>
                 )}
@@ -385,10 +385,10 @@ export default function MealPlanGenerator() {
                         onChange={(e) =>
                           setFormData({ ...formData, adults: parseInt(e.target.value) || 0 })
                         }
-                        className={errors.adults ? 'border-red-500' : ''}
+                        className={errors.adults ? 'border-destructive' : ''}
                       />
                       {errors.adults && (
-                        <p className="text-sm text-red-500">{errors.adults}</p>
+                        <p className="text-sm text-destructive">{errors.adults}</p>
                       )}
                     </div>
 
@@ -403,23 +403,23 @@ export default function MealPlanGenerator() {
                         onChange={(e) =>
                           setFormData({ ...formData, children: parseInt(e.target.value) || 0 })
                         }
-                        className={errors.children ? 'border-red-500' : ''}
+                        className={errors.children ? 'border-destructive' : ''}
                       />
                       {errors.children && (
-                        <p className="text-sm text-red-500">{errors.children}</p>
+                        <p className="text-sm text-destructive">{errors.children}</p>
                       )}
                     </div>
                   </div>
 
                   {errors.familySize && (
-                    <p className="text-sm text-red-500">{errors.familySize}</p>
+                    <p className="text-sm text-destructive">{errors.familySize}</p>
                   )}
                 </div>
 
                 {/* Picky Eater Level */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Picky Eater Level</h3>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-muted-foreground">
                     How adventurous are your eaters?
                   </p>
 
@@ -429,7 +429,7 @@ export default function MealPlanGenerator() {
                       setFormData({ ...formData, pickyEaterLevel: value as PickyEaterLevel })
                     }
                   >
-                    <SelectTrigger className={errors.pickyEaterLevel ? 'border-red-500' : ''}>
+                    <SelectTrigger className={errors.pickyEaterLevel ? 'border-destructive' : ''}>
                       <SelectValue placeholder="Select picky eater level" />
                     </SelectTrigger>
                     <SelectContent>
@@ -440,7 +440,7 @@ export default function MealPlanGenerator() {
                     </SelectContent>
                   </Select>
                   {errors.pickyEaterLevel && (
-                    <p className="text-sm text-red-500">{errors.pickyEaterLevel}</p>
+                    <p className="text-sm text-destructive">{errors.pickyEaterLevel}</p>
                   )}
                 </div>
 
@@ -463,10 +463,10 @@ export default function MealPlanGenerator() {
                             cookingTimeAvailable: parseInt(e.target.value) || 45,
                           })
                         }
-                        className={errors.cookingTime ? 'border-red-500' : ''}
+                        className={errors.cookingTime ? 'border-destructive' : ''}
                       />
                       {errors.cookingTime && (
-                        <p className="text-sm text-red-500">{errors.cookingTime}</p>
+                        <p className="text-sm text-destructive">{errors.cookingTime}</p>
                       )}
                     </div>
 
@@ -481,7 +481,7 @@ export default function MealPlanGenerator() {
                           })
                         }
                       >
-                        <SelectTrigger className={errors.skillLevel ? 'border-red-500' : ''}>
+                        <SelectTrigger className={errors.skillLevel ? 'border-destructive' : ''}>
                           <SelectValue placeholder="Select skill level" />
                         </SelectTrigger>
                         <SelectContent>
@@ -491,7 +491,7 @@ export default function MealPlanGenerator() {
                         </SelectContent>
                       </Select>
                       {errors.skillLevel && (
-                        <p className="text-sm text-red-500">{errors.skillLevel}</p>
+                        <p className="text-sm text-destructive">{errors.skillLevel}</p>
                       )}
                     </div>
                   </div>
@@ -500,7 +500,7 @@ export default function MealPlanGenerator() {
                 {/* Kitchen Equipment */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Kitchen Equipment (Optional)</h3>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-muted-foreground">
                     Select any special equipment you have available
                   </p>
 
@@ -562,8 +562,8 @@ export default function MealPlanGenerator() {
 
                 {/* Submit Error */}
                 {errors.submit && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-700">{errors.submit}</p>
+                  <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+                    <p className="text-sm text-destructive">{errors.submit}</p>
                   </div>
                 )}
 
@@ -588,7 +588,7 @@ export default function MealPlanGenerator() {
           </Card>
 
           {/* Trust Indicators */}
-          <div className="mt-8 text-center text-sm text-gray-600">
+          <div className="mt-8 text-center text-sm text-muted-foreground">
             <p>
               100% free · No credit card required · Instant results
             </p>

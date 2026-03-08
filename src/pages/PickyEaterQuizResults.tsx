@@ -186,7 +186,7 @@ export default function PickyEaterQuizResults() {
         />
       </Helmet>
 
-      <div id="main-content" className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      <div id="main-content" className="min-h-screen bg-gradient-to-b from-primary/5 via-background to-primary/3 dark:from-primary/10 dark:via-background dark:to-primary/5">
         <div className="container max-w-6xl mx-auto px-4 py-12">
           <BreadcrumbNavigation
             items={[
@@ -213,7 +213,7 @@ export default function PickyEaterQuizResults() {
               {personalityDef.name}
             </h1>
 
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto mb-6">
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-6">
               {personalityDef.shortDescription}
             </p>
 
@@ -273,7 +273,7 @@ export default function PickyEaterQuizResults() {
                     <h3 className="font-semibold mb-3 flex items-center gap-2">
                       <Badge variant="destructive">Primary Challenge</Badge>
                     </h3>
-                    <p className="text-gray-700 dark:text-gray-300">
+                    <p className="text-muted-foreground">
                       {personalityDef.primaryChallenge}
                     </p>
                   </div>
@@ -285,8 +285,8 @@ export default function PickyEaterQuizResults() {
                     <ul className="space-y-2">
                       {personalityDef.strengths.slice(0, 3).map((strength, i) => (
                         <li key={i} className="flex items-start gap-2">
-                          <span className="text-green-500 mt-1">✓</span>
-                          <span className="text-gray-700 dark:text-gray-300">{strength}</span>
+                          <span className="text-primary mt-1">✓</span>
+                          <span className="text-muted-foreground">{strength}</span>
                         </li>
                       ))}
                     </ul>
@@ -362,27 +362,27 @@ export default function PickyEaterQuizResults() {
                 <div className="filter blur-sm pointer-events-none opacity-60">
                   <div className="grid md:grid-cols-2 gap-4 mb-4">
                     <Card className="p-6">
-                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-4" />
+                      <div className="h-4 bg-muted rounded w-3/4 mb-4" />
                       <div className="space-y-2">
-                        <div className="h-3 bg-gray-100 rounded w-full" />
-                        <div className="h-3 bg-gray-100 rounded w-5/6" />
-                        <div className="h-3 bg-gray-100 rounded w-4/6" />
+                        <div className="h-3 bg-muted/60 rounded w-full" />
+                        <div className="h-3 bg-muted/60 rounded w-5/6" />
+                        <div className="h-3 bg-muted/60 rounded w-4/6" />
                       </div>
                     </Card>
                     <Card className="p-6">
-                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-4" />
+                      <div className="h-4 bg-muted rounded w-3/4 mb-4" />
                       <div className="space-y-2">
-                        <div className="h-3 bg-gray-100 rounded w-full" />
-                        <div className="h-3 bg-gray-100 rounded w-5/6" />
-                        <div className="h-3 bg-gray-100 rounded w-4/6" />
+                        <div className="h-3 bg-muted/60 rounded w-full" />
+                        <div className="h-3 bg-muted/60 rounded w-5/6" />
+                        <div className="h-3 bg-muted/60 rounded w-4/6" />
                       </div>
                     </Card>
                   </div>
                   <Card className="p-6">
-                    <div className="h-4 bg-gray-200 rounded w-1/2 mb-4" />
+                    <div className="h-4 bg-muted rounded w-1/2 mb-4" />
                     <div className="grid grid-cols-3 gap-4">
                       {[1, 2, 3].map((i) => (
-                        <div key={i} className="h-32 bg-gray-100 rounded" />
+                        <div key={i} className="h-32 bg-muted/60 rounded" />
                       ))}
                     </div>
                   </Card>
@@ -412,8 +412,8 @@ export default function PickyEaterQuizResults() {
                           '12-week progress pathway',
                         ].map((item, i) => (
                           <div key={i} className="flex items-center gap-2 text-sm">
-                            <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                              <span className="text-green-600 text-xs">✓</span>
+                            <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                              <span className="text-primary text-xs">✓</span>
                             </div>
                             <span>{item}</span>
                           </div>
@@ -447,7 +447,7 @@ export default function PickyEaterQuizResults() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.7 }}
           >
-            <Card className="bg-gradient-to-br from-primary/10 to-purple-100 dark:from-primary/20 dark:to-purple-900 border-primary/20 shadow-2xl">
+            <Card className="bg-gradient-to-br from-primary/10 to-primary/5 dark:from-primary/20 dark:to-primary/10 border-primary/20 shadow-2xl">
               <CardHeader className="text-center pb-4">
                 <CardTitle className="text-3xl mb-2">
                   Ready for Stress-Free Mealtimes?
@@ -461,21 +461,21 @@ export default function PickyEaterQuizResults() {
                   <div className="p-4">
                     <div className="text-4xl mb-2">📅</div>
                     <h4 className="font-semibold mb-1">Weekly Meal Plans</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                    <p className="text-sm text-muted-foreground">
                       Personalized to your child's eating personality
                     </p>
                   </div>
                   <div className="p-4">
                     <div className="text-4xl mb-2">🛒</div>
                     <h4 className="font-semibold mb-1">Smart Grocery Lists</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                    <p className="text-sm text-muted-foreground">
                       Organized by aisle, nothing wasted
                     </p>
                   </div>
                   <div className="p-4">
                     <div className="text-4xl mb-2">📊</div>
                     <h4 className="font-semibold mb-1">Progress Tracking</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                    <p className="text-sm text-muted-foreground">
                       See your child's eating journey evolve
                     </p>
                   </div>
@@ -486,7 +486,7 @@ export default function PickyEaterQuizResults() {
                   Start Your $1 Trial Today
                 </Button>
 
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-4">
+                <p className="text-sm text-muted-foreground mt-4">
                   Risk-free • Cancel anytime • Join 3,142 parents succeeding at mealtimes
                 </p>
               </CardContent>

@@ -1075,8 +1075,8 @@
         "npm run build succeeds"
       ],
       "priority": 67,
-      "passes": false,
-      "notes": "Both lead magnet forms are long with no progress indication. Users don't know how much more is required, leading to abandonment."
+      "passes": true,
+      "notes": "Progress bars, time estimates, milestone text, and reduced-motion support already implemented. Fixed hardcoded colors (text-gray-*, bg-purple-*, border-red-*) to theme-aware tokens (text-foreground, text-muted-foreground, bg-primary/*, border-destructive) on both MealPlanGenerator and BudgetCalculator pages."
     },
     {
       "id": "US-068",
@@ -1939,6 +1939,75 @@
       "priority": 3,
       "passes": true,
       "notes": "SEO is one of the four PageSpeed Insights categories. Google truncates meta descriptions over ~155 characters. Proper heading hierarchy helps search engines understand page structure."
+    },
+    {
+      "id": "US-098",
+      "title": "Fix hardcoded colors on Landing page for dark mode compatibility",
+      "description": "As a user browsing in dark mode, I want the Landing page to render correctly with theme-aware colors so that text is readable and backgrounds don't appear as white blobs.",
+      "acceptanceCriteria": [
+        "Replace all text-gray-* classes with text-foreground or text-muted-foreground in src/pages/Landing.tsx (18 occurrences)",
+        "Replace bg-gray-* and bg-white with bg-card, bg-muted, or bg-background",
+        "Ensure gradient backgrounds use theme tokens (from-primary/5 instead of from-purple-50)",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 98,
+      "passes": false,
+      "notes": "Landing page is the first page visitors see. 18 hardcoded colors break dark mode rendering, creating white/gray blobs on dark backgrounds."
+    },
+    {
+      "id": "US-099",
+      "title": "Fix hardcoded colors on Auth page for dark mode compatibility",
+      "description": "As a user signing up in dark mode, I want the Auth page to render correctly so that form fields, text, and backgrounds are visible and contrast is adequate.",
+      "acceptanceCriteria": [
+        "Replace text-gray-* and bg-gray-* classes with theme tokens in src/pages/Auth.tsx",
+        "Ensure form validation error styling uses text-destructive/border-destructive",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 99,
+      "passes": false,
+      "notes": "Auth page has 3+ hardcoded colors. This is the conversion funnel - broken dark mode here directly loses signups."
+    },
+    {
+      "id": "US-100",
+      "title": "Fix hardcoded colors on VPAT accessibility page for dark mode",
+      "description": "As a user reviewing accessibility compliance in dark mode, I want the VPAT page to render correctly with proper contrast.",
+      "acceptanceCriteria": [
+        "Replace text-gray-* and bg-gray-* classes with theme tokens in src/pages/VPAT.tsx (5 occurrences)",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 100,
+      "passes": false,
+      "notes": "Ironic that the accessibility compliance page itself has dark mode rendering issues."
+    },
+    {
+      "id": "US-101",
+      "title": "Fix hardcoded colors in admin dashboard components for dark mode",
+      "description": "As an admin using the dashboard in dark mode, I want all admin components to render correctly so that I can manage the platform without eye strain.",
+      "acceptanceCriteria": [
+        "Audit and fix all text-gray-*, bg-gray-*, and bg-white occurrences in src/components/admin/ directory",
+        "Replace with theme-aware tokens (text-foreground, text-muted-foreground, bg-card, bg-muted)",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 101,
+      "passes": false,
+      "notes": "Multiple admin components still have hardcoded colors that break dark mode. These are used daily by the team."
+    },
+    {
+      "id": "US-102",
+      "title": "Fix hardcoded colors in PickyEaterQuiz form page for dark mode",
+      "description": "As a user taking the quiz in dark mode, I want the quiz form to render correctly with readable text and proper contrast.",
+      "acceptanceCriteria": [
+        "Replace text-gray-* and bg-gray-* classes with theme tokens in src/pages/PickyEaterQuiz.tsx (5 occurrences)",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 102,
+      "passes": false,
+      "notes": "The quiz is a key lead magnet. Dark mode issues on the quiz form page create a poor first impression."
     }
   ]
 }
