@@ -164,7 +164,7 @@ export default function BudgetCalculatorResults() {
         />
       </Helmet>
 
-      <div id="main-content" className="min-h-screen bg-gradient-to-b from-green-50 to-white py-12 px-4 sm:px-6 lg:px-8">
+      <div id="main-content" className="min-h-screen bg-gradient-to-b from-primary/5 to-background py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
           {/* Back Button */}
           <Link to="/budget-calculator">
@@ -182,12 +182,12 @@ export default function BudgetCalculatorResults() {
             className="text-center mb-10"
           >
             <div className="flex justify-center mb-4">
-              <div className="p-4 bg-green-100 rounded-full">
-                <DollarSign className="w-12 h-12 text-green-600" />
+              <div className="p-4 bg-primary/10 rounded-full">
+                <DollarSign className="w-12 h-12 text-primary" />
               </div>
             </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Your Budget Results</h1>
-            <p className="text-xl text-gray-600">
+            <h1 className="text-4xl font-bold text-foreground mb-4">Your Budget Results</h1>
+            <p className="text-xl text-muted-foreground">
               Here's your personalized grocery budget for a family of {input.familySize}
             </p>
           </motion.div>
@@ -199,15 +199,15 @@ export default function BudgetCalculatorResults() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
             >
-              <Card className="border-2 border-green-500">
+              <Card className="border-2 border-primary">
                 <CardHeader className="pb-3">
                   <CardDescription>Recommended Monthly Budget</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-green-600">
+                  <div className="text-3xl font-bold text-primary">
                     {formatCurrency(calculation.recommendedMonthlyBudget)}
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">USDA Moderate Plan</p>
+                  <p className="text-sm text-muted-foreground mt-1">USDA Moderate Plan</p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -222,10 +222,10 @@ export default function BudgetCalculatorResults() {
                   <CardDescription>Cost Per Meal</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-gray-900">
+                  <div className="text-3xl font-bold text-foreground">
                     {formatCurrency(calculation.costPerMeal)}
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">Per person</p>
+                  <p className="text-sm text-muted-foreground mt-1">Per person</p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -240,10 +240,10 @@ export default function BudgetCalculatorResults() {
                   <CardDescription>Daily Food Cost</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-gray-900">
+                  <div className="text-3xl font-bold text-foreground">
                     {formatCurrency(calculation.costPerPersonPerDay)}
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">Per person per day</p>
+                  <p className="text-sm text-muted-foreground mt-1">Per person per day</p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -253,15 +253,15 @@ export default function BudgetCalculatorResults() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
             >
-              <Card className="border-2 border-blue-500 bg-blue-50">
+              <Card className="border-2 border-primary bg-primary/5">
                 <CardHeader className="pb-3">
                   <CardDescription>Annual Savings</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-blue-600">
+                  <div className="text-3xl font-bold text-primary">
                     {formatCurrency(calculation.annualSavings)}
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">vs. Meal Kits</p>
+                  <p className="text-sm text-muted-foreground mt-1">vs. Meal Kits</p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -319,15 +319,15 @@ export default function BudgetCalculatorResults() {
                 </ResponsiveContainer>
 
                 <div className="mt-4 space-y-2">
-                  <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                  <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg">
                     <span className="font-medium">vs. Meal Kits</span>
-                    <span className="text-green-600 font-bold">
+                    <span className="text-primary font-bold">
                       Save {formatCurrency(calculation.vsMealKitsSavings)}/mo
                     </span>
                   </div>
-                  <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                     <span className="font-medium">vs. Dining Out</span>
-                    <span className="text-blue-600 font-bold">
+                    <span className="text-primary font-bold">
                       Save {formatCurrency(calculation.vsDiningOutSavings)}/mo
                     </span>
                   </div>
@@ -356,8 +356,8 @@ export default function BudgetCalculatorResults() {
                 </BarChart>
               </ResponsiveContainer>
 
-              <div className="mt-4 p-4 bg-purple-50 rounded-lg">
-                <p className="text-sm text-gray-700">
+              <div className="mt-4 p-4 bg-muted rounded-lg">
+                <p className="text-sm text-muted-foreground">
                   <strong>Your recommended plan: {calculation.usdaPlanLevel}</strong> - A balanced
                   approach that provides nutritious meals while keeping costs reasonable.
                 </p>
@@ -387,13 +387,13 @@ export default function BudgetCalculatorResults() {
                         <div className="flex items-start justify-between">
                           <CardTitle className="text-lg">{meal.name}</CardTitle>
                           <div className="text-right">
-                            <div className="text-lg font-bold text-green-600">
+                            <div className="text-lg font-bold text-primary">
                               {formatCurrency(meal.costPerServing)}
                             </div>
                             <div className="text-xs text-gray-500">per serving</div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Calendar className="w-4 h-4" />
                           <span>{meal.prepTime} min prep</span>
                         </div>
@@ -402,7 +402,7 @@ export default function BudgetCalculatorResults() {
                         <div className="space-y-2">
                           <div>
                             <p className="text-xs text-gray-500 mb-1">Ingredients:</p>
-                            <p className="text-sm text-gray-700">
+                            <p className="text-sm text-muted-foreground">
                               {meal.ingredients.slice(0, 4).join(', ')}
                               {meal.ingredients.length > 4 && '...'}
                             </p>
@@ -427,7 +427,7 @@ export default function BudgetCalculatorResults() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="w-5 h-5 text-green-600" />
+                  <DollarSign className="w-5 h-5 text-primary" />
                   Budget Tips
                 </CardTitle>
               </CardHeader>
@@ -435,8 +435,8 @@ export default function BudgetCalculatorResults() {
                 <ul className="space-y-3">
                   {calculation.budgetTips.slice(0, 5).map((tip, index) => (
                     <li key={index} className="flex items-start gap-2">
-                      <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm text-gray-700">{tip}</span>
+                      <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                      <span className="text-sm text-muted-foreground">{tip}</span>
                     </li>
                   ))}
                 </ul>
@@ -447,7 +447,7 @@ export default function BudgetCalculatorResults() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <TrendingDown className="w-5 h-5 text-blue-600" />
+                  <TrendingDown className="w-5 h-5 text-primary" />
                   Reduce Waste
                 </CardTitle>
               </CardHeader>
@@ -455,8 +455,8 @@ export default function BudgetCalculatorResults() {
                 <ul className="space-y-3">
                   {calculation.wasteReductionTips.slice(0, 5).map((tip, index) => (
                     <li key={index} className="flex items-start gap-2">
-                      <CheckCircle2 className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm text-gray-700">{tip}</span>
+                      <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                      <span className="text-sm text-muted-foreground">{tip}</span>
                     </li>
                   ))}
                 </ul>
@@ -467,7 +467,7 @@ export default function BudgetCalculatorResults() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Lightbulb className="w-5 h-5 text-purple-600" />
+                  <Lightbulb className="w-5 h-5 text-primary" />
                   Meal Prep Tips
                 </CardTitle>
               </CardHeader>
@@ -475,8 +475,8 @@ export default function BudgetCalculatorResults() {
                 <ul className="space-y-3">
                   {calculation.mealPrepTips.slice(0, 5).map((tip, index) => (
                     <li key={index} className="flex items-start gap-2">
-                      <CheckCircle2 className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm text-gray-700">{tip}</span>
+                      <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                      <span className="text-sm text-muted-foreground">{tip}</span>
                     </li>
                   ))}
                 </ul>
@@ -485,7 +485,7 @@ export default function BudgetCalculatorResults() {
           </div>
 
           {/* CTA Section */}
-          <Card className="bg-gradient-to-r from-green-500 to-blue-500 text-white mb-10">
+          <Card className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground mb-10">
             <CardContent className="pt-6">
               <div className="text-center space-y-4">
                 <h2 className="text-3xl font-bold">
@@ -508,7 +508,7 @@ export default function BudgetCalculatorResults() {
                   <Button
                     size="lg"
                     variant="outline"
-                    className="bg-white text-green-600 hover:bg-gray-100"
+                    className="bg-background text-primary hover:bg-muted"
                     onClick={() => setShowEmailModal(true)}
                   >
                     Start Free Trial
@@ -520,7 +520,7 @@ export default function BudgetCalculatorResults() {
 
           {/* Share Section */}
           <div className="text-center space-y-4">
-            <p className="text-gray-600 mb-4">
+            <p className="text-muted-foreground mb-4">
               Found this helpful? Share with friends and family!
             </p>
             <ShareButtons

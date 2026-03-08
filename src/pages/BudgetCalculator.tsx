@@ -247,7 +247,7 @@ export default function BudgetCalculator() {
     <>
       <SEOHead {...getPageSEO("budgetCalculator")!} />
 
-      <main id="main-content" className="min-h-screen bg-gradient-to-b from-green-50 to-white py-12 px-4 sm:px-6 lg:px-8">
+      <main id="main-content" className="min-h-screen bg-gradient-to-b from-primary/5 to-background py-12 px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -257,14 +257,14 @@ export default function BudgetCalculator() {
           {/* Header */}
           <div className="text-center mb-10">
             <div className="flex justify-center mb-4">
-              <div className="p-4 bg-green-100 rounded-full">
-                <Calculator className="w-12 h-12 text-green-600" />
+              <div className="p-4 bg-primary/10 rounded-full">
+                <Calculator className="w-12 h-12 text-primary" />
               </div>
             </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            <h1 className="text-4xl font-bold text-foreground mb-4">
               Grocery Budget Calculator
             </h1>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Calculate your family's realistic grocery budget based on official USDA food cost
               data. Get personalized recommendations and money-saving tips.
             </p>
@@ -291,23 +291,23 @@ export default function BudgetCalculator() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
             <Card>
               <CardContent className="pt-6 text-center">
-                <DollarSign className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                <DollarSign className="w-8 h-8 text-primary mx-auto mb-2" />
                 <h3 className="font-semibold mb-1">USDA-Based Data</h3>
-                <p className="text-sm text-gray-600">Official 2024 food cost data</p>
+                <p className="text-sm text-muted-foreground">Official 2024 food cost data</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-6 text-center">
-                <Users className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                <Users className="w-8 h-8 text-primary mx-auto mb-2" />
                 <h3 className="font-semibold mb-1">Personalized</h3>
-                <p className="text-sm text-gray-600">Custom for your family size</p>
+                <p className="text-sm text-muted-foreground">Custom for your family size</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-6 text-center">
-                <MapPin className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                <MapPin className="w-8 h-8 text-primary mx-auto mb-2" />
                 <h3 className="font-semibold mb-1">Regional Pricing</h3>
-                <p className="text-sm text-gray-600">Adjusted for your location</p>
+                <p className="text-sm text-muted-foreground">Adjusted for your location</p>
               </CardContent>
             </Card>
           </div>
@@ -324,11 +324,11 @@ export default function BudgetCalculator() {
               {/* Progress Indicator */}
               <div className="mb-8 space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 flex items-center gap-1">
+                  <span className="text-muted-foreground flex items-center gap-1">
                     <Clock className="w-4 h-4" />
                     About 3 minutes to complete
                   </span>
-                  <span className="font-medium text-gray-700">
+                  <span className="font-medium text-foreground">
                     {progressInfo.percentage}% complete
                   </span>
                 </div>
@@ -349,7 +349,7 @@ export default function BudgetCalculator() {
                   />
                 </div>
                 {progressInfo.milestone && (
-                  <p className="text-sm text-green-600 font-medium">
+                  <p className="text-sm text-primary font-medium">
                     {progressInfo.milestone}
                   </p>
                 )}
@@ -372,10 +372,10 @@ export default function BudgetCalculator() {
                         onChange={(e) =>
                           setFormData({ ...formData, adults: parseInt(e.target.value) || 0 })
                         }
-                        className={errors.adults ? 'border-red-500' : ''}
+                        className={errors.adults ? 'border-destructive' : ''}
                       />
                       {errors.adults && (
-                        <p className="text-sm text-red-500">{errors.adults}</p>
+                        <p className="text-sm text-destructive">{errors.adults}</p>
                       )}
                     </div>
 
@@ -390,20 +390,20 @@ export default function BudgetCalculator() {
                         onChange={(e) =>
                           setFormData({ ...formData, children: parseInt(e.target.value) || 0 })
                         }
-                        className={errors.children ? 'border-red-500' : ''}
+                        className={errors.children ? 'border-destructive' : ''}
                       />
                       {errors.children && (
-                        <p className="text-sm text-red-500">{errors.children}</p>
+                        <p className="text-sm text-destructive">{errors.children}</p>
                       )}
                     </div>
                   </div>
 
                   {errors.familySize && (
-                    <p className="text-sm text-red-500">{errors.familySize}</p>
+                    <p className="text-sm text-destructive">{errors.familySize}</p>
                   )}
 
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-900">
+                  <div className="p-4 bg-muted rounded-lg">
+                    <p className="text-sm text-foreground">
                       <strong>Total Family Size:</strong>{' '}
                       {(formData.adults || 0) + (formData.children || 0)} people
                     </p>
@@ -421,7 +421,7 @@ export default function BudgetCalculator() {
                         value={formData.state}
                         onValueChange={(value) => setFormData({ ...formData, state: value })}
                       >
-                        <SelectTrigger id="state" className={errors.state ? 'border-red-500' : ''} aria-label="Select your state">
+                        <SelectTrigger id="state" className={errors.state ? 'border-destructive' : ''} aria-label="Select your state">
                           <SelectValue placeholder="Select your state" />
                         </SelectTrigger>
                         <SelectContent className="max-h-[300px]">
@@ -432,7 +432,7 @@ export default function BudgetCalculator() {
                           ))}
                         </SelectContent>
                       </Select>
-                      {errors.state && <p className="text-sm text-red-500">{errors.state}</p>}
+                      {errors.state && <p className="text-sm text-destructive">{errors.state}</p>}
                     </div>
 
                     <div className="space-y-2">
@@ -454,7 +454,7 @@ export default function BudgetCalculator() {
                 {/* Dietary Restrictions */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Dietary Restrictions (Optional)</h3>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-muted-foreground">
                     Select any dietary restrictions to get more accurate cost estimates
                   </p>
 
@@ -473,7 +473,7 @@ export default function BudgetCalculator() {
                           >
                             {restriction.label}
                           </Label>
-                          <p className="text-sm text-gray-500">{restriction.description}</p>
+                          <p className="text-sm text-muted-foreground">{restriction.description}</p>
                         </div>
                       </div>
                     ))}
@@ -482,8 +482,8 @@ export default function BudgetCalculator() {
 
                 {/* Submit Error */}
                 {errors.submit && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-700">{errors.submit}</p>
+                  <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+                    <p className="text-sm text-destructive">{errors.submit}</p>
                   </div>
                 )}
 
@@ -508,7 +508,7 @@ export default function BudgetCalculator() {
           </Card>
 
           {/* Trust Indicators */}
-          <div className="mt-8 text-center text-sm text-gray-600">
+          <div className="mt-8 text-center text-sm text-muted-foreground">
             <p>
               Based on official USDA Food Plans data (2024) · Regional cost adjustments included
             </p>
