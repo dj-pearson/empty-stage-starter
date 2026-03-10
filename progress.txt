@@ -1035,3 +1035,43 @@ Implemented the remaining 5 branding stories to complete the ARFID/food chaining
 - Remaining: 19 stories with passes: false
 - Security: Full edge function sanitization, CSRF protection, progressive rate limiting, CI/CD security scanning
 ---
+
+## 2026-03-10 - Dark Mode Color Fixes (US-098, US-099, US-100, US-102)
+
+### US-098: Fix hardcoded colors on Landing page for dark mode compatibility
+- Replaced `bg-white text-primary` CTA button with `bg-primary-foreground text-primary` for theme awareness
+- All `bg-white/N` opacity-based decorative elements on primary gradient background left intact (correct for both modes)
+- Files changed: `src/pages/Landing.tsx`
+
+### US-099: Fix hardcoded colors on Auth page for dark mode compatibility
+- Audited Auth.tsx — no `text-gray-*` or `bg-gray-*` found; all `bg-white/N` are opacity-based on primary gradient (intentional)
+- Auth page was already dark mode compatible
+- Files changed: None needed
+
+### US-100: Fix hardcoded colors on VPAT accessibility page for dark mode
+- Replaced `bg-gray-50 dark:bg-gray-900/30 border border-gray-200 dark:border-gray-700` with `bg-muted/50 border border-border`
+- Replaced `text-gray-600` with `text-muted-foreground` (NA count stats)
+- Replaced `text-gray-400` icons with `text-muted-foreground` (Not Applicable conformance icons)
+- Files changed: `src/pages/VPAT.tsx`
+
+### US-102: Fix hardcoded colors in PickyEaterQuiz form page for dark mode
+- Replaced `from-blue-50 to-white dark:from-gray-900 dark:to-gray-800` gradient with `from-primary/5 to-background`
+- Replaced `text-gray-900 dark:text-white` with `text-foreground`
+- Replaced `text-gray-600 dark:text-gray-300` with `text-muted-foreground`
+- Replaced `text-gray-700 dark:text-gray-300` progress labels with `text-muted-foreground`
+- Replaced `text-gray-600 dark:text-gray-400` encouragement text with `text-muted-foreground`
+- Files changed: `src/pages/PickyEaterQuiz.tsx`
+
+### Deferred for Later Ralph Loop
+- US-101: Fix hardcoded colors in admin dashboard components for dark mode (recorded in prd.json, passes: false)
+
+### Build Verification
+- `npm run build`: SUCCESS (built in 1m 2s)
+- All 4 completed stories marked as passes: true in prd.json
+- US-101 remains as passes: false for future Ralph loop
+
+### Progress Summary
+- 4 stories completed this session (US-098, US-099, US-100, US-102)
+- 1 story deferred for later (US-101)
+- Total remaining with passes: false: 1 (US-101)
+---
