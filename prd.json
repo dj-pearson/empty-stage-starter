@@ -1952,8 +1952,8 @@
         "npm run build succeeds"
       ],
       "priority": 98,
-      "passes": false,
-      "notes": "Landing page is the first page visitors see. 18 hardcoded colors break dark mode rendering, creating white/gray blobs on dark backgrounds."
+      "passes": true,
+      "notes": "Replaced hardcoded text-gray-*/bg-gray-*/bg-white colors with theme-aware tokens (text-foreground, text-muted-foreground, bg-background, bg-muted, bg-primary-foreground). npm run build succeeds."
     },
     {
       "id": "US-099",
@@ -1966,8 +1966,8 @@
         "npm run build succeeds"
       ],
       "priority": 99,
-      "passes": false,
-      "notes": "Auth page has 3+ hardcoded colors. This is the conversion funnel - broken dark mode here directly loses signups."
+      "passes": true,
+      "notes": "Replaced hardcoded text-gray-*/bg-gray-*/bg-white colors with theme-aware tokens (text-foreground, text-muted-foreground, bg-background, bg-muted, bg-primary-foreground). npm run build succeeds."
     },
     {
       "id": "US-100",
@@ -1979,8 +1979,8 @@
         "npm run build succeeds"
       ],
       "priority": 100,
-      "passes": false,
-      "notes": "Ironic that the accessibility compliance page itself has dark mode rendering issues."
+      "passes": true,
+      "notes": "Replaced hardcoded text-gray-*/bg-gray-*/bg-white colors with theme-aware tokens (text-foreground, text-muted-foreground, bg-background, bg-muted, bg-primary-foreground). npm run build succeeds."
     },
     {
       "id": "US-101",
@@ -2006,8 +2006,8 @@
         "npm run build succeeds"
       ],
       "priority": 102,
-      "passes": false,
-      "notes": "The quiz is a key lead magnet. Dark mode issues on the quiz form page create a poor first impression."
+      "passes": true,
+      "notes": "Replaced hardcoded text-gray-*/bg-gray-*/bg-white colors with theme-aware tokens (text-foreground, text-muted-foreground, bg-background, bg-muted, bg-primary-foreground). npm run build succeeds."
     }
   ]
 }

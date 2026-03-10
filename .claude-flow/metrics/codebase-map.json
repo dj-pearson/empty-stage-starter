@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-03-08T07:53:54.483Z",
+  "timestamp": "2026-03-10T12:09:20.807Z",
   "projectRoot": "/home/user/empty-stage-starter",
   "structure": {
     "hasPackageJson": true,
@@ -7,5 +7,5 @@
     "hasClaudeConfig": true,
     "hasClaudeFlow": true
   },
-  "scannedAt": 1772956434483
+  "scannedAt": 1773144560807
 }

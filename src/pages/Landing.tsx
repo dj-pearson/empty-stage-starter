@@ -1107,7 +1107,7 @@ const Landing = () => {
                   <Button
                     size="lg"
                     aria-label="Start your free trial of EatPal meal planning"
-                    className="bg-white text-primary hover:bg-white/90 shadow-xl hover:shadow-2xl transition-all text-lg px-10 py-7 rounded-full gap-2"
+                    className="bg-primary-foreground text-primary hover:bg-primary-foreground/90 shadow-xl hover:shadow-2xl transition-all text-lg px-10 py-7 rounded-full gap-2"
                   >
                     Start Free Trial <ArrowRight className="h-5 w-5" aria-hidden="true" />
                   </Button>

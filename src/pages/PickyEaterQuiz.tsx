@@ -106,14 +106,14 @@ export default function PickyEaterQuiz() {
     <>
       <SEOHead {...getPageSEO("pickyEaterQuiz")!} />
 
-      <main id="main-content" className="min-h-screen bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800">
+      <main id="main-content" className="min-h-screen bg-gradient-to-b from-primary/5 to-background">
         <div className="container max-w-4xl mx-auto px-4 py-8">
           {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+            <h1 className="text-4xl font-bold text-foreground mb-2">
               Picky Eater Food Personality Quiz
             </h1>
-            <p className="text-lg text-gray-600 dark:text-gray-300">
+            <p className="text-lg text-muted-foreground">
               Discover your child's eating personality and get personalized strategies
             </p>
           </div>
@@ -149,10 +149,10 @@ export default function PickyEaterQuiz() {
               {/* Progress Bar */}
               <div className="mb-8">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <span className="text-sm font-medium text-muted-foreground">
                     Question {quizState.currentStep + 1} of {QUIZ_QUESTIONS.length}
                   </span>
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <span className="text-sm font-medium text-muted-foreground">
                     {progress}% Complete
                   </span>
                 </div>
@@ -218,7 +218,7 @@ export default function PickyEaterQuiz() {
 
               {/* Encouragement Text */}
               <div className="text-center mt-6">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   {isLastQuestion
                     ? 'Almost there! Click to see your personalized results.'
                     : 'Keep going! You\'re doing great.'}

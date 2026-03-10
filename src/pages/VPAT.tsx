@@ -86,7 +86,7 @@ const getConformanceIcon = (conformance: ConformanceLevel) => {
     case "Does Not Support":
       return <MinusCircle className="h-5 w-5 text-red-600" aria-hidden="true" />;
     case "Not Applicable":
-      return <MinusCircle className="h-5 w-5 text-gray-400" aria-hidden="true" />;
+      return <MinusCircle className="h-5 w-5 text-muted-foreground" aria-hidden="true" />;
   }
 };
 
@@ -206,9 +206,9 @@ const VPAT = () => {
               <div className="text-3xl font-bold text-yellow-600">{partialCount}</div>
               <div className="text-sm text-yellow-700 dark:text-yellow-400">Partially Supports</div>
             </div>
-            <div className="bg-gray-50 dark:bg-gray-900/30 border border-gray-200 dark:border-gray-700 rounded-lg p-4 text-center">
-              <div className="text-3xl font-bold text-gray-600">{naCount}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">Not Applicable</div>
+            <div className="bg-muted/50 border border-border rounded-lg p-4 text-center">
+              <div className="text-3xl font-bold text-muted-foreground">{naCount}</div>
+              <div className="text-sm text-muted-foreground">Not Applicable</div>
             </div>
             <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 text-center">
               <div className="text-3xl font-bold text-primary">{Math.round((supportCount / totalApplicable) * 100)}%</div>
@@ -250,7 +250,7 @@ const VPAT = () => {
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <MinusCircle className="h-5 w-5 text-gray-400 mt-0.5 shrink-0" aria-hidden="true" />
+              <MinusCircle className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" aria-hidden="true" />
               <div>
                 <dt className="font-medium text-foreground inline">Not Applicable:</dt>
                 <dd className="text-muted-foreground inline"> The criterion is not relevant to the product.</dd>
