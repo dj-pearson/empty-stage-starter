@@ -1075,3 +1075,21 @@ Implemented the remaining 5 branding stories to complete the ARFID/food chaining
 - 1 story deferred for later (US-101)
 - Total remaining with passes: false: 1 (US-101)
 ---
+
+## 2026-03-11 - Critical Platform Improvements: US-101, US-103, US-104, US-105
+
+### US-101: Fix admin dashboard dark mode (55 occurrences across 14 files)
+- Replaced bg-gray-100/200, text-gray-400-900, bg-white with theme tokens in all admin components
+
+### US-103: Fix page dark mode (10 occurrences across 6 pages)
+- Fixed MealPlanGeneratorResults, BudgetCalculatorResults, ApiDocs, AdminDashboard, SearchTrafficDashboard, ProfessionalSettings
+
+### US-104: Fix component dark mode (28+ component files)
+- Fixed CardNav, quiz components, ProcessSteps, AchievementBadge, EmailCaptureModals, subscription components, and more
+
+### US-105: Logo PNG→WebP conversion (63 references, ~380KB savings per page)
+- Switched all Logo-Green.png (267KB) and Logo-White.png (167KB) to WebP (28KB + 23KB) across 24 src files + 2 XML feeds
+
+### Build: SUCCESS (1m 3s, no errors)
+### New future stories: US-106 (semantic badge dark mode), US-107 (remaining PNGs→WebP), US-108 (phone mockup dark mode)
+---

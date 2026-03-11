@@ -223,9 +223,9 @@ export function ContentOptimizer() {
       case "medium":
         return "bg-yellow-100 text-yellow-800 border-yellow-200";
       case "low":
-        return "bg-gray-100 text-gray-800 border-gray-200";
+        return "bg-muted text-foreground border-border";
       default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
+        return "bg-muted text-foreground border-border";
     }
   };
 
@@ -531,7 +531,7 @@ export function ContentOptimizer() {
                   <Separator className="my-4" />
                   <div className="space-y-2">
                     {optimizationResult.optimizations.lsiKeywords.map((keyword, idx) => (
-                      <div key={idx} className="p-3 bg-gray-50 rounded-md">
+                      <div key={idx} className="p-3 bg-muted rounded-md">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-medium text-sm">{keyword.keyword}</span>
                           <Badge variant="outline" className="text-xs">
@@ -564,7 +564,7 @@ export function ContentOptimizer() {
                     {optimizationResult.optimizations.contentGaps.map((gap, idx) => (
                       <div
                         key={idx}
-                        className="p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                        className="p-4 border rounded-lg hover:bg-muted transition-colors"
                       >
                         <div className="flex items-start justify-between mb-2">
                           <h4 className="font-medium text-sm">{gap.topic}</h4>

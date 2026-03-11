@@ -39,7 +39,7 @@ const COLLECTION_COLORS = [
   { value: "purple", label: "Purple", class: "text-purple-600" },
   { value: "pink", label: "Pink", class: "text-pink-600" },
   { value: "orange", label: "Orange", class: "text-orange-600" },
-  { value: "gray", label: "Gray", class: "text-gray-600" },
+  { value: "gray", label: "Gray", class: "text-muted-foreground" },
 ];
 
 const COLLECTION_TEMPLATES = [

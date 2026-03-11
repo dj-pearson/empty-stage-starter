@@ -266,7 +266,7 @@ export function AdminIntegrationManager() {
       case 'pending':
         return <RefreshCw className="h-4 w-4 text-yellow-600" />;
       default:
-        return <Activity className="h-4 w-4 text-gray-400" />;
+        return <Activity className="h-4 w-4 text-muted-foreground/70" />;
     }
   };
 

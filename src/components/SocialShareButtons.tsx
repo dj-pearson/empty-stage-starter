@@ -25,7 +25,7 @@ export function SocialShareButtons({ title, description, url, imageUrl }: Social
     {
       name: "X",
       href: `https://twitter.com/intent/tweet?text=${encodedTitle}&url=${encodedUrl}`,
-      color: "hover:text-gray-900 dark:hover:text-gray-100",
+      color: "hover:text-foreground",
     },
     {
       name: "Pinterest",

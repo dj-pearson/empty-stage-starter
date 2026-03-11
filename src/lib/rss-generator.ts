@@ -54,7 +54,7 @@ const defaultConfig: FeedConfig = {
   webMaster: 'support@tryeatpal.com (EatPal Support)',
   generator: 'EatPal RSS Generator',
   image: {
-    url: 'https://tryeatpal.com/Logo-Green.png',
+    url: 'https://tryeatpal.com/Logo-Green.webp',
     title: 'EatPal - Kids Meal Planning for Picky Eaters',
     link: 'https://tryeatpal.com',
   },

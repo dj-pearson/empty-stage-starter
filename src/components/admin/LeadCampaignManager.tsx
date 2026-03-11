@@ -110,7 +110,7 @@ const LEAD_STATUSES = [
   { value: "contacted", label: "Contacted", color: "bg-yellow-500" },
   { value: "qualified", label: "Qualified", color: "bg-purple-500" },
   { value: "converted", label: "Converted", color: "bg-safe-food" },
-  { value: "unqualified", label: "Unqualified", color: "bg-gray-500" },
+  { value: "unqualified", label: "Unqualified", color: "bg-muted-foreground" },
   { value: "lost", label: "Lost", color: "bg-destructive" },
 ];
 

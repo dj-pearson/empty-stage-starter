@@ -144,7 +144,7 @@ export function AITicketAnalysis({ ticketId }: { ticketId: string }) {
   const getSentimentBadge = (sentiment: string) => {
     const colors: Record<string, string> = {
       positive: 'bg-green-100 text-green-800',
-      neutral: 'bg-gray-100 text-gray-800',
+      neutral: 'bg-muted text-foreground',
       negative: 'bg-orange-100 text-orange-800',
       frustrated: 'bg-red-100 text-red-800',
     };
@@ -243,7 +243,7 @@ export function AITicketAnalysis({ ticketId }: { ticketId: string }) {
             <div>
               <p className="text-sm text-muted-foreground mb-1">Urgency Score</p>
               <div className="flex items-center gap-2">
-                <div className="flex-1 bg-gray-200 rounded-full h-2">
+                <div className="flex-1 bg-muted/80 rounded-full h-2">
                   <div
                     className={`h-2 rounded-full ${
                       analysis.urgency_score >= 75

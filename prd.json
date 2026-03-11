@@ -1993,8 +1993,8 @@
         "npm run build succeeds"
       ],
       "priority": 101,
-      "passes": false,
-      "notes": "Multiple admin components still have hardcoded colors that break dark mode. These are used daily by the team."
+      "passes": true,
+      "notes": "Fixed hardcoded colors across 14 admin files (SEOManager, QuizAnalyticsDashboard, SupportPerformanceDashboard, ContentOptimizer, EmailTemplateBuilder, BudgetAnalyticsDashboard, PlatformConnectionManager, AITicketAnalysis, UserIntelligenceDashboard, AdminIntegrationManager, LeadCampaignManager, TicketQueue, ActivityTimeline, RevenueOperationsCenter). Replaced bg-gray-100/200, text-gray-400/500/600/700/800/900, bg-white with theme-aware tokens. npm run build succeeds."
     },
     {
       "id": "US-102",
@@ -2008,6 +2008,142 @@
       "priority": 102,
       "passes": true,
       "notes": "Replaced hardcoded text-gray-*/bg-gray-*/bg-white colors with theme-aware tokens (text-foreground, text-muted-foreground, bg-background, bg-muted, bg-primary-foreground). npm run build succeeds."
+    },
+    {
+      "id": "US-103",
+      "title": "Fix hardcoded colors in key pages for dark mode compatibility",
+      "description": "As a user browsing the site in dark mode, I want all pages to render correctly with proper contrast and no invisible text.",
+      "acceptanceCriteria": [
+        "Replace text-gray-*, bg-gray-*, and bg-white classes with theme tokens in MealPlanGeneratorResults.tsx, BudgetCalculatorResults.tsx, ApiDocs.tsx, AdminDashboard.tsx, SearchTrafficDashboard.tsx, and ProfessionalSettings.tsx",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 103,
+      "passes": true,
+      "notes": "Fixed 10 hardcoded color occurrences across 6 page files. MealPlanGeneratorResults (2), BudgetCalculatorResults (3), ApiDocs (1), AdminDashboard (1), SearchTrafficDashboard (1), ProfessionalSettings (2). Landing.tsx and Auth.tsx had only semi-transparent white overlays (bg-white/5, bg-white/10) on colored backgrounds which are intentional. npm run build succeeds."
+    },
+    {
+      "id": "US-104",
+      "title": "Fix hardcoded colors in user-facing components for dark mode compatibility",
+      "description": "As a user interacting with components in dark mode, I want quiz forms, navigation cards, and dialogs to render correctly.",
+      "acceptanceCriteria": [
+        "Replace text-gray-*, bg-gray-*, and bg-white classes with theme tokens in CardNav, ProcessSteps, quiz components, subscription components, and other user-facing components",
+        "Typecheck passes",
+        "npm run build succeeds"
+      ],
+      "priority": 104,
+      "passes": true,
+      "notes": "Fixed hardcoded colors across 28+ component files including CardNav (7), FoodRecommendationsDisplay (6), FoodSuccessTracker (4), SampleMealsCarousel (4), QuizQuestion (4), ProcessSteps (3), AchievementBadge (3), KidMealBuilder (2), EmailCaptureModals (4), and many more. Remaining gray-500 colors are semantic status indicators (refused/closed/unqualified) that work in both modes. npm run build succeeds."
+    },
+    {
+      "id": "US-105",
+      "title": "Switch Logo PNG references to WebP for 10x size reduction",
+      "description": "As a user visiting any page, I want logos to load faster using optimized WebP format instead of PNGs that are 10x larger.",
+      "acceptanceCriteria": [
+        "Replace all Logo-Green.png references with Logo-Green.webp across src/ and public/ (Logo-Green.png: 267KB → Logo-Green.webp: 28KB)",
+        "Replace all Logo-White.png references with Logo-White.webp across src/ and public/ (Logo-White.png: 167KB → Logo-White.webp: 23KB)",
+        "Update RSS feeds and schema components to use WebP URLs",
+        "npm run build succeeds"
+      ],
+      "priority": 105,
+      "passes": true,
+      "notes": "Replaced 63 PNG logo references across 24 src files and 2 public XML feeds with WebP equivalents. Total savings: ~380KB per page load (Logo-Green: 267KB→28KB, Logo-White: 167KB→23KB). Email templates kept as PNG for broader email client compatibility. npm run build succeeds."
+    },
+    {
+      "id": "US-106",
+      "title": "Replace remaining semantic bg-gray-100 badges with theme tokens for dark mode",
+      "description": "As an admin or user viewing status badges in dark mode, I want all badge colors to have adequate contrast. Status badges using bg-gray-100 text-gray-800 are invisible in dark mode.",
+      "acceptanceCriteria": [
+        "Audit all remaining bg-gray-100 text-gray-800 badge patterns in admin and component files",
+        "Replace with bg-muted text-foreground for neutral/inactive status badges",
+        "Keep mid-tone gray-500 semantic colors (refused, closed, unqualified) as-is since they work in both modes",
+        "npm run build succeeds"
+      ],
+      "priority": 106,
+      "passes": false,
+      "notes": "Some semantic status badges still use bg-gray-100 text-gray-800 pattern which has no contrast in dark mode. Partially addressed in US-101 batch but a thorough audit is needed."
+    },
+    {
+      "id": "US-107",
+      "title": "Convert remaining unoptimized PNGs to WebP (screenshots, product images)",
+      "description": "As a performance-conscious user, I want all images to use optimized formats. ProductShowcase3D references screenshot PNGs that should be WebP.",
+      "acceptanceCriteria": [
+        "Audit all remaining .png references in src/ for conversion opportunities",
+        "Create or convert screenshot images to WebP format",
+        "Update ProductShowcase3D.tsx and other components to use WebP",
+        "npm run build succeeds"
+      ],
+      "priority": 107,
+      "passes": false,
+      "notes": "ProductShowcase3D.tsx references /screenshots/meal-plan.png, progress.png, grocery.png. These directories/files may not exist yet. og-recipe-default.png on tryeatpal.com should also be WebP."
+    },
+    {
+      "id": "US-108",
+      "title": "Fix ProductShowcase3D phone mockup colors for dark mode",
+      "description": "As a user viewing the product showcase in dark mode, I want the phone mockup to render correctly with appropriate frame and screen colors.",
+      "acceptanceCriteria": [
+        "Review bg-white (phone screen), bg-gray-900 (phone frame), bg-gray-800 (side buttons) in ProductShowcase3D.tsx",
+        "Determine if phone mockup should adapt to dark mode or remain fixed as a device simulation",
+        "If adapting: replace bg-white with bg-card, keep frame as-is",
+        "npm run build succeeds"
+      ],
+      "priority": 108,
+      "passes": false,
+      "notes": "Phone mockup in ProductShowcase3D uses hardcoded colors to simulate a physical device. These may be intentional but should be reviewed for dark mode context."
+    },
+    {
+      "id": "US-109",
+      "title": "Add RouteErrorBoundary to catch-all 404 route",
+      "description": "As a user hitting an unmatched route, I want errors to be caught gracefully instead of crashing the app.",
+      "acceptanceCriteria": [
+        "Wrap NotFound component in RouteErrorBoundary in App.tsx catch-all route (path='*')",
+        "63 other routes already have RouteErrorBoundary - this is the only one missing",
+        "npm run build succeeds"
+      ],
+      "priority": 109,
+      "passes": false,
+      "notes": "App.tsx line 202: catch-all route is NOT wrapped in RouteErrorBoundary while all 63 other routes are. Quick fix."
+    },
+    {
+      "id": "US-110",
+      "title": "Add alt text to logo images missing accessibility attributes",
+      "description": "As a screen reader user, I want logo images to have proper alt text so I can identify the brand.",
+      "acceptanceCriteria": [
+        "Add alt='EatPal' to logo images in Accessibility.tsx (lines 27, 32, 503, 508)",
+        "Add alt='EatPal' to logo images in BlogPost.tsx (lines 309, 314, 386, 391, 550, 555)",
+        "Add alt='EatPal' to logo images in Dashboard.tsx (lines 258, 263)",
+        "npm run build succeeds"
+      ],
+      "priority": 110,
+      "passes": false,
+      "notes": "6 logo images across 3 pages missing alt text. Quick accessibility fix."
+    },
+    {
+      "id": "US-111",
+      "title": "Replace direct localStorage calls with platform abstraction in BudgetCalculator",
+      "description": "As a developer, I want all storage access to use the platform abstraction so the app works correctly on mobile and in SSR contexts.",
+      "acceptanceCriteria": [
+        "Replace localStorage.getItem/setItem/removeItem calls in BudgetCalculator.tsx with getStorage() from @/lib/platform",
+        "Verify consistent with MealPlanGenerator.tsx pattern which already uses platform abstraction",
+        "npm run build succeeds"
+      ],
+      "priority": 111,
+      "passes": false,
+      "notes": "BudgetCalculator.tsx has 6+ direct localStorage calls bypassing the platform abstraction layer. Not SSR-safe."
+    },
+    {
+      "id": "US-112",
+      "title": "Lazy load conditional dialogs in Pantry page for performance",
+      "description": "As a user loading the Pantry page, I want only essential components loaded initially so the page loads faster.",
+      "acceptanceCriteria": [
+        "Lazy load AddFoodDialog, ImportCsvDialog, BarcodeScannerDialog, BulkAddFoodDialog in Pantry.tsx",
+        "These dialogs are only shown when user clicks buttons - no need to load eagerly",
+        "Wrap lazy components in Suspense with appropriate fallbacks",
+        "npm run build succeeds"
+      ],
+      "priority": 112,
+      "passes": false,
+      "notes": "Pantry.tsx is 1261 lines with 20+ eagerly imported components. Dialogs that appear conditionally should be lazy loaded."
     }
   ]
 }

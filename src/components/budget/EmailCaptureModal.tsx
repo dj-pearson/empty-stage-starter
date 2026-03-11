@@ -191,7 +191,7 @@ export function EmailCaptureModal({
                 onCheckedChange={(checked) => setAcceptsMarketing(checked as boolean)}
                 disabled={isSubmitting}
               />
-              <label htmlFor="marketing" className="text-sm text-gray-600 cursor-pointer">
+              <label htmlFor="marketing" className="text-sm text-muted-foreground cursor-pointer">
                 Send me money-saving tips, meal planning ideas, and exclusive offers from TryEatPal
               </label>
             </div>
@@ -210,7 +210,7 @@ export function EmailCaptureModal({
                   : 'Get My Budget Report'}
             </Button>
 
-            <p className="text-xs text-gray-500 text-center">
+            <p className="text-xs text-muted-foreground text-center">
               Your information is safe with us. We respect your privacy and won't spam you.
             </p>
           </form>

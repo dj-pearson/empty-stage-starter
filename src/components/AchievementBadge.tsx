@@ -45,10 +45,10 @@ const iconMap = {
 
 const rarityColors = {
   common: {
-    bg: 'bg-gray-500/10 dark:bg-gray-400/10',
-    border: 'border-gray-500/20',
-    text: 'text-gray-700 dark:text-gray-300',
-    icon: 'text-gray-600 dark:text-gray-400',
+    bg: 'bg-muted',
+    border: 'border-muted-foreground/20',
+    text: 'text-foreground',
+    icon: 'text-muted-foreground',
   },
   rare: {
     bg: 'bg-blue-500/10 dark:bg-blue-400/10',

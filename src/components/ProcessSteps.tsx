@@ -66,7 +66,7 @@ export function ProcessSteps() {
                             transition: { duration: 0.2 },
                           }
                     }
-                    className="relative bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow h-full"
+                    className="relative bg-card rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow h-full"
                   >
               {/* Connection line to next step */}
               {index < steps.length - 1 && (
@@ -110,12 +110,12 @@ export function ProcessSteps() {
                     <h3 className="text-2xl font-heading font-bold mb-3">
                       {step.title}
                     </h3>
-                    <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                    <p className="text-muted-foreground leading-relaxed">
                       {step.description}
                     </p>
 
                     {/* Progress indicator */}
-                    <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <div className="mt-6 pt-6 border-t border-border">
                       <div className="flex items-center gap-2 text-sm text-trust-green font-medium">
                         <svg
                           className="w-5 h-5"
@@ -151,7 +151,7 @@ export function ProcessSteps() {
                   clipRule="evenodd"
                 />
               </svg>
-              <span className="font-semibold text-gray-700 dark:text-gray-200">
+              <span className="font-semibold text-foreground">
                 94% of families see improvement in food acceptance within 2 weeks
               </span>
             </div>

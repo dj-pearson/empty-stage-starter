@@ -645,10 +645,10 @@ export function EmailTemplateBuilder() {
           onDrop={(e) => handleDrop(e, template.blocks.length)}
         >
           <div
-            className="max-w-[600px] mx-auto bg-white rounded-lg shadow-lg"
+            className="max-w-[600px] mx-auto bg-card rounded-lg shadow-lg"
             style={{ backgroundColor: template.globalStyles.backgroundColor }}
           >
-            <div className="p-8 bg-white rounded-lg m-4">
+            <div className="p-8 bg-card rounded-lg m-4">
               {template.blocks.length === 0 ? (
                 <div
                   className={cn(
@@ -1107,7 +1107,7 @@ export function EmailTemplateBuilder() {
           <div className="flex-1 overflow-auto bg-muted rounded-lg p-4">
             <iframe
               srcDoc={generateHTML()}
-              className="w-full h-full min-h-[400px] bg-white rounded-lg shadow"
+              className="w-full h-full min-h-[400px] bg-card rounded-lg shadow"
               title="Email Preview"
             />
           </div>

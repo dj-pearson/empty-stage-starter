@@ -390,7 +390,7 @@ export default function BudgetCalculatorResults() {
                             <div className="text-lg font-bold text-primary">
                               {formatCurrency(meal.costPerServing)}
                             </div>
-                            <div className="text-xs text-gray-500">per serving</div>
+                            <div className="text-xs text-muted-foreground">per serving</div>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -401,14 +401,14 @@ export default function BudgetCalculatorResults() {
                       <CardContent>
                         <div className="space-y-2">
                           <div>
-                            <p className="text-xs text-gray-500 mb-1">Ingredients:</p>
+                            <p className="text-xs text-muted-foreground mb-1">Ingredients:</p>
                             <p className="text-sm text-muted-foreground">
                               {meal.ingredients.slice(0, 4).join(', ')}
                               {meal.ingredients.length > 4 && '...'}
                             </p>
                           </div>
                           <div className="pt-2 border-t">
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-muted-foreground">
                               Total: {formatCurrency(meal.totalCost)} for {meal.servings} servings
                             </p>
                           </div>

@@ -2093,12 +2093,12 @@ RESTful API available for integrations. Contact for API access.
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-white rounded p-3">
+                  <div className="bg-card rounded p-3">
                     <div className="text-sm text-muted-foreground">Total Suggestions</div>
                     <div className="text-2xl font-bold">{autoHealingResults.totalSuggestions}</div>
                   </div>
                   {autoHealingResults.autoApplyEnabled && (
-                    <div className="bg-white rounded p-3">
+                    <div className="bg-card rounded p-3">
                       <div className="text-sm text-muted-foreground">Applied Fixes</div>
                       <div className="text-2xl font-bold text-green-600">{autoHealingResults.appliedFixes}</div>
                     </div>
@@ -2138,12 +2138,12 @@ RESTful API available for integrations. Contact for API access.
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white rounded p-3">
+                  <div className="bg-card rounded p-3">
                     <div className="text-sm text-muted-foreground">Successfully Applied</div>
                     <div className="text-2xl font-bold text-green-600">{fixesAppliedResults.appliedFixes}</div>
                   </div>
                   {fixesAppliedResults.failedFixes > 0 && (
-                    <div className="bg-white rounded p-3">
+                    <div className="bg-card rounded p-3">
                       <div className="text-sm text-muted-foreground">Failed Fixes</div>
                       <div className="text-2xl font-bold text-red-600">{fixesAppliedResults.failedFixes}</div>
                     </div>
@@ -2837,7 +2837,7 @@ RESTful API available for integrations. Contact for API access.
                       <TableCell>
                         {kw.trend === "up" && <TrendingUp className="h-4 w-4 text-green-600" />}
                         {kw.trend === "down" && <TrendingUp className="h-4 w-4 text-red-600 rotate-180" />}
-                        {kw.trend === "stable" && <Activity className="h-4 w-4 text-gray-600" />}
+                        {kw.trend === "stable" && <Activity className="h-4 w-4 text-muted-foreground" />}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -3609,19 +3609,19 @@ RESTful API available for integrations. Contact for API access.
                           </div>
 
                           <div className="grid grid-cols-2 gap-4 mb-4">
-                            <div className="bg-white rounded p-3">
+                            <div className="bg-card rounded p-3">
                               <div className="text-sm text-muted-foreground">Overall Score</div>
                               <div className="text-2xl font-bold text-green-600">{structuredDataValidationResults.data.overallScore}/100</div>
                             </div>
-                            <div className="bg-white rounded p-3">
+                            <div className="bg-card rounded p-3">
                               <div className="text-sm text-muted-foreground">Total Items</div>
                               <div className="text-2xl font-bold">{structuredDataValidationResults.data.totalItems}</div>
                             </div>
-                            <div className="bg-white rounded p-3">
+                            <div className="bg-card rounded p-3">
                               <div className="text-sm text-muted-foreground">Valid Items</div>
                               <div className="text-2xl font-bold text-green-600">{structuredDataValidationResults.data.validItems}</div>
                             </div>
-                            <div className="bg-white rounded p-3">
+                            <div className="bg-card rounded p-3">
                               <div className="text-sm text-muted-foreground">Invalid Items</div>
                               <div className="text-2xl font-bold text-red-600">{structuredDataValidationResults.data.invalidItems}</div>
                             </div>
@@ -3631,7 +3631,7 @@ RESTful API available for integrations. Contact for API access.
                             <div className="space-y-2">
                               <h5 className="font-semibold text-sm">Items Found:</h5>
                               {structuredDataValidationResults.data.items.map((item: any, idx: number) => (
-                                <div key={idx} className="bg-white rounded p-3">
+                                <div key={idx} className="bg-card rounded p-3">
                                   <div className="flex items-center justify-between">
                                     <span className="font-medium">{item.type}</span>
                                     <div className="flex items-center gap-2">
@@ -3762,7 +3762,7 @@ RESTful API available for integrations. Contact for API access.
                             {alert.message}
                           </p>
                           {alert.details && Object.keys(alert.details).length > 0 && (
-                            <div className="text-xs bg-white dark:bg-gray-900 p-2 rounded border mt-2">
+                            <div className="text-xs bg-card p-2 rounded border mt-2">
                               {Object.entries(alert.details).map(([key, value]) => (
                                 <div key={key} className="flex justify-between py-1">
                                   <span className="font-medium">{key}:</span>
@@ -4279,11 +4279,11 @@ RESTful API available for integrations. Contact for API access.
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-white rounded p-3">
+                          <div className="bg-card rounded p-3">
                             <div className="text-sm text-muted-foreground">Performance Score</div>
                             <div className="text-2xl font-bold">{coreWebVitalsResults.data.metrics?.mobile_performance_score || 'N/A'}</div>
                           </div>
-                          <div className="bg-white rounded p-3">
+                          <div className="bg-card rounded p-3">
                             <div className="text-sm text-muted-foreground">LCP</div>
                             <div className="text-2xl font-bold">
                               {coreWebVitalsResults.data.metrics?.mobile_lcp ? `${coreWebVitalsResults.data.metrics.mobile_lcp}s` : 'N/A'}
@@ -4294,7 +4294,7 @@ RESTful API available for integrations. Contact for API access.
                               </Badge>
                             )}
                           </div>
-                          <div className="bg-white rounded p-3">
+                          <div className="bg-card rounded p-3">
                             <div className="text-sm text-muted-foreground">CLS</div>
                             <div className="text-2xl font-bold">{coreWebVitalsResults.data.metrics?.mobile_cls || 'N/A'}</div>
                             {coreWebVitalsResults.data.metrics?.cls_status && (

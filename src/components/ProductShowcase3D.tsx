@@ -147,7 +147,7 @@ export function ProductShowcase3D({
                       </div>
                       <div>
                         <h3 className="font-bold text-lg mb-1">{screenshot.title}</h3>
-                        <p className="text-gray-600">{screenshot.description}</p>
+                        <p className="text-muted-foreground">{screenshot.description}</p>
                       </div>
                     </m.div>
                   ))}
@@ -196,7 +196,7 @@ export function ProductShowcase3D({
                               {index === 0 ? '🍽️' : index === 1 ? '📊' : '🛒'}
                             </div>
                             <h4 className="font-bold text-lg mb-2">{screenshot.title}</h4>
-                            <p className="text-sm text-gray-600">{screenshot.description}</p>
+                            <p className="text-sm text-muted-foreground">{screenshot.description}</p>
                           </div>
                         </div>
                       ))}

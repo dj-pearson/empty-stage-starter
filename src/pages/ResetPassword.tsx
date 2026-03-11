@@ -107,12 +107,12 @@ export default function ResetPassword() {
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 mb-4">
             <img
-              src="/Logo-Green.png"
+              src="/Logo-Green.webp"
               alt="EatPal"
               className="h-10 block dark:hidden"
             />
             <img
-              src="/Logo-White.png"
+              src="/Logo-White.webp"
               alt="EatPal"
               className="h-10 hidden dark:block"
             />

@@ -256,7 +256,7 @@ export function AchievementsView() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="text-center p-3 rounded-lg bg-gray-100 dark:bg-gray-900">
+            <div className="text-center p-3 rounded-lg bg-muted">
               <div className="text-lg font-bold">{stats.byRarity.common}</div>
               <div className="text-xs text-muted-foreground">Common</div>
             </div>

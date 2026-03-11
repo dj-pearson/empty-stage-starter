@@ -37,7 +37,7 @@ export function QuizQuestion({ question, value, onChange }: QuizQuestionProps) {
                 'cursor-pointer transition-all hover:shadow-md border-2',
                 value === option.value
                   ? 'border-primary bg-primary/5'
-                  : 'border-gray-200 dark:border-gray-700'
+                  : 'border-border'
               )}
               onClick={() => handleSingleChange(option.value)}
             >
@@ -51,7 +51,7 @@ export function QuizQuestion({ question, value, onChange }: QuizQuestionProps) {
                   <div className="flex-1">
                     <div className="font-medium">{option.label}</div>
                     {option.description && (
-                      <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      <div className="text-sm text-muted-foreground mt-1">
                         {option.description}
                       </div>
                     )}
@@ -81,7 +81,7 @@ export function QuizQuestion({ question, value, onChange }: QuizQuestionProps) {
                 'cursor-pointer transition-all hover:shadow-md border-2',
                 isChecked
                   ? 'border-primary bg-primary/5'
-                  : 'border-gray-200 dark:border-gray-700'
+                  : 'border-border'
               )}
               onClick={() => handleMultipleChange(option.value, !isChecked)}
             >
@@ -101,7 +101,7 @@ export function QuizQuestion({ question, value, onChange }: QuizQuestionProps) {
                   <div className="flex-1">
                     <div className="font-medium">{option.label}</div>
                     {option.description && (
-                      <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      <div className="text-sm text-muted-foreground mt-1">
                         {option.description}
                       </div>
                     )}
@@ -111,7 +111,7 @@ export function QuizQuestion({ question, value, onChange }: QuizQuestionProps) {
             </Card>
           );
         })}
-        <p className="text-sm text-gray-600 dark:text-gray-400 italic">
+        <p className="text-sm text-muted-foreground italic">
           Select all that apply
         </p>
       </div>
@@ -130,7 +130,7 @@ export function QuizQuestion({ question, value, onChange }: QuizQuestionProps) {
                 'cursor-pointer transition-all hover:shadow-lg hover:scale-105 border-2',
                 value === option.value
                   ? 'border-primary bg-primary/10 shadow-lg'
-                  : 'border-gray-200 dark:border-gray-700'
+                  : 'border-border'
               )}
               onClick={() => handleSingleChange(option.value)}
             >
@@ -149,7 +149,7 @@ export function QuizQuestion({ question, value, onChange }: QuizQuestionProps) {
                 >
                   <div className="font-semibold text-lg mb-1">{option.label}</div>
                   {option.description && (
-                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                    <div className="text-xs text-muted-foreground">
                       {option.description}
                     </div>
                   )}

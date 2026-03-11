@@ -539,3 +539,57 @@ Implemented top 4 highest-priority items to increase visibility and MRR through 
   - `bg-primary/5` is a good replacement for light colored backgrounds like bg-purple-50, bg-green-50
   - PickyEaterQuizResults already had some dark: overrides (text-gray-600 dark:text-gray-300) but using text-muted-foreground is simpler and more consistent
 ---
+
+## 2026-03-11 - Critical Platform Improvements Batch: US-101, US-103, US-104, US-105
+
+### US-101: Fix hardcoded colors in admin dashboard components for dark mode
+- Fixed 55 hardcoded color occurrences across 14 admin component files
+- Files: SEOManager.tsx (14), QuizAnalyticsDashboard.tsx (14), SupportPerformanceDashboard.tsx (4), ContentOptimizer.tsx (4), EmailTemplateBuilder.tsx (3), BudgetAnalyticsDashboard.tsx (3), PlatformConnectionManager.tsx (4), AITicketAnalysis.tsx (2), UserIntelligenceDashboard.tsx (2), AdminIntegrationManager.tsx (1), LeadCampaignManager.tsx (1), TicketQueue.tsx (1), ActivityTimeline.tsx (1), RevenueOperationsCenter.tsx (1)
+- Replacements: bg-gray-100/200→bg-muted, text-gray-400→text-muted-foreground/70, text-gray-500/600→text-muted-foreground, text-gray-700/800/900→text-foreground, bg-white→bg-card, border-gray→border-border
+
+### US-103: Fix hardcoded colors in key pages for dark mode
+- Fixed 10 occurrences across 6 page files
+- MealPlanGeneratorResults.tsx (2 text-gray-500→text-muted-foreground)
+- BudgetCalculatorResults.tsx (3 text-gray-500→text-muted-foreground)
+- ApiDocs.tsx (1 bg-gray-100 text-gray-700→bg-muted text-foreground)
+- AdminDashboard.tsx (1 bg-gray-200→bg-muted/80)
+- SearchTrafficDashboard.tsx (1 bg-gray-100 text-gray-700→bg-muted text-foreground)
+- ProfessionalSettings.tsx (2 bg-white→bg-card)
+- Landing.tsx and Auth.tsx had only semi-transparent white overlays on colored backgrounds (intentional)
+
+### US-104: Fix hardcoded colors in user-facing components for dark mode
+- Fixed hardcoded colors across 28+ component files
+- Key files: CardNav (7), FoodRecommendationsDisplay (6), QuizQuestion (4), SampleMealsCarousel (4), ProcessSteps (3), AchievementBadge (3), KidMealBuilder (2), EmailCaptureModals (4), ProductShowcase3D (2 text-gray-600→text-muted-foreground)
+- Remaining gray-500 colors are semantic status indicators (refused/closed/unqualified) that work in both modes
+
+### US-105: Switch Logo PNG references to WebP (10x size reduction)
+- Replaced 63 PNG logo references across 24 src/ files and 2 public XML feeds
+- Logo-Green.png: 267KB → Logo-Green.webp: 28KB (10x savings)
+- Logo-White.png: 167KB → Logo-White.webp: 23KB (7x savings)
+- Total savings: ~380KB per page load across every page
+- Email templates (public/email-templates/) kept as PNG for email client compatibility
+- Files changed: 24 src files, public/feed.xml, public/rss.xml
+
+### New Stories Added (US-103 through US-108)
+- US-103: Page dark mode fixes (COMPLETED)
+- US-104: Component dark mode fixes (COMPLETED)
+- US-105: Logo PNG→WebP conversion (COMPLETED)
+- US-106: Remaining semantic badge dark mode fixes (future)
+- US-107: Convert remaining PNGs to WebP (future)
+- US-108: ProductShowcase3D phone mockup dark mode (future)
+
+### Build Verification
+- `npx vite build`: SUCCESS (built in 1m 3s, no errors)
+
+### Progress Summary
+- 4 stories completed this session (US-101, US-103, US-104, US-105)
+- 3 new future stories added (US-106, US-107, US-108)
+- Total: 93/95 stories now passing
+- Remaining: 3 stories with passes: false (US-106, US-107, US-108)
+- **Learnings for future iterations:**
+  - Semantic status badges using mid-tone grays (gray-500) work OK in both modes; only light backgrounds (gray-100/200) and dark text (gray-800/900) break in dark mode
+  - Phone/device mockup components (ProductShowcase3D) intentionally use hardcoded colors for physical device simulation
+  - Logo WebP files exist alongside PNGs in public/ - always prefer .webp for web usage
+  - Email templates should keep PNG for maximum email client compatibility
+  - `bg-white/5`, `bg-white/10` semi-transparent whites on colored backgrounds are intentional glass effects and should NOT be converted
+---

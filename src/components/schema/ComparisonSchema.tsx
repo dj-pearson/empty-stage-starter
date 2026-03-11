@@ -16,7 +16,7 @@
  *       name: "EatPal",
  *       description: "AI-powered food chaining meal planner for picky eaters",
  *       url: "https://tryeatpal.com",
- *       image: "https://tryeatpal.com/Logo-Green.png",
+ *       image: "https://tryeatpal.com/Logo-Green.webp",
  *       rating: 4.8,
  *       ratingCount: 2847,
  *       priceRange: "Free - $19.99/month",

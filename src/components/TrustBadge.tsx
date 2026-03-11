@@ -59,7 +59,7 @@ export function TrustBadge({ variant, value, label, delay = 0 }: TrustBadgeProps
                 transition: { duration: 0.2 },
               }
         }
-        className={`flex items-center gap-3 px-4 py-2 rounded-full ${config.bgColor} border border-gray-200/50 backdrop-blur-sm`}
+        className={`flex items-center gap-3 px-4 py-2 rounded-full ${config.bgColor} border border-border/50 backdrop-blur-sm`}
       >
         <div className={`${config.color}`}>
           <Icon className="w-5 h-5" />
@@ -68,7 +68,7 @@ export function TrustBadge({ variant, value, label, delay = 0 }: TrustBadgeProps
           {value && (
             <span className={`text-lg font-bold ${config.color}`}>{value}</span>
           )}
-          <span className="text-xs text-gray-700 font-medium">{label}</span>
+          <span className="text-xs text-foreground font-medium">{label}</span>
         </div>
       </m.div>
     </LazyMotion>

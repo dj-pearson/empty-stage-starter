@@ -35,7 +35,7 @@ const COLOR_CLASS_MAP: Record<string, string> = {
   purple: "text-purple-600",
   pink: "text-pink-600",
   orange: "text-orange-600",
-  gray: "text-gray-600",
+  gray: "text-muted-foreground",
 };
 
 interface AddToCollectionsDialogProps {

@@ -60,7 +60,7 @@ export function CardNav() {
 
   return (
     <LazyMotion features={domAnimation} strict>
-      <section className="py-20 bg-gradient-to-b from-white to-secondary/10">
+      <section className="py-20 bg-gradient-to-b from-background to-secondary/10">
         <div className="max-w-7xl mx-auto px-4">
           {/* Section Header */}
           <m.div
@@ -98,7 +98,7 @@ export function CardNav() {
                   flex items-center whitespace-nowrap
                   ${activeCard === section.id
                     ? 'bg-trust-green text-white'
-                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    : 'bg-card text-foreground hover:bg-muted'
                   }
                 `}
               >
@@ -136,7 +136,7 @@ export function CardNav() {
                   absolute inset-0 
                   bg-gradient-to-br ${activeSection.gradient} 
                   rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden
-                  border-2 border-gray-100
+                  border-2 border-border
                 `}
               >
                 <div className="grid md:grid-cols-2 gap-6 md:gap-8 p-6 md:p-12 h-full">
@@ -162,16 +162,16 @@ export function CardNav() {
                     </h3>
                     
                     {/* Description */}
-                    <p className="text-base sm:text-lg md:text-xl text-gray-700 dark:text-gray-200 mb-4 md:mb-6">
+                    <p className="text-base sm:text-lg md:text-xl text-foreground mb-4 md:mb-6">
                       {activeSection.description}
                     </p>
                     
                     {/* Trust Signal */}
-                    <div className="flex items-center gap-2 md:gap-3 mb-6 md:mb-8 p-3 md:p-4 bg-white/60 dark:bg-white/10 rounded-xl backdrop-blur-sm">
+                    <div className="flex items-center gap-2 md:gap-3 mb-6 md:mb-8 p-3 md:p-4 bg-card/60 dark:bg-card/10 rounded-xl backdrop-blur-sm">
                       <div className="flex-shrink-0 w-6 h-6 md:w-8 md:h-8 bg-trust-green rounded-full flex items-center justify-center">
                         <Check className="w-4 h-4 md:w-5 md:h-5 text-white" />
                       </div>
-                      <span className="font-semibold text-sm sm:text-base text-gray-800 dark:text-gray-100">
+                      <span className="font-semibold text-sm sm:text-base text-foreground">
                         {activeSection.trustSignal}
                       </span>
                     </div>
@@ -179,8 +179,8 @@ export function CardNav() {
                   
                   {/* Right Column - Features List */}
                   <div className="flex flex-col justify-center">
-                    <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl md:rounded-2xl p-5 md:p-8 shadow-lg">
-                      <h4 className="text-lg md:text-xl font-bold mb-4 md:mb-6 text-gray-900 dark:text-gray-100">
+                    <div className="bg-card/80 dark:bg-card/80 backdrop-blur-sm rounded-xl md:rounded-2xl p-5 md:p-8 shadow-lg">
+                      <h4 className="text-lg md:text-xl font-bold mb-4 md:mb-6 text-foreground">
                         What's Included:
                       </h4>
                       <ul className="space-y-3 md:space-y-4">
@@ -198,7 +198,7 @@ export function CardNav() {
                             <div className="flex-shrink-0 w-5 h-5 md:w-6 md:h-6 bg-trust-green/20 rounded-full flex items-center justify-center mt-0.5">
                               <Check className="w-3 h-3 md:w-4 md:h-4 text-trust-green" />
                             </div>
-                            <span className="text-sm sm:text-base text-gray-700 dark:text-gray-200 leading-relaxed">
+                            <span className="text-sm sm:text-base text-foreground leading-relaxed">
                               {feature}
                             </span>
                           </m.li>

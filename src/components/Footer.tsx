@@ -10,7 +10,7 @@ export const Footer = () => {
               <picture className="block dark:hidden">
                 <source srcSet="/Logo-Green.webp" type="image/webp" />
                 <img
-                  src="/Logo-Green.png"
+                  src="/Logo-Green.webp"
                   alt="EatPal"
                   className="h-8"
                   width="120"
@@ -22,7 +22,7 @@ export const Footer = () => {
               <picture className="hidden dark:block">
                 <source srcSet="/Logo-White.webp" type="image/webp" />
                 <img
-                  src="/Logo-White.png"
+                  src="/Logo-White.webp"
                   alt="EatPal"
                   className="h-8"
                   width="120"

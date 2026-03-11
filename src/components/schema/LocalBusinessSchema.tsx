@@ -60,7 +60,7 @@ export function LocalBusinessSchema({
   name = "EatPal",
   description = "AI-powered meal planning platform using food chaining therapy for picky eaters, ARFID, and selective eating challenges.",
   url = "https://tryeatpal.com",
-  logo = "https://tryeatpal.com/Logo-Green.png",
+  logo = "https://tryeatpal.com/Logo-Green.webp",
   email = "Support@TryEatPal.com",
   telephone,
   priceRange = "Free - $19.99/month",

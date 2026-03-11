@@ -79,7 +79,7 @@ export function QuizAnalyticsDashboard() {
     return (
       <Card>
         <CardContent className="pt-6">
-          <p className="text-center text-gray-500">No quiz data available yet.</p>
+          <p className="text-center text-muted-foreground">No quiz data available yet.</p>
         </CardContent>
       </Card>
     );
@@ -107,7 +107,7 @@ export function QuizAnalyticsDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold">Quiz Analytics</h2>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-muted-foreground">
             Performance metrics for the Picky Eater Quiz
           </p>
         </div>
@@ -127,11 +127,11 @@ export function QuizAnalyticsDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Responses</CardTitle>
-            <Users className="w-4 h-4 text-gray-500" />
+            <Users className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{analytics.totalResponses}</div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               {analytics.completedResponses} completed
             </p>
           </CardContent>
@@ -140,13 +140,13 @@ export function QuizAnalyticsDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Email Capture Rate</CardTitle>
-            <Mail className="w-4 h-4 text-gray-500" />
+            <Mail className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {(analytics.emailCaptureRate * 100).toFixed(1)}%
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               {Math.round(analytics.totalResponses * analytics.emailCaptureRate)} leads captured
             </p>
           </CardContent>
@@ -155,13 +155,13 @@ export function QuizAnalyticsDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">PDF Download Rate</CardTitle>
-            <FileDown className="w-4 h-4 text-gray-500" />
+            <FileDown className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {(analytics.pdfDownloadRate * 100).toFixed(1)}%
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               {Math.round(analytics.totalResponses * analytics.pdfDownloadRate)} downloads
             </p>
           </CardContent>
@@ -170,13 +170,13 @@ export function QuizAnalyticsDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Avg Completion Time</CardTitle>
-            <Clock className="w-4 h-4 text-gray-500" />
+            <Clock className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {Math.round(analytics.avgCompletionTime / 60)}m
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               {Math.round(analytics.avgCompletionTime)} seconds
             </p>
           </CardContent>
@@ -256,13 +256,13 @@ export function QuizAnalyticsDashboard() {
         </CardHeader>
         <CardContent>
           {leads.length === 0 ? (
-            <p className="text-center text-gray-500 py-8">No leads yet</p>
+            <p className="text-center text-muted-foreground py-8">No leads yet</p>
           ) : (
             <div className="space-y-3">
               {leads.map((lead) => (
                 <div
                   key={lead.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted"
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
@@ -271,14 +271,14 @@ export function QuizAnalyticsDashboard() {
                         <Badge variant="default">Trial Started</Badge>
                       )}
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                    <div className="text-sm text-muted-foreground">
                       {lead.email} • Child: {lead.child_name}
                     </div>
                     <div className="flex items-center gap-2 mt-1">
                       <Badge variant="outline">
                         {getPersonalityName(lead.personality_type)}
                       </Badge>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-muted-foreground">
                         {formatDistanceToNow(new Date(lead.created_at), { addSuffix: true })}
                       </span>
                     </div>

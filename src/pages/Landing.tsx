@@ -293,7 +293,7 @@ const Landing = () => {
               <picture className="block dark:hidden">
                 <source srcSet="/Logo-Green.webp" type="image/webp" />
                 <img
-                  src="/Logo-Green.png"
+                  src="/Logo-Green.webp"
                   alt="EatPal"
                   className="h-8 w-auto"
                   width="120"
@@ -304,7 +304,7 @@ const Landing = () => {
               <picture className="hidden dark:block">
                 <source srcSet="/Logo-White.webp" type="image/webp" />
                 <img
-                  src="/Logo-White.png"
+                  src="/Logo-White.webp"
                   alt="EatPal"
                   className="h-8 w-auto"
                   width="120"
@@ -383,7 +383,7 @@ const Landing = () => {
                     <picture className="block dark:hidden">
                       <source srcSet="/Logo-Green.webp" type="image/webp" />
                       <img
-                        src="/Logo-Green.png"
+                        src="/Logo-Green.webp"
                         alt="EatPal"
                         className="h-7"
                         width="105"
@@ -393,7 +393,7 @@ const Landing = () => {
                     <picture className="hidden dark:block">
                       <source srcSet="/Logo-White.webp" type="image/webp" />
                       <img
-                        src="/Logo-White.png"
+                        src="/Logo-White.webp"
                         alt="EatPal"
                         className="h-7"
                         width="105"

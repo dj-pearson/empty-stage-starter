@@ -444,7 +444,7 @@ function DNSVerificationInstructions({ domain }: { domain: CustomDomain }) {
               <h4 className="font-semibold text-sm">1. Verification Record (TXT)</h4>
               <Badge variant="outline">Required</Badge>
             </div>
-            <div className="bg-white dark:bg-muted p-4 rounded-lg border space-y-2 font-mono text-sm">
+            <div className="bg-card dark:bg-muted p-4 rounded-lg border space-y-2 font-mono text-sm">
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Type:</span>
                 <div className="flex items-center gap-2">
@@ -498,7 +498,7 @@ function DNSVerificationInstructions({ domain }: { domain: CustomDomain }) {
               <h4 className="font-semibold text-sm">2. Root Domain Record (CNAME or A)</h4>
               <Badge variant="outline">Required</Badge>
             </div>
-            <div className="bg-white dark:bg-muted p-4 rounded-lg border space-y-2 font-mono text-sm">
+            <div className="bg-card dark:bg-muted p-4 rounded-lg border space-y-2 font-mono text-sm">
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Type:</span>
                 <span className="font-semibold">{dnsRecords.cname.type}</span>
