@@ -102,7 +102,7 @@ export function AppInstallPrompt() {
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shrink-0">
               <picture>
                 <source srcSet="/Logo-White.webp" type="image/webp" />
-                <img src="/Logo-White.png" alt="EatPal" className="w-8 h-8" width="32" height="32" />
+                <img src="/Logo-White.webp" alt="EatPal" className="w-8 h-8" width="32" height="32" />
               </picture>
             </div>
 

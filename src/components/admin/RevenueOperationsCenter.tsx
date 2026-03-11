@@ -357,7 +357,7 @@ export function RevenueOperationsCenter() {
                               <span>Status: {user.subscription_status}</span>
                             </div>
                             <div className="mt-2">
-                              <div className="flex-1 bg-gray-200 rounded-full h-2">
+                              <div className="flex-1 bg-muted/80 rounded-full h-2">
                                 <div
                                   className={`h-2 rounded-full ${
                                     user.churn_probability >= 0.7 ? 'bg-red-500' : 'bg-yellow-500'

@@ -150,7 +150,7 @@ const HealthScoreCard = ({ user }: { user: UserIntelligence }) => {
     const colors: Record<string, string> = {
       power_user: "bg-purple-100 text-purple-800",
       active: "bg-blue-100 text-blue-800",
-      casual: "bg-gray-100 text-gray-800",
+      casual: "bg-muted text-foreground",
       inactive: "bg-red-100 text-red-800",
     };
     return <Badge className={colors[tier] || ""}>{tier.replace('_', ' ').toUpperCase()}</Badge>;
@@ -882,7 +882,7 @@ const ContextSidebar = ({ user }: { user: UserIntelligence }) => {
                 {flag.enabled ? (
                   <CheckCircle className="h-3 w-3 text-green-600" />
                 ) : (
-                  <XCircle className="h-3 w-3 text-gray-400" />
+                  <XCircle className="h-3 w-3 text-muted-foreground/70" />
                 )}
                 <span>{flag.feature_flags?.name || 'Unknown'}</span>
               </div>

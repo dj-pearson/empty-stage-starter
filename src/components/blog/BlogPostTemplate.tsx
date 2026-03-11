@@ -115,7 +115,7 @@ export function BlogPostTemplate({
       "name": "EatPal",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://tryeatpal.com/Logo-Green.png",
+        "url": "https://tryeatpal.com/Logo-Green.webp",
       },
     },
     "mainEntityOfPage": {

@@ -62,7 +62,7 @@ interface Order {
 }
 
 const statusConfig: Record<string, { label: string; icon: any; color: string }> = {
-  draft: { label: "Draft", icon: Package, color: "bg-gray-100 text-gray-700" },
+  draft: { label: "Draft", icon: Package, color: "bg-muted text-foreground" },
   pending: { label: "Ready", icon: Clock, color: "bg-blue-100 text-blue-700" },
   submitted: { label: "Submitted", icon: Truck, color: "bg-purple-100 text-purple-700" },
   confirmed: { label: "Confirmed", icon: CheckCircle, color: "bg-green-100 text-green-700" },

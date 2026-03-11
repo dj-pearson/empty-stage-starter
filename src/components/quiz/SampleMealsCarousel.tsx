@@ -20,7 +20,7 @@ export function SampleMealsCarousel({ meals }: SampleMealsCarouselProps) {
         <ChefHat className="w-6 h-6 text-primary" />
         <h2 className="text-3xl font-bold">Sample Meal Ideas</h2>
       </div>
-      <p className="text-gray-600 dark:text-gray-300 mb-6">
+      <p className="text-muted-foreground mb-6">
         Meals that kids with this personality type typically love
       </p>
 
@@ -42,7 +42,7 @@ export function SampleMealsCarousel({ meals }: SampleMealsCarouselProps) {
               <CardDescription>{meal.description}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Clock className="w-4 h-4" />
                 <span>{meal.prepTime} minutes</span>
               </div>
@@ -60,7 +60,7 @@ export function SampleMealsCarousel({ meals }: SampleMealsCarouselProps) {
 
               <div className="bg-primary/5 dark:bg-primary/10 p-3 rounded-lg">
                 <h4 className="font-semibold text-sm mb-1">Why It Works:</h4>
-                <p className="text-xs text-gray-700 dark:text-gray-300">
+                <p className="text-xs text-foreground">
                   {meal.whyItWorks}
                 </p>
               </div>
@@ -70,7 +70,7 @@ export function SampleMealsCarousel({ meals }: SampleMealsCarouselProps) {
       </div>
 
       {meals.length === 0 && (
-        <div className="text-center text-gray-500 py-8">
+        <div className="text-center text-muted-foreground py-8">
           <p>More meal ideas coming soon!</p>
         </div>
       )}

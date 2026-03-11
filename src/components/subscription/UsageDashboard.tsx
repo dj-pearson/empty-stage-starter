@@ -198,14 +198,14 @@ function FeatureItem({ name, available }: { name: string; available: boolean }) 
     <div className={`flex items-center gap-2 p-2 rounded-lg ${
       available 
         ? "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300" 
-        : "bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400"
+        : "bg-muted text-muted-foreground"
     }`}>
       {available ? (
         <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
           <span className="text-white text-xs">✓</span>
         </div>
       ) : (
-        <div className="w-5 h-5 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center">
+        <div className="w-5 h-5 rounded-full bg-muted-foreground/50 flex items-center justify-center">
           <span className="text-white text-xs">✗</span>
         </div>
       )}

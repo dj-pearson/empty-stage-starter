@@ -68,7 +68,7 @@ const CATEGORY_COLORS: Record<ActivityCategory, string> = {
   billing: 'bg-yellow-100 text-yellow-800',
   ai: 'bg-indigo-100 text-indigo-800',
   engagement: 'bg-teal-100 text-teal-800',
-  storage: 'bg-gray-100 text-gray-800',
+  storage: 'bg-muted text-foreground',
   general: 'bg-slate-100 text-slate-800',
 };
 

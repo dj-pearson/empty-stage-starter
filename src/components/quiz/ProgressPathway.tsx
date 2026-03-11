@@ -14,7 +14,7 @@ export function ProgressPathway({ pathway }: ProgressPathwayProps) {
         <TrendingUp className="w-6 h-6 text-primary" />
         <h2 className="text-3xl font-bold">Your Child's Progress Pathway</h2>
       </div>
-      <p className="text-gray-600 dark:text-gray-300 mb-6">
+      <p className="text-muted-foreground mb-6">
         A roadmap showing where your child is now and where they're heading
       </p>
 

@@ -177,7 +177,7 @@ export function SupportPerformanceDashboard() {
                 <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
               </div>
               <div className="mt-2">
-                <div className="flex-1 bg-gray-200 rounded-full h-2">
+                <div className="flex-1 bg-muted/80 rounded-full h-2">
                   <div
                     className="bg-yellow-500 h-2 rounded-full"
                     style={{ width: `${(metrics.avg_csat_rating / 5) * 100}%` }}
@@ -196,7 +196,7 @@ export function SupportPerformanceDashboard() {
                 <Star className="h-5 w-5 text-purple-500 fill-purple-500" />
               </div>
               <div className="mt-2">
-                <div className="flex-1 bg-gray-200 rounded-full h-2">
+                <div className="flex-1 bg-muted/80 rounded-full h-2">
                   <div
                     className="bg-purple-500 h-2 rounded-full"
                     style={{ width: `${(metrics.avg_csat_ai_assisted / 5) * 100}%` }}
@@ -215,7 +215,7 @@ export function SupportPerformanceDashboard() {
                 <Star className="h-5 w-5 text-green-500 fill-green-500" />
               </div>
               <div className="mt-2">
-                <div className="flex-1 bg-gray-200 rounded-full h-2">
+                <div className="flex-1 bg-muted/80 rounded-full h-2">
                   <div
                     className="bg-green-500 h-2 rounded-full"
                     style={{ width: `${(metrics.avg_csat_auto_resolved / 5) * 100}%` }}
@@ -265,7 +265,7 @@ export function SupportPerformanceDashboard() {
                     </div>
                   </div>
                   <div className="flex gap-2 items-center">
-                    <div className="flex-1 bg-gray-200 rounded-full h-2">
+                    <div className="flex-1 bg-muted/80 rounded-full h-2">
                       <div
                         className="bg-blue-500 h-2 rounded-full transition-all"
                         style={{ width: `${resolutionRate}%` }}

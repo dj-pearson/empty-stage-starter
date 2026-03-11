@@ -256,12 +256,12 @@ const Dashboard = () => {
           <div className="flex justify-between items-center h-14 px-4">
             <div className="flex items-center gap-2">
               <img
-                src="/Logo-Green.png"
+                src="/Logo-Green.webp"
                 alt="EatPal"
                 className="h-7 block dark:hidden"
               />
               <img
-                src="/Logo-White.png"
+                src="/Logo-White.webp"
                 alt="EatPal"
                 className="h-7 hidden dark:block"
               />

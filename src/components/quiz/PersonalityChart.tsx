@@ -52,7 +52,7 @@ export function PersonalityChart({ scores }: PersonalityChartProps) {
                 backgroundColor: index === 0 ? `${getPersonalityColor(score.type)}10` : 'transparent',
               }}
             >
-              <div className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <div className="text-sm font-medium text-muted-foreground">
                 {getPersonalityName(score.type)}
               </div>
               <div className="text-2xl font-bold" style={{ color: getPersonalityColor(score.type) }}>

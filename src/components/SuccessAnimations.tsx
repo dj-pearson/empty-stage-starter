@@ -256,7 +256,7 @@ export function ProgressCelebration({ show, milestone, count, onComplete }: Prog
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={onComplete}
-                className="mt-8 px-8 py-3 bg-white text-trust-green rounded-full font-semibold text-lg"
+                className="mt-8 px-8 py-3 bg-background text-trust-green rounded-full font-semibold text-lg"
               >
                 Keep Going! 🚀
               </m.button>

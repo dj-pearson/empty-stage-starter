@@ -75,7 +75,7 @@ const statusColors = {
   in_progress: "bg-purple-500/10 text-purple-500",
   waiting_user: "bg-yellow-500/10 text-yellow-500",
   resolved: "bg-green-500/10 text-green-500",
-  closed: "bg-gray-500/10 text-gray-500",
+  closed: "bg-muted-foreground/10 text-muted-foreground",
 };
 
 export function TicketQueue() {

@@ -61,7 +61,7 @@ interface Achievement {
 }
 
 const PLATE_TEMPLATES = [
-  { id: "standard", name: "Round Plate", emoji: "🍽️", color: "bg-gray-100" },
+  { id: "standard", name: "Round Plate", emoji: "🍽️", color: "bg-muted" },
   { id: "divided", name: "Divided Plate", emoji: "🍱", color: "bg-blue-50" },
   { id: "face", name: "Make a Face", emoji: "😊", color: "bg-yellow-50" },
   { id: "rainbow", name: "Rainbow", emoji: "🌈", color: "bg-purple-50" },
@@ -301,7 +301,7 @@ export function KidMealBuilder() {
               {recentAchievements.map((achievement) => (
                 <div
                   key={achievement.id}
-                  className="flex flex-col items-center min-w-[140px] p-4 bg-white dark:bg-gray-800 rounded-xl border-2 border-yellow-300"
+                  className="flex flex-col items-center min-w-[140px] p-4 bg-card rounded-xl border-2 border-yellow-300"
                 >
                   <div className="text-4xl mb-2">🏆</div>
                   <p className="text-sm font-bold text-center">{achievement.achievement_name}</p>

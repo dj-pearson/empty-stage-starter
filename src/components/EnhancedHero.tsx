@@ -281,7 +281,7 @@ export function EnhancedHero() {
           {stats.map((stat) => (
             <div
               key={stat.label}
-              className="stat-card group cursor-default bg-white/60 dark:bg-black/20 backdrop-blur-md rounded-2xl p-6 border border-white/20 shadow-sm hover:shadow-md transition-all"
+              className="stat-card group cursor-default bg-card/60 dark:bg-card/20 backdrop-blur-md rounded-2xl p-6 border border-white/20 shadow-sm hover:shadow-md transition-all"
             >
               <div className="text-3xl mb-3">{stat.icon}</div>
               <div className="text-3xl md:text-4xl font-heading font-bold text-primary mb-2 transition-colors group-hover:text-primary/80">

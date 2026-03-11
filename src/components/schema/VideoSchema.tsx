@@ -81,7 +81,7 @@ export function VideoSchema({
   author,
   publisher = {
     name: 'EatPal',
-    logoUrl: 'https://tryeatpal.com/Logo-Green.png',
+    logoUrl: 'https://tryeatpal.com/Logo-Green.webp',
   },
 }: VideoSchemaProps) {
   useEffect(() => {

@@ -204,7 +204,7 @@ export function PlatformConnectionManager({ open, onClose }: Props) {
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg bg-gray-100`}>
+                      <div className={`p-2 rounded-lg bg-muted`}>
                         <Icon className={`h-6 w-6 ${platform.color}`} />
                       </div>
                       <div>
@@ -220,7 +220,7 @@ export function PlatformConnectionManager({ open, onClose }: Props) {
                         Connected
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="bg-gray-50">
+                      <Badge variant="outline" className="bg-muted">
                         <XCircle className="h-3 w-3 mr-1" />
                         Not Connected
                       </Badge>
@@ -229,7 +229,7 @@ export function PlatformConnectionManager({ open, onClose }: Props) {
                 </CardHeader>
                 <CardContent>
                   {connected && connection && (
-                    <div className="mb-3 p-3 bg-gray-50 rounded-lg text-xs space-y-1">
+                    <div className="mb-3 p-3 bg-muted rounded-lg text-xs space-y-1">
                       <div>
                         <span className="font-medium">Account:</span>{" "}
                         {connection.platform_account_name || "Not selected"}
@@ -248,7 +248,7 @@ export function PlatformConnectionManager({ open, onClose }: Props) {
                               ? "text-green-600"
                               : connection.sync_status === "error"
                               ? "text-red-600"
-                              : "text-gray-600"
+                              : "text-muted-foreground"
                           }
                         >
                           {connection.sync_status || "Unknown"}

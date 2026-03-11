@@ -98,7 +98,7 @@ export function OfflineIndicator() {
           <WifiOff className="h-4 w-4" />
           You are offline
           {pendingCount > 0 && (
-            <span className="ml-1 bg-white/20 px-2 py-0.5 rounded-full text-xs">
+            <span className="ml-1 bg-background/20 px-2 py-0.5 rounded-full text-xs">
               {pendingCount} pending {pendingCount === 1 ? "change" : "changes"}
             </span>
           )}

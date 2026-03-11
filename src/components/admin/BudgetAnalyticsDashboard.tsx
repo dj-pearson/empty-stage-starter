@@ -57,7 +57,7 @@ export function BudgetAnalyticsDashboard() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-gray-500">Loading analytics...</p>
+        <p className="text-muted-foreground">Loading analytics...</p>
       </div>
     );
   }
@@ -192,7 +192,7 @@ export function BudgetAnalyticsDashboard() {
                       </span>
                       <span className="text-sm text-muted-foreground">{state.count} calcs</span>
                     </div>
-                    <div className="mt-1 h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                    <div className="mt-1 h-2 w-full bg-muted/80 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-green-600"
                         style={{
@@ -257,7 +257,7 @@ export function BudgetAnalyticsDashboard() {
                           Yes
                         </span>
                       ) : (
-                        <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
+                        <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
                           No
                         </span>
                       )}

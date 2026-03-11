@@ -141,12 +141,12 @@ const FAQ = () => {
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <Link to="/" className="flex items-center gap-2">
             <img 
-              src="/Logo-Green.png" 
+              src="/Logo-Green.webp" 
               alt="EatPal" 
               className="h-8 block dark:hidden"
             />
             <img 
-              src="/Logo-White.png" 
+              src="/Logo-White.webp" 
               alt="EatPal" 
               className="h-8 hidden dark:block"
             />
@@ -257,12 +257,12 @@ const FAQ = () => {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <img 
-                  src="/Logo-Green.png" 
+                  src="/Logo-Green.webp" 
                   alt="EatPal" 
                   className="h-8 block dark:hidden"
                 />
                 <img 
-                  src="/Logo-White.png" 
+                  src="/Logo-White.webp" 
                   alt="EatPal" 
                   className="h-8 hidden dark:block"
                 />

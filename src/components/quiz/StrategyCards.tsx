@@ -13,7 +13,7 @@ export function StrategyCards({ strategies }: StrategyCardsProps) {
         <Lightbulb className="w-6 h-6 text-primary" />
         <h2 className="text-3xl font-bold">Personalized Feeding Strategies</h2>
       </div>
-      <p className="text-gray-600 dark:text-gray-300 mb-6">
+      <p className="text-muted-foreground mb-6">
         Proven strategies specifically designed for your child's eating personality
       </p>
 

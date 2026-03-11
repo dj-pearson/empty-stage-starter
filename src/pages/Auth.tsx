@@ -423,11 +423,11 @@ const Auth = () => {
         <div className="animate-pulse flex flex-col items-center gap-3">
           <picture className="block dark:hidden">
             <source srcSet="/Logo-Green.webp" type="image/webp" />
-            <img src="/Logo-Green.png" alt="EatPal" className="h-10" width="150" height="40" />
+            <img src="/Logo-Green.webp" alt="EatPal" className="h-10" width="150" height="40" />
           </picture>
           <picture className="hidden dark:block">
             <source srcSet="/Logo-White.webp" type="image/webp" />
-            <img src="/Logo-White.png" alt="EatPal" className="h-10" width="150" height="40" />
+            <img src="/Logo-White.webp" alt="EatPal" className="h-10" width="150" height="40" />
           </picture>
           <p className="text-sm text-muted-foreground">Loading...</p>
         </div>
@@ -466,7 +466,7 @@ const Auth = () => {
           <div className="relative z-10 max-w-lg">
             <Link to="/" className="inline-block mb-8">
               <img
-                src="/Logo-White.png"
+                src="/Logo-White.webp"
                 alt="EatPal"
                 className="h-12"
               />
@@ -545,12 +545,12 @@ const Auth = () => {
             <div className="lg:hidden text-center mb-8">
               <Link to="/" className="inline-flex items-center gap-2 mb-4">
                 <img
-                  src="/Logo-Green.png"
+                  src="/Logo-Green.webp"
                   alt="EatPal"
                   className="h-10 block dark:hidden"
                 />
                 <img
-                  src="/Logo-White.png"
+                  src="/Logo-White.webp"
                   alt="EatPal"
                   className="h-10 hidden dark:block"
                 />

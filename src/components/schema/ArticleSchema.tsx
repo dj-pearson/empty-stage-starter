@@ -42,7 +42,7 @@ export function ArticleSchema({
   authorName = "EatPal Team",
   authorUrl = "https://tryeatpal.com",
   publisherName = "EatPal",
-  publisherLogo = "https://tryeatpal.com/Logo-Green.png",
+  publisherLogo = "https://tryeatpal.com/Logo-Green.webp",
   category,
   keywords,
   wordCount,

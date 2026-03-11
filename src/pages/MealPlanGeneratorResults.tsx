@@ -282,7 +282,7 @@ export default function MealPlanGeneratorResults() {
                               <span className="text-sm">
                                 {ing.amount} {ing.unit} {ing.name}
                               </span>
-                              <span className="text-xs text-gray-500">
+                              <span className="text-xs text-muted-foreground">
                                 {formatCurrency(ing.estimatedCost || 0)}
                               </span>
                             </div>
@@ -368,7 +368,7 @@ export default function MealPlanGeneratorResults() {
                                 <div className="font-medium text-sm">
                                   {item.amount} {item.unit} {item.name}
                                 </div>
-                                <div className="text-xs text-gray-500">
+                                <div className="text-xs text-muted-foreground">
                                   Used in: Day {item.usedInMeals.join(', ')}
                                 </div>
                               </div>

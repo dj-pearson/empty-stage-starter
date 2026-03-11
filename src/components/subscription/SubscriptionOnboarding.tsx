@@ -228,7 +228,7 @@ export function SubscriptionOnboarding({
                     ? "bg-primary"
                     : index < step
                     ? "bg-primary/50"
-                    : "bg-gray-300"
+                    : "bg-muted-foreground/50"
                 }`}
               />
             ))}

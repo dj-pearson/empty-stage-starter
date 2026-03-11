@@ -24,7 +24,7 @@ export function FoodRecommendationsDisplay({ recommendations }: FoodRecommendati
               <CheckCircle2 className="w-5 h-5 text-green-500" />
               <h3 className="font-semibold text-lg">Green Light Foods</h3>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               High likelihood of acceptance
             </p>
             <div className="space-y-2">
@@ -37,7 +37,7 @@ export function FoodRecommendationsDisplay({ recommendations }: FoodRecommendati
                     {food.icon && <span className="text-xl">{food.icon}</span>}
                     <span className="font-medium text-sm">{food.name}</span>
                   </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                  <p className="text-xs text-muted-foreground">
                     {food.description}
                   </p>
                 </div>
@@ -51,7 +51,7 @@ export function FoodRecommendationsDisplay({ recommendations }: FoodRecommendati
               <AlertCircle className="w-5 h-5 text-yellow-500" />
               <h3 className="font-semibold text-lg">Yellow Light Foods</h3>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               Introduce with care
             </p>
             <div className="space-y-2">
@@ -64,7 +64,7 @@ export function FoodRecommendationsDisplay({ recommendations }: FoodRecommendati
                     {food.icon && <span className="text-xl">{food.icon}</span>}
                     <span className="font-medium text-sm">{food.name}</span>
                   </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                  <p className="text-xs text-muted-foreground">
                     {food.description}
                   </p>
                 </div>
@@ -78,7 +78,7 @@ export function FoodRecommendationsDisplay({ recommendations }: FoodRecommendati
               <XCircle className="w-5 h-5 text-red-500" />
               <h3 className="font-semibold text-lg">Red Light Foods</h3>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               Avoid for now
             </p>
             <div className="space-y-2">
@@ -91,7 +91,7 @@ export function FoodRecommendationsDisplay({ recommendations }: FoodRecommendati
                     {food.icon && <span className="text-xl">{food.icon}</span>}
                     <span className="font-medium text-sm">{food.name}</span>
                   </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                  <p className="text-xs text-muted-foreground">
                     {food.description}
                   </p>
                 </div>

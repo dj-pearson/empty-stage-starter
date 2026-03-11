@@ -29,7 +29,7 @@ function EndpointDetail({
       ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
       : method === 'POST'
         ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-        : 'bg-gray-100 text-gray-700';
+        : 'bg-muted text-foreground';
 
   return (
     <div className="border border-border rounded-md overflow-hidden">

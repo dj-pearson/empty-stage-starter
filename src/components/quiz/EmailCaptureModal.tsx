@@ -152,7 +152,7 @@ export function EmailCaptureModal({
             </Label>
           </div>
 
-          <p className="text-xs text-gray-600 dark:text-gray-400">
+          <p className="text-xs text-muted-foreground">
             We'll never share your email. Unsubscribe anytime.
           </p>
 
@@ -165,7 +165,7 @@ export function EmailCaptureModal({
             {isSubmitting ? 'Sending...' : 'Get My Complete Guide'}
           </Button>
 
-          <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-center text-sm text-muted-foreground">
             Join <strong>3,142 parents</strong> finally winning at mealtime
           </p>
         </form>

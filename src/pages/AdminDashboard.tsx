@@ -349,7 +349,7 @@ export default function AdminDashboard() {
                       {feature.users_using} users ({feature.adoption_rate_pct}%)
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-muted/80 rounded-full h-2">
                     <div
                       className="bg-blue-500 h-2 rounded-full"
                       style={{ width: `${feature.adoption_rate_pct}%` }}
