@@ -2090,6 +2090,60 @@
       "priority": 108,
       "passes": false,
       "notes": "Phone mockup in ProductShowcase3D uses hardcoded colors to simulate a physical device. These may be intentional but should be reviewed for dark mode context."
+    },
+    {
+      "id": "US-109",
+      "title": "Add RouteErrorBoundary to catch-all 404 route",
+      "description": "As a user hitting an unmatched route, I want errors to be caught gracefully instead of crashing the app.",
+      "acceptanceCriteria": [
+        "Wrap NotFound component in RouteErrorBoundary in App.tsx catch-all route (path='*')",
+        "63 other routes already have RouteErrorBoundary - this is the only one missing",
+        "npm run build succeeds"
+      ],
+      "priority": 109,
+      "passes": false,
+      "notes": "App.tsx line 202: catch-all route is NOT wrapped in RouteErrorBoundary while all 63 other routes are. Quick fix."
+    },
+    {
+      "id": "US-110",
+      "title": "Add alt text to logo images missing accessibility attributes",
+      "description": "As a screen reader user, I want logo images to have proper alt text so I can identify the brand.",
+      "acceptanceCriteria": [
+        "Add alt='EatPal' to logo images in Accessibility.tsx (lines 27, 32, 503, 508)",
+        "Add alt='EatPal' to logo images in BlogPost.tsx (lines 309, 314, 386, 391, 550, 555)",
+        "Add alt='EatPal' to logo images in Dashboard.tsx (lines 258, 263)",
+        "npm run build succeeds"
+      ],
+      "priority": 110,
+      "passes": false,
+      "notes": "6 logo images across 3 pages missing alt text. Quick accessibility fix."
+    },
+    {
+      "id": "US-111",
+      "title": "Replace direct localStorage calls with platform abstraction in BudgetCalculator",
+      "description": "As a developer, I want all storage access to use the platform abstraction so the app works correctly on mobile and in SSR contexts.",
+      "acceptanceCriteria": [
+        "Replace localStorage.getItem/setItem/removeItem calls in BudgetCalculator.tsx with getStorage() from @/lib/platform",
+        "Verify consistent with MealPlanGenerator.tsx pattern which already uses platform abstraction",
+        "npm run build succeeds"
+      ],
+      "priority": 111,
+      "passes": false,
+      "notes": "BudgetCalculator.tsx has 6+ direct localStorage calls bypassing the platform abstraction layer. Not SSR-safe."
+    },
+    {
+      "id": "US-112",
+      "title": "Lazy load conditional dialogs in Pantry page for performance",
+      "description": "As a user loading the Pantry page, I want only essential components loaded initially so the page loads faster.",
+      "acceptanceCriteria": [
+        "Lazy load AddFoodDialog, ImportCsvDialog, BarcodeScannerDialog, BulkAddFoodDialog in Pantry.tsx",
+        "These dialogs are only shown when user clicks buttons - no need to load eagerly",
+        "Wrap lazy components in Suspense with appropriate fallbacks",
+        "npm run build succeeds"
+      ],
+      "priority": 112,
+      "passes": false,
+      "notes": "Pantry.tsx is 1261 lines with 20+ eagerly imported components. Dialogs that appear conditionally should be lazy loaded."
     }
   ]
 }
