@@ -68,6 +68,10 @@ const AccessibilitySettingsPage = lazy(() => import("./pages/dashboard/Accessibi
 const ApiDocs = lazy(() => import("./pages/ApiDocs"));
 const ShareTarget = lazy(() => import("./pages/ShareTarget"));
 
+// pSEO programmatic pages
+const PseoPage = lazy(() => import("./pages/pseo/PseoPage"));
+const PseoAdminPage = lazy(() => import("./pages/PseoAdmin"));
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -149,6 +153,7 @@ const App = () => (
             <Route path="/admin" element={<ProtectedRoute><RouteErrorBoundary><Admin /></RouteErrorBoundary></ProtectedRoute>} />
             <Route path="/admin-dashboard" element={<ProtectedRoute><RouteErrorBoundary><AdminDashboard /></RouteErrorBoundary></ProtectedRoute>} />
             <Route path="/seo-dashboard" element={<ProtectedRoute requireAdmin><RouteErrorBoundary><SEODashboard /></RouteErrorBoundary></ProtectedRoute>} />
+            <Route path="/pseo-admin" element={<ProtectedRoute requireAdmin><RouteErrorBoundary><Suspense fallback={<LoadingFallback />}><PseoAdminPage /></Suspense></RouteErrorBoundary></ProtectedRoute>} />
             <Route path="/search-traffic" element={<ProtectedRoute requireAdmin><RouteErrorBoundary><SearchTrafficDashboard /></RouteErrorBoundary></ProtectedRoute>} />
 
             {/* Main Dashboard with nested routes - Protected */}
@@ -198,6 +203,11 @@ const App = () => (
             <Route path="/insights" element={<ProtectedRoute><RouteErrorBoundary><Dashboard /></RouteErrorBoundary></ProtectedRoute>}>
               <Route index element={<RouteErrorBoundary><InsightsDashboard /></RouteErrorBoundary>} />
             </Route>
+            {/* pSEO programmatic pages */}
+            <Route path="/food-chaining/:safeFood" element={<RouteErrorBoundary><Suspense fallback={<LoadingFallback />}><PseoPage /></Suspense></RouteErrorBoundary>} />
+            <Route path="/food-chaining/:safeFood/:modifier" element={<RouteErrorBoundary><Suspense fallback={<LoadingFallback />}><PseoPage /></Suspense></RouteErrorBoundary>} />
+            <Route path="/guides/:guideSlug" element={<RouteErrorBoundary><Suspense fallback={<LoadingFallback />}><PseoPage /></Suspense></RouteErrorBoundary>} />
+            <Route path="/:dimension1/:dimension2" element={<RouteErrorBoundary><Suspense fallback={<LoadingFallback />}><PseoPage /></Suspense></RouteErrorBoundary>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
