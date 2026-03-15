@@ -2060,8 +2060,8 @@
         "npm run build succeeds"
       ],
       "priority": 106,
-      "passes": false,
-      "notes": "Some semantic status badges still use bg-gray-100 text-gray-800 pattern which has no contrast in dark mode. Partially addressed in US-101 batch but a thorough audit is needed."
+      "passes": true,
+      "notes": "Replaced all remaining bg-gray-100 text-gray-800 patterns: admin-analytics.ts (3 occurrences: default severity, inactive tier, default tier), ai-cost-tracking.ts (1 default alert level), PseoAdminDashboard.tsx (1 archived status). All replaced with bg-muted text-muted-foreground/text-foreground. npm run build succeeds."
     },
     {
       "id": "US-107",
@@ -2101,8 +2101,8 @@
         "npm run build succeeds"
       ],
       "priority": 109,
-      "passes": false,
-      "notes": "App.tsx line 202: catch-all route is NOT wrapped in RouteErrorBoundary while all 63 other routes are. Quick fix."
+      "passes": true,
+      "notes": "Wrapped NotFound in RouteErrorBoundary in App.tsx catch-all route (path='*'). Now consistent with all 63 other routes. npm run build succeeds."
     },
     {
       "id": "US-110",
@@ -2115,8 +2115,8 @@
         "npm run build succeeds"
       ],
       "priority": 110,
-      "passes": false,
-      "notes": "6 logo images across 3 pages missing alt text. Quick accessibility fix."
+      "passes": true,
+      "notes": "Already complete: all logo images in Accessibility.tsx, BlogPost.tsx, and Dashboard.tsx already have alt='EatPal'. Verified via codebase grep. npm run build succeeds."
     },
     {
       "id": "US-111",
@@ -2128,8 +2128,8 @@
         "npm run build succeeds"
       ],
       "priority": 111,
-      "passes": false,
-      "notes": "BudgetCalculator.tsx has 6+ direct localStorage calls bypassing the platform abstraction layer. Not SSR-safe."
+      "passes": true,
+      "notes": "Replaced all 5 direct localStorage calls in BudgetCalculator.tsx with getSyncStorage() from @/lib/platform. Uses module-level const storage = getSyncStorage() for synchronous access compatible with useState initializers and useEffect. npm run build succeeds."
     },
     {
       "id": "US-112",
@@ -2142,8 +2142,8 @@
         "npm run build succeeds"
       ],
       "priority": 112,
-      "passes": false,
-      "notes": "Pantry.tsx is 1261 lines with 20+ eagerly imported components. Dialogs that appear conditionally should be lazy loaded."
+      "passes": true,
+      "notes": "Lazy loaded AddFoodDialog, BarcodeScannerDialog, and BulkAddFoodDialog in Pantry.tsx using React.lazy() with named export transform. Wrapped in single Suspense boundary with null fallback. ImportCsvDialog kept eager since it renders inline in dropdown menu. npm run build succeeds."
     }
   ]
 }

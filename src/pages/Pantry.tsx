@@ -1,14 +1,16 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from "react";
 import { Helmet } from "react-helmet-async";
 // CSS animations used instead of framer-motion for list rendering performance
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useApp } from "@/contexts/AppContext";
 import { FoodCard } from "@/components/FoodCard";
-import { AddFoodDialog } from "@/components/AddFoodDialog";
 import { ImportCsvDialog } from "@/components/ImportCsvDialog";
-import { BarcodeScannerDialog } from "@/components/admin/BarcodeScannerDialog";
 import { ImageFoodCapture } from "@/components/ImageFoodCapture";
-import { BulkAddFoodDialog } from "@/components/BulkAddFoodDialog";
+
+// Lazy load dialogs that are only shown on user action
+const AddFoodDialog = lazy(() => import("@/components/AddFoodDialog").then(m => ({ default: m.AddFoodDialog })));
+const BarcodeScannerDialog = lazy(() => import("@/components/admin/BarcodeScannerDialog").then(m => ({ default: m.BarcodeScannerDialog })));
+const BulkAddFoodDialog = lazy(() => import("@/components/BulkAddFoodDialog").then(m => ({ default: m.BulkAddFoodDialog })));
 import { PantryStatsBar } from "@/components/pantry/PantryStatsBar";
 import { PantryCategorySection } from "@/components/pantry/PantryCategorySection";
 import { PantryListItem } from "@/components/pantry/PantryListItem";
@@ -1011,6 +1013,7 @@ export default function Pantry() {
         </div>
 
         {/* === DIALOGS === */}
+        <Suspense fallback={null}>
         <AddFoodDialog
           open={dialogOpen}
           onOpenChange={handleDialogClose}
@@ -1101,6 +1104,7 @@ export default function Pantry() {
           onOpenChange={setBulkAddOpen}
           onSave={handleBulkAdd}
         />
+        </Suspense>
       </div>
     </div>
   );

@@ -330,7 +330,7 @@ export function getAlertLevelColor(alertLevel: string): {
     case "ok":
       return { text: "text-green-700", bg: "bg-green-100" };
     default:
-      return { text: "text-gray-700", bg: "bg-gray-100" };
+      return { text: "text-muted-foreground", bg: "bg-muted" };
   }
 }
 

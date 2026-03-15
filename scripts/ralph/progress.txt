@@ -593,3 +593,52 @@ Implemented top 4 highest-priority items to increase visibility and MRR through 
   - Email templates should keep PNG for maximum email client compatibility
   - `bg-white/5`, `bg-white/10` semi-transparent whites on colored backgrounds are intentional glass effects and should NOT be converted
 ---
+
+## 2026-03-15 - Critical Platform Improvements Batch: US-106, US-109, US-110, US-111, US-112
+
+### US-109: Add RouteErrorBoundary to catch-all 404 route
+- Wrapped NotFound component in RouteErrorBoundary in App.tsx catch-all route (path='*')
+- Now consistent with all 63 other routes in the app
+- Files changed: src/App.tsx
+
+### US-106: Replace remaining semantic bg-gray-100 badges with theme tokens for dark mode
+- Replaced bg-gray-100 text-gray-800/700 with bg-muted text-muted-foreground in 5 occurrences:
+  - admin-analytics.ts: default severity badge, inactive tier, default tier (3 occurrences)
+  - ai-cost-tracking.ts: default alert level (1 occurrence)
+  - PseoAdminDashboard.tsx: archived status badge (1 occurrence, also removed dark: overrides)
+- Files changed: src/lib/admin-analytics.ts, src/lib/ai-cost-tracking.ts, src/components/admin/pseo/PseoAdminDashboard.tsx
+
+### US-110: Add alt text to logo images (already complete)
+- Verified all logo images in Accessibility.tsx, BlogPost.tsx, and Dashboard.tsx already have alt='EatPal'
+- No code changes needed - marked as passed
+
+### US-111: Replace direct localStorage calls with platform abstraction in BudgetCalculator
+- Added `import { getSyncStorage } from '@/lib/platform'` and module-level `const storage = getSyncStorage()`
+- Replaced 5 direct localStorage calls (2 getItem, 1 setItem, 2 removeItem) with storage abstraction
+- Now SSR-safe and mobile-compatible, consistent with MealPlanGenerator.tsx pattern
+- Files changed: src/pages/BudgetCalculator.tsx
+
+### US-112: Lazy load conditional dialogs in Pantry page for performance
+- Converted AddFoodDialog, BarcodeScannerDialog, BulkAddFoodDialog from eager to lazy imports using React.lazy()
+- Used `.then(m => ({ default: m.ComponentName }))` pattern for named exports
+- Wrapped all lazy dialogs in single `<Suspense fallback={null}>` boundary
+- ImportCsvDialog kept as eager import since it renders inline in dropdown menu (not conditional on open state)
+- Files changed: src/pages/Pantry.tsx
+
+### Build Verification
+- `npm run build`: SUCCESS (built in 1m 15s, no errors)
+
+### Remaining Stories (for future Ralph loops)
+- US-107: Convert remaining unoptimized PNGs to WebP (screenshots, product images)
+- US-108: Fix ProductShowcase3D phone mockup colors for dark mode
+
+### Progress Summary
+- 5 stories completed/verified this session (US-106, US-109, US-110, US-111, US-112)
+- Total: 98/100 stories now passing (prior was 93/95, US-110 was already done)
+- Remaining: 2 stories with passes: false (US-107, US-108)
+- **Learnings for future iterations:**
+  - getSyncStorage() from @/lib/platform is the correct abstraction for synchronous localStorage usage in components (vs getStorage() which is async)
+  - Named exports require `.then(m => ({ default: m.Name }))` transform with React.lazy()
+  - ImportCsvDialog is self-contained with its own dialog trigger, cannot be lazy loaded like open-state dialogs
+  - US-110 logo alt text was already complete from prior work - always verify before implementing
+---

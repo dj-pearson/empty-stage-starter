@@ -21,8 +21,10 @@ import { SEOHead } from '@/components/SEOHead';
 import { getPageSEO } from '@/lib/seo-config';
 import { toast } from 'sonner';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { getSyncStorage } from '@/lib/platform';
 
 const BUDGET_CALC_DRAFT_KEY = 'eatpal-budget-calc-draft';
+const storage = getSyncStorage();
 
 const US_STATES = [
   { code: 'AL', name: 'Alabama' },
@@ -110,7 +112,7 @@ export default function BudgetCalculator() {
 
   const [formData, setFormData] = useState<Partial<BudgetCalculatorInput>>(() => {
     try {
-      const saved = localStorage.getItem(BUDGET_CALC_DRAFT_KEY);
+      const saved = storage.getItem(BUDGET_CALC_DRAFT_KEY);
       if (saved) {
         return JSON.parse(saved) as Partial<BudgetCalculatorInput>;
       }
@@ -122,7 +124,7 @@ export default function BudgetCalculator() {
 
   const [showResumeBanner, setShowResumeBanner] = useState(() => {
     try {
-      return localStorage.getItem(BUDGET_CALC_DRAFT_KEY) !== null;
+      return storage.getItem(BUDGET_CALC_DRAFT_KEY) !== null;
     } catch {
       return false;
     }
@@ -149,14 +151,14 @@ export default function BudgetCalculator() {
   // Auto-save form data to localStorage on every change
   useEffect(() => {
     try {
-      localStorage.setItem(BUDGET_CALC_DRAFT_KEY, JSON.stringify(formData));
+      storage.setItem(BUDGET_CALC_DRAFT_KEY, JSON.stringify(formData));
     } catch {
       // Ignore storage errors
     }
   }, [formData]);
 
   const handleStartFresh = () => {
-    localStorage.removeItem(BUDGET_CALC_DRAFT_KEY);
+    storage.removeItem(BUDGET_CALC_DRAFT_KEY);
     setFormData(DEFAULT_BUDGET_FORM);
     setShowResumeBanner(false);
     toast.success('Started a fresh form');
@@ -215,7 +217,7 @@ export default function BudgetCalculator() {
       );
 
       // Clear saved draft on successful calculation
-      localStorage.removeItem(BUDGET_CALC_DRAFT_KEY);
+      storage.removeItem(BUDGET_CALC_DRAFT_KEY);
 
       // Navigate to results with data
       navigate('/budget-calculator/results', {
