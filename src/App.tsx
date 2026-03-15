@@ -209,7 +209,7 @@ const App = () => (
             <Route path="/guides/:guideSlug" element={<RouteErrorBoundary><Suspense fallback={<LoadingFallback />}><PseoPage /></Suspense></RouteErrorBoundary>} />
             <Route path="/:dimension1/:dimension2" element={<RouteErrorBoundary><Suspense fallback={<LoadingFallback />}><PseoPage /></Suspense></RouteErrorBoundary>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
+            <Route path="*" element={<RouteErrorBoundary><NotFound /></RouteErrorBoundary>} />
           </Routes>
           </Suspense>
           </BrowserRouter>

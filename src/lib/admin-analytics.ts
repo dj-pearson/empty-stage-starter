@@ -358,7 +358,7 @@ export function formatSeverity(severity: string): {
     case "low":
       return { label: "Low", color: "text-blue-700", bgColor: "bg-blue-100" };
     default:
-      return { label: severity, color: "text-gray-700", bgColor: "bg-gray-100" };
+      return { label: severity, color: "text-muted-foreground", bgColor: "bg-muted" };
   }
 }
 
@@ -378,9 +378,9 @@ export function formatUserTier(tier: string): {
     case "casual":
       return { label: "Casual", color: "text-blue-700", bgColor: "bg-blue-100" };
     case "inactive":
-      return { label: "Inactive", color: "text-gray-700", bgColor: "bg-gray-100" };
+      return { label: "Inactive", color: "text-muted-foreground", bgColor: "bg-muted" };
     default:
-      return { label: tier, color: "text-gray-700", bgColor: "bg-gray-100" };
+      return { label: tier, color: "text-muted-foreground", bgColor: "bg-muted" };
   }
 }
 
