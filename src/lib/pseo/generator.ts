@@ -369,10 +369,7 @@ export async function generatePseoPage(
         canonical_url: `https://tryeatpal.com/guides/${slug}`,
         generation_status: 'generating',
         tier,
-        combination,
-        breadcrumbs: buildBreadcrumbs(pageType, combination),
         content: {},
-        related_pages: [],
       })
       .select('id')
       .single();
@@ -433,14 +430,13 @@ export async function generateBatch(
   const { data: batch, error: batchError } = await supabase
     .from('pseo_generation_batches')
     .insert({
-      page_types: config.pageTypes,
-      tiers: config.tiers,
-      batch_size: config.batchSize,
-      priority: priorityMap[config.priority] ?? 5,
+      name: `Batch ${config.pageTypes.join(', ')} T${config.tiers.join(',')}`,
+      description: `${config.batchSize} pages, priority: ${config.priority}`,
+      page_type: config.pageTypes[0] ?? null,
       status: 'pending',
-      total: 0,
-      completed: 0,
-      failed: 0,
+      total_pages: 0,
+      completed_pages: 0,
+      failed_pages: 0,
     })
     .select('id')
     .single();
@@ -459,7 +455,7 @@ export async function generateBatch(
   // Update batch total
   await supabase
     .from('pseo_generation_batches')
-    .update({ total: queued, status: 'processing' })
+    .update({ total_pages: queued, status: 'running', started_at: new Date().toISOString() })
     .eq('id', batch.id);
 
   return { batchId: batch.id, queued };
@@ -480,8 +476,7 @@ export async function queuePages(
   const { data: taxonomy, error: taxError } = await supabase
     .from('pseo_taxonomy')
     .select('*')
-    .eq('active', true)
-    .in('page_type', pageTypes)
+    .eq('is_active', true)
     .in('tier', tiers);
 
   if (taxError) throw taxError;
@@ -504,7 +499,7 @@ export async function queuePages(
     page_type: PseoPageType;
     combination: TaxonomyCombination;
     priority: number;
-    status: 'pending';
+    status: 'queued';
   }> = [];
 
   for (const item of taxonomy) {
@@ -520,7 +515,7 @@ export async function queuePages(
       page_type: item.page_type as PseoPageType,
       combination,
       priority,
-      status: 'pending',
+      status: 'queued',
     });
   }
 
@@ -547,7 +542,7 @@ export async function processQueue(batchId: string): Promise<{
     .from('pseo_generation_queue')
     .select('*')
     .eq('batch_id', batchId)
-    .eq('status', 'pending')
+    .eq('status', 'queued')
     .order('priority', { ascending: false })
     .limit(10);
 
@@ -597,9 +592,9 @@ export async function processQueue(batchId: string): Promise<{
   await supabase
     .from('pseo_generation_batches')
     .update({
-      completed: completed,
-      failed: failed,
-      status: failed > 0 && completed === 0 ? 'failed' : 'processing',
+      completed_pages: completed,
+      failed_pages: failed,
+      status: failed > 0 && completed === 0 ? 'failed' : 'running',
     })
     .eq('id', batchId);
 
@@ -734,7 +729,7 @@ export async function getGenerationStats(): Promise<GenerationStats> {
   const { data: queue } = await supabase
     .from('pseo_generation_queue')
     .select('id')
-    .in('status', ['pending', 'processing']);
+    .in('status', ['queued', 'processing']);
 
   stats.queueLength = queue?.length ?? 0;
 

@@ -1,20 +1,52 @@
-// API route for Make.com or external automation to trigger the next pSEO build step
-// Place in: src/pages/api/pseo/next.ts
+/**
+ * pSEO queue processor — triggers the next batch of pSEO page generation.
+ *
+ * This is NOT a Next.js API route. It exports a helper that the admin
+ * dashboard can call, which invokes the `process-pseo-queue` edge function.
+ *
+ * For Make.com / external automation, call the edge function directly:
+ *   POST https://functions.tryeatpal.com/process-pseo-queue
+ *   Body: { "batchId": "<optional>", "limit": 5 }
+ */
 
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { processQueue } from '@/lib/pseo/generator';
+import { supabase } from '@/integrations/supabase/client';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+export interface ProcessQueueResult {
+  status: string;
+  processed: number;
+  succeeded: number;
+  failed: number;
+  results: Array<{
+    queueId: string;
+    pageType: string;
+    slug: string;
+    status: 'success' | 'failed';
+    pageId?: string;
+    qualityScore?: number;
+    error?: string;
+  }>;
+  batchId: string | null;
+}
+
+/**
+ * Trigger the pSEO queue processor edge function.
+ */
+export async function triggerPseoQueue(options?: {
+  batchId?: string;
+  limit?: number;
+  dryRun?: boolean;
+}): Promise<ProcessQueueResult> {
+  const { data, error } = await supabase.functions.invoke('process-pseo-queue', {
+    body: {
+      batchId: options?.batchId,
+      limit: options?.limit ?? 5,
+      dryRun: options?.dryRun ?? false,
+    },
+  });
+
+  if (error) {
+    throw new Error(`process-pseo-queue failed: ${error.message}`);
   }
 
-  try {
-    // Optionally accept a batchId or just process the next item in the queue
-    const { batchId } = req.body || {};
-    const result = await processQueue(batchId);
-    return res.status(200).json({ success: true, result });
-  } catch (error) {
-    return res.status(500).json({ error: (error as Error).message });
-  }
+  return data as ProcessQueueResult;
 }
