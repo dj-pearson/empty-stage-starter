@@ -13,6 +13,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
 import { RouteAnnouncer } from "@/components/RouteAnnouncer";
 import { LoadingFallback } from "@/components/LoadingFallback";
+import { AdminControlPanel } from '@/components/admin/AdminControlPanel';
 
 // Lazy load non-critical components to improve initial bundle size and LCP
 const PWAInstallPrompt = lazy(() => import("@/components/PWAInstallPrompt").then(m => ({ default: m.PWAInstallPrompt })));
