@@ -1,22 +1,7 @@
-import { Platform } from 'react-native';
-import { useEffect } from 'react';
+import { Redirect } from 'expo-router';
 
 export default function Index() {
-  useEffect(() => {
-    // On web, redirect to the existing React app
-    if (Platform.OS === 'web') {
-      // The existing Vite app will handle web routing
-      window.location.href = '/';
-    }
-  }, []);
-
-  // For mobile platforms, render the mobile app
-  if (Platform.OS !== 'web') {
-    // Import mobile components dynamically to avoid web build issues
-    const MobileApp = require('./mobile/MobileApp').default;
-    return <MobileApp />;
-  }
-
-  return null;
+  // Root index redirects to tabs - auth is handled by _layout.tsx AuthGate
+  return <Redirect href="/(tabs)/" />;
 }
 
