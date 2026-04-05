@@ -1093,3 +1093,82 @@ Implemented the remaining 5 branding stories to complete the ARFID/food chaining
 ### Build: SUCCESS (1m 3s, no errors)
 ### New future stories: US-106 (semantic badge dark mode), US-107 (remaining PNGs→WebP), US-108 (phone mockup dark mode)
 ---
+
+---
+
+## 2026-04-04 - Android App Deep Dive Audit & Implementation (US-113 through US-118)
+
+### Audit Summary
+- Full audit of Android/mobile app revealed: well-architected scaffold but NO functional screens
+- Infrastructure in place: Expo 54, React Native 0.81.4, Expo Router 6.0.12, EAS builds, secure storage
+- Created 22 new PRD user stories (US-113 through US-134) covering UI, UX, security, performance, accessibility
+- Implemented top 4 priority items
+
+### US-113: Mobile Tab Navigation with Expo Router
+- What was implemented: 5-tab bottom navigation (Home, Meals, Scan, Lists, Profile) with Expo Router Tabs
+- Files changed:
+  - `app/(tabs)/_layout.tsx` (new) - Tab navigator with EatPal brand colors, Android keyboard hide, a11y labels
+  - `app/_layout.tsx` (modified) - Added AuthGate component for session-based routing between auth and tabs
+  - `app/index.tsx` (modified) - Root redirect to tabs, auth handled by AuthGate
+
+### US-114: Mobile Authentication Screens
+- What was implemented: Login, signup, and forgot-password screens with full validation
+- Files changed:
+  - `app/(auth)/_layout.tsx` (new) - Auth group stack navigator
+  - `app/(auth)/login.tsx` (new) - Email/password login with rate limiting (5 attempts/15min), show/hide toggle
+  - `app/(auth)/signup.tsx` (new) - Signup with real-time password requirement indicators, email confirmation
+  - `app/(auth)/forgot-password.tsx` (new) - Password reset with Supabase resetPasswordForEmail
+  - `app/mobile/lib/validation.ts` (new) - Shared validation: email, password (12+ chars, upper, lower, number, special), rate limiting, sanitization
+
+### US-115: Dashboard/Home Screen
+- What was implemented: Full dashboard with meal summary, nutrition overview, kid selector, quick actions
+- Files changed:
+  - `app/(tabs)/index.tsx` (new) - Home tab with daily meal summary, calorie/item/meal counts, greeting, pull-to-refresh
+  - Shows today's meals by slot (breakfast/lunch/dinner/snack), empty states with CTAs
+  - Kid selector chips for multi-child families
+
+### US-116: Biometric Authentication
+- What was implemented: Fingerprint/face unlock with expo-local-authentication
+- Files changed:
+  - `app/mobile/hooks/useBiometricAuth.ts` (new) - Biometric hook with 2-min grace period, app resume detection, fallback handling
+  - `app.config.js` (modified) - Added USE_BIOMETRIC, USE_FINGERPRINT permissions, expo-local-authentication plugin
+
+### US-117: SSL/Network Security
+- What was implemented: HTTPS enforcement, SSRF prevention, secure fetch wrapper
+- Files changed:
+  - `app/mobile/lib/networkSecurity.ts` (new) - isSecureUrl(), sanitizeUrlForLogging(), secureFetch() with timeout, SSRF blocked IPs
+
+### US-118: Splash Screen & Performance
+- What was implemented: Splash screen management, network status detection
+- Files changed:
+  - `app/mobile/hooks/useSplashScreen.ts` (new) - Prevents auto-hide, smooth transition, no white flash
+  - `app/mobile/hooks/useNetworkStatus.ts` (new) - Offline detection for grocery store usage
+  - `app.config.js` (modified) - Added expo-splash-screen plugin, allowBackup=false, deep link intent filters
+
+### Additional Files Created:
+- `app/(tabs)/meals.tsx` - Weekly meal planning with day selector, kid selector, long-press delete
+- `app/(tabs)/scan.tsx` - Barcode scanner placeholder with camera permission handling
+- `app/(tabs)/lists.tsx` - Grocery list with checkbox toggle, swipe delete, progress bar, add item
+- `app/(tabs)/profile.tsx` - User profile, kids list, subscription status, settings toggles, sign out
+- `app/mobile/lib/secureSession.ts` - Secure token management, session validation, secure storage cleanup
+- `app/mobile/lib/theme.ts` - Design tokens matching web app Tailwind theme
+
+### Security Hardening Applied:
+- Auth tokens in Android Keystore via expo-secure-store (never AsyncStorage)
+- allowBackup=false prevents token extraction via ADB backup
+- HTTPS enforced for all non-localhost connections
+- Rate limiting on login (5 attempts/15min)
+- Input sanitization on all forms (HTML stripping, length limits)
+- Session auto-refresh via Supabase config
+- Biometric auth with 2-minute grace period
+- Deep linking configured with autoVerify for App Links
+
+### Learnings for future iterations:
+- Expo Router file-based routing: `(tabs)` and `(auth)` groups handle navigation grouping
+- AuthGate pattern in root _layout.tsx handles session-based routing
+- Dynamic imports for optional native modules (expo-local-authentication, expo-camera) prevent build issues
+- expo-secure-store uses Android Keystore by default - no additional config needed
+- FlatList with refreshControl is the standard pattern for pull-to-refresh on mobile
+- All touch targets must be 48px minimum for Android accessibility guidelines
+
+---
