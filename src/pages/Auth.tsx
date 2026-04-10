@@ -22,6 +22,7 @@ import { Link } from "react-router-dom";
 import { OnboardingDialog } from "@/components/OnboardingDialog";
 import { PasswordResetDialog } from "@/components/PasswordResetDialog";
 import { PasswordSchema, EmailSchema, sanitizeURL } from "@/lib/validations";
+import { isDisposableEmail, DISPOSABLE_EMAIL_ERROR_MESSAGE } from "@/lib/disposable-email";
 import { Footer } from "@/components/Footer";
 import { cn } from "@/lib/utils";
 import {
@@ -232,6 +233,15 @@ const Auth = () => {
     }
 
     setLoading(true);
+
+    // Block disposable / temporary email providers (list is admin-managed
+    // in the `disposable_email_domains` table).
+    const disposable = await isDisposableEmail(email);
+    if (disposable) {
+      setLoading(false);
+      toast.error("Email Not Allowed", { description: DISPOSABLE_EMAIL_ERROR_MESSAGE });
+      return;
+    }
 
     const { error } = await supabase.auth.signUp({
       email,
