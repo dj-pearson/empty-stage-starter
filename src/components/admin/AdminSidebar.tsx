@@ -1,4 +1,4 @@
-import { Users, Database, Brain, UserCog, CreditCard, Target, Share2, BookOpen, Mail, Search, Percent, Gift, Flag, Ticket, UserPlus, Sparkles, BarChart3, DollarSign, TrendingUp, UsersIcon, Palette, FlaskConical, LineChart, Globe, FileSpreadsheet } from "lucide-react";
+import { Users, Database, Brain, UserCog, CreditCard, Target, Share2, BookOpen, Mail, Search, Percent, Gift, Flag, Ticket, UserPlus, Sparkles, BarChart3, DollarSign, TrendingUp, UsersIcon, Palette, FlaskConical, LineChart, Globe, FileSpreadsheet, Ban } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -34,6 +34,7 @@ const adminItems = [
   { title: "Feature Flags", value: "flags", icon: Flag },
   { title: "Nutrition", value: "nutrition", icon: Database },
   { title: "Roles", value: "roles", icon: Users },
+  { title: "Disposable Emails", value: "disposable-emails", icon: Ban },
   { title: "AI", value: "ai", icon: Brain },
   { title: "Multi-Region Backup", value: "backup", icon: Globe },
   { title: "Export", value: "export", icon: FileSpreadsheet },
