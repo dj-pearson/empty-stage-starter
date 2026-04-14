@@ -134,7 +134,11 @@ interface PseoPage {
   quality_score: number | null;
   tier: number | null;
   needs_refresh: boolean;
-  combination: TaxonomyCombination | null;
+  safe_food_slug: string | null;
+  age_group_slug: string | null;
+  challenge_slug: string | null;
+  meal_occasion_slug: string | null;
+  dietary_restriction_slug: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -142,23 +146,23 @@ interface PseoPage {
 interface TaxonomyItem {
   id: string;
   dimension: string;
-  value: string;
-  page_type: string;
+  display_name: string;
+  slug: string;
   tier: number;
-  active: boolean;
+  is_active: boolean;
   context: Record<string, unknown> | null;
-  combination: TaxonomyCombination | null;
-  page_count: number;
+  category: string | null;
+  sort_order: number | null;
 }
 
 interface BatchRecord {
   id: string;
+  name: string | null;
   status: string;
-  total: number;
-  completed: number;
-  failed: number;
-  page_types: string[];
-  tiers: number[];
+  total_pages: number;
+  completed_pages: number;
+  failed_pages: number;
+  page_type: string | null;
   created_at: string;
 }
 
@@ -449,35 +453,20 @@ function TaxonomyTab() {
         .from('pseo_taxonomy')
         .select('*')
         .order('dimension')
-        .order('value');
+        .order('display_name');
 
       if (error) throw error;
-
-      // Count pages generated per taxonomy value
-      const { data: pages } = await supabase
-        .from('pseo_pages')
-        .select('page_type, combination');
-
-      const pageCounts = new Map<string, number>();
-      for (const page of pages ?? []) {
-        const combo = page.combination as TaxonomyCombination | null;
-        if (combo) {
-          for (const val of Object.values(combo)) {
-            pageCounts.set(val, (pageCounts.get(val) ?? 0) + 1);
-          }
-        }
-      }
 
       const items: TaxonomyItem[] = (data ?? []).map((row) => ({
         id: row.id,
         dimension: row.dimension ?? '',
-        value: row.value ?? '',
-        page_type: row.page_type ?? '',
+        display_name: row.display_name ?? '',
+        slug: row.slug ?? '',
         tier: row.tier ?? 0,
-        active: row.active ?? true,
+        is_active: row.is_active ?? true,
         context: (row.context ?? null) as Record<string, unknown> | null,
-        combination: (row.combination ?? null) as TaxonomyCombination | null,
-        page_count: pageCounts.get(row.value ?? '') ?? 0,
+        category: row.category ?? null,
+        sort_order: row.sort_order ?? null,
       }));
 
       setTaxonomy(items);
@@ -498,15 +487,15 @@ function TaxonomyTab() {
     try {
       const { error } = await supabase
         .from('pseo_taxonomy')
-        .update({ active: !item.active })
+        .update({ is_active: !item.is_active })
         .eq('id', item.id);
 
       if (error) throw error;
 
       setTaxonomy((prev) =>
-        prev.map((t) => (t.id === item.id ? { ...t, active: !t.active } : t)),
+        prev.map((t) => (t.id === item.id ? { ...t, is_active: !t.is_active } : t)),
       );
-      toast.success(`${item.value} ${item.active ? 'deactivated' : 'activated'}`);
+      toast.success(`${item.display_name} ${item.is_active ? 'deactivated' : 'activated'}`);
     } catch (err) {
       console.error('Toggle failed:', err);
       toast.error('Failed to update taxonomy item');
@@ -553,10 +542,10 @@ function TaxonomyTab() {
             <TableHeader>
               <TableRow>
                 <TableHead>Dimension</TableHead>
-                <TableHead>Value</TableHead>
-                <TableHead>Page Type</TableHead>
+                <TableHead>Display Name</TableHead>
+                <TableHead>Slug</TableHead>
                 <TableHead>Tier</TableHead>
-                <TableHead className="text-center">Pages</TableHead>
+                <TableHead>Category</TableHead>
                 <TableHead className="text-center">Active</TableHead>
                 <TableHead>Context</TableHead>
               </TableRow>
@@ -572,17 +561,19 @@ function TaxonomyTab() {
               {filtered.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell className="font-medium">{item.dimension}</TableCell>
-                  <TableCell>{item.value}</TableCell>
+                  <TableCell>{item.display_name}</TableCell>
                   <TableCell>
-                    <span className="text-xs">{formatPageType(item.page_type)}</span>
+                    <span className="text-xs text-muted-foreground">{item.slug}</span>
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline">{item.tier}</Badge>
                   </TableCell>
-                  <TableCell className="text-center">{item.page_count}</TableCell>
+                  <TableCell>
+                    <span className="text-xs">{item.category ?? '--'}</span>
+                  </TableCell>
                   <TableCell className="text-center">
                     <Button
-                      variant={item.active ? 'default' : 'outline'}
+                      variant={item.is_active ? 'default' : 'outline'}
                       size="sm"
                       className="h-7 px-2 text-xs"
                       disabled={toggling === item.id}
@@ -590,7 +581,7 @@ function TaxonomyTab() {
                     >
                       {toggling === item.id ? (
                         <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : item.active ? (
+                      ) : item.is_active ? (
                         'Active'
                       ) : (
                         'Inactive'
@@ -609,7 +600,7 @@ function TaxonomyTab() {
                         <DialogContent className="max-w-lg">
                           <DialogHeader>
                             <DialogTitle>
-                              Context: {item.dimension} / {item.value}
+                              Context: {item.dimension} / {item.display_name}
                             </DialogTitle>
                           </DialogHeader>
                           <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-80">
@@ -657,7 +648,7 @@ function GenerateTab() {
       const { data, error } = await supabase
         .from('pseo_generation_batches')
         .select('*')
-        .in('status', ['pending', 'processing', 'paused'])
+        .in('status', ['pending', 'running', 'paused'])
         .order('created_at', { ascending: false })
         .limit(10);
 
@@ -665,12 +656,12 @@ function GenerateTab() {
       setActiveBatches(
         (data ?? []).map((b) => ({
           id: b.id,
+          name: b.name ?? null,
           status: b.status ?? 'pending',
-          total: b.total ?? 0,
-          completed: b.completed ?? 0,
-          failed: b.failed ?? 0,
-          page_types: (b.page_types ?? []) as string[],
-          tiers: (b.tiers ?? []) as number[],
+          total_pages: b.total_pages ?? 0,
+          completed_pages: b.completed_pages ?? 0,
+          failed_pages: b.failed_pages ?? 0,
+          page_type: b.page_type ?? null,
           created_at: b.created_at ?? '',
         })),
       );
@@ -765,7 +756,7 @@ function GenerateTab() {
           { id: `batch-${batchId}` },
         );
       } else {
-        const statusMap = { pause: 'paused', resume: 'processing', cancel: 'cancelled' };
+        const statusMap = { pause: 'paused', resume: 'running', cancel: 'failed' };
         await supabase
           .from('pseo_generation_batches')
           .update({ status: statusMap[action] })
@@ -983,9 +974,9 @@ function GenerateTab() {
             <div className="space-y-4">
               {activeBatches.map((batch) => {
                 const progress =
-                  batch.total > 0
+                  batch.total_pages > 0
                     ? Math.round(
-                        ((batch.completed + batch.failed) / batch.total) * 100,
+                        ((batch.completed_pages + batch.failed_pages) / batch.total_pages) * 100,
                       )
                     : 0;
 
@@ -997,18 +988,18 @@ function GenerateTab() {
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
                         <p className="text-sm font-medium">
-                          Batch {batch.id.slice(0, 8)}
+                          {batch.name || `Batch ${batch.id.slice(0, 8)}`}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {batch.completed}/{batch.total} completed
-                          {batch.failed > 0 && `, ${batch.failed} failed`}
+                          {batch.completed_pages}/{batch.total_pages} completed
+                          {batch.failed_pages > 0 && `, ${batch.failed_pages} failed`}
                         </p>
                       </div>
                       <StatusBadge status={batch.status} />
                     </div>
                     <Progress value={progress} className="h-2" />
                     <div className="flex gap-1.5">
-                      {batch.status === 'processing' && (
+                      {batch.status === 'running' && (
                         <>
                           <Button
                             variant="outline"
@@ -1084,7 +1075,7 @@ function PageBrowserTab() {
     try {
       let query = supabase
         .from('pseo_pages')
-        .select('id, slug, page_type, generation_status, title, meta_description, quality_score, tier, needs_refresh, combination, created_at, updated_at', { count: 'exact' });
+        .select('id, slug, page_type, generation_status, title, meta_description, quality_score, tier, needs_refresh, safe_food_slug, age_group_slug, challenge_slug, meal_occasion_slug, dietary_restriction_slug, created_at, updated_at', { count: 'exact' });
 
       if (filterType !== 'all') {
         query = query.eq('page_type', filterType);
