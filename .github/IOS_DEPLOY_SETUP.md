@@ -11,7 +11,8 @@ Go to **Settings > Secrets and variables > Actions** and add these secrets:
 | `IOS_P12_CERTIFICATE_BASE64` | Base64-encoded .p12 distribution certificate | Export from Keychain Access, then `base64 -i cert.p12` |
 | `IOS_P12_PASSWORD` | Password for the .p12 certificate | Set when exporting from Keychain |
 | `IOS_KEYCHAIN_PASSWORD` | Temporary keychain password (any random string) | Generate: `openssl rand -hex 16` |
-| `IOS_PROVISIONING_PROFILE_BASE64` | Base64-encoded App Store provisioning profile | Download from Apple Developer portal, then `base64 -i profile.mobileprovision` |
+| `IOS_PROVISIONING_PROFILE_BASE64` | Base64-encoded App Store provisioning profile for `com.eatpal.app` | Download from Apple Developer portal, then `base64 -i profile.mobileprovision` |
+| `IOS_WIDGET_PROVISIONING_PROFILE_BASE64` | Base64-encoded App Store provisioning profile for `com.eatpal.app.widget` | Same flow as above, for the widget extension |
 
 ### App Store Connect API
 
@@ -66,6 +67,17 @@ base64 -i EatPal_AppStore.mobileprovision | pbcopy
 base64 -i AuthKey_XXXXXXXXXX.p8 | pbcopy
 # Paste into APP_STORE_CONNECT_API_KEY_BASE64 secret
 ```
+
+## Provisioning profile naming
+
+`ios/EatPal/ExportOptions.plist` references provisioning profiles by their
+**Apple Developer portal name** (not UUID):
+
+- App target → profile named **`EatPal App Store`** for `com.eatpal.app`
+- Widget target → profile named **`EatPal Widget App Store`** for `com.eatpal.app.widget`
+
+Create profiles with those exact names in the Apple Developer portal, or edit
+`ExportOptions.plist` to match your profile names.
 
 ## Running the Workflow
 

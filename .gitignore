@@ -32,6 +32,10 @@ ios/EatPal/.build/
 ios/EatPal/.swiftpm/
 ios/EatPal/DerivedData/
 ios/EatPal/build/
+# XcodeGen generates EatPal.xcodeproj from project.yml — never commit it
+ios/EatPal/EatPal.xcodeproj/
+# Auto-generated widget Info.plist (XcodeGen writes it at build time)
+ios/EatPal/EatPalWidget/Info.plist
 
 # Expo
 .expo/

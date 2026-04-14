@@ -1,104 +1,97 @@
-# EatPal iOS - Native Swift App
+# EatPal iOS — Native Swift App
 
-Native iOS client for EatPal (Munch Maker Mate) built with SwiftUI and targeting iOS 17+.
+Native iOS client for EatPal, SwiftUI, iOS 17+.
 
 ## Requirements
 
-- Xcode 15.0+
-- iOS 17.0+
-- Swift 5.9+
+- Xcode 15.4+
+- iOS 17.0+ deployment target
+- Swift 5.9
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`) — the Xcode project is generated from `ios/EatPal/project.yml`.
 
-## Setup
+## First-time local setup
 
-1. Open `EatPal/Package.swift` in Xcode (File > Open > select Package.swift)
-2. Xcode will resolve the Supabase Swift SDK dependency automatically
-3. Configure your Supabase credentials:
-   - Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` as build settings or in the scheme environment
-
-## Architecture
-
-- **Pattern**: MVVM with SwiftUI
-- **State Management**: `@EnvironmentObject` with `AppState` (mirrors web AppContext)
-- **Networking**: Supabase Swift SDK (async/await)
-- **Auth**: Supabase Auth (email/password, Apple Sign-In)
-- **Design System**: `AppTheme` with centralized colors, spacing, radii, animations
-- **Feedback**: Toast notifications, haptic feedback, offline banner
-
-## Project Structure
-
-```
-EatPal/
-├── App/                    # App entry point, root view, global state
-│   ├── EatPalApp.swift     # @main entry
-│   ├── RootView.swift      # Auth routing (loading/unauth/auth/onboarding)
-│   └── AppState.swift      # Central state with toast + haptic integration
-├── Models/                 # Codable data models matching Supabase schema
-│   ├── Food.swift
-│   ├── Kid.swift
-│   ├── Recipe.swift
-│   ├── PlanEntry.swift
-│   └── GroceryItem.swift
-├── Services/               # Backend communication
-│   ├── SupabaseClient.swift
-│   ├── AuthService.swift
-│   └── DataService.swift
-├── ViewModels/             # View-specific logic
-│   └── AuthViewModel.swift
-├── Views/
-│   ├── Auth/               # Sign in, sign up, forgot password, onboarding
-│   ├── Dashboard/          # Tab view, home dashboard, more menu
-│   ├── Pantry/             # Food management with categories
-│   ├── Grocery/            # Grocery list with check-off
-│   ├── MealPlan/           # Weekly calendar meal planner
-│   ├── Kids/               # Child profile management
-│   ├── Recipes/            # Recipe browser and creator
-│   ├── Settings/           # Account, notifications, appearance
-│   └── Components/         # CachedAsyncImage, skeleton loaders, shared UI
-├── Utilities/              # Design system, toast, haptics, network monitor
-│   ├── AppTheme.swift      # Colors, spacing, radii, animations
-│   ├── ToastManager.swift  # Toast notification system
-│   ├── HapticManager.swift # Haptic feedback
-│   ├── NetworkMonitor.swift # Connectivity monitoring + offline banner
-│   ├── DateFormatters.swift
-│   └── PasswordValidator.swift
-└── Resources/              # Assets, Info.plist
+```bash
+cd ios/EatPal
+brew install xcodegen     # once
+xcodegen generate         # produces EatPal.xcodeproj from project.yml
+open EatPal.xcodeproj
 ```
 
-## Features Included
+The generated `EatPal.xcodeproj/` is **git-ignored**. Regenerate whenever you add/rename files or change `project.yml`.
 
-- **Auth**: Email/password sign in & sign up with password strength validation, Apple Sign-In, forgot password
-- **Onboarding**: 5-screen first-time user walkthrough with skip option
-- **Meal Planner**: Weekly calendar view, per-child meal slots, result logging (ate/tasted/refused)
-- **Pantry**: Full food management, category filtering, safe/try-bite toggles, allergen display
-- **Grocery List**: Categorized items, check-off, priority, swipe-to-delete, clear completed
-- **Recipes**: Browse, create, detail view with nutrition info, difficulty filtering, ingredient selection
-- **Kids**: Child profiles with age, allergens, pickiness level, eating stats
-- **Food Tracker**: Result history with ate/tasted/refused statistics
-- **Insights**: Pantry distribution, food safety stats, weekly coverage
-- **Settings**: Account info, notifications, appearance (light/dark/system), sign out
-- **Toast Notifications**: Success/error/warning/info feedback on all CRUD operations
-- **Haptic Feedback**: Native tactile feedback on interactions (save, delete, toggle)
-- **Network Monitor**: Offline detection with banner, graceful error handling
-- **Async Images**: Remote profile pictures and recipe thumbnails with placeholder
-- **Skeleton Loading**: Shimmer loading states during data fetch
-- **Accessibility**: Labels, hints, VoiceOver support throughout
+### Supabase credentials
 
-## CI/CD: App Store Deployment
+The app reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` from `Info.plist` (substituted from build settings). For local dev, set them in the scheme's Run > Arguments > Environment Variables, or pass to `xcodebuild`:
 
-A GitHub Actions workflow at `.github/workflows/ios-app-store-deploy.yml` handles building and uploading to the App Store.
+```bash
+xcodebuild build \
+  -project EatPal.xcodeproj \
+  -scheme EatPal \
+  -destination "platform=iOS Simulator,name=iPhone 15" \
+  SUPABASE_URL="https://api.tryeatpal.com" \
+  SUPABASE_ANON_KEY="<your-anon-key>"
+```
 
-**Manual trigger with version input:**
-1. Go to Actions > iOS App Store Deploy > Run workflow
-2. Enter semver version (e.g., `1.0.0`)
-3. Optionally set build number, release notes, auto-submit for review
+## Project layout
 
-See `.github/IOS_DEPLOY_SETUP.md` for required secrets and setup instructions.
+```
+ios/EatPal/
+├── project.yml                   # XcodeGen spec — single source of truth
+├── ExportOptions.plist           # IPA export config for App Store
+├── EatPal/                       # App target sources
+│   ├── App/                      # Entry point, AppDelegate, AppState
+│   ├── Models/                   # Codable models matching Supabase schema
+│   ├── Services/                 # Supabase, auth, realtime, notifications,
+│   │                             #   StoreKit, barcode, AI coach/meal, image upload
+│   ├── ViewModels/
+│   ├── Views/                    # Dashboard, Pantry, Grocery, MealPlan, Kids,
+│   │                             #   Recipes, Scanner, Settings, Subscription,
+│   │                             #   AICoach, FoodChaining, Progress, Quiz
+│   ├── Utilities/                # Theme, Toast, Haptics, Network monitor,
+│   │                             #   DateFormatters, DeepLinkHandler, AppleSignInHelper
+│   ├── Resources/
+│   │   ├── Info.plist
+│   │   ├── PrivacyInfo.xcprivacy
+│   │   └── Assets.xcassets
+│   └── EatPal.entitlements       # Push, Sign in with Apple, Associated Domains,
+│                                 #   App Groups, In-App Purchase
+├── EatPalWidget/                 # Home-screen widget extension (WidgetKit)
+│   ├── EatPalWidget.swift
+│   └── EatPalWidgetExtension.entitlements
+└── EatPalTests/                  # XCTest unit tests
+    └── EatPalTests.swift
+```
 
-## Not Included (Web Only)
+## Capabilities (entitlements)
 
-- Homepage / marketing landing page
-- Admin dashboard
-- Blog CMS
-- AI Coach / AI Planner (future iOS release)
-- Grocery delivery integrations
-- Barcode scanning (future iOS release)
+| Capability | File | Notes |
+|---|---|---|
+| Push Notifications | `EatPal.entitlements` → `aps-environment = production` | Matching provisioning profile must enable Push. |
+| Sign in with Apple | `EatPal.entitlements` → `com.apple.developer.applesignin` | Used by `AppleSignInHelper`. |
+| Associated Domains | `EatPal.entitlements` → `applinks:tryeatpal.com` | Universal links handled by `DeepLinkHandler`. |
+| App Groups | Both entitlements files → `group.com.eatpal.app` | Shared `UserDefaults` between app and widget. |
+| In-App Purchase | `EatPal.entitlements` → `com.apple.developer.in-app-payments` | Used by `StoreKitService`. |
+
+## CI / deploy workflows
+
+| Workflow | File | Trigger |
+|---|---|---|
+| iOS CI (build + tests + lint) | `.github/workflows/ios-ci.yml` | PR + push to `main` touching `ios/**` |
+| iOS App Store Deploy | `.github/workflows/ios-app-store-deploy.yml` | Manual `workflow_dispatch` |
+
+Both workflows `brew install xcodegen` and run `xcodegen generate` before `xcodebuild`, so the committed state (no `.xcodeproj/`) is always the source of truth.
+
+### Deploying to TestFlight / App Store
+
+1. Configure secrets per `.github/IOS_DEPLOY_SETUP.md`.
+2. Go to **Actions → iOS App Store Deploy → Run workflow**.
+3. Enter a semver `version` (e.g. `1.0.0`) and optional release notes.
+4. The build uploads to App Store Connect; it appears in TestFlight after 15–30 minutes of Apple processing.
+
+Each successful deploy creates a git tag `ios/v<version>+<build>`.
+
+## Not yet included
+
+- Auto-submission for App Store review (the workflow uploads only; submit manually in App Store Connect).
+- Sentry DSN wiring on iOS (web is done, iOS uses console logging).

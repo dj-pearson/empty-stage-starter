@@ -1,0 +1,153 @@
+# XcodeGen specification — single source of truth for the EatPal iOS project.
+# Regenerate the Xcode project with:  xcodegen generate
+# (Install: brew install xcodegen)
+
+name: EatPal
+
+options:
+  bundleIdPrefix: com.eatpal
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "15.4"
+  createIntermediateGroups: true
+  groupSortPosition: top
+  generateEmptyDirectories: false
+  usesTabs: false
+  indentWidth: 4
+  tabWidth: 4
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    SWIFT_STRICT_CONCURRENCY: targeted
+    CLANG_ENABLE_MODULES: YES
+    CLANG_ENABLE_OBJC_ARC: YES
+    ENABLE_BITCODE: NO
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    GCC_WARN_ABOUT_RETURN_TYPE: YES_ERROR
+    CODE_SIGN_STYLE: Manual
+  configs:
+    Debug:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG"
+      SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+      DEBUG_INFORMATION_FORMAT: dwarf
+      ONLY_ACTIVE_ARCH: YES
+      GCC_PREPROCESSOR_DEFINITIONS: "DEBUG=1"
+    Release:
+      SWIFT_COMPILATION_MODE: wholemodule
+      SWIFT_OPTIMIZATION_LEVEL: "-O"
+      DEBUG_INFORMATION_FORMAT: "dwarf-with-dsym"
+      VALIDATE_PRODUCT: YES
+      ENABLE_NS_ASSERTIONS: NO
+
+packages:
+  Supabase:
+    url: https://github.com/supabase/supabase-swift.git
+    from: 2.0.0
+
+targets:
+  # -----------------------------------------------------------------
+  # Main app
+  # -----------------------------------------------------------------
+  EatPal:
+    type: application
+    platform: iOS
+    sources:
+      - path: EatPal
+        excludes:
+          - "Resources/Info.plist"
+          - "Resources/PrivacyInfo.xcprivacy"
+          - "EatPal.entitlements"
+    resources:
+      - path: EatPal/Resources/Assets.xcassets
+      - path: EatPal/Resources/PrivacyInfo.xcprivacy
+    dependencies:
+      - package: Supabase
+        product: Supabase
+      - target: EatPalWidgetExtension
+        embed: true
+        codeSign: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.eatpal.app
+        PRODUCT_NAME: EatPal
+        INFOPLIST_FILE: EatPal/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: EatPal/EatPal.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/Frameworks"
+
+  # -----------------------------------------------------------------
+  # Home-screen widget
+  # -----------------------------------------------------------------
+  EatPalWidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: EatPalWidget
+        excludes:
+          - "Info.plist"
+          - "EatPalWidgetExtension.entitlements"
+    info:
+      path: EatPalWidget/Info.plist
+      properties:
+        CFBundleDisplayName: EatPal
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.eatpal.app.widget
+        PRODUCT_NAME: EatPalWidgetExtension
+        CODE_SIGN_ENTITLEMENTS: EatPalWidget/EatPalWidgetExtension.entitlements
+        SKIP_INSTALL: YES
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/Frameworks"
+          - "@executable_path/../../Frameworks"
+
+  # -----------------------------------------------------------------
+  # Unit tests
+  # -----------------------------------------------------------------
+  EatPalTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: EatPalTests
+    dependencies:
+      - target: EatPal
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.eatpal.app.tests
+        GENERATE_INFOPLIST_FILE: YES
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/EatPal.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EatPal"
+
+schemes:
+  EatPal:
+    build:
+      targets:
+        EatPal: all
+        EatPalWidgetExtension: all
+        EatPalTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - EatPalTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

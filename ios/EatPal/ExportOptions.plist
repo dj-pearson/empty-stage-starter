@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>app-store-connect</string>
+    <key>destination</key>
+    <string>upload</string>
+    <key>signingStyle</key>
+    <string>manual</string>
+    <key>stripSwiftSymbols</key>
+    <true/>
+    <key>uploadBitcode</key>
+    <false/>
+    <key>uploadSymbols</key>
+    <true/>
+    <key>compileBitcode</key>
+    <false/>
+    <key>manageAppVersionAndBuildNumber</key>
+    <false/>
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>com.eatpal.app</key>
+        <string>EatPal App Store</string>
+        <key>com.eatpal.app.widget</key>
+        <string>EatPal Widget App Store</string>
+    </dict>
+</dict>
+</plist>
