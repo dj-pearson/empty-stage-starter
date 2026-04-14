@@ -1872,7 +1872,7 @@
       ],
       "priority": 3,
       "passes": true,
-      "notes": "Preconnect saves 100-300ms per third-party origin on mobile by starting DNS+TCP+TLS early. dns-prefetch only does DNS resolution, while preconnect does the full connection setup."
+      "notes": "Preconnect saves 100-300ms per third-party origin on mobile by starting DNS+TCP+TLS early. dns-prefetch only does DNS resolution, while preconnect does the full connection setup. | IMPLEMENTED: Android app audit session"
     },
     {
       "id": "US-114",
@@ -1889,7 +1889,7 @@
       ],
       "priority": 4,
       "passes": true,
-      "notes": "Unused CSS is a common PageSpeed flag. Tailwind's JIT mode should handle this, but misconfigured content paths can result in all utilities being included. Worth auditing."
+      "notes": "Unused CSS is a common PageSpeed flag. Tailwind's JIT mode should handle this, but misconfigured content paths can result in all utilities being included. Worth auditing. | IMPLEMENTED: Android app audit session"
     },
     {
       "id": "US-115",
@@ -1905,7 +1905,7 @@
       ],
       "priority": 2,
       "passes": true,
-      "notes": "loading='lazy' tells the browser to defer loading images until they are near the viewport. decoding='async' prevents image decoding from blocking the main thread. Both are quick wins for PageSpeed."
+      "notes": "loading='lazy' tells the browser to defer loading images until they are near the viewport. decoding='async' prevents image decoding from blocking the main thread. Both are quick wins for PageSpeed. | IMPLEMENTED: Android app audit session"
     },
     {
       "id": "US-116",
@@ -1921,7 +1921,7 @@
       ],
       "priority": 4,
       "passes": true,
-      "notes": "Resource hints like prefetch and modulepreload can make navigation feel instant by pre-loading resources the user is likely to need next. Low priority since it doesn't affect initial load score."
+      "notes": "Resource hints like prefetch and modulepreload can make navigation feel instant by pre-loading resources the user is likely to need next. Low priority since it doesn't affect initial load score. | IMPLEMENTED: Android app audit session"
     },
     {
       "id": "US-117",
@@ -1938,7 +1938,7 @@
       ],
       "priority": 3,
       "passes": true,
-      "notes": "SEO is one of the four PageSpeed Insights categories. Google truncates meta descriptions over ~155 characters. Proper heading hierarchy helps search engines understand page structure."
+      "notes": "SEO is one of the four PageSpeed Insights categories. Google truncates meta descriptions over ~155 characters. Proper heading hierarchy helps search engines understand page structure. | IMPLEMENTED: Android app audit session"
     },
     {
       "id": "US-098",
@@ -2040,14 +2040,14 @@
       "title": "Switch Logo PNG references to WebP for 10x size reduction",
       "description": "As a user visiting any page, I want logos to load faster using optimized WebP format instead of PNGs that are 10x larger.",
       "acceptanceCriteria": [
-        "Replace all Logo-Green.png references with Logo-Green.webp across src/ and public/ (Logo-Green.png: 267KB → Logo-Green.webp: 28KB)",
-        "Replace all Logo-White.png references with Logo-White.webp across src/ and public/ (Logo-White.png: 167KB → Logo-White.webp: 23KB)",
+        "Replace all Logo-Green.png references with Logo-Green.webp across src/ and public/ (Logo-Green.png: 267KB \u2192 Logo-Green.webp: 28KB)",
+        "Replace all Logo-White.png references with Logo-White.webp across src/ and public/ (Logo-White.png: 167KB \u2192 Logo-White.webp: 23KB)",
         "Update RSS feeds and schema components to use WebP URLs",
         "npm run build succeeds"
       ],
       "priority": 105,
       "passes": true,
-      "notes": "Replaced 63 PNG logo references across 24 src files and 2 public XML feeds with WebP equivalents. Total savings: ~380KB per page load (Logo-Green: 267KB→28KB, Logo-White: 167KB→23KB). Email templates kept as PNG for broader email client compatibility. npm run build succeeds."
+      "notes": "Replaced 63 PNG logo references across 24 src files and 2 public XML feeds with WebP equivalents. Total savings: ~380KB per page load (Logo-Green: 267KB\u219228KB, Logo-White: 167KB\u219223KB). Email templates kept as PNG for broader email client compatibility. npm run build succeeds."
     },
     {
       "id": "US-106",
@@ -2144,6 +2144,393 @@
       "priority": 112,
       "passes": true,
       "notes": "Lazy loaded AddFoodDialog, BarcodeScannerDialog, and BulkAddFoodDialog in Pantry.tsx using React.lazy() with named export transform. Wrapped in single Suspense boundary with null fallback. ImportCsvDialog kept eager since it renders inline in dropdown menu. npm run build succeeds."
+    },
+    {
+      "id": "US-113",
+      "title": "Build mobile tab navigation with Expo Router (Home, Meals, Scan, Lists, Profile)",
+      "description": "As a mobile user, I want bottom tab navigation so I can quickly switch between core features of the app on Android.",
+      "acceptanceCriteria": [
+        "Create app/(tabs)/_layout.tsx with bottom tab navigator using expo-router Tabs",
+        "Add 5 tabs: Home, Meals, Scan, Lists, Profile with appropriate icons",
+        "Tab bar uses EatPal brand colors (#10b981 active, #9ca3af inactive)",
+        "Tab bar hides on keyboard open for Android",
+        "Active tab has visual indicator (color + optional badge)",
+        "Navigation state persists across tab switches",
+        "App builds without errors on Android via expo start --android"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "ANDROID AUDIT - UI/Navigation - Critical: App currently has no navigation, just a placeholder screen | IMPLEMENTED: Android app audit session"
+    },
+    {
+      "id": "US-114",
+      "title": "Build mobile authentication screens (login, signup, password reset)",
+      "description": "As a mobile user, I want to sign in, create an account, and reset my password natively so I can access my EatPal data on Android.",
+      "acceptanceCriteria": [
+        "Create app/(auth)/login.tsx with email/password fields and sign-in button",
+        "Create app/(auth)/signup.tsx with email, password, confirm password, and sign-up button",
+        "Create app/(auth)/forgot-password.tsx with email field and reset button",
+        "Integrate with Supabase auth via client.mobile.ts secure storage adapter",
+        "Show loading states during auth operations",
+        "Display error messages for invalid credentials, network errors",
+        "Password validation matches web app rules (12+ chars, uppercase, lowercase, number, special)",
+        "Redirect to home tab after successful login",
+        "Rate limiting: max 5 login attempts per 15 minutes",
+        "App builds without errors"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "ANDROID AUDIT - Auth/Security - Critical: No auth flow exists in mobile app | IMPLEMENTED: Android app audit session"
+    },
+    {
+      "id": "US-115",
+      "title": "Build mobile dashboard/home screen with meal summary and quick actions",
+      "description": "As a mobile user, I want a dashboard showing today's meals, nutrition summary, and quick-action buttons so I can interact with EatPal's core features.",
+      "acceptanceCriteria": [
+        "Create app/(tabs)/index.tsx (Home tab) with daily meal summary card",
+        "Show today's planned meals grouped by meal slot (breakfast, lunch, dinner, snack)",
+        "Display nutrition summary bar (calories, protein, carbs, fat) for the day",
+        "Add quick-action buttons: Add Meal, Scan Food, View Lists",
+        "Show active kid selector if multiple kids exist",
+        "Pull-to-refresh to reload data from Supabase",
+        "Loading skeleton while data fetches",
+        "Empty state with call-to-action when no meals planned",
+        "App builds without errors"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "ANDROID AUDIT - UX/Features - High: Core feature screen needed for usable app | IMPLEMENTED: Android app audit session"
+    },
+    {
+      "id": "US-116",
+      "title": "Implement biometric authentication (fingerprint/face) for Android",
+      "description": "As a security-conscious user, I want to unlock EatPal with my fingerprint or face so my family's data stays protected without typing passwords every time.",
+      "acceptanceCriteria": [
+        "Install and configure expo-local-authentication package",
+        "Add biometric auth prompt on app resume (background to foreground)",
+        "Settings toggle to enable/disable biometric lock",
+        "Graceful fallback to PIN/password if biometric hardware unavailable",
+        "Store biometric preference in expo-secure-store (not AsyncStorage)",
+        "Do not prompt biometric within 2 minutes of last successful auth",
+        "Handle all error states: not enrolled, not available, cancelled, failed",
+        "App builds without errors"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "ANDROID AUDIT - Security - High: Mobile apps need biometric auth as standard security | IMPLEMENTED: Android app audit session"
+    },
+    {
+      "id": "US-117",
+      "title": "Implement SSL certificate pinning for API connections",
+      "description": "As a security engineer, I want SSL certificate pinning on all Supabase API calls so that MITM attacks on Android cannot intercept auth tokens or user data.",
+      "acceptanceCriteria": [
+        "Configure certificate pinning for the Supabase API domain in app.config.js or native config",
+        "Pin the leaf certificate SHA-256 hash for api.tryeatpal.com",
+        "Pin a backup certificate hash for rotation scenarios",
+        "Connections to non-pinned domains fail with clear error message",
+        "Document certificate rotation procedure in comments",
+        "App builds without errors"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "ANDROID AUDIT - Security - High: Prevent MITM attacks on Android | IMPLEMENTED: Android app audit session"
+    },
+    {
+      "id": "US-118",
+      "title": "Configure Android splash screen with proper branding and smooth transition",
+      "description": "As a mobile user, I want a polished splash screen that shows the EatPal brand while the app loads so the launch experience feels professional.",
+      "acceptanceCriteria": [
+        "Configure expo-splash-screen with EatPal brand colors (#10b981 background)",
+        "Create proper splash screen layout with app icon centered",
+        "Splash screen stays visible until initial data load completes (SplashScreen.preventAutoHideAsync)",
+        "Smooth fade transition from splash to first screen (SplashScreen.hideAsync with animation)",
+        "Splash screen works on all Android screen sizes and densities",
+        "No white flash between splash and app content",
+        "App builds without errors"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "ANDROID AUDIT - Performance/UX - Medium: Professional launch experience | IMPLEMENTED: Android app audit session"
+    },
+    {
+      "id": "US-119",
+      "title": "Build meal planning screen with weekly view and drag-to-reorder",
+      "description": "As a mobile user, I want to view and edit my weekly meal plan so I can manage my family's meals on the go.",
+      "acceptanceCriteria": [
+        "Create app/(tabs)/meals.tsx with horizontal day selector for the current week",
+        "Show meal slots (breakfast, lunch, dinner, snack) for selected day",
+        "Tap meal slot to add/edit food items from the food database",
+        "Long-press to delete a meal entry with confirmation",
+        "Kid selector to switch between children's meal plans",
+        "Sync changes to Supabase in real-time",
+        "Offline indicator when no network connection",
+        "App builds without errors"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "ANDROID AUDIT - UX/Features - Medium: Core meal planning feature"
+    },
+    {
+      "id": "US-120",
+      "title": "Build barcode scanner screen for food item lookup",
+      "description": "As a mobile user, I want to scan food barcodes with my camera so I can quickly add items to my food database with nutrition data.",
+      "acceptanceCriteria": [
+        "Create app/(tabs)/scan.tsx with camera preview using expo-camera",
+        "Request camera permission with clear explanation text",
+        "Detect and decode EAN-13, UPC-A, UPC-E barcodes",
+        "On successful scan, query OpenFoodFacts API for nutrition data",
+        "Show scanned food details (name, calories, macros, allergens) in bottom sheet",
+        "Button to add scanned food to user's food database",
+        "Handle permission denied, camera unavailable, and no-match states",
+        "Flashlight toggle button for low-light scanning",
+        "App builds without errors"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "ANDROID AUDIT - Features - Medium: Key mobile differentiator"
+    },
+    {
+      "id": "US-121",
+      "title": "Build grocery list screen with check-off and sharing",
+      "description": "As a mobile user, I want to manage my grocery lists so I can check items off while shopping in the store.",
+      "acceptanceCriteria": [
+        "Create app/(tabs)/lists.tsx showing all grocery lists",
+        "Tap list to view items grouped by category (produce, dairy, etc.)",
+        "Tap item to toggle checked/unchecked state",
+        "Swipe left to delete item with undo option",
+        "Add new items via text input at top of list",
+        "Sync check state to Supabase real-time",
+        "Show completion progress (e.g., 5/12 items checked)",
+        "App builds without errors"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "ANDROID AUDIT - Features - Medium: Essential shopping companion feature"
+    },
+    {
+      "id": "US-122",
+      "title": "Build user profile and settings screen",
+      "description": "As a mobile user, I want to manage my profile, kids, subscription, and app preferences from a settings screen.",
+      "acceptanceCriteria": [
+        "Create app/(tabs)/profile.tsx with user info header (name, email, avatar)",
+        "Kids management section: list kids, add/edit/delete child profiles",
+        "Subscription status display (plan name, renewal date, upgrade button)",
+        "Settings toggles: notifications, biometric lock, dark mode",
+        "Sign out button with confirmation dialog",
+        "App version display at bottom",
+        "App builds without errors"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "ANDROID AUDIT - UX - Medium: Account management needed for complete app"
+    },
+    {
+      "id": "US-123",
+      "title": "Implement secure token storage and session management for Android",
+      "description": "As a security engineer, I want auth tokens stored in Android Keystore via expo-secure-store and sessions managed properly so tokens are not exposed to rooted devices or backup extraction.",
+      "acceptanceCriteria": [
+        "Verify expo-secure-store uses Android Keystore (SECURITY_LEVEL.SOFTWARE at minimum)",
+        "Auth tokens never stored in AsyncStorage or SharedPreferences",
+        "Session auto-refresh before token expiry using Supabase autoRefreshToken",
+        "Clear all secure storage on sign-out",
+        "Handle expired session gracefully (redirect to login, don't crash)",
+        "No tokens logged to console in production builds",
+        "Sensitive fields excluded from Android backup manifest (android:allowBackup=false or exclude rules)",
+        "App builds without errors"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "ANDROID AUDIT - Security - High: Token security is critical for mobile"
+    },
+    {
+      "id": "US-124",
+      "title": "Add network security configuration for Android",
+      "description": "As a security engineer, I want Android Network Security Config to enforce HTTPS-only connections and certificate transparency so the app never sends data over plaintext.",
+      "acceptanceCriteria": [
+        "Create android network security config that blocks cleartext traffic",
+        "Allow cleartext only for localhost (10.0.2.2) in debug builds",
+        "Configure certificate transparency for production domains",
+        "Add this config via expo app.config.js android.networkSecurityConfig or plugin",
+        "Test that HTTP requests to non-localhost fail in production builds",
+        "App builds without errors"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "ANDROID AUDIT - Security - Medium: Prevent accidental cleartext data transmission"
+    },
+    {
+      "id": "US-125",
+      "title": "Implement proper Android deep linking and app links",
+      "description": "As a mobile user, I want EatPal links to open directly in the app so I can be taken to specific content from notifications or shared links.",
+      "acceptanceCriteria": [
+        "Configure Android App Links (autoVerify) for tryeatpal.com domain",
+        "Register URI scheme 'eatpal://' for custom deep links",
+        "Deep link routes: eatpal://meals/:date, eatpal://recipe/:id, eatpal://lists/:id",
+        "Handle deep link when app is cold started vs already open",
+        "Verify assetlinks.json digital asset link format documented",
+        "App builds without errors"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "ANDROID AUDIT - UX - Medium: Deep links needed for notifications and sharing"
+    },
+    {
+      "id": "US-126",
+      "title": "Add push notification support for Android (meal reminders, list updates)",
+      "description": "As a mobile user, I want push notifications for meal reminders and grocery list updates so I stay on track with meal plans.",
+      "acceptanceCriteria": [
+        "Install and configure expo-notifications for Android",
+        "Request notification permissions with clear explanation",
+        "Register device push token with Supabase push_notifications table",
+        "Handle foreground, background, and killed-state notifications",
+        "Notification categories: meal_reminder, list_update, plan_ready",
+        "Tapping notification navigates to relevant screen via deep link",
+        "Settings screen toggle to enable/disable each notification category",
+        "App builds without errors"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "ANDROID AUDIT - UX/Engagement - Medium: Push notifications drive retention"
+    },
+    {
+      "id": "US-127",
+      "title": "Implement offline mode with data sync queue for Android",
+      "description": "As a mobile user, I want to use EatPal without internet and have changes sync when I'm back online so the app works in stores with poor connectivity.",
+      "acceptanceCriteria": [
+        "Detect network state using expo NetInfo or equivalent",
+        "Queue write operations (add meal, check grocery item) when offline",
+        "Show offline indicator banner at top of screen",
+        "Sync queued operations on reconnection in order",
+        "Handle sync conflicts (server data newer) with last-write-wins strategy",
+        "Cache last-fetched data for offline read access",
+        "Clear sync queue on successful sync",
+        "App builds without errors"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "ANDROID AUDIT - UX/Performance - Medium: Offline is essential for grocery store usage"
+    },
+    {
+      "id": "US-128",
+      "title": "Implement proper Android app icons, adaptive icons, and splash assets",
+      "description": "As a mobile user, I want professional app icons that look correct on all Android launchers and devices.",
+      "acceptanceCriteria": [
+        "Create foreground icon (1024x1024) with EatPal logo",
+        "Create adaptive icon background layer (1024x1024) in brand green (#10b981)",
+        "Icons render correctly in round, squircle, and square launcher shapes",
+        "Generate all required densities (mdpi through xxxhdpi) or use adaptive format",
+        "Configure in app.config.js android.adaptiveIcon with both layers",
+        "Verify icon appears correctly in Android app drawer, recents, and settings",
+        "App builds without errors"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "ANDROID AUDIT - UI - Low: Required for Play Store submission"
+    },
+    {
+      "id": "US-129",
+      "title": "Add dark mode support for all mobile screens",
+      "description": "As a mobile user, I want dark mode that follows my Android system preference so EatPal is comfortable to use at night.",
+      "acceptanceCriteria": [
+        "Detect system color scheme using useColorScheme from react-native",
+        "Create theme context with light and dark color tokens matching web app theme",
+        "All mobile screens use theme-aware colors (no hardcoded white/black)",
+        "Tab bar, headers, and modals respect dark mode",
+        "Settings toggle to override system preference (light, dark, system)",
+        "Store theme preference in expo-secure-store",
+        "App builds without errors"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "ANDROID AUDIT - UI - Low: Dark mode is expected on modern Android apps"
+    },
+    {
+      "id": "US-130",
+      "title": "Implement input validation and data sanitization for all mobile forms",
+      "description": "As a security engineer, I want all mobile form inputs validated and sanitized so the app is protected against injection and malformed data.",
+      "acceptanceCriteria": [
+        "Email validation using same regex as web app on login/signup forms",
+        "Password strength validation matching web requirements on signup",
+        "Food name input sanitized (strip HTML tags, limit length to 200 chars)",
+        "Grocery item input sanitized (strip HTML, limit to 200 chars)",
+        "Child name input sanitized (strip HTML, limit to 100 chars)",
+        "Numeric inputs (calories, servings) validated as positive numbers within sane ranges",
+        "No user input directly interpolated into Supabase queries (use parameterized queries)",
+        "App builds without errors"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "ANDROID AUDIT - Security - Medium: Input validation prevents data corruption and injection"
+    },
+    {
+      "id": "US-131",
+      "title": "Add accessibility support (TalkBack, content descriptions, touch targets)",
+      "description": "As a user with accessibility needs, I want EatPal to work with Android TalkBack and meet WCAG standards so everyone can use the app.",
+      "acceptanceCriteria": [
+        "All interactive elements have accessibilityLabel props",
+        "All images have accessibilityLabel or are marked accessibilityElementsHidden",
+        "Touch targets minimum 48x48dp per Android accessibility guidelines",
+        "Focus order follows logical reading order on all screens",
+        "Color contrast ratios meet WCAG AA (4.5:1 for text, 3:1 for large text)",
+        "Reduce motion support via AccessibilityInfo.isReduceMotionEnabled",
+        "Screen reader announces screen transitions and loading states",
+        "App builds without errors"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "ANDROID AUDIT - Accessibility - Medium: Required for inclusive app and Play Store best practices"
+    },
+    {
+      "id": "US-132",
+      "title": "Add memory optimization and list virtualization for Android",
+      "description": "As a mobile user with a mid-range Android device, I want the app to run smoothly without excessive memory usage or janky scrolling.",
+      "acceptanceCriteria": [
+        "Use FlatList (not ScrollView+map) for all lists with 20+ potential items",
+        "Implement getItemLayout for fixed-height list items to avoid measurement",
+        "Set removeClippedSubviews={true} on long lists",
+        "Limit image cache size and implement image recycling",
+        "No memory leaks from unsubscribed Supabase channels or timers",
+        "Profile and verify: app uses under 200MB RAM during normal usage",
+        "App builds without errors"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "ANDROID AUDIT - Performance - Low: Critical for mid/low-end Android devices"
+    },
+    {
+      "id": "US-133",
+      "title": "Configure ProGuard/R8 minification and app signing for production Android builds",
+      "description": "As a developer, I want production Android builds to be properly minified, signed, and optimized so the APK size is minimal and ready for Play Store.",
+      "acceptanceCriteria": [
+        "EAS build production profile generates signed AAB (Android App Bundle)",
+        "R8 minification enabled (default in Expo production builds)",
+        "App bundle size under 30MB (excluding assets that can be on-demand)",
+        "Signing key stored securely (not in repo) via EAS credentials",
+        "Build generates correct versionCode and versionName from app.config.js",
+        "Test production build installs and runs correctly on Android 8+ (API 26+)",
+        "App builds without errors"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "ANDROID AUDIT - Performance/Deployment - Low: Required for Play Store submission"
+    },
+    {
+      "id": "US-134",
+      "title": "Add error boundary and crash reporting for mobile with Sentry",
+      "description": "As a developer, I want unhandled errors caught and reported to Sentry so we can monitor Android app stability post-launch.",
+      "acceptanceCriteria": [
+        "Configure @sentry/react-native for Android with proper DSN",
+        "Add ErrorBoundary component wrapping the root app layout",
+        "Crash-free session rate visible in Sentry dashboard",
+        "Source maps uploaded during EAS build for readable stack traces",
+        "User feedback prompt on crash with option to describe what happened",
+        "Breadcrumbs for navigation events, API calls, and user actions",
+        "No PII (email, names) sent to Sentry by default (scrub sensitive fields)",
+        "App builds without errors"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "ANDROID AUDIT - Monitoring - Low: Essential for production stability"
     }
   ]
 }

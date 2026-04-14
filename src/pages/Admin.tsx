@@ -35,6 +35,7 @@ import { EmailABTesting } from "@/components/admin/EmailABTesting";
 import { EmailAnalyticsDashboard } from "@/components/admin/EmailAnalyticsDashboard";
 import { MultiRegionBackup } from "@/components/admin/MultiRegionBackup";
 import { DocumentExportManager } from "@/components/admin/DocumentExportManager";
+import { DisposableEmailManager } from "@/components/admin/DisposableEmailManager";
 import { logger } from "@/lib/logger";
 
 const Admin = () => {
@@ -414,6 +415,21 @@ const Admin = () => {
                 </CardHeader>
                 <CardContent>
                   <UserRolesManager />
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === "disposable-emails" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Disposable Email Blocklist</CardTitle>
+                  <CardDescription>
+                    Manage the list of disposable and temporary email domains
+                    that are blocked from signing up
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <DisposableEmailManager />
                 </CardContent>
               </Card>
             )}

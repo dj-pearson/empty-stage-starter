@@ -4,6 +4,7 @@ import type { Database } from './types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const FUNCTIONS_URL = import.meta.env.VITE_FUNCTIONS_URL;
 
 // Flag to track if Supabase is properly configured
 export const isSupabaseConfigured = !!(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
@@ -123,7 +124,8 @@ function createMockClient(): SupabaseClient<Database> {
 // Create supabase client only if configured, otherwise create a mock
 function createSupabaseClient(): SupabaseClient<Database> {
   if (isSupabaseConfigured) {
-    return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    // Configure options for self-hosted Supabase
+    const options: Parameters<typeof createClient>[2] = {
       auth: {
         storage: typeof localStorage !== 'undefined' ? localStorage : undefined,
         persistSession: true,
@@ -140,6 +142,19 @@ function createSupabaseClient(): SupabaseClient<Database> {
         headers: {
           'X-Client-Info': 'eatpal-web',
         },
+        // Custom functions URL for self-hosted edge functions
+        ...(FUNCTIONS_URL && {
+          fetch: (url: RequestInfo | URL, options?: RequestInit) => {
+            const urlString = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+            // Rewrite /functions/v1/ URLs to point to custom functions domain
+            if (urlString.includes('/functions/v1/')) {
+              const functionPath = urlString.split('/functions/v1/')[1];
+              const newUrl = `${FUNCTIONS_URL}/${functionPath}`;
+              return fetch(newUrl, options);
+            }
+            return fetch(url, options);
+          }
+        })
       },
       realtime: {
         params: {
@@ -151,7 +166,9 @@ function createSupabaseClient(): SupabaseClient<Database> {
         // Schema to use for all queries
         schema: 'public',
       },
-    });
+    };
+    
+    return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, options);
   }
 
   return createMockClient();

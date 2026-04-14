@@ -40,7 +40,41 @@ export default {
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ],
+      allowBackup: false, // Prevent token extraction via backup
+      blockedPermissions: [
+        "android.permission.READ_PHONE_STATE" // No phone state access needed
+      ],
+      intentFilters: [
+        {
+          action: "VIEW",
+          autoVerify: true,
+          data: [
+            {
+              scheme: "https",
+              host: "tryeatpal.com",
+              pathPrefix: "/app"
+            }
+          ],
+          category: ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          action: "VIEW",
+          data: [
+            {
+              scheme: "eatpal",
+              host: "*"
+            }
+          ],
+          category: ["BROWSABLE", "DEFAULT"]
+        }
       ]
     },
     web: {
@@ -62,7 +96,14 @@ export default {
           "photosPermission": "EatPal needs access to your photos to let you add meal images"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow EatPal to use Face ID to unlock the app securely"
+        }
+      ],
+      "expo-splash-screen"
     ],
     extra: {
       eas: {
