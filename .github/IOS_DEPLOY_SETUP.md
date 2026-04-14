@@ -16,6 +16,32 @@ Work through the phases in order. Each phase ends with the concrete artifacts yo
 | 4 | GitHub | Repo secrets (everything the workflow consumes) |
 | 5 | GitHub Actions | Run `iOS App Store Deploy` → TestFlight |
 
+## What you can reuse from another iOS project
+
+If you've already shipped an app from the same Apple Developer account, **most Apple-level credentials are account-wide** — don't regenerate them.
+
+Each step below is tagged:
+
+- 🟢 **REUSE** — account-wide, copy the value/secret from your other project
+- 🟠 **REUSE-IF** — reusable under a specific condition (noted inline)
+- 🔴 **NEW** — must be created fresh for EatPal (app-specific)
+
+**Short version — if you have another iOS app already deployed:**
+
+| Secret | Status |
+|---|---|
+| `APPLE_TEAM_ID` | 🟢 REUSE |
+| `IOS_P12_CERTIFICATE_BASE64` + `IOS_P12_PASSWORD` | 🟢 REUSE |
+| `IOS_KEYCHAIN_PASSWORD` | 🟢 REUSE (or any random string) |
+| `APP_STORE_CONNECT_API_KEY_ID` / `ISSUER_ID` / `API_KEY_BASE64` | 🟢 REUSE |
+| APNs `.p8` auth key | 🟢 REUSE (one key serves all team apps; Apple caps at 2) |
+| Sign in with Apple `.p8` key | 🟠 REUSE-IF the key's Primary App ID is grouped with `com.eatpal.app` |
+| `IOS_PROVISIONING_PROFILE_BASE64` | 🔴 NEW (bound to `com.eatpal.app`) |
+| `IOS_WIDGET_PROVISIONING_PROFILE_BASE64` | 🔴 NEW (bound to `com.eatpal.app.widget`) |
+| `SUPABASE_URL` / `SUPABASE_ANON_KEY` | 🟠 REUSE-IF the other project uses the same Supabase project |
+
+The only Apple secrets you must *always* regenerate are the two provisioning profiles — everything else is optional.
+
 **Bundle IDs used by this project:**
 - App: `com.eatpal.app`
 - Widget extension: `com.eatpal.app.widget`
@@ -30,12 +56,14 @@ Push Notifications · Sign in with Apple · Associated Domains (`applinks:tryeat
 
 Prerequisite: paid Apple Developer Program membership ($99/yr). Login at <https://developer.apple.com/account>.
 
-### 1.1 Record your Team ID
+### 1.1 Record your Team ID — 🟢 REUSE
 
 Top-right of the developer account page (10-character alphanumeric, e.g. `ABCDE12345`).
 → Save as **`APPLE_TEAM_ID`**.
 
-### 1.2 Register App IDs (Identifiers)
+One Team ID per Developer account — same value for every app you ship.
+
+### 1.2 Register App IDs (Identifiers) — 🔴 NEW
 
 <https://developer.apple.com/account/resources/identifiers/list>
 
@@ -55,7 +83,7 @@ Create **two** App IDs (type: App IDs → App):
 - Enable:
   - [x] App Groups
 
-### 1.3 Create the App Group
+### 1.3 Create the App Group — 🔴 NEW
 
 Identifiers → App Groups → `+`
 - Description: `EatPal Shared`
@@ -63,13 +91,15 @@ Identifiers → App Groups → `+`
 
 Then edit **both** App IDs above → Configure App Groups → tick `group.com.eatpal.app`.
 
-### 1.4 Configure Associated Domains
+### 1.4 Configure Associated Domains — 🔴 NEW
 
 On `com.eatpal.app`: Configure Associated Domains is automatic — declared in the entitlements file. Host `tryeatpal.com` must serve an `apple-app-site-association` file at `https://tryeatpal.com/.well-known/apple-app-site-association` pointing to `<TEAM_ID>.com.eatpal.app`. (Not part of this workflow — deploy separately to your web host.)
 
-### 1.5 Create the Distribution Certificate
+### 1.5 Create the Distribution Certificate — 🟢 REUSE
 
-Certificates → `+` → **Apple Distribution** → follow the CSR flow from Keychain Access on a Mac.
+If another iOS project already has an **Apple Distribution** cert exported, paste the same `IOS_P12_CERTIFICATE_BASE64` and `IOS_P12_PASSWORD` — one cert signs every app in your team (Apple caps you at 2 distribution certs, so reusing is the norm).
+
+If you need a fresh one: Certificates → `+` → **Apple Distribution** → follow the CSR flow from Keychain Access on a Mac.
 
 Once installed in Keychain Access:
 1. Find "Apple Distribution: <Your Name>" (expand to see the private key underneath).
@@ -81,26 +111,33 @@ Once installed in Keychain Access:
    → **`IOS_P12_CERTIFICATE_BASE64`** (GitHub secret)
    → **`IOS_P12_PASSWORD`** = the password you chose
 
-### 1.6 Create the APNs Auth Key (Push Notifications)
+### 1.6 Create the APNs Auth Key (Push Notifications) — 🟢 REUSE
 
-Keys → `+` → enable **Apple Push Notifications service (APNs)** → Continue → Register. Download the `.p8` file (one-time download). Note the **Key ID** (10 chars).
+**One APNs auth key serves every app on your team.** Apple caps you at 2 active APNs keys total, so if another project already has one, reuse its `.p8` + Key ID — do not generate a new one.
+
+Only if you don't have one: Keys → `+` → enable **Apple Push Notifications service (APNs)** → Continue → Register. Download the `.p8` file (one-time download). Note the **Key ID** (10 chars).
 
 You'll paste these into Supabase (see 3.3) or your push backend. Keep the `.p8` file secure — Apple will not let you re-download it.
 
-### 1.7 Create the Sign in with Apple Key
+### 1.7 Create the Sign in with Apple Key — 🟠 REUSE-IF grouped
 
-Keys → `+` → enable **Sign in with Apple** → Configure → Primary App ID = `com.eatpal.app`. Download `.p8`, note the Key ID.
+Sign in with Apple keys are scoped to a **Primary App ID** and any App IDs *grouped under it*. Two paths:
 
-You'll use these to generate the client secret Supabase needs (see 3.1).
+- **Reuse path** — If another app already has a Sign in with Apple key and you want to share it with EatPal, edit that key's Primary App ID grouping to include `com.eatpal.app`. Then reuse the same `.p8` and Key ID.
+- **Fresh path** — Keys → `+` → enable **Sign in with Apple** → Configure → Primary App ID = `com.eatpal.app`. Download `.p8`, note the Key ID.
 
-### 1.8 Create a Services ID (only if using web-based Apple login too)
+Either way, these values feed into Supabase (see 3.1) to generate the client secret.
+
+### 1.8 Create a Services ID (web Apple login) — 🟠 REUSE-IF same domain
 
 If your web app also signs users in with Apple, create a Services ID:
 Identifiers → `+` → Services IDs → e.g. `com.eatpal.app.web` → Configure → Sign in with Apple → Primary App ID `com.eatpal.app` → add your website domain and Supabase callback URL `https://<your-supabase-project>.supabase.co/auth/v1/callback`.
 
 For iOS-only this is not required (the native Sign in with Apple flow uses the App ID directly).
 
-### 1.9 Create App Store Provisioning Profiles
+### 1.9 Create App Store Provisioning Profiles — 🔴 NEW
+
+These are always app-specific — profiles embed the App ID and entitlements, so you can't reuse another app's profile here.
 
 Profiles → `+` → **App Store** (Distribution):
 
@@ -213,9 +250,11 @@ App Store tab → 1.0:
   - Notes explaining anything that isn't obvious (e.g. IAP flow, parental features)
 - Version Release: Manually release / Automatically release after review / Scheduled
 
-### 2.8 App Store Connect API Key (for GitHub Actions)
+### 2.8 App Store Connect API Key (for GitHub Actions) — 🟢 REUSE
 
-Users and Access → Keys tab (under **Integrations** in the new UI) → `+`:
+API keys are team-wide — one "App Manager" key can upload any app in the team. If another project already has a working key in CI, reuse the same `APP_STORE_CONNECT_API_KEY_ID`, `ISSUER_ID`, and `APP_STORE_CONNECT_API_KEY_BASE64` values.
+
+Only if you need a fresh one: Users and Access → Keys tab (under **Integrations** in the new UI) → `+`:
 - Name: `GitHub Actions Deploy`
 - Access: **App Manager** (minimum required for `altool --upload-app`)
 - Download `.p8` — only available **once**. Store it safely.
@@ -324,32 +363,34 @@ If you use a third-party push service (OneSignal, Airship, etc.), configure it t
 
 Repository **Settings → Secrets and variables → Actions → New repository secret**.
 
+The **Reuse** column tells you whether you can copy the value from an existing GitHub repo or your password manager instead of regenerating.
+
 ### 4.1 Code signing
 
-| Secret | Source | Required |
+| Secret | Source | Reuse? |
 |---|---|---|
-| `IOS_P12_CERTIFICATE_BASE64` | Phase 1.5 | Yes |
-| `IOS_P12_PASSWORD` | Phase 1.5 | Yes |
-| `IOS_KEYCHAIN_PASSWORD` | `openssl rand -hex 16` | Yes |
-| `IOS_PROVISIONING_PROFILE_BASE64` | Phase 1.9 (app) | Yes |
-| `IOS_WIDGET_PROVISIONING_PROFILE_BASE64` | Phase 1.9 (widget) | Yes |
+| `IOS_P12_CERTIFICATE_BASE64` | Phase 1.5 | 🟢 Team-wide |
+| `IOS_P12_PASSWORD` | Phase 1.5 | 🟢 Team-wide |
+| `IOS_KEYCHAIN_PASSWORD` | `openssl rand -hex 16` | 🟢 Any random string works |
+| `IOS_PROVISIONING_PROFILE_BASE64` | Phase 1.9 (app) | 🔴 App-specific |
+| `IOS_WIDGET_PROVISIONING_PROFILE_BASE64` | Phase 1.9 (widget) | 🔴 App-specific |
 
 ### 4.2 App Store Connect API
 
-| Secret | Source | Required |
+| Secret | Source | Reuse? |
 |---|---|---|
-| `APP_STORE_CONNECT_API_KEY_ID` | Phase 2.8 | Yes |
-| `APP_STORE_CONNECT_ISSUER_ID` | Phase 2.8 | Yes |
-| `APP_STORE_CONNECT_API_KEY_BASE64` | Phase 2.8 | Yes |
+| `APP_STORE_CONNECT_API_KEY_ID` | Phase 2.8 | 🟢 Team-wide |
+| `APP_STORE_CONNECT_ISSUER_ID` | Phase 2.8 | 🟢 Team-wide |
+| `APP_STORE_CONNECT_API_KEY_BASE64` | Phase 2.8 | 🟢 Team-wide |
 
 ### 4.3 App runtime configuration
 
 These are baked into the built IPA via `xcodebuild` arguments (passed to `Info.plist` substitutions).
 
-| Secret | Description | Required |
+| Secret | Description | Reuse? |
 |---|---|---|
-| `SUPABASE_URL` | Your Supabase project URL, e.g. `https://api.tryeatpal.com` | Yes |
-| `SUPABASE_ANON_KEY` | Supabase anon/public key | Yes |
+| `SUPABASE_URL` | Your Supabase project URL, e.g. `https://api.tryeatpal.com` | 🟠 If same Supabase project as another EatPal platform |
+| `SUPABASE_ANON_KEY` | Supabase anon/public key | 🟠 Same as above |
 
 > The iOS app uses the built-in Supabase Functions URL derivation (same hostname under `/functions/v1/…`) so no separate `FUNCTIONS_URL` secret is needed for iOS. If you host Edge Functions on a different domain, add one and thread it through `SupabaseClient.swift` and the workflow.
 
