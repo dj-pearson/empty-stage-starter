@@ -529,9 +529,31 @@ struct AddPlanEntryView: View {
     }
 
     private func addEntry() async {
-        guard let kidId = appState.activeKidId else { return }
+        guard let kidId = appState.activeKidId else {
+            ToastManager.shared.error("Select a child profile first")
+            return
+        }
 
-        let foodId = selectedFoodId ?? ""
+        // plan_entries.food_id is NOT NULL, so always resolve a concrete
+        // food UUID. When the user picks a recipe we default to its first
+        // linked ingredient (matching the web planner's behaviour).
+        let resolvedFoodId: String? = {
+            if let id = selectedFoodId, !id.isEmpty { return id }
+            if let recipeId = selectedRecipeId,
+               let recipe = appState.recipes.first(where: { $0.id == recipeId }),
+               let firstFoodId = recipe.foodIds.first {
+                return firstFoodId
+            }
+            return nil
+        }()
+
+        guard let foodId = resolvedFoodId else {
+            ToastManager.shared.error(
+                "Pick a food or a recipe with ingredients before adding."
+            )
+            return
+        }
+
         let entry = PlanEntry(
             id: UUID().uuidString,
             userId: "",
@@ -542,8 +564,13 @@ struct AddPlanEntryView: View {
             recipeId: selectedRecipeId
         )
 
-        try? await appState.addPlanEntry(entry)
-        dismiss()
+        do {
+            try await appState.addPlanEntry(entry)
+            dismiss()
+        } catch {
+            // AppState already surfaces a toast; stay on the sheet so the
+            // user can correct the input.
+        }
     }
 }
 

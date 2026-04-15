@@ -10,6 +10,24 @@ final class DataService {
 
     private init() {}
 
+    // MARK: - Auth helpers
+
+    /// Returns the current authenticated user's UUID as a lowercase string.
+    /// Throws if no session is present so inserts never send an empty
+    /// `user_id` (which Postgres rejects as `invalid input syntax for type uuid`).
+    private func currentUserId() async throws -> String {
+        let session = try await client.auth.session
+        return session.user.id.uuidString.lowercased()
+    }
+
+    /// Ensures a candidate value is a valid UUID. When the caller passes
+    /// an empty string we fall back to the current authenticated user.
+    private func ensureUserId(_ existing: String) async throws -> String {
+        let trimmed = existing.trimmingCharacters(in: .whitespacesAndNewlines)
+        if UUID(uuidString: trimmed) != nil { return trimmed }
+        return try await currentUserId()
+    }
+
     // MARK: - Foods
 
     func fetchFoods() async throws -> [Food] {
@@ -21,8 +39,10 @@ final class DataService {
     }
 
     func insertFood(_ food: Food) async throws {
+        var payload = food
+        payload.userId = try await ensureUserId(payload.userId)
         try await client.from("foods")
-            .insert(food)
+            .insert(payload)
             .execute()
     }
 
@@ -51,8 +71,10 @@ final class DataService {
     }
 
     func insertKid(_ kid: Kid) async throws {
+        var payload = kid
+        payload.userId = try await ensureUserId(payload.userId)
         try await client.from("kids")
-            .insert(kid)
+            .insert(payload)
             .execute()
     }
 
@@ -81,8 +103,10 @@ final class DataService {
     }
 
     func insertRecipe(_ recipe: Recipe) async throws {
+        var payload = recipe
+        payload.userId = try await ensureUserId(payload.userId)
         try await client.from("recipes")
-            .insert(recipe)
+            .insert(payload)
             .execute()
     }
 
@@ -120,8 +144,21 @@ final class DataService {
     }
 
     func insertPlanEntry(_ entry: PlanEntry) async throws {
+        var payload = entry
+        payload.userId = try await ensureUserId(payload.userId)
+
+        // plan_entries.kid_id and food_id are NOT NULL UUIDs in Postgres.
+        // Surface a friendly error instead of letting the database reject
+        // the insert with `invalid input syntax for type uuid: ""`.
+        if UUID(uuidString: payload.kidId) == nil {
+            throw DataServiceError.missingKid
+        }
+        if UUID(uuidString: payload.foodId) == nil {
+            throw DataServiceError.missingFood
+        }
+
         try await client.from("plan_entries")
-            .insert(entry)
+            .insert(payload)
             .execute()
     }
 
@@ -150,8 +187,10 @@ final class DataService {
     }
 
     func insertGroceryItem(_ item: GroceryItem) async throws {
+        var payload = item
+        payload.userId = try await ensureUserId(payload.userId)
         try await client.from("grocery_items")
-            .insert(item)
+            .insert(payload)
             .execute()
     }
 
@@ -177,5 +216,21 @@ final class DataService {
             .order("created_at", ascending: false)
             .execute()
             .value
+    }
+}
+
+// MARK: - Errors
+
+enum DataServiceError: LocalizedError {
+    case missingFood
+    case missingKid
+
+    var errorDescription: String? {
+        switch self {
+        case .missingFood:
+            return "Pick a food before adding it to the plan."
+        case .missingKid:
+            return "Select a child profile first."
+        }
     }
 }

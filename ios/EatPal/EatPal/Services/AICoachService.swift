@@ -22,27 +22,31 @@ final class AICoachService: ObservableObject {
         isLoading = true
 
         do {
-            let conversationHistory = messages.suffix(20).map { msg -> [String: String] in
+            // Edge function contract (see supabase/functions/ai-coach-chat):
+            //   { messages: [{role, content}], kidContext?: {...}, maxTokens? }
+            // Previously this sent `{ conversation, kidName, ... }`, which
+            // caused the function to return 400 "Messages array is required"
+            // and forced the UI to fall back to the canned response.
+            let history = messages.suffix(20).map { msg -> [String: String] in
                 ["role": msg.role.rawValue, "content": msg.content]
             }
 
-            var context: [String: Any] = [
-                "conversation": conversationHistory
+            var payload: [String: Any] = [
+                "messages": history,
+                "maxTokens": 2000
             ]
 
             if let kid = kid {
-                context["kidName"] = kid.name
-                context["kidAge"] = kid.age as Any
-                context["allergens"] = kid.allergens as Any
-                context["pickinessLevel"] = kid.pickinessLevel as Any
+                var kidContext: [String: Any] = ["name": kid.name]
+                if let age = kid.age { kidContext["age"] = age }
+                if let allergens = kid.allergens { kidContext["allergens"] = allergens }
+                if let pickiness = kid.pickinessLevel { kidContext["pickinessLevel"] = pickiness }
+                kidContext["safeFoodsCount"] = foods.filter(\.isSafe).count
+                kidContext["tryBiteFoodsCount"] = foods.filter(\.isTryBite).count
+                payload["kidContext"] = kidContext
             }
 
-            let safeFoodNames = foods.filter(\.isSafe).prefix(20).map(\.name)
-            if !safeFoodNames.isEmpty {
-                context["safeFoods"] = safeFoodNames
-            }
-
-            let requestBody = try JSONSerialization.data(withJSONObject: context)
+            let requestBody = try JSONSerialization.data(withJSONObject: payload)
 
             struct CoachResponse: Decodable {
                 let message: String
@@ -55,7 +59,12 @@ final class AICoachService: ObservableObject {
             let assistantMessage = ChatMessage(role: .assistant, content: decoded.message)
             messages.append(assistantMessage)
         } catch {
-            // Fallback to canned responses
+            // Only fall back to the canned response when the edge call
+            // genuinely fails (network, auth, 5xx). Log so we can tell
+            // the canned path apart from a real model response in testing.
+            #if DEBUG
+            print("[AICoachService] edge invoke failed: \(error)")
+            #endif
             let fallback = generateFallbackResponse(for: text, kid: kid)
             let assistantMessage = ChatMessage(role: .assistant, content: fallback)
             messages.append(assistantMessage)
