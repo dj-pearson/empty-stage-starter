@@ -1,5 +1,6 @@
 import Foundation
-import SwiftData
+@preconcurrency import SwiftData
+@preconcurrency import Supabase
 
 /// Local offline cache using SwiftData.
 /// Persists data locally so the app is usable without network.

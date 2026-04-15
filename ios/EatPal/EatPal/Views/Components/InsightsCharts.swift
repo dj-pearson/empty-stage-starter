@@ -8,7 +8,7 @@ struct PantryDistributionChart: View {
 
     private var categoryData: [(category: String, count: Int, color: Color)] {
         let grouped = Dictionary(grouping: foods, by: { $0.category })
-        return grouped.map { (category, items) in
+        let mapped: [(category: String, count: Int, color: Color)] = grouped.map { (category, items) in
             let cat = FoodCategory(rawValue: category)
             return (
                 category: cat?.displayName ?? category,
@@ -16,7 +16,7 @@ struct PantryDistributionChart: View {
                 color: AppTheme.Colors.categoryColor(category)
             )
         }
-        .sorted(by: { $0.count > $1.count })
+        return mapped.sorted { $0.count > $1.count }
     }
 
     var body: some View {
@@ -167,10 +167,9 @@ struct AllergenChart: View {
     private var allergenData: [(allergen: String, count: Int)] {
         let allAllergens = foods.flatMap { $0.allergens ?? [] }
         let grouped = Dictionary(grouping: allAllergens, by: { $0 })
-        return grouped.map { ($0.key, $0.value.count) }
-            .sorted(by: { $0.count > $1.count })
-            .prefix(8)
-            .map { ($0.0, $0.1) }
+        let mapped: [(allergen: String, count: Int)] = grouped.map { (allergen: $0.key, count: $0.value.count) }
+        let sorted = mapped.sorted { $0.count > $1.count }
+        return Array(sorted.prefix(8))
     }
 
     var body: some View {

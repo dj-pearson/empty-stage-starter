@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
-import UserNotifications
+@preconcurrency import UserNotifications
+@preconcurrency import Supabase
 
 /// Manages push notification registration (APNs) and local notification scheduling.
 @MainActor
@@ -51,7 +52,9 @@ final class NotificationService: ObservableObject {
     /// Stores the device token in Supabase for server-side push.
     func handleDeviceToken(_ deviceToken: Data) async {
         let token = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+        #if DEBUG
         print("APNs device token: \(token)")
+        #endif
 
         // Store token in Supabase push_notifications table
         struct PushTokenPayload: Encodable {
@@ -69,7 +72,9 @@ final class NotificationService: ObservableObject {
                 .upsert(payload)
                 .execute()
         } catch {
+            #if DEBUG
             print("Failed to store push token: \(error)")
+            #endif
         }
     }
 
