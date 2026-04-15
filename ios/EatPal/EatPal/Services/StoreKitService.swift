@@ -2,35 +2,57 @@ import StoreKit
 import Foundation
 
 /// Product identifiers that match App Store Connect configuration.
+/// See documents/APP_STORE_CONNECT_SETUP.md for the full tier breakdown.
 enum SubscriptionProduct: String, CaseIterable {
-    case monthlyBasic = "com.eatpal.app.basic.monthly"
-    case yearlyBasic = "com.eatpal.app.basic.yearly"
-    case monthlyPremium = "com.eatpal.app.premium.monthly"
-    case yearlyPremium = "com.eatpal.app.premium.yearly"
+    case monthlyPro          = "com.eatpal.app.pro.monthly"
+    case yearlyPro           = "com.eatpal.app.pro.yearly"
+    case monthlyFamilyPlus   = "com.eatpal.app.familyplus.monthly"
+    case yearlyFamilyPlus    = "com.eatpal.app.familyplus.yearly"
+    case monthlyProfessional = "com.eatpal.app.professional.monthly"
+    case yearlyProfessional  = "com.eatpal.app.professional.yearly"
 
     var tier: SubscriptionTier {
         switch self {
-        case .monthlyBasic, .yearlyBasic: return .basic
-        case .monthlyPremium, .yearlyPremium: return .premium
+        case .monthlyPro, .yearlyPro: return .pro
+        case .monthlyFamilyPlus, .yearlyFamilyPlus: return .familyPlus
+        case .monthlyProfessional, .yearlyProfessional: return .professional
+        }
+    }
+
+    var isYearly: Bool {
+        switch self {
+        case .yearlyPro, .yearlyFamilyPlus, .yearlyProfessional: return true
+        default: return false
         }
     }
 }
 
-enum SubscriptionTier: String, Comparable {
+enum SubscriptionTier: String, Comparable, CaseIterable {
     case free
-    case basic
-    case premium
+    case pro
+    case familyPlus
+    case professional
 
     static func < (lhs: SubscriptionTier, rhs: SubscriptionTier) -> Bool {
-        let order: [SubscriptionTier] = [.free, .basic, .premium]
+        let order: [SubscriptionTier] = [.free, .pro, .familyPlus, .professional]
         return order.firstIndex(of: lhs)! < order.firstIndex(of: rhs)!
     }
 
     var displayName: String {
         switch self {
         case .free: return "Free"
-        case .basic: return "Basic"
-        case .premium: return "Premium"
+        case .pro: return "Pro"
+        case .familyPlus: return "Family Plus"
+        case .professional: return "Professional"
+        }
+    }
+
+    var tagline: String {
+        switch self {
+        case .free: return "Start planning with one kid"
+        case .pro: return "For the everyday picky-eater parent"
+        case .familyPlus: return "Unlimited kids, shared household"
+        case .professional: return "Feeding therapists & dietitians"
         }
     }
 
@@ -38,26 +60,34 @@ enum SubscriptionTier: String, Comparable {
         switch self {
         case .free:
             return [
-                "Track up to 1 child",
-                "Basic meal planning",
-                "Manual food entry",
+                "Track 1 child",
+                "Manual meal planning",
+                "Basic grocery list",
             ]
-        case .basic:
+        case .pro:
             return [
-                "Track up to 3 children",
-                "Full meal planning",
-                "Barcode scanning",
-                "Grocery list generation",
-                "Weekly nutrition reports",
+                "Up to 3 kids",
+                "AI meal coach",
+                "Barcode scanner",
+                "Smart grocery lists (aisle-grouped)",
+                "Food-chaining tools (basic)",
             ]
-        case .premium:
+        case .familyPlus:
             return [
-                "Unlimited children",
-                "AI meal suggestions",
-                "AI nutrition coaching",
-                "Food chaining therapy tools",
-                "Grocery delivery integration",
-                "Priority support",
+                "Unlimited kids",
+                "Shared household (2 parents)",
+                "Grocery delivery (Instacart)",
+                "Meal voting",
+                "Weekly nutrition email reports",
+                "Food-chaining tools (full)",
+            ]
+        case .professional:
+            return [
+                "Multi-family client management",
+                "Exportable PDF nutrition reports",
+                "Case-template library",
+                "Bulk client onboarding",
+                "Priority support (<4hr reply)",
             ]
         }
     }

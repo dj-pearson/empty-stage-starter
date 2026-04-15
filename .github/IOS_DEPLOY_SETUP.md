@@ -201,18 +201,23 @@ My Apps → `+` → **New App**:
 ### 2.4 In-App Purchase products
 
 Features → In-App Purchases → `+` → **Auto-Renewable Subscription**.
-Create a subscription group `EatPal Premium`, then four products matching the hardcoded IDs in `ios/EatPal/EatPal/Services/StoreKitService.swift`:
+Create a subscription group `EatPal Subscriptions`, then six products matching the hardcoded IDs in `ios/EatPal/EatPal/Services/StoreKitService.swift`:
 
-| Product ID | Duration | Tier |
-|---|---|---|
-| `com.eatpal.app.basic.monthly` | 1 month | Basic |
-| `com.eatpal.app.basic.yearly` | 1 year | Basic |
-| `com.eatpal.app.premium.monthly` | 1 month | Premium |
-| `com.eatpal.app.premium.yearly` | 1 year | Premium |
+| Product ID | Duration | Tier | Price (USD) |
+|---|---|---|---|
+| `com.eatpal.app.pro.monthly` | 1 month | Pro | $14.99 |
+| `com.eatpal.app.pro.yearly` | 1 year | Pro | $143.90 |
+| `com.eatpal.app.familyplus.monthly` | 1 month | Family Plus | $24.99 |
+| `com.eatpal.app.familyplus.yearly` | 1 year | Family Plus | $239.90 |
+| `com.eatpal.app.professional.monthly` | 1 month | Professional | $99.00 |
+| `com.eatpal.app.professional.yearly` | 1 year | Professional | $950.00 |
 
-For each: fill in reference name, price tier, display name and description in at least one locale, upload a 1024×1024 review screenshot. Submit for review (IAP is reviewed alongside the first app version).
+For each: fill in reference name, price, display name and description in at least one locale, upload a 1024×1024 review screenshot. Submit for review (IAP is reviewed alongside the first app version).
+
+Also enable a **7-day free trial** introductory offer on all six products for new subscribers.
 
 > The product IDs are **hardcoded** — don't rename them without updating `StoreKitService.swift`.
+> Full ASO metadata, per-product display names and descriptions, feature matrix, and pricing rationale live in `documents/APP_STORE_CONNECT_SETUP.md`.
 
 ### 2.5 App Privacy
 
@@ -270,7 +275,7 @@ base64 -i AuthKey_XXXXXXXXXX.p8 | pbcopy
 ### Phase 2 exit check
 - [ ] App record created with bundle ID `com.eatpal.app`
 - [ ] Category, age rating, privacy questionnaire complete
-- [ ] 4 IAP products created with exact IDs from `StoreKitService.swift`
+- [ ] 6 IAP products created with exact IDs from `StoreKitService.swift` (Pro/Family Plus/Professional × monthly/yearly)
 - [ ] TestFlight info filled (beta description, feedback email, privacy policy URL)
 - [ ] App Store 1.0 metadata drafted (description, keywords, screenshots, support URL)
 - [ ] App Review demo credentials prepared
@@ -435,7 +440,7 @@ Code and config:
 
 App Store Connect:
 - [ ] App metadata complete for en-US (description, keywords, screenshots, promotional text).
-- [ ] All 4 IAP products in `Ready to Submit` status.
+- [ ] All 6 IAP products in `Ready to Submit` status.
 - [ ] Age rating questionnaire answered.
 - [ ] Privacy questionnaire matches `PrivacyInfo.xcprivacy`.
 - [ ] App Review Info has demo account credentials that actually work.

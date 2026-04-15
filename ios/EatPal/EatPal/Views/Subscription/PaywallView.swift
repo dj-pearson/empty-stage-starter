@@ -148,7 +148,7 @@ struct PaywallView: View {
 
     private var featureComparison: some View {
         VStack(alignment: .leading, spacing: 16) {
-            ForEach([SubscriptionTier.free, .basic, .premium], id: \.self) { tier in
+            ForEach(SubscriptionTier.allCases, id: \.self) { tier in
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text(tier.displayName)
@@ -163,6 +163,11 @@ struct PaywallView: View {
                                 .background(.green.opacity(0.2), in: Capsule())
                         }
                     }
+
+                    Text(tier.tagline)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .italic()
 
                     ForEach(tier.features, id: \.self) { feature in
                         Label(feature, systemImage: "checkmark")
