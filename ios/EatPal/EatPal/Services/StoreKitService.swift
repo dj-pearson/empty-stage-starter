@@ -203,18 +203,25 @@ final class StoreKitService: ObservableObject {
     /// Syncs the active subscription status to Supabase for server-side entitlement checks.
     private func syncSubscriptionToSupabase(transaction: StoreKit.Transaction) async {
         struct SubscriptionPayload: Encodable {
-            let store_product_id: String
-            let store_transaction_id: String
+            let storeProductId: String
+            let storeTransactionId: String
             let status: String
             let platform: String
-            let expires_at: String
+            let expiresAt: String
+
+            enum CodingKeys: String, CodingKey {
+                case storeProductId = "store_product_id"
+                case storeTransactionId = "store_transaction_id"
+                case status, platform
+                case expiresAt = "expires_at"
+            }
         }
         let payload = SubscriptionPayload(
-            store_product_id: transaction.productID,
-            store_transaction_id: String(transaction.id),
+            storeProductId: transaction.productID,
+            storeTransactionId: String(transaction.id),
             status: transaction.revocationDate == nil ? "active" : "revoked",
             platform: "ios",
-            expires_at: transaction.expirationDate?.ISO8601Format() ?? ""
+            expiresAt: transaction.expirationDate?.ISO8601Format() ?? ""
         )
         do {
             try await SupabaseManager.client.from("user_subscriptions")

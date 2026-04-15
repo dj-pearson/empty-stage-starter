@@ -24,8 +24,10 @@ final class EatPalTests: XCTestCase {
         }
         """.data(using: .utf8)!
 
+        // Food declares explicit snake_case CodingKeys, so we must NOT also set
+        // keyDecodingStrategy = .convertFromSnakeCase — the strategy would
+        // rewrite "user_id" → "userId" before lookup, causing a key miss.
         let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
         let food = try? decoder.decode(Food.self, from: json)
         XCTAssertNotNil(food, "Food should decode from snake_case JSON")
     }

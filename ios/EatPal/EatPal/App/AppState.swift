@@ -57,17 +57,18 @@ final class AppState: ObservableObject {
             async let fetchedGroceryItems = dataService.fetchGroceryItems()
             async let fetchedGroceryLists = dataService.fetchGroceryLists()
 
-            let (f, k, r, p, g, gl) = try await (
+            let (loadedFoods, loadedKids, loadedRecipes,
+                 loadedPlanEntries, loadedGroceryItems, loadedGroceryLists) = try await (
                 fetchedFoods, fetchedKids, fetchedRecipes,
                 fetchedPlanEntries, fetchedGroceryItems, fetchedGroceryLists
             )
 
-            foods = f
-            kids = k
-            recipes = r
-            planEntries = p
-            groceryItems = g
-            groceryLists = gl
+            foods = loadedFoods
+            kids = loadedKids
+            recipes = loadedRecipes
+            planEntries = loadedPlanEntries
+            groceryItems = loadedGroceryItems
+            groceryLists = loadedGroceryLists
 
             if activeKidId == nil, let firstKid = kids.first {
                 activeKidId = firstKid.id

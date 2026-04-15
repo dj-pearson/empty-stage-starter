@@ -45,7 +45,9 @@
       "Bash(find:*)",
       "Bash(npx playwright:*)",
       "Bash(npx vite:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(awk *)",
+      "Bash(sort -t: -k2 -nr)"
     ],
     "deny": [],
     "ask": []

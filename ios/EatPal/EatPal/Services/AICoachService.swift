@@ -76,17 +76,53 @@ final class AICoachService: ObservableObject {
         let kidName = kid?.name ?? "your child"
 
         if lowered.contains("picky") || lowered.contains("won't eat") || lowered.contains("refuse") {
-            return "Picky eating is very common! Here are some strategies for \(kidName):\n\n1. Offer new foods alongside familiar favorites\n2. Let them explore food with all senses - touching and smelling count as progress\n3. Try food chaining - start with foods they like and gradually introduce similar ones\n4. Keep portions tiny for new foods (1-2 bites)\n5. Avoid pressure - keep mealtimes positive"
+            return """
+            Picky eating is very common! Here are some strategies for \(kidName):
+
+            1. Offer new foods alongside familiar favorites
+            2. Let them explore food with all senses - touching and smelling count as progress
+            3. Try food chaining - start with foods they like and gradually introduce similar ones
+            4. Keep portions tiny for new foods (1-2 bites)
+            5. Avoid pressure - keep mealtimes positive
+            """
         }
 
-        if lowered.contains("breakfast") || lowered.contains("lunch") || lowered.contains("dinner") || lowered.contains("meal idea") {
-            return "Here are some balanced meal ideas for \(kidName):\n\n- **Breakfast**: Whole grain toast with nut butter + banana slices\n- **Lunch**: Roll-ups with turkey, cheese, and veggies\n- **Dinner**: Mini meatballs with pasta and hidden veggie sauce\n- **Snack**: Apple slices with yogurt dip\n\nWould you like more specific ideas based on their safe foods?"
+        if lowered.contains("breakfast") || lowered.contains("lunch")
+            || lowered.contains("dinner") || lowered.contains("meal idea") {
+            return """
+            Here are some balanced meal ideas for \(kidName):
+
+            - **Breakfast**: Whole grain toast with nut butter + banana slices
+            - **Lunch**: Roll-ups with turkey, cheese, and veggies
+            - **Dinner**: Mini meatballs with pasta and hidden veggie sauce
+            - **Snack**: Apple slices with yogurt dip
+
+            Would you like more specific ideas based on their safe foods?
+            """
         }
 
         if lowered.contains("nutrition") || lowered.contains("vitamin") || lowered.contains("nutrient") {
-            return "Great question about nutrition for \(kidName)! Key nutrients for growing kids include:\n\n- **Iron**: Found in lean meats, beans, fortified cereals\n- **Calcium**: Dairy, fortified alternatives, leafy greens\n- **Fiber**: Fruits, vegetables, whole grains\n- **Protein**: Meat, eggs, dairy, legumes\n\nWould you like me to suggest foods rich in a specific nutrient?"
+            return """
+            Great question about nutrition for \(kidName)! Key nutrients for growing kids include:
+
+            - **Iron**: Found in lean meats, beans, fortified cereals
+            - **Calcium**: Dairy, fortified alternatives, leafy greens
+            - **Fiber**: Fruits, vegetables, whole grains
+            - **Protein**: Meat, eggs, dairy, legumes
+
+            Would you like me to suggest foods rich in a specific nutrient?
+            """
         }
 
-        return "That's a great question! Here are some general tips for feeding \(kidName):\n\n- Keep introducing new foods - it can take 10-15 exposures\n- Model healthy eating habits\n- Involve them in meal prep when possible\n- Make food fun with different shapes and colors\n\nWould you like more specific advice? Tell me about any particular challenges you're facing."
+        return """
+        That's a great question! Here are some general tips for feeding \(kidName):
+
+        - Keep introducing new foods - it can take 10-15 exposures
+        - Model healthy eating habits
+        - Involve them in meal prep when possible
+        - Make food fun with different shapes and colors
+
+        Would you like more specific advice? Tell me about any particular challenges you're facing.
+        """
     }
 }

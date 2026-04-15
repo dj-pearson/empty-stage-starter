@@ -17,7 +17,11 @@ struct FoodChainingView: View {
                     Label("What is Food Chaining?", systemImage: "link")
                         .font(.headline)
 
-                    Text("Food chaining helps picky eaters try new foods by creating small, gradual steps from foods they already accept to new target foods. Each step changes one small property (texture, flavor, color, or temperature).")
+                    Text(
+                        "Food chaining helps picky eaters try new foods by creating small, "
+                        + "gradual steps from foods they already accept to new target foods. "
+                        + "Each step changes one small property (texture, flavor, color, or temperature)."
+                    )
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }

@@ -1,0 +1,66 @@
+# SwiftLint config for EatPal iOS target.
+# Runs in CI via `swiftlint lint EatPal EatPalWidget` from ios/EatPal/.
+#
+# Strategy: keep rules that catch real issues (long lines, snake_case leaking
+# into Swift identifiers) while tolerating idiomatic SwiftUI patterns
+# (short spacing tokens like `sm`, `md`, `lg`, `xl`, trailing commas in
+# multi-line collection literals, long view files).
+
+included:
+  - EatPal
+  - EatPalWidget
+
+excluded:
+  - "**/.build"
+  - "**/DerivedData"
+  - "**/Pods"
+
+# --- Noisy defaults we opt out of ------------------------------------------
+# These either flag common SwiftUI patterns or are purely stylistic and not
+# worth churn right now.
+disabled_rules:
+  - trailing_comma          # Multi-line array/dict literals read better with trailing commas.
+  - file_length             # SwiftUI view files are naturally long.
+  - type_body_length        # Same — large view-model / view bodies are fine.
+  - function_body_length    # Same.
+  - cyclomatic_complexity   # Switch-heavy helpers (haptics, deep links) trip this.
+  - large_tuple             # A few (foo, bar, baz) returns used in helpers.
+  - nesting                 # Widget uses a few 2-level nested types.
+  - function_parameter_count
+  - orphaned_doc_comment
+
+# --- Rules we keep but tune ------------------------------------------------
+line_length:
+  warning: 150
+  error: 200
+  ignores_urls: true
+  ignores_comments: true
+  ignores_interpolated_strings: true
+
+identifier_name:
+  min_length:
+    warning: 1
+    error: 1          # Single-char identifiers still allowed (e.g. closure params).
+  max_length:
+    warning: 50
+    error: 60
+  # Design-system spacing tokens and common short identifiers we want to allow.
+  excluded:
+    - id
+    - on
+    - xs
+    - sm
+    - md
+    - lg
+    - xl
+    - gl
+    - to
+    - at
+    - by
+    - x
+    - y
+    - dx
+    - dy
+  # Keep the "no snake_case identifiers" behavior — this is the rule that
+  # caught `store_product_id` etc., which were real bugs.
+  validates_start_with_lowercase: warning

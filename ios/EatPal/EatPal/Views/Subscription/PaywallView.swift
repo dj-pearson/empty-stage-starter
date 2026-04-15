@@ -107,7 +107,11 @@ struct PaywallView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                        Text("Payment will be charged to your Apple ID account at confirmation of purchase. Subscription automatically renews unless it is canceled at least 24 hours before the end of the current period.")
+                        Text(
+                            "Payment will be charged to your Apple ID account at confirmation of "
+                            + "purchase. Subscription automatically renews unless it is canceled at "
+                            + "least 24 hours before the end of the current period."
+                        )
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                             .multilineTextAlignment(.center)
