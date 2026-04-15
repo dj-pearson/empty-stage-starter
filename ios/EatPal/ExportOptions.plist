@@ -4,8 +4,13 @@
 <dict>
     <key>method</key>
     <string>app-store-connect</string>
+    <!-- destination=export produces a local .ipa; the separate "Upload to
+         App Store Connect" step uploads it via `xcrun altool` with an API
+         key. Using destination=upload here would require the API key to be
+         registered *before* exportArchive runs (it isn't), and fails with
+         "Failed to Use Accounts". -->
     <key>destination</key>
-    <string>upload</string>
+    <string>export</string>
     <key>signingStyle</key>
     <string>manual</string>
     <key>stripSwiftSymbols</key>
