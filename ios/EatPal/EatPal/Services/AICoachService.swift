@@ -44,16 +44,14 @@ final class AICoachService: ObservableObject {
 
             let requestBody = try JSONSerialization.data(withJSONObject: context)
 
-            let response = try await client.functions.invoke(
-                "ai-coach-chat",
-                options: .init(body: requestBody)
-            )
-
             struct CoachResponse: Decodable {
                 let message: String
             }
 
-            let decoded = try JSONDecoder().decode(CoachResponse.self, from: response.data)
+            let decoded: CoachResponse = try await client.functions.invoke(
+                "ai-coach-chat",
+                options: .init(body: requestBody)
+            )
             let assistantMessage = ChatMessage(role: .assistant, content: decoded.message)
             messages.append(assistantMessage)
         } catch {

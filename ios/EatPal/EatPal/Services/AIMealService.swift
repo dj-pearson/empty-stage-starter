@@ -135,13 +135,10 @@ final class AIMealService: ObservableObject {
         )
 
         do {
-            let response = try await client.functions.invoke(
+            let decoded: [MealSuggestion] = try await client.functions.invoke(
                 "generate-meal-suggestions",
                 options: .init(body: request)
             )
-
-            let data = response.data
-            let decoded = try JSONDecoder().decode([MealSuggestion].self, from: data)
             suggestions = decoded
         } catch {
             errorMessage = "Failed to generate suggestions: \(error.localizedDescription)"

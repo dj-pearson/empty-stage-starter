@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import UserNotifications
 
 /// Manages push notification registration (APNs) and local notification scheduling.
@@ -53,13 +54,19 @@ final class NotificationService: ObservableObject {
         print("APNs device token: \(token)")
 
         // Store token in Supabase push_notifications table
+        struct PushTokenPayload: Encodable {
+            let endpoint: String
+            let platform: String
+            let keys: [String: String]
+        }
+        let payload = PushTokenPayload(
+            endpoint: token,
+            platform: "ios",
+            keys: ["apns_token": token]
+        )
         do {
             try await SupabaseManager.client.from("push_notifications")
-                .upsert([
-                    "endpoint": token,
-                    "platform": "ios",
-                    "keys": ["apns_token": token]
-                ] as [String: Any])
+                .upsert(payload)
                 .execute()
         } catch {
             print("Failed to store push token: \(error)")

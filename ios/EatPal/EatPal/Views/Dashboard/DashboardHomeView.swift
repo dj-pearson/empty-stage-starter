@@ -167,25 +167,25 @@ struct QuickStatsGrid: View {
             GridItem(.flexible()),
             GridItem(.flexible()),
         ], spacing: 12) {
-            StatCard(
+            DashboardStatCard(
                 title: "Foods",
                 value: "\(appState.foods.count)",
                 icon: "leaf.fill",
                 color: .green
             )
-            StatCard(
+            DashboardStatCard(
                 title: "Safe Foods",
                 value: "\(appState.safeFoods.count)",
                 icon: "checkmark.shield.fill",
                 color: .blue
             )
-            StatCard(
+            DashboardStatCard(
                 title: "Recipes",
                 value: "\(appState.recipes.count)",
                 icon: "book.fill",
                 color: .orange
             )
-            StatCard(
+            DashboardStatCard(
                 title: "Grocery Items",
                 value: "\(appState.groceryItems.filter { !$0.checked }.count)",
                 icon: "cart.fill",
@@ -195,7 +195,7 @@ struct QuickStatsGrid: View {
     }
 }
 
-struct StatCard: View {
+struct DashboardStatCard: View {
     let title: String
     let value: String
     let icon: String

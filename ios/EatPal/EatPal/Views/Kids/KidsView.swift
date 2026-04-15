@@ -227,8 +227,8 @@ struct AddKidView: View {
             age: age,
             gender: gender.isEmpty ? nil : gender,
             allergens: allergenList,
-            pickinessLevel: pickinessLevel,
-            notes: notes.isEmpty ? nil : notes
+            notes: notes.isEmpty ? nil : notes,
+            pickinessLevel: pickinessLevel
         )
 
         try? await appState.addKid(kid)

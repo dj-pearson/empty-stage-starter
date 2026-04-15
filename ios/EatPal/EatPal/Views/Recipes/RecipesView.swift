@@ -297,7 +297,7 @@ struct RecipeDetailView: View {
 
                     // Nutrition
                     if let nutrition = currentRecipe.nutritionInfo {
-                        NutritionCard(nutrition: nutrition)
+                        RecipeNutritionCard(nutrition: nutrition)
                     }
 
                     // Tips
@@ -415,7 +415,7 @@ struct MetaBadge: View {
     }
 }
 
-struct NutritionCard: View {
+struct RecipeNutritionCard: View {
     let nutrition: NutritionInfo
 
     var body: some View {

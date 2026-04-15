@@ -16,7 +16,7 @@ struct PantryDistributionChart: View {
                 color: AppTheme.Colors.categoryColor(category)
             )
         }
-        .sorted { $0.count > $1.count }
+        .sorted(by: { $0.count > $1.count })
     }
 
     var body: some View {
@@ -168,7 +168,7 @@ struct AllergenChart: View {
         let allAllergens = foods.flatMap { $0.allergens ?? [] }
         let grouped = Dictionary(grouping: allAllergens, by: { $0 })
         return grouped.map { ($0.key, $0.value.count) }
-            .sorted { $0.count > $1.count }
+            .sorted(by: { $0.count > $1.count })
             .prefix(8)
             .map { ($0.0, $0.1) }
     }
