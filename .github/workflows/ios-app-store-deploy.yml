@@ -212,7 +212,12 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          if [ -z "$APPLE_TEAM_ID" ]; then
+            echo "::error::APPLE_TEAM_ID secret is not set"
+            exit 1
+          fi
           set -o pipefail
           ARCHIVE_PATH="$RUNNER_TEMP/EatPal.xcarchive"
 
@@ -226,9 +231,9 @@ jobs:
             -destination "generic/platform=iOS" \
             MARKETING_VERSION="$APP_VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-            PRODUCT_BUNDLE_IDENTIFIER="${{ env.BUNDLE_ID }}" \
             SUPABASE_URL="$SUPABASE_URL" \
             SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
             | xcbeautify
