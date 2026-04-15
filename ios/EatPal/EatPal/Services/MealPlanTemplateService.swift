@@ -134,9 +134,13 @@ final class MealPlanTemplateService {
             }
         }
 
+        // meal_plan_templates.user_id is NOT NULL UUID. Pull it from the
+        // current auth session rather than sending "" which Postgres
+        // rejects as `invalid input syntax for type uuid`.
+        let session = try await client.auth.session
         let template = MealPlanTemplate(
             id: UUID().uuidString,
-            userId: "",
+            userId: session.user.id.uuidString.lowercased(),
             name: name,
             meals: meals
         )
