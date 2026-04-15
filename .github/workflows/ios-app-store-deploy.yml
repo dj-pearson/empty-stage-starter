@@ -142,8 +142,17 @@ jobs:
         env:
           PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
         run: |
+          if [ -z "$PROVISIONING_PROFILE_BASE64" ]; then
+            echo "::error::IOS_PROVISIONING_PROFILE_BASE64 secret is empty or not set"
+            exit 1
+          fi
+          echo "Base64 secret length: ${#PROVISIONING_PROFILE_BASE64}"
+
           PROFILE_PATH="$RUNNER_TEMP/profile.mobileprovision"
-          echo -n "$PROVISIONING_PROFILE_BASE64" | base64 --decode -o "$PROFILE_PATH"
+          printf '%s' "$PROVISIONING_PROFILE_BASE64" | tr -d '[:space:]' | base64 --decode -o "$PROFILE_PATH"
+
+          echo "Decoded profile size:"
+          ls -la "$PROFILE_PATH"
 
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" | \
@@ -160,8 +169,10 @@ jobs:
             echo "::warning::IOS_WIDGET_PROVISIONING_PROFILE_BASE64 is not set — widget target will fail to sign."
             exit 0
           fi
+          echo "Widget base64 secret length: ${#WIDGET_PROVISIONING_PROFILE_BASE64}"
           PROFILE_PATH="$RUNNER_TEMP/widget-profile.mobileprovision"
-          echo -n "$WIDGET_PROVISIONING_PROFILE_BASE64" | base64 --decode -o "$PROFILE_PATH"
+          printf '%s' "$WIDGET_PROVISIONING_PROFILE_BASE64" | tr -d '[:space:]' | base64 --decode -o "$PROFILE_PATH"
+          ls -la "$PROFILE_PATH"
 
           PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" | \
             /usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin)
