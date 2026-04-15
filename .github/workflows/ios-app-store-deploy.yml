@@ -583,19 +583,37 @@ jobs:
           IPA_PATH=$(find "$RUNNER_TEMP/export" -name "*.ipa" -type f | head -1)
           echo "Uploading $IPA_PATH to App Store Connect..."
 
+          # altool has a quirk: it prints "UPLOAD FAILED" / "VERIFY FAILED"
+          # blocks to stdout but still exits 0 on some validation errors,
+          # which makes the job look green while nothing actually reached
+          # App Store Connect. Capture stdout+stderr and grep for failure
+          # markers so the step actually fails.
+
           # Validate first — surfaces App Store rejection issues without
           # actually uploading. Cheap insurance against bad submissions.
+          VALIDATE_LOG="$RUNNER_TEMP/altool-validate.log"
           xcrun altool --validate-app \
             --type ios \
             --file "$IPA_PATH" \
             --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
-            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
+            2>&1 | tee "$VALIDATE_LOG"
+          if grep -qE "VERIFY FAILED|Failed to validate package|Validation failed" "$VALIDATE_LOG"; then
+            echo "::error::altool validation failed — see the log above for details."
+            exit 1
+          fi
 
+          UPLOAD_LOG="$RUNNER_TEMP/altool-upload.log"
           xcrun altool --upload-app \
             --type ios \
             --file "$IPA_PATH" \
             --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
-            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
+            2>&1 | tee "$UPLOAD_LOG"
+          if grep -qE "UPLOAD FAILED|Failed to upload package|Validation failed" "$UPLOAD_LOG"; then
+            echo "::error::altool upload failed — see the log above for details."
+            exit 1
+          fi
 
           echo "Upload complete — build will appear in TestFlight after ~15-30 min of processing."
 
