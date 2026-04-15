@@ -154,9 +154,13 @@ jobs:
           echo "Decoded profile size:"
           ls -la "$PROFILE_PATH"
 
+          PLIST_PATH="$RUNNER_TEMP/profile.plist"
+          security cms -D -i "$PROFILE_PATH" -o "$PLIST_PATH"
+          echo "Unwrapped plist size:"
+          ls -la "$PLIST_PATH"
+
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" | \
-            /usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin)
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$PLIST_PATH")
           cp "$PROFILE_PATH" \
             ~/Library/MobileDevice/Provisioning\ Profiles/"$PROFILE_UUID.mobileprovision"
           echo "Installed app profile: $PROFILE_UUID"
@@ -174,8 +178,9 @@ jobs:
           printf '%s' "$WIDGET_PROVISIONING_PROFILE_BASE64" | tr -d '[:space:]' | base64 --decode -o "$PROFILE_PATH"
           ls -la "$PROFILE_PATH"
 
-          PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" | \
-            /usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin)
+          PLIST_PATH="$RUNNER_TEMP/widget-profile.plist"
+          security cms -D -i "$PROFILE_PATH" -o "$PLIST_PATH"
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$PLIST_PATH")
           cp "$PROFILE_PATH" \
             ~/Library/MobileDevice/Provisioning\ Profiles/"$PROFILE_UUID.mobileprovision"
           echo "Installed widget profile: $PROFILE_UUID"
