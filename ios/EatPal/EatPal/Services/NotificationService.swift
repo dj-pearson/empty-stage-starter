@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
-import UserNotifications
+@preconcurrency import UserNotifications
+@preconcurrency import Supabase
 
 /// Manages push notification registration (APNs) and local notification scheduling.
 @MainActor

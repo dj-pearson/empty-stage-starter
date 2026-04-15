@@ -1,5 +1,5 @@
 import Foundation
-import Supabase
+@preconcurrency import Supabase
 
 /// Handles all CRUD operations against Supabase tables.
 /// Each method maps to the corresponding web AppContext operation.

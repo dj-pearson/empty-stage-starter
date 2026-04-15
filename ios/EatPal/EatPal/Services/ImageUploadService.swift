@@ -33,8 +33,8 @@ enum ImageUploadService {
         try await client.storage
             .from(bucketName)
             .upload(
-                path: path,
-                file: data,
+                path,
+                data: data,
                 options: FileOptions(contentType: "image/jpeg", upsert: true)
             )
 

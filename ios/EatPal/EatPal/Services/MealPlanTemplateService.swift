@@ -1,5 +1,5 @@
 import Foundation
-import Supabase
+@preconcurrency import Supabase
 
 /// Handles meal plan copying and template operations.
 @MainActor

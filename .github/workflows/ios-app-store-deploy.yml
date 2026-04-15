@@ -30,7 +30,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  XCODE_VERSION: '16.1'
+  XCODE_VERSION: '26.2'
   SCHEME: 'EatPal'
   PROJECT_DIR: 'ios/EatPal'
   BUNDLE_ID: 'com.eatpal.app'
@@ -72,7 +72,7 @@ jobs:
   build-and-deploy:
     name: Build & Deploy to App Store
     needs: validate
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 60
     env:
       APP_VERSION: ${{ needs.validate.outputs.version }}
@@ -85,7 +85,18 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Select Xcode version
-        run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
+        run: |
+          XCODE_APP="/Applications/Xcode_${{ env.XCODE_VERSION }}.app"
+          if [ ! -d "$XCODE_APP" ]; then
+            echo "::warning::Xcode ${{ env.XCODE_VERSION }} not found at $XCODE_APP. Falling back to latest installed Xcode."
+            XCODE_APP=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+            if [ -z "$XCODE_APP" ]; then
+              echo "::error::No Xcode installation found on runner."
+              exit 1
+            fi
+            echo "Using $XCODE_APP"
+          fi
+          sudo xcode-select -s "$XCODE_APP"
 
       - name: Show Xcode version
         run: xcodebuild -version

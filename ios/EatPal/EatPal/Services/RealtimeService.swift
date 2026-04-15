@@ -1,6 +1,6 @@
 import Foundation
-import Supabase
-import Realtime
+@preconcurrency import Supabase
+@preconcurrency import Realtime
 
 /// Manages Supabase real-time subscriptions so changes from web or other devices
 /// are reflected in the iOS app without manual refresh.
@@ -25,7 +25,7 @@ final class RealtimeService {
             table: "foods"
         )
         channels.append(foodsChannel)
-        await foodsChannel.subscribe()
+        try? await foodsChannel.subscribeWithError()
 
         Task {
             for await change in foodsChanges {
@@ -41,7 +41,7 @@ final class RealtimeService {
             table: "kids"
         )
         channels.append(kidsChannel)
-        await kidsChannel.subscribe()
+        try? await kidsChannel.subscribeWithError()
 
         Task {
             for await change in kidsChanges {
@@ -57,7 +57,7 @@ final class RealtimeService {
             table: "grocery_items"
         )
         channels.append(groceryChannel)
-        await groceryChannel.subscribe()
+        try? await groceryChannel.subscribeWithError()
 
         Task {
             for await change in groceryChanges {
@@ -73,7 +73,7 @@ final class RealtimeService {
             table: "plan_entries"
         )
         channels.append(planChannel)
-        await planChannel.subscribe()
+        try? await planChannel.subscribeWithError()
 
         Task {
             for await change in planChanges {
@@ -89,7 +89,7 @@ final class RealtimeService {
             table: "recipes"
         )
         channels.append(recipesChannel)
-        await recipesChannel.subscribe()
+        try? await recipesChannel.subscribeWithError()
 
         Task {
             for await change in recipesChanges {
