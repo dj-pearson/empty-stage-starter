@@ -30,7 +30,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  XCODE_VERSION: '15.4'
+  XCODE_VERSION: '16.1'
   SCHEME: 'EatPal'
   PROJECT_DIR: 'ios/EatPal'
   BUNDLE_ID: 'com.eatpal.app'
