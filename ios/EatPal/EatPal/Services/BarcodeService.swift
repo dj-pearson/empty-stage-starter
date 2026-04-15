@@ -24,8 +24,17 @@ enum BarcodeService {
 
     /// Looks up a barcode and returns product information if found.
     static func lookup(barcode: String) async throws -> ProductResult? {
-        let url = URL(string: "\(baseURL)/\(barcode).json")!
+        // Encode the barcode so unusual characters can't make URL(string:) return nil.
+        let allowed = CharacterSet.urlPathAllowed
+        guard
+            let encoded = barcode.addingPercentEncoding(withAllowedCharacters: allowed),
+            !encoded.isEmpty,
+            let url = URL(string: "\(baseURL)/\(encoded).json")
+        else {
+            return nil
+        }
         var request = URLRequest(url: url)
+        request.timeoutInterval = 15
         request.setValue("EatPal iOS App - https://tryeatpal.com", forHTTPHeaderField: "User-Agent")
 
         let (data, response) = try await URLSession.shared.data(for: request)

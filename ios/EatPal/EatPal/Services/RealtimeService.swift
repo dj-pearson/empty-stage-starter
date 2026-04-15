@@ -9,6 +9,7 @@ final class RealtimeService {
     static let shared = RealtimeService()
     private let client = SupabaseManager.client
     private var channels: [RealtimeChannelV2] = []
+    private var listenerTasks: [Task<Void, Never>] = []
 
     private init() {}
 
@@ -25,13 +26,14 @@ final class RealtimeService {
             table: "foods"
         )
         channels.append(foodsChannel)
-        try? await foodsChannel.subscribeWithError()
+        await subscribeChannel(foodsChannel, name: "foods")
 
-        Task {
+        listenerTasks.append(Task { [weak appState] in
+            guard let appState else { return }
             for await change in foodsChanges {
-                await handleFoodsChange(change, appState: appState)
+                await self.handleFoodsChange(change, appState: appState)
             }
-        }
+        })
 
         // Kids channel
         let kidsChannel = client.realtimeV2.channel("kids-changes")
@@ -41,13 +43,14 @@ final class RealtimeService {
             table: "kids"
         )
         channels.append(kidsChannel)
-        try? await kidsChannel.subscribeWithError()
+        await subscribeChannel(kidsChannel, name: "kids")
 
-        Task {
+        listenerTasks.append(Task { [weak appState] in
+            guard let appState else { return }
             for await change in kidsChanges {
-                await handleKidsChange(change, appState: appState)
+                await self.handleKidsChange(change, appState: appState)
             }
-        }
+        })
 
         // Grocery items channel
         let groceryChannel = client.realtimeV2.channel("grocery-changes")
@@ -57,13 +60,14 @@ final class RealtimeService {
             table: "grocery_items"
         )
         channels.append(groceryChannel)
-        try? await groceryChannel.subscribeWithError()
+        await subscribeChannel(groceryChannel, name: "grocery_items")
 
-        Task {
+        listenerTasks.append(Task { [weak appState] in
+            guard let appState else { return }
             for await change in groceryChanges {
-                await handleGroceryChange(change, appState: appState)
+                await self.handleGroceryChange(change, appState: appState)
             }
-        }
+        })
 
         // Plan entries channel
         let planChannel = client.realtimeV2.channel("plan-changes")
@@ -73,13 +77,14 @@ final class RealtimeService {
             table: "plan_entries"
         )
         channels.append(planChannel)
-        try? await planChannel.subscribeWithError()
+        await subscribeChannel(planChannel, name: "plan_entries")
 
-        Task {
+        listenerTasks.append(Task { [weak appState] in
+            guard let appState else { return }
             for await change in planChanges {
-                await handlePlanChange(change, appState: appState)
+                await self.handlePlanChange(change, appState: appState)
             }
-        }
+        })
 
         // Recipes channel
         let recipesChannel = client.realtimeV2.channel("recipes-changes")
@@ -89,17 +94,34 @@ final class RealtimeService {
             table: "recipes"
         )
         channels.append(recipesChannel)
-        try? await recipesChannel.subscribeWithError()
+        await subscribeChannel(recipesChannel, name: "recipes")
 
-        Task {
+        listenerTasks.append(Task { [weak appState] in
+            guard let appState else { return }
             for await change in recipesChanges {
-                await handleRecipesChange(change, appState: appState)
+                await self.handleRecipesChange(change, appState: appState)
             }
+        })
+    }
+
+    /// Subscribe to a channel and surface errors instead of swallowing them silently.
+    private func subscribeChannel(_ channel: RealtimeChannelV2, name: String) async {
+        do {
+            try await channel.subscribeWithError()
+        } catch {
+            #if DEBUG
+            print("Realtime subscribe failed for \(name): \(error)")
+            #endif
         }
     }
 
-    /// Unsubscribes from all active channels.
+    /// Unsubscribes from all active channels and cancels listener tasks.
     func unsubscribeAll() async {
+        for task in listenerTasks {
+            task.cancel()
+        }
+        listenerTasks.removeAll()
+
         for channel in channels {
             await channel.unsubscribe()
         }
