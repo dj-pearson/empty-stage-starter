@@ -553,7 +553,32 @@ jobs:
           API_KEY_DIR="$HOME/.appstoreconnect/private_keys"
           mkdir -p "$API_KEY_DIR"
           API_KEY_PATH="$API_KEY_DIR/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
-          echo -n "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 --decode -o "$API_KEY_PATH"
+          # Use the same whitespace-tolerant decode as the provisioning-profile
+          # steps. `base64` output from macOS wraps at 76 chars, and copy/paste
+          # can introduce stray newlines — stripping all whitespace first makes
+          # the decode robust against both.
+          printf '%s' "$APP_STORE_CONNECT_API_KEY_BASE64" | tr -d '[:space:]' | base64 --decode -o "$API_KEY_PATH"
+
+          # Sanity-check the decoded key. A valid App Store Connect .p8 is a
+          # PEM file starting with "-----BEGIN PRIVATE KEY-----". If this check
+          # fails, the APP_STORE_CONNECT_API_KEY_BASE64 secret is bad (wrong
+          # contents, or was stored un-encoded instead of base64-encoded).
+          if ! head -1 "$API_KEY_PATH" | grep -q "BEGIN PRIVATE KEY"; then
+            echo "::error::Decoded API key does not look like a PEM .p8 file."
+            echo "First bytes of decoded output:"
+            head -c 100 "$API_KEY_PATH" | od -c | head -5
+            echo "Check the APP_STORE_CONNECT_API_KEY_BASE64 secret — it must be"
+            echo "the result of: base64 -i AuthKey_XXXXXXXXXX.p8 | pbcopy"
+            exit 1
+          fi
+          # Validate the other two secrets look sane (not swapped). Issuer ID
+          # is a UUID; Key ID is a 10-char alphanumeric string.
+          if ! echo "$APP_STORE_CONNECT_ISSUER_ID" | grep -Eq '^[0-9a-f-]{36}$'; then
+            echo "::error::APP_STORE_CONNECT_ISSUER_ID is not a UUID. Check that"
+            echo "APP_STORE_CONNECT_API_KEY_ID and APP_STORE_CONNECT_ISSUER_ID"
+            echo "aren't swapped — issuer is a UUID, key id is 10 alphanumeric chars."
+            exit 1
+          fi
 
           IPA_PATH=$(find "$RUNNER_TEMP/export" -name "*.ipa" -type f | head -1)
           echo "Uploading $IPA_PATH to App Store Connect..."
