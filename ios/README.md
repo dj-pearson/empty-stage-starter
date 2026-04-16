@@ -71,7 +71,8 @@ ios/EatPal/
 | Sign in with Apple | `EatPal.entitlements` → `com.apple.developer.applesignin` | Used by `AppleSignInHelper`. |
 | Associated Domains | `EatPal.entitlements` → `applinks:tryeatpal.com` | Universal links handled by `DeepLinkHandler`. |
 | App Groups | Both entitlements files → `group.com.eatpal.app` | Shared `UserDefaults` between app and widget. |
-| In-App Purchase | `EatPal.entitlements` → `com.apple.developer.in-app-payments` | Used by `StoreKitService`. |
+
+> **Note:** In-app purchases via `StoreKitService` do NOT require an entitlement. The `com.apple.developer.in-app-payments` key is for **Apple Pay (PassKit)**, not StoreKit IAP, and is intentionally not enabled for this app.
 
 ## CI / deploy workflows
 
