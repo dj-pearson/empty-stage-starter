@@ -14,7 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Pencil, Trash2, AlertTriangle, Plus, Minus } from "lucide-react";
+import { Pencil, Trash2, AlertTriangle, Plus, Minus, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CATEGORY_CONFIG, getStockStatus } from "./pantryConstants";
 
@@ -23,6 +23,7 @@ interface PantryListItemProps {
   onEdit: (food: Food) => void;
   onDelete: (id: string) => void;
   onQuantityChange?: (id: string, newQuantity: number) => void;
+  onAddToGrocery?: (food: Food) => void;
   kidAllergens?: string[];
 }
 
@@ -31,6 +32,7 @@ export const PantryListItem = memo(function PantryListItem({
   onEdit,
   onDelete,
   onQuantityChange,
+  onAddToGrocery,
   kidAllergens,
 }: PantryListItemProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -178,6 +180,18 @@ export const PantryListItem = memo(function PantryListItem({
 
       {/* Actions */}
       <div className="flex gap-0.5 shrink-0 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+        {onAddToGrocery && (
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => onAddToGrocery(food)}
+            className="h-10 w-10 text-primary hover:text-primary"
+            aria-label={`Add ${food.name} to grocery list`}
+            title="Add to grocery list"
+          >
+            <ShoppingCart className="h-3 w-3" />
+          </Button>
+        )}
         <Button
           size="icon"
           variant="ghost"

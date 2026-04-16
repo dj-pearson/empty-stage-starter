@@ -97,6 +97,7 @@ export default function Pantry() {
     kids,
     activeKidId,
     refreshFoods,
+    addGroceryItem,
   } = useApp();
   const isMobile = useIsMobile();
 
@@ -367,6 +368,22 @@ export default function Pantry() {
       }
     },
     [foods, updateFood]
+  );
+
+  const handleAddToGrocery = useCallback(
+    (food: Food) => {
+      addGroceryItem({
+        name: food.name,
+        quantity: 1,
+        unit: food.unit || "",
+        category: food.category,
+        aisle: food.aisle,
+      });
+      toast.success(`Added "${food.name}" to grocery list`, {
+        description: "Edit quantity on the Grocery page",
+      });
+    },
+    [addGroceryItem]
   );
 
   const handleSave = useCallback(
@@ -913,6 +930,7 @@ export default function Pantry() {
                     onEdit={handleEdit}
                     onDelete={deleteFood}
                     onQuantityChange={handleQuantityChange}
+                    onAddToGrocery={handleAddToGrocery}
                     kidAllergens={uniqueKidAllergens}
                   />
                 );
@@ -964,6 +982,7 @@ export default function Pantry() {
                               onEdit={handleEdit}
                               onDelete={deleteFood}
                               onQuantityChange={handleQuantityChange}
+                              onAddToGrocery={handleAddToGrocery}
                               kidAllergens={uniqueKidAllergens}
                             />
                           </div>
@@ -983,6 +1002,7 @@ export default function Pantry() {
                         onEdit={handleEdit}
                         onDelete={deleteFood}
                         onQuantityChange={handleQuantityChange}
+                        onAddToGrocery={handleAddToGrocery}
                         kidAllergens={uniqueKidAllergens}
                       />
                     ))}

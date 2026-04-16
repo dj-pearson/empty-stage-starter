@@ -21,6 +21,7 @@ interface PantryCategorySectionProps {
   onEdit: (food: Food) => void;
   onDelete: (id: string) => void;
   onQuantityChange: (id: string, newQuantity: number) => void;
+  onAddToGrocery?: (food: Food) => void;
   kidAllergens: string[];
 }
 
@@ -33,6 +34,7 @@ export const PantryCategorySection = memo(function PantryCategorySection({
   onEdit,
   onDelete,
   onQuantityChange,
+  onAddToGrocery,
   kidAllergens,
 }: PantryCategorySectionProps) {
   const config = CATEGORY_CONFIG[category];
@@ -114,6 +116,7 @@ export const PantryCategorySection = memo(function PantryCategorySection({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onQuantityChange={onQuantityChange}
+                onAddToGrocery={onAddToGrocery}
                 kidAllergens={kidAllergens}
               />
             ))}

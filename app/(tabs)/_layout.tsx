@@ -6,6 +6,8 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
   const icons: Record<string, string> = {
     Home: '🏠',
     Meals: '📅',
+    Recipes: '🍳',
+    Pantry: '🥫',
     Scan: '📷',
     Lists: '🛒',
     Profile: '👤',
@@ -56,11 +58,25 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="recipes"
+        options={{
+          title: 'Recipes',
+          tabBarIcon: ({ focused }) => <TabIcon name="Recipes" focused={focused} />,
+          tabBarAccessibilityLabel: 'Recipes tab',
+        }}
+      />
+      <Tabs.Screen
+        name="pantry"
+        options={{
+          title: 'Pantry',
+          tabBarIcon: ({ focused }) => <TabIcon name="Pantry" focused={focused} />,
+          tabBarAccessibilityLabel: 'Pantry tab',
+        }}
+      />
+      <Tabs.Screen
         name="scan"
         options={{
-          title: 'Scan',
-          tabBarIcon: ({ focused }) => <TabIcon name="Scan" focused={focused} />,
-          tabBarAccessibilityLabel: 'Barcode scanner tab',
+          href: null,
         }}
       />
       <Tabs.Screen
