@@ -130,27 +130,11 @@ export default function Planner() {
 
     setIsGeneratingPlan(true);
     try {
-      const { data: aiSettings, error: aiError } = await supabase
-        .from("ai_settings")
-        .select("*")
-        .eq("is_active", true)
-        .single();
-
-      if (aiError || !aiSettings) {
-        toast.error(
-          "No active AI model configured. Please set one up in Admin settings."
-        );
-        setIsGeneratingPlan(false);
-        return;
-      }
-
       const { data, error } = await invokeEdgeFunction("ai-meal-plan", {
         body: {
           kid: activeKid,
           foods,
           recipes,
-          planHistory: planEntries,
-          aiModel: aiSettings,
           days,
         },
       });

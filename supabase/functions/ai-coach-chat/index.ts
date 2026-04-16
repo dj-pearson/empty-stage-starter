@@ -27,7 +27,7 @@ export default async (req: Request) => {
           headers: { 
             ...corsHeaders, 
             ...securityHeaders, 
-            ...noCacheHeaders,
+            ...noCacheHeaders(),
             'Content-Type': 'application/json' 
           } 
         }
@@ -92,7 +92,7 @@ Your role is to:
         headers: {
           ...corsHeaders,
           ...securityHeaders,
-          ...noCacheHeaders,
+          ...noCacheHeaders(),
           'Content-Type': 'application/json'
         }
       }
@@ -111,7 +111,7 @@ Your role is to:
         headers: {
           ...corsHeaders,
           ...securityHeaders,
-          ...noCacheHeaders,
+          ...noCacheHeaders(),
           'Content-Type': 'application/json'
         }
       }
