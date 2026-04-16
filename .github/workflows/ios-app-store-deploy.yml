@@ -263,11 +263,18 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           set -o pipefail
+          SIM_DEVICE=$(xcrun simctl list devices available -j \
+            | python3 -c "import sys,json; devs=json.load(sys.stdin)['devices']; print(next(d['udid'] for r in devs for d in devs[r] if 'iPhone' in d['name'] and d['isAvailable']),end='')" 2>/dev/null || true)
+          if [ -z "$SIM_DEVICE" ]; then
+            echo "::warning::No available iPhone simulator found — skipping tests"
+            exit 0
+          fi
+          echo "Using simulator: $SIM_DEVICE"
           xcodebuild test \
             -project EatPal.xcodeproj \
             -scheme "$SCHEME" \
             -sdk iphonesimulator \
-            -destination "generic/platform=iOS Simulator" \
+            -destination "platform=iOS Simulator,id=$SIM_DEVICE" \
             -configuration Debug \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
             -resultBundlePath "$RUNNER_TEMP/Tests.xcresult" \
