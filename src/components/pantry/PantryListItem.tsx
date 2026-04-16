@@ -1,7 +1,9 @@
-import { memo, useState } from "react";
+import { memo, useState, useEffect } from "react";
 import { Food } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +34,23 @@ export const PantryListItem = memo(function PantryListItem({
   kidAllergens,
 }: PantryListItemProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [qtyPopoverOpen, setQtyPopoverOpen] = useState(false);
+  const [qtyDraft, setQtyDraft] = useState<string>(String(food.quantity ?? 0));
+
+  useEffect(() => {
+    if (qtyPopoverOpen) setQtyDraft(String(food.quantity ?? 0));
+  }, [qtyPopoverOpen, food.quantity]);
+
+  const commitQty = (value: number) => {
+    if (!onQuantityChange) return;
+    const safe = Math.max(0, Math.round(value));
+    onQuantityChange(food.id, safe);
+  };
+
+  const adjustBy = (delta: number) => {
+    commitQty((food.quantity ?? 0) + delta);
+    setQtyPopoverOpen(false);
+  };
 
   const config = CATEGORY_CONFIG[food.category];
   const stockStatus = getStockStatus(food.quantity);
@@ -95,15 +114,48 @@ export const PantryListItem = memo(function PantryListItem({
         >
           <Minus className="h-3 w-3" />
         </Button>
-        <span
-          className={cn(
-            "w-8 text-center font-semibold text-sm tabular-nums",
-            stockStatus === "out" && "text-destructive",
-            stockStatus === "low" && "text-amber-600 dark:text-amber-400"
-          )}
-        >
-          {food.quantity ?? 0}
-        </span>
+        <Popover open={qtyPopoverOpen} onOpenChange={setQtyPopoverOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                "w-8 text-center font-semibold text-sm tabular-nums hover:bg-muted rounded px-1 py-0.5",
+                stockStatus === "out" && "text-destructive",
+                stockStatus === "low" && "text-amber-600 dark:text-amber-400"
+              )}
+              aria-label={`Adjust ${food.name} quantity`}
+            >
+              {food.quantity ?? 0}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56 p-3" align="center">
+            <p className="text-xs font-semibold mb-2">{food.name}</p>
+            <div className="flex items-center gap-2 mb-2">
+              <Input
+                type="number"
+                min={0}
+                value={qtyDraft}
+                onChange={(e) => setQtyDraft(e.target.value)}
+                className="h-9"
+              />
+              <Button
+                size="sm"
+                onClick={() => {
+                  commitQty(parseInt(qtyDraft) || 0);
+                  setQtyPopoverOpen(false);
+                }}
+              >
+                Set
+              </Button>
+            </div>
+            <div className="grid grid-cols-4 gap-1">
+              <Button variant="outline" size="sm" onClick={() => adjustBy(-5)}>-5</Button>
+              <Button variant="outline" size="sm" onClick={() => adjustBy(-2)}>-2</Button>
+              <Button variant="outline" size="sm" onClick={() => adjustBy(2)}>+2</Button>
+              <Button variant="outline" size="sm" onClick={() => adjustBy(5)}>+5</Button>
+            </div>
+          </PopoverContent>
+        </Popover>
         <Button
           size="icon"
           variant="ghost"

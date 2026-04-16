@@ -6,6 +6,7 @@ struct GroceryView: View {
     @State private var showingAddItem = false
     @State private var showingClearAlert = false
     @State private var isGenerating = false
+    @State private var editingItem: GroceryItem?
 
     private var uncheckedItems: [GroceryItem] {
         appState.groceryItems.filter { !$0.checked && matchesSearch($0) }
@@ -71,12 +72,22 @@ struct GroceryView: View {
                     Section {
                         ForEach(items) { item in
                             GroceryItemRow(item: item)
+                                .contentShape(Rectangle())
+                                .onTapGesture { editingItem = item }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
                                         Task { try? await appState.deleteGroceryItem(item.id) }
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
+                                }
+                                .swipeActions(edge: .leading) {
+                                    Button {
+                                        editingItem = item
+                                    } label: {
+                                        Label("Edit", systemImage: "pencil")
+                                    }
+                                    .tint(.blue)
                                 }
                         }
                     } header: {
@@ -131,6 +142,9 @@ struct GroceryView: View {
         }
         .sheet(isPresented: $showingAddItem) {
             AddGroceryItemView()
+        }
+        .sheet(item: $editingItem) { item in
+            EditGroceryItemView(item: item)
         }
         .alert("Clear Completed Items?", isPresented: $showingClearAlert) {
             Button("Clear", role: .destructive) {
@@ -313,6 +327,127 @@ struct AddGroceryItemView: View {
         )
 
         try? await appState.addGroceryItem(item)
+        dismiss()
+    }
+}
+
+// MARK: - Edit Grocery Item View
+
+struct EditGroceryItemView: View {
+    @EnvironmentObject var appState: AppState
+    @Environment(\.dismiss) var dismiss
+    let item: GroceryItem
+
+    @State private var name: String = ""
+    @State private var category: FoodCategory = .protein
+    @State private var quantity: Double = 1
+    @State private var unit: String = "count"
+    @State private var notes: String = ""
+    @State private var priority: String = "medium"
+
+    private let units = ["count", "oz", "lb", "g", "kg", "cups", "tbsp", "tsp", "ml", "l"]
+    private let priorities = ["low", "medium", "high"]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Item Details") {
+                    TextField("Item name", text: $name)
+
+                    Picker("Category", selection: $category) {
+                        ForEach(FoodCategory.allCases, id: \.self) { cat in
+                            Text("\(cat.icon) \(cat.displayName)").tag(cat)
+                        }
+                    }
+                }
+
+                Section("Quantity") {
+                    HStack {
+                        Button {
+                            quantity = max(0, quantity - 1)
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+
+                        TextField("Qty", value: $quantity, format: .number)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+
+                        Button {
+                            quantity += 1
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+
+                        Picker("Unit", selection: $unit) {
+                            ForEach(units, id: \.self) { u in
+                                Text(u).tag(u)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                    }
+                }
+
+                Section("Priority") {
+                    Picker("Priority", selection: $priority) {
+                        ForEach(priorities, id: \.self) { p in
+                            Text(p.capitalized).tag(p)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Section("Notes") {
+                    TextField("Optional notes", text: $notes, axis: .vertical)
+                        .lineLimit(3)
+                }
+
+                Section {
+                    Button("Save Changes") {
+                        Task { await save() }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .disabled(name.isEmpty)
+                }
+            }
+            .navigationTitle("Edit Item")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .onAppear {
+                name = item.name
+                category = FoodCategory(rawValue: item.category) ?? .protein
+                quantity = item.quantity
+                unit = item.unit
+                notes = item.notes ?? ""
+                priority = item.priority ?? "medium"
+            }
+        }
+    }
+
+    private func save() async {
+        try? await appState.updateGroceryItem(
+            item.id,
+            updates: GroceryItemUpdate(
+                name: name,
+                category: category.rawValue,
+                quantity: quantity,
+                unit: unit,
+                notes: notes.isEmpty ? nil : notes,
+                priority: priority
+            )
+        )
         dismiss()
     }
 }

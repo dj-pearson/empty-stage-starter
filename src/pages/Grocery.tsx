@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { AddGroceryItemDialog } from "@/components/AddGroceryItemDialog";
+import { EditGroceryItemDialog } from "@/components/EditGroceryItemDialog";
 import { SmartRestockSuggestions } from "@/components/SmartRestockSuggestions";
 import { GroceryListSelector } from "@/components/GroceryListSelector";
 import { CreateGroceryListDialog } from "@/components/CreateGroceryListDialog";
@@ -24,7 +25,7 @@ import { generateGroceryList } from "@/lib/mealPlanner";
 import {
   ShoppingCart, Trash2, Printer, Download, Plus, Share2, FileText,
   Sparkles, Store, Barcode, RefreshCw, ChevronDown, ChevronRight,
-  X, Minus, Check, MoreHorizontal, PackageCheck, ShoppingBag
+  X, Minus, Check, MoreHorizontal, PackageCheck, ShoppingBag, Pencil
 } from "lucide-react";
 import { toast } from "sonner";
 import { FoodCategory, GroceryItem } from "@/types";
@@ -86,6 +87,7 @@ export default function Grocery() {
 
   const [groupBy, setGroupBy] = useState<"category" | "aisle">("aisle");
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
   const [isGeneratingRestock, setIsGeneratingRestock] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [householdId, setHouseholdId] = useState<string | null>(null);
@@ -831,8 +833,18 @@ export default function Grocery() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                          onClick={() => setEditingItem(item)}
+                          aria-label="Edit item"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                           onClick={() => handleDeleteItem(item.id)}
+                          aria-label="Delete item"
                         >
                           <X className="h-4 w-4" />
                         </Button>
@@ -923,6 +935,16 @@ export default function Grocery() {
                               </Button>
                             </div>
 
+                            {/* Edit button */}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                              onClick={() => setEditingItem(item)}
+                              aria-label="Edit item"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
                             {/* Delete button */}
                             <Button
                               variant="ghost"
@@ -1042,6 +1064,13 @@ export default function Grocery() {
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
         onAdd={addGroceryItem}
+      />
+
+      <EditGroceryItemDialog
+        open={editingItem !== null}
+        onOpenChange={(open) => !open && setEditingItem(null)}
+        item={editingItem}
+        onSave={(id, updates) => updateGroceryItem(id, updates)}
       />
 
       {userId && (

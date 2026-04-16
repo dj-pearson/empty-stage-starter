@@ -84,6 +84,7 @@ export interface GroceryItem {
   source_recipe_id?: string;
   added_by_user_id?: string;
   added_via?: 'manual' | 'voice' | 'recipe' | 'restock' | 'barcode' | 'plan' | 'import';
+  priority?: 'low' | 'medium' | 'high';
 }
 
 export interface Recipe {

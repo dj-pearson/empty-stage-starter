@@ -139,10 +139,28 @@ export default function Planner() {
         },
       });
 
-      if (error) throw error;
+      console.log('[AI Meal Plan] response:', { data, error });
+
+      if (error) {
+        console.error('[AI Meal Plan] Edge function error:', error);
+        toast.error(`AI meal plan failed: ${error.message || JSON.stringify(error)}`);
+        return;
+      }
+
+      if (!data) {
+        toast.error('Edge function returned no data — is ai-meal-plan deployed?');
+        return;
+      }
 
       if (data.error) {
-        toast.error(data.error);
+        console.error('[AI Meal Plan] Function error:', data);
+        toast.error(`${data.error}${data.details ? ` (${data.details})` : ''}`);
+        return;
+      }
+
+      if (!data.plan) {
+        toast.error('Invalid meal plan response shape');
+        console.error('[AI Meal Plan] Invalid shape:', data);
         return;
       }
 

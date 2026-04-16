@@ -262,11 +262,23 @@ struct CategoryChip: View {
 // MARK: - Food Row
 
 struct FoodRowView: View {
+    @EnvironmentObject var appState: AppState
     let food: Food
+
+    @State private var showQuantityAdjust = false
+
+    private var displayQuantity: Double {
+        food.quantity ?? 0
+    }
+
+    private var stockColor: Color {
+        if displayQuantity <= 0 { return .red }
+        if displayQuantity <= 2 { return .orange }
+        return .secondary
+    }
 
     var body: some View {
         HStack(spacing: 12) {
-            // Category icon
             let category = FoodCategory(rawValue: food.category)
             Text(category?.icon ?? "🍽")
                 .font(.title2)
@@ -297,11 +309,157 @@ struct FoodRowView: View {
 
             Spacer()
 
+            HStack(spacing: 4) {
+                Button {
+                    adjust(by: -1)
+                } label: {
+                    Image(systemName: "minus.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .disabled(displayQuantity <= 0)
+
+                Button {
+                    showQuantityAdjust = true
+                } label: {
+                    VStack(spacing: 0) {
+                        Text(displayQuantity.formatted(.number.precision(.fractionLength(0...1))))
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(stockColor)
+                            .monospacedDigit()
+                        if let unit = food.unit, !unit.isEmpty {
+                            Text(unit)
+                                .font(.system(size: 9))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .frame(minWidth: 36)
+                    .padding(.vertical, 2)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    adjust(by: 1)
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+
             Image(systemName: "chevron.right")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 4)
+        .sheet(isPresented: $showQuantityAdjust) {
+            QuantityAdjustSheet(food: food)
+                .presentationDetents([.height(280)])
+        }
+    }
+
+    private func adjust(by delta: Double) {
+        let newQty = max(0, displayQuantity + delta)
+        Task {
+            try? await appState.updateFood(
+                food.id,
+                updates: FoodUpdate(quantity: newQty)
+            )
+        }
+    }
+}
+
+// MARK: - Quantity Adjust Sheet
+
+struct QuantityAdjustSheet: View {
+    @EnvironmentObject var appState: AppState
+    @Environment(\.dismiss) var dismiss
+    let food: Food
+
+    @State private var draft: Double = 0
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                Text(food.name)
+                    .font(.headline)
+
+                HStack(spacing: 16) {
+                    Button {
+                        draft = max(0, draft - 1)
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.system(size: 32))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+
+                    TextField("Qty", value: $draft, format: .number)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.center)
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .frame(width: 100, height: 48)
+                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+
+                    Button {
+                        draft += 1
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 32))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                HStack(spacing: 8) {
+                    ForEach([-5, -2, 2, 5], id: \.self) { delta in
+                        Button {
+                            draft = max(0, draft + Double(delta))
+                        } label: {
+                            Text(delta > 0 ? "+\(delta)" : "\(delta)")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal)
+
+                Button {
+                    Task {
+                        try? await appState.updateFood(
+                            food.id,
+                            updates: FoodUpdate(quantity: draft)
+                        )
+                        dismiss()
+                    }
+                } label: {
+                    Text("Save")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(.tint, in: RoundedRectangle(cornerRadius: 10))
+                        .foregroundStyle(.white)
+                        .fontWeight(.semibold)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal)
+            }
+            .padding()
+            .navigationTitle("Adjust Quantity")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .onAppear {
+                draft = food.quantity ?? 0
+            }
+        }
     }
 }
 
@@ -385,8 +543,13 @@ struct FoodDetailView: View {
     let food: Food
 
     @State private var name: String = ""
+    @State private var category: FoodCategory = .protein
     @State private var isSafe: Bool = false
     @State private var isTryBite: Bool = false
+    @State private var quantity: Double = 0
+    @State private var unit: String = "count"
+
+    private let units = ["count", "oz", "lb", "g", "kg", "cups", "tbsp", "tsp", "ml", "l", "servings"]
 
     var body: some View {
         NavigationStack {
@@ -394,9 +557,45 @@ struct FoodDetailView: View {
                 Section("Food Details") {
                     TextField("Name", text: $name)
 
-                    LabeledContent("Category") {
-                        let cat = FoodCategory(rawValue: food.category)
-                        Text("\(cat?.icon ?? "") \(cat?.displayName ?? food.category)")
+                    Picker("Category", selection: $category) {
+                        ForEach(FoodCategory.allCases, id: \.self) { cat in
+                            Text("\(cat.icon) \(cat.displayName)").tag(cat)
+                        }
+                    }
+                }
+
+                Section("Inventory") {
+                    HStack {
+                        Button {
+                            quantity = max(0, quantity - 1)
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+
+                        TextField("Qty", value: $quantity, format: .number)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+
+                        Button {
+                            quantity += 1
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+
+                        Picker("Unit", selection: $unit) {
+                            ForEach(units, id: \.self) { u in
+                                Text(u).tag(u)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
                     }
                 }
 
@@ -421,8 +620,11 @@ struct FoodDetailView: View {
                                 food.id,
                                 updates: FoodUpdate(
                                     name: name,
+                                    category: category.rawValue,
                                     isSafe: isSafe,
-                                    isTryBite: isTryBite
+                                    isTryBite: isTryBite,
+                                    quantity: quantity,
+                                    unit: unit
                                 )
                             )
                             dismiss()
@@ -440,8 +642,11 @@ struct FoodDetailView: View {
             }
             .onAppear {
                 name = food.name
+                category = FoodCategory(rawValue: food.category) ?? .protein
                 isSafe = food.isSafe
                 isTryBite = food.isTryBite
+                quantity = food.quantity ?? 0
+                unit = food.unit ?? "count"
             }
         }
     }
