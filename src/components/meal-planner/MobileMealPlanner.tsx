@@ -478,7 +478,10 @@ export const MobileMealPlanner = memo(function MobileMealPlanner({
       {/* Quick-add drawer */}
       <MealQuickAddDrawer
         open={drawerOpen}
-        onOpenChange={setDrawerOpen}
+        onOpenChange={(open) => {
+          setDrawerOpen(open);
+          if (!open) setDrawerContext(null);
+        }}
         context={drawerContext}
         foods={foods}
         recipes={recipes}

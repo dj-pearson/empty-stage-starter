@@ -22,7 +22,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (mounted) setUserId(uid);
 
       if (uid) {
-        const { data: hh } = await supabase.rpc('get_user_household_id', { _user_id: uid });
+        let { data: hh } = await supabase.rpc('get_user_household_id', { _user_id: uid });
+        if (!hh) {
+          const { data: newHh } = await supabase.rpc('ensure_user_household');
+          hh = newHh;
+        }
         if (mounted) setHouseholdId((hh as string) ?? null);
       }
     };
@@ -34,8 +38,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (mounted) setUserId(uid);
 
       if (uid) {
-        supabase.rpc('get_user_household_id', { _user_id: uid }).then(({ data }) => {
-          if (mounted) setHouseholdId((data as string) ?? null);
+        supabase.rpc('get_user_household_id', { _user_id: uid }).then(async ({ data }) => {
+          let hhId = data;
+          if (!hhId) {
+            const { data: newHh } = await supabase.rpc('ensure_user_household');
+            hhId = newHh;
+          }
+          if (mounted) setHouseholdId((hhId as string) ?? null);
         }).catch((error) => {
           logger.error('Failed to get household ID:', error);
         });
