@@ -247,7 +247,7 @@ jobs:
             -project EatPal.xcodeproj \
             -scheme "$SCHEME" \
             -sdk iphonesimulator \
-            -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+            -destination "generic/platform=iOS Simulator" \
             -configuration Debug \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
             -resultBundlePath "$RUNNER_TEMP/Preflight.xcresult" \
@@ -267,7 +267,7 @@ jobs:
             -project EatPal.xcodeproj \
             -scheme "$SCHEME" \
             -sdk iphonesimulator \
-            -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+            -destination "generic/platform=iOS Simulator" \
             -configuration Debug \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
             -resultBundlePath "$RUNNER_TEMP/Tests.xcresult" \
@@ -287,7 +287,7 @@ jobs:
             -project EatPal.xcodeproj \
             -scheme "$SCHEME" \
             -sdk iphonesimulator \
-            -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+            -destination "generic/platform=iOS Simulator" \
             -configuration Debug \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
             CODE_SIGN_IDENTITY="" \
