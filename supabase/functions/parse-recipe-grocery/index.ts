@@ -1,9 +1,18 @@
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
+import type { AIImageSource } from '../_shared/ai-service-v2.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+function detectMediaType(base64: string): AIImageSource['media_type'] {
+  if (base64.startsWith('/9j/')) return 'image/jpeg';
+  if (base64.startsWith('iVBOR')) return 'image/png';
+  if (base64.startsWith('R0lG')) return 'image/gif';
+  if (base64.startsWith('UklG')) return 'image/webp';
+  return 'image/jpeg';
+}
 
 export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -12,27 +21,36 @@ export default async (req: Request) => {
 
   try {
     const { url, imageBase64 } = await req.json();
-    
-    // Initialize AI service
+
     const aiService = new AIServiceV2();
 
     let recipeContent = "";
-    
-    // Handle image-based recipe parsing
+
     if (imageBase64) {
-      console.log('Parsing recipe from image using AI...');
-      // Note: Vision API requires Claude Sonnet or similar - use standard task type
-      recipeContent = await aiService.generateContent(
-        'Extract all ingredients from this recipe image. Include the recipe title if visible. List each ingredient with its quantity and unit. Format as plain text.',
-        {
-          taskType: 'standard', // Vision requires more capable model
-          // TODO: Add vision support to AIServiceV2 if Claude supports it
-        }
-      );
-      
+      console.log('Parsing recipe from image using vision API...');
+      const rawBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+      const mediaType = detectMediaType(rawBase64);
+
+      const visionResponse = await aiService.generateContent({
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a recipe extraction assistant. Extract all recipe information from the image: title, ingredients with quantities/units, and step-by-step instructions. Output as plain text.',
+          },
+          {
+            role: 'user',
+            content: 'Extract the complete recipe from this image. Include the title, all ingredients with amounts, and all instructions.',
+            images: [{ type: 'base64', media_type: mediaType, data: rawBase64 }],
+          },
+        ],
+        maxTokens: 4000,
+      }, 'standard');
+
+      recipeContent = visionResponse.content;
       if (!recipeContent) {
         throw new Error('Failed to analyze recipe image');
       }
+      console.log('Vision extracted text length:', recipeContent.length);
     }
     // Handle URL-based recipe parsing
     else if (url) {

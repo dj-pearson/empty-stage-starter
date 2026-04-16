@@ -5,6 +5,7 @@ import { generateId, debounce } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { useAuth } from "./AuthContext";
+import { inferFoodCategory } from "@/lib/foodCategoryMap";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -72,7 +73,7 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
     if (userId && householdId) {
       const newItem: Record<string, unknown> = {
         name: item.name, quantity: item.quantity || 1, unit: item.unit || '',
-        category: item.category || 'other', notes: item.notes || null,
+        category: item.category || inferFoodCategory(item.name), notes: item.notes || null,
         aisle: item.aisle || null, grocery_list_id: item.grocery_list_id || null,
         user_id: userId, household_id: householdId, checked: false
       };

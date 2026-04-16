@@ -33,9 +33,16 @@ export interface AIConfig {
   enableCaching: boolean;
 }
 
+export interface AIImageSource {
+  type: 'base64';
+  media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+  data: string;
+}
+
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
+  images?: AIImageSource[];
 }
 
 export interface AIRequest {
@@ -222,7 +229,21 @@ export class AIServiceV2 {
         },
         body: JSON.stringify({
           model,
-          messages: request.messages.filter(m => m.role !== 'system'),
+          messages: request.messages.filter(m => m.role !== 'system').map(m => {
+            if (m.images && m.images.length > 0) {
+              return {
+                role: m.role,
+                content: [
+                  ...m.images.map(img => ({
+                    type: 'image' as const,
+                    source: { type: img.type, media_type: img.media_type, data: img.data },
+                  })),
+                  { type: 'text' as const, text: m.content },
+                ],
+              };
+            }
+            return { role: m.role, content: m.content };
+          }),
           system: request.messages.find(m => m.role === 'system')?.content,
           max_tokens: request.maxTokens || 4000,
           temperature: request.temperature ?? this.config.temperature,

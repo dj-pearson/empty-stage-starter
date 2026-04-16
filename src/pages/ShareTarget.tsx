@@ -7,7 +7,7 @@ import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/integrations/supabase/client';
 import { parseGroceryText, type ParsedGroceryItem } from '@/lib/parse-grocery-text';
 import { ParsedItemsPreview } from '@/components/grocery/ParsedItemsPreview';
-import { Loader2, Share2, ShoppingCart, LogIn } from 'lucide-react';
+import { Loader2, Share2, ShoppingCart, LogIn, ChefHat, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import type { FoodCategory } from '@/types';
 
@@ -32,6 +32,9 @@ export default function ShareTarget() {
   const [parsedItems, setParsedItems] = useState<ParsedGroceryItem[] | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [needsAuth, setNeedsAuth] = useState(false);
+  const [sharedUrl, setSharedUrl] = useState<string | null>(null);
+  const [importMode, setImportMode] = useState<'choose' | 'grocery' | 'recipe' | null>(null);
+  const [recipeImporting, setRecipeImporting] = useState(false);
 
   useEffect(() => {
     loadShareData();
@@ -94,33 +97,17 @@ export default function ShareTarget() {
       // Process the shared data
       setProcessing(true);
 
+      const detectedUrl = shareData.url || (shareData.text?.match(/https?:\/\/[^\s]+/)?.[0]);
+
       if (shareData.imageBase64) {
-        // Image path: send to AI vision
-        try {
-          const { data, error } = await supabase.functions.invoke('parse-grocery-image', {
-            body: { imageBase64: shareData.imageBase64 },
-          });
-
-          if (error) throw error;
-
-          const items: ParsedGroceryItem[] = (data?.items || []).map((item: any) => ({
-            name: item.name,
-            quantity: item.quantity || 1,
-            unit: item.unit || '',
-            category: (item.category || 'snack') as FoodCategory,
-          }));
-
-          if (items.length > 0) {
-            setParsedItems(items);
-          } else {
-            toast.error('No grocery items found in the shared image');
-          }
-        } catch {
-          toast.error('Failed to process shared image');
-        }
+        setImportMode('choose');
+        setSharedUrl(null);
+      } else if (detectedUrl) {
+        setSharedUrl(detectedUrl);
+        setImportMode('choose');
       } else {
-        // Text path: combine available text fields
-        const textContent = [shareData.title, shareData.text, shareData.url]
+        setImportMode('grocery');
+        const textContent = [shareData.title, shareData.text]
           .filter(Boolean)
           .join('\n');
 
@@ -128,7 +115,7 @@ export default function ShareTarget() {
         if (items.length > 0) {
           setParsedItems(items);
         } else {
-          toast.error('No grocery items could be parsed from the shared text');
+          toast.error('No items could be parsed from the shared text');
         }
       }
     } catch (err) {
@@ -139,6 +126,27 @@ export default function ShareTarget() {
       setProcessing(false);
     }
   }
+
+  const handleImportAsRecipe = async () => {
+    if (!sharedUrl) return;
+    setRecipeImporting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('parse-recipe-grocery', {
+        body: { url: sharedUrl },
+      });
+      if (error) throw error;
+      if (data?.recipe) {
+        navigate('/dashboard/recipes', { state: { importedRecipe: data.recipe, sourceUrl: sharedUrl } });
+        toast.success('Recipe imported! Review and save it.');
+      } else {
+        toast.error('Could not extract a recipe from that URL');
+      }
+    } catch {
+      toast.error('Failed to import recipe. Try opening it manually.');
+    } finally {
+      setRecipeImporting(false);
+    }
+  };
 
   const handleAddSelected = async (items: ParsedGroceryItem[]) => {
     setIsAdding(true);
@@ -199,16 +207,53 @@ export default function ShareTarget() {
           </div>
         </div>
 
-        {(loading || processing) && (
+        {(loading || processing || recipeImporting) && (
           <div className="flex flex-col items-center gap-3 py-8">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="text-sm text-muted-foreground">
-              {loading ? 'Loading shared content...' : 'Processing items...'}
+              {loading ? 'Loading shared content...' : recipeImporting ? 'Importing recipe...' : 'Processing items...'}
             </p>
           </div>
         )}
 
-        {!loading && !processing && parsedItems && (
+        {!loading && !processing && !recipeImporting && importMode === 'choose' && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">What would you like to do with this?</p>
+            {sharedUrl && (
+              <p className="text-xs text-muted-foreground truncate">{sharedUrl}</p>
+            )}
+            <button
+              onClick={handleImportAsRecipe}
+              className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-primary/20 hover:border-primary/40 bg-primary/5 transition-colors text-left"
+            >
+              <ChefHat className="h-6 w-6 text-primary shrink-0" />
+              <div className="flex-1">
+                <p className="font-semibold text-sm">Import as Recipe</p>
+                <p className="text-xs text-muted-foreground">Extract ingredients, instructions, and more</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+            </button>
+            <button
+              onClick={() => {
+                setImportMode('grocery');
+                if (sharedUrl) {
+                  toast.info('Paste items from the recipe into your grocery list');
+                  navigate('/dashboard/grocery');
+                }
+              }}
+              className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-border hover:border-primary/30 transition-colors text-left"
+            >
+              <ShoppingCart className="h-6 w-6 text-green-600 shrink-0" />
+              <div className="flex-1">
+                <p className="font-semibold text-sm">Add to Grocery List</p>
+                <p className="text-xs text-muted-foreground">Add ingredients as grocery items</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
+        )}
+
+        {!loading && !processing && !recipeImporting && importMode === 'grocery' && parsedItems && (
           <ParsedItemsPreview
             items={parsedItems}
             onAddSelected={handleAddSelected}
@@ -216,7 +261,7 @@ export default function ShareTarget() {
           />
         )}
 
-        {!loading && !processing && !parsedItems && (
+        {!loading && !processing && !recipeImporting && importMode !== 'choose' && !parsedItems && (
           <div className="text-center py-6 space-y-3">
             <ShoppingCart className="h-10 w-10 mx-auto text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
