@@ -201,6 +201,7 @@ struct PantryView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityLabel("Add food")
                 }
             }
         }

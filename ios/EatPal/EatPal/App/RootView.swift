@@ -21,7 +21,7 @@ struct RootView: View {
                 }
             }
         }
-        .animation(AppTheme.Animation.standard, value: authViewModel.authState)
+        .accessibleAnimation(AppTheme.Animation.standard, value: authViewModel.authState)
     }
 }
 

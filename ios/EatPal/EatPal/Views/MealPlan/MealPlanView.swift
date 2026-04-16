@@ -82,6 +82,7 @@ struct MealPlanView: View {
                     } label: {
                         Image(systemName: "wand.and.stars")
                     }
+                    .accessibilityLabel("Generate AI meal plan")
 
                     Menu {
                         Button {
@@ -106,6 +107,7 @@ struct MealPlanView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
+                    .accessibilityLabel("More meal plan actions")
 
                     Button {
                         selectedDate = Date()

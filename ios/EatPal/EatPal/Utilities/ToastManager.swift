@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Toast notification type matching web's Sonner patterns.
 enum ToastType {
@@ -81,10 +82,16 @@ final class ToastManager: ObservableObject {
         show(Toast(type: .info, title: title, message: message))
     }
 
+    private var reduceMotion: Bool { UIAccessibility.isReduceMotionEnabled }
+
     func dismiss() {
         dismissTask?.cancel()
-        withAnimation(AppTheme.Animation.standard) {
+        if reduceMotion {
             currentToast = nil
+        } else {
+            withAnimation(AppTheme.Animation.standard) {
+                currentToast = nil
+            }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             self?.showNext()
@@ -92,8 +99,12 @@ final class ToastManager: ObservableObject {
     }
 
     private func present(_ toast: Toast) {
-        withAnimation(AppTheme.Animation.spring) {
+        if reduceMotion {
             currentToast = toast
+        } else {
+            withAnimation(AppTheme.Animation.spring) {
+                currentToast = toast
+            }
         }
         dismissTask?.cancel()
         dismissTask = Task {

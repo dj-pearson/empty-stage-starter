@@ -48,7 +48,7 @@ struct OnboardingView: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .animation(AppTheme.Animation.standard, value: currentPage)
+            .accessibleAnimation(AppTheme.Animation.standard, value: currentPage)
 
             // Bottom Controls
             VStack(spacing: AppTheme.Spacing.xl) {
@@ -58,7 +58,7 @@ struct OnboardingView: View {
                         Circle()
                             .fill(index == currentPage ? AppTheme.Colors.primary : Color(.systemGray4))
                             .frame(width: index == currentPage ? 10 : 7, height: index == currentPage ? 10 : 7)
-                            .animation(AppTheme.Animation.quick, value: currentPage)
+                            .accessibleAnimation(AppTheme.Animation.quick, value: currentPage)
                     }
                 }
 

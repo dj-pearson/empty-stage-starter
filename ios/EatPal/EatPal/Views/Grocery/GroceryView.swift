@@ -131,12 +131,14 @@ struct GroceryView: View {
                     } label: {
                         Image(systemName: "wand.and.stars")
                     }
+                    .accessibilityLabel("Generate options")
 
                     Button {
                         showingAddItem = true
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityLabel("Add grocery item")
                 }
             }
         }
