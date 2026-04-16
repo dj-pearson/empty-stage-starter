@@ -15,6 +15,7 @@ final class MealPlanTemplateService {
     struct MealPlanTemplate: Identifiable, Codable {
         let id: String
         var userId: String
+        var householdId: String?
         var name: String
         var meals: [TemplateMeal]
         var createdAt: String?
@@ -22,6 +23,7 @@ final class MealPlanTemplateService {
         enum CodingKeys: String, CodingKey {
             case id
             case userId = "user_id"
+            case householdId = "household_id"
             case name, meals
             case createdAt = "created_at"
         }
@@ -134,13 +136,18 @@ final class MealPlanTemplateService {
             }
         }
 
-        // meal_plan_templates.user_id is NOT NULL UUID. Pull it from the
-        // current auth session rather than sending "" which Postgres
-        // rejects as `invalid input syntax for type uuid`.
+        // RLS requires user_id AND household_id.
         let session = try await client.auth.session
+        let uid = session.user.id.uuidString.lowercased()
+        struct P: Encodable { let _user_id: String }
+        let hhId: String? = try await client
+            .rpc("get_user_household_id", params: P(_user_id: uid))
+            .execute()
+            .value
         let template = MealPlanTemplate(
             id: UUID().uuidString,
-            userId: session.user.id.uuidString.lowercased(),
+            userId: uid,
+            householdId: hhId,
             name: name,
             meals: meals
         )

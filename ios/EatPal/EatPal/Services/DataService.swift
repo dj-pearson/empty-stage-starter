@@ -2,31 +2,53 @@ import Foundation
 @preconcurrency import Supabase
 
 /// Handles all CRUD operations against Supabase tables.
-/// Each method maps to the corresponding web AppContext operation.
+///
+/// RLS on every core table checks
+/// `household_id = get_user_household_id(auth.uid())`.
+/// Every insert therefore needs both a valid `user_id` and `household_id`,
+/// which this service resolves automatically from the auth session.
 @MainActor
 final class DataService {
     static let shared = DataService()
     private let client = SupabaseManager.client
+    private var cachedHouseholdId: String?
 
     private init() {}
 
-    // MARK: - Auth helpers
+    // MARK: - Auth / Household helpers
 
-    /// Returns the current authenticated user's UUID as a lowercase string.
-    /// Throws if no session is present so inserts never send an empty
-    /// `user_id` (which Postgres rejects as `invalid input syntax for type uuid`).
     private func currentUserId() async throws -> String {
         let session = try await client.auth.session
         return session.user.id.uuidString.lowercased()
     }
 
-    /// Ensures a candidate value is a valid UUID. When the caller passes
-    /// an empty string we fall back to the current authenticated user.
     private func ensureUserId(_ existing: String) async throws -> String {
         let trimmed = existing.trimmingCharacters(in: .whitespacesAndNewlines)
         if UUID(uuidString: trimmed) != nil { return trimmed }
         return try await currentUserId()
     }
+
+    private func currentHouseholdId() async throws -> String {
+        if let cached = cachedHouseholdId { return cached }
+        let uid = try await currentUserId()
+        struct P: Encodable { let _user_id: String }
+        let value: String? = try await client
+            .rpc("get_user_household_id", params: P(_user_id: uid))
+            .execute()
+            .value
+        guard let hhId = value, UUID(uuidString: hhId) != nil else {
+            throw DataServiceError.missingHousehold
+        }
+        cachedHouseholdId = hhId
+        return hhId
+    }
+
+    private func ensureHouseholdId(_ existing: String?) async throws -> String {
+        if let existing, UUID(uuidString: existing) != nil { return existing }
+        return try await currentHouseholdId()
+    }
+
+    func resetCache() { cachedHouseholdId = nil }
 
     // MARK: - Foods
 
@@ -41,6 +63,7 @@ final class DataService {
     func insertFood(_ food: Food) async throws {
         var payload = food
         payload.userId = try await ensureUserId(payload.userId)
+        payload.householdId = try await ensureHouseholdId(payload.householdId)
         try await client.from("foods")
             .insert(payload)
             .execute()
@@ -73,6 +96,7 @@ final class DataService {
     func insertKid(_ kid: Kid) async throws {
         var payload = kid
         payload.userId = try await ensureUserId(payload.userId)
+        payload.householdId = try await ensureHouseholdId(payload.householdId)
         try await client.from("kids")
             .insert(payload)
             .execute()
@@ -105,6 +129,7 @@ final class DataService {
     func insertRecipe(_ recipe: Recipe) async throws {
         var payload = recipe
         payload.userId = try await ensureUserId(payload.userId)
+        payload.householdId = try await ensureHouseholdId(payload.householdId)
         try await client.from("recipes")
             .insert(payload)
             .execute()
@@ -146,10 +171,8 @@ final class DataService {
     func insertPlanEntry(_ entry: PlanEntry) async throws {
         var payload = entry
         payload.userId = try await ensureUserId(payload.userId)
+        payload.householdId = try await ensureHouseholdId(payload.householdId)
 
-        // plan_entries.kid_id and food_id are NOT NULL UUIDs in Postgres.
-        // Surface a friendly error instead of letting the database reject
-        // the insert with `invalid input syntax for type uuid: ""`.
         if UUID(uuidString: payload.kidId) == nil {
             throw DataServiceError.missingKid
         }
@@ -189,6 +212,7 @@ final class DataService {
     func insertGroceryItem(_ item: GroceryItem) async throws {
         var payload = item
         payload.userId = try await ensureUserId(payload.userId)
+        payload.householdId = try await ensureHouseholdId(payload.householdId)
         try await client.from("grocery_items")
             .insert(payload)
             .execute()
@@ -224,6 +248,7 @@ final class DataService {
 enum DataServiceError: LocalizedError {
     case missingFood
     case missingKid
+    case missingHousehold
 
     var errorDescription: String? {
         switch self {
@@ -231,6 +256,8 @@ enum DataServiceError: LocalizedError {
             return "Pick a food before adding it to the plan."
         case .missingKid:
             return "Select a child profile first."
+        case .missingHousehold:
+            return "Couldn't find your household. Please sign out and back in."
         }
     }
 }

@@ -87,6 +87,7 @@ final class AppState: ObservableObject {
 
     func clearData() {
         Task { await realtimeService.unsubscribeAll() }
+        dataService.resetCache()
         foods = []
         kids = []
         recipes = []
