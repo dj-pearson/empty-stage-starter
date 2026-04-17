@@ -1891,3 +1891,63 @@ Scoped down from the original US-145 multi-activity brief: cook-mode Live Activi
 - `.frequentUpdates` entitlement unlocks rapid update calls without throttling — required when updating on every checkoff.
 
 ---
+
+## 2026-04-17 - US-143: Share Extension for recipe URL import (DONE first pass)
+
+### What was implemented
+A standalone Share Extension target that lets users hit Share → EatPal from Safari / Instagram / TikTok / anywhere iOS shows a URL, parses the shared URL against the existing `parse-recipe` Supabase edge function, previews the recipe, and queues it for import. The main app drains the queue on next launch (with an authenticated session) and inserts it as a Recipe row.
+
+### Architecture decisions
+- **Queue-and-drain pattern** instead of cross-target Supabase auth. The extension writes to App Group UserDefaults; the main app inserts with the user's authenticated session. Rationale: avoids the complexity of configuring supabase-swift's keychain access group across two bundle ids, keeps the extension binary small, and is resilient to "user is signed out when they share." The pattern mirrors US-150's OfflineStore queue — same "deferred write when auth is available" shape.
+- **No supabase-swift in the extension**. Pure URLSession. The parse-recipe edge function is public (no JWT required per its progress.txt entry), so the extension only needs the anon key from the env-substituted Info.plist.
+- **Handles both URL and plain-text attachments**. Some apps (Instagram, TikTok) send a caption rather than a direct URL — we run NSDataDetector over the caption and grab the first link.
+- **Extension size stays tiny** by reusing the shared /Shared folder for PendingRecipeImport rather than duplicating the domain Recipe type in the extension.
+
+### Files changed / added
+- `ios/EatPal/project.yml`
+  - New `EatPalShareExtension` target with `type: app-extension`, bundle id `com.eatpal.app.share`, sources `EatPalShare` + `Shared`, NSExtensionActivationRule accepting up to 1 web URL plus plain text, NSExtensionPrincipalClass `$(PRODUCT_MODULE_NAME).ShareViewController`.
+  - Added `- target: EatPalShareExtension, embed: true, codeSign: true` to the main EatPal target dependencies so the extension embeds in the shipped bundle.
+
+- `ios/EatPal/EatPalShare/EatPalShareExtension.entitlements` (new)
+  - `com.apple.security.application-groups = [group.com.eatpal.app]` — required for the queue read/write.
+
+- `ios/EatPal/Shared/PendingRecipeImport.swift` (new, ~75 LOC)
+  - Public Codable struct capturing everything the parse-recipe edge function returns (name, description, imageUrl, instructions, prepTime, cookTime, servings, ingredients-as-text, sourceUrl, capturedAt).
+  - `public enum PendingRecipeImportQueue` wraps App Group UserDefaults with `load()`, `enqueue(_:)`, `remove(id:)`, `clear()`. Uses JSONEncoder/Decoder for durability.
+
+- `ios/EatPal/EatPalShare/ShareViewController.swift` (new, ~100 LOC)
+  - `final class ShareViewController: UIViewController` — the NSExtensionPrincipalClass.
+  - `viewDidLoad` kicks off a Task that extracts the shared URL (UTType.url path first, plain-text + NSDataDetector fallback) and presents `ShareImportView` via `UIHostingController`.
+  - `complete()` and `cancel()` call `extensionContext?.completeRequest(returningItems:completionHandler:)` / `cancelRequest(withError:)`.
+
+- `ios/EatPal/EatPalShare/ShareImportView.swift` (new, ~175 LOC)
+  - Pure SwiftUI. Four states: loading / error / no-URL / preview.
+  - Preview shows async-loaded header image, name, description, prep/cook/servings chips, ingredients, and instructions.
+  - Save button constructs a `PendingRecipeImport`, enqueues it, and calls onDone which completes the extension.
+  - Uses ContentUnavailableView for the error case.
+
+- `ios/EatPal/EatPalShare/ShareExtensionAPI.swift` (new, ~95 LOC)
+  - `struct ParsedRecipe: Codable` matches the edge function's return shape (snake_case coding keys).
+  - `enum ImportError: Error, LocalizedError` (missingConfig / badResponse / network / decode).
+  - `ShareExtensionAPI.parseRecipe(url:)` POSTs `{ url }` to `${SUPABASE_URL}/functions/v1/parse-recipe`, sets apikey + Authorization headers, decodes direct or `{ recipe: ... }` wrapper response.
+  - Reads SUPABASE_URL + SUPABASE_ANON_KEY from the extension's Info.plist (same env-substitution pattern the main app uses).
+
+- `ios/EatPal/EatPal/App/AppState.swift`
+  - New `func drainPendingRecipeImports()` iterates the queue, constructs a Recipe per import with `sourceType: "share_extension"` and blank `foodIds` (ingredients land in `additionalIngredients` free-text), calls `addRecipe(_:)`, removes only successful items, shows a success toast summarising how many imported.
+  - `loadAllData()` calls `await drainPendingRecipeImports()` after realtime subscription is established — ensures the session is authenticated and the recipes array is loaded before inserts, and keeps drain retry-safe (failed items stay queued).
+
+### Not in this pass
+- Multi-URL share (iOS allows up to N URLs per share; activation rule caps at 1 for simplicity).
+- Recipe image download + upload to Supabase Storage. Today we save the remote image URL only; if the source page 404s later, the thumbnail breaks. Mirroring to Storage is a follow-up.
+- In-extension ingredient mapping to the user's Foods list. The ingredients text goes into `additional_ingredients` as free text; real food_ids come from manual editing inside the main app's recipe detail. Future pass could match against user's foods via name similarity.
+- User-facing "pending imports" diagnostic surface (like a Settings row "3 recipes queued"). Low priority because the drain happens immediately after loadAllData.
+- Keychain access group configuration so the extension can authenticate directly to Supabase. Deferred; the queue pattern is cleaner.
+
+### Learnings
+- NSExtensionPrincipalClass with `$(PRODUCT_MODULE_NAME).ShareViewController` resolves through XcodeGen's env substitution and avoids hardcoding the module name.
+- `UIHostingController` inside a UIKit `UIViewController` lifecycle is the standard iOS 13+ pattern for SwiftUI-based share extensions — wraps the SwiftUI root, pins edges, adds/childs correctly so extension lifecycle is preserved.
+- App Group UserDefaults is the right IPC for small Codable payloads like this; larger payloads (images) would want a shared file container at `FileManager.default.containerURL(forSecurityApplicationGroupIdentifier:)`.
+- Extension Info.plist properties can be fully generated by XcodeGen via `info.properties`; keeping them in project.yml instead of a hand-maintained plist keeps secrets-substitution working and reduces drift.
+- Failed items staying queued is critical — a flaky network at drain time shouldn't lose the user's imported recipe. The queue survives app restarts.
+
+---

@@ -78,6 +78,9 @@ targets:
       - target: EatPalWidgetExtension
         embed: true
         codeSign: true
+      - target: EatPalShareExtension
+        embed: true
+        codeSign: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.eatpal.app
@@ -90,6 +93,45 @@ targets:
         LD_RUNPATH_SEARCH_PATHS:
           - "$(inherited)"
           - "@executable_path/Frameworks"
+
+  # -----------------------------------------------------------------
+  # Share extension — "Share to EatPal" recipe URL import (US-143)
+  # -----------------------------------------------------------------
+  EatPalShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: EatPalShare
+        excludes:
+          - "Info.plist"
+          - "EatPalShareExtension.entitlements"
+      - path: Shared
+    info:
+      path: EatPalShare/Info.plist
+      properties:
+        CFBundleDisplayName: EatPal
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        SUPABASE_URL: "$(SUPABASE_URL)"
+        SUPABASE_ANON_KEY: "$(SUPABASE_ANON_KEY)"
+        NSExtension:
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsText: true
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.eatpal.app.share
+        PRODUCT_NAME: EatPalShareExtension
+        CODE_SIGN_ENTITLEMENTS: EatPalShare/EatPalShareExtension.entitlements
+        PROVISIONING_PROFILE_SPECIFIER: "EatPal Share App Store"
+        SKIP_INSTALL: YES
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/Frameworks"
+          - "@executable_path/../../Frameworks"
 
   # -----------------------------------------------------------------
   # Home-screen widget

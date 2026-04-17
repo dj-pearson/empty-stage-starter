@@ -2698,8 +2698,8 @@
         "Swift builds cleanly"
       ],
       "priority": 29,
-      "passes": false,
-      "notes": "iOS UX AUDIT - Tier 2: #1 recipe-bank growth lever."
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 2: DONE 2026-04-17. New EatPalShareExtension Xcode target in project.yml with app-extension type, com.eatpal.app.share bundle id, SKIP_INSTALL YES, SUPABASE_URL/ANON_KEY env-substituted in generated Info.plist, NSExtensionActivationSupportsWebURLWithMaxCount=1 + NSExtensionActivationSupportsText=true, NSExtensionPrincipalClass=$(PRODUCT_MODULE_NAME).ShareViewController. Added EatPalShareExtension.entitlements with group.com.eatpal.app. New Shared/PendingRecipeImport.swift defines Codable struct + PendingRecipeImportQueue (load/enqueue/remove/clear) backed by App Group UserDefaults key 'pending_recipe_imports'. EatPalShare/ShareViewController.swift extracts URL from extensionContext (via UTType.url, falls back to plain-text + NSDataDetector), presents UIHostingController hosting ShareImportView. ShareImportView.swift has task-based fetch, loading / error / ContentUnavailableView / recipe preview states, Save button enqueues PendingRecipeImport. ShareExtensionAPI.swift is a URLSession client POSTing to {SUPABASE_URL}/functions/v1/parse-recipe with apikey header; decodes ParsedRecipe (with wrapper fallback). AppState.drainPendingRecipeImports() called after loadAllData successfully completes — iterates queue, constructs Recipe (sourceType='share_extension'), calls addRecipe, removes only successful items from queue (failed stay for next launch). Auth is enforced by AppState.addRecipe's existing path. Not yet verified on device."
     },
     {
       "id": "US-144",

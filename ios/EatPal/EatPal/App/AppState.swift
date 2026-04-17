@@ -35,6 +35,63 @@ final class AppState: ObservableObject {
     /// Observes the @Published collections that feed the home/Lock Screen
     /// widget and pushes a debounced snapshot into App Group UserDefaults
     /// any time they change. Widget timeline reloads follow automatically.
+    // MARK: - Pending recipe imports (US-143)
+
+    /// Drains the share-extension-fed recipe queue. Each pending import is
+    /// inserted as a Recipe row for the signed-in user. Silently no-ops when
+    /// no auth session is present — the queue survives app restarts, so the
+    /// next launch after sign-in will still process them.
+    func drainPendingRecipeImports() async {
+        let queued = PendingRecipeImportQueue.load()
+        guard !queued.isEmpty else { return }
+
+        var successful: Set<String> = []
+        for pending in queued {
+            let recipe = Recipe(
+                id: UUID().uuidString,
+                userId: "",
+                name: pending.name,
+                description: pending.description,
+                instructions: pending.instructions,
+                foodIds: [],
+                prepTime: pending.prepTime,
+                cookTime: pending.cookTime,
+                servings: pending.servings,
+                additionalIngredients: pending.additionalIngredients,
+                imageUrl: pending.imageUrl,
+                sourceUrl: pending.sourceUrl,
+                sourceType: "share_extension"
+            )
+
+            do {
+                try await addRecipe(recipe)
+                successful.insert(pending.id)
+                SentryService.leaveBreadcrumb(
+                    category: "share-import",
+                    message: "Imported shared recipe: \(pending.name)"
+                )
+            } catch {
+                SentryService.capture(error, extras: [
+                    "context": "drainPendingRecipeImports",
+                    "recipe": pending.name
+                ])
+            }
+        }
+
+        // Remove only the ones that succeeded — failed imports stay queued
+        // so the next launch can try again.
+        for id in successful {
+            PendingRecipeImportQueue.remove(id: id)
+        }
+
+        if !successful.isEmpty {
+            toast.success(
+                "Imported \(successful.count) recipe\(successful.count == 1 ? "" : "s")",
+                message: "From your share sheet"
+            )
+        }
+    }
+
     private func setupWidgetSnapshotSync() {
         $planEntries
             .combineLatest($foods, $groceryItems, $recipes)
@@ -155,6 +212,10 @@ final class AppState: ObservableObject {
 
             // Start real-time subscriptions after initial load
             await realtimeService.subscribe(appState: self)
+
+            // US-143: drain any recipes the share extension saved while the
+            // user was signed out or the app was backgrounded.
+            await drainPendingRecipeImports()
         } catch {
             errorMessage = error.localizedDescription
             toast.error("Failed to load data", message: error.localizedDescription)
