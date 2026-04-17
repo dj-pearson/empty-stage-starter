@@ -1172,3 +1172,131 @@ Implemented the remaining 5 branding stories to complete the ARFID/food chaining
 - All touch targets must be 48px minimum for Android accessibility guidelines
 
 ---
+
+## 2026-04-17 - iOS Native UX Audit + PRD Additions (US-135 through US-152)
+
+### Audit Summary
+- Surveyed native iOS Xcode project at `ios/EatPal/` (separate from Expo/React Native app at `/app/`)
+- Stack: Pure SwiftUI, iOS 17+, XcodeGen, single SPM dep (supabase-swift)
+- 5 tabs: Planner, Pantry, Recipes, Grocery, More (+ Scanner modal, KidsView, AICoach, Dashboard, Progress, FoodChaining, PickyEaterQuiz, Paywall)
+- Central state: `AppState.swift` (Combine @Published, optimistic updates + rollback) + `RealtimeService.swift` (Supabase v2 realtime working cross-device)
+- Barcode scan already works via `BarcodeService.swift` + Open Food Facts API
+- Widget exists (systemSmall + systemMedium only; no Lock Screen / interactive / Control Center)
+- Partial offline scaffold: `OfflineStore.swift` (235 LOC placeholder) + `NetworkMonitor.swift` not yet wired as write queue
+- StoreKit 2 with 6 IAP products, Sign in with Apple, push notifications, deep linking - all working
+
+### Gaps identified (none covered by prior PRD entries):
+- No `.swipeActions` on any List row
+- No drag-and-drop (no `.draggable` / `.dropDestination`)
+- No `.contextMenu` with preview
+- No TipKit onboarding
+- No VisionKit DataScannerViewController (barcode scanner is hand-rolled AVFoundation)
+- No Speech framework / voice input
+- No Vision OCR for text / screenshot parsing
+- No App Intents or Siri Shortcuts
+- No Share Extension for recipe URL import
+- No HealthKit integration
+- No Live Activities / Dynamic Island
+- No Lock Screen widget families (.accessoryRectangular / Inline / Circular)
+- No interactive widgets (iOS 17+)
+- No Control Center widget (iOS 18+)
+- No App Clip
+- OfflineStore not a real durable write queue
+- No Sentry on iOS (README noted console-only logging)
+- Widget data not kept fresh via App Group UserDefaults on AppState mutations
+
+### Added 18 new PRD stories (US-135 through US-152), grouped by tier:
+- Tier 1 (trivial effort, high UX impact): US-135 swipe actions, US-136 drag-drop, US-137 context menus, US-138 TipKit
+- Tier 2 (Apple frameworks matching feature asks): US-139 unified DataScanner, US-140 voice-to-grocery, US-141 photo/screenshot OCR, US-142 App Intents + Siri, US-143 Share Extension, US-144 HealthKit
+- Tier 3 (platform surfaces most apps ignore): US-145 Live Activities, US-146 Lock Screen widgets, US-147 interactive widget, US-148 Control Center widget, US-149 App Clip
+- Tier 4 (structural): US-150 finish OfflineStore queue, US-151 Sentry iOS, US-152 widget freshness via App Group
+
+### Next up
+- Starting with US-135 (SwiftUI swipe actions) — smallest Tier 1 unit.
+
+---
+
+## 2026-04-17 - US-135: SwiftUI swipe actions across core iOS lists (DONE)
+
+### What was implemented
+SwiftUI `.swipeActions` added on Pantry, Grocery, and Recipes list rows; `.contextMenu` added to MealPlanView's PlanEntryRow since it isn't rendered inside a `List` (required for `.swipeActions`).
+
+### Files changed
+- `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift`
+  - Unchecked items: leading full-swipe = Check (green, HapticManager.success), trailing full-swipe = Delete (destructive) + Edit (blue, secondary).
+  - Checked items: leading full-swipe = Uncheck (orange), trailing full-swipe = Delete.
+  - Accessibility labels on every swipe button (e.g., "Mark <name> as bought", "Uncheck <name>").
+
+- `ios/EatPal/EatPal/Views/Pantry/PantryView.swift`
+  - Leading full-swipe = +1 qty (green, lightImpact), plus tap-only Safe/Unsafe toggle (selection haptic) as a secondary leading action.
+  - Trailing full-swipe = Delete (destructive, error haptic), plus tap-only "Grocery" move action that creates a GroceryItem with addedVia: "restock" and fires a ToastManager.shared.success.
+  - Kept the existing FoodDetailView tap-to-open behavior intact.
+
+- `ios/EatPal/EatPal/Views/Recipes/RecipesView.swift`
+  - Added leading full-swipe = "Grocery" (blue, success haptic) that calls a new `addRecipeIngredientsToGrocery(_:)` helper on RecipesView.
+  - Helper iterates `recipe.foodIds`, resolves Foods from AppState, and calls `appState.addGroceryItem(...)` for each with `addedVia: "recipe"`. Reports result via ToastManager (success when N items added, info when no foods are linked to the recipe).
+  - Trailing destructive Delete preserved.
+
+- `ios/EatPal/EatPal/Views/MealPlan/MealPlanView.swift`
+  - PlanEntryRow is nested inside a ScrollView → VStack, not a List, so `.swipeActions` is not valid there. Added `.contextMenu` with: Log Ate (success haptic), Log Tasted (light impact), Log Refused (warning haptic), Divider, Remove-from-plan (destructive, error haptic).
+  - Existing confirmationDialog tap-to-log flow preserved.
+
+### Interaction patterns locked in
+- Leading edge = constructive/positive action (check, +1, add-to-grocery). Full swipe is safe.
+- Trailing edge = destructive/management actions. Destructive button placed FIRST so full swipe still maps to Delete (matches Apple HIG).
+- Every action fires HapticManager feedback (success for constructive, error for destructive, lightImpact for neutral toggles, selection for boolean toggles, warning for negative log-refused).
+- All writes route through existing AppState optimistic-update + rollback pattern — no new state plumbing.
+- Every custom swipe button has an `.accessibilityLabel` distinct from the visible label (keeps VoiceOver narration clear when row content is repeated).
+
+### Not verified yet (requires macOS)
+- `xcodebuild -scheme EatPal build` — Windows host has no Swift toolchain. Static review only.
+- No UI test added for swipe actions yet (EatPalTests is minimal — only sanity/model tests).
+- On-device confirmation that swipe layouts render correctly across trait sizes (compact height on iPhone SE, large-dynamic-type).
+
+### Learnings for future iterations
+- `.swipeActions` only works on rows inside a `List`; non-List renderings (ScrollView+VStack, as in MealPlanView) need `.contextMenu` instead. Worth noting when we do US-136 drag-drop: MealPlanView will likely need to migrate its day-slot rendering into a `List` for full gesture parity, or keep using DragGesture / contextMenu-with-preview as the mobile interaction model.
+- When combining multiple trailing actions with `allowsFullSwipe: true`, put the destructive (red) button FIRST — that's the button the full swipe invokes. Non-destructive secondaries follow.
+- `HapticManager` is @MainActor; direct calls from SwiftUI Button action closures are fine (closures execute on the main actor by default in view bodies).
+- `ToastManager.shared.success(_:message:)` / `.info(_:message:)` is the established user-feedback channel — use it, not `Alert`, for non-blocking confirmations.
+- GroceryItem memberwise init lets you omit every optional field; only `id, userId, name, category, quantity, unit, checked` are required in practice.
+
+---
+
+## 2026-04-17 - US-137: Context menus with preview on food/recipe rows (DONE)
+
+### What was implemented
+SwiftUI `.contextMenu` added to every primary list row on iOS; Recipes rows also get a `preview:` closure showing a larger thumbnail + key metadata.
+
+### Files changed
+- `ios/EatPal/EatPal/Views/Pantry/PantryView.swift`
+  - FoodRowView rows get `.contextMenu` with: Add to Grocery (creates GroceryItem with addedVia: "restock"), Mark Safe/Unsafe toggle, Mark Try-Bite/Clear toggle, Edit (opens FoodDetailView sheet), Delete (destructive).
+  - Reuses the same HapticManager + ToastManager patterns as the US-135 swipe actions so behavior is consistent across gestures.
+
+- `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift`
+  - GroceryItemRow rows get `.contextMenu` with: Mark Bought/Uncheck toggle, Edit, Duplicate (creates fresh GroceryItem with new UUID and addedVia: "manual"), Delete (destructive).
+  - Duplicate uses existing AppState.addGroceryItem; no new service needed.
+
+- `ios/EatPal/EatPal/Views/Recipes/RecipesView.swift`
+  - RecipeRowView rows get `.contextMenu { ... } preview: { RecipePreviewCard(recipe: recipe) }`.
+  - Menu actions: Add Ingredients to Grocery (reuses addRecipeIngredientsToGrocery helper from US-135), View Details (opens sheet), Delete (destructive).
+  - New `RecipePreviewCard` view (appended near the #Preview block): renders 280pt thumbnail, name, description (lineLimit 3), prep time, difficulty badge, ingredient count, rating. Frame width 320pt. Pure SwiftUI, no new dependencies.
+
+- `ios/EatPal/EatPal/Views/MealPlan/MealPlanView.swift` — PlanEntryRow contextMenu was already added during US-135 (Log Ate/Tasted/Refused + Remove from plan) since that view doesn't render inside a List.
+
+### Interaction patterns reinforced
+- Swipe actions (US-135) cover the single most-common action per row with a full-swipe shortcut.
+- Context menus (US-137) give the full action inventory via long-press, duplicate of swipe for discoverability, plus actions too rare or multi-step to warrant a swipe slot (duplicate, try-bite toggle, preview).
+- Destructive actions are always last, after a Divider, marked `role: .destructive`.
+- `.contextMenu` and `.swipeActions` coexist on the same row without gesture conflicts — SwiftUI routes long-press to menu, horizontal pan to swipe.
+
+### Not verified yet
+- Requires macOS build to confirm the `preview:` closure on `.contextMenu` renders at the expected size across trait environments.
+- RecipePreviewCard uses existing `RecipeThumbnail` component — assumed safe since it's used in the sibling RecipeRowView body at line 133.
+
+### Learnings
+- `.contextMenu { } preview: { }` is the iOS 16+ API for rich previews. The preview closure returns any `View`, sized automatically but capped around 320pt wide for good results.
+- Actions inside `.contextMenu` respect `role: .destructive` for red tinting and trailing positioning, matching swipe actions.
+- For boolean toggles (Safe/Try-Bite), wording should describe the action, not the state: "Mark Safe" vs. "Mark Unsafe" (verb-first) reads clearer than "Safe: On/Off".
+- When a feature is split across swipe + contextMenu, keep the same helper functions (addRecipeIngredientsToGrocery here) so behavior doesn't diverge.
+
+---

@@ -135,15 +135,23 @@ struct PantryView: View {
                                 .onTapGesture {
                                     selectedFood = food
                                 }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        Task { try? await appState.deleteFood(food.id) }
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
-                                .swipeActions(edge: .leading) {
+                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                     Button {
+                                        HapticManager.lightImpact()
+                                        Task {
+                                            try? await appState.updateFood(
+                                                food.id,
+                                                updates: FoodUpdate(quantity: (food.quantity ?? 0) + 1)
+                                            )
+                                        }
+                                    } label: {
+                                        Label("+1", systemImage: "plus.circle.fill")
+                                    }
+                                    .tint(.green)
+                                    .accessibilityLabel("Add one \(food.name) to pantry")
+
+                                    Button {
+                                        HapticManager.selection()
                                         Task {
                                             try? await appState.updateFood(
                                                 food.id,
@@ -156,7 +164,106 @@ struct PantryView: View {
                                             systemImage: food.isSafe ? "xmark.shield" : "checkmark.shield"
                                         )
                                     }
-                                    .tint(food.isSafe ? .orange : .green)
+                                    .tint(food.isSafe ? .orange : .blue)
+                                }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        HapticManager.error()
+                                        Task { try? await appState.deleteFood(food.id) }
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+
+                                    Button {
+                                        HapticManager.success()
+                                        Task {
+                                            let item = GroceryItem(
+                                                id: UUID().uuidString,
+                                                userId: "",
+                                                name: food.name,
+                                                category: food.category,
+                                                quantity: 1,
+                                                unit: food.unit ?? "count",
+                                                checked: false,
+                                                addedVia: "restock"
+                                            )
+                                            try? await appState.addGroceryItem(item)
+                                            ToastManager.shared.success(
+                                                "Added to grocery",
+                                                message: food.name
+                                            )
+                                        }
+                                    } label: {
+                                        Label("Grocery", systemImage: "cart.fill.badge.plus")
+                                    }
+                                    .tint(.blue)
+                                    .accessibilityLabel("Add \(food.name) to grocery list")
+                                }
+                                .contextMenu {
+                                    Button {
+                                        HapticManager.success()
+                                        Task {
+                                            let item = GroceryItem(
+                                                id: UUID().uuidString,
+                                                userId: "",
+                                                name: food.name,
+                                                category: food.category,
+                                                quantity: 1,
+                                                unit: food.unit ?? "count",
+                                                checked: false,
+                                                addedVia: "restock"
+                                            )
+                                            try? await appState.addGroceryItem(item)
+                                            ToastManager.shared.success("Added to grocery", message: food.name)
+                                        }
+                                    } label: {
+                                        Label("Add to Grocery", systemImage: "cart.fill.badge.plus")
+                                    }
+
+                                    Button {
+                                        HapticManager.selection()
+                                        Task {
+                                            try? await appState.updateFood(
+                                                food.id,
+                                                updates: FoodUpdate(isSafe: !food.isSafe)
+                                            )
+                                        }
+                                    } label: {
+                                        Label(
+                                            food.isSafe ? "Mark Unsafe" : "Mark Safe",
+                                            systemImage: food.isSafe ? "xmark.shield" : "checkmark.shield"
+                                        )
+                                    }
+
+                                    Button {
+                                        HapticManager.selection()
+                                        Task {
+                                            try? await appState.updateFood(
+                                                food.id,
+                                                updates: FoodUpdate(isTryBite: !food.isTryBite)
+                                            )
+                                        }
+                                    } label: {
+                                        Label(
+                                            food.isTryBite ? "Clear Try Bite" : "Mark Try Bite",
+                                            systemImage: food.isTryBite ? "star.slash" : "star.fill"
+                                        )
+                                    }
+
+                                    Divider()
+
+                                    Button {
+                                        selectedFood = food
+                                    } label: {
+                                        Label("Edit", systemImage: "pencil")
+                                    }
+
+                                    Button(role: .destructive) {
+                                        HapticManager.error()
+                                        Task { try? await appState.deleteFood(food.id) }
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
                                 }
                         }
                     } header: {

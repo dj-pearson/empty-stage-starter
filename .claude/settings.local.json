@@ -49,7 +49,11 @@
       "Bash(awk *)",
       "Bash(sort -t: -k2 -nr)",
       "Bash(sed -n '7789,7860p' src/integrations/supabase/types.ts)",
-      "Bash(sed -n '7925,7990p' src/integrations/supabase/types.ts)"
+      "Bash(sed -n '7925,7990p' src/integrations/supabase/types.ts)",
+      "Bash(gh api *)",
+      "Bash(command -v xcodebuild)",
+      "Bash(command -v xcodegen)",
+      "Bash(command -v swift)"
     ],
     "deny": [],
     "ask": []

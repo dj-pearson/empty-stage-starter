@@ -67,12 +67,48 @@ struct RecipesView: View {
                     RecipeRowView(recipe: recipe)
                         .contentShape(Rectangle())
                         .onTapGesture { selectedRecipe = recipe }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            Button {
+                                HapticManager.success()
+                                Task { await addRecipeIngredientsToGrocery(recipe) }
+                            } label: {
+                                Label("Grocery", systemImage: "cart.fill.badge.plus")
+                            }
+                            .tint(.blue)
+                            .accessibilityLabel("Add \(recipe.name) ingredients to grocery list")
+                        }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
+                                HapticManager.error()
                                 Task { try? await appState.deleteRecipe(recipe.id) }
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
+                        }
+                        .contextMenu {
+                            Button {
+                                HapticManager.success()
+                                Task { await addRecipeIngredientsToGrocery(recipe) }
+                            } label: {
+                                Label("Add Ingredients to Grocery", systemImage: "cart.fill.badge.plus")
+                            }
+
+                            Button {
+                                selectedRecipe = recipe
+                            } label: {
+                                Label("View Details", systemImage: "doc.text.magnifyingglass")
+                            }
+
+                            Divider()
+
+                            Button(role: .destructive) {
+                                HapticManager.error()
+                                Task { try? await appState.deleteRecipe(recipe.id) }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        } preview: {
+                            RecipePreviewCard(recipe: recipe)
                         }
                 }
             }
@@ -106,6 +142,40 @@ struct RecipesView: View {
         case "medium": return "2.circle.fill"
         case "hard": return "3.circle.fill"
         default: return "circle"
+        }
+    }
+
+    private func addRecipeIngredientsToGrocery(_ recipe: Recipe) async {
+        var addedCount = 0
+        for foodId in recipe.foodIds {
+            guard let food = appState.foods.first(where: { $0.id == foodId }) else { continue }
+            let item = GroceryItem(
+                id: UUID().uuidString,
+                userId: "",
+                name: food.name,
+                category: food.category,
+                quantity: 1,
+                unit: food.unit ?? "count",
+                checked: false,
+                addedVia: "recipe"
+            )
+            do {
+                try await appState.addGroceryItem(item)
+                addedCount += 1
+            } catch {
+                continue
+            }
+        }
+        if addedCount > 0 {
+            ToastManager.shared.success(
+                "Added to grocery",
+                message: "\(addedCount) ingredient\(addedCount == 1 ? "" : "s") from \(recipe.name)"
+            )
+        } else {
+            ToastManager.shared.info(
+                "No ingredients linked",
+                message: "This recipe has no foods linked yet."
+            )
         }
     }
 }
@@ -645,6 +715,69 @@ struct AddRecipeView: View {
 
         try? await appState.addRecipe(recipe)
         dismiss()
+    }
+}
+
+// MARK: - Recipe Preview Card (context menu preview)
+
+struct RecipePreviewCard: View {
+    let recipe: Recipe
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if recipe.imageUrl != nil {
+                RecipeThumbnail(imageUrl: recipe.imageUrl, size: 280)
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+
+            Text(recipe.name)
+                .font(.title3)
+                .fontWeight(.semibold)
+
+            if let description = recipe.description, !description.isEmpty {
+                Text(description)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+
+            HStack(spacing: 12) {
+                if let prepTime = recipe.prepTime {
+                    Label(prepTime, systemImage: "timer")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let difficulty = recipe.difficultyLevel {
+                    Text(difficulty.capitalized)
+                        .font(.caption)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.15), in: Capsule())
+                        .foregroundStyle(.green)
+                }
+
+                let foodCount = recipe.foodIds.count
+                if foodCount > 0 {
+                    Label("\(foodCount)", systemImage: "leaf.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let rating = recipe.rating, rating > 0 {
+                    HStack(spacing: 2) {
+                        Image(systemName: "star.fill")
+                            .font(.caption)
+                            .foregroundStyle(.yellow)
+                        Text(String(format: "%.1f", rating))
+                            .font(.caption)
+                    }
+                }
+            }
+        }
+        .padding()
+        .frame(width: 320)
     }
 }
 

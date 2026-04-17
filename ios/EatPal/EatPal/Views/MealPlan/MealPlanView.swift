@@ -387,6 +387,34 @@ struct PlanEntryRow: View {
                 }
             }
         }
+        .contextMenu {
+            ForEach(MealResult.allCases, id: \.self) { result in
+                Button {
+                    switch result {
+                    case .ate: HapticManager.success()
+                    case .tasted: HapticManager.lightImpact()
+                    case .refused: HapticManager.warning()
+                    }
+                    Task {
+                        try? await appState.updatePlanEntry(
+                            entry.id,
+                            updates: PlanEntryUpdate(result: result.rawValue)
+                        )
+                    }
+                } label: {
+                    Label("Log \(result.displayName)", systemImage: result.icon)
+                }
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                HapticManager.error()
+                Task { try? await appState.deletePlanEntry(entry.id) }
+            } label: {
+                Label("Remove from plan", systemImage: "trash")
+            }
+        }
     }
 
     private func resultColor(_ result: MealResult) -> Color {

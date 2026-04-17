@@ -74,20 +74,77 @@ struct GroceryView: View {
                             GroceryItemRow(item: item)
                                 .contentShape(Rectangle())
                                 .onTapGesture { editingItem = item }
+                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                    Button {
+                                        HapticManager.success()
+                                        Task { try? await appState.toggleGroceryItem(item.id) }
+                                    } label: {
+                                        Label("Check", systemImage: "checkmark.circle.fill")
+                                    }
+                                    .tint(.green)
+                                    .accessibilityLabel("Mark \(item.name) as bought")
+                                }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
+                                        HapticManager.error()
                                         Task { try? await appState.deleteGroceryItem(item.id) }
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
-                                }
-                                .swipeActions(edge: .leading) {
                                     Button {
+                                        HapticManager.lightImpact()
                                         editingItem = item
                                     } label: {
                                         Label("Edit", systemImage: "pencil")
                                     }
                                     .tint(.blue)
+                                }
+                                .contextMenu {
+                                    Button {
+                                        HapticManager.success()
+                                        Task { try? await appState.toggleGroceryItem(item.id) }
+                                    } label: {
+                                        Label(item.checked ? "Uncheck" : "Mark Bought",
+                                              systemImage: item.checked ? "arrow.uturn.backward.circle" : "checkmark.circle.fill")
+                                    }
+
+                                    Button {
+                                        HapticManager.lightImpact()
+                                        editingItem = item
+                                    } label: {
+                                        Label("Edit", systemImage: "pencil")
+                                    }
+
+                                    Button {
+                                        HapticManager.success()
+                                        Task {
+                                            let duplicate = GroceryItem(
+                                                id: UUID().uuidString,
+                                                userId: "",
+                                                name: item.name,
+                                                category: item.category,
+                                                quantity: item.quantity,
+                                                unit: item.unit,
+                                                checked: false,
+                                                notes: item.notes,
+                                                priority: item.priority,
+                                                addedVia: "manual"
+                                            )
+                                            try? await appState.addGroceryItem(duplicate)
+                                            ToastManager.shared.success("Duplicated", message: item.name)
+                                        }
+                                    } label: {
+                                        Label("Duplicate", systemImage: "plus.square.on.square")
+                                    }
+
+                                    Divider()
+
+                                    Button(role: .destructive) {
+                                        HapticManager.error()
+                                        Task { try? await appState.deleteGroceryItem(item.id) }
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
                                 }
                         }
                     } header: {
@@ -101,8 +158,19 @@ struct GroceryView: View {
                     Section {
                         ForEach(checkedItems) { item in
                             GroceryItemRow(item: item)
+                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                    Button {
+                                        HapticManager.lightImpact()
+                                        Task { try? await appState.toggleGroceryItem(item.id) }
+                                    } label: {
+                                        Label("Uncheck", systemImage: "arrow.uturn.backward.circle")
+                                    }
+                                    .tint(.orange)
+                                    .accessibilityLabel("Uncheck \(item.name)")
+                                }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
+                                        HapticManager.error()
                                         Task { try? await appState.deleteGroceryItem(item.id) }
                                     } label: {
                                         Label("Delete", systemImage: "trash")
