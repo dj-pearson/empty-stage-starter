@@ -83,6 +83,10 @@
     <string>EatPal saves meal photos you take to your photo library.</string>
     <key>NSUserNotificationsUsageDescription</key>
     <string>EatPal sends meal reminders, grocery list updates, and weekly nutrition summaries.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>EatPal uses the microphone so you can add grocery items by voice.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>EatPal uses speech recognition to turn what you say into grocery items. Recognition runs on-device when available.</string>
     <key>UIBackgroundModes</key>
     <array>
         <string>remote-notification</string>

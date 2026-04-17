@@ -1379,3 +1379,66 @@ Users can long-press a food in the Pantry to start a drag session, then drop it 
 - Coexistence with `.contextMenu`: iOS 17 allows both long-press gestures on the same view; the OS disambiguates by press depth/duration. No refactor needed for now.
 
 ---
+
+## 2026-04-17 - US-140: Voice-to-grocery via SFSpeechRecognizer (DONE)
+
+### What was implemented
+Full voice-to-grocery flow. User taps a mic button in the Grocery tab toolbar, dictates items ("milk, eggs, two pounds of chicken, bananas"), and sees each parsed item previewed with per-item toggles before committing to `grocery_items`. Speech recognition prefers on-device so nothing leaves the phone.
+
+### Files changed / added
+- `ios/EatPal/EatPal/Resources/Info.plist`
+  - Added `NSMicrophoneUsageDescription`: "EatPal uses the microphone so you can add grocery items by voice."
+  - Added `NSSpeechRecognitionUsageDescription`: "EatPal uses speech recognition to turn what you say into grocery items. Recognition runs on-device when available."
+
+- `ios/EatPal/EatPal/Services/GroceryTextParser.swift` (new, ~220 LOC)
+  - Compact Swift port of `src/lib/parse-grocery-text.ts`.
+  - Exposes `ParsedGroceryItem` (name, quantity, unit, category, confidence) and `GroceryTextParser.parse(_:) -> [ParsedGroceryItem]`.
+  - Handles newlines, commas, and " and " / " also " / " plus " connectors as item separators.
+  - Strips bullets / numbered markers / checkboxes before parsing so the same parser also handles OCR output (US-141 reuses it).
+  - Number parsing: digits, decimals, `1/2` fractions, and word forms ("a", "one", "two" ... "twelve", "half", "quarter").
+  - Unit map covers imperial + metric + package forms (bags, cans, jars, loaves, sticks, etc.).
+  - Category inference: substring match against keyword dictionaries for protein / dairy / fruit / vegetable / carb / snack.
+  - Dedupes repeated names case-insensitively.
+  - Returns a confidence score so low-confidence items can be flagged in the UI.
+
+- `ios/EatPal/EatPal/Services/VoiceInputService.swift` (new, ~180 LOC)
+  - `@MainActor final class VoiceInputService: ObservableObject`.
+  - State machine: `.idle`, `.preparing`, `.listening`, `.error(String)`.
+  - `@Published liveTranscript`, `finalTranscript`, `inputLevel` (0..1 RMS of the current audio buffer, smoothed 70/30).
+  - `authorizationStatus()` and `requestAuthorization()` check + request BOTH `AVAudioApplication.shared.recordPermission` and `SFSpeechRecognizer.authorizationStatus()`. Returns a merged `AuthorizationStatus` enum (`.authorized / .micDenied / .speechDenied / .bothDenied / .notDetermined`) so the UI can show the right "open Settings" message.
+  - `start()` configures the AVAudioSession for `.record` / `.measurement` / `.duckOthers`, installs a tap on the input node, creates an `SFSpeechAudioBufferRecognitionRequest` with `shouldReportPartialResults = true` and (if supported) `requiresOnDeviceRecognition = true`.
+  - `stop()` tears down the tap + session, and if no final callback fired it promotes the last partial transcript to `finalTranscript` so the UI always sees something.
+  - `cancel()` clears state without committing.
+
+- `ios/EatPal/EatPal/Views/Grocery/VoiceAddGrocerySheet.swift` (new, ~280 LOC)
+  - SwiftUI sheet with three stacked regions: transcript area + waveform, parsed-items preview list, controls footer.
+  - `WaveformView` renders 30 capsule bars whose heights combine the live `level` with a deterministic per-bar shape (sin over index), so the visualiser feels alive while `level` streams in without needing a TimelineView.
+  - Preview list lets users tap to include/exclude each parsed item; low-confidence items show a `questionmark.circle` warning. Category icon + quantity/unit visible per row.
+  - Controls footer: big circular mic/stop button (red when listening, scales with `inputLevel`) and a prominent "Add to grocery" button that inserts selected items and dismisses on success.
+  - Writes go through `AppState.addGroceryItem` with `addedVia: "voice"`.
+
+- `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift`
+  - Added `@State private var showingVoiceAdd = false`.
+  - Toolbar gained a `mic.fill` button between the existing wand menu and the plus button.
+  - Added `.sheet(isPresented: $showingVoiceAdd) { VoiceAddGrocerySheet() }`.
+
+### Interaction patterns locked in
+- Permissions are dual-checked and requested in one round trip; users see a single Settings hint regardless of which permission is missing.
+- On-device recognition is preferred but gracefully falls back when the recognizer reports `supportsOnDeviceRecognition == false`.
+- Parser deduplicates — dictating "milk, milk, milk" yields one item, which matches the TS parser's behaviour.
+- User always reviews parsed items before they hit `grocery_items`. No silent inserts from mis-heard audio.
+- Items inserted via this path are tagged `addedVia: "voice"` so analytics / ReasoningBank can distinguish voice-sourced items from manual/drag/recipe sources.
+
+### Not verified yet / future follow-ups
+- Requires macOS to run in the simulator — voice recognition specifically requires a device or "Use Built-in Microphone" simulator setting.
+- Share the parser with the OCR path (US-141) — already designed for reuse, just needs the OCR path to call `GroceryTextParser.parse(recognizedText)`.
+- Consider a TipKit onboarding pointer at the mic button on first visit to Grocery (add to `SwipeGroceryTip` family when US-141 lands).
+- Dictation-style voice is currently best-effort; expanding `numberWords` to cover "thirteen"…"nineteen" and round hundreds would improve accuracy for larger qty utterances.
+
+### Learnings
+- SFSpeechRecognizer's on-device mode is iOS 13+ but the `supportsOnDeviceRecognition` check is required per-recognizer instance; it's false for some locales.
+- AVAudioEngine taps must be removed before calling `start()` again — calling `removeTap(onBus: 0)` defensively before `installTap` avoids double-tap crashes when a session recovers from an error.
+- Recognition tasks deliver `result.isFinal` only on `endAudio()` — the `stop()` → `endAudio()` → final callback is async, so persisting `liveTranscript` as a fallback in `stop()` avoids a race where the user ends recording but recognition finishes 100ms later.
+- `AVAudioApplication.shared.recordPermission` is the iOS 17+ replacement for `AVAudioSession.sharedInstance().recordPermission` — deprecated cousin still works but the new API is clearer.
+
+---

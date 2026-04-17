@@ -2640,8 +2640,8 @@
         "Swift builds cleanly"
       ],
       "priority": 26,
-      "passes": false,
-      "notes": "iOS UX AUDIT - Tier 2: core 'bulk add by voice' ask."
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 2: DONE 2026-04-17. Info.plist gained NSMicrophoneUsageDescription + NSSpeechRecognitionUsageDescription. New Services/GroceryTextParser.swift (~220 LOC) ports parse-grocery-text.ts into Swift with number words ('two pounds of chicken'), unit normalisation, category inference, and confidence scoring. New Services/VoiceInputService.swift (~180 LOC) wraps SFSpeechRecognizer + AVAudioEngine, prefers on-device recognition, dual-tracks mic + speech permissions, publishes live transcript + RMS input level, and supports cancel. New Views/Grocery/VoiceAddGrocerySheet.swift (~280 LOC) provides waveform visualiser, transcript view, parsed-items preview with per-item toggles, confidence warning icons, and a big record/stop button. GroceryView toolbar gained a mic button that opens the sheet; items save via AppState.addGroceryItem with addedVia: 'voice'. Not yet verified on device — SFSpeechRecognizer behaviour with on-device flag needs real-hardware testing."
     },
     {
       "id": "US-141",

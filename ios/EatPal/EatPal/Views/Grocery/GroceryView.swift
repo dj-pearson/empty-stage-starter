@@ -5,6 +5,7 @@ struct GroceryView: View {
     @EnvironmentObject var appState: AppState
     @State private var searchText = ""
     @State private var showingAddItem = false
+    @State private var showingVoiceAdd = false
     @State private var showingClearAlert = false
     @State private var isGenerating = false
     @State private var editingItem: GroceryItem?
@@ -236,6 +237,13 @@ struct GroceryView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: 12) {
+                    Button {
+                        showingVoiceAdd = true
+                    } label: {
+                        Image(systemName: "mic.fill")
+                    }
+                    .accessibilityLabel("Add by voice")
+
                     Menu {
                         Button {
                             Task { await generateFromWeekPlan() }
@@ -259,6 +267,9 @@ struct GroceryView: View {
         }
         .sheet(isPresented: $showingAddItem) {
             AddGroceryItemView()
+        }
+        .sheet(isPresented: $showingVoiceAdd) {
+            VoiceAddGrocerySheet()
         }
         .sheet(item: $editingItem) { item in
             EditGroceryItemView(item: item)
