@@ -10,6 +10,12 @@ on:
     paths:
       - 'ios/**'
       - '.github/workflows/ios-ci.yml'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or commit to build (defaults to current)'
+        required: false
+        default: ''
 
 concurrency:
   group: ios-ci-${{ github.ref }}
