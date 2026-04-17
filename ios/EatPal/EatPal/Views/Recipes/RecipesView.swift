@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 
 struct RecipesView: View {
     @EnvironmentObject var appState: AppState
@@ -6,6 +7,8 @@ struct RecipesView: View {
     @State private var selectedRecipe: Recipe?
     @State private var showingAddRecipe = false
     @State private var selectedDifficulty: String?
+
+    private var swipeTip = SwipeRecipeTip()
 
     private var filteredRecipes: [Recipe] {
         var recipes = appState.recipes
@@ -45,6 +48,7 @@ struct RecipesView: View {
                     .padding(.vertical, 4)
                 }
                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                .popoverTip(swipeTip)
             }
 
             // Recipes
@@ -70,7 +74,10 @@ struct RecipesView: View {
                         .swipeActions(edge: .leading, allowsFullSwipe: true) {
                             Button {
                                 HapticManager.success()
-                                Task { await addRecipeIngredientsToGrocery(recipe) }
+                                Task {
+                                    await addRecipeIngredientsToGrocery(recipe)
+                                    await TipEvents.didSwipeRecipe.donate()
+                                }
                             } label: {
                                 Label("Grocery", systemImage: "cart.fill.badge.plus")
                             }

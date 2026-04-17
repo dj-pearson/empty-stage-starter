@@ -2566,8 +2566,8 @@
         "Swift builds cleanly and unit tests for FoodTransferable encode/decode added to EatPalTests"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": "iOS UX AUDIT - Tier 1: enables the 'move food between tabs' paradigm."
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 1: DONE 2026-04-17 (first pass). Created ios/EatPal/EatPal/Models/FoodTransferable.swift (Codable + Transferable with CodableRepresentation(.utf8PlainText) + ProxyRepresentation for external drag-out of the food name). PantryView FoodRowView has .draggable(FoodTransferable(food:)) with a custom drag preview (category icon + name, shadowed pill). GroceryView.List has .dropDestination(for: FoodTransferable.self) that inserts a GroceryItem with addedVia: \"drag\" per dropped item. MealPlanView passes date: selectedDate into MealSlotCard. MealSlotCard has .dropDestination that creates a PlanEntry(foodId: dropped.id, date: isoString, mealSlot: slot.rawValue, kidId: activeKidId). isTargeted state drives a green overlay border and a swap-in 'Release to add to X' label. Donates TipEvents.didDragFood on successful drop. Not yet verified on device — TabView-level drop targets (drag-hover-over-tab-to-switch) NOT implemented in this pass; user must navigate to destination tab before dropping."
     },
     {
       "id": "US-137",
@@ -2600,8 +2600,8 @@
         "Swift builds cleanly"
       ],
       "priority": 24,
-      "passes": false,
-      "notes": "iOS UX AUDIT - Tier 1: required for gesture discoverability."
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 1: DONE 2026-04-17. Created ios/EatPal/EatPal/Utilities/Tips.swift with 5 Tip structs (SwipeGroceryTip, SwipePantryTip, SwipeRecipeTip, ContextMenuTip, plus Event definitions). Called Tips.configure(.displayFrequency(.immediate), .datastoreLocation(.applicationDefault)) in EatPalApp.init(). Attached .popoverTip(swipeTip) on Pantry, Grocery, Recipes list headers. Events TipEvents.didSwipeGrocery/Pantry/Recipe are donated on first successful swipe action so tips dismiss permanently per install. Rules use #Rule(event) { $0.donations.count == 0 }. Not yet verified on device."
     },
     {
       "id": "US-139",

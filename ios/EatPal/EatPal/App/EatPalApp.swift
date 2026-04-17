@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 
 @main
 struct EatPalApp: App {
@@ -6,6 +7,15 @@ struct EatPalApp: App {
     @StateObject private var authViewModel = AuthViewModel()
     @StateObject private var appState = AppState()
     @StateObject private var deepLinkHandler = DeepLinkHandler.shared
+
+    init() {
+        // TipKit: register gesture-discovery tips (US-138).
+        // Uses default datastore. Tips are silent when their rules evaluate to false.
+        try? Tips.configure([
+            .displayFrequency(.immediate),
+            .datastoreLocation(.applicationDefault)
+        ])
+    }
 
     var body: some Scene {
         WindowGroup {

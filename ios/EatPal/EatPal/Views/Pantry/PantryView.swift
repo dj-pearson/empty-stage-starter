@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 
 struct PantryView: View {
     @EnvironmentObject var appState: AppState
@@ -15,6 +16,8 @@ struct PantryView: View {
     @State private var filterSafeOnly = false
     @State private var filterTryBiteOnly = false
     @State private var sortOption: FoodSortOption = .nameAsc
+
+    private var swipeTip = SwipePantryTip()
 
     enum PantryFilter: String, CaseIterable {
         case all = "All"
@@ -109,6 +112,7 @@ struct PantryView: View {
                 }
                 .pickerStyle(.segmented)
                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                .popoverTip(swipeTip)
             }
 
             // Foods List
@@ -135,6 +139,19 @@ struct PantryView: View {
                                 .onTapGesture {
                                     selectedFood = food
                                 }
+                                .draggable(FoodTransferable(food: food)) {
+                                    // Drag preview
+                                    HStack(spacing: 8) {
+                                        Text(FoodCategory(rawValue: food.category)?.icon ?? "🍽")
+                                        Text(food.name)
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 8))
+                                    .shadow(radius: 4)
+                                }
                                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                     Button {
                                         HapticManager.lightImpact()
@@ -143,6 +160,7 @@ struct PantryView: View {
                                                 food.id,
                                                 updates: FoodUpdate(quantity: (food.quantity ?? 0) + 1)
                                             )
+                                            await TipEvents.didSwipePantry.donate()
                                         }
                                     } label: {
                                         Label("+1", systemImage: "plus.circle.fill")
@@ -157,6 +175,7 @@ struct PantryView: View {
                                                 food.id,
                                                 updates: FoodUpdate(isSafe: !food.isSafe)
                                             )
+                                            await TipEvents.didSwipePantry.donate()
                                         }
                                     } label: {
                                         Label(
@@ -192,6 +211,7 @@ struct PantryView: View {
                                                 "Added to grocery",
                                                 message: food.name
                                             )
+                                            await TipEvents.didSwipePantry.donate()
                                         }
                                     } label: {
                                         Label("Grocery", systemImage: "cart.fill.badge.plus")

@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 
 struct GroceryView: View {
     @EnvironmentObject var appState: AppState
@@ -7,6 +8,9 @@ struct GroceryView: View {
     @State private var showingClearAlert = false
     @State private var isGenerating = false
     @State private var editingItem: GroceryItem?
+
+    private var swipeTip = SwipeGroceryTip()
+    private var contextMenuTip = ContextMenuTip()
 
     private var uncheckedItems: [GroceryItem] {
         appState.groceryItems.filter { !$0.checked && matchesSearch($0) }
@@ -50,6 +54,7 @@ struct GroceryView: View {
                         .foregroundStyle(.red)
                     }
                 }
+                .popoverTip(swipeTip)
             }
 
             // Unchecked Items by Category
@@ -77,7 +82,10 @@ struct GroceryView: View {
                                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                     Button {
                                         HapticManager.success()
-                                        Task { try? await appState.toggleGroceryItem(item.id) }
+                                        Task {
+                                            try? await appState.toggleGroceryItem(item.id)
+                                            await TipEvents.didSwipeGrocery.donate()
+                                        }
                                     } label: {
                                         Label("Check", systemImage: "checkmark.circle.fill")
                                     }
@@ -87,13 +95,17 @@ struct GroceryView: View {
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
                                         HapticManager.error()
-                                        Task { try? await appState.deleteGroceryItem(item.id) }
+                                        Task {
+                                            try? await appState.deleteGroceryItem(item.id)
+                                            await TipEvents.didSwipeGrocery.donate()
+                                        }
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
                                     Button {
                                         HapticManager.lightImpact()
                                         editingItem = item
+                                        Task { await TipEvents.didSwipeGrocery.donate() }
                                     } label: {
                                         Label("Edit", systemImage: "pencil")
                                     }
@@ -186,6 +198,41 @@ struct GroceryView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Grocery List")
         .searchable(text: $searchText, prompt: "Search items...")
+        .dropDestination(for: FoodTransferable.self) { droppedFoods, _ in
+            guard !droppedFoods.isEmpty else { return false }
+            Task {
+                var addedCount = 0
+                for dropped in droppedFoods {
+                    let item = GroceryItem(
+                        id: UUID().uuidString,
+                        userId: "",
+                        name: dropped.name,
+                        category: dropped.category,
+                        quantity: 1,
+                        unit: dropped.unit ?? "count",
+                        checked: false,
+                        addedVia: "drag"
+                    )
+                    do {
+                        try await appState.addGroceryItem(item)
+                        addedCount += 1
+                    } catch {
+                        continue
+                    }
+                }
+                HapticManager.success()
+                await TipEvents.didDragFood.donate()
+                if addedCount > 0 {
+                    ToastManager.shared.success(
+                        "Added to grocery",
+                        message: addedCount == 1
+                            ? droppedFoods.first!.name
+                            : "\(addedCount) items"
+                    )
+                }
+            }
+            return true
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: 12) {

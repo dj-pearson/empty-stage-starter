@@ -1300,3 +1300,82 @@ SwiftUI `.contextMenu` added to every primary list row on iOS; Recipes rows also
 - When a feature is split across swipe + contextMenu, keep the same helper functions (addRecipeIngredientsToGrocery here) so behavior doesn't diverge.
 
 ---
+
+## 2026-04-17 - US-138: TipKit gesture onboarding (DONE)
+
+### What was implemented
+TipKit tips introduce the new swipe / drag / context-menu gestures without a tutorial wall. Each tip shows once per install and is dismissed permanently when the user performs the corresponding gesture.
+
+### Files changed
+- `ios/EatPal/EatPal/Utilities/Tips.swift` (new, ~85 LOC):
+  - `TipEvents` enum holds shared `Tips.Event` instances: `didSwipeGrocery`, `didSwipePantry`, `didSwipeRecipe`, `didUseContextMenu`, `didDragFood`.
+  - Tip structs: `SwipeGroceryTip`, `SwipePantryTip`, `SwipeRecipeTip`, `ContextMenuTip`. Each has title / message / systemImage and a `#Rule(event) { $0.donations.count == 0 }` to hide once the gesture has been used.
+
+- `ios/EatPal/EatPal/App/EatPalApp.swift`
+  - Imported TipKit.
+  - Added `init()` that calls `try? Tips.configure([.displayFrequency(.immediate), .datastoreLocation(.applicationDefault)])`.
+
+- `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift`
+  - `import TipKit`, instantiated `swipeTip = SwipeGroceryTip()`, `contextMenuTip = ContextMenuTip()`.
+  - Attached `.popoverTip(swipeTip)` to the summary-header HStack.
+  - Added `await TipEvents.didSwipeGrocery.donate()` after every swipe Button action (Check, Delete, Edit).
+
+- `ios/EatPal/EatPal/Views/Pantry/PantryView.swift`
+  - Same pattern: imported TipKit, `swipeTip = SwipePantryTip()`, attached `.popoverTip(swipeTip)` on the filter Picker section.
+  - Donated `TipEvents.didSwipePantry` in the +1, safe-toggle, and move-to-grocery swipe buttons.
+
+- `ios/EatPal/EatPal/Views/Recipes/RecipesView.swift`
+  - Imported TipKit, `swipeTip = SwipeRecipeTip()`.
+  - Attached `.popoverTip(swipeTip)` on the difficulty filter section.
+  - Donated `TipEvents.didSwipeRecipe` in the leading-swipe "Grocery" button.
+
+### Learnings
+- `Tips.configure(_:)` can throw; wrap in `try?` at app init since tip persistence is non-critical.
+- `Tips.Event` instances must be stable across app launches — declaring them as `static let` on an enum namespace (TipEvents) is the idiomatic approach.
+- `#Rule(event) { $0.donations.count == 0 }` is the cleanest "show until used once" predicate; no need to track "shown before" state manually.
+- `.popoverTip(tip)` anchors the popover to the view it's attached to; put it on a persistent element near the rows, not on the rows themselves (rows may scroll off screen and the tip would get cut off).
+- Donating the event from inside a SwiftUI Button closure requires `Task { await event.donate() }` — `donate()` is async.
+
+---
+
+## 2026-04-17 - US-136: SwiftUI drag-and-drop for Pantry -> Grocery / Meal Planner (DONE first pass)
+
+### What was implemented
+Users can long-press a food in the Pantry to start a drag session, then drop it onto the Grocery list or a Meal Planner slot card to add it as a grocery item or plan entry, respectively. Drop targets provide visual + haptic feedback. Cross-tab dragging works within a single session (user must switch to the destination tab before releasing).
+
+### Files changed
+- `ios/EatPal/EatPal/Models/FoodTransferable.swift` (new, ~35 LOC):
+  - `FoodTransferable: Codable, Transferable` value object with `id, name, category, unit`.
+  - Convenience `init(food: Food)`.
+  - `transferRepresentation` exposes BOTH `CodableRepresentation(contentType: .utf8PlainText)` for intra-app JSON transfer and `ProxyRepresentation(exporting: \.name)` so external drops (Messages, Notes) receive a readable string.
+
+- `ios/EatPal/EatPal/Views/Pantry/PantryView.swift`
+  - `.draggable(FoodTransferable(food: food)) { /* preview */ }` on FoodRowView.
+  - Drag preview is a small shadowed pill showing the food's category emoji + name — stays readable under the finger without revealing the row's inventory controls.
+  - `.draggable` coexists with existing `.onTapGesture`, `.swipeActions`, and `.contextMenu`. iOS 17 arbitrates (tap = open detail, horizontal swipe = action, long-press = drag OR context menu depending on press duration).
+
+- `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift`
+  - `.dropDestination(for: FoodTransferable.self) { droppedFoods, _ in ... }` on the List container, positioned after `.searchable`.
+  - On drop: iterates `droppedFoods`, creates a `GroceryItem` per food with `addedVia: "drag"`, inserts via `appState.addGroceryItem`, collects an `addedCount`, fires `HapticManager.success()`, donates `TipEvents.didDragFood`, and emits a ToastManager success ("Added to grocery: <name>" or "N items").
+
+- `ios/EatPal/EatPal/Views/MealPlan/MealPlanView.swift`
+  - MealPlanView body updated to pass `date: selectedDate` into `MealSlotCard(...)` — the slot now knows what day it represents.
+  - `MealSlotCard` gained `let date: Date` and `@State private var isTargeted = false`.
+  - Card body wraps the root VStack with a conditional `.overlay(RoundedRectangle ... strokeBorder(isTargeted ? .green : .clear, lineWidth: 2))` and swaps the empty-state label to "Release to add to <slot>" when targeted.
+  - `.dropDestination(for: FoodTransferable.self) { ... } isTargeted: { isTargeted = $0; if $0 { HapticManager.selection() } }` creates a `PlanEntry(foodId: dropped.id, date: DateFormatter.isoDate.string(from: date), mealSlot: slot.rawValue, kidId: activeKidId)` via `appState.addPlanEntry`.
+  - Error path: if `activeKidId` is nil, ToastManager.shared.error("Select a child profile first") and drop rejected (returns false).
+
+### Not implemented in this pass
+- **TabView-level drop targets** (drag-hover-over-tab-to-switch). SwiftUI TabView doesn't expose a native drop API for tab labels. Would require a custom TabView replacement or an off-screen drop-hint overlay — out of scope for Tier 1.
+- **Dragging recipes or plan entries.** Only `Food` rows are currently draggable. Recipes can't be dragged onto the planner yet (but swipe-to-grocery covers that use case). Plan entries can't be dragged between slots (future US — cross-slot rearrangement).
+- **Drop targets on other surfaces**: pantry doesn't accept recipe-ingredient drops, meal plan doesn't accept recipe drops, grocery doesn't accept plan-entry drops. Each would be its own drop-destination modifier if we want bidirectional movement.
+- **On-device verification.** Windows host has no Swift toolchain; `.draggable` and `.dropDestination` haven't been exercised in the simulator yet.
+
+### Learnings
+- `Transferable` with dual representations (Codable for intra-app, Proxy for out-of-app) is the idiomatic iOS 16+ pattern — small payload, plays nicely with external apps.
+- Drop destinations take `isTargeted:` as a second trailing closure; use it to drive visual feedback (border color, label text) and subtle haptics (`.selection()` is right — don't fire `.success()` until the actual drop).
+- The drop closure returns `Bool` — returning `false` cancels the drop and SwiftUI snaps the drag payload back to origin with the system's default animation. Useful for preconditions (e.g., no active kid).
+- Custom drag previews (the view builder after `.draggable(_:)`) should be compact — a pill with icon + name reads better than trying to duplicate the full row.
+- Coexistence with `.contextMenu`: iOS 17 allows both long-press gestures on the same view; the OS disambiguates by press depth/duration. No refactor needed for now.
+
+---

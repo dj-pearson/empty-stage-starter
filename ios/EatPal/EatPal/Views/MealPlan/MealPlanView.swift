@@ -53,6 +53,7 @@ struct MealPlanView: View {
                         ForEach(MealSlot.allCases, id: \.self) { slot in
                             MealSlotCard(
                                 slot: slot,
+                                date: selectedDate,
                                 entries: entriesForSelectedDate.filter { $0.mealSlot == slot.rawValue },
                                 onAdd: {
                                     selectedSlot = slot
@@ -286,8 +287,11 @@ struct DayChip: View {
 struct MealSlotCard: View {
     @EnvironmentObject var appState: AppState
     let slot: MealSlot
+    let date: Date
     let entries: [PlanEntry]
     let onAdd: () -> Void
+
+    @State private var isTargeted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -311,9 +315,9 @@ struct MealSlotCard: View {
             if entries.isEmpty {
                 HStack {
                     Spacer()
-                    Text("No foods planned")
+                    Text(isTargeted ? "Release to add to \(slot.displayName.lowercased())" : "No foods planned")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(isTargeted ? .green : .secondary)
                     Spacer()
                 }
                 .padding(.vertical, 8)
@@ -324,7 +328,55 @@ struct MealSlotCard: View {
             }
         }
         .padding()
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        .background(
+            Color(.secondarySystemBackground),
+            in: RoundedRectangle(cornerRadius: 12)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(isTargeted ? Color.green : Color.clear, lineWidth: 2)
+        )
+        .dropDestination(for: FoodTransferable.self) { droppedFoods, _ in
+            guard let kidId = appState.activeKidId else {
+                ToastManager.shared.error("Select a child profile first")
+                return false
+            }
+            guard !droppedFoods.isEmpty else { return false }
+
+            Task {
+                var addedCount = 0
+                for dropped in droppedFoods {
+                    let entry = PlanEntry(
+                        id: UUID().uuidString,
+                        userId: "",
+                        kidId: kidId,
+                        date: DateFormatter.isoDate.string(from: date),
+                        mealSlot: slot.rawValue,
+                        foodId: dropped.id
+                    )
+                    do {
+                        try await appState.addPlanEntry(entry)
+                        addedCount += 1
+                    } catch {
+                        continue
+                    }
+                }
+                HapticManager.success()
+                await TipEvents.didDragFood.donate()
+                if addedCount > 0 {
+                    ToastManager.shared.success(
+                        "Added to plan",
+                        message: "\(addedCount) item\(addedCount == 1 ? "" : "s") for \(slot.displayName.lowercased())"
+                    )
+                }
+            }
+            return true
+        } isTargeted: { targeted in
+            isTargeted = targeted
+            if targeted {
+                HapticManager.selection()
+            }
+        }
     }
 }
 
