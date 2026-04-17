@@ -339,8 +339,13 @@ struct PantryView: View {
             FoodDetailView(food: food)
         }
         .fullScreenCover(isPresented: $showingScanner) {
-            BarcodeScannerView { barcode in
-                scannedBarcode = ScannedBarcodeItem(code: barcode)
+            UnifiedScannerView(
+                initialMode: .barcode,
+                allowModeSwitching: false
+            ) { result in
+                if case .barcode(let code) = result {
+                    scannedBarcode = ScannedBarcodeItem(code: code)
+                }
             }
         }
         .sheet(item: $scannedBarcode) { item in

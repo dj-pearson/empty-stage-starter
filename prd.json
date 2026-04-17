@@ -2621,8 +2621,8 @@
         "Swift builds cleanly"
       ],
       "priority": 25,
-      "passes": false,
-      "notes": "iOS UX AUDIT - Tier 2: headline capability - one scanner, four use cases."
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 2: DONE 2026-04-17 (first pass). New Views/Scanner/DataScannerRepresentable.swift wraps VisionKit DataScannerViewController with a Configuration struct (barcodes + text toggles, quality level, highlighting, guidance) and delegate callbacks for didTapOn, didAdd, didRemove, and becameUnavailableWithError. New Views/Scanner/UnifiedScannerView.swift provides the SwiftUI host with a segmented Mode picker (Barcode / Grocery List), live guidance banner, recognised-count indicator, and graceful fallback to the legacy BarcodeScannerView when DataScannerViewController.isSupported returns false. Recreates the scanner via .id(mode) when the user switches modes. New Views/Grocery/TextImportGrocerySheet.swift reviews recognised text with an editable transcript (live re-parse on edit) and the same parsed-items preview used by voice/photo paths. PantryView and DashboardHomeView now open UnifiedScannerView in .barcode mode with mode-switching locked, preserving existing OpenFoodFacts flow. GroceryView's quick-add menu gained a 'Scan a list' entry that opens UnifiedScannerView in .groceryList mode then presents TextImportGrocerySheet with sourceTag: 'scan'. Follow-ups (not in this pass): recipe-card mode, ingredient-label mode, receipt mode, TipKit pointer at the scanner. Not yet verified on device."
     },
     {
       "id": "US-140",

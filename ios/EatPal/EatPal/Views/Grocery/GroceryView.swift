@@ -7,6 +7,9 @@ struct GroceryView: View {
     @State private var showingAddItem = false
     @State private var showingVoiceAdd = false
     @State private var showingPhotoImport = false
+    @State private var showingListScanner = false
+    @State private var scannedListLines: [String] = []
+    @State private var showingScanReview = false
     @State private var showingClearAlert = false
     @State private var isGenerating = false
     @State private var editingItem: GroceryItem?
@@ -246,6 +249,12 @@ struct GroceryView: View {
                         }
 
                         Button {
+                            showingListScanner = true
+                        } label: {
+                            Label("Scan a list", systemImage: "text.viewfinder")
+                        }
+
+                        Button {
                             showingPhotoImport = true
                         } label: {
                             Label("Import from photo", systemImage: "photo.on.rectangle.angled")
@@ -281,6 +290,24 @@ struct GroceryView: View {
         }
         .sheet(isPresented: $showingPhotoImport) {
             PhotoImportGrocerySheet()
+        }
+        .fullScreenCover(isPresented: $showingListScanner) {
+            UnifiedScannerView(
+                initialMode: .groceryList,
+                allowModeSwitching: false
+            ) { result in
+                if case .text(let lines) = result, !lines.isEmpty {
+                    scannedListLines = lines
+                    showingScanReview = true
+                }
+            }
+        }
+        .sheet(isPresented: $showingScanReview) {
+            TextImportGrocerySheet(
+                recognisedLines: scannedListLines,
+                sourceTag: "scan",
+                title: "Review Scanned List"
+            )
         }
         .sheet(item: $editingItem) { item in
             EditGroceryItemView(item: item)

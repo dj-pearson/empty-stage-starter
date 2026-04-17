@@ -1490,3 +1490,69 @@ Users can tap the grocery "quick add" menu, choose "Import from photo", pick up 
 - Reusing the parser from US-140 cut this story from ~400 LOC to ~280 of new UI + ~120 of Vision glue. Good sign that GroceryTextParser should stay a shared primitive — future OCR sources (share extension, camera-in-scanner) should also flow through it.
 
 ---
+
+## 2026-04-17 - US-139: Unified DataScannerViewController (barcode + grocery list text) (DONE first pass)
+
+### What was implemented
+Replaced the hand-rolled AVFoundation barcode scanner with a VisionKit-backed unified scanner that supports BOTH barcode and live text recognition in one view. Existing OpenFoodFacts barcode flows (Pantry, Dashboard) are now driven by the new scanner with a barcode-only mode; the Grocery tab gained a new "Scan a list" entry point that captures recognised text and routes it through a review sheet.
+
+### Files changed / added
+- `ios/EatPal/EatPal/Views/Scanner/DataScannerRepresentable.swift` (new, ~120 LOC)
+  - `UIViewControllerRepresentable` around `DataScannerViewController`.
+  - `Configuration` struct: recognizesBarcodes / recognizesText / recognizesMultipleItems / qualityLevel / isHighlightingEnabled / isGuidanceEnabled.
+  - Callbacks: `onRecognizedItem(RecognizedItem)` for taps, `onTextSnapshot([String])` for deduplicated live transcript, `onError(Error)`.
+  - Coordinator implements DataScannerViewControllerDelegate: didTapOn, didAdd, didRemove, becameUnavailableWithError.
+  - Snapshot helper dedupes by case-insensitive transcript, preserves reading order.
+  - `dismantleUIViewController` calls `stopScanning()` to avoid leaving the camera hot after dismissal.
+
+- `ios/EatPal/EatPal/Views/Scanner/UnifiedScannerView.swift` (new, ~170 LOC)
+  - Public `Mode` enum: `.barcode`, `.groceryList`.
+  - Public `Result` enum: `.barcode(String)`, `.text([String])`.
+  - Initializer exposes `initialMode` + `allowModeSwitching` so callers can lock the view to one mode (existing barcode flows set `allowModeSwitching: false`).
+  - Runtime branch: `if #available(iOS 17.0, *), DataScannerViewController.isSupported` → modern path; else falls back to `BarcodeScannerView` with the legacy AVFoundation implementation wired to `onComplete(.barcode(...))`.
+  - Modern path renders a DataScannerRepresentable plus an overlay with guidance text, recognised-line count (grocery list mode), error banner, and an optional segmented mode picker.
+  - `.id(mode)` on the representable so SwiftUI recreates the underlying DataScannerViewController with fresh configuration when the user switches modes.
+  - Barcode mode: first tap fires `.barcode(payload)` and dismisses.
+  - Grocery list mode: text snapshots stream into `collectedText`; user also tap-to-force-add individual text regions; "Done" button emits `.text(collectedText)`.
+
+- `ios/EatPal/EatPal/Views/Grocery/TextImportGrocerySheet.swift` (new, ~185 LOC)
+  - Shared "review recognised text" sheet. Accepts `recognisedLines: [String]`, `sourceTag: String` (e.g. `scan`, `share`), `title: String`.
+  - Editable `TextEditor` showing the transcript; on change, re-parses via `GroceryTextParser.parse(...)`.
+  - Parsed-items preview list with the same per-item include/exclude toggles as photo/voice paths. Low-confidence (< 0.75) items flagged with questionmark badge.
+  - Footer save button inserts selected items via `AppState.addGroceryItem(...)` with the provided sourceTag.
+  - Drop-in replacement for anyone needing the parsed-items review UX without repeating ~180 LOC.
+
+- `ios/EatPal/EatPal/Views/Pantry/PantryView.swift`
+  - `.fullScreenCover(isPresented: $showingScanner)` now presents `UnifiedScannerView(initialMode: .barcode, allowModeSwitching: false)`; only consumes the `.barcode(...)` case.
+  - Zero behavioral change from the user's perspective when scanning a barcode in the pantry.
+
+- `ios/EatPal/EatPal/Views/Dashboard/DashboardHomeView.swift`
+  - Same swap — quick-action barcode button now routes through UnifiedScannerView.
+
+- `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift`
+  - Added `showingListScanner`, `scannedListLines`, `showingScanReview` state.
+  - Quick-add menu gained a new "Scan a list" entry (between "Dictate items" and "Import from photo").
+  - `.fullScreenCover` presents `UnifiedScannerView(initialMode: .groceryList, allowModeSwitching: false)`; on `.text(lines)` result, captures lines and opens `TextImportGrocerySheet(recognisedLines:, sourceTag: "scan", title: "Review Scanned List")`.
+  - Two-sheet choreography (full-screen cover for camera, then sheet for review) keeps each surface doing one job.
+
+### Interaction patterns / design decisions
+- Legacy `BarcodeScannerView` is now a fallback, not the primary scanner. It only shows on hardware where `DataScannerViewController.isSupported == false` (A11 chip and older, which shouldn't happen on iOS 17-capable hardware anyway, but the branch is defensive).
+- "Scan a list" and "Import from photo" share the same mental model: recognise text → review → save. Scan is real-time; photo is batch. Both terminate in a sheet the user edits before committing.
+- The review sheet's TextEditor lets users repair OCR mistakes (e.g. "2 ib chicken" → "2 lb chicken") and see the parser react line by line. The editor is primary, not a hidden advanced feature — if users trust the parse they just tap Save; if they don't, they can correct in place.
+- `sourceTag: "scan"` on inserted items keeps addedVia meaningful for analytics / ReasoningBank distinct from photo / voice / drag / recipe paths.
+
+### Not implemented this pass (follow-ups noted in prd.json)
+- Recipe-card mode (capture printed recipe → EditRecipeView).
+- Ingredient-label mode (capture nutrition → create Food).
+- Receipt mode (parse receipt line-items → bulk pantry/grocery insert).
+- TipKit tip anchored on the scanner to teach the mode picker.
+- Multi-mode mode picker visible when a caller opts in (all existing callers currently lock to one mode).
+
+### Learnings
+- `DataScannerViewController.isSupported` is a static Bool; don't confuse with instance `isScanning`. Always check `.isSupported` before constructing the view.
+- `DataScannerViewController.ScanningUnavailable` is Apple's ready-made error enum surfaced via `becameUnavailableWithError`. Forwarding its localizedDescription gives users the right message ("Camera unavailable", "Unsupported device", etc.) without any custom messaging.
+- `recognizedDataTypes: Set<RecognizedDataType>` requires Hashable — which the enum provides — but Set literal initialisation is clearer than array → Set cast when mode is static.
+- Recreating the UIViewController via `.id(mode)` is the idiomatic way to reset a delegate-driven UIKit controller from SwiftUI; avoids the trap of trying to reconfigure mid-flight.
+- Barcode + text at the same time in one DataScanner instance is supported (`.barcode()` + `.text()` in the Set), but it adds noise — most users want one or the other. Two discrete modes with fast switching gives a cleaner UX.
+
+---

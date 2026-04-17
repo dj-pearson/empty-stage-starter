@@ -35,8 +35,13 @@ struct DashboardHomeView: View {
             await appState.loadAllData()
         }
         .fullScreenCover(isPresented: $showingScanner) {
-            BarcodeScannerView { barcode in
-                scannedBarcode = ScannedBarcodeItem(code: barcode)
+            UnifiedScannerView(
+                initialMode: .barcode,
+                allowModeSwitching: false
+            ) { result in
+                if case .barcode(let code) = result {
+                    scannedBarcode = ScannedBarcodeItem(code: code)
+                }
             }
         }
         .sheet(isPresented: $showingAddFood) {
