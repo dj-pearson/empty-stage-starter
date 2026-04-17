@@ -49,6 +49,9 @@ packages:
   Supabase:
     url: https://github.com/supabase/supabase-swift.git
     from: 2.0.0
+  Sentry:
+    url: https://github.com/getsentry/sentry-cocoa.git
+    from: 8.0.0
 
 targets:
   # -----------------------------------------------------------------
@@ -69,6 +72,8 @@ targets:
     dependencies:
       - package: Supabase
         product: Supabase
+      - package: Sentry
+        product: Sentry
       - target: EatPalWidgetExtension
         embed: true
         codeSign: true

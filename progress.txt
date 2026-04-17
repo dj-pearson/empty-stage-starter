@@ -1556,3 +1556,104 @@ Replaced the hand-rolled AVFoundation barcode scanner with a VisionKit-backed un
 - Barcode + text at the same time in one DataScanner instance is supported (`.barcode()` + `.text()` in the Set), but it adds noise — most users want one or the other. Two discrete modes with fast switching gives a cleaner UX.
 
 ---
+
+## 2026-04-17 - US-151: Sentry for iOS (sentry-cocoa) (DONE)
+
+### What was implemented
+iOS crash / error / breadcrumb telemetry with PII scrubbing, matching the web integration.
+
+### Files changed / added
+- `ios/EatPal/project.yml`
+  - Added `Sentry: url: https://github.com/getsentry/sentry-cocoa.git, from: 8.0.0` under `packages`.
+  - Added `- package: Sentry, product: Sentry` under EatPal target dependencies.
+
+- `ios/EatPal/EatPal/Resources/Info.plist`
+  - Added `SENTRY_DSN` key, env-substituted (`$(SENTRY_DSN)`), same pattern as SUPABASE_URL / SUPABASE_ANON_KEY.
+
+- `ios/EatPal/EatPal/Services/SentryService.swift` (new, ~135 LOC)
+  - `configure()` is a no-op in DEBUG and when DSN is missing/unresolved; otherwise calls `SentrySDK.start`.
+  - Options: env "production", releaseName derived from CFBundleShortVersionString + CFBundleVersion, enableAutoSessionTracking, sessionTrackingIntervalMillis 30000, tracesSampleRate 0.2, profilesSampleRate 0.1.
+  - `beforeSend` strips user email/name/ip, drops request.data and request.cookies, redacts sensitive keys (authorization, auth, cookie, password, token, email, name, first_name, last_name, phone, dob, birthday, address) from extras and headers.
+  - `beforeBreadcrumb` redacts sensitive keys on breadcrumb data.
+  - `setUserId(_:)` attaches a stable UUID — NO email, NO name.
+  - `leaveBreadcrumb(category:message:level:data:)` for navigation/auth/intent hooks.
+  - `capture(_:extras:)` for caught errors with optional context scope.
+
+- `ios/EatPal/EatPal/App/EatPalApp.swift`
+  - `init()` now calls `SentryService.configure()` BEFORE `Tips.configure(...)` so early startup failures are captured.
+
+- `ios/EatPal/EatPal/ViewModels/AuthViewModel.swift`
+  - `startListeningForAuthChanges()` now:
+    - On initial session restore: sets Sentry user id from `session?.user.id.uuidString` and leaves a `session restored` breadcrumb.
+    - On `.signedIn` event: sets user id, leaves `signed in` breadcrumb (uses the emitted session).
+    - On `.signedOut`: clears user id (nil), leaves `signed out` breadcrumb.
+
+### Decisions
+- DEBUG builds skip Sentry entirely — dev iterations don't need to hit the prod project. Production release builds enable it.
+- Profile sampling starts conservative (0.1) and traces at 0.2 — adjust after the first week of data.
+- User id only: matches the "no PII by default" project convention and keeps GDPR/CCPA noise low.
+- Sensitive-key redaction is key-name based (case-insensitive), not value-inspection based. Cheap and predictable.
+
+### Not verified yet
+- Requires `xcodegen generate` on macOS to resolve the SPM dependency before any build will succeed.
+- No breadcrumbs yet on DataService calls, AppState mutations, or navigation — intentional scope cut for first pass. Add incrementally as problems surface.
+
+---
+
+## 2026-04-17 - US-142: App Intents + Siri Shortcuts (DONE first pass)
+
+### What was implemented
+Three App Intents registered via AppShortcutsProvider so users can talk to EatPal through Siri or compose shortcuts in the Shortcuts app. All run in the background (no forced app launch) and route through `DataService.shared` which authenticates via the keychain-stored Supabase session.
+
+### Files changed / added
+- `ios/EatPal/EatPal/Intents/GroceryAppIntents.swift` (new, ~120 LOC)
+  - `AddGroceryItemIntent`
+    - `@Parameter(title: "Item")` with `inputOptions: .init(capitalizationType: .sentences)` so Siri fills the field natively.
+    - `parameterSummary: Summary("Add \(\.$item) to EatPal grocery")`.
+    - `perform()` pipes the spoken string through `GroceryTextParser.parse(...)` to recover qty/unit/category — "two pounds of chicken" becomes `{ name: Chicken, quantity: 2, unit: lbs, category: protein }`.
+    - Inserts via `DataService.shared.insertGroceryItem` with `addedVia: "siri"`.
+    - Returns `.result(dialog: "Added \(name) to your grocery list.")`.
+    - Breadcrumb + Sentry capture on error.
+  - `WhatsForDinnerIntent`
+    - No parameters. `parameterSummary: Summary("What's for dinner in EatPal")`.
+    - `perform()` fetches kids, plan_entries, foods, recipes; filters to today's dinner entries across all kids; resolves each to either a recipe name or the linked food name; formats with kid-name prefix when present ("Liam: Chicken tacos").
+    - Handles 1-item / 2-item / N-item cases with natural conjunctions.
+    - Empty state returns "You don't have dinner planned in EatPal today."
+
+- `ios/EatPal/EatPal/Intents/MealAppIntents.swift` (new, ~100 LOC)
+  - `MealSlotAppEnum` (AppEnum) with Siri-facing cases `.breakfast .lunch .dinner .snack`.
+  - `domainSlotRawValues` maps `.snack` → both `snack1` and `snack2` from the domain `MealSlot` enum. Breakfast/lunch/dinner map 1:1.
+  - `MealResultAppEnum` (AppEnum): `.ate .tasted .refused`.
+  - `LogMealResultIntent`
+    - `@Parameter` for slot + result, parameterSummary `"Log that \(\.$slot) was \(\.$result) in EatPal"`.
+    - Fetches today's plan_entries, filters by slot(s), updates each match via `DataService.shared.updatePlanEntry` with `PlanEntryUpdate(result: ...)`.
+    - Returns dialog reporting how many meals were updated.
+
+- `ios/EatPal/EatPal/Intents/EatPalAppShortcuts.swift` (new, ~40 LOC)
+  - `AppShortcutsProvider` exposes all 3 intents with 3+ phrases each, using `(.applicationName)` placeholder so phrases adapt to rebrands.
+  - Shortcut tile colour: `.green` (matches the primary app tint).
+
+### Phrases registered
+- Add: "Add `<item>` to EatPal grocery", "Add `<item>` to my EatPal list", "Put `<item>` on my EatPal grocery list".
+- Dinner: "What's for dinner in EatPal", "What am I making for dinner in EatPal", "EatPal dinner tonight".
+- Log: "Log `<slot>` as `<result>` in EatPal", "Mark `<slot>` `<result>` in EatPal", "Record `<slot>` in EatPal".
+
+### Design decisions
+- Background execution (`openAppWhenRun = false`) is the whole point — if the user wanted to open the app, they would. Siri fires the intent, the result dialog appears in the Siri UI overlay, and nothing forces the user out of their current context.
+- All intent writes use `addedVia: "siri"` so analytics and ReasoningBank can distinguish Siri-sourced data.
+- No kid-entity picker in this pass. Today's meal log applies to every kid with a matching slot on today's date. Follow-up: donate per-kid LogMealResultIntent variants so Siri learns per-kid patterns.
+- No donation from manual flows yet. AppShortcutsProvider-declared phrases already work on iOS 16+ without donation; donation only improves Siri suggestions. Intentionally deferred.
+
+### Not verified yet
+- Requires `xcodegen generate` + Xcode build to compile the AppIntents metadata. Siri registration happens at first launch after install.
+- On-device test: "Hey Siri, add milk to EatPal grocery" is the canonical smoke test.
+- Shortcuts app discovery: the three tiles should appear under EatPal automatically after first launch.
+
+### Learnings
+- `AppShortcutsProvider` replaces the old INInteraction donation pattern for surface-level Siri discovery — the system parses your phrases at install time.
+- `(.applicationName)` in phrase strings is iOS 16+ and keeps phrases in sync with any future app rename.
+- `@Parameter` with `inputOptions: .init(capitalizationType: .sentences)` makes Siri transcription feel natural in dialogs — without it the dictated word can be all-lowercase.
+- `DataService.shared` being `@MainActor` + having `ensureUserId` built in means App Intents need zero extra auth plumbing — the keychain Supabase session gets used automatically.
+- MealSlot → MealSlotAppEnum mapping: keeping Siri vocabulary lean (4 options) and mapping snack → {snack1, snack2} internally is friendlier than forcing users to say "snack one".
+
+---

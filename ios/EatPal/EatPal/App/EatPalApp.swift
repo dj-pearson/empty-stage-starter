@@ -9,6 +9,10 @@ struct EatPalApp: App {
     @StateObject private var deepLinkHandler = DeepLinkHandler.shared
 
     init() {
+        // Sentry (US-151): must initialise before anything that might crash
+        // so early failures are captured. No-op in DEBUG / when DSN missing.
+        SentryService.configure()
+
         // TipKit: register gesture-discovery tips (US-138).
         // Uses default datastore. Tips are silent when their rules evaluate to false.
         try? Tips.configure([

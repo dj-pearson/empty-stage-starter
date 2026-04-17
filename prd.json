@@ -2679,8 +2679,8 @@
         "Swift builds cleanly"
       ],
       "priority": 28,
-      "passes": false,
-      "notes": "iOS UX AUDIT - Tier 2: hands-free parent moat."
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 2: DONE 2026-04-17. New Intents/ folder with: GroceryAppIntents.swift (AddGroceryItemIntent — item: String, pipes through GroceryTextParser so 'two pounds of chicken' resolves qty/unit/category; WhatsForDinnerIntent — fetches today's plan_entries with dinner slot across all kids, resolves via DataService.shared.fetchFoods/fetchRecipes/fetchKids, composes a friendly dialog). MealAppIntents.swift (MealSlotAppEnum with Siri-facing breakfast/lunch/dinner/snack mapped to domain slots via domainSlotRawValues — snack covers both snack1 and snack2; MealResultAppEnum; LogMealResultIntent — updates all matching plan_entries for today+slot with the chosen result). EatPalAppShortcuts.swift AppShortcutsProvider registers 3+ phrases per intent using (.applicationName) placeholder. All three intents run with openAppWhenRun: false — background execution via DataService.shared which authenticates from the keychain-stored Supabase session. Breadcrumbs via SentryService on each perform(). Errors captured with SentryService.capture(error:extras:['intent': ...]). Not yet implemented: intent donation from manual-equivalent actions (AddGroceryItemView form save, PlanEntryRow result log) and full kid-selection entity for multi-kid families. Not yet verified on device — requires xcodegen generate + build to register phrases with Siri."
     },
     {
       "id": "US-143",
@@ -2836,8 +2836,8 @@
         "Swift builds cleanly"
       ],
       "priority": 37,
-      "passes": false,
-      "notes": "iOS UX AUDIT - Tier 4: production stability."
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 4: DONE 2026-04-17. Added sentry-cocoa (from 8.0.0) SPM dep in project.yml + dependency on main EatPal target. Info.plist gained SENTRY_DSN key env-substituted same as Supabase secrets. New Services/SentryService.swift exposes configure() (no-op in DEBUG, no-op when DSN missing/unresolved), setUserId(_:), leaveBreadcrumb(category:message:level:data:), capture(_:extras:), with PII scrubbing (event.user email/name/ip stripped, request.data + cookies dropped, sensitive keys redacted in extras/headers/breadcrumb data). SentrySDK options: env production, releaseName from CFBundleShortVersionString+CFBundleVersion, auto session tracking, tracesSampleRate 0.2, profilesSampleRate 0.1. EatPalApp.init() calls SentryService.configure() before Tips.configure. AuthViewModel startListeningForAuthChanges now calls SentryService.setUserId on sign-in (with session.user.id.uuidString) and nils out on sign-out, plus breadcrumbs for 'session restored', 'signed in', 'signed out'. Not yet verified — xcodegen generate required to resolve SPM."
     },
     {
       "id": "US-152",
