@@ -2660,8 +2660,8 @@
         "Swift builds cleanly"
       ],
       "priority": 27,
-      "passes": false,
-      "notes": "iOS UX AUDIT - Tier 2: core 'screenshot to grocery' ask."
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 2: DONE 2026-04-17. New Services/ImageTextRecognizer.swift wraps Vision VNRecognizeTextRequest with .accurate recognitionLevel, en-US language, and correct CGImagePropertyOrientation mapping from UIImage.imageOrientation. Returns per-line strings + confidences + merged text. New Views/Grocery/PhotoImportGrocerySheet.swift uses PhotosPicker (maxSelectionCount: 5), runs OCR on each image, merges transcripts, feeds GroceryTextParser (shared with US-140), shows recognized image thumbnails + parsed-items preview with per-item include/exclude. Low-confidence scans (< 0.5 mean) display a warning banner; per-item confidence < 0.75 displays a questionmark badge. GroceryView toolbar collapsed into a single 'wand.and.stars' Menu with Dictate / Import from Photo / Generate from plan entries. Items saved via AppState.addGroceryItem with addedVia: 'photo'. Reuses existing NSPhotoLibraryUsageDescription. Not yet verified on device."
     },
     {
       "id": "US-142",

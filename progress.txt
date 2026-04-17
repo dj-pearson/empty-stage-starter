@@ -1442,3 +1442,51 @@ Full voice-to-grocery flow. User taps a mic button in the Grocery tab toolbar, d
 - `AVAudioApplication.shared.recordPermission` is the iOS 17+ replacement for `AVAudioSession.sharedInstance().recordPermission` — deprecated cousin still works but the new API is clearer.
 
 ---
+
+## 2026-04-17 - US-141: Photo / screenshot → grocery list via Vision OCR (DONE)
+
+### What was implemented
+Users can tap the grocery "quick add" menu, choose "Import from photo", pick up to 5 screenshots/photos of a list, and see each recognised item previewed with per-item include/exclude toggles before saving. Reuses the same `GroceryTextParser` as the voice flow (US-140) — mean and per-item confidence drive review prompts.
+
+### Files changed / added
+- `ios/EatPal/EatPal/Services/ImageTextRecognizer.swift` (new, ~120 LOC)
+  - Namespace enum with static `recognize(in: UIImage) async throws -> RecognitionResult` and a batch `recognize(in: [UIImage]) async -> [RecognitionResult]`.
+  - `RecognitionResult`: `lines`, `confidences` (per-line Float), `mergedText` (ready for GroceryTextParser).
+  - Uses `VNRecognizeTextRequest` with `.accurate` recognitionLevel, `usesLanguageCorrection = true`, `recognitionLanguages = ["en-US"]`.
+  - Maps `UIImage.imageOrientation` → `CGImagePropertyOrientation` so rotated images parse correctly (common for screenshots taken in landscape).
+  - Exposes `trustworthyConfidence: Float = 0.5` so UI can gate on it.
+
+- `ios/EatPal/EatPal/Views/Grocery/PhotoImportGrocerySheet.swift` (new, ~280 LOC)
+  - SwiftUI sheet. Sections: picker area, parsed-items preview, footer save button.
+  - `PhotosPicker(selection: …, maxSelectionCount: 5, matching: .images)` for multi-image selection.
+  - On change: loads each `PhotosPickerItem` into `UIImage`, runs `ImageTextRecognizer.recognize`, concatenates merged text, feeds through `GroceryTextParser.parse(…)`.
+  - Horizontal scroll row of 72×72 thumbnails so the user can confirm what's being read.
+  - Warning banners: low-confidence scan (< 0.5 mean), per-item confidence < 0.75 (questionmark badge).
+  - Progress overlay (`ProgressView("Reading text…")`) during recognition.
+  - Save flow identical to US-140: iterate selected items, insert via `AppState.addGroceryItem(...)` with `addedVia: "photo"`, haptic + toast on success, stay on sheet on partial failure.
+
+- `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift`
+  - Added `@State private var showingPhotoImport = false`.
+  - Collapsed the toolbar: the former `mic.fill` button plus the old `wand.and.stars` menu are now unified into a single `wand.and.stars` Menu with three ordered options: **Dictate items**, **Import from photo**, divider, **Generate from this week's plan**. Plus the existing `+` button to the right.
+  - Added `.sheet(isPresented: $showingPhotoImport) { PhotoImportGrocerySheet() }`.
+
+### Interaction patterns / design decisions
+- Single grocery "quick add" menu (wand icon) now owns every bulk-input path: dictation, photo, plan-derived. Keeps toolbar tidy and gives users one clear entry point for "more than one item at a time."
+- Confidence signalling at two levels: per-image mean (banner) and per-item (icon). Avoids silent incorrect inserts.
+- Parser is shared with voice: OCR lines are joined with newlines and the parser's existing bullet/checkbox/numbered-list strip handles list screenshots natively.
+- `addedVia` tag is distinct per source (`voice`, `photo`, `recipe`, `drag`, `restock`, `manual`) — good for analytics, retention studies, and future ReasoningBank training.
+- Uses existing `NSPhotoLibraryUsageDescription` in Info.plist — PhotosPicker on iOS 16+ actually bypasses this via the system-provided out-of-process picker, but the description stays for the direct-capture paths elsewhere.
+
+### Not verified yet / future follow-ups
+- `xcodebuild` not run (no macOS host) — especially relevant for Vision: the framework's behaviour with `.accurate` on older devices can be slow on first call.
+- Consider down-sampling very large screenshots before handing to Vision (memory footprint).
+- TipKit tip for the new menu (teach users where voice/photo live) — candidate follow-up.
+- Multi-image merging currently concatenates merged text from each image in pick order. If users pick a receipt + a list, the parser treats them as one stream. If that turns out confusing we can prompt per-image review.
+
+### Learnings
+- `PhotosPicker.loadTransferable(type: Data.self)` is the simplest path to `UIImage`; `loadTransferable(type: UIImage.self)` would avoid the Data roundtrip on iOS 17 but isn't universally reliable — sticking with Data → UIImage avoids surprises.
+- Vision's `VNRecognizeTextRequest` completion handler is synchronous relative to `VNImageRequestHandler.perform`, so wrapping in `withCheckedThrowingContinuation` is the right bridge to async/await.
+- Per-line confidence (`VNRecognizedText.confidence`) is usable but noisy on handwritten inputs; Apple recommends treating anything < 0.4 as suspect. Using 0.5 as the "show warning" threshold is conservative but not paranoid.
+- Reusing the parser from US-140 cut this story from ~400 LOC to ~280 of new UI + ~120 of Vision glue. Good sign that GroceryTextParser should stay a shared primitive — future OCR sources (share extension, camera-in-scanner) should also flow through it.
+
+---

@@ -6,6 +6,7 @@ struct GroceryView: View {
     @State private var searchText = ""
     @State private var showingAddItem = false
     @State private var showingVoiceAdd = false
+    @State private var showingPhotoImport = false
     @State private var showingClearAlert = false
     @State private var isGenerating = false
     @State private var editingItem: GroceryItem?
@@ -237,24 +238,31 @@ struct GroceryView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: 12) {
-                    Button {
-                        showingVoiceAdd = true
-                    } label: {
-                        Image(systemName: "mic.fill")
-                    }
-                    .accessibilityLabel("Add by voice")
-
                     Menu {
+                        Button {
+                            showingVoiceAdd = true
+                        } label: {
+                            Label("Dictate items", systemImage: "mic.fill")
+                        }
+
+                        Button {
+                            showingPhotoImport = true
+                        } label: {
+                            Label("Import from photo", systemImage: "photo.on.rectangle.angled")
+                        }
+
+                        Divider()
+
                         Button {
                             Task { await generateFromWeekPlan() }
                         } label: {
-                            Label("Generate from This Week's Plan", systemImage: "calendar.badge.plus")
+                            Label("Generate from this week's plan", systemImage: "calendar.badge.plus")
                         }
                         .disabled(isGenerating)
                     } label: {
                         Image(systemName: "wand.and.stars")
                     }
-                    .accessibilityLabel("Generate options")
+                    .accessibilityLabel("Quick add options")
 
                     Button {
                         showingAddItem = true
@@ -270,6 +278,9 @@ struct GroceryView: View {
         }
         .sheet(isPresented: $showingVoiceAdd) {
             VoiceAddGrocerySheet()
+        }
+        .sheet(isPresented: $showingPhotoImport) {
+            PhotoImportGrocerySheet()
         }
         .sheet(item: $editingItem) { item in
             EditGroceryItemView(item: item)
