@@ -122,7 +122,7 @@ final class OfflineStore: ObservableObject {
     /// Last sync error, if any. Reset on successful sync.
     @Published private(set) var lastSyncError: String?
 
-    enum Op: String {
+    enum Operation: String {
         case insert
         case update
         case delete
@@ -242,7 +242,7 @@ final class OfflineStore: ObservableObject {
         let data = try? JSONEncoder.supabaseSnakeCase.encode(payload)
         addPendingMutation(
             table: table.rawValue,
-            operation: Op.insert.rawValue,
+            operation: Operation.insert.rawValue,
             entityId: entityId,
             payload: data
         )
@@ -253,7 +253,7 @@ final class OfflineStore: ObservableObject {
         let data = try? JSONEncoder.supabaseSnakeCase.encode(payload)
         addPendingMutation(
             table: table.rawValue,
-            operation: Op.update.rawValue,
+            operation: Operation.update.rawValue,
             entityId: entityId,
             payload: data
         )
@@ -263,7 +263,7 @@ final class OfflineStore: ObservableObject {
     func enqueueDelete(table: Table, entityId: String) {
         addPendingMutation(
             table: table.rawValue,
-            operation: Op.delete.rawValue,
+            operation: Operation.delete.rawValue,
             entityId: entityId,
             payload: nil
         )
@@ -318,13 +318,13 @@ final class OfflineStore: ObservableObject {
         let decoder = JSONDecoder.supabaseSnakeCase
 
         switch mutation.operation {
-        case Op.delete.rawValue:
+        case Operation.delete.rawValue:
             try await client.from(table)
                 .delete()
                 .eq("id", value: mutation.entityId)
                 .execute()
 
-        case Op.insert.rawValue:
+        case Operation.insert.rawValue:
             guard let data = mutation.payload else { return }
 
             switch table {
@@ -347,7 +347,7 @@ final class OfflineStore: ObservableObject {
                 break
             }
 
-        case Op.update.rawValue:
+        case Operation.update.rawValue:
             guard let data = mutation.payload else { return }
 
             switch table {

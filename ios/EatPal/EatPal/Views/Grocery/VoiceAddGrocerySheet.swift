@@ -109,7 +109,7 @@ struct VoiceAddGrocerySheet: View {
                             Image(systemName: excludedIds.contains(item.id)
                                   ? "circle"
                                   : "checkmark.circle.fill")
-                                .foregroundStyle(excludedIds.contains(item.id) ? .secondary : .green)
+                                .foregroundStyle(excludedIds.contains(item.id) ? Color.secondary : Color.green)
                                 .onTapGesture { toggle(item) }
 
                             VStack(alignment: .leading, spacing: 2) {

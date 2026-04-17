@@ -132,7 +132,7 @@ struct PhotoImportGrocerySheet: View {
                         Image(systemName: excludedIds.contains(item.id)
                               ? "circle"
                               : "checkmark.circle.fill")
-                            .foregroundStyle(excludedIds.contains(item.id) ? .secondary : .green)
+                            .foregroundStyle(excludedIds.contains(item.id) ? Color.secondary : Color.green)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.name)
