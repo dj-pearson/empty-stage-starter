@@ -106,9 +106,9 @@ enum SentryService {
         event.user?.ipAddress = nil
         event.user?.data = nil
 
-        // Strip request bodies — a stack trace with the method is plenty,
-        // the body can contain tokens or food notes.
-        event.request?.data = nil
+        // SentryRequest in sentry-cocoa 8.x doesn't surface request bodies,
+        // so there's nothing to scrub there. Cookies and headers are the
+        // only interesting fields we want to redact.
         event.request?.cookies = nil
         event.request?.headers = Self.sanitise(headers: event.request?.headers)
 

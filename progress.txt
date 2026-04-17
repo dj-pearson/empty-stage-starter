@@ -1975,3 +1975,52 @@ A standalone Share Extension target that lets users hit Share → EatPal from Sa
 - Test target still hasn't run (build failure blocked it).
 
 ---
+
+## 2026-04-17 - CI build pass #2 — second round of fixes
+
+### Build error fixed
+- `.foregroundStyle(condition ? .secondary : .green)` ambiguity. `.secondary` resolves to `HierarchicalShapeStyle` (Apple's SDK prefers that over `Color.secondary`), but `.green` only exists on `Color`. Swift can't unify the two branches of the ternary.
+- Fixed in three files by qualifying both branches explicitly:
+  - `Views/Grocery/PhotoImportGrocerySheet.swift:135` — `Color.secondary : Color.green`.
+  - `Views/Grocery/TextImportGrocerySheet.swift:110` — same.
+  - `Views/Grocery/VoiceAddGrocerySheet.swift:112` — same.
+- Root cause: when iOS 17+ introduced `HierarchicalShapeStyle`, `.secondary` became ambiguous at the call site unless both ternary branches share a type. Explicit `Color.` prefix on both sides locks the inference to `Color`.
+
+### SwiftLint findings — what's mine vs what's legacy
+SwiftLint surfaced **134 violations** under `--strict`. The workflow has `continue-on-error: true` on the SwiftLint step, so these don't block CI — but they're still worth triaging.
+
+**From our session (small):**
+- `Op` enum name in `OfflineStore.swift` (Type Name Violation, min 3 chars) — renamed to `Operation` and call sites updated.
+- Some trailing commas + long lines in new files — not addressed this pass, low priority.
+
+**Pre-existing (majority):**
+- `AppTheme.swift` — `xs/sm/md/lg/xl` identifier violations (spacing constants, 20+ hits).
+- `KidProfileEditorView.swift` (796 lines), `ProgressDashboardView.swift` (655 lines), `OnboardingView.swift` (635 lines) — `file_length` violations.
+- `AppState.swift` (now 655 lines) — `type_body_length` at 517 (was large before our additions).
+- Various long lines, trailing commas, function complexity in `AuthService.swift`, `PasswordValidator.swift`, `ProgressDashboardView.swift`, etc.
+- These are tech debt across the pre-existing codebase; addressing them is a separate cleanup story.
+
+### SwiftData Sendable warnings
+CI flagged:
+```
+type 'ReferenceWritableKeyPath<CachedFood, String>' does not conform to the 'Sendable' protocol
+    sortBy: [SortDescriptor(\.name)]
+```
+in the existing SwiftData code (pre-existing `OfflineStore.loadCachedFoods`) and in our new `getPendingMutations` SortDescriptor. These are **warnings under Swift 5 language mode, errors under Swift 6**. Fine for now since the project compiles as Swift 5; switching to Swift 6 mode is a separate decision.
+
+### Fixes in this pass
+- `ios/EatPal/EatPal/Views/Grocery/PhotoImportGrocerySheet.swift` — `.foregroundStyle` ternary.
+- `ios/EatPal/EatPal/Views/Grocery/TextImportGrocerySheet.swift` — same.
+- `ios/EatPal/EatPal/Views/Grocery/VoiceAddGrocerySheet.swift` — same.
+- `ios/EatPal/EatPal/Services/OfflineStore.swift` — `enum Op` → `enum Operation`, all 7 call sites updated.
+
+### What the next run should show
+- Main target compiles all the way through (no blocking errors left from our session).
+- Either clean green build, or a third small wave of errors (my strong expectation: clean or 1-2 tiny fixes).
+- Tests actually run for the first time since before the ShortcutTileColor failure.
+- SwiftLint still reports ~130 warnings, all pre-existing or cosmetic; not a CI blocker.
+
+### Lesson for future SwiftUI shape-style work
+When using `.foregroundStyle`, `.tint`, `.foregroundColor` with a ternary, always pin the branch types explicitly. SwiftUI's shape-style protocols (`HierarchicalShapeStyle`, `SemanticShapeStyle`, etc.) share symbol names like `.secondary`, `.primary`, `.tertiary` with `Color` but aren't type-equivalent. In ternary expressions, Swift's inference picks the more specific type and the other branch has to match. Explicit `Color.*` keeps things predictable.
+
+---
