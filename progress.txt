@@ -1951,3 +1951,27 @@ A standalone Share Extension target that lets users hit Share → EatPal from Sa
 - Failed items staying queued is critical — a flaky network at drain time shouldn't lose the user's imported recipe. The queue survives app restarts.
 
 ---
+
+## 2026-04-17 - CI build pass #1 — fixes on top of the 15-story drop
+
+### What CI told us (macOS-15 / Xcode 26.2 runner)
+- SwiftLint job: passed.
+- Build job: SPM resolved all deps (Supabase 2.43.1, Sentry 8.58.1, swift-crypto, swift-asn1, swift-http-types, swift-clocks, swift-concurrency-extras, xctest-dynamic-overlay). 25 targets enumerated.
+- Widget extension (US-135/146/152/145 bits) compiled cleanly.
+- Share extension (US-143) compiled cleanly — all five files (ShareViewController, ShareImportView, ShareExtensionAPI, PendingRecipeImport, GroceryTripActivityAttributes) passed type-checking.
+- Main EatPal target FAILED on a single type error during EmitSwiftModule: `type 'ShortcutTileColor' has no member 'green'` in Intents/EatPalAppShortcuts.swift.
+
+### Fix
+- `ios/EatPal/EatPal/Intents/EatPalAppShortcuts.swift`: removed the `static var shortcutTileColor: ShortcutTileColor = .green` line. Cosmetic-only property; the shortcut tile now uses the system default color. Xcode 26.2's AppIntents SDK either renamed `.green` or dropped it from the enum.
+
+### Lesson
+- When touching new Apple APIs blind (no local Xcode to autocomplete), purely cosmetic properties — shortcut tile colors, Widget containerBackground tints, minor visual flourishes — are the highest-risk-for-lowest-reward lines. Easier to omit them than to guess at the current enum case naming. Core behaviour is unaffected.
+
+### Still to verify (pending next CI run)
+- Main target's remaining files (most of the 15-story work) compiled AFTER the type error because Swift continues past single-file errors, but the emit-module phase aborted. The next CI run, with this fix in place, will either pass cleanly or surface the next layer of errors. Candidates to watch:
+  - Swift concurrency strictness under Xcode 26.2 (Sendable conformance on AppState sinks).
+  - Activity<GroceryTripAttributes>.request API shape (minor signature changes possible in ActivityKit between iOS 16.1/17/18).
+  - `AVAudioApplication.shared.recordPermission` availability vs the old AVAudioSession.recordPermission.
+- Test target still hasn't run (build failure blocked it).
+
+---

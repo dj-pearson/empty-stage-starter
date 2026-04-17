@@ -38,6 +38,4 @@ struct EatPalAppShortcuts: AppShortcutsProvider {
             systemImageName: "checkmark.circle.fill"
         )
     }
-
-    static var shortcutTileColor: ShortcutTileColor = .green
 }
