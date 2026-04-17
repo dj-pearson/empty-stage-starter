@@ -268,6 +268,35 @@ struct GroceryView: View {
                             Label("Generate from this week's plan", systemImage: "calendar.badge.plus")
                         }
                         .disabled(isGenerating)
+
+                        Divider()
+
+                        if GroceryTripActivityService.shared.isActive {
+                            Button(role: .destructive) {
+                                Task {
+                                    await GroceryTripActivityService.shared.end()
+                                    HapticManager.mediumImpact()
+                                }
+                            } label: {
+                                Label("End shopping trip", systemImage: "checkmark.circle.fill")
+                            }
+                        } else {
+                            Button {
+                                Task {
+                                    let total = appState.groceryItems.count
+                                    let checked = appState.groceryItems.filter(\.checked).count
+                                    await GroceryTripActivityService.shared.start(
+                                        listTitle: "Grocery Trip",
+                                        totalCount: total,
+                                        checkedCount: checked
+                                    )
+                                    HapticManager.success()
+                                }
+                            } label: {
+                                Label("Start shopping trip", systemImage: "cart.fill.badge.plus")
+                            }
+                            .disabled(appState.groceryItems.isEmpty)
+                        }
                     } label: {
                         Image(systemName: "wand.and.stars")
                     }

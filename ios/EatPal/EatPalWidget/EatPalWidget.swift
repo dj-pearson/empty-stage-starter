@@ -328,6 +328,7 @@ struct MealPlanWidgetView: View {
 struct EatPalWidgetBundle: WidgetBundle {
     var body: some Widget {
         EatPalMealWidget()
+        GroceryTripLiveActivity()
     }
 }
 

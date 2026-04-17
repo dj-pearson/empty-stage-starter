@@ -1771,3 +1771,123 @@ Extended the existing EatPalWidget with three Lock Screen families so users can 
 - `MealPlanWidgetView` router pattern is cleaner than per-family `#if`/`#available` blocks inside the widget configuration — keeps each family's layout in its own struct.
 
 ---
+
+## 2026-04-17 - US-144: HealthKit nutrition write-back on meal log (DONE)
+
+### What was implemented
+Users who opt in now have their logged meals' nutrition written to the iPhone Health app. When a plan entry transitions to `ate` and the linked recipe has nutrition data, EatPal bundles the macros into a single HKCorrelation of type `.food` so Health surfaces a coherent meal entry rather than four disconnected quantity samples.
+
+### Files changed / added
+- `ios/EatPal/EatPal/EatPal.entitlements`
+  - Added `com.apple.developer.healthkit` (true) and the empty `com.apple.developer.healthkit.access` array (defaults to standard dietary access).
+
+- `ios/EatPal/EatPal/Resources/Info.plist`
+  - Added NSHealthShareUsageDescription (opt-in wording around reading) and NSHealthUpdateUsageDescription (opt-in wording around writing) — both explicit about the "only if you opt in" nature.
+
+- `ios/EatPal/EatPal/Services/HealthKitService.swift` (new, ~130 LOC)
+  - `@MainActor final class HealthKitService` singleton.
+  - `isAvailable` proxies HKHealthStore.isHealthDataAvailable.
+  - `isEnabled` is UserDefaults-backed (`eatpal_health_sync_enabled`) — distinct from the system-level HealthKit authorization; users can toggle off in-app without revoking system access.
+  - `requestAuthorization()` asks for share (not read) on the four macros + the `.food` correlation type. Returns true if at least one type reports `.sharingAuthorized` after the prompt.
+  - `writeMeal(calories:proteinGrams:carbsGrams:fatGrams:mealDate:mealName:)` no-ops when `!isEnabled` or `!isAvailable`; otherwise constructs one HKQuantitySample per non-nil/non-zero macro and bundles them into a single `HKCorrelation(type: .food, start: end:, objects:, metadata:)` with `HKMetadataKeyFoodType` set to the meal name. No kid names, no EatPal IDs — HealthKit is not our PII bucket.
+
+- `ios/EatPal/EatPal/App/AppState.swift`
+  - `updatePlanEntry` now fires `Task { await writeHealthSample(for: planEntries[index]) }` when `updates.result == MealResult.ate.rawValue`.
+  - New private `writeHealthSample(for:)` resolves the linked recipe + nutritionInfo, formats the plan's date string back to `Date`, and calls the service. SentryService breadcrumb on success, capture on error.
+
+- `ios/EatPal/EatPal/Views/Settings/HealthSettingsView.swift` (new, ~95 LOC)
+  - Form with one Toggle that triggers `requestAuthorization` on flip-to-on.
+  - Denial alert with a "Open Settings" button linking to the iOS Settings app.
+  - Link to the Health app via `x-apple-health://`.
+  - Footer copy adapts to current state (enabled / disabled / unavailable) so users always know what the toggle means.
+
+- `ios/EatPal/EatPal/Views/Settings/SettingsView.swift`
+  - Preferences section gained a "Sync to Health" NavigationLink between "Appearance" and the existing support links.
+
+### Design decisions
+- Opt-in is a two-gate affair: the app-level toggle (`isEnabled`) AND HealthKit's system authorization. Toggle flips are the single source of truth for our side; system auth is owned by iOS.
+- HKCorrelation over individual samples — meals in Health should read as meals, not as a scattered timeline of macro points. HealthKit's own Food tab joins them the same way.
+- Only recipes carry nutrition today; the Food model has no macros field. Food-only plan entries are skipped silently — there's no honest number to write. Adding macros to Food is a data-model change that belongs to a separate story.
+- No reads, no imports: this pass is write-only. Reading HealthKit data would open a consent surface the user doesn't need yet.
+
+### Not in this pass
+- Importing dietary data FROM Health for the AICoach / meal planning suggestions.
+- Per-kid correlation — HealthKit is anchored to the device owner's identity; multi-kid household tracking in Health isn't a supported pattern and would surprise users. Keeping the correlation anonymous-ish (just food name metadata) is safer.
+- A "Last synced N minutes ago" status line in the Settings screen — simple follow-up.
+
+### Learnings
+- `HKHealthStore.requestAuthorization(toShare:read:)` doesn't report whether the user tapped Allow or Deny (Apple privacy design). The post-request check is to look at `authorizationStatus(for:)` per type and infer intent.
+- `HKCorrelation` needs the contained samples to all be authorised; if one type is denied, the whole correlation fails to save. Worth surfacing as a single generic error to the user rather than per-type diagnostics.
+- `HKMetadataKeyFoodType` is the right slot for a human-readable meal name; the system shows it in the detail view in Health.
+- `x-apple-health://` opens the Health app to its main tab — useful for a "verify your data" shortcut from Settings.
+
+---
+
+## 2026-04-17 - US-145: Live Activities + Dynamic Island (grocery trip) (DONE first pass)
+
+### What was implemented
+Users can start a "shopping trip" Live Activity that tracks progress through the grocery list on the Lock Screen and in the Dynamic Island. Every time an item is checked off (online or offline-queued), the activity updates with the new count and the name of the just-added item. Trip auto-ends 3 seconds after hitting 100%.
+
+Scoped down from the original US-145 multi-activity brief: cook-mode Live Activity is deferred until iOS has a CookMode view (web has one; iOS doesn't yet). AI-meal-plan-generation activity isn't worth the ceremony because the flow is short (seconds, not minutes).
+
+### Files changed / added
+- `ios/EatPal/EatPal/Resources/Info.plist`
+  - `NSSupportsLiveActivities = true`
+  - `NSSupportsLiveActivitiesFrequentUpdates = true` (lets us update on every check-off without being throttled)
+
+- `ios/EatPal/project.yml`
+  - Created a new source folder reference `path: Shared` listed under BOTH the `EatPal` target and the `EatPalWidgetExtension` target. XcodeGen compiles the shared Swift files into both binaries — the clean way to share ActivityAttributes between main app and widget.
+
+- `ios/EatPal/Shared/GroceryTripActivityAttributes.swift` (new, ~35 LOC)
+  - `public struct GroceryTripAttributes: ActivityAttributes`.
+  - `TripState: Codable, Hashable` — totalCount, checkedCount, lastCheckedName, with computed `progress` and `isComplete`.
+  - Static attrs: `listTitle`, `startedAt`.
+  - `public` API surface because the widget extension lives in a different module.
+
+- `ios/EatPal/EatPal/Services/GroceryTripActivityService.swift` (new, ~95 LOC)
+  - `@MainActor` singleton. One active activity at a time; init recovers any in-flight Activity from a previous launch.
+  - `isAvailable` checks `ActivityAuthorizationInfo().areActivitiesEnabled`.
+  - `start(listTitle:totalCount:checkedCount:)` constructs Attributes + TripState, requests an Activity with an 8-hour staleDate safety net.
+  - `update(totalCount:checkedCount:lastCheckedName:)` coalesces state updates; auto-ends 3 seconds after `isComplete` becomes true so the user sees the 100% bar.
+  - `end(finalState:dismissalPolicy:)` cleans up.
+  - All failures route to SentryService.
+
+- `ios/EatPal/EatPalWidget/GroceryTripLiveActivity.swift` (new, ~95 LOC)
+  - `Widget` conforming to `ActivityConfiguration(for: GroceryTripAttributes.self)`.
+  - Lock Screen view: title + progress bar + count + "Just added:" subtitle or "All done!" banner.
+  - Dynamic Island expanded: leading (title), trailing (count), center (last added), bottom (progress bar).
+  - Compact leading/trailing: cart icon + count ratio.
+  - Minimal: cart icon.
+  - `widgetURL(URL(string: "eatpal://openGroceryList"))` so tapping the activity deep-links into the grocery tab via DeepLinkHandler.
+
+- `ios/EatPal/EatPalWidget/EatPalWidget.swift`
+  - `EatPalWidgetBundle.body` now includes `GroceryTripLiveActivity()` alongside `EatPalMealWidget()`.
+
+- `ios/EatPal/EatPal/App/AppState.swift`
+  - `toggleGroceryItem` captures item name upfront and, on either success or offline-queue fallback, calls `updateGroceryTripActivity(lastCheckedName: checked ? name : "")`.
+  - New private `updateGroceryTripActivity(lastCheckedName:)` recalculates totals and updates the activity — no-op when none is active.
+
+- `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift`
+  - Quick-add menu gained a divider + Start shopping trip button (when none active, disabled if the list is empty) OR End shopping trip button (destructive-styled, when active). Start passes initial total/checked counts so the activity begins accurate.
+
+### Design decisions
+- **Shared attributes via a new Shared/ folder** rather than duplicating the struct or reaching for a Swift package. XcodeGen's multi-target `path: Shared` is the idiomatic fit.
+- **One activity at a time**. Start-while-active becomes an update (the user fell out of the flow once; don't stack Lock Screen banners on them).
+- **3-second delay before auto-end** after 100%: long enough for the win feel, short enough not to crowd the Lock Screen.
+- **Offline updates work**: even when a toggle queues via OfflineStore, the Live Activity still updates locally. The user sees their trip progress regardless of network.
+- **Dynamic Island compact trailing shows "checked/total"** — the single most useful glance in a crowded UI.
+
+### Not in this pass
+- Cook-mode Live Activity. Unblocked once iOS has a CookMode view.
+- AI-meal-plan-generation activity. Waiting until the flow becomes slow enough to warrant one.
+- Push-updated Live Activities (ActivityKit supports pushType:.token). Useful when another device / the web app toggles an item mid-trip; punt.
+- "Shopping at <store>" label — would require the grocery_lists.storeName field surfaced in the UI; trivial follow-up.
+
+### Learnings
+- Shared types between app + widget: multi-target source paths in XcodeGen (`path: Shared` under both targets) is cleaner than a Swift package and more discoverable than file-by-file target membership juggling.
+- `ActivityContent(state:staleDate:)` with a long staleDate (8 hours) is the right abandonment safety net — iOS will silently expire stuck activities without user action.
+- `ActivityAuthorizationInfo().areActivitiesEnabled` respects both the system-wide Live Activities toggle and any per-app setting.
+- `Activity<A>.activities.first` on init is the recovery pattern; without it, force-quit + relaunch loses the handle even though the activity keeps rendering on the Lock Screen.
+- `.frequentUpdates` entitlement unlocks rapid update calls without throttling — required when updating on every checkoff.
+
+---

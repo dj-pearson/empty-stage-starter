@@ -89,9 +89,17 @@
     <string>EatPal uses the microphone so you can add grocery items by voice.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>EatPal uses speech recognition to turn what you say into grocery items. Recognition runs on-device when available.</string>
+    <key>NSHealthShareUsageDescription</key>
+    <string>EatPal reads your Health data so we can show how recorded meals fit into your day — only if you opt in.</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>EatPal saves logged meals to Health as calories, protein, carbs, and fat so your nutrition picture stays in sync — only if you opt in.</string>
     <key>UIBackgroundModes</key>
     <array>
         <string>remote-notification</string>
     </array>
+    <key>NSSupportsLiveActivities</key>
+    <true/>
+    <key>NSSupportsLiveActivitiesFrequentUpdates</key>
+    <true/>
 </dict>
 </plist>

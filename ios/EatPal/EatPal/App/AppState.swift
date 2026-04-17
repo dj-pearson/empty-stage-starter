@@ -342,6 +342,11 @@ final class AppState: ObservableObject {
             try await dataService.updatePlanEntry(id, updates: updates)
             if let result = updates.result {
                 toast.success("Result logged", message: "Marked as \(result)")
+                // US-144: write nutrition to Health when the meal was eaten
+                // and the user has opted in. No-op otherwise.
+                if result == MealResult.ate.rawValue {
+                    Task { await writeHealthSample(for: planEntries[index]) }
+                }
             }
             HapticManager.lightImpact()
         } catch {
@@ -349,6 +354,40 @@ final class AppState: ObservableObject {
             toast.error("Failed to update meal", message: error.localizedDescription)
             HapticManager.error()
             throw error
+        }
+    }
+
+    /// US-144: pushes the linked recipe's macros to HealthKit as a single
+    /// food correlation dated to the meal's date. Silently skipped when the
+    /// user hasn't opted in, HealthKit isn't available, or the linked
+    /// recipe has no nutrition data attached (food-only plan entries
+    /// don't currently carry macros in the schema).
+    private func writeHealthSample(for entry: PlanEntry) async {
+        let service = HealthKitService.shared
+        guard service.isEnabled, service.isAvailable else { return }
+
+        guard let recipeId = entry.recipeId,
+              let recipe = recipes.first(where: { $0.id == recipeId }),
+              let nutrition = recipe.nutritionInfo else { return }
+
+        let formatter = DateFormatter.isoDate
+        let mealDate = formatter.date(from: entry.date) ?? Date()
+
+        do {
+            try await service.writeMeal(
+                calories: nutrition.calories,
+                proteinGrams: nutrition.proteinG,
+                carbsGrams: nutrition.carbsG,
+                fatGrams: nutrition.fatG,
+                mealDate: mealDate,
+                mealName: recipe.name
+            )
+            SentryService.leaveBreadcrumb(
+                category: "healthkit",
+                message: "Wrote food correlation for \(recipe.name)"
+            )
+        } catch {
+            SentryService.capture(error, extras: ["context": "healthkit_writeMeal"])
         }
     }
 
@@ -432,12 +471,14 @@ final class AppState: ObservableObject {
         guard let index = groceryItems.firstIndex(where: { $0.id == id }) else { return }
         groceryItems[index].checked.toggle()
         let checked = groceryItems[index].checked
+        let itemName = groceryItems[index].name
         do {
             try await dataService.updateGroceryItem(
                 id,
                 updates: GroceryItemUpdate(checked: checked)
             )
             HapticManager.lightImpact()
+            await updateGroceryTripActivity(lastCheckedName: checked ? itemName : "")
         } catch {
             if isNetworkError(error) {
                 OfflineStore.shared.enqueueUpdate(
@@ -446,6 +487,7 @@ final class AppState: ObservableObject {
                     entityId: id
                 )
                 HapticManager.lightImpact()
+                await updateGroceryTripActivity(lastCheckedName: checked ? itemName : "")
             } else {
                 groceryItems[index].checked.toggle()
                 toast.error("Failed to update item")
@@ -453,6 +495,22 @@ final class AppState: ObservableObject {
                 throw error
             }
         }
+    }
+
+    // MARK: - Live Activity helpers (US-145)
+
+    /// Refreshes the grocery-trip Live Activity counts if one is running.
+    /// Silently no-ops when no activity is active.
+    private func updateGroceryTripActivity(lastCheckedName: String) async {
+        let service = GroceryTripActivityService.shared
+        guard service.isActive else { return }
+        let total = groceryItems.count
+        let checked = groceryItems.filter(\.checked).count
+        await service.update(
+            totalCount: total,
+            checkedCount: checked,
+            lastCheckedName: lastCheckedName
+        )
     }
 
     // MARK: - Offline helpers (US-150)

@@ -2716,8 +2716,8 @@
         "Swift builds cleanly"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": "iOS UX AUDIT - Tier 2: niche-leading differentiator."
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 2: DONE 2026-04-17. EatPal.entitlements gained com.apple.developer.healthkit (true). Info.plist gained NSHealthShareUsageDescription + NSHealthUpdateUsageDescription. New Services/HealthKitService.swift with isAvailable (HKHealthStore.isHealthDataAvailable), isEnabled (UserDefaults-backed user opt-in distinct from system authorization), requestAuthorization async, writeTypes covering dietaryEnergyConsumed / dietaryProtein / dietaryCarbohydrates / dietaryFatTotal + the .food correlation type, and writeMeal(calories:proteinGrams:carbsGrams:fatGrams:mealDate:mealName:) which bundles macros into one HKCorrelation so Health shows a single meal entry (not four orphan samples). Metadata uses HKMetadataKeyFoodType = mealName, no PII. AppState.updatePlanEntry now fires Task { await writeHealthSample(for:) } when result becomes MealResult.ate.rawValue and the entry has a linked recipe with nutritionInfo. New Views/Settings/HealthSettingsView.swift provides the toggle UI — flipping on triggers requestAuthorization, shows 'Open Settings' alert on denial, links to the Health app with x-apple-health:// URL. SettingsView got a new Preferences row 'Sync to Health' navigating into HealthSettingsView. Food-only plan entries (no linked recipe with nutrition) are silently skipped. Not yet verified on device."
     },
     {
       "id": "US-145",
@@ -2735,8 +2735,8 @@
         "Swift builds cleanly"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": "iOS UX AUDIT - Tier 3: Lock Screen + Dynamic Island presence."
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 3: DONE 2026-04-17. Scope: grocery-trip Live Activity (cook-mode and AI-plan-generation Live Activities deferred — no CookMode on iOS yet; AI plan flow is short enough to not need one). Info.plist gained NSSupportsLiveActivities + NSSupportsLiveActivitiesFrequentUpdates. New ios/EatPal/Shared/ folder added to BOTH EatPal and EatPalWidgetExtension target source paths in project.yml so the shared GroceryTripAttributes type compiles into both. Shared/GroceryTripActivityAttributes.swift defines ActivityAttributes with TripState (totalCount, checkedCount, lastCheckedName) + computed progress and isComplete; static attrs listTitle + startedAt. Services/GroceryTripActivityService.swift @MainActor singleton handles start/update/end via Activity<GroceryTripAttributes>.request/update/end with 8-hour staleDate safety net, recovers lingering activities on init, auto-ends 3s after 100% completion. EatPalWidget/GroceryTripLiveActivity.swift renders Lock Screen banner (title + count + progress bar + last-checked subtitle) and Dynamic Island expanded (leading: title, trailing: count, center: last added, bottom: progress) / compact (cart icon + count) / minimal (cart icon). Registered alongside EatPalMealWidget in the WidgetBundle. AppState.toggleGroceryItem now calls updateGroceryTripActivity when a toggle succeeds or queues (works online + offline). GroceryView quick-add menu gained Start shopping trip (when no active activity) / End shopping trip (when one is running). widgetURL deep-links eatpal://openGroceryList. Not yet verified on device."
     },
     {
       "id": "US-146",
