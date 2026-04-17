@@ -27,16 +27,30 @@ final class NetworkMonitor: ObservableObject {
     private func startMonitoring() {
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
-                self?.isConnected = path.status == .satisfied
+                guard let self else { return }
+
+                let wasConnected = self.isConnected
+                let nowConnected = path.status == .satisfied
+                self.isConnected = nowConnected
 
                 if path.usesInterfaceType(.wifi) {
-                    self?.connectionType = .wifi
+                    self.connectionType = .wifi
                 } else if path.usesInterfaceType(.cellular) {
-                    self?.connectionType = .cellular
+                    self.connectionType = .cellular
                 } else if path.usesInterfaceType(.wiredEthernet) {
-                    self?.connectionType = .wired
+                    self.connectionType = .wired
                 } else {
-                    self?.connectionType = .unknown
+                    self.connectionType = .unknown
+                }
+
+                // US-150: drain the offline write queue the moment we're back
+                // online, whether from a clean launch or after a flaky network.
+                if !wasConnected && nowConnected {
+                    SentryService.leaveBreadcrumb(
+                        category: "network",
+                        message: "connectivity restored — flushing offline queue"
+                    )
+                    await OfflineStore.shared.syncPendingMutations()
                 }
             }
         }

@@ -1657,3 +1657,117 @@ Three App Intents registered via AppShortcutsProvider so users can talk to EatPa
 - MealSlot → MealSlotAppEnum mapping: keeping Siri vocabulary lean (4 options) and mapping snack → {snack1, snack2} internally is friendlier than forcing users to say "snack one".
 
 ---
+
+## 2026-04-17 - US-150: OfflineStore durable write queue + NetworkMonitor wiring (DONE first pass)
+
+### What was implemented
+Promoted OfflineStore.swift from a sync-delete placeholder into a durable queue that replays insert / update / delete mutations against Supabase when the device regains connectivity. NetworkMonitor now triggers the drain automatically on offline→online transitions. AppState's grocery mutations route to the queue instead of rolling back when the failure is network-related.
+
+### Files changed
+- `ios/EatPal/EatPal/Services/OfflineStore.swift`
+  - Added `Op` enum (insert/update/delete) and `Table` enum (foods, kids, recipes, plan_entries, grocery_items).
+  - New `@Published` state: `pendingMutationCount`, `isSyncing`, `lastSyncError` for UI diagnostics.
+  - New typed enqueue helpers: `enqueueInsert<T: Encodable>`, `enqueueUpdate<T: Encodable>`, `enqueueDelete(table:entityId:)`.
+  - `syncPendingMutations()` rewritten with concurrent-run guard, per-table dispatch (groceryItems / foods / planEntries / kids / recipes) that decodes stored JSON payloads back into domain structs and posts the right typed insert/update/delete to Supabase.
+  - Sync failures route through SentryService.capture with a `queue: "OfflineStore"` tag; sync stops on first failure to preserve ordering.
+  - `refreshPendingCount()` fires after every enqueue / clear so the published count stays accurate.
+
+- `ios/EatPal/EatPal/Utilities/NetworkMonitor.swift`
+  - Tracks offline→online edge. On the transition, leaves a Sentry breadcrumb and awaits `OfflineStore.shared.syncPendingMutations()`.
+
+- `ios/EatPal/EatPal/App/AppState.swift`
+  - `addGroceryItem`, `deleteGroceryItem`, `toggleGroceryItem` updated with an `if isNetworkError(error) { ... }` branch that keeps the optimistic state AND queues the mutation, plus an info-level "Queued for sync" toast on add.
+  - New `isNetworkError(_:)` helper inspects URLError / NSURLErrorDomain codes (notConnectedToInternet, networkConnectionLost, timedOut, cannotFindHost, cannotConnectToHost, internationalRoamingOff, dataNotAllowed) to distinguish connectivity failures from semantic failures.
+
+### Behaviour summary
+- User adds "milk" to grocery while offline → row appears in the list, toast says "Queued for sync", OfflineStore has 1 pending mutation. User comes back online → NetworkMonitor fires, OfflineStore drains the queue, Supabase gets the insert.
+- User deletes an item offline → row disappears locally, delete queued with table=grocery_items, operation=delete.
+- Non-network errors (validation, RLS reject) still rollback the optimistic state — queueing is reserved for transient connectivity failures.
+
+### Not in this pass (follow-ups)
+- Remaining AppState methods (updateGroceryItem, addFood/updateFood/deleteFood, plan_entries, kids, recipes) still follow the classic optimistic-then-rollback pattern. Retrofitting them is mechanical but intentionally scoped out to keep this change focused.
+- No in-app queue diagnostic view yet (Settings row showing pendingMutationCount + lastSyncError is a good next-pass addition).
+- No conflict resolution against the realtime channel — last-write-wins in practice, which is fine for grocery items but may need a rethink for plan entries where two devices could vote differently.
+- JSON encoding uses the default JSONEncoder (matching domain-struct CodingKeys); the private `JSONEncoder.supabaseSnakeCase` extension is a placeholder in case we switch to `.convertToSnakeCase` in the future.
+
+### Learnings
+- `URLError` and `NSURLErrorDomain` overlap but aren't identical — covering both code paths in `isNetworkError` handles the various stacks in supabase-swift / URLSession / async-http-client.
+- Preserving queue ordering by stopping on the first failure is important for correctness (a delete followed by an insert of the same id should NOT be reordered).
+- SwiftData-backed queue persists across app launches, which is necessary — a user might kill the app between going offline and coming back online.
+
+---
+
+## 2026-04-17 - US-152: Widget freshness via App Group UserDefaults (DONE)
+
+### What was implemented
+Home-screen widget data now refreshes every time the relevant AppState collections mutate, via a debounced Combine pipeline that writes a snapshot to the shared App Group UserDefaults and asks WidgetKit to reload timelines.
+
+### Files changed / added
+- `ios/EatPal/EatPal/Services/WidgetSnapshot.swift` (new, ~90 LOC)
+  - `@MainActor enum WidgetSnapshot` namespace: `appGroup = "group.com.eatpal.app"`, `Key` constants (meals, grocery_count, pantry_low_count, tonight_dish, try_bite_streak, last_updated_at), `widgetKind = "EatPalMealWidget"`.
+  - `Payload` struct holds the snapshot (meals array with slot/foodName/icon, grocery / pantry-low / try-bite counts, tonight's dish name).
+  - `write(_:)` debounces 0.5s via DispatchWorkItem; `writeImmediately(_:)` bypasses for launch / background-handoff paths.
+  - `persist(...)` writes each key and calls `WidgetCenter.shared.reloadTimelines(ofKind:)`.
+
+- `ios/EatPal/EatPal/App/AppState.swift`
+  - `init()` now calls `setupWidgetSnapshotSync()`.
+  - Combine sink: `$planEntries.combineLatest($foods, $groceryItems, $recipes).debounce(500ms).sink { refreshWidgetSnapshot() }` stored in a new `cancellables: Set<AnyCancellable>`.
+  - `refreshWidgetSnapshot()` composes the Payload: today's meals for the active kid (or across all kids), tonight's dinner name (recipe preferred over food), pantry-low count (qty ∈ (0, 2]), unchecked grocery count, try-bite streak placeholder.
+
+- `ios/EatPal/EatPal/EatPalWidget/EatPalWidget.swift`
+  - `MealPlanEntry` extended with `pantryLowCount`, `tonightDish: String?`, `tryBiteStreak`.
+  - `loadFromAppGroup()` reads the three new keys.
+  - Placeholder + #Preview updated to include the new fields.
+
+### Design decisions
+- Combine observation of @Published collections means the snapshot auto-refreshes for every mutation path — the app never has to call `WidgetSnapshot.write(...)` manually, and we can't forget.
+- 500ms debounce avoids thrashing WidgetKit during batch inserts (recipe→grocery, scan-a-list, voice-add multi-item).
+- Payload uses primitive-only dict for `meals` so reading from the widget doesn't require access to the domain Codable types — matches the existing key naming ("widget_meals") so the migration is zero-downtime.
+- try-bite streak is a 0 placeholder; the actual streak calc isn't scoped here but the storage path is ready.
+
+### Not in this pass
+- Lock Screen widgets (`.accessoryRectangular`, `.accessoryInline`, `.accessoryCircular`) — covered by US-146 next.
+- Interactive widget buttons (check off a grocery item from the home screen) — covered by US-147.
+- Using `AppGroup` for the OfflineStore SwiftData container so the widget target can also read cached data — overkill; App Group UserDefaults already covers the widget's needs.
+
+### Learnings
+- Widgets live in their own process. The only realistic IPC surfaces between app ↔ widget are App Group UserDefaults (for small snapshots), shared files (for bigger blobs), and Core/SwiftData with an App-Group-scoped store. UserDefaults is the right tool for the widget data here — small, flat, flush-on-write.
+- `WidgetCenter.shared.reloadTimelines(ofKind:)` takes the `kind` string that matches the `StaticConfiguration`'s kind. Storing it in `WidgetSnapshot.widgetKind` avoids magic-string drift.
+- Combine's `combineLatest` fires once for every upstream publisher change. Debouncing by 500ms smooths bursts cleanly; no need for `.removeDuplicates` since the snapshot contents are what the widget ultimately cares about.
+
+---
+
+## 2026-04-17 - US-146: Lock Screen widget families (accessoryRectangular / Inline / Circular) (DONE)
+
+### What was implemented
+Extended the existing EatPalWidget with three Lock Screen families so users can see tonight's dinner, grocery count, pantry status, or their try-bite streak at a glance from the Lock Screen.
+
+### Files changed
+- `ios/EatPal/EatPalWidget/EatPalWidget.swift`
+  - New view structs:
+    - `MealPlanAccessoryRectangular` — two-line layout with "Tonight" header + dish name + grocery/pantry status chips. Uses `.widgetAccentable()` so icons and the "Tonight" label pick up the OS tint.
+    - `MealPlanAccessoryInline` — single tinted Label using iOS's inline widget style. Priority order: tonight's dish > grocery count > pantry-low count > EatPal branding fallback.
+    - `MealPlanAccessoryCircular` — ZStack with `AccessoryWidgetBackground()` + stacked icon/number. Shows the try-bite streak when > 0, otherwise grocery count.
+  - New `MealPlanWidgetView` router: reads `@Environment(\.widgetFamily)` and dispatches to the right sub-view. Handles `.containerBackground(for: .widget)` with `.systemBackground` for the rectangular system widgets and `Color.clear` for the accessory widgets (Lock Screen widgets get the system's tinted mask automatically).
+  - `EatPalMealWidget.supportedFamilies` extended from `[.systemSmall, .systemMedium]` to include `.accessoryRectangular`, `.accessoryInline`, `.accessoryCircular`.
+  - `configurationDisplayName` / `description` tightened to reflect all the data surfaced.
+
+### Design decisions
+- **Rectangular** is the most information-dense; it should be the user's default pick. Led with tonight's dish because that's the single most useful piece of "glanceable meal planning."
+- **Inline** is space-constrained — I prioritised tonight's dish because the user has already explicitly chosen to show EatPal on their Lock Screen; showing "EatPal" alone would be useless.
+- **Circular** favours the try-bite streak because it's a repeat-delight loop (streak go up = motivation) and falls back to grocery count when there's no streak to show.
+- All three read from the same App Group snapshot the home-screen widgets already use (US-152) — no new writes needed.
+- `.widgetAccentable()` is the right tool for accessory widgets to opt in to OS-tinted rendering. Text inside is dimmed by default; accentable elements are shown at full contrast.
+
+### Not in this pass
+- Interactive widget buttons (tap to check off grocery items) — scoped to US-147 because it needs an AppIntent that can execute from the widget extension process.
+- Control Center widget (US-148) is iOS 18+ and a separate target class.
+- Deep links from widgets — tapping a Lock Screen rectangular widget should open the Grocery or Planner tab directly. The `DeepLinkHandler` already understands eatpal://openGroceryList / openMealPlan; wiring `widgetURL(_:)` onto each view is a ~5-line follow-up.
+
+### Learnings
+- Accessory widget container background is special: pass `Color.clear` (or skip `containerBackground` — the system applies its own tinted mask). Passing a solid color breaks the Lock Screen look.
+- `AccessoryWidgetBackground()` is a ready-made circular background that matches Apple's own widgets. Use it on circular.
+- `widgetAccentable()` takes no argument; it just marks the view as eligible to be drawn in the accent tint. No-op on system-size widgets.
+- `MealPlanWidgetView` router pattern is cleaner than per-family `#if`/`#available` blocks inside the widget configuration — keeps each family's layout in its own struct.
+
+---

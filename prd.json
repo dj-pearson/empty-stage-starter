@@ -2753,8 +2753,8 @@
         "Swift builds cleanly"
       ],
       "priority": 32,
-      "passes": false,
-      "notes": "iOS UX AUDIT - Tier 3: Lock Screen real estate."
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 3: DONE 2026-04-17. EatPalWidget.swift supportedFamilies expanded from [.systemSmall, .systemMedium] to include .accessoryRectangular (Tonight: <dish> + grocery/pantry-low counts, widgetAccentable), .accessoryInline (single tinted line: tonight's dish → grocery count → pantry-low → fallback), .accessoryCircular (try-bite streak count with star or grocery count with cart icon, AccessoryWidgetBackground). Added MealPlanWidgetView router reading @Environment(\\.widgetFamily) to pick the right layout + container background (Color.clear for accessories, .systemBackground for system widgets). Reuses WidgetSnapshot keys from US-152 so data flows through the same pipeline. Not yet verified on device — Lock Screen widgets need iOS 16+ (all covered by iOS 17 deployment target)."
     },
     {
       "id": "US-147",
@@ -2818,8 +2818,8 @@
         "Swift builds cleanly"
       ],
       "priority": 36,
-      "passes": false,
-      "notes": "iOS UX AUDIT - Tier 4: foundational for reliability."
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 4: DONE 2026-04-17 (first pass). OfflineStore promoted to a durable SwiftData-backed write queue with typed enqueue helpers (enqueueInsert<T: Encodable>, enqueueUpdate, enqueueDelete) keyed by Table enum (foods / kids / recipes / plan_entries / grocery_items). syncPendingMutations now dispatches per-table and decodes JSON payloads back into domain structs, calling client.from(table).insert/update/delete. Sent Sentry breadcrumbs + error capture on sync failure. Published pendingMutationCount + isSyncing + lastSyncError so the UI can surface diagnostics. NetworkMonitor now tracks offline→online transitions and drains the queue automatically (`if !wasConnected && nowConnected { await OfflineStore.shared.syncPendingMutations() }`). AppState.addGroceryItem / deleteGroceryItem / toggleGroceryItem gained an isNetworkError(_:) classifier (URLError / NSURLErrorDomain codes) — on network errors the optimistic state is preserved and the mutation enqueued with a 'Queued for sync' toast. Remaining grocery + plan + food mutation methods can be retrofitted with the same pattern. Not yet verified on device."
     },
     {
       "id": "US-151",
@@ -2852,8 +2852,8 @@
         "Swift builds cleanly; widget preview reflects latest data during dev"
       ],
       "priority": 38,
-      "passes": false,
-      "notes": "iOS UX AUDIT - Tier 4: widget accuracy."
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 4: DONE 2026-04-17. New Services/WidgetSnapshot.swift namespaces the App Group id (group.com.eatpal.app), key constants (meals, grocery_count, pantry_low_count, tonight_dish, try_bite_streak, last_updated_at), and widget kind (EatPalMealWidget). Exposes Payload struct + write(_:) (debounced 500ms) and writeImmediately(_:). Persists to UserDefaults(suiteName: appGroup) and calls WidgetCenter.shared.reloadTimelines(ofKind:). AppState gained an init() with setupWidgetSnapshotSync() — Combine sink on $planEntries.combineLatest($foods, $groceryItems, $recipes) debounced 500ms, calling refreshWidgetSnapshot() which composes today's meals for the active kid, pantry-low count (qty > 0 && qty <= 2), unchecked grocery count, and tonight's dish. EatPalWidget.swift MealPlanEntry extended with pantryLowCount, tonightDish, tryBiteStreak fields; loadFromAppGroup reads the new keys. tryBiteStreak is a placeholder 0 pending a future streak-calc story. Not yet verified on device — WidgetCenter reload confirmation requires actual widget add to Home Screen."
     }
   ]
 }

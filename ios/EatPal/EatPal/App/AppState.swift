@@ -24,6 +24,85 @@ final class AppState: ObservableObject {
     private let dataService = DataService.shared
     private let realtimeService = RealtimeService.shared
     private let toast = ToastManager.shared
+    private var cancellables: Set<AnyCancellable> = []
+
+    init() {
+        setupWidgetSnapshotSync()
+    }
+
+    // MARK: - Widget Snapshot Sync (US-152)
+
+    /// Observes the @Published collections that feed the home/Lock Screen
+    /// widget and pushes a debounced snapshot into App Group UserDefaults
+    /// any time they change. Widget timeline reloads follow automatically.
+    private func setupWidgetSnapshotSync() {
+        $planEntries
+            .combineLatest($foods, $groceryItems, $recipes)
+            .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
+            .sink { [weak self] _, _, _, _ in
+                self?.refreshWidgetSnapshot()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func refreshWidgetSnapshot() {
+        let todayString = DateFormatter.isoDate.string(from: Date())
+        let kidId = activeKidId
+
+        // Today's meals (by slot): pick the first food per slot for the
+        // active kid, or across all kids when no active kid is set.
+        let todaysEntries = planEntries.filter { entry in
+            entry.date == todayString && (kidId == nil || entry.kidId == kidId)
+        }
+
+        let widgetMeals: [WidgetSnapshot.Payload.Meal] = MealSlot.allCases.compactMap { slot in
+            guard let entry = todaysEntries.first(where: { $0.mealSlot == slot.rawValue }) else {
+                return nil
+            }
+            let foodName: String = {
+                if let recipeId = entry.recipeId,
+                   let recipe = recipes.first(where: { $0.id == recipeId }) {
+                    return recipe.name
+                }
+                if let food = foods.first(where: { $0.id == entry.foodId }) {
+                    return food.name
+                }
+                return "Unnamed"
+            }()
+            return WidgetSnapshot.Payload.Meal(
+                slot: slot.displayName,
+                foodName: foodName,
+                icon: slot.icon
+            )
+        }
+
+        let tonightDish = todaysEntries
+            .first(where: { $0.mealSlot == MealSlot.dinner.rawValue })
+            .flatMap { entry -> String? in
+                if let recipeId = entry.recipeId,
+                   let recipe = recipes.first(where: { $0.id == recipeId }) {
+                    return recipe.name
+                }
+                return foods.first(where: { $0.id == entry.foodId })?.name
+            }
+
+        let pantryLowCount = foods.filter { food in
+            guard let qty = food.quantity else { return false }
+            return qty > 0 && qty <= 2
+        }.count
+
+        let unchecked = groceryItems.filter { !$0.checked }.count
+
+        let payload = WidgetSnapshot.Payload(
+            meals: widgetMeals,
+            groceryCount: unchecked,
+            pantryLowCount: pantryLowCount,
+            tonightDish: tonightDish,
+            tryBiteStreak: 0  // placeholder — real streak calc is a future story
+        )
+
+        WidgetSnapshot.write(payload)
+    }
 
     // MARK: - Computed Properties
 
@@ -301,10 +380,17 @@ final class AppState: ObservableObject {
             toast.success("Item added", message: "\(item.name) added to list")
             HapticManager.success()
         } catch {
-            groceryItems.removeAll { $0.id == item.id }
-            toast.error("Failed to add item", message: error.localizedDescription)
-            HapticManager.error()
-            throw error
+            if isNetworkError(error) {
+                // US-150: keep the optimistic update and queue for later replay.
+                OfflineStore.shared.enqueueInsert(item, table: .groceryItems, entityId: item.id)
+                toast.info("Queued for sync", message: "\(item.name) will save when you're back online.")
+                HapticManager.lightImpact()
+            } else {
+                groceryItems.removeAll { $0.id == item.id }
+                toast.error("Failed to add item", message: error.localizedDescription)
+                HapticManager.error()
+                throw error
+            }
         }
     }
 
@@ -330,10 +416,15 @@ final class AppState: ObservableObject {
             try await dataService.deleteGroceryItem(id)
             HapticManager.mediumImpact()
         } catch {
-            groceryItems.append(contentsOf: removed)
-            toast.error("Failed to delete item", message: error.localizedDescription)
-            HapticManager.error()
-            throw error
+            if isNetworkError(error) {
+                OfflineStore.shared.enqueueDelete(table: .groceryItems, entityId: id)
+                HapticManager.lightImpact()
+            } else {
+                groceryItems.append(contentsOf: removed)
+                toast.error("Failed to delete item", message: error.localizedDescription)
+                HapticManager.error()
+                throw error
+            }
         }
     }
 
@@ -348,11 +439,61 @@ final class AppState: ObservableObject {
             )
             HapticManager.lightImpact()
         } catch {
-            groceryItems[index].checked.toggle()
-            toast.error("Failed to update item")
-            HapticManager.error()
-            throw error
+            if isNetworkError(error) {
+                OfflineStore.shared.enqueueUpdate(
+                    GroceryItemUpdate(checked: checked),
+                    table: .groceryItems,
+                    entityId: id
+                )
+                HapticManager.lightImpact()
+            } else {
+                groceryItems[index].checked.toggle()
+                toast.error("Failed to update item")
+                HapticManager.error()
+                throw error
+            }
         }
+    }
+
+    // MARK: - Offline helpers (US-150)
+
+    /// Classifies an error as connectivity-related so callers can choose to
+    /// keep the optimistic update and queue the mutation for later replay.
+    /// Covers URLError / CancellationError / NSURLErrorDomain codes most
+    /// commonly surfaced by supabase-swift when offline.
+    private func isNetworkError(_ error: Error) -> Bool {
+        if error is CancellationError { return false }
+
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            switch nsError.code {
+            case NSURLErrorNotConnectedToInternet,
+                 NSURLErrorNetworkConnectionLost,
+                 NSURLErrorTimedOut,
+                 NSURLErrorCannotFindHost,
+                 NSURLErrorCannotConnectToHost,
+                 NSURLErrorInternationalRoamingOff,
+                 NSURLErrorDataNotAllowed:
+                return true
+            default:
+                return false
+            }
+        }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet,
+                 .networkConnectionLost,
+                 .timedOut,
+                 .cannotFindHost,
+                 .cannotConnectToHost,
+                 .internationalRoamingOff,
+                 .dataNotAllowed:
+                return true
+            default:
+                return false
+            }
+        }
+        return false
     }
 
     func clearCheckedGroceryItems() async throws {
