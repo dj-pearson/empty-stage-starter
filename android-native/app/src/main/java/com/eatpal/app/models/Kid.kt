@@ -1,0 +1,88 @@
+package com.eatpal.app.models
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+/** Mirrors iOS `Kid`. Fields kept in the same order for easy side-by-side diff. */
+@Serializable
+data class Kid(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("household_id") val householdId: String? = null,
+    val name: String,
+    val age: Int? = null,
+    @SerialName("date_of_birth") val dateOfBirth: String? = null,
+    val gender: String? = null,
+    @SerialName("profile_picture_url") val profilePictureUrl: String? = null,
+    val allergens: List<String>? = null,
+    @SerialName("allergen_severity") val allergenSeverity: Map<String, String>? = null,
+    @SerialName("cross_contamination_sensitive") val crossContaminationSensitive: Boolean? = null,
+    @SerialName("dietary_restrictions") val dietaryRestrictions: List<String>? = null,
+    @SerialName("favorite_foods") val favoriteFoods: List<String>? = null,
+    @SerialName("disliked_foods") val dislikedFoods: List<String>? = null,
+    @SerialName("always_eats_foods") val alwaysEatsFoods: List<String>? = null,
+    val notes: String? = null,
+    @SerialName("behavioral_notes") val behavioralNotes: String? = null,
+    @SerialName("pickiness_level") val pickinessLevel: String? = null,
+    @SerialName("new_food_willingness") val newFoodWillingness: String? = null,
+    @SerialName("eating_behavior") val eatingBehavior: String? = null,
+    @SerialName("texture_preferences") val texturePreferences: List<String>? = null,
+    @SerialName("texture_dislikes") val textureDislikes: List<String>? = null,
+    @SerialName("texture_sensitivity_level") val textureSensitivityLevel: String? = null,
+    @SerialName("flavor_preferences") val flavorPreferences: List<String>? = null,
+    @SerialName("health_goals") val healthGoals: List<String>? = null,
+    @SerialName("nutrition_concerns") val nutritionConcerns: List<String>? = null,
+    @SerialName("helpful_strategies") val helpfulStrategies: List<String>? = null,
+    @SerialName("preferred_preparations") val preferredPreparations: List<String>? = null,
+    @SerialName("dietary_variety_score") val dietaryVarietyScore: Double? = null,
+    @SerialName("profile_completed") val profileCompleted: Boolean? = null,
+    @SerialName("height_cm") val heightCm: Double? = null,
+    @SerialName("weight_kg") val weightKg: Double? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+) {
+    fun applying(u: KidUpdate): Kid = copy(
+        name = u.name ?: name,
+        age = u.age ?: age,
+        gender = u.gender ?: gender,
+        allergens = u.allergens ?: allergens,
+        dietaryRestrictions = u.dietaryRestrictions ?: dietaryRestrictions,
+        pickinessLevel = u.pickinessLevel ?: pickinessLevel,
+        notes = u.notes ?: notes,
+        heightCm = u.heightCm ?: heightCm,
+        weightKg = u.weightKg ?: weightKg,
+        profilePictureUrl = u.profilePictureUrl ?: profilePictureUrl,
+        texturePreferences = u.texturePreferences ?: texturePreferences,
+        textureDislikes = u.textureDislikes ?: textureDislikes,
+        flavorPreferences = u.flavorPreferences ?: flavorPreferences,
+        favoriteFoods = u.favoriteFoods ?: favoriteFoods,
+        dislikedFoods = u.dislikedFoods ?: dislikedFoods,
+        behavioralNotes = u.behavioralNotes ?: behavioralNotes,
+        healthGoals = u.healthGoals ?: healthGoals,
+        nutritionConcerns = u.nutritionConcerns ?: nutritionConcerns,
+        helpfulStrategies = u.helpfulStrategies ?: helpfulStrategies,
+    )
+}
+
+@Serializable
+data class KidUpdate(
+    val name: String? = null,
+    val age: Int? = null,
+    val gender: String? = null,
+    val allergens: List<String>? = null,
+    @SerialName("dietary_restrictions") val dietaryRestrictions: List<String>? = null,
+    @SerialName("pickiness_level") val pickinessLevel: String? = null,
+    val notes: String? = null,
+    @SerialName("height_cm") val heightCm: Double? = null,
+    @SerialName("weight_kg") val weightKg: Double? = null,
+    @SerialName("profile_picture_url") val profilePictureUrl: String? = null,
+    @SerialName("texture_preferences") val texturePreferences: List<String>? = null,
+    @SerialName("texture_dislikes") val textureDislikes: List<String>? = null,
+    @SerialName("flavor_preferences") val flavorPreferences: List<String>? = null,
+    @SerialName("favorite_foods") val favoriteFoods: List<String>? = null,
+    @SerialName("disliked_foods") val dislikedFoods: List<String>? = null,
+    @SerialName("behavioral_notes") val behavioralNotes: String? = null,
+    @SerialName("health_goals") val healthGoals: List<String>? = null,
+    @SerialName("nutrition_concerns") val nutritionConcerns: List<String>? = null,
+    @SerialName("helpful_strategies") val helpfulStrategies: List<String>? = null,
+)

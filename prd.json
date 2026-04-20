@@ -2854,6 +2854,366 @@
       "priority": 38,
       "passes": true,
       "notes": "iOS UX AUDIT - Tier 4: DONE 2026-04-17. New Services/WidgetSnapshot.swift namespaces the App Group id (group.com.eatpal.app), key constants (meals, grocery_count, pantry_low_count, tonight_dish, try_bite_streak, last_updated_at), and widget kind (EatPalMealWidget). Exposes Payload struct + write(_:) (debounced 500ms) and writeImmediately(_:). Persists to UserDefaults(suiteName: appGroup) and calls WidgetCenter.shared.reloadTimelines(ofKind:). AppState gained an init() with setupWidgetSnapshotSync() — Combine sink on $planEntries.combineLatest($foods, $groceryItems, $recipes) debounced 500ms, calling refreshWidgetSnapshot() which composes today's meals for the active kid, pantry-low count (qty > 0 && qty <= 2), unchecked grocery count, and tonight's dish. EatPalWidget.swift MealPlanEntry extended with pantryLowCount, tonightDish, tryBiteStreak fields; loadFromAppGroup reads the new keys. tryBiteStreak is a placeholder 0 pending a future streak-calc story. Not yet verified on device — WidgetCenter reload confirmation requires actual widget add to Home Screen."
+    },
+    {
+      "id": "US-200",
+      "title": "Android Native: seed repository + database-layer parity with iOS",
+      "description": "As an Android developer, I want a fresh native Kotlin/Jetpack Compose module that talks to Supabase with the same contract as iOS, so every row round-trips between platforms without a translation layer.",
+      "acceptanceCriteria": [
+        "New `android-native/` Gradle module co-exists alongside the existing RN/Expo `android/` shell (do not delete the RN shell yet)",
+        "Kotlin 2.1 + Compose BOM 2024.12.01 + Hilt 2.52 + Room 2.6 + DataStore 1.1 + supabase-kt 3.x + Sentry-Android + Coil + Accompanist",
+        "Version catalog at `android-native/gradle/libs.versions.toml`; no hardcoded versions in build.gradle.kts files",
+        "Secrets (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SENTRY_DSN`) loaded from `env.local.properties` or env vars into BuildConfig — never committed",
+        "Models (Food, Kid, Recipe, PlanEntry, GroceryItem, GroceryList, ChatMessage, NutritionInfo) as @Serializable data classes with @SerialName snake_case matching iOS CodingKeys exactly",
+        "Room cache entities (CachedFood / CachedKid / CachedGroceryItem / PendingMutation) mirror iOS SwiftData models",
+        "Services ported with 1:1 method parity: SupabaseClientProvider, AuthService, DataService, RealtimeService (PostgresChangeFlow fan-out into AppStateStore), OfflineStore (typed enqueueInsert/enqueueUpdate/enqueueDelete + ordered replay with stop-on-first-failure), NetworkMonitor (ConnectivityManager callback + auto-flush on reconnect)",
+        "AppStateStore singleton (StateFlow equivalents of iOS @Published) with same optimistic-update-then-rollback add/update/delete methods for each entity",
+        "Hilt DataModule provides Room DB + Json + DAOs; EatPalApplication starts Sentry + NetworkMonitor",
+        "MainActivity hosts a minimal Compose shell that reacts to SessionStatus and kicks AppStateStore.loadAllData() on Authenticated",
+        "Module compiles and installs on API 26+ device"
+      ],
+      "priority": 40,
+      "passes": true,
+      "notes": "Android native: DONE 2026-04-20 (first pass, no device verification). Scaffolded `android-native/` with settings.gradle.kts + build.gradle.kts + libs.versions.toml + app/build.gradle.kts (SUPABASE_URL/ANON_KEY/SENTRY_DSN BuildConfig wiring), proguard rules for kotlinx.serialization + supabase-kt, AndroidManifest with INTERNET / ACCESS_NETWORK_STATE / POST_NOTIFICATIONS + deep link intent filter for tryeatpal.com, data_extraction_rules.xml excluding sharedpref/database from cloud backup. Ported all 7 iOS models with matching snake_case SerialNames (Food, Kid, Recipe, PlanEntry, GroceryItem, GroceryList, ChatMessage, NutritionInfo) plus enums (FoodCategory, MealSlot, MealResult). Room offline layer mirrors iOS: CachedFood/CachedKid/CachedGroceryItem/PendingMutation entities, CacheDao + PendingMutationDao (observeCount Flow for UI), EatPalDatabase. Services ported: SupabaseClientProvider (Auth/Postgrest/Realtime/Storage/Functions installed, alwaysAutoRefresh + autoLoadFromStorage), AuthService (email/password, Google IDToken equivalent of Apple Sign-In, reset/update/signOut, deleteAccount via functions.invoke('delete-account')), DataService (fetch*/insert*/update*/delete* for foods/kids/recipes/plan_entries/grocery_items + fetchGroceryLists, ensureUserId guardrail + UUID_REGEX validation for plan_entries.kid_id/food_id matching iOS DataServiceError.missingKid/missingFood), OfflineStore (Mutex-gated syncPendingMutations, per-table insert/update replay via kotlinx.serialization, observable pendingMutationCount/isSyncing/lastSyncError StateFlows), RealtimeService (PostgresAction.Insert/Update/Delete flow per channel, fan-out into AppStateStore on* handlers), NetworkMonitor (ConnectivityManager.NetworkCallback + isNetworkError classifier + auto-drain on reconnect). AppStateStore replaces iOS AppState — all 20+ optimistic add/update/delete methods, same rollback-on-failure + enqueue-on-network-error pattern for grocery items. Hilt DataModule, EatPalApplication (Sentry init skipped in debug, NetworkMonitor.start()), MainActivity (@AndroidEntryPoint, single Compose host), RootScreen + RootViewModel (reacts to SessionStatus, kicks loadAllData). README documents stack, build instructions, and the snake_case wire contract as the load-bearing cross-platform guarantee. NOT YET VERIFIED: no `./gradlew assembleDebug` run, no device install. Next-step checklist in follow-up US-201 through US-220."
+    },
+    {
+      "id": "US-201",
+      "title": "Android Native: Gradle wrapper + CI build verification",
+      "description": "As an Android developer, I want `./gradlew assembleDebug` to pass locally and on CI, so every PR that touches android-native is green before merge.",
+      "acceptanceCriteria": [
+        "Generate gradle/wrapper/gradle-wrapper.jar + gradle-wrapper.properties (Gradle 8.10+) at `android-native/gradle/wrapper/`",
+        "gradlew / gradlew.bat committed and executable",
+        "`./gradlew :app:assembleDebug` completes with no errors on a fresh clone",
+        "Verify supabase-kt 3.x API matches the code as written (PostgrestRequestBuilder update/filter lambda syntax, channel.postgresChangeFlow, PostgresAction sealed class shape) — adjust if the Kotlin library has diverged from what we scaffolded",
+        "Add GitHub Actions job `android-native-build.yml` that runs assembleDebug + lint on every PR touching `android-native/**`",
+        "Android lint passes with zero errors (warnings acceptable short-term)"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": "Android native: PENDING. The supabase-kt call sites in DataService.kt / RealtimeService.kt / OfflineStore.kt / AuthService.kt assume the 3.0.x API — verify against the version actually resolved once Gradle runs. Likely adjustments: PostgresAction.Select may not exist, PostgresChangeFlow decoded-record access, channel.subscribe(blockUntilSubscribed) param name."
+    },
+    {
+      "id": "US-202",
+      "title": "Android Native: Auth UI (email/password + Google Sign-In via Credential Manager)",
+      "description": "As an Android user, I want to sign in with Google or email/password, matching the iOS Apple/email flow.",
+      "acceptanceCriteria": [
+        "AuthScreen composable with email/password + Google Sign-In button, matching iOS AuthView layout (forgot password link, sign-up toggle, validation)",
+        "Google Sign-In uses androidx.credentials (CredentialManager) to obtain an ID token + nonce, then calls AuthService.signInWithGoogle",
+        "OnboardingScreen composable mirrors iOS OnboardingView",
+        "Password validator shared logic (12+ chars, upper/lower/digit/special) matching iOS PasswordValidator",
+        "Error messages surfaced via SnackbarHost",
+        "Works against production Supabase project"
+      ],
+      "priority": 42,
+      "passes": false,
+      "notes": "Android native: PENDING. AuthService already exposes signInWithGoogle(idToken, rawNonce) — UI layer just needs to hook Credential Manager + GetGoogleIdOption."
+    },
+    {
+      "id": "US-203",
+      "title": "Android Native: main navigation + Dashboard/MealPlan/Grocery/Recipes/Kids tab shell",
+      "description": "As an Android user, I want the same five-tab navigation the iOS app has, so the two apps feel identical.",
+      "acceptanceCriteria": [
+        "Navigation-Compose graph with routes: dashboard, mealPlan, grocery, recipes, kids, more, settings, paywall, pantry, aiCoach, foodChaining, progress, pickyQuiz",
+        "Bottom NavigationBar with 5 top-level tabs (Dashboard, Meals, Grocery, Recipes, More) matching iOS MainTabView",
+        "DashboardHomeScreen composable showing active-kid today meals, grocery count, pantry low count (reads from AppStateStore)",
+        "More screen exposes Settings, Paywall, AI Coach, Pantry, Progress, Kids, Food Chaining, Picky Eater Quiz",
+        "Active kid picker in the top app bar (updates appState.activeKidId)"
+      ],
+      "priority": 43,
+      "passes": false,
+      "notes": "Android native: PENDING."
+    },
+    {
+      "id": "US-204",
+      "title": "Android Native: Grocery screen (list, add, check/uncheck, clear) with offline queue parity",
+      "description": "As an Android user, I want to manage my grocery list with the same offline resilience as iOS — adds survive airplane mode.",
+      "acceptanceCriteria": [
+        "GroceryScreen composable: list grouped by category/aisle, checkbox toggle, quantity editor, delete swipe",
+        "Add-item sheet with category picker, quantity, unit",
+        "'Clear completed' action mirrors iOS clearCheckedGroceryItems",
+        "Offline banner (OfflineBanner composable observing NetworkMonitor.isConnected) matches iOS OfflineBannerView",
+        "Calls AppStateStore.addGroceryItem / toggleGroceryItem / deleteGroceryItem — no direct DataService use",
+        "Pending-sync pill in top app bar when offlineStore.pendingMutationCount > 0"
+      ],
+      "priority": 44,
+      "passes": false,
+      "notes": "Android native: PENDING. AppStateStore grocery methods already have network-error queuing via offlineStore.enqueue*."
+    },
+    {
+      "id": "US-205",
+      "title": "Android Native: Recipes screen + editor (create/edit/delete) matching iOS RecipesView",
+      "description": "As an Android user, I want to browse, create, edit, and delete recipes with the same feature set as the iOS app.",
+      "acceptanceCriteria": [
+        "RecipesScreen: search, filter by category/tag, sort, list view with thumbnail via Coil",
+        "RecipeDetailScreen: ingredients (food_ids resolved against AppStateStore.foods), instructions (JSON array preserved), nutrition info, tips, source URL",
+        "EditRecipeScreen: full form with ingredient picker, additional-ingredients freeform, prep/cook time, servings, tags, image upload",
+        "Add-to-planner action mirrors iOS AddToPlannerPopover — prompts for date+slot+kid, creates PlanEntry",
+        "CookMode screen (step-by-step with next/back, matches iOS CookMode component)"
+      ],
+      "priority": 45,
+      "passes": false,
+      "notes": "Android native: PENDING."
+    },
+    {
+      "id": "US-206",
+      "title": "Android Native: Meal Plan screen + AI Meal Plan generator",
+      "description": "As an Android user, I want weekly meal planning and AI-generated plans with the same UX as iOS.",
+      "acceptanceCriteria": [
+        "MealPlanScreen: week picker, per-kid swim lanes, per-slot meal cards, drag-to-reschedule (Compose foundation.draggable)",
+        "AddPlanEntry sheet with food/recipe picker + slot selection",
+        "AIMealPlanScreen invokes the `generate-meal-plan` edge function (Supabase Functions) — mirrors AIMealService",
+        "Result card shows generated entries with Approve / Regenerate / Edit actions",
+        "On approve, bulk-inserts PlanEntry rows via AppStateStore"
+      ],
+      "priority": 46,
+      "passes": false,
+      "notes": "Android native: PENDING. Needs AIMealService Kotlin port (~180 lines iOS equivalent)."
+    },
+    {
+      "id": "US-207",
+      "title": "Android Native: Kids screen + profile editor mirroring iOS KidsView/KidProfileEditorView",
+      "description": "As an Android user, I want to manage kid profiles with the same 20+ fields the iOS app supports.",
+      "acceptanceCriteria": [
+        "KidsScreen: list of cards (avatar, name, age), add-child FAB, tap opens editor",
+        "KidProfileEditorScreen: full form covering every field in Kid model (allergens, dietary restrictions, texture prefs, flavor prefs, health goals, picky level, notes, height/weight, etc.)",
+        "Profile-picture picker via ActivityResultContracts.PickVisualMedia → ImageUploadService → Supabase Storage",
+        "Uses AppStateStore.addKid / updateKid / deleteKid"
+      ],
+      "priority": 47,
+      "passes": false,
+      "notes": "Android native: PENDING."
+    },
+    {
+      "id": "US-208",
+      "title": "Android Native: Pantry screen + barcode scanner (ML Kit)",
+      "description": "As an Android user, I want to scan barcodes and manage pantry qty with feature parity to iOS BarcodeScannerView/PantryView.",
+      "acceptanceCriteria": [
+        "PantryScreen: grid by category, qty editors, low-stock highlight (qty > 0 && qty <= 2 mirrors iOS widget logic)",
+        "BarcodeScannerScreen: CameraX preview + ML Kit BarcodeScanning (com.google.mlkit:barcode-scanning)",
+        "Scanned product lookup against Open Food Facts + local foods table (mirrors iOS BarcodeService)",
+        "ScannedProductScreen: shows nutrition, allergens, add-to-pantry action",
+        "Handles CAMERA permission via Accompanist Permissions"
+      ],
+      "priority": 48,
+      "passes": false,
+      "notes": "Android native: PENDING. Port ios/EatPal/EatPal/Services/BarcodeService.swift (116 lines) to Kotlin."
+    },
+    {
+      "id": "US-209",
+      "title": "Android Native: Grocery photo/text/voice import (ML Kit OCR + SpeechRecognizer + GroceryTextParser port)",
+      "description": "As an Android user, I want the photo-of-a-list, text paste, and voice-dictate import flows from iOS GroceryView.",
+      "acceptanceCriteria": [
+        "PhotoImportScreen: camera/gallery picker → ML Kit TextRecognition → GroceryTextParser → preview rows → bulk insert",
+        "TextImportScreen: textarea → GroceryTextParser → preview → bulk insert",
+        "VoiceAddScreen: Android SpeechRecognizer (or Assistant via CREATE_SHORTCUT) → GroceryTextParser → preview → bulk insert",
+        "GroceryTextParser.kt ports the iOS parser (264 lines) — same tokenizer, same category inference, same qty/unit regex",
+        "Handles RECORD_AUDIO + CAMERA permissions"
+      ],
+      "priority": 49,
+      "passes": false,
+      "notes": "Android native: PENDING. Big lift — ports 3 services: GroceryTextParser, VoiceInputService, ImageTextRecognizer."
+    },
+    {
+      "id": "US-210",
+      "title": "Android Native: image upload service → Supabase Storage (parity with iOS ImageUploadService)",
+      "description": "As an Android user, I want to upload profile pictures and recipe images to the same Supabase Storage buckets iOS uses.",
+      "acceptanceCriteria": [
+        "ImageUploadService.kt ports iOS ImageUploadService.swift (83 lines) — same bucket names, same path conventions (userId/timestamp.jpg)",
+        "Handles image compression to match iOS JPEG 0.7 quality",
+        "Returns public URL string that can be stored in Kid.profilePictureUrl / Recipe.imageUrl / GroceryItem.photoUrl",
+        "Uses supabase.storage.from(bucket).upload(...)"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": "Android native: PENDING."
+    },
+    {
+      "id": "US-211",
+      "title": "Android Native: AI Coach + conversational UI (parity with iOS AICoachService/AICoachView)",
+      "description": "As an Android user, I want the AI coach chat experience the iOS app ships.",
+      "acceptanceCriteria": [
+        "AICoachService.kt ports iOS AICoachService.swift (137 lines) — invokes `ai-coach` edge function, streams responses",
+        "AICoachScreen composable: conversation history (ChatMessage list), input bar, typing indicator, retry on error",
+        "Message persistence across app restarts via DataStore (last N messages)",
+        "Breadcrumbs via Sentry on send/receive"
+      ],
+      "priority": 51,
+      "passes": false,
+      "notes": "Android native: PENDING."
+    },
+    {
+      "id": "US-212",
+      "title": "Android Native: MealPlanTemplate + GroceryGenerator services",
+      "description": "As an Android user, I want meal-plan templates and the 'generate grocery list from plan' feature from iOS.",
+      "acceptanceCriteria": [
+        "MealPlanTemplateService.kt ports iOS version (190 lines) — fetches meal_plan_templates, applies to plan_entries with kid+date offset",
+        "GroceryGeneratorService.kt ports iOS version (97 lines) — walks PlanEntry → Recipe.foodIds → merges qty/unit → creates GroceryItem rows",
+        "UI: 'Generate from meal plan' button on GroceryScreen, template gallery on MealPlanScreen"
+      ],
+      "priority": 52,
+      "passes": false,
+      "notes": "Android native: PENDING."
+    },
+    {
+      "id": "US-213",
+      "title": "Android Native: FCM push + local notification parity with iOS NotificationService",
+      "description": "As an Android user, I want push notifications (meal reminders, family sharing) and local reminders matching iOS behavior.",
+      "acceptanceCriteria": [
+        "Add firebase-messaging dependency + google-services.json (excluded from VCS; documented in README)",
+        "NotificationService.kt ports iOS version (161 lines) — requestAuthorization, registers FCM token, stores in push_notifications table (same schema as iOS)",
+        "Local notifications via NotificationManagerCompat for meal-reminder slots (breakfast/lunch/dinner)",
+        "POST_NOTIFICATIONS runtime permission handled on API 33+",
+        "Foreground service not needed — schedule via WorkManager + setExactAndAllowWhileIdle where appropriate",
+        "Notification channels: reminders, family_activity, tips"
+      ],
+      "priority": 53,
+      "passes": false,
+      "notes": "Android native: PENDING. FCM config file + google-services plugin must be added."
+    },
+    {
+      "id": "US-214",
+      "title": "Android Native: Google Play Billing integration (parity with iOS StoreKitService)",
+      "description": "As an Android user, I want to subscribe to EatPal Pro/Premium/Family via Play Billing, same tiers as iOS StoreKit.",
+      "acceptanceCriteria": [
+        "StoreKitService.kt ports iOS StoreKitService.swift (275 lines) — productsList, purchase, restore, subscription state via Flow",
+        "Uses com.android.billingclient:billing-ktx 7.x (BillingClient + productDetailsAsync + launchBillingFlow)",
+        "Purchase tokens posted to existing Supabase `verify-play-subscription` edge function (create if missing; mirror `verify-apple-subscription`)",
+        "PaywallScreen composable: same three tiers (Basic/Family/Premium), same monthly/annual toggle, same features list copy as iOS PaywallView",
+        "Subscription entitlements flow through user_subscriptions table (schema reused)",
+        "Testing: license tester + play console internal testing track"
+      ],
+      "priority": 54,
+      "passes": false,
+      "notes": "Android native: PENDING. Requires creating a `verify-play-subscription` edge function — tracked here because it's blocking Play Billing."
+    },
+    {
+      "id": "US-215",
+      "title": "Android Native: Health Connect integration (parity with iOS HealthKitService / US-144)",
+      "description": "As an Android user, I want logged meals to write to Health Connect the same way iOS writes to HealthKit.",
+      "acceptanceCriteria": [
+        "Add androidx.health.connect:connect-client dependency",
+        "HealthConnectService.kt mirrors iOS HealthKitService.swift (167 lines) — isEnabled opt-in flag in DataStore, writeMeal(calories, protein, carbs, fat, date, name)",
+        "Writes NutritionRecord to Health Connect with MEAL_TYPE_UNKNOWN, linked to the PlanEntry date",
+        "Permission request flow via PermissionController.createRequestPermissionResultContract",
+        "HealthSettingsScreen composable mirrors iOS HealthSettingsView — toggle + last-synced diagnostic",
+        "AppStateStore.updatePlanEntry writes to Health Connect when updates.result == 'ate' AND service.isEnabled (same guard as iOS writeHealthSample)"
+      ],
+      "priority": 55,
+      "passes": false,
+      "notes": "Android native: PENDING. Health Connect is the Google-sanctioned HealthKit equivalent. Requires Health Connect app installed on user's device (Android 14+ built-in)."
+    },
+    {
+      "id": "US-216",
+      "title": "Android Native: Glance widget (parity with iOS EatPalWidget / US-152)",
+      "description": "As an Android user, I want a home-screen widget showing today's meals, grocery count, and pantry-low count — same payload iOS widget renders.",
+      "acceptanceCriteria": [
+        "Add androidx.glance:glance-appwidget dependency",
+        "Glance widget receiver + AppWidgetProvider mirroring iOS EatPalWidget layout",
+        "WidgetSnapshotStore.kt: DataStore<Preferences> equivalent of iOS App Group UserDefaults, keys: meals, grocery_count, pantry_low_count, tonight_dish, try_bite_streak, last_updated_at",
+        "AppStateStore has a combined StateFlow (foods + planEntries + groceryItems + recipes) debounced 500ms that writes the snapshot and calls GlanceAppWidgetManager.update(...)",
+        "Widget reads exclusively from DataStore — no network",
+        "Lock screen widget variant via Glance's LazyColumn stub"
+      ],
+      "priority": 56,
+      "passes": false,
+      "notes": "Android native: PENDING. Glance is the Compose-based widget API and the right primitive."
+    },
+    {
+      "id": "US-217",
+      "title": "Android Native: App Actions / Shortcuts (parity with iOS AppIntents / EatPalAppShortcuts)",
+      "description": "As an Android user, I want Google Assistant / launcher shortcuts equivalent to iOS 'Add to grocery', 'Log meal', 'Start shopping trip'.",
+      "acceptanceCriteria": [
+        "Add shortcuts.xml + dynamic ShortcutManager.setDynamicShortcuts for common intents",
+        "App Actions via actions.xml (google.assistant.capabilities) — built-in intents GET_THING + CREATE_THING",
+        "AddGroceryItemActivity handles ACTION_CREATE_THING for grocery",
+        "LogMealActivity handles PlanEntry creation with pre-populated kid + slot",
+        "StartGroceryTripActivity equivalent of iOS GroceryTripActivityService — see US-218"
+      ],
+      "priority": 57,
+      "passes": false,
+      "notes": "Android native: PENDING. Ports iOS Intents/MealAppIntents.swift + GroceryAppIntents.swift + EatPalAppShortcuts.swift."
+    },
+    {
+      "id": "US-218",
+      "title": "Android Native: grocery-trip foreground service (parity with iOS GroceryTripActivityService Live Activity)",
+      "description": "As an Android user, I want the same at-a-glance shopping progress notification iOS shows via Live Activities.",
+      "acceptanceCriteria": [
+        "GroceryTripService.kt as a ForegroundService with ONGOING notification showing 'X of Y items checked — last: <name>'",
+        "Updates on each AppStateStore.toggleGroceryItem call (mirrors iOS updateGroceryTripActivity)",
+        "Start/stop from GroceryScreen 'Start shopping trip' button",
+        "Notification action buttons: 'Finish trip', 'Open list'",
+        "Handles FOREGROUND_SERVICE_DATA_SYNC permission (API 34+)"
+      ],
+      "priority": 58,
+      "passes": false,
+      "notes": "Android native: PENDING. iOS uses ActivityKit Live Activities; Android equivalent is an expandable MediaStyle foreground notification."
+    },
+    {
+      "id": "US-219",
+      "title": "Android Native: Share target for recipe URLs (parity with iOS Share Extension / US-143)",
+      "description": "As an Android user, I want to share a recipe URL from Chrome/Instagram into EatPal and have it imported, same as iOS Share Extension.",
+      "acceptanceCriteria": [
+        "Intent-filter for ACTION_SEND with mimeType text/plain (URL) in AndroidManifest",
+        "ShareReceiverActivity enqueues a PendingRecipeImport into DataStore (mirrors iOS PendingRecipeImportQueue)",
+        "On next AppStateStore.loadAllData, drainPendingRecipeImports runs — inserts Recipe with sourceType='share_extension'",
+        "ShareImportScreen composable shows progress + result toast",
+        "URL-to-recipe parsing via `parse-recipe-url` edge function (same the iOS ShareExtensionAPI calls)"
+      ],
+      "priority": 59,
+      "passes": false,
+      "notes": "Android native: PENDING."
+    },
+    {
+      "id": "US-220",
+      "title": "Android Native: Settings + Subscription + Onboarding + ancillary screens",
+      "description": "As an Android user, I want the same settings, subscription management, onboarding, picky-eater quiz, food chaining, and progress screens as iOS.",
+      "acceptanceCriteria": [
+        "SettingsScreen composable: notification prefs, health sync toggle, subscription status, account deletion, sign out, dev diagnostics (pending mutations, last sync error)",
+        "OnboardingScreen composable mirrors iOS OnboardingView (multi-step with skip)",
+        "PickyEaterQuizScreen composable ports iOS PickyEaterQuizView",
+        "FoodChainingScreen composable ports iOS FoodChainingView",
+        "ProgressDashboardScreen composable with charts (androidx.compose + custom Canvas or Vico charts lib) mirroring iOS ProgressDashboardView",
+        "AppTheme.kt expands to full token set matching iOS AppTheme (Spacing, Colors, Typography)",
+        "HapticManager.kt wraps Vibrator/VibratorManager for success/error/light/medium patterns",
+        "ToastManager.kt exposes Snackbar helpers (success/error/info) matching iOS sonner-style API",
+        "Deep-link handler ports iOS DeepLinkHandler — routes tryeatpal.com URLs to appropriate Compose destinations"
+      ],
+      "priority": 60,
+      "passes": false,
+      "notes": "Android native: PENDING. Long tail of UI work — can be split further into per-screen stories if needed."
+    },
+    {
+      "id": "US-221",
+      "title": "Android Native: unit + instrumentation test coverage for database layer",
+      "description": "As an Android developer, I want the same test confidence iOS has — the database layer is load-bearing and must be covered.",
+      "acceptanceCriteria": [
+        "Unit tests for AppStateStore optimistic update + rollback paths (all 5 entities × add/update/delete)",
+        "Unit tests for OfflineStore enqueue/replay/stop-on-failure ordering",
+        "Unit tests for Food/Kid/Recipe/PlanEntry/GroceryItem JSON round-trip against known-good fixtures captured from the iOS encoder",
+        "Instrumentation test: Room migration smoke (drop + recreate, cache round-trip)",
+        "Instrumentation test: NetworkMonitor.isNetworkError classifier against common IOException subtypes",
+        "Target coverage: 80%+ on data + domain packages"
+      ],
+      "priority": 61,
+      "passes": false,
+      "notes": "Android native: PENDING."
+    },
+    {
+      "id": "US-222",
+      "title": "Android Native: retire Expo/RN android/ shell once parity is reached",
+      "description": "As a developer, I want a single source of truth for the Android app — once native parity ships, the Expo Android shell is dead weight.",
+      "acceptanceCriteria": [
+        "Feature-by-feature parity confirmed against `android-native/` (use US-200 through US-220 as the checklist)",
+        "Promote `android-native/` to `android/` (move + delete the RN shell)",
+        "Remove RN-only Gradle plugins (expo-root-project, com.facebook.react.rootproject)",
+        "Update `package.json` scripts to drop Expo Android commands (keep iOS via the web/Expo path if still in use) or retire Expo entirely",
+        "Update CI: drop expo-android builds, keep only android-native build",
+        "Update eas.json and app.config.js accordingly",
+        "Play Store listing updated; first native release via Play Console internal track"
+      ],
+      "priority": 62,
+      "passes": false,
+      "notes": "Android native: PENDING. Do this LAST — after every US-200..US-221 item is green. Until then, the Expo shell is the shipping Android app."
     }
   ]
 }
