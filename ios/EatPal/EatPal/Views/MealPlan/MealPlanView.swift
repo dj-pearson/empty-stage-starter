@@ -534,8 +534,16 @@ struct AddPlanEntryView: View {
 
                 if entryType == 0 {
                     Section("Select a Food") {
-                        if filteredFoods.isEmpty {
-                            Text("No foods available")
+                        if appState.foods.isEmpty && appState.isLoading {
+                            HStack(spacing: 12) {
+                                ProgressView()
+                                Text("Loading foods…")
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else if filteredFoods.isEmpty {
+                            Text(searchText.isEmpty
+                                ? "No foods yet. Add some in Pantry first."
+                                : "No foods match \"\(searchText)\".")
                                 .foregroundStyle(.secondary)
                         } else {
                             ForEach(filteredFoods) { food in
@@ -560,8 +568,16 @@ struct AddPlanEntryView: View {
                     }
                 } else {
                     Section("Select a Recipe") {
-                        if filteredRecipes.isEmpty {
-                            Text("No recipes available")
+                        if appState.recipes.isEmpty && appState.isLoading {
+                            HStack(spacing: 12) {
+                                ProgressView()
+                                Text("Loading recipes…")
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else if filteredRecipes.isEmpty {
+                            Text(searchText.isEmpty
+                                ? "No recipes yet. Create one in Recipes first."
+                                : "No recipes match \"\(searchText)\".")
                                 .foregroundStyle(.secondary)
                         } else {
                             ForEach(filteredRecipes) { recipe in
@@ -597,6 +613,17 @@ struct AddPlanEntryView: View {
             .navigationTitle("Add to Plan")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: entryType == 0 ? "Search foods..." : "Search recipes...")
+            .task {
+                // If the user opened the planner faster than the initial
+                // data fetch could complete, kick off a load so the list
+                // isn't perpetually empty. No-ops once data is present.
+                if appState.foods.isEmpty && appState.recipes.isEmpty && !appState.isLoading {
+                    await appState.loadAllData()
+                }
+            }
+            .refreshable {
+                await appState.loadAllData()
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
