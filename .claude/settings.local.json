@@ -55,7 +55,12 @@
       "Bash(command -v xcodegen)",
       "Bash(command -v swift)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://tryeatpal.com/terms)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://tryeatpal.com/privacy)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://tryeatpal.com/privacy)",
+      "Bash(gradle --version)",
+      "Bash(java -version)",
+      "Bash(chmod +x C:/Users/dpearson/Documents/EatPal/empty-stage-starter/android-native/gradlew)",
+      "Bash(./gradlew :app:compileDebugKotlin --no-daemon)",
+      "Bash(./gradlew :app:compileDebugKotlin)"
     ],
     "deny": [],
     "ask": []

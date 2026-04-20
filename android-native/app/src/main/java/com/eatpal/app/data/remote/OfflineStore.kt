@@ -40,8 +40,8 @@ import javax.inject.Singleton
 class OfflineStore @Inject constructor(
     private val supabase: SupabaseClientProvider,
     private val cacheDao: CacheDao,
-    private val pendingDao: PendingMutationDao,
-    private val json: Json,
+    @PublishedApi internal val pendingDao: PendingMutationDao,
+    @PublishedApi internal val json: Json,
 ) {
     private val syncMutex = Mutex()
 

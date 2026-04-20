@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -9,7 +11,7 @@ plugins {
 
 // Loads SUPABASE_URL / SUPABASE_ANON_KEY / SENTRY_DSN from a local env file so
 // real keys never land in git. Mirrors the iOS Info.plist substitution pattern.
-val envProps = java.util.Properties().apply {
+val envProps: Properties = Properties().apply {
     val f = rootProject.file("../env.local.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }

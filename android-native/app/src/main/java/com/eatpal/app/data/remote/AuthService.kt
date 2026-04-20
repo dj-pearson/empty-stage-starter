@@ -9,7 +9,6 @@ import io.github.jan.supabase.auth.user.UserInfo
 import io.github.jan.supabase.auth.user.UserSession
 import io.github.jan.supabase.functions.functions
 import kotlinx.coroutines.flow.Flow
-import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -80,20 +79,15 @@ class AuthService @Inject constructor(
 
     // MARK: - Delete account (iOS parity: `delete-account` edge function)
 
-    @Serializable
-    private data class DeleteResponse(val success: Boolean? = null, val error: String? = null)
-
     /**
      * Calls the `delete-account` edge function, which removes user-keyed data
      * and the auth.users row with service-role credentials. Same contract as
-     * iOS. Best-effort local sign-out at the end — even if the final signOut
+     * iOS. On non-2xx the Ktor call throws `RestException` — we propagate.
+     * Best-effort local sign-out at the end — even if the final signOut
      * fails, the server already dropped the account.
      */
     suspend fun deleteAccount() {
-        val response = client.functions.invoke("delete-account").body<DeleteResponse>()
-        response.error?.takeIf { it.isNotBlank() }?.let { error ->
-            throw IllegalStateException(error)
-        }
+        client.functions.invoke("delete-account")
         runCatching { client.auth.signOut() }
     }
 }

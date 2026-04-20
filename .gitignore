@@ -112,3 +112,9 @@ EatPal_Share_App_Store.mobileprovision
 EatPal_App_Store.base64.txt
 EatPal_Share_App_Store.base64.txt
 /crash
+env.local.properties
+android-native/local.properties
+android-native/build/
+android-native/app/build/
+android-native/.gradle/
+
