@@ -8,9 +8,9 @@ struct EatPalAppShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: AddGroceryItemIntent(),
             phrases: [
-                "Add \(\.$item) to \(.applicationName) grocery",
-                "Add \(\.$item) to my \(.applicationName) list",
-                "Put \(\.$item) on my \(.applicationName) grocery list"
+                "Add to \(.applicationName) grocery",
+                "Add to my \(.applicationName) list",
+                "Put on my \(.applicationName) grocery list"
             ],
             shortTitle: "Add to grocery",
             systemImageName: "cart.fill.badge.plus"
@@ -30,9 +30,9 @@ struct EatPalAppShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: LogMealResultIntent(),
             phrases: [
-                "Log \(\.$slot) as \(\.$result) in \(.applicationName)",
-                "Mark \(\.$slot) \(\.$result) in \(.applicationName)",
-                "Record \(\.$slot) in \(.applicationName)"
+                "Log \(\.$slot) in \(.applicationName)",
+                "Record \(\.$slot) in \(.applicationName)",
+                "Mark \(\.$slot) in \(.applicationName)"
             ],
             shortTitle: "Log meal result",
             systemImageName: "checkmark.circle.fill"
