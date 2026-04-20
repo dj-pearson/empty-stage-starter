@@ -31,19 +31,19 @@ final class HealthKitService {
         set { UserDefaults.standard.set(newValue, forKey: Self.enabledDefaultsKey) }
     }
 
-    // Types we write. Built without force-unwraps so a missing system
-    // identifier can never crash the app during authorization.
+    // Types we write. Only the individual dietary sample types —
+    // HKCorrelationType(.food) is deliberately omitted because HealthKit
+    // raises an Objective-C NSException ("Invalid type") when you include
+    // a correlation type in `toShare`; the correlation is just a container
+    // and HKHealthStore.save accepts it as long as the component sample
+    // types are authorized.
     private var writeTypes: Set<HKSampleType> {
-        var types: Set<HKSampleType> = [
+        [
             HKQuantityType(.dietaryEnergyConsumed),
             HKQuantityType(.dietaryProtein),
             HKQuantityType(.dietaryCarbohydrates),
             HKQuantityType(.dietaryFatTotal)
         ]
-        if let correlation = HKObjectType.correlationType(forIdentifier: .food) {
-            types.insert(correlation)
-        }
-        return types
     }
 
     private init() {}
@@ -52,26 +52,65 @@ final class HealthKitService {
 
     /// Requests write permission for the dietary types we care about.
     /// Returns true when HealthKit is available and at least one of the
-    /// requested types ended up authorized. Any HealthKit error surfaces
-    /// as a thrown Swift error rather than an uncaught NSException.
+    /// requested types ended up authorized. Both Objective-C NSExceptions
+    /// and Swift errors surface as thrown Swift errors rather than a
+    /// SIGABRT.
     func requestAuthorization() async throws -> Bool {
         guard isAvailable else { return false }
 
         let types = writeTypes
         guard !types.isEmpty else { return false }
 
-        // HealthKit APIs can raise Objective-C exceptions for configuration
-        // issues (missing usage strings, missing entitlement). Wrap the call
-        // so we convert those into Swift errors instead of hard crashes —
-        // users get an actionable message and we keep the app alive.
-        do {
-            try await store.requestAuthorization(toShare: types, read: [])
-        } catch {
-            SentryService.capture(error, extras: [
-                "context": "healthkit_requestAuthorization",
-                "typesCount": "\(types.count)"
-            ])
-            throw error
+        // HealthKit's internal validation can raise Objective-C exceptions
+        // (e.g. missing entitlement, invalid type, provisioning-profile
+        // capability mismatch). Swift try/catch doesn't catch those — so
+        // we probe synchronously via the catcher first to surface a
+        // friendly error, then let the normal async path do the real
+        // authorization request.
+        var preflightError: NSError?
+        let probeOK = NSExceptionCatcher.try {
+            _ = self.store.authorizationStatus(for: types.first!)
+        }
+        if !probeOK {
+            // Shouldn't happen — authorizationStatus never raises in
+            // practice — but if it does we capture and bail out.
+            let err = NSError(
+                domain: "HealthKitPreflight",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "HealthKit preflight check failed."]
+            )
+            SentryService.capture(err, extras: ["context": "healthkit_preflight"])
+            throw err
+        }
+        _ = preflightError  // silence unused
+
+        // The async API doesn't raise NSException itself (it throws Swift
+        // errors), but the synchronous callback-based API it's built on
+        // does. Use the callback form inside the catcher so we convert
+        // any raise into a normal Swift error.
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            var didResume = false
+            let ok = NSExceptionCatcher.try {
+                self.store.requestAuthorization(toShare: types, read: []) { _, error in
+                    guard !didResume else { return }
+                    didResume = true
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
+                }
+            }
+            if !ok && !didResume {
+                didResume = true
+                let nsErr = NSError(
+                    domain: "HealthKit",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "HealthKit couldn't process the authorization request on this device."]
+                )
+                SentryService.capture(nsErr, extras: ["context": "healthkit_requestAuthorization_nsexception"])
+                continuation.resume(throwing: nsErr)
+            }
         }
 
         // HealthKit doesn't disclose whether the user tapped Allow or Deny
