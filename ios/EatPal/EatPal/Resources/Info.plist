@@ -83,8 +83,6 @@
     <string>EatPal needs photo library access to add profile pictures and food photos.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>EatPal saves meal photos you take to your photo library.</string>
-    <key>NSUserNotificationsUsageDescription</key>
-    <string>EatPal sends meal reminders, grocery list updates, and weekly nutrition summaries.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>EatPal uses the microphone so you can add grocery items by voice.</string>
     <key>NSSpeechRecognitionUsageDescription</key>

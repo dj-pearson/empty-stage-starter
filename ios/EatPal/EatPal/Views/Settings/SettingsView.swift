@@ -6,7 +6,22 @@ struct SettingsView: View {
     @State private var showingSignOutAlert = false
     @State private var showingDeleteDataAlert = false
     @State private var showingPaywall = false
+    @State private var showingDeleteAccountAlert = false
+    @State private var isDeletingAccount = false
+    @State private var deleteAccountError: String?
     @StateObject private var store = StoreKitService.shared
+
+    /// Prefers the real session email over the login form field so users
+    /// who signed in with Apple still see their email here.
+    private var displayedAccountLabel: String {
+        if let email = authViewModel.sessionEmail, !email.isEmpty {
+            return email
+        }
+        if !authViewModel.email.isEmpty {
+            return authViewModel.email
+        }
+        return "Signed In"
+    }
 
     var body: some View {
         Form {
@@ -23,7 +38,7 @@ struct SettingsView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(authViewModel.email.isEmpty ? "Signed In" : authViewModel.email)
+                        Text(displayedAccountLabel)
                             .font(.body)
                             .fontWeight(.medium)
 
@@ -118,6 +133,21 @@ struct SettingsView: View {
                 } label: {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.forward")
                 }
+
+                Button(role: .destructive) {
+                    showingDeleteAccountAlert = true
+                } label: {
+                    HStack {
+                        Label("Delete Account", systemImage: "trash.fill")
+                        if isDeletingAccount {
+                            Spacer()
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(isDeletingAccount)
+            } footer: {
+                Text("Deleting your account permanently removes your profile, meal plans, pantry, recipes, grocery lists, and children's profiles. This can't be undone.")
             }
         }
         .navigationTitle("Settings")
@@ -135,6 +165,41 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("You will need to sign in again to access your data.")
+        }
+        .alert("Delete your account?", isPresented: $showingDeleteAccountAlert) {
+            Button("Delete Account", role: .destructive) {
+                Task { await performDeleteAccount() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes your account and all of your data. You can't undo this action.")
+        }
+        .alert(
+            "Couldn't delete account",
+            isPresented: Binding(
+                get: { deleteAccountError != nil },
+                set: { if !$0 { deleteAccountError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { deleteAccountError = nil }
+        } message: {
+            Text(deleteAccountError ?? "")
+        }
+    }
+
+    private func performDeleteAccount() async {
+        isDeletingAccount = true
+        defer { isDeletingAccount = false }
+
+        do {
+            try await authViewModel.deleteAccount()
+            // Successful delete signs out server-side; clear local caches so
+            // stale AppState doesn't linger after the auth listener flips us
+            // back to the login screen.
+            appState.clearData()
+        } catch {
+            deleteAccountError = error.localizedDescription
+            SentryService.capture(error, extras: ["context": "settings_delete_account"])
         }
     }
 

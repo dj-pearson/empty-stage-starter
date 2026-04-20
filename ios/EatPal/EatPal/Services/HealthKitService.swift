@@ -31,15 +31,19 @@ final class HealthKitService {
         set { UserDefaults.standard.set(newValue, forKey: Self.enabledDefaultsKey) }
     }
 
-    // Types we write and read (we read-back only for diagnostics).
+    // Types we write. Built without force-unwraps so a missing system
+    // identifier can never crash the app during authorization.
     private var writeTypes: Set<HKSampleType> {
-        Set([
+        var types: Set<HKSampleType> = [
             HKQuantityType(.dietaryEnergyConsumed),
             HKQuantityType(.dietaryProtein),
             HKQuantityType(.dietaryCarbohydrates),
-            HKQuantityType(.dietaryFatTotal),
-            HKObjectType.correlationType(forIdentifier: .food)!
-        ])
+            HKQuantityType(.dietaryFatTotal)
+        ]
+        if let correlation = HKObjectType.correlationType(forIdentifier: .food) {
+            types.insert(correlation)
+        }
+        return types
     }
 
     private init() {}
@@ -47,17 +51,33 @@ final class HealthKitService {
     // MARK: - Authorization
 
     /// Requests write permission for the dietary types we care about.
-    /// Returns true when HealthKit is available and the user didn't refuse.
+    /// Returns true when HealthKit is available and at least one of the
+    /// requested types ended up authorized. Any HealthKit error surfaces
+    /// as a thrown Swift error rather than an uncaught NSException.
     func requestAuthorization() async throws -> Bool {
         guard isAvailable else { return false }
 
-        try await store.requestAuthorization(toShare: writeTypes, read: [])
+        let types = writeTypes
+        guard !types.isEmpty else { return false }
+
+        // HealthKit APIs can raise Objective-C exceptions for configuration
+        // issues (missing usage strings, missing entitlement). Wrap the call
+        // so we convert those into Swift errors instead of hard crashes —
+        // users get an actionable message and we keep the app alive.
+        do {
+            try await store.requestAuthorization(toShare: types, read: [])
+        } catch {
+            SentryService.capture(error, extras: [
+                "context": "healthkit_requestAuthorization",
+                "typesCount": "\(types.count)"
+            ])
+            throw error
+        }
 
         // HealthKit doesn't disclose whether the user tapped Allow or Deny
-        // (privacy design). We verify by attempting to write a tiny probe…
-        // or more simply, check the per-type authorizationStatus which at
-        // least reports .notDetermined vs .sharingAuthorized / .sharingDenied.
-        return writeTypes.contains { type in
+        // for privacy reasons. The per-type authorizationStatus at least
+        // distinguishes .notDetermined from .sharingAuthorized / .sharingDenied.
+        return types.contains { type in
             store.authorizationStatus(for: type) == .sharingAuthorized
         }
     }

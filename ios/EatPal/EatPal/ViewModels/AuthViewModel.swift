@@ -31,6 +31,12 @@ final class AuthViewModel: ObservableObject {
 
     @Published var passwordValidation: PasswordValidator.ValidationResult?
 
+    /// Email of the currently signed-in user, sourced from the Supabase
+    /// session (not the login form). Nil when unauthenticated. Used by
+    /// Settings to show the real email even after Sign in with Apple,
+    /// which never populates the form field.
+    @Published var sessionEmail: String?
+
     // MARK: - Apple Sign-In
 
     /// The raw nonce for the current Apple Sign-In attempt.
@@ -62,12 +68,14 @@ final class AuthViewModel: ObservableObject {
             do {
                 let session = try await authService.currentSession()
                 self.authState = session != nil ? .authenticated : .unauthenticated
+                self.sessionEmail = session?.user.email
                 if let userId = session?.user.id.uuidString {
                     SentryService.setUserId(userId)
                     SentryService.leaveBreadcrumb(category: "auth", message: "session restored")
                 }
             } catch {
                 self.authState = .unauthenticated
+                self.sessionEmail = nil
             }
 
             // Listen for changes
@@ -75,10 +83,12 @@ final class AuthViewModel: ObservableObject {
                 switch event {
                 case .signedIn:
                     self.authState = .authenticated
+                    self.sessionEmail = session?.user.email
                     SentryService.setUserId(session?.user.id.uuidString)
                     SentryService.leaveBreadcrumb(category: "auth", message: "signed in")
                 case .signedOut:
                     self.authState = .unauthenticated
+                    self.sessionEmail = nil
                     self.clearForm()
                     SentryService.setUserId(nil)
                     SentryService.leaveBreadcrumb(category: "auth", message: "signed out")
@@ -146,6 +156,13 @@ final class AuthViewModel: ObservableObject {
         }
     }
 
+    /// Permanently deletes the user's account via the `delete-account` edge
+    /// function. Throws so the caller can show an error; the auth-state
+    /// listener handles the sign-out transition on success.
+    func deleteAccount() async throws {
+        try await authService.deleteAccount()
+    }
+
     // MARK: - Apple Sign-In
 
     /// Configures the Apple Sign-In request with a fresh nonce.
@@ -163,11 +180,39 @@ final class AuthViewModel: ObservableObject {
 
         switch result {
         case .success(let authorization):
-            guard let appleCredential = authorization.credential as? ASAuthorizationAppleIDCredential,
-                  let identityTokenData = appleCredential.identityToken,
-                  let idToken = String(data: identityTokenData, encoding: .utf8),
-                  let nonce = currentNonce else {
-                errorMessage = "Failed to process Apple Sign-In credentials."
+            guard let appleCredential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+                errorMessage = "Apple Sign-In returned an unexpected credential type. Please try again."
+                SentryService.capture(
+                    NSError(domain: "AppleSignIn", code: -1, userInfo: [NSLocalizedDescriptionKey: "Unexpected credential type"]),
+                    extras: ["context": "apple_sign_in_credential_type"]
+                )
+                isSubmitting = false
+                return
+            }
+            guard let identityTokenData = appleCredential.identityToken else {
+                errorMessage = "Apple didn't return an identity token. Please try Sign in with Apple again."
+                SentryService.capture(
+                    NSError(domain: "AppleSignIn", code: -2, userInfo: [NSLocalizedDescriptionKey: "Missing identity token"]),
+                    extras: ["context": "apple_sign_in_missing_token"]
+                )
+                isSubmitting = false
+                return
+            }
+            guard let idToken = String(data: identityTokenData, encoding: .utf8) else {
+                errorMessage = "Couldn't read the identity token returned by Apple. Please try again."
+                SentryService.capture(
+                    NSError(domain: "AppleSignIn", code: -3, userInfo: [NSLocalizedDescriptionKey: "Identity token not UTF-8 decodable"]),
+                    extras: ["context": "apple_sign_in_token_decode"]
+                )
+                isSubmitting = false
+                return
+            }
+            guard let nonce = currentNonce else {
+                errorMessage = "Sign in with Apple lost its secure nonce. Please tap the button again."
+                SentryService.capture(
+                    NSError(domain: "AppleSignIn", code: -4, userInfo: [NSLocalizedDescriptionKey: "Missing nonce"]),
+                    extras: ["context": "apple_sign_in_missing_nonce"]
+                )
                 isSubmitting = false
                 return
             }
@@ -176,13 +221,35 @@ final class AuthViewModel: ObservableObject {
                 _ = try await authService.signInWithApple(idToken: idToken, nonce: nonce)
                 // Auth state listener will handle the transition to .authenticated
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = "Sign in with Apple failed: \(error.localizedDescription)"
+                SentryService.capture(error, extras: [
+                    "context": "apple_sign_in_supabase_exchange",
+                    "userIdentifier": appleCredential.user
+                ])
             }
 
         case .failure(let error):
-            // Don't show error if user cancelled (error code 1001)
-            if (error as NSError).code != ASAuthorizationError.canceled.rawValue {
+            let nsError = error as NSError
+            // Don't surface an error if the user simply cancelled the sheet.
+            switch nsError.code {
+            case ASAuthorizationError.canceled.rawValue:
+                break
+            case ASAuthorizationError.notHandled.rawValue:
+                errorMessage = "Apple couldn't complete Sign in. Make sure you're signed into iCloud and try again."
+                SentryService.capture(error, extras: ["context": "apple_sign_in_not_handled"])
+            case ASAuthorizationError.failed.rawValue:
+                errorMessage = "Sign in with Apple failed. Please try again or use email sign-in."
+                SentryService.capture(error, extras: ["context": "apple_sign_in_failed"])
+            case ASAuthorizationError.invalidResponse.rawValue:
+                errorMessage = "Apple returned an invalid response. Please try again."
+                SentryService.capture(error, extras: ["context": "apple_sign_in_invalid_response"])
+            default:
                 errorMessage = error.localizedDescription
+                SentryService.capture(error, extras: [
+                    "context": "apple_sign_in_authorization",
+                    "errorCode": "\(nsError.code)",
+                    "errorDomain": nsError.domain
+                ])
             }
         }
 

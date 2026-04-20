@@ -154,7 +154,24 @@ final class OfflineStore: ObservableObject {
             container = try ModelContainer(for: schema, configurations: [config])
             context = ModelContext(container)
         } catch {
-            fatalError("Failed to initialize SwiftData: \(error)")
+            // If the on-disk store is corrupted or migration fails, fall back
+            // to an in-memory container so the app stays alive. Offline queue
+            // state won't persist across launches in this degraded mode, but
+            // it beats crashing on launch for the user.
+            SentryService.capture(error, extras: [
+                "context": "offline_store_init_fallback"
+            ])
+            let memoryConfig = ModelConfiguration(
+                "EatPalOfflineMemory",
+                schema: schema,
+                isStoredInMemoryOnly: true
+            )
+            do {
+                container = try ModelContainer(for: schema, configurations: [memoryConfig])
+                context = ModelContext(container)
+            } catch {
+                fatalError("Failed to initialize SwiftData fallback: \(error)")
+            }
         }
 
         refreshPendingCount()

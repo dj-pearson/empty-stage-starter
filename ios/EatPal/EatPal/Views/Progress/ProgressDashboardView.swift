@@ -325,8 +325,9 @@ struct WeeklyReportsTab: View {
     private var weeklyReports: [WeekReport] {
         let calendar = Calendar.current
         return (0..<4).map { weekOffset in
-            let weekStart = calendar.date(byAdding: .weekOfYear, value: -weekOffset, to: Date())!.weekDates.first ?? Date()
-            let dates = (0..<7).map { calendar.date(byAdding: .day, value: $0, to: weekStart)! }
+            let weekStart = (calendar.date(byAdding: .weekOfYear, value: -weekOffset, to: Date()) ?? Date())
+                .weekDates.first ?? Date()
+            let dates = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: weekStart) }
             let kidId = appState.activeKidId ?? ""
 
             let entries = dates.flatMap { date in

@@ -72,6 +72,40 @@ final class AuthService {
         try await client.auth.signOut()
     }
 
+    // MARK: - Delete Account
+
+    /// Deletes the signed-in user's account by calling the `delete-account`
+    /// edge function, which removes user-keyed data and the auth.users row
+    /// with service-role credentials. Required for Apple Guideline 5.1.1(v).
+    ///
+    /// On success the server returns 200 and we sign the user out locally so
+    /// the session token can't be reused. Any server error is rethrown.
+    func deleteAccount() async throws {
+        struct Empty: Encodable {}
+        struct DeleteResponse: Decodable {
+            let success: Bool?
+            let error: String?
+        }
+
+        let body = try JSONEncoder().encode(Empty())
+        let response: DeleteResponse = try await client.functions.invoke(
+            "delete-account",
+            options: .init(body: body)
+        )
+
+        if let error = response.error {
+            throw NSError(
+                domain: "DeleteAccount",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: error]
+            )
+        }
+
+        // Best-effort local sign-out — even if the network call fails here,
+        // the server already removed the account so the session is dead.
+        try? await client.auth.signOut()
+    }
+
     // MARK: - Auth State Listener
 
     func onAuthStateChange() -> AsyncStream<(AuthChangeEvent, Session?)> {

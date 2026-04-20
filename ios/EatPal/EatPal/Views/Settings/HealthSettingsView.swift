@@ -8,6 +8,10 @@ struct HealthSettingsView: View {
     @State private var isEnabled: Bool = HealthKitService.shared.isEnabled
     @State private var showDeniedAlert = false
     @State private var statusMessage: String?
+    /// Guards the onChange handler against re-entry when we flip the toggle
+    /// back ourselves after a denied/failed authorization. Without this,
+    /// the view could thrash state while HealthKit's sheet is animating.
+    @State private var isHandling = false
 
     private var service: HealthKitService { HealthKitService.shared }
 
@@ -45,7 +49,8 @@ struct HealthSettingsView: View {
             }
         }
         .navigationTitle("Sync to Health")
-        .onChange(of: isEnabled) { _, newValue in
+        .onChange(of: isEnabled) { oldValue, newValue in
+            guard oldValue != newValue, !isHandling else { return }
             Task { await handleToggle(newValue) }
         }
         .alert("Health access denied", isPresented: $showDeniedAlert) {
@@ -61,6 +66,9 @@ struct HealthSettingsView: View {
     }
 
     private func handleToggle(_ newValue: Bool) async {
+        isHandling = true
+        defer { isHandling = false }
+
         statusMessage = nil
 
         if !newValue {
