@@ -84,6 +84,7 @@ jobs:
           IOS_KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
           IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
           IOS_WIDGET_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_WIDGET_PROVISIONING_PROFILE_BASE64 }}
+          IOS_SHARE_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_SHARE_PROVISIONING_PROFILE_BASE64 }}
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
@@ -98,6 +99,7 @@ jobs:
             IOS_KEYCHAIN_PASSWORD
             IOS_PROVISIONING_PROFILE_BASE64
             IOS_WIDGET_PROVISIONING_PROFILE_BASE64
+            IOS_SHARE_PROVISIONING_PROFILE_BASE64
             APP_STORE_CONNECT_API_KEY_ID
             APP_STORE_CONNECT_ISSUER_ID
             APP_STORE_CONNECT_API_KEY_BASE64
@@ -184,6 +186,7 @@ jobs:
         run: |
           APP_PROFILE=$(/usr/libexec/PlistBuddy -c "Print :provisioningProfiles:${{ env.BUNDLE_ID }}" ExportOptions.plist 2>/dev/null || true)
           WIDGET_PROFILE=$(/usr/libexec/PlistBuddy -c "Print :provisioningProfiles:${{ env.WIDGET_BUNDLE_ID }}" ExportOptions.plist 2>/dev/null || true)
+          SHARE_PROFILE=$(/usr/libexec/PlistBuddy -c "Print :provisioningProfiles:com.eatpal.app.share" ExportOptions.plist 2>/dev/null || true)
           if [ -z "$APP_PROFILE" ]; then
             echo "::error::ExportOptions.plist missing provisioningProfiles entry for ${{ env.BUNDLE_ID }}"
             exit 1
@@ -192,8 +195,13 @@ jobs:
             echo "::error::ExportOptions.plist missing provisioningProfiles entry for ${{ env.WIDGET_BUNDLE_ID }}"
             exit 1
           fi
+          if [ -z "$SHARE_PROFILE" ]; then
+            echo "::error::ExportOptions.plist missing provisioningProfiles entry for com.eatpal.app.share"
+            exit 1
+          fi
           echo "App profile:    $APP_PROFILE"
           echo "Widget profile: $WIDGET_PROFILE"
+          echo "Share profile:  $SHARE_PROFILE"
 
       - name: SwiftLint (informational; does not fail build)
         working-directory: ${{ env.PROJECT_DIR }}
@@ -464,6 +472,35 @@ jobs:
           echo "  AppID:   $PROFILE_APP_ID"
           echo "  Expires: $PROFILE_EXPIRY"
 
+      - name: Install share extension provisioning profile
+        env:
+          SHARE_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_SHARE_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          PROFILE_PATH="$RUNNER_TEMP/share-profile.mobileprovision"
+          printf '%s' "$SHARE_PROVISIONING_PROFILE_BASE64" | tr -d '[:space:]' | base64 --decode -o "$PROFILE_PATH"
+
+          PLIST_PATH="$RUNNER_TEMP/share-profile.plist"
+          security cms -D -i "$PROFILE_PATH" -o "$PLIST_PATH"
+
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$PLIST_PATH")
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" "$PLIST_PATH")
+          PROFILE_APP_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" "$PLIST_PATH" | sed 's/^[A-Z0-9]*\.//')
+          PROFILE_EXPIRY=$(/usr/libexec/PlistBuddy -c "Print :ExpirationDate" "$PLIST_PATH")
+
+          if [ "$PROFILE_APP_ID" != "com.eatpal.app.share" ]; then
+            echo "::error::Share profile bundle ID mismatch: profile is for '$PROFILE_APP_ID' but share extension uses 'com.eatpal.app.share'"
+            exit 1
+          fi
+
+          cp "$PROFILE_PATH" \
+            ~/Library/MobileDevice/Provisioning\ Profiles/"$PROFILE_UUID.mobileprovision"
+
+          echo "Installed share profile:"
+          echo "  UUID:    $PROFILE_UUID"
+          echo "  Name:    $PROFILE_NAME"
+          echo "  AppID:   $PROFILE_APP_ID"
+          echo "  Expires: $PROFILE_EXPIRY"
+
       # ---- Build / archive (uses cached SPM from preflight) -------------
       - name: Cache SPM dependencies
         uses: actions/cache@v4
@@ -659,8 +696,10 @@ jobs:
           rm -f "$RUNNER_TEMP/certificate.p12"
           rm -f "$RUNNER_TEMP/profile.mobileprovision"
           rm -f "$RUNNER_TEMP/widget-profile.mobileprovision"
+          rm -f "$RUNNER_TEMP/share-profile.mobileprovision"
           rm -f "$RUNNER_TEMP/profile.plist"
           rm -f "$RUNNER_TEMP/widget-profile.plist"
+          rm -f "$RUNNER_TEMP/share-profile.plist"
           rm -rf "$HOME/.appstoreconnect/private_keys"
 
       - name: Build summary

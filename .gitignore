@@ -107,3 +107,7 @@ AUTH_FIXED_README.md
 distribution.pem
 EatPalDistribution.key
 /tables/
+EatPal_App_Store.mobileprovision
+EatPal_Share_App_Store.mobileprovision
+EatPal_App_Store.base64.txt
+EatPal_Share_App_Store.base64.txt
