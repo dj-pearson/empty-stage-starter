@@ -587,6 +587,16 @@ jobs:
           fi
           echo "Exported IPA: $IPA ($(du -h "$IPA" | cut -f1))"
 
+      - name: Pre-warm iTMSTransporter
+        # altool calls iTMSTransporter (a Java tool) under the hood. On
+        # GitHub-hosted Xcode 26 runners, the first invocation sometimes
+        # fails with "The file 'Defaults.properties' couldn't be opened"
+        # because iTMSTransporter races on initializing its bundled config.
+        # Running it once standalone first warms the caches so the real
+        # upload call below succeeds.
+        run: |
+          xcrun iTMSTransporter -version 2>&1 | head -5 || true
+
       - name: Upload to App Store Connect
         env:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
