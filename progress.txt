@@ -2024,3 +2024,40 @@ in the existing SwiftData code (pre-existing `OfflineStore.loadCachedFoods`) and
 When using `.foregroundStyle`, `.tint`, `.foregroundColor` with a ternary, always pin the branch types explicitly. SwiftUI's shape-style protocols (`HierarchicalShapeStyle`, `SemanticShapeStyle`, etc.) share symbol names like `.secondary`, `.primary`, `.tertiary` with `Color` but aren't type-equivalent. In ternary expressions, Swift's inference picks the more specific type and the other branch has to match. Explicit `Color.*` keeps things predictable.
 
 ---
+
+## 2026-04-17 - CI build pass #3 — Sentry API fix
+
+### Progress
+- Build got further than pass #2 — ternary fix worked across all three Grocery sheets.
+- Compiled: all SPM dependencies, EatPalWidgetExtension (4 files), EatPalShareExtension (5 files), main EatPal target made it through 30+ files before hitting the error.
+- SwiftLint still reports 133 violations (down 1 from 134 because we renamed `Op` to `Operation`).
+
+### Build error fixed
+```
+value of type 'SentryRequest' has no member 'data'
+    event.request?.data = nil
+```
+
+`SentryRequest` in sentry-cocoa 8.58.1 doesn't surface a `.data` property — request bodies just aren't stored on that type in the current version.
+Fix in `SentryService.swift:scrub(event:)` — dropped the `event.request?.data = nil` line. Kept `event.request?.cookies = nil` and the `event.request?.headers` sanitisation since those fields do exist. Updated the comment to explain why there's nothing to scrub in the body.
+
+### Confidence check before re-running
+Double-checked the other Sentry Cocoa API calls in this file are still current:
+- `event.user?.email/.username/.ipAddress/.data = nil` — `SentryUser` has all four as writeable properties.
+- `Breadcrumb(level:category:)` + `crumb.message`, `crumb.data` — matches the current init and properties.
+- `SentrySDK.capture(error:withScopeBlock:)` + `scope.setExtra(value:key:)` — current API shape in 8.58.1.
+- `SentrySDK.addBreadcrumb(_:)` — single-arg, matches.
+- `options.beforeSend`, `options.beforeBreadcrumb` — still present.
+- `options.enableAutoSessionTracking`, `sessionTrackingIntervalMillis`, `attachStacktrace`, `tracesSampleRate`, `profilesSampleRate` — all still valid options.
+
+### Next run expectation
+Strong bet: **clean build**. The error pattern so far has been "one API surface mismatch per run, fix it, move on." sentry-cocoa wasn't part of our previous two error runs (those were SwiftUI + AppIntents surface issues), so we've now hit each of the three new Apple/third-party APIs (AppIntents, SwiftUI, Sentry) once. Unless ActivityKit or HealthKit has a surprise — both of which we haven't exercised yet in a compile pass — the main target should emit cleanly this round.
+
+### If run #4 still fails
+Prime suspects to check, in order of likelihood:
+1. **ActivityKit** — `Activity<T>.request(attributes:content:pushType:)` signature drift, or `ActivityContent(state:staleDate:)` parameter order.
+2. **HealthKit** — `HKQuantityType(.dietaryEnergyConsumed)` convenience init availability, `HKCorrelation(type:start:end:objects:metadata:)` parameter shape.
+3. **VisionKit** — `DataScannerViewController` constructor ordering (lots of parameters).
+4. **App Intents** — `inputOptions: .init(capitalizationType: .sentences)` — that init exists in iOS 17 but let's see.
+
+---
