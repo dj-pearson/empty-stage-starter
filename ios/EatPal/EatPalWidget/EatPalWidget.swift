@@ -7,6 +7,9 @@ struct MealPlanEntry: TimelineEntry {
     let date: Date
     let meals: [WidgetMeal]
     let groceryCount: Int
+    let pantryLowCount: Int
+    let tonightDish: String?
+    let tryBiteStreak: Int
 }
 
 struct WidgetMeal {
@@ -26,7 +29,10 @@ struct MealPlanProvider: TimelineProvider {
                 WidgetMeal(slot: "Lunch", foodName: "Sandwich", icon: "sun.max.fill"),
                 WidgetMeal(slot: "Dinner", foodName: "Pasta", icon: "moon.fill"),
             ],
-            groceryCount: 5
+            groceryCount: 5,
+            pantryLowCount: 2,
+            tonightDish: "Pasta",
+            tryBiteStreak: 3
         )
     }
 
@@ -43,7 +49,8 @@ struct MealPlanProvider: TimelineProvider {
     }
 
     private func loadFromAppGroup() -> MealPlanEntry {
-        // Load from shared App Group UserDefaults
+        // Load from shared App Group UserDefaults. Keys mirror WidgetSnapshot.Key
+        // in the main app so writes and reads line up.
         let defaults = UserDefaults(suiteName: "group.com.eatpal.app")
 
         let mealsData = defaults?.array(forKey: "widget_meals") as? [[String: String]] ?? []
@@ -56,14 +63,102 @@ struct MealPlanProvider: TimelineProvider {
         }
 
         let groceryCount = defaults?.integer(forKey: "widget_grocery_count") ?? 0
+        let pantryLowCount = defaults?.integer(forKey: "widget_pantry_low_count") ?? 0
+        let tonightDish = defaults?.string(forKey: "widget_tonight_dish")
+        let tryBiteStreak = defaults?.integer(forKey: "widget_try_bite_streak") ?? 0
 
         return MealPlanEntry(
             date: Date(),
             meals: meals.isEmpty ? [
                 WidgetMeal(slot: "No meals", foodName: "Open EatPal to plan", icon: "calendar.badge.plus")
             ] : meals,
-            groceryCount: groceryCount
+            groceryCount: groceryCount,
+            pantryLowCount: pantryLowCount,
+            tonightDish: tonightDish,
+            tryBiteStreak: tryBiteStreak
         )
+    }
+}
+
+// MARK: - Lock Screen widgets (US-146)
+
+/// Lock Screen rectangular accessory: "Tonight: <dish>" on line 1,
+/// grocery / pantry status on line 2. Uses accented rendering mode.
+struct MealPlanAccessoryRectangular: View {
+    let entry: MealPlanEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Image(systemName: "fork.knife")
+                Text("Tonight")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+            }
+
+            Text(entry.tonightDish ?? "No dinner planned")
+                .font(.caption)
+                .fontWeight(.medium)
+                .lineLimit(1)
+
+            HStack(spacing: 8) {
+                if entry.groceryCount > 0 {
+                    Label("\(entry.groceryCount)", systemImage: "cart.fill")
+                        .font(.caption2)
+                }
+                if entry.pantryLowCount > 0 {
+                    Label("\(entry.pantryLowCount) low", systemImage: "leaf")
+                        .font(.caption2)
+                }
+            }
+        }
+        .widgetAccentable()
+    }
+}
+
+/// Lock Screen inline accessory: single tinted line. iOS lays this out
+/// alongside other inline widgets on the Lock Screen.
+struct MealPlanAccessoryInline: View {
+    let entry: MealPlanEntry
+
+    var body: some View {
+        if let tonight = entry.tonightDish {
+            Label("Tonight: \(tonight)", systemImage: "fork.knife")
+        } else if entry.groceryCount > 0 {
+            Label("\(entry.groceryCount) to buy", systemImage: "cart.fill")
+        } else if entry.pantryLowCount > 0 {
+            Label("\(entry.pantryLowCount) pantry items low", systemImage: "leaf")
+        } else {
+            Label("EatPal", systemImage: "leaf.fill")
+        }
+    }
+}
+
+/// Lock Screen circular accessory: shows the try-bite streak inside a
+/// progress ring. Falls back to grocery count when no streak.
+struct MealPlanAccessoryCircular: View {
+    let entry: MealPlanEntry
+
+    private var displayValue: Int {
+        entry.tryBiteStreak > 0 ? entry.tryBiteStreak : entry.groceryCount
+    }
+
+    private var displayIcon: String {
+        entry.tryBiteStreak > 0 ? "star.fill" : "cart.fill"
+    }
+
+    var body: some View {
+        ZStack {
+            AccessoryWidgetBackground()
+            VStack(spacing: 0) {
+                Image(systemName: displayIcon)
+                    .font(.system(size: 12))
+                Text("\(displayValue)")
+                    .font(.system(size: 16, weight: .bold))
+                    .monospacedDigit()
+            }
+        }
+        .widgetAccentable()
     }
 }
 
@@ -179,18 +274,51 @@ struct EatPalMealWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: MealPlanProvider()) { entry in
-            Group {
-                if #available(iOSApplicationExtension 17.0, *) {
-                    MealPlanWidgetSmall(entry: entry)
-                        .containerBackground(.fill.tertiary, for: .widget)
-                } else {
-                    MealPlanWidgetSmall(entry: entry)
-                }
-            }
+            MealPlanWidgetView(entry: entry)
         }
         .configurationDisplayName("Today's Meals")
-        .description("See today's meal plan at a glance.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .description("See today's meal plan, grocery count, and pantry status at a glance.")
+        .supportedFamilies([
+            .systemSmall,
+            .systemMedium,
+            .accessoryRectangular,
+            .accessoryInline,
+            .accessoryCircular
+        ])
+    }
+}
+
+/// Family-aware view router. Picks the correct layout for the family the
+/// widget system is requesting and applies the appropriate container style.
+struct MealPlanWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    let entry: MealPlanEntry
+
+    var body: some View {
+        Group {
+            switch family {
+            case .systemSmall:
+                MealPlanWidgetSmall(entry: entry)
+            case .systemMedium:
+                MealPlanWidgetMedium(entry: entry)
+            case .accessoryRectangular:
+                MealPlanAccessoryRectangular(entry: entry)
+            case .accessoryInline:
+                MealPlanAccessoryInline(entry: entry)
+            case .accessoryCircular:
+                MealPlanAccessoryCircular(entry: entry)
+            default:
+                MealPlanWidgetSmall(entry: entry)
+            }
+        }
+        .containerBackground(for: .widget) {
+            switch family {
+            case .accessoryRectangular, .accessoryInline, .accessoryCircular:
+                Color.clear
+            default:
+                Color(.systemBackground)
+            }
+        }
     }
 }
 
@@ -200,6 +328,7 @@ struct EatPalMealWidget: Widget {
 struct EatPalWidgetBundle: WidgetBundle {
     var body: some Widget {
         EatPalMealWidget()
+        GroceryTripLiveActivity()
     }
 }
 
@@ -213,6 +342,9 @@ struct EatPalWidgetBundle: WidgetBundle {
             WidgetMeal(slot: "Lunch", foodName: "Chicken sandwich", icon: "sun.max.fill"),
             WidgetMeal(slot: "Dinner", foodName: "Pasta with veggies", icon: "moon.fill"),
         ],
-        groceryCount: 8
+        groceryCount: 8,
+        pantryLowCount: 3,
+        tonightDish: "Pasta with veggies",
+        tryBiteStreak: 5
     )
 }

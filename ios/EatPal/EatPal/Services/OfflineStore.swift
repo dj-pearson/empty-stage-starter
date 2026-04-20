@@ -104,11 +104,37 @@ final class PendingMutation {
 // MARK: - Offline Store
 
 @MainActor
-final class OfflineStore {
+final class OfflineStore: ObservableObject {
     static let shared = OfflineStore()
 
     let container: ModelContainer
     let context: ModelContext
+
+    /// Reflects the current pending-mutation queue size so UI can surface it
+    /// (offline banner, Settings diagnostics). Updated after every enqueue
+    /// and after each successful or failed sync.
+    @Published private(set) var pendingMutationCount: Int = 0
+
+    /// Set to true while a sync pass is in flight. Prevents concurrent syncs
+    /// racing against the same queue.
+    @Published private(set) var isSyncing: Bool = false
+
+    /// Last sync error, if any. Reset on successful sync.
+    @Published private(set) var lastSyncError: String?
+
+    enum Operation: String {
+        case insert
+        case update
+        case delete
+    }
+
+    enum Table: String {
+        case foods
+        case kids
+        case recipes
+        case planEntries = "plan_entries"
+        case groceryItems = "grocery_items"
+    }
 
     private init() {
         let schema = Schema([
@@ -130,6 +156,8 @@ final class OfflineStore {
         } catch {
             fatalError("Failed to initialize SwiftData: \(error)")
         }
+
+        refreshPendingCount()
     }
 
     // MARK: - Cache Foods
@@ -181,6 +209,7 @@ final class OfflineStore {
         )
         context.insert(mutation)
         try? context.save()
+        refreshPendingCount()
     }
 
     func getPendingMutations() -> [PendingMutation] {
@@ -193,6 +222,7 @@ final class OfflineStore {
     func clearPendingMutation(_ mutation: PendingMutation) {
         context.delete(mutation)
         try? context.save()
+        refreshPendingCount()
     }
 
     func clearAllPendingMutations() {
@@ -201,35 +231,159 @@ final class OfflineStore {
             context.delete(mutation)
         }
         try? context.save()
+        refreshPendingCount()
+    }
+
+    // MARK: - Typed enqueue helpers (US-150)
+
+    /// Queue an insert with an encodable payload. The payload is JSON-encoded
+    /// and decoded back during sync.
+    func enqueueInsert<T: Encodable>(_ payload: T, table: Table, entityId: String) {
+        let data = try? JSONEncoder.supabaseSnakeCase.encode(payload)
+        addPendingMutation(
+            table: table.rawValue,
+            operation: Operation.insert.rawValue,
+            entityId: entityId,
+            payload: data
+        )
+    }
+
+    /// Queue an update with an encodable update struct.
+    func enqueueUpdate<T: Encodable>(_ payload: T, table: Table, entityId: String) {
+        let data = try? JSONEncoder.supabaseSnakeCase.encode(payload)
+        addPendingMutation(
+            table: table.rawValue,
+            operation: Operation.update.rawValue,
+            entityId: entityId,
+            payload: data
+        )
+    }
+
+    /// Queue a delete for a specific row id.
+    func enqueueDelete(table: Table, entityId: String) {
+        addPendingMutation(
+            table: table.rawValue,
+            operation: Operation.delete.rawValue,
+            entityId: entityId,
+            payload: nil
+        )
     }
 
     // MARK: - Sync
 
     /// Replays pending mutations against Supabase when coming back online.
+    /// Per-table dispatch decodes the stored payload and posts the right typed
+    /// insert / update to the right endpoint. Stops on first failure to
+    /// preserve queue ordering — the next sync pass retries from that point.
     func syncPendingMutations() async {
+        guard !isSyncing else { return }
         let mutations = getPendingMutations()
-        guard !mutations.isEmpty else { return }
+        guard !mutations.isEmpty else {
+            lastSyncError = nil
+            return
+        }
 
-        let client = SupabaseManager.client
+        isSyncing = true
+        lastSyncError = nil
+        defer { isSyncing = false }
 
         for mutation in mutations {
             do {
-                switch mutation.operation {
-                case "delete":
-                    try await client.from(mutation.table)
-                        .delete()
-                        .eq("id", value: mutation.entityId)
-                        .execute()
-
-                default:
-                    break // insert/update handled by optimistic updates in AppState
-                }
-
+                try await replay(mutation)
                 clearPendingMutation(mutation)
             } catch {
-                print("Failed to sync mutation \(mutation.id): \(error)")
-                break // Stop on first failure to maintain order
+                lastSyncError = error.localizedDescription
+                SentryService.capture(error, extras: [
+                    "queue": "OfflineStore",
+                    "table": mutation.table,
+                    "operation": mutation.operation,
+                    "id": mutation.entityId
+                ])
+                break // preserve ordering; retry on next reconnection
             }
         }
+
+        refreshPendingCount()
+    }
+
+    // MARK: - Private helpers
+
+    private func refreshPendingCount() {
+        pendingMutationCount = getPendingMutations().count
+    }
+
+    private func replay(_ mutation: PendingMutation) async throws {
+        let client = SupabaseManager.client
+        let table = mutation.table
+        let decoder = JSONDecoder.supabaseSnakeCase
+
+        switch mutation.operation {
+        case Operation.delete.rawValue:
+            try await client.from(table)
+                .delete()
+                .eq("id", value: mutation.entityId)
+                .execute()
+
+        case Operation.insert.rawValue:
+            guard let data = mutation.payload else { return }
+
+            switch table {
+            case Table.groceryItems.rawValue:
+                let item = try decoder.decode(GroceryItem.self, from: data)
+                try await client.from(table).insert(item).execute()
+            case Table.foods.rawValue:
+                let food = try decoder.decode(Food.self, from: data)
+                try await client.from(table).insert(food).execute()
+            case Table.planEntries.rawValue:
+                let entry = try decoder.decode(PlanEntry.self, from: data)
+                try await client.from(table).insert(entry).execute()
+            case Table.kids.rawValue:
+                let kid = try decoder.decode(Kid.self, from: data)
+                try await client.from(table).insert(kid).execute()
+            case Table.recipes.rawValue:
+                let recipe = try decoder.decode(Recipe.self, from: data)
+                try await client.from(table).insert(recipe).execute()
+            default:
+                break
+            }
+
+        case Operation.update.rawValue:
+            guard let data = mutation.payload else { return }
+
+            switch table {
+            case Table.groceryItems.rawValue:
+                let update = try decoder.decode(GroceryItemUpdate.self, from: data)
+                try await client.from(table).update(update).eq("id", value: mutation.entityId).execute()
+            case Table.foods.rawValue:
+                let update = try decoder.decode(FoodUpdate.self, from: data)
+                try await client.from(table).update(update).eq("id", value: mutation.entityId).execute()
+            case Table.planEntries.rawValue:
+                let update = try decoder.decode(PlanEntryUpdate.self, from: data)
+                try await client.from(table).update(update).eq("id", value: mutation.entityId).execute()
+            default:
+                break
+            }
+
+        default:
+            break
+        }
+    }
+}
+
+// MARK: - JSONCoder helpers shared with Supabase (matches the library's default encoding)
+
+private extension JSONEncoder {
+    static var supabaseSnakeCase: JSONEncoder {
+        let encoder = JSONEncoder()
+        // Domain structs already declare their snake_case CodingKeys, so keep
+        // the default key strategy to avoid double-conversion.
+        return encoder
+    }
+}
+
+private extension JSONDecoder {
+    static var supabaseSnakeCase: JSONDecoder {
+        let decoder = JSONDecoder()
+        return decoder
     }
 }

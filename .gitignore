@@ -106,3 +106,4 @@ AUTH_FIXED_README.md
 .cache_ggshield
 distribution.pem
 EatPalDistribution.key
+/tables/

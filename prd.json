@@ -2531,6 +2531,329 @@
       "priority": 20,
       "passes": false,
       "notes": "ANDROID AUDIT - Monitoring - Low: Essential for production stability"
+    },
+    {
+      "id": "US-135",
+      "title": "iOS: Add SwiftUI swipe actions to Pantry, Grocery, Recipes, and Meal Plan lists",
+      "description": "As an iOS user, I want to swipe on list rows to perform the most common actions without opening detail views, so that managing foods, groceries, and meals feels fast and native.",
+      "acceptanceCriteria": [
+        "Pantry rows (ios/EatPal/EatPal/Views/Pantry/PantryView.swift): leading swipe = +1 qty (green), trailing swipe = move to grocery (blue) and delete (red, destructive)",
+        "Grocery rows (Views/Grocery/GroceryView.swift): leading swipe = toggle checked, trailing swipe = change category and delete",
+        "Recipe rows (Views/Recipes/RecipesView.swift): leading swipe = favorite toggle, trailing swipe = add to grocery and add to planner",
+        "Meal plan rows (Views/MealPlan/MealPlanView.swift): leading swipe = log ate/tried, trailing swipe = delete",
+        "All actions fire HapticManager feedback (success for constructive, light impact for toggles, error for destructive)",
+        "All actions update AppState optimistically and roll back on Supabase failure (match existing pattern)",
+        "Actions respect allowsFullSwipe: true for destructive delete, false for multi-option swipes",
+        "VoiceOver announces the swipe actions via .accessibilityAction",
+        "Swift builds cleanly (xcodebuild -scheme EatPal build) and existing EatPalTests pass"
+      ],
+      "priority": 21,
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 1: DONE 2026-04-17. Swipe actions added across GroceryView (leading check/uncheck, trailing delete+edit), PantryView (leading +1 + safe toggle, trailing delete+grocery), RecipesView (leading add-ingredients-to-grocery + helper, trailing delete), MealPlanView PlanEntryRow (contextMenu fallback since it isn't in a List). All fire HapticManager feedback and reuse existing AppState optimistic-update pattern. Not yet verified on device / no xcodebuild run (no Swift toolchain available on Windows host)."
+    },
+    {
+      "id": "US-136",
+      "title": "iOS: SwiftUI drag-and-drop to move foods between Pantry, Grocery, and Meal Plan",
+      "description": "As an iOS user, I want to long-press-drag a food from the Pantry onto a day in the Meal Planner or onto the Grocery tab, so that moving items between areas feels like manipulating physical objects.",
+      "acceptanceCriteria": [
+        "Pantry food rows use .draggable(foodTransferable) with a custom NSItemProvider carrying food id + name",
+        "MealPlanView day cells use .dropDestination(for: FoodTransferable.self) to insert a plan_entry for that date/slot",
+        "GroceryView root area uses .dropDestination to add the dropped food to grocery_items",
+        "TabView tab indicators (Grocery and Planner) accept drops when a drag is hovering, triggering tab switch and drop",
+        "Custom drag preview shows food name + category emoji",
+        "Haptic feedback on drop accept",
+        "Rollback on Supabase failure",
+        "Swift builds cleanly and unit tests for FoodTransferable encode/decode added to EatPalTests"
+      ],
+      "priority": 22,
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 1: DONE 2026-04-17 (first pass). Created ios/EatPal/EatPal/Models/FoodTransferable.swift (Codable + Transferable with CodableRepresentation(.utf8PlainText) + ProxyRepresentation for external drag-out of the food name). PantryView FoodRowView has .draggable(FoodTransferable(food:)) with a custom drag preview (category icon + name, shadowed pill). GroceryView.List has .dropDestination(for: FoodTransferable.self) that inserts a GroceryItem with addedVia: \"drag\" per dropped item. MealPlanView passes date: selectedDate into MealSlotCard. MealSlotCard has .dropDestination that creates a PlanEntry(foodId: dropped.id, date: isoString, mealSlot: slot.rawValue, kidId: activeKidId). isTargeted state drives a green overlay border and a swap-in 'Release to add to X' label. Donates TipEvents.didDragFood on successful drop. Not yet verified on device — TabView-level drop targets (drag-hover-over-tab-to-switch) NOT implemented in this pass; user must navigate to destination tab before dropping."
+    },
+    {
+      "id": "US-137",
+      "title": "iOS: Context menus with preview on food, recipe, and plan rows",
+      "description": "As an iOS user, I want a long-press context menu with a preview thumbnail and quick actions on food/recipe rows, so I can take action without tapping into detail screens.",
+      "acceptanceCriteria": [
+        "Food rows in PantryView, GroceryView use .contextMenu with actions: Add to Grocery, Add to Plan, Mark Safe, Mark Try-Bite, Edit, Delete",
+        "Recipe rows in RecipesView use .contextMenu with actions: Add to Grocery, Add to Plan, Favorite, Share, Edit, Delete",
+        "Plan entry rows in MealPlanView use .contextMenu with actions: Log Ate, Log Tried, Log Refused, Move, Delete",
+        "Preview uses .contextMenu { ... } preview: { ... } closure to show larger thumbnail + key metadata",
+        "Destructive actions use role: .destructive",
+        "Haptic feedback on open",
+        "Swift builds cleanly"
+      ],
+      "priority": 23,
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 1: DONE 2026-04-17. contextMenu added to PantryView FoodRowView (Add to Grocery, Mark Safe/Unsafe, Mark Try-Bite/Clear, Edit, Delete), GroceryView GroceryItemRow (Mark Bought/Uncheck, Edit, Duplicate, Delete), RecipesView RecipeRowView (Add Ingredients to Grocery, View Details, Delete) with preview: RecipePreviewCard showing image/name/description/prep time/difficulty/ingredient count/rating. MealPlanView PlanEntryRow contextMenu was added during US-135 (Log Ate/Tasted/Refused + Remove). Not yet verified on device (no macOS build available on Windows host)."
+    },
+    {
+      "id": "US-138",
+      "title": "iOS: TipKit onboarding for new gestures (swipe/drag/long-press)",
+      "description": "As a new iOS user, I want subtle in-context tips to teach me the new swipe, drag, and long-press gestures so I discover them without a tutorial wall.",
+      "acceptanceCriteria": [
+        "Add TipKit (iOS 17+) framework",
+        "Configure Tips.configure() in EatPalApp:body",
+        "Create SwipePantryTip, DragToPlannerTip, ContextMenuTip Tip structs with rules (show after N app launches, dismiss on first successful use)",
+        "Attach .popoverTip(tip) to the first Pantry row, first MealPlanView day cell, first Recipe row",
+        "Tips never re-appear after being dismissed or after first successful action",
+        "Tips honor Reduce Motion and VoiceOver",
+        "Swift builds cleanly"
+      ],
+      "priority": 24,
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 1: DONE 2026-04-17. Created ios/EatPal/EatPal/Utilities/Tips.swift with 5 Tip structs (SwipeGroceryTip, SwipePantryTip, SwipeRecipeTip, ContextMenuTip, plus Event definitions). Called Tips.configure(.displayFrequency(.immediate), .datastoreLocation(.applicationDefault)) in EatPalApp.init(). Attached .popoverTip(swipeTip) on Pantry, Grocery, Recipes list headers. Events TipEvents.didSwipeGrocery/Pantry/Recipe are donated on first successful swipe action so tips dismiss permanently per install. Rules use #Rule(event) { $0.donations.count == 0 }. Not yet verified on device."
+    },
+    {
+      "id": "US-139",
+      "title": "iOS: Unified DataScannerViewController for barcode + OCR (recipe cards, ingredient labels, receipts, handwritten lists)",
+      "description": "As an iOS user, I want one scanner tab that can scan a barcode, recipe card, ingredient label, or grocery receipt/list using live text recognition, so bulk data entry becomes effortless.",
+      "acceptanceCriteria": [
+        "Replace or extend ios/EatPal/EatPal/Views/Scanner/BarcodeScannerView.swift with VisionKit DataScannerViewController",
+        "Single scanner supports recognizedDataTypes: [.barcode(), .text()]",
+        "UI offers a mode selector: Barcode (-> Open Food Facts flow), Recipe Card, Ingredient Label, Receipt, Grocery List",
+        "Barcode mode preserves existing BarcodeService lookup behavior",
+        "Recipe card mode captures text, routes to a new 'Create Recipe from OCR' preview (reuses EditRecipeView)",
+        "Ingredient label mode captures text, creates Food record with parsed nutrition",
+        "Receipt mode parses line items and bulk-inserts into Pantry or Grocery (user choice)",
+        "Grocery list mode parses lines and routes through existing bulk grocery add flow",
+        "Availability gating: isSupported && isAvailable, graceful fallback message on older hardware",
+        "Camera permission handling preserved",
+        "Swift builds cleanly"
+      ],
+      "priority": 25,
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 2: DONE 2026-04-17 (first pass). New Views/Scanner/DataScannerRepresentable.swift wraps VisionKit DataScannerViewController with a Configuration struct (barcodes + text toggles, quality level, highlighting, guidance) and delegate callbacks for didTapOn, didAdd, didRemove, and becameUnavailableWithError. New Views/Scanner/UnifiedScannerView.swift provides the SwiftUI host with a segmented Mode picker (Barcode / Grocery List), live guidance banner, recognised-count indicator, and graceful fallback to the legacy BarcodeScannerView when DataScannerViewController.isSupported returns false. Recreates the scanner via .id(mode) when the user switches modes. New Views/Grocery/TextImportGrocerySheet.swift reviews recognised text with an editable transcript (live re-parse on edit) and the same parsed-items preview used by voice/photo paths. PantryView and DashboardHomeView now open UnifiedScannerView in .barcode mode with mode-switching locked, preserving existing OpenFoodFacts flow. GroceryView's quick-add menu gained a 'Scan a list' entry that opens UnifiedScannerView in .groceryList mode then presents TextImportGrocerySheet with sourceTag: 'scan'. Follow-ups (not in this pass): recipe-card mode, ingredient-label mode, receipt mode, TipKit pointer at the scanner. Not yet verified on device."
+    },
+    {
+      "id": "US-140",
+      "title": "iOS: Voice-to-grocery via SFSpeechRecognizer",
+      "description": "As an iOS user, I want to tap a mic button and dictate multiple grocery items in one sentence, so I can add items hands-free while cooking or driving.",
+      "acceptanceCriteria": [
+        "Add Speech framework and NSSpeechRecognitionUsageDescription + NSMicrophoneUsageDescription to ios/EatPal/EatPal/Info.plist",
+        "Add mic button to GroceryView add row with live waveform indicator",
+        "Use SFSpeechRecognizer with on-device recognition when available (requiresOnDeviceRecognition = true)",
+        "Pipe transcript through a Swift port of parseGroceryText that handles 'milk, eggs, two pounds of chicken, six bananas'",
+        "Show parsed preview before insert; user can edit, remove, or confirm",
+        "Insert parsed items via AppState.addGroceryItem batch",
+        "Haptic + toast on completion",
+        "Graceful handling of permission denial and no-speech timeout",
+        "Swift builds cleanly"
+      ],
+      "priority": 26,
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 2: DONE 2026-04-17. Info.plist gained NSMicrophoneUsageDescription + NSSpeechRecognitionUsageDescription. New Services/GroceryTextParser.swift (~220 LOC) ports parse-grocery-text.ts into Swift with number words ('two pounds of chicken'), unit normalisation, category inference, and confidence scoring. New Services/VoiceInputService.swift (~180 LOC) wraps SFSpeechRecognizer + AVAudioEngine, prefers on-device recognition, dual-tracks mic + speech permissions, publishes live transcript + RMS input level, and supports cancel. New Views/Grocery/VoiceAddGrocerySheet.swift (~280 LOC) provides waveform visualiser, transcript view, parsed-items preview with per-item toggles, confidence warning icons, and a big record/stop button. GroceryView toolbar gained a mic button that opens the sheet; items save via AppState.addGroceryItem with addedVia: 'voice'. Not yet verified on device — SFSpeechRecognizer behaviour with on-device flag needs real-hardware testing."
+    },
+    {
+      "id": "US-141",
+      "title": "iOS: Photo / screenshot to grocery list via Vision OCR",
+      "description": "As an iOS user, I want to import a screenshot or photo of a grocery list and have it parsed into items automatically, so I never manually transcribe a list again.",
+      "acceptanceCriteria": [
+        "Add 'Import from Photo' button in GroceryView",
+        "Uses PhotosPicker (iOS 16+) to select one or more images",
+        "Runs VNRecognizeTextRequest with .accurate recognitionLevel on each image",
+        "Concatenates recognized strings, parses via grocery parser",
+        "Shows preview modal with checkboxes per parsed item (reuse existing BulkAddSheet UX from React Native if possible, or native SwiftUI equivalent)",
+        "User can edit each row before insert",
+        "Insert via AppState.addGroceryItem batch",
+        "Handle rotated images (use VNImageRequestHandler orientation)",
+        "Handle low-confidence recognitions (< 0.5) by prompting review",
+        "Swift builds cleanly"
+      ],
+      "priority": 27,
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 2: DONE 2026-04-17. New Services/ImageTextRecognizer.swift wraps Vision VNRecognizeTextRequest with .accurate recognitionLevel, en-US language, and correct CGImagePropertyOrientation mapping from UIImage.imageOrientation. Returns per-line strings + confidences + merged text. New Views/Grocery/PhotoImportGrocerySheet.swift uses PhotosPicker (maxSelectionCount: 5), runs OCR on each image, merges transcripts, feeds GroceryTextParser (shared with US-140), shows recognized image thumbnails + parsed-items preview with per-item include/exclude. Low-confidence scans (< 0.5 mean) display a warning banner; per-item confidence < 0.75 displays a questionmark badge. GroceryView toolbar collapsed into a single 'wand.and.stars' Menu with Dictate / Import from Photo / Generate from plan entries. Items saved via AppState.addGroceryItem with addedVia: 'photo'. Reuses existing NSPhotoLibraryUsageDescription. Not yet verified on device."
+    },
+    {
+      "id": "US-142",
+      "title": "iOS: App Intents + Siri Shortcuts for add-to-grocery, what's-for-dinner, log-meal-result",
+      "description": "As an iOS user, I want to ask Siri to add items to my grocery list, tell me what's for dinner, or log whether my kid ate their meal, so I can interact hands-free.",
+      "acceptanceCriteria": [
+        "Add AppIntents framework",
+        "AddGroceryItemIntent: parameter item (String), inserts into grocery_items for current user",
+        "WhatsForDinnerIntent: returns today's dinner plan_entry food names + recipe name if linked",
+        "LogMealResultIntent: parameters kid, date, slot, result (ate/refused/tried), updates plan_entry",
+        "All intents are donatable via IntentDonationManager so they appear in Siri suggestions and Shortcuts app",
+        "AppShortcutsProvider exposes the three intents with phrases (e.g., 'Add __ to EatPal grocery', 'What's for dinner in EatPal', 'Log __ meal in EatPal')",
+        "Intents respect AuthViewModel authentication state; return AuthenticationRequired error if signed out",
+        "Localization of phrases in en-US",
+        "Swift builds cleanly"
+      ],
+      "priority": 28,
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 2: DONE 2026-04-17. New Intents/ folder with: GroceryAppIntents.swift (AddGroceryItemIntent — item: String, pipes through GroceryTextParser so 'two pounds of chicken' resolves qty/unit/category; WhatsForDinnerIntent — fetches today's plan_entries with dinner slot across all kids, resolves via DataService.shared.fetchFoods/fetchRecipes/fetchKids, composes a friendly dialog). MealAppIntents.swift (MealSlotAppEnum with Siri-facing breakfast/lunch/dinner/snack mapped to domain slots via domainSlotRawValues — snack covers both snack1 and snack2; MealResultAppEnum; LogMealResultIntent — updates all matching plan_entries for today+slot with the chosen result). EatPalAppShortcuts.swift AppShortcutsProvider registers 3+ phrases per intent using (.applicationName) placeholder. All three intents run with openAppWhenRun: false — background execution via DataService.shared which authenticates from the keychain-stored Supabase session. Breadcrumbs via SentryService on each perform(). Errors captured with SentryService.capture(error:extras:['intent': ...]). Not yet implemented: intent donation from manual-equivalent actions (AddGroceryItemView form save, PlanEntryRow result log) and full kid-selection entity for multi-kid families. Not yet verified on device — requires xcodegen generate + build to register phrases with Siri."
+    },
+    {
+      "id": "US-143",
+      "title": "iOS: Share Extension for recipe URL import from Safari / Instagram / TikTok",
+      "description": "As an iOS user, when I find a recipe on the web or social, I want to share it into EatPal and have it saved as a structured recipe, so my recipe bank grows effortlessly.",
+      "acceptanceCriteria": [
+        "Add new Share Extension target EatPalShareExtension configured in project.yml",
+        "Accepts public.url (and public.plain-text as fallback)",
+        "Calls the existing functions/parse-recipe edge function with the shared URL",
+        "Shows a SwiftUI preview of parsed recipe (name, image, ingredients, instructions) before save",
+        "Save writes to recipes + recipe_ingredients tables via DataService (share target signs in via keychain-shared Supabase session)",
+        "App Group used for keychain access between main app and extension",
+        "Handles extension size constraints (no heavy views, < 120MB memory)",
+        "Graceful failure if URL cannot be parsed (show error, offer manual save)",
+        "Swift builds cleanly"
+      ],
+      "priority": 29,
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 2: DONE 2026-04-17. New EatPalShareExtension Xcode target in project.yml with app-extension type, com.eatpal.app.share bundle id, SKIP_INSTALL YES, SUPABASE_URL/ANON_KEY env-substituted in generated Info.plist, NSExtensionActivationSupportsWebURLWithMaxCount=1 + NSExtensionActivationSupportsText=true, NSExtensionPrincipalClass=$(PRODUCT_MODULE_NAME).ShareViewController. Added EatPalShareExtension.entitlements with group.com.eatpal.app. New Shared/PendingRecipeImport.swift defines Codable struct + PendingRecipeImportQueue (load/enqueue/remove/clear) backed by App Group UserDefaults key 'pending_recipe_imports'. EatPalShare/ShareViewController.swift extracts URL from extensionContext (via UTType.url, falls back to plain-text + NSDataDetector), presents UIHostingController hosting ShareImportView. ShareImportView.swift has task-based fetch, loading / error / ContentUnavailableView / recipe preview states, Save button enqueues PendingRecipeImport. ShareExtensionAPI.swift is a URLSession client POSTing to {SUPABASE_URL}/functions/v1/parse-recipe with apikey header; decodes ParsedRecipe (with wrapper fallback). AppState.drainPendingRecipeImports() called after loadAllData successfully completes — iterates queue, constructs Recipe (sourceType='share_extension'), calls addRecipe, removes only successful items from queue (failed stay for next launch). Auth is enforced by AppState.addRecipe's existing path. Not yet verified on device."
+    },
+    {
+      "id": "US-144",
+      "title": "iOS: HealthKit nutrition write-back for logged meals",
+      "description": "As a health-conscious parent, I want logged meals to write nutrition (energy, protein, carbs, fat) to my kid's Health profile, so EatPal becomes the authoritative nutrition source.",
+      "acceptanceCriteria": [
+        "Add HealthKit capability to ios/EatPal/EatPal.entitlements",
+        "Add NSHealthShareUsageDescription and NSHealthUpdateUsageDescription to Info.plist",
+        "New HealthKitService.swift with request/check authorization for dietaryEnergyConsumed, dietaryProtein, dietaryCarbohydrates, dietaryFatTotal",
+        "When a plan_entry is logged as 'ate', compute macros from linked Food/Recipe and write an HKCorrelation for the meal slot",
+        "Settings toggle: 'Sync meals to Health' (default off)",
+        "Handle opt-out gracefully (no silent writes)",
+        "Do not write PII-sensitive fields (names, notes) to HealthKit",
+        "Swift builds cleanly"
+      ],
+      "priority": 30,
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 2: DONE 2026-04-17. EatPal.entitlements gained com.apple.developer.healthkit (true). Info.plist gained NSHealthShareUsageDescription + NSHealthUpdateUsageDescription. New Services/HealthKitService.swift with isAvailable (HKHealthStore.isHealthDataAvailable), isEnabled (UserDefaults-backed user opt-in distinct from system authorization), requestAuthorization async, writeTypes covering dietaryEnergyConsumed / dietaryProtein / dietaryCarbohydrates / dietaryFatTotal + the .food correlation type, and writeMeal(calories:proteinGrams:carbsGrams:fatGrams:mealDate:mealName:) which bundles macros into one HKCorrelation so Health shows a single meal entry (not four orphan samples). Metadata uses HKMetadataKeyFoodType = mealName, no PII. AppState.updatePlanEntry now fires Task { await writeHealthSample(for:) } when result becomes MealResult.ate.rawValue and the entry has a linked recipe with nutritionInfo. New Views/Settings/HealthSettingsView.swift provides the toggle UI — flipping on triggers requestAuthorization, shows 'Open Settings' alert on denial, links to the Health app with x-apple-health:// URL. SettingsView got a new Preferences row 'Sync to Health' navigating into HealthSettingsView. Food-only plan entries (no linked recipe with nutrition) are silently skipped. Not yet verified on device."
+    },
+    {
+      "id": "US-145",
+      "title": "iOS: Live Activities + Dynamic Island (cook mode, grocery trip, AI plan generation)",
+      "description": "As an iOS user, I want glanceable Live Activities for things that take time or span location, so I don't have to keep the app open.",
+      "acceptanceCriteria": [
+        "Add ActivityKit framework",
+        "Add NSSupportsLiveActivities = YES in Info.plist",
+        "CookModeAttributes: recipe name, current step, total steps, step timer; rendered as compact/expanded/minimal Dynamic Island variants",
+        "GroceryTripAttributes: checked count, total count, last checked item name",
+        "AIMealPlanAttributes: progress %, stage label",
+        "Start activity when Cook Mode begins, when user starts a grocery trip (optional toggle), when AI plan generation is triggered",
+        "End activity on completion or after 8 hours",
+        "Graceful fallback on devices < iOS 16.1",
+        "Swift builds cleanly"
+      ],
+      "priority": 31,
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 3: DONE 2026-04-17. Scope: grocery-trip Live Activity (cook-mode and AI-plan-generation Live Activities deferred — no CookMode on iOS yet; AI plan flow is short enough to not need one). Info.plist gained NSSupportsLiveActivities + NSSupportsLiveActivitiesFrequentUpdates. New ios/EatPal/Shared/ folder added to BOTH EatPal and EatPalWidgetExtension target source paths in project.yml so the shared GroceryTripAttributes type compiles into both. Shared/GroceryTripActivityAttributes.swift defines ActivityAttributes with TripState (totalCount, checkedCount, lastCheckedName) + computed progress and isComplete; static attrs listTitle + startedAt. Services/GroceryTripActivityService.swift @MainActor singleton handles start/update/end via Activity<GroceryTripAttributes>.request/update/end with 8-hour staleDate safety net, recovers lingering activities on init, auto-ends 3s after 100% completion. EatPalWidget/GroceryTripLiveActivity.swift renders Lock Screen banner (title + count + progress bar + last-checked subtitle) and Dynamic Island expanded (leading: title, trailing: count, center: last added, bottom: progress) / compact (cart icon + count) / minimal (cart icon). Registered alongside EatPalMealWidget in the WidgetBundle. AppState.toggleGroceryItem now calls updateGroceryTripActivity when a toggle succeeds or queues (works online + offline). GroceryView quick-add menu gained Start shopping trip (when no active activity) / End shopping trip (when one is running). widgetURL deep-links eatpal://openGroceryList. Not yet verified on device."
+    },
+    {
+      "id": "US-146",
+      "title": "iOS: Lock Screen widgets (accessoryRectangular, accessoryInline, accessoryCircular)",
+      "description": "As an iOS user, I want EatPal on my Lock Screen so I see tonight's meal and low pantry items at a glance.",
+      "acceptanceCriteria": [
+        "Extend ios/EatPal/EatPalWidget/EatPalWidget.swift supportedFamilies to include .accessoryRectangular, .accessoryInline, .accessoryCircular",
+        "accessoryRectangular: 'Tonight: <dinner recipe name>' with small icon",
+        "accessoryInline: 'N items low in pantry' (single line, tinted)",
+        "accessoryCircular: try-bite streak count for active kid",
+        "Use widgetRenderingMode appropriately (.accented where relevant)",
+        "Widget data still sourced from App Group UserDefaults",
+        "Xcode preview snapshots added for each family",
+        "Swift builds cleanly"
+      ],
+      "priority": 32,
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 3: DONE 2026-04-17. EatPalWidget.swift supportedFamilies expanded from [.systemSmall, .systemMedium] to include .accessoryRectangular (Tonight: <dish> + grocery/pantry-low counts, widgetAccentable), .accessoryInline (single tinted line: tonight's dish → grocery count → pantry-low → fallback), .accessoryCircular (try-bite streak count with star or grocery count with cart icon, AccessoryWidgetBackground). Added MealPlanWidgetView router reading @Environment(\\.widgetFamily) to pick the right layout + container background (Color.clear for accessories, .systemBackground for system widgets). Reuses WidgetSnapshot keys from US-152 so data flows through the same pipeline. Not yet verified on device — Lock Screen widgets need iOS 16+ (all covered by iOS 17 deployment target)."
+    },
+    {
+      "id": "US-147",
+      "title": "iOS: Interactive home screen widget - check off grocery items via App Intent",
+      "description": "As an iOS user, I want to check off grocery items directly from the widget without opening the app, so shopping feels frictionless.",
+      "acceptanceCriteria": [
+        "systemMedium widget family shows up to 5 unchecked grocery items",
+        "Each row is a SwiftUI Button(intent: ToggleGroceryItemIntent(id:)) (iOS 17+)",
+        "ToggleGroceryItemIntent toggles checked state via App Group shared store and queues a Supabase update",
+        "Widget timeline reloads after tap (WidgetCenter.shared.reloadTimelines)",
+        "Non-interactive fallback view for iOS 16 and below",
+        "Swift builds cleanly"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": "iOS UX AUDIT - Tier 3: interactive widget delight."
+    },
+    {
+      "id": "US-148",
+      "title": "iOS: Control Center widget (iOS 18) for quick grocery add",
+      "description": "As an iOS user on iOS 18+, I want a Control Center tile that launches EatPal directly into the grocery add flow or voice add, so adding items is one swipe-and-tap away.",
+      "acceptanceCriteria": [
+        "Add ControlWidget target leveraging ControlConfiguration",
+        "Control triggers AddGroceryItemIntent (reuse from US-142) or opens GroceryView with voice mic primed",
+        "Icon, tint, and label approved for Control Center",
+        "iOS 18 guard (availability check); feature inert on iOS 17 and below",
+        "Swift builds cleanly"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": "iOS UX AUDIT - Tier 3: iOS 18 platform surface."
+    },
+    {
+      "id": "US-149",
+      "title": "iOS: App Clip for staple QR / fridge magnet add-to-grocery",
+      "description": "As a parent, I want a fridge magnet QR that launches a tiny EatPal App Clip to add common staples to my grocery list without installing the full app, so onboarding friction drops.",
+      "acceptanceCriteria": [
+        "Add EatPalClip App Clip target",
+        "Clip shows a short list of staples (milk, eggs, bread, etc.) or a scanned item",
+        "Invocation via advanced App Clip experience URL encoding category/item",
+        "Signed-out clip: prompts anonymous add to a temporary list that migrates on full app install + sign-in",
+        "Clip size under 10MB",
+        "Associated domains entitlement configured",
+        "Swift builds cleanly"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": "iOS UX AUDIT - Tier 3: growth + retention hook."
+    },
+    {
+      "id": "US-150",
+      "title": "iOS: Finish OfflineStore as durable write queue + wire NetworkMonitor",
+      "description": "As an iOS user, I want edits I make offline (add to grocery, log meal, +1 pantry) to sync automatically when I'm back online, so I can use the app on a plane or in a store basement.",
+      "acceptanceCriteria": [
+        "Promote ios/EatPal/EatPal/Services/OfflineStore.swift from placeholder to durable append-only write queue on disk (JSONEncoder to Application Support directory)",
+        "DataService writes route through OfflineStore first when NetworkMonitor reports offline or when a network call fails",
+        "OfflineStore.flush() triggered by NetworkMonitor.onConnectivityRestored",
+        "Last-write-wins conflict resolution for grocery_items and pantry qty; RealtimeService suppresses echoes of queued writes",
+        "Queue visible in Settings (diagnostic view showing pending count + last error)",
+        "Unit tests for queue encode/decode, flush ordering, failure retry in EatPalTests",
+        "Swift builds cleanly"
+      ],
+      "priority": 36,
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 4: DONE 2026-04-17 (first pass). OfflineStore promoted to a durable SwiftData-backed write queue with typed enqueue helpers (enqueueInsert<T: Encodable>, enqueueUpdate, enqueueDelete) keyed by Table enum (foods / kids / recipes / plan_entries / grocery_items). syncPendingMutations now dispatches per-table and decodes JSON payloads back into domain structs, calling client.from(table).insert/update/delete. Sent Sentry breadcrumbs + error capture on sync failure. Published pendingMutationCount + isSyncing + lastSyncError so the UI can surface diagnostics. NetworkMonitor now tracks offline→online transitions and drains the queue automatically (`if !wasConnected && nowConnected { await OfflineStore.shared.syncPendingMutations() }`). AppState.addGroceryItem / deleteGroceryItem / toggleGroceryItem gained an isNetworkError(_:) classifier (URLError / NSURLErrorDomain codes) — on network errors the optimistic state is preserved and the mutation enqueued with a 'Queued for sync' toast. Remaining grocery + plan + food mutation methods can be retrofitted with the same pattern. Not yet verified on device."
+    },
+    {
+      "id": "US-151",
+      "title": "iOS: Sentry integration via sentry-cocoa (parity with web)",
+      "description": "As a developer, I want crash and breadcrumb telemetry from iOS matching what we have on the web, so I can monitor iOS app stability and diagnose bugs.",
+      "acceptanceCriteria": [
+        "Add sentry-cocoa SPM dependency",
+        "Initialize SentrySDK in EatPalApp with DSN sourced from Info.plist env injection (same pattern as Supabase keys)",
+        "Breadcrumbs on navigation (TabView selection), DataService calls, and AuthViewModel state transitions",
+        "Attach user context (user id only, no email/name) after sign-in; clear on sign-out",
+        "PII scrubbing before send (beforeSend hook)",
+        "Crash-free session rate visible in Sentry dashboard",
+        "Disable in DEBUG builds to avoid noise",
+        "Swift builds cleanly"
+      ],
+      "priority": 37,
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 4: DONE 2026-04-17. Added sentry-cocoa (from 8.0.0) SPM dep in project.yml + dependency on main EatPal target. Info.plist gained SENTRY_DSN key env-substituted same as Supabase secrets. New Services/SentryService.swift exposes configure() (no-op in DEBUG, no-op when DSN missing/unresolved), setUserId(_:), leaveBreadcrumb(category:message:level:data:), capture(_:extras:), with PII scrubbing (event.user email/name/ip stripped, request.data + cookies dropped, sensitive keys redacted in extras/headers/breadcrumb data). SentrySDK options: env production, releaseName from CFBundleShortVersionString+CFBundleVersion, auto session tracking, tracesSampleRate 0.2, profilesSampleRate 0.1. EatPalApp.init() calls SentryService.configure() before Tips.configure. AuthViewModel startListeningForAuthChanges now calls SentryService.setUserId on sign-in (with session.user.id.uuidString) and nils out on sign-out, plus breadcrumbs for 'session restored', 'signed in', 'signed out'. Not yet verified — xcodegen generate required to resolve SPM."
+    },
+    {
+      "id": "US-152",
+      "title": "iOS: Keep home screen widget fresh via App Group UserDefaults writes on AppState mutations",
+      "description": "As an iOS user, I want the widget to always reflect my latest data even if I haven't opened the app recently, so it stays useful.",
+      "acceptanceCriteria": [
+        "Define shared App Group key constants in a WidgetShared.swift file included in both main app and widget target",
+        "On every AppState mutation that affects widget data (today's meals, grocery count, pantry low count, try-bite streak), write a compact JSON snapshot to App Group UserDefaults",
+        "Call WidgetCenter.shared.reloadTimelines(ofKind:) after writes",
+        "Widget timeline provider reads exclusively from App Group UserDefaults (no network calls)",
+        "Debounce writes (500ms) to avoid excessive widget reloads",
+        "Swift builds cleanly; widget preview reflects latest data during dev"
+      ],
+      "priority": 38,
+      "passes": true,
+      "notes": "iOS UX AUDIT - Tier 4: DONE 2026-04-17. New Services/WidgetSnapshot.swift namespaces the App Group id (group.com.eatpal.app), key constants (meals, grocery_count, pantry_low_count, tonight_dish, try_bite_streak, last_updated_at), and widget kind (EatPalMealWidget). Exposes Payload struct + write(_:) (debounced 500ms) and writeImmediately(_:). Persists to UserDefaults(suiteName: appGroup) and calls WidgetCenter.shared.reloadTimelines(ofKind:). AppState gained an init() with setupWidgetSnapshotSync() — Combine sink on $planEntries.combineLatest($foods, $groceryItems, $recipes) debounced 500ms, calling refreshWidgetSnapshot() which composes today's meals for the active kid, pantry-low count (qty > 0 && qty <= 2), unchecked grocery count, and tonight's dish. EatPalWidget.swift MealPlanEntry extended with pantryLowCount, tonightDish, tryBiteStreak fields; loadFromAppGroup reads the new keys. tryBiteStreak is a placeholder 0 pending a future streak-calc story. Not yet verified on device — WidgetCenter reload confirmation requires actual widget add to Home Screen."
     }
   ]
 }

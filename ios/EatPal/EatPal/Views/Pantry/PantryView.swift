@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 
 struct PantryView: View {
     @EnvironmentObject var appState: AppState
@@ -15,6 +16,8 @@ struct PantryView: View {
     @State private var filterSafeOnly = false
     @State private var filterTryBiteOnly = false
     @State private var sortOption: FoodSortOption = .nameAsc
+
+    private var swipeTip = SwipePantryTip()
 
     enum PantryFilter: String, CaseIterable {
         case all = "All"
@@ -109,6 +112,7 @@ struct PantryView: View {
                 }
                 .pickerStyle(.segmented)
                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                .popoverTip(swipeTip)
             }
 
             // Foods List
@@ -135,15 +139,109 @@ struct PantryView: View {
                                 .onTapGesture {
                                     selectedFood = food
                                 }
+                                .draggable(FoodTransferable(food: food)) {
+                                    // Drag preview
+                                    HStack(spacing: 8) {
+                                        Text(FoodCategory(rawValue: food.category)?.icon ?? "🍽")
+                                        Text(food.name)
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 8))
+                                    .shadow(radius: 4)
+                                }
+                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                    Button {
+                                        HapticManager.lightImpact()
+                                        Task {
+                                            try? await appState.updateFood(
+                                                food.id,
+                                                updates: FoodUpdate(quantity: (food.quantity ?? 0) + 1)
+                                            )
+                                            await TipEvents.didSwipePantry.donate()
+                                        }
+                                    } label: {
+                                        Label("+1", systemImage: "plus.circle.fill")
+                                    }
+                                    .tint(.green)
+                                    .accessibilityLabel("Add one \(food.name) to pantry")
+
+                                    Button {
+                                        HapticManager.selection()
+                                        Task {
+                                            try? await appState.updateFood(
+                                                food.id,
+                                                updates: FoodUpdate(isSafe: !food.isSafe)
+                                            )
+                                            await TipEvents.didSwipePantry.donate()
+                                        }
+                                    } label: {
+                                        Label(
+                                            food.isSafe ? "Unsafe" : "Safe",
+                                            systemImage: food.isSafe ? "xmark.shield" : "checkmark.shield"
+                                        )
+                                    }
+                                    .tint(food.isSafe ? .orange : .blue)
+                                }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
+                                        HapticManager.error()
                                         Task { try? await appState.deleteFood(food.id) }
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
-                                }
-                                .swipeActions(edge: .leading) {
+
                                     Button {
+                                        HapticManager.success()
+                                        Task {
+                                            let item = GroceryItem(
+                                                id: UUID().uuidString,
+                                                userId: "",
+                                                name: food.name,
+                                                category: food.category,
+                                                quantity: 1,
+                                                unit: food.unit ?? "count",
+                                                checked: false,
+                                                addedVia: "restock"
+                                            )
+                                            try? await appState.addGroceryItem(item)
+                                            ToastManager.shared.success(
+                                                "Added to grocery",
+                                                message: food.name
+                                            )
+                                            await TipEvents.didSwipePantry.donate()
+                                        }
+                                    } label: {
+                                        Label("Grocery", systemImage: "cart.fill.badge.plus")
+                                    }
+                                    .tint(.blue)
+                                    .accessibilityLabel("Add \(food.name) to grocery list")
+                                }
+                                .contextMenu {
+                                    Button {
+                                        HapticManager.success()
+                                        Task {
+                                            let item = GroceryItem(
+                                                id: UUID().uuidString,
+                                                userId: "",
+                                                name: food.name,
+                                                category: food.category,
+                                                quantity: 1,
+                                                unit: food.unit ?? "count",
+                                                checked: false,
+                                                addedVia: "restock"
+                                            )
+                                            try? await appState.addGroceryItem(item)
+                                            ToastManager.shared.success("Added to grocery", message: food.name)
+                                        }
+                                    } label: {
+                                        Label("Add to Grocery", systemImage: "cart.fill.badge.plus")
+                                    }
+
+                                    Button {
+                                        HapticManager.selection()
                                         Task {
                                             try? await appState.updateFood(
                                                 food.id,
@@ -152,11 +250,40 @@ struct PantryView: View {
                                         }
                                     } label: {
                                         Label(
-                                            food.isSafe ? "Unsafe" : "Safe",
+                                            food.isSafe ? "Mark Unsafe" : "Mark Safe",
                                             systemImage: food.isSafe ? "xmark.shield" : "checkmark.shield"
                                         )
                                     }
-                                    .tint(food.isSafe ? .orange : .green)
+
+                                    Button {
+                                        HapticManager.selection()
+                                        Task {
+                                            try? await appState.updateFood(
+                                                food.id,
+                                                updates: FoodUpdate(isTryBite: !food.isTryBite)
+                                            )
+                                        }
+                                    } label: {
+                                        Label(
+                                            food.isTryBite ? "Clear Try Bite" : "Mark Try Bite",
+                                            systemImage: food.isTryBite ? "star.slash" : "star.fill"
+                                        )
+                                    }
+
+                                    Divider()
+
+                                    Button {
+                                        selectedFood = food
+                                    } label: {
+                                        Label("Edit", systemImage: "pencil")
+                                    }
+
+                                    Button(role: .destructive) {
+                                        HapticManager.error()
+                                        Task { try? await appState.deleteFood(food.id) }
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
                                 }
                         }
                     } header: {
@@ -212,8 +339,13 @@ struct PantryView: View {
             FoodDetailView(food: food)
         }
         .fullScreenCover(isPresented: $showingScanner) {
-            BarcodeScannerView { barcode in
-                scannedBarcode = ScannedBarcodeItem(code: barcode)
+            UnifiedScannerView(
+                initialMode: .barcode,
+                allowModeSwitching: false
+            ) { result in
+                if case .barcode(let code) = result {
+                    scannedBarcode = ScannedBarcodeItem(code: code)
+                }
             }
         }
         .sheet(item: $scannedBarcode) { item in

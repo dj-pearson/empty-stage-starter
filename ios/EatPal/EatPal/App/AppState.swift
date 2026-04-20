@@ -24,6 +24,142 @@ final class AppState: ObservableObject {
     private let dataService = DataService.shared
     private let realtimeService = RealtimeService.shared
     private let toast = ToastManager.shared
+    private var cancellables: Set<AnyCancellable> = []
+
+    init() {
+        setupWidgetSnapshotSync()
+    }
+
+    // MARK: - Widget Snapshot Sync (US-152)
+
+    /// Observes the @Published collections that feed the home/Lock Screen
+    /// widget and pushes a debounced snapshot into App Group UserDefaults
+    /// any time they change. Widget timeline reloads follow automatically.
+    // MARK: - Pending recipe imports (US-143)
+
+    /// Drains the share-extension-fed recipe queue. Each pending import is
+    /// inserted as a Recipe row for the signed-in user. Silently no-ops when
+    /// no auth session is present — the queue survives app restarts, so the
+    /// next launch after sign-in will still process them.
+    func drainPendingRecipeImports() async {
+        let queued = PendingRecipeImportQueue.load()
+        guard !queued.isEmpty else { return }
+
+        var successful: Set<String> = []
+        for pending in queued {
+            let recipe = Recipe(
+                id: UUID().uuidString,
+                userId: "",
+                name: pending.name,
+                description: pending.description,
+                instructions: pending.instructions,
+                foodIds: [],
+                prepTime: pending.prepTime,
+                cookTime: pending.cookTime,
+                servings: pending.servings,
+                additionalIngredients: pending.additionalIngredients,
+                imageUrl: pending.imageUrl,
+                sourceUrl: pending.sourceUrl,
+                sourceType: "share_extension"
+            )
+
+            do {
+                try await addRecipe(recipe)
+                successful.insert(pending.id)
+                SentryService.leaveBreadcrumb(
+                    category: "share-import",
+                    message: "Imported shared recipe: \(pending.name)"
+                )
+            } catch {
+                SentryService.capture(error, extras: [
+                    "context": "drainPendingRecipeImports",
+                    "recipe": pending.name
+                ])
+            }
+        }
+
+        // Remove only the ones that succeeded — failed imports stay queued
+        // so the next launch can try again.
+        for id in successful {
+            PendingRecipeImportQueue.remove(id: id)
+        }
+
+        if !successful.isEmpty {
+            toast.success(
+                "Imported \(successful.count) recipe\(successful.count == 1 ? "" : "s")",
+                message: "From your share sheet"
+            )
+        }
+    }
+
+    private func setupWidgetSnapshotSync() {
+        $planEntries
+            .combineLatest($foods, $groceryItems, $recipes)
+            .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
+            .sink { [weak self] _, _, _, _ in
+                self?.refreshWidgetSnapshot()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func refreshWidgetSnapshot() {
+        let todayString = DateFormatter.isoDate.string(from: Date())
+        let kidId = activeKidId
+
+        // Today's meals (by slot): pick the first food per slot for the
+        // active kid, or across all kids when no active kid is set.
+        let todaysEntries = planEntries.filter { entry in
+            entry.date == todayString && (kidId == nil || entry.kidId == kidId)
+        }
+
+        let widgetMeals: [WidgetSnapshot.Payload.Meal] = MealSlot.allCases.compactMap { slot in
+            guard let entry = todaysEntries.first(where: { $0.mealSlot == slot.rawValue }) else {
+                return nil
+            }
+            let foodName: String = {
+                if let recipeId = entry.recipeId,
+                   let recipe = recipes.first(where: { $0.id == recipeId }) {
+                    return recipe.name
+                }
+                if let food = foods.first(where: { $0.id == entry.foodId }) {
+                    return food.name
+                }
+                return "Unnamed"
+            }()
+            return WidgetSnapshot.Payload.Meal(
+                slot: slot.displayName,
+                foodName: foodName,
+                icon: slot.icon
+            )
+        }
+
+        let tonightDish = todaysEntries
+            .first(where: { $0.mealSlot == MealSlot.dinner.rawValue })
+            .flatMap { entry -> String? in
+                if let recipeId = entry.recipeId,
+                   let recipe = recipes.first(where: { $0.id == recipeId }) {
+                    return recipe.name
+                }
+                return foods.first(where: { $0.id == entry.foodId })?.name
+            }
+
+        let pantryLowCount = foods.filter { food in
+            guard let qty = food.quantity else { return false }
+            return qty > 0 && qty <= 2
+        }.count
+
+        let unchecked = groceryItems.filter { !$0.checked }.count
+
+        let payload = WidgetSnapshot.Payload(
+            meals: widgetMeals,
+            groceryCount: unchecked,
+            pantryLowCount: pantryLowCount,
+            tonightDish: tonightDish,
+            tryBiteStreak: 0  // placeholder — real streak calc is a future story
+        )
+
+        WidgetSnapshot.write(payload)
+    }
 
     // MARK: - Computed Properties
 
@@ -76,6 +212,10 @@ final class AppState: ObservableObject {
 
             // Start real-time subscriptions after initial load
             await realtimeService.subscribe(appState: self)
+
+            // US-143: drain any recipes the share extension saved while the
+            // user was signed out or the app was backgrounded.
+            await drainPendingRecipeImports()
         } catch {
             errorMessage = error.localizedDescription
             toast.error("Failed to load data", message: error.localizedDescription)
@@ -263,6 +403,11 @@ final class AppState: ObservableObject {
             try await dataService.updatePlanEntry(id, updates: updates)
             if let result = updates.result {
                 toast.success("Result logged", message: "Marked as \(result)")
+                // US-144: write nutrition to Health when the meal was eaten
+                // and the user has opted in. No-op otherwise.
+                if result == MealResult.ate.rawValue {
+                    Task { await writeHealthSample(for: planEntries[index]) }
+                }
             }
             HapticManager.lightImpact()
         } catch {
@@ -270,6 +415,40 @@ final class AppState: ObservableObject {
             toast.error("Failed to update meal", message: error.localizedDescription)
             HapticManager.error()
             throw error
+        }
+    }
+
+    /// US-144: pushes the linked recipe's macros to HealthKit as a single
+    /// food correlation dated to the meal's date. Silently skipped when the
+    /// user hasn't opted in, HealthKit isn't available, or the linked
+    /// recipe has no nutrition data attached (food-only plan entries
+    /// don't currently carry macros in the schema).
+    private func writeHealthSample(for entry: PlanEntry) async {
+        let service = HealthKitService.shared
+        guard service.isEnabled, service.isAvailable else { return }
+
+        guard let recipeId = entry.recipeId,
+              let recipe = recipes.first(where: { $0.id == recipeId }),
+              let nutrition = recipe.nutritionInfo else { return }
+
+        let formatter = DateFormatter.isoDate
+        let mealDate = formatter.date(from: entry.date) ?? Date()
+
+        do {
+            try await service.writeMeal(
+                calories: nutrition.calories,
+                proteinGrams: nutrition.proteinG,
+                carbsGrams: nutrition.carbsG,
+                fatGrams: nutrition.fatG,
+                mealDate: mealDate,
+                mealName: recipe.name
+            )
+            SentryService.leaveBreadcrumb(
+                category: "healthkit",
+                message: "Wrote food correlation for \(recipe.name)"
+            )
+        } catch {
+            SentryService.capture(error, extras: ["context": "healthkit_writeMeal"])
         }
     }
 
@@ -301,10 +480,17 @@ final class AppState: ObservableObject {
             toast.success("Item added", message: "\(item.name) added to list")
             HapticManager.success()
         } catch {
-            groceryItems.removeAll { $0.id == item.id }
-            toast.error("Failed to add item", message: error.localizedDescription)
-            HapticManager.error()
-            throw error
+            if isNetworkError(error) {
+                // US-150: keep the optimistic update and queue for later replay.
+                OfflineStore.shared.enqueueInsert(item, table: .groceryItems, entityId: item.id)
+                toast.info("Queued for sync", message: "\(item.name) will save when you're back online.")
+                HapticManager.lightImpact()
+            } else {
+                groceryItems.removeAll { $0.id == item.id }
+                toast.error("Failed to add item", message: error.localizedDescription)
+                HapticManager.error()
+                throw error
+            }
         }
     }
 
@@ -330,10 +516,15 @@ final class AppState: ObservableObject {
             try await dataService.deleteGroceryItem(id)
             HapticManager.mediumImpact()
         } catch {
-            groceryItems.append(contentsOf: removed)
-            toast.error("Failed to delete item", message: error.localizedDescription)
-            HapticManager.error()
-            throw error
+            if isNetworkError(error) {
+                OfflineStore.shared.enqueueDelete(table: .groceryItems, entityId: id)
+                HapticManager.lightImpact()
+            } else {
+                groceryItems.append(contentsOf: removed)
+                toast.error("Failed to delete item", message: error.localizedDescription)
+                HapticManager.error()
+                throw error
+            }
         }
     }
 
@@ -341,18 +532,87 @@ final class AppState: ObservableObject {
         guard let index = groceryItems.firstIndex(where: { $0.id == id }) else { return }
         groceryItems[index].checked.toggle()
         let checked = groceryItems[index].checked
+        let itemName = groceryItems[index].name
         do {
             try await dataService.updateGroceryItem(
                 id,
                 updates: GroceryItemUpdate(checked: checked)
             )
             HapticManager.lightImpact()
+            await updateGroceryTripActivity(lastCheckedName: checked ? itemName : "")
         } catch {
-            groceryItems[index].checked.toggle()
-            toast.error("Failed to update item")
-            HapticManager.error()
-            throw error
+            if isNetworkError(error) {
+                OfflineStore.shared.enqueueUpdate(
+                    GroceryItemUpdate(checked: checked),
+                    table: .groceryItems,
+                    entityId: id
+                )
+                HapticManager.lightImpact()
+                await updateGroceryTripActivity(lastCheckedName: checked ? itemName : "")
+            } else {
+                groceryItems[index].checked.toggle()
+                toast.error("Failed to update item")
+                HapticManager.error()
+                throw error
+            }
         }
+    }
+
+    // MARK: - Live Activity helpers (US-145)
+
+    /// Refreshes the grocery-trip Live Activity counts if one is running.
+    /// Silently no-ops when no activity is active.
+    private func updateGroceryTripActivity(lastCheckedName: String) async {
+        let service = GroceryTripActivityService.shared
+        guard service.isActive else { return }
+        let total = groceryItems.count
+        let checked = groceryItems.filter(\.checked).count
+        await service.update(
+            totalCount: total,
+            checkedCount: checked,
+            lastCheckedName: lastCheckedName
+        )
+    }
+
+    // MARK: - Offline helpers (US-150)
+
+    /// Classifies an error as connectivity-related so callers can choose to
+    /// keep the optimistic update and queue the mutation for later replay.
+    /// Covers URLError / CancellationError / NSURLErrorDomain codes most
+    /// commonly surfaced by supabase-swift when offline.
+    private func isNetworkError(_ error: Error) -> Bool {
+        if error is CancellationError { return false }
+
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            switch nsError.code {
+            case NSURLErrorNotConnectedToInternet,
+                 NSURLErrorNetworkConnectionLost,
+                 NSURLErrorTimedOut,
+                 NSURLErrorCannotFindHost,
+                 NSURLErrorCannotConnectToHost,
+                 NSURLErrorInternationalRoamingOff,
+                 NSURLErrorDataNotAllowed:
+                return true
+            default:
+                return false
+            }
+        }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet,
+                 .networkConnectionLost,
+                 .timedOut,
+                 .cannotFindHost,
+                 .cannotConnectToHost,
+                 .internationalRoamingOff,
+                 .dataNotAllowed:
+                return true
+            default:
+                return false
+            }
+        }
+        return false
     }
 
     func clearCheckedGroceryItems() async throws {

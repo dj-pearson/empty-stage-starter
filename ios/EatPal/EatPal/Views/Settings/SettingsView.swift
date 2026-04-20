@@ -88,6 +88,12 @@ struct SettingsView: View {
                 } label: {
                     Label("Appearance", systemImage: "paintbrush.fill")
                 }
+
+                NavigationLink {
+                    HealthSettingsView()
+                } label: {
+                    Label("Sync to Health", systemImage: "heart.text.square.fill")
+                }
             }
 
             // Support

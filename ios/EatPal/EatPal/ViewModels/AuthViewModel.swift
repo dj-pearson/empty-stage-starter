@@ -62,18 +62,26 @@ final class AuthViewModel: ObservableObject {
             do {
                 let session = try await authService.currentSession()
                 self.authState = session != nil ? .authenticated : .unauthenticated
+                if let userId = session?.user.id.uuidString {
+                    SentryService.setUserId(userId)
+                    SentryService.leaveBreadcrumb(category: "auth", message: "session restored")
+                }
             } catch {
                 self.authState = .unauthenticated
             }
 
             // Listen for changes
-            for await (event, _) in authService.onAuthStateChange() {
+            for await (event, session) in authService.onAuthStateChange() {
                 switch event {
                 case .signedIn:
                     self.authState = .authenticated
+                    SentryService.setUserId(session?.user.id.uuidString)
+                    SentryService.leaveBreadcrumb(category: "auth", message: "signed in")
                 case .signedOut:
                     self.authState = .unauthenticated
                     self.clearForm()
+                    SentryService.setUserId(nil)
+                    SentryService.leaveBreadcrumb(category: "auth", message: "signed out")
                 default:
                     break
                 }

@@ -1,12 +1,21 @@
 import SwiftUI
+import TipKit
 
 struct GroceryView: View {
     @EnvironmentObject var appState: AppState
     @State private var searchText = ""
     @State private var showingAddItem = false
+    @State private var showingVoiceAdd = false
+    @State private var showingPhotoImport = false
+    @State private var showingListScanner = false
+    @State private var scannedListLines: [String] = []
+    @State private var showingScanReview = false
     @State private var showingClearAlert = false
     @State private var isGenerating = false
     @State private var editingItem: GroceryItem?
+
+    private var swipeTip = SwipeGroceryTip()
+    private var contextMenuTip = ContextMenuTip()
 
     private var uncheckedItems: [GroceryItem] {
         appState.groceryItems.filter { !$0.checked && matchesSearch($0) }
@@ -50,6 +59,7 @@ struct GroceryView: View {
                         .foregroundStyle(.red)
                     }
                 }
+                .popoverTip(swipeTip)
             }
 
             // Unchecked Items by Category
@@ -74,20 +84,84 @@ struct GroceryView: View {
                             GroceryItemRow(item: item)
                                 .contentShape(Rectangle())
                                 .onTapGesture { editingItem = item }
+                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                    Button {
+                                        HapticManager.success()
+                                        Task {
+                                            try? await appState.toggleGroceryItem(item.id)
+                                            await TipEvents.didSwipeGrocery.donate()
+                                        }
+                                    } label: {
+                                        Label("Check", systemImage: "checkmark.circle.fill")
+                                    }
+                                    .tint(.green)
+                                    .accessibilityLabel("Mark \(item.name) as bought")
+                                }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
-                                        Task { try? await appState.deleteGroceryItem(item.id) }
+                                        HapticManager.error()
+                                        Task {
+                                            try? await appState.deleteGroceryItem(item.id)
+                                            await TipEvents.didSwipeGrocery.donate()
+                                        }
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
-                                }
-                                .swipeActions(edge: .leading) {
                                     Button {
+                                        HapticManager.lightImpact()
                                         editingItem = item
+                                        Task { await TipEvents.didSwipeGrocery.donate() }
                                     } label: {
                                         Label("Edit", systemImage: "pencil")
                                     }
                                     .tint(.blue)
+                                }
+                                .contextMenu {
+                                    Button {
+                                        HapticManager.success()
+                                        Task { try? await appState.toggleGroceryItem(item.id) }
+                                    } label: {
+                                        Label(item.checked ? "Uncheck" : "Mark Bought",
+                                              systemImage: item.checked ? "arrow.uturn.backward.circle" : "checkmark.circle.fill")
+                                    }
+
+                                    Button {
+                                        HapticManager.lightImpact()
+                                        editingItem = item
+                                    } label: {
+                                        Label("Edit", systemImage: "pencil")
+                                    }
+
+                                    Button {
+                                        HapticManager.success()
+                                        Task {
+                                            let duplicate = GroceryItem(
+                                                id: UUID().uuidString,
+                                                userId: "",
+                                                name: item.name,
+                                                category: item.category,
+                                                quantity: item.quantity,
+                                                unit: item.unit,
+                                                checked: false,
+                                                notes: item.notes,
+                                                priority: item.priority,
+                                                addedVia: "manual"
+                                            )
+                                            try? await appState.addGroceryItem(duplicate)
+                                            ToastManager.shared.success("Duplicated", message: item.name)
+                                        }
+                                    } label: {
+                                        Label("Duplicate", systemImage: "plus.square.on.square")
+                                    }
+
+                                    Divider()
+
+                                    Button(role: .destructive) {
+                                        HapticManager.error()
+                                        Task { try? await appState.deleteGroceryItem(item.id) }
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
                                 }
                         }
                     } header: {
@@ -101,8 +175,19 @@ struct GroceryView: View {
                     Section {
                         ForEach(checkedItems) { item in
                             GroceryItemRow(item: item)
+                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                    Button {
+                                        HapticManager.lightImpact()
+                                        Task { try? await appState.toggleGroceryItem(item.id) }
+                                    } label: {
+                                        Label("Uncheck", systemImage: "arrow.uturn.backward.circle")
+                                    }
+                                    .tint(.orange)
+                                    .accessibilityLabel("Uncheck \(item.name)")
+                                }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
+                                        HapticManager.error()
                                         Task { try? await appState.deleteGroceryItem(item.id) }
                                     } label: {
                                         Label("Delete", systemImage: "trash")
@@ -118,20 +203,104 @@ struct GroceryView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Grocery List")
         .searchable(text: $searchText, prompt: "Search items...")
+        .dropDestination(for: FoodTransferable.self) { droppedFoods, _ in
+            guard !droppedFoods.isEmpty else { return false }
+            Task {
+                var addedCount = 0
+                for dropped in droppedFoods {
+                    let item = GroceryItem(
+                        id: UUID().uuidString,
+                        userId: "",
+                        name: dropped.name,
+                        category: dropped.category,
+                        quantity: 1,
+                        unit: dropped.unit ?? "count",
+                        checked: false,
+                        addedVia: "drag"
+                    )
+                    do {
+                        try await appState.addGroceryItem(item)
+                        addedCount += 1
+                    } catch {
+                        continue
+                    }
+                }
+                HapticManager.success()
+                await TipEvents.didDragFood.donate()
+                if addedCount > 0 {
+                    ToastManager.shared.success(
+                        "Added to grocery",
+                        message: addedCount == 1
+                            ? droppedFoods.first!.name
+                            : "\(addedCount) items"
+                    )
+                }
+            }
+            return true
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: 12) {
                     Menu {
                         Button {
+                            showingVoiceAdd = true
+                        } label: {
+                            Label("Dictate items", systemImage: "mic.fill")
+                        }
+
+                        Button {
+                            showingListScanner = true
+                        } label: {
+                            Label("Scan a list", systemImage: "text.viewfinder")
+                        }
+
+                        Button {
+                            showingPhotoImport = true
+                        } label: {
+                            Label("Import from photo", systemImage: "photo.on.rectangle.angled")
+                        }
+
+                        Divider()
+
+                        Button {
                             Task { await generateFromWeekPlan() }
                         } label: {
-                            Label("Generate from This Week's Plan", systemImage: "calendar.badge.plus")
+                            Label("Generate from this week's plan", systemImage: "calendar.badge.plus")
                         }
                         .disabled(isGenerating)
+
+                        Divider()
+
+                        if GroceryTripActivityService.shared.isActive {
+                            Button(role: .destructive) {
+                                Task {
+                                    await GroceryTripActivityService.shared.end()
+                                    HapticManager.mediumImpact()
+                                }
+                            } label: {
+                                Label("End shopping trip", systemImage: "checkmark.circle.fill")
+                            }
+                        } else {
+                            Button {
+                                Task {
+                                    let total = appState.groceryItems.count
+                                    let checked = appState.groceryItems.filter(\.checked).count
+                                    await GroceryTripActivityService.shared.start(
+                                        listTitle: "Grocery Trip",
+                                        totalCount: total,
+                                        checkedCount: checked
+                                    )
+                                    HapticManager.success()
+                                }
+                            } label: {
+                                Label("Start shopping trip", systemImage: "cart.fill.badge.plus")
+                            }
+                            .disabled(appState.groceryItems.isEmpty)
+                        }
                     } label: {
                         Image(systemName: "wand.and.stars")
                     }
-                    .accessibilityLabel("Generate options")
+                    .accessibilityLabel("Quick add options")
 
                     Button {
                         showingAddItem = true
@@ -144,6 +313,30 @@ struct GroceryView: View {
         }
         .sheet(isPresented: $showingAddItem) {
             AddGroceryItemView()
+        }
+        .sheet(isPresented: $showingVoiceAdd) {
+            VoiceAddGrocerySheet()
+        }
+        .sheet(isPresented: $showingPhotoImport) {
+            PhotoImportGrocerySheet()
+        }
+        .fullScreenCover(isPresented: $showingListScanner) {
+            UnifiedScannerView(
+                initialMode: .groceryList,
+                allowModeSwitching: false
+            ) { result in
+                if case .text(let lines) = result, !lines.isEmpty {
+                    scannedListLines = lines
+                    showingScanReview = true
+                }
+            }
+        }
+        .sheet(isPresented: $showingScanReview) {
+            TextImportGrocerySheet(
+                recognisedLines: scannedListLines,
+                sourceTag: "scan",
+                title: "Review Scanned List"
+            )
         }
         .sheet(item: $editingItem) { item in
             EditGroceryItemView(item: item)

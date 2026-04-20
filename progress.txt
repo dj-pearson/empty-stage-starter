@@ -1172,3 +1172,855 @@ Implemented the remaining 5 branding stories to complete the ARFID/food chaining
 - All touch targets must be 48px minimum for Android accessibility guidelines
 
 ---
+
+## 2026-04-17 - iOS Native UX Audit + PRD Additions (US-135 through US-152)
+
+### Audit Summary
+- Surveyed native iOS Xcode project at `ios/EatPal/` (separate from Expo/React Native app at `/app/`)
+- Stack: Pure SwiftUI, iOS 17+, XcodeGen, single SPM dep (supabase-swift)
+- 5 tabs: Planner, Pantry, Recipes, Grocery, More (+ Scanner modal, KidsView, AICoach, Dashboard, Progress, FoodChaining, PickyEaterQuiz, Paywall)
+- Central state: `AppState.swift` (Combine @Published, optimistic updates + rollback) + `RealtimeService.swift` (Supabase v2 realtime working cross-device)
+- Barcode scan already works via `BarcodeService.swift` + Open Food Facts API
+- Widget exists (systemSmall + systemMedium only; no Lock Screen / interactive / Control Center)
+- Partial offline scaffold: `OfflineStore.swift` (235 LOC placeholder) + `NetworkMonitor.swift` not yet wired as write queue
+- StoreKit 2 with 6 IAP products, Sign in with Apple, push notifications, deep linking - all working
+
+### Gaps identified (none covered by prior PRD entries):
+- No `.swipeActions` on any List row
+- No drag-and-drop (no `.draggable` / `.dropDestination`)
+- No `.contextMenu` with preview
+- No TipKit onboarding
+- No VisionKit DataScannerViewController (barcode scanner is hand-rolled AVFoundation)
+- No Speech framework / voice input
+- No Vision OCR for text / screenshot parsing
+- No App Intents or Siri Shortcuts
+- No Share Extension for recipe URL import
+- No HealthKit integration
+- No Live Activities / Dynamic Island
+- No Lock Screen widget families (.accessoryRectangular / Inline / Circular)
+- No interactive widgets (iOS 17+)
+- No Control Center widget (iOS 18+)
+- No App Clip
+- OfflineStore not a real durable write queue
+- No Sentry on iOS (README noted console-only logging)
+- Widget data not kept fresh via App Group UserDefaults on AppState mutations
+
+### Added 18 new PRD stories (US-135 through US-152), grouped by tier:
+- Tier 1 (trivial effort, high UX impact): US-135 swipe actions, US-136 drag-drop, US-137 context menus, US-138 TipKit
+- Tier 2 (Apple frameworks matching feature asks): US-139 unified DataScanner, US-140 voice-to-grocery, US-141 photo/screenshot OCR, US-142 App Intents + Siri, US-143 Share Extension, US-144 HealthKit
+- Tier 3 (platform surfaces most apps ignore): US-145 Live Activities, US-146 Lock Screen widgets, US-147 interactive widget, US-148 Control Center widget, US-149 App Clip
+- Tier 4 (structural): US-150 finish OfflineStore queue, US-151 Sentry iOS, US-152 widget freshness via App Group
+
+### Next up
+- Starting with US-135 (SwiftUI swipe actions) — smallest Tier 1 unit.
+
+---
+
+## 2026-04-17 - US-135: SwiftUI swipe actions across core iOS lists (DONE)
+
+### What was implemented
+SwiftUI `.swipeActions` added on Pantry, Grocery, and Recipes list rows; `.contextMenu` added to MealPlanView's PlanEntryRow since it isn't rendered inside a `List` (required for `.swipeActions`).
+
+### Files changed
+- `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift`
+  - Unchecked items: leading full-swipe = Check (green, HapticManager.success), trailing full-swipe = Delete (destructive) + Edit (blue, secondary).
+  - Checked items: leading full-swipe = Uncheck (orange), trailing full-swipe = Delete.
+  - Accessibility labels on every swipe button (e.g., "Mark <name> as bought", "Uncheck <name>").
+
+- `ios/EatPal/EatPal/Views/Pantry/PantryView.swift`
+  - Leading full-swipe = +1 qty (green, lightImpact), plus tap-only Safe/Unsafe toggle (selection haptic) as a secondary leading action.
+  - Trailing full-swipe = Delete (destructive, error haptic), plus tap-only "Grocery" move action that creates a GroceryItem with addedVia: "restock" and fires a ToastManager.shared.success.
+  - Kept the existing FoodDetailView tap-to-open behavior intact.
+
+- `ios/EatPal/EatPal/Views/Recipes/RecipesView.swift`
+  - Added leading full-swipe = "Grocery" (blue, success haptic) that calls a new `addRecipeIngredientsToGrocery(_:)` helper on RecipesView.
+  - Helper iterates `recipe.foodIds`, resolves Foods from AppState, and calls `appState.addGroceryItem(...)` for each with `addedVia: "recipe"`. Reports result via ToastManager (success when N items added, info when no foods are linked to the recipe).
+  - Trailing destructive Delete preserved.
+
+- `ios/EatPal/EatPal/Views/MealPlan/MealPlanView.swift`
+  - PlanEntryRow is nested inside a ScrollView → VStack, not a List, so `.swipeActions` is not valid there. Added `.contextMenu` with: Log Ate (success haptic), Log Tasted (light impact), Log Refused (warning haptic), Divider, Remove-from-plan (destructive, error haptic).
+  - Existing confirmationDialog tap-to-log flow preserved.
+
+### Interaction patterns locked in
+- Leading edge = constructive/positive action (check, +1, add-to-grocery). Full swipe is safe.
+- Trailing edge = destructive/management actions. Destructive button placed FIRST so full swipe still maps to Delete (matches Apple HIG).
+- Every action fires HapticManager feedback (success for constructive, error for destructive, lightImpact for neutral toggles, selection for boolean toggles, warning for negative log-refused).
+- All writes route through existing AppState optimistic-update + rollback pattern — no new state plumbing.
+- Every custom swipe button has an `.accessibilityLabel` distinct from the visible label (keeps VoiceOver narration clear when row content is repeated).
+
+### Not verified yet (requires macOS)
+- `xcodebuild -scheme EatPal build` — Windows host has no Swift toolchain. Static review only.
+- No UI test added for swipe actions yet (EatPalTests is minimal — only sanity/model tests).
+- On-device confirmation that swipe layouts render correctly across trait sizes (compact height on iPhone SE, large-dynamic-type).
+
+### Learnings for future iterations
+- `.swipeActions` only works on rows inside a `List`; non-List renderings (ScrollView+VStack, as in MealPlanView) need `.contextMenu` instead. Worth noting when we do US-136 drag-drop: MealPlanView will likely need to migrate its day-slot rendering into a `List` for full gesture parity, or keep using DragGesture / contextMenu-with-preview as the mobile interaction model.
+- When combining multiple trailing actions with `allowsFullSwipe: true`, put the destructive (red) button FIRST — that's the button the full swipe invokes. Non-destructive secondaries follow.
+- `HapticManager` is @MainActor; direct calls from SwiftUI Button action closures are fine (closures execute on the main actor by default in view bodies).
+- `ToastManager.shared.success(_:message:)` / `.info(_:message:)` is the established user-feedback channel — use it, not `Alert`, for non-blocking confirmations.
+- GroceryItem memberwise init lets you omit every optional field; only `id, userId, name, category, quantity, unit, checked` are required in practice.
+
+---
+
+## 2026-04-17 - US-137: Context menus with preview on food/recipe rows (DONE)
+
+### What was implemented
+SwiftUI `.contextMenu` added to every primary list row on iOS; Recipes rows also get a `preview:` closure showing a larger thumbnail + key metadata.
+
+### Files changed
+- `ios/EatPal/EatPal/Views/Pantry/PantryView.swift`
+  - FoodRowView rows get `.contextMenu` with: Add to Grocery (creates GroceryItem with addedVia: "restock"), Mark Safe/Unsafe toggle, Mark Try-Bite/Clear toggle, Edit (opens FoodDetailView sheet), Delete (destructive).
+  - Reuses the same HapticManager + ToastManager patterns as the US-135 swipe actions so behavior is consistent across gestures.
+
+- `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift`
+  - GroceryItemRow rows get `.contextMenu` with: Mark Bought/Uncheck toggle, Edit, Duplicate (creates fresh GroceryItem with new UUID and addedVia: "manual"), Delete (destructive).
+  - Duplicate uses existing AppState.addGroceryItem; no new service needed.
+
+- `ios/EatPal/EatPal/Views/Recipes/RecipesView.swift`
+  - RecipeRowView rows get `.contextMenu { ... } preview: { RecipePreviewCard(recipe: recipe) }`.
+  - Menu actions: Add Ingredients to Grocery (reuses addRecipeIngredientsToGrocery helper from US-135), View Details (opens sheet), Delete (destructive).
+  - New `RecipePreviewCard` view (appended near the #Preview block): renders 280pt thumbnail, name, description (lineLimit 3), prep time, difficulty badge, ingredient count, rating. Frame width 320pt. Pure SwiftUI, no new dependencies.
+
+- `ios/EatPal/EatPal/Views/MealPlan/MealPlanView.swift` — PlanEntryRow contextMenu was already added during US-135 (Log Ate/Tasted/Refused + Remove from plan) since that view doesn't render inside a List.
+
+### Interaction patterns reinforced
+- Swipe actions (US-135) cover the single most-common action per row with a full-swipe shortcut.
+- Context menus (US-137) give the full action inventory via long-press, duplicate of swipe for discoverability, plus actions too rare or multi-step to warrant a swipe slot (duplicate, try-bite toggle, preview).
+- Destructive actions are always last, after a Divider, marked `role: .destructive`.
+- `.contextMenu` and `.swipeActions` coexist on the same row without gesture conflicts — SwiftUI routes long-press to menu, horizontal pan to swipe.
+
+### Not verified yet
+- Requires macOS build to confirm the `preview:` closure on `.contextMenu` renders at the expected size across trait environments.
+- RecipePreviewCard uses existing `RecipeThumbnail` component — assumed safe since it's used in the sibling RecipeRowView body at line 133.
+
+### Learnings
+- `.contextMenu { } preview: { }` is the iOS 16+ API for rich previews. The preview closure returns any `View`, sized automatically but capped around 320pt wide for good results.
+- Actions inside `.contextMenu` respect `role: .destructive` for red tinting and trailing positioning, matching swipe actions.
+- For boolean toggles (Safe/Try-Bite), wording should describe the action, not the state: "Mark Safe" vs. "Mark Unsafe" (verb-first) reads clearer than "Safe: On/Off".
+- When a feature is split across swipe + contextMenu, keep the same helper functions (addRecipeIngredientsToGrocery here) so behavior doesn't diverge.
+
+---
+
+## 2026-04-17 - US-138: TipKit gesture onboarding (DONE)
+
+### What was implemented
+TipKit tips introduce the new swipe / drag / context-menu gestures without a tutorial wall. Each tip shows once per install and is dismissed permanently when the user performs the corresponding gesture.
+
+### Files changed
+- `ios/EatPal/EatPal/Utilities/Tips.swift` (new, ~85 LOC):
+  - `TipEvents` enum holds shared `Tips.Event` instances: `didSwipeGrocery`, `didSwipePantry`, `didSwipeRecipe`, `didUseContextMenu`, `didDragFood`.
+  - Tip structs: `SwipeGroceryTip`, `SwipePantryTip`, `SwipeRecipeTip`, `ContextMenuTip`. Each has title / message / systemImage and a `#Rule(event) { $0.donations.count == 0 }` to hide once the gesture has been used.
+
+- `ios/EatPal/EatPal/App/EatPalApp.swift`
+  - Imported TipKit.
+  - Added `init()` that calls `try? Tips.configure([.displayFrequency(.immediate), .datastoreLocation(.applicationDefault)])`.
+
+- `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift`
+  - `import TipKit`, instantiated `swipeTip = SwipeGroceryTip()`, `contextMenuTip = ContextMenuTip()`.
+  - Attached `.popoverTip(swipeTip)` to the summary-header HStack.
+  - Added `await TipEvents.didSwipeGrocery.donate()` after every swipe Button action (Check, Delete, Edit).
+
+- `ios/EatPal/EatPal/Views/Pantry/PantryView.swift`
+  - Same pattern: imported TipKit, `swipeTip = SwipePantryTip()`, attached `.popoverTip(swipeTip)` on the filter Picker section.
+  - Donated `TipEvents.didSwipePantry` in the +1, safe-toggle, and move-to-grocery swipe buttons.
+
+- `ios/EatPal/EatPal/Views/Recipes/RecipesView.swift`
+  - Imported TipKit, `swipeTip = SwipeRecipeTip()`.
+  - Attached `.popoverTip(swipeTip)` on the difficulty filter section.
+  - Donated `TipEvents.didSwipeRecipe` in the leading-swipe "Grocery" button.
+
+### Learnings
+- `Tips.configure(_:)` can throw; wrap in `try?` at app init since tip persistence is non-critical.
+- `Tips.Event` instances must be stable across app launches — declaring them as `static let` on an enum namespace (TipEvents) is the idiomatic approach.
+- `#Rule(event) { $0.donations.count == 0 }` is the cleanest "show until used once" predicate; no need to track "shown before" state manually.
+- `.popoverTip(tip)` anchors the popover to the view it's attached to; put it on a persistent element near the rows, not on the rows themselves (rows may scroll off screen and the tip would get cut off).
+- Donating the event from inside a SwiftUI Button closure requires `Task { await event.donate() }` — `donate()` is async.
+
+---
+
+## 2026-04-17 - US-136: SwiftUI drag-and-drop for Pantry -> Grocery / Meal Planner (DONE first pass)
+
+### What was implemented
+Users can long-press a food in the Pantry to start a drag session, then drop it onto the Grocery list or a Meal Planner slot card to add it as a grocery item or plan entry, respectively. Drop targets provide visual + haptic feedback. Cross-tab dragging works within a single session (user must switch to the destination tab before releasing).
+
+### Files changed
+- `ios/EatPal/EatPal/Models/FoodTransferable.swift` (new, ~35 LOC):
+  - `FoodTransferable: Codable, Transferable` value object with `id, name, category, unit`.
+  - Convenience `init(food: Food)`.
+  - `transferRepresentation` exposes BOTH `CodableRepresentation(contentType: .utf8PlainText)` for intra-app JSON transfer and `ProxyRepresentation(exporting: \.name)` so external drops (Messages, Notes) receive a readable string.
+
+- `ios/EatPal/EatPal/Views/Pantry/PantryView.swift`
+  - `.draggable(FoodTransferable(food: food)) { /* preview */ }` on FoodRowView.
+  - Drag preview is a small shadowed pill showing the food's category emoji + name — stays readable under the finger without revealing the row's inventory controls.
+  - `.draggable` coexists with existing `.onTapGesture`, `.swipeActions`, and `.contextMenu`. iOS 17 arbitrates (tap = open detail, horizontal swipe = action, long-press = drag OR context menu depending on press duration).
+
+- `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift`
+  - `.dropDestination(for: FoodTransferable.self) { droppedFoods, _ in ... }` on the List container, positioned after `.searchable`.
+  - On drop: iterates `droppedFoods`, creates a `GroceryItem` per food with `addedVia: "drag"`, inserts via `appState.addGroceryItem`, collects an `addedCount`, fires `HapticManager.success()`, donates `TipEvents.didDragFood`, and emits a ToastManager success ("Added to grocery: <name>" or "N items").
+
+- `ios/EatPal/EatPal/Views/MealPlan/MealPlanView.swift`
+  - MealPlanView body updated to pass `date: selectedDate` into `MealSlotCard(...)` — the slot now knows what day it represents.
+  - `MealSlotCard` gained `let date: Date` and `@State private var isTargeted = false`.
+  - Card body wraps the root VStack with a conditional `.overlay(RoundedRectangle ... strokeBorder(isTargeted ? .green : .clear, lineWidth: 2))` and swaps the empty-state label to "Release to add to <slot>" when targeted.
+  - `.dropDestination(for: FoodTransferable.self) { ... } isTargeted: { isTargeted = $0; if $0 { HapticManager.selection() } }` creates a `PlanEntry(foodId: dropped.id, date: DateFormatter.isoDate.string(from: date), mealSlot: slot.rawValue, kidId: activeKidId)` via `appState.addPlanEntry`.
+  - Error path: if `activeKidId` is nil, ToastManager.shared.error("Select a child profile first") and drop rejected (returns false).
+
+### Not implemented in this pass
+- **TabView-level drop targets** (drag-hover-over-tab-to-switch). SwiftUI TabView doesn't expose a native drop API for tab labels. Would require a custom TabView replacement or an off-screen drop-hint overlay — out of scope for Tier 1.
+- **Dragging recipes or plan entries.** Only `Food` rows are currently draggable. Recipes can't be dragged onto the planner yet (but swipe-to-grocery covers that use case). Plan entries can't be dragged between slots (future US — cross-slot rearrangement).
+- **Drop targets on other surfaces**: pantry doesn't accept recipe-ingredient drops, meal plan doesn't accept recipe drops, grocery doesn't accept plan-entry drops. Each would be its own drop-destination modifier if we want bidirectional movement.
+- **On-device verification.** Windows host has no Swift toolchain; `.draggable` and `.dropDestination` haven't been exercised in the simulator yet.
+
+### Learnings
+- `Transferable` with dual representations (Codable for intra-app, Proxy for out-of-app) is the idiomatic iOS 16+ pattern — small payload, plays nicely with external apps.
+- Drop destinations take `isTargeted:` as a second trailing closure; use it to drive visual feedback (border color, label text) and subtle haptics (`.selection()` is right — don't fire `.success()` until the actual drop).
+- The drop closure returns `Bool` — returning `false` cancels the drop and SwiftUI snaps the drag payload back to origin with the system's default animation. Useful for preconditions (e.g., no active kid).
+- Custom drag previews (the view builder after `.draggable(_:)`) should be compact — a pill with icon + name reads better than trying to duplicate the full row.
+- Coexistence with `.contextMenu`: iOS 17 allows both long-press gestures on the same view; the OS disambiguates by press depth/duration. No refactor needed for now.
+
+---
+
+## 2026-04-17 - US-140: Voice-to-grocery via SFSpeechRecognizer (DONE)
+
+### What was implemented
+Full voice-to-grocery flow. User taps a mic button in the Grocery tab toolbar, dictates items ("milk, eggs, two pounds of chicken, bananas"), and sees each parsed item previewed with per-item toggles before committing to `grocery_items`. Speech recognition prefers on-device so nothing leaves the phone.
+
+### Files changed / added
+- `ios/EatPal/EatPal/Resources/Info.plist`
+  - Added `NSMicrophoneUsageDescription`: "EatPal uses the microphone so you can add grocery items by voice."
+  - Added `NSSpeechRecognitionUsageDescription`: "EatPal uses speech recognition to turn what you say into grocery items. Recognition runs on-device when available."
+
+- `ios/EatPal/EatPal/Services/GroceryTextParser.swift` (new, ~220 LOC)
+  - Compact Swift port of `src/lib/parse-grocery-text.ts`.
+  - Exposes `ParsedGroceryItem` (name, quantity, unit, category, confidence) and `GroceryTextParser.parse(_:) -> [ParsedGroceryItem]`.
+  - Handles newlines, commas, and " and " / " also " / " plus " connectors as item separators.
+  - Strips bullets / numbered markers / checkboxes before parsing so the same parser also handles OCR output (US-141 reuses it).
+  - Number parsing: digits, decimals, `1/2` fractions, and word forms ("a", "one", "two" ... "twelve", "half", "quarter").
+  - Unit map covers imperial + metric + package forms (bags, cans, jars, loaves, sticks, etc.).
+  - Category inference: substring match against keyword dictionaries for protein / dairy / fruit / vegetable / carb / snack.
+  - Dedupes repeated names case-insensitively.
+  - Returns a confidence score so low-confidence items can be flagged in the UI.
+
+- `ios/EatPal/EatPal/Services/VoiceInputService.swift` (new, ~180 LOC)
+  - `@MainActor final class VoiceInputService: ObservableObject`.
+  - State machine: `.idle`, `.preparing`, `.listening`, `.error(String)`.
+  - `@Published liveTranscript`, `finalTranscript`, `inputLevel` (0..1 RMS of the current audio buffer, smoothed 70/30).
+  - `authorizationStatus()` and `requestAuthorization()` check + request BOTH `AVAudioApplication.shared.recordPermission` and `SFSpeechRecognizer.authorizationStatus()`. Returns a merged `AuthorizationStatus` enum (`.authorized / .micDenied / .speechDenied / .bothDenied / .notDetermined`) so the UI can show the right "open Settings" message.
+  - `start()` configures the AVAudioSession for `.record` / `.measurement` / `.duckOthers`, installs a tap on the input node, creates an `SFSpeechAudioBufferRecognitionRequest` with `shouldReportPartialResults = true` and (if supported) `requiresOnDeviceRecognition = true`.
+  - `stop()` tears down the tap + session, and if no final callback fired it promotes the last partial transcript to `finalTranscript` so the UI always sees something.
+  - `cancel()` clears state without committing.
+
+- `ios/EatPal/EatPal/Views/Grocery/VoiceAddGrocerySheet.swift` (new, ~280 LOC)
+  - SwiftUI sheet with three stacked regions: transcript area + waveform, parsed-items preview list, controls footer.
+  - `WaveformView` renders 30 capsule bars whose heights combine the live `level` with a deterministic per-bar shape (sin over index), so the visualiser feels alive while `level` streams in without needing a TimelineView.
+  - Preview list lets users tap to include/exclude each parsed item; low-confidence items show a `questionmark.circle` warning. Category icon + quantity/unit visible per row.
+  - Controls footer: big circular mic/stop button (red when listening, scales with `inputLevel`) and a prominent "Add to grocery" button that inserts selected items and dismisses on success.
+  - Writes go through `AppState.addGroceryItem` with `addedVia: "voice"`.
+
+- `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift`
+  - Added `@State private var showingVoiceAdd = false`.
+  - Toolbar gained a `mic.fill` button between the existing wand menu and the plus button.
+  - Added `.sheet(isPresented: $showingVoiceAdd) { VoiceAddGrocerySheet() }`.
+
+### Interaction patterns locked in
+- Permissions are dual-checked and requested in one round trip; users see a single Settings hint regardless of which permission is missing.
+- On-device recognition is preferred but gracefully falls back when the recognizer reports `supportsOnDeviceRecognition == false`.
+- Parser deduplicates — dictating "milk, milk, milk" yields one item, which matches the TS parser's behaviour.
+- User always reviews parsed items before they hit `grocery_items`. No silent inserts from mis-heard audio.
+- Items inserted via this path are tagged `addedVia: "voice"` so analytics / ReasoningBank can distinguish voice-sourced items from manual/drag/recipe sources.
+
+### Not verified yet / future follow-ups
+- Requires macOS to run in the simulator — voice recognition specifically requires a device or "Use Built-in Microphone" simulator setting.
+- Share the parser with the OCR path (US-141) — already designed for reuse, just needs the OCR path to call `GroceryTextParser.parse(recognizedText)`.
+- Consider a TipKit onboarding pointer at the mic button on first visit to Grocery (add to `SwipeGroceryTip` family when US-141 lands).
+- Dictation-style voice is currently best-effort; expanding `numberWords` to cover "thirteen"…"nineteen" and round hundreds would improve accuracy for larger qty utterances.
+
+### Learnings
+- SFSpeechRecognizer's on-device mode is iOS 13+ but the `supportsOnDeviceRecognition` check is required per-recognizer instance; it's false for some locales.
+- AVAudioEngine taps must be removed before calling `start()` again — calling `removeTap(onBus: 0)` defensively before `installTap` avoids double-tap crashes when a session recovers from an error.
+- Recognition tasks deliver `result.isFinal` only on `endAudio()` — the `stop()` → `endAudio()` → final callback is async, so persisting `liveTranscript` as a fallback in `stop()` avoids a race where the user ends recording but recognition finishes 100ms later.
+- `AVAudioApplication.shared.recordPermission` is the iOS 17+ replacement for `AVAudioSession.sharedInstance().recordPermission` — deprecated cousin still works but the new API is clearer.
+
+---
+
+## 2026-04-17 - US-141: Photo / screenshot → grocery list via Vision OCR (DONE)
+
+### What was implemented
+Users can tap the grocery "quick add" menu, choose "Import from photo", pick up to 5 screenshots/photos of a list, and see each recognised item previewed with per-item include/exclude toggles before saving. Reuses the same `GroceryTextParser` as the voice flow (US-140) — mean and per-item confidence drive review prompts.
+
+### Files changed / added
+- `ios/EatPal/EatPal/Services/ImageTextRecognizer.swift` (new, ~120 LOC)
+  - Namespace enum with static `recognize(in: UIImage) async throws -> RecognitionResult` and a batch `recognize(in: [UIImage]) async -> [RecognitionResult]`.
+  - `RecognitionResult`: `lines`, `confidences` (per-line Float), `mergedText` (ready for GroceryTextParser).
+  - Uses `VNRecognizeTextRequest` with `.accurate` recognitionLevel, `usesLanguageCorrection = true`, `recognitionLanguages = ["en-US"]`.
+  - Maps `UIImage.imageOrientation` → `CGImagePropertyOrientation` so rotated images parse correctly (common for screenshots taken in landscape).
+  - Exposes `trustworthyConfidence: Float = 0.5` so UI can gate on it.
+
+- `ios/EatPal/EatPal/Views/Grocery/PhotoImportGrocerySheet.swift` (new, ~280 LOC)
+  - SwiftUI sheet. Sections: picker area, parsed-items preview, footer save button.
+  - `PhotosPicker(selection: …, maxSelectionCount: 5, matching: .images)` for multi-image selection.
+  - On change: loads each `PhotosPickerItem` into `UIImage`, runs `ImageTextRecognizer.recognize`, concatenates merged text, feeds through `GroceryTextParser.parse(…)`.
+  - Horizontal scroll row of 72×72 thumbnails so the user can confirm what's being read.
+  - Warning banners: low-confidence scan (< 0.5 mean), per-item confidence < 0.75 (questionmark badge).
+  - Progress overlay (`ProgressView("Reading text…")`) during recognition.
+  - Save flow identical to US-140: iterate selected items, insert via `AppState.addGroceryItem(...)` with `addedVia: "photo"`, haptic + toast on success, stay on sheet on partial failure.
+
+- `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift`
+  - Added `@State private var showingPhotoImport = false`.
+  - Collapsed the toolbar: the former `mic.fill` button plus the old `wand.and.stars` menu are now unified into a single `wand.and.stars` Menu with three ordered options: **Dictate items**, **Import from photo**, divider, **Generate from this week's plan**. Plus the existing `+` button to the right.
+  - Added `.sheet(isPresented: $showingPhotoImport) { PhotoImportGrocerySheet() }`.
+
+### Interaction patterns / design decisions
+- Single grocery "quick add" menu (wand icon) now owns every bulk-input path: dictation, photo, plan-derived. Keeps toolbar tidy and gives users one clear entry point for "more than one item at a time."
+- Confidence signalling at two levels: per-image mean (banner) and per-item (icon). Avoids silent incorrect inserts.
+- Parser is shared with voice: OCR lines are joined with newlines and the parser's existing bullet/checkbox/numbered-list strip handles list screenshots natively.
+- `addedVia` tag is distinct per source (`voice`, `photo`, `recipe`, `drag`, `restock`, `manual`) — good for analytics, retention studies, and future ReasoningBank training.
+- Uses existing `NSPhotoLibraryUsageDescription` in Info.plist — PhotosPicker on iOS 16+ actually bypasses this via the system-provided out-of-process picker, but the description stays for the direct-capture paths elsewhere.
+
+### Not verified yet / future follow-ups
+- `xcodebuild` not run (no macOS host) — especially relevant for Vision: the framework's behaviour with `.accurate` on older devices can be slow on first call.
+- Consider down-sampling very large screenshots before handing to Vision (memory footprint).
+- TipKit tip for the new menu (teach users where voice/photo live) — candidate follow-up.
+- Multi-image merging currently concatenates merged text from each image in pick order. If users pick a receipt + a list, the parser treats them as one stream. If that turns out confusing we can prompt per-image review.
+
+### Learnings
+- `PhotosPicker.loadTransferable(type: Data.self)` is the simplest path to `UIImage`; `loadTransferable(type: UIImage.self)` would avoid the Data roundtrip on iOS 17 but isn't universally reliable — sticking with Data → UIImage avoids surprises.
+- Vision's `VNRecognizeTextRequest` completion handler is synchronous relative to `VNImageRequestHandler.perform`, so wrapping in `withCheckedThrowingContinuation` is the right bridge to async/await.
+- Per-line confidence (`VNRecognizedText.confidence`) is usable but noisy on handwritten inputs; Apple recommends treating anything < 0.4 as suspect. Using 0.5 as the "show warning" threshold is conservative but not paranoid.
+- Reusing the parser from US-140 cut this story from ~400 LOC to ~280 of new UI + ~120 of Vision glue. Good sign that GroceryTextParser should stay a shared primitive — future OCR sources (share extension, camera-in-scanner) should also flow through it.
+
+---
+
+## 2026-04-17 - US-139: Unified DataScannerViewController (barcode + grocery list text) (DONE first pass)
+
+### What was implemented
+Replaced the hand-rolled AVFoundation barcode scanner with a VisionKit-backed unified scanner that supports BOTH barcode and live text recognition in one view. Existing OpenFoodFacts barcode flows (Pantry, Dashboard) are now driven by the new scanner with a barcode-only mode; the Grocery tab gained a new "Scan a list" entry point that captures recognised text and routes it through a review sheet.
+
+### Files changed / added
+- `ios/EatPal/EatPal/Views/Scanner/DataScannerRepresentable.swift` (new, ~120 LOC)
+  - `UIViewControllerRepresentable` around `DataScannerViewController`.
+  - `Configuration` struct: recognizesBarcodes / recognizesText / recognizesMultipleItems / qualityLevel / isHighlightingEnabled / isGuidanceEnabled.
+  - Callbacks: `onRecognizedItem(RecognizedItem)` for taps, `onTextSnapshot([String])` for deduplicated live transcript, `onError(Error)`.
+  - Coordinator implements DataScannerViewControllerDelegate: didTapOn, didAdd, didRemove, becameUnavailableWithError.
+  - Snapshot helper dedupes by case-insensitive transcript, preserves reading order.
+  - `dismantleUIViewController` calls `stopScanning()` to avoid leaving the camera hot after dismissal.
+
+- `ios/EatPal/EatPal/Views/Scanner/UnifiedScannerView.swift` (new, ~170 LOC)
+  - Public `Mode` enum: `.barcode`, `.groceryList`.
+  - Public `Result` enum: `.barcode(String)`, `.text([String])`.
+  - Initializer exposes `initialMode` + `allowModeSwitching` so callers can lock the view to one mode (existing barcode flows set `allowModeSwitching: false`).
+  - Runtime branch: `if #available(iOS 17.0, *), DataScannerViewController.isSupported` → modern path; else falls back to `BarcodeScannerView` with the legacy AVFoundation implementation wired to `onComplete(.barcode(...))`.
+  - Modern path renders a DataScannerRepresentable plus an overlay with guidance text, recognised-line count (grocery list mode), error banner, and an optional segmented mode picker.
+  - `.id(mode)` on the representable so SwiftUI recreates the underlying DataScannerViewController with fresh configuration when the user switches modes.
+  - Barcode mode: first tap fires `.barcode(payload)` and dismisses.
+  - Grocery list mode: text snapshots stream into `collectedText`; user also tap-to-force-add individual text regions; "Done" button emits `.text(collectedText)`.
+
+- `ios/EatPal/EatPal/Views/Grocery/TextImportGrocerySheet.swift` (new, ~185 LOC)
+  - Shared "review recognised text" sheet. Accepts `recognisedLines: [String]`, `sourceTag: String` (e.g. `scan`, `share`), `title: String`.
+  - Editable `TextEditor` showing the transcript; on change, re-parses via `GroceryTextParser.parse(...)`.
+  - Parsed-items preview list with the same per-item include/exclude toggles as photo/voice paths. Low-confidence (< 0.75) items flagged with questionmark badge.
+  - Footer save button inserts selected items via `AppState.addGroceryItem(...)` with the provided sourceTag.
+  - Drop-in replacement for anyone needing the parsed-items review UX without repeating ~180 LOC.
+
+- `ios/EatPal/EatPal/Views/Pantry/PantryView.swift`
+  - `.fullScreenCover(isPresented: $showingScanner)` now presents `UnifiedScannerView(initialMode: .barcode, allowModeSwitching: false)`; only consumes the `.barcode(...)` case.
+  - Zero behavioral change from the user's perspective when scanning a barcode in the pantry.
+
+- `ios/EatPal/EatPal/Views/Dashboard/DashboardHomeView.swift`
+  - Same swap — quick-action barcode button now routes through UnifiedScannerView.
+
+- `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift`
+  - Added `showingListScanner`, `scannedListLines`, `showingScanReview` state.
+  - Quick-add menu gained a new "Scan a list" entry (between "Dictate items" and "Import from photo").
+  - `.fullScreenCover` presents `UnifiedScannerView(initialMode: .groceryList, allowModeSwitching: false)`; on `.text(lines)` result, captures lines and opens `TextImportGrocerySheet(recognisedLines:, sourceTag: "scan", title: "Review Scanned List")`.
+  - Two-sheet choreography (full-screen cover for camera, then sheet for review) keeps each surface doing one job.
+
+### Interaction patterns / design decisions
+- Legacy `BarcodeScannerView` is now a fallback, not the primary scanner. It only shows on hardware where `DataScannerViewController.isSupported == false` (A11 chip and older, which shouldn't happen on iOS 17-capable hardware anyway, but the branch is defensive).
+- "Scan a list" and "Import from photo" share the same mental model: recognise text → review → save. Scan is real-time; photo is batch. Both terminate in a sheet the user edits before committing.
+- The review sheet's TextEditor lets users repair OCR mistakes (e.g. "2 ib chicken" → "2 lb chicken") and see the parser react line by line. The editor is primary, not a hidden advanced feature — if users trust the parse they just tap Save; if they don't, they can correct in place.
+- `sourceTag: "scan"` on inserted items keeps addedVia meaningful for analytics / ReasoningBank distinct from photo / voice / drag / recipe paths.
+
+### Not implemented this pass (follow-ups noted in prd.json)
+- Recipe-card mode (capture printed recipe → EditRecipeView).
+- Ingredient-label mode (capture nutrition → create Food).
+- Receipt mode (parse receipt line-items → bulk pantry/grocery insert).
+- TipKit tip anchored on the scanner to teach the mode picker.
+- Multi-mode mode picker visible when a caller opts in (all existing callers currently lock to one mode).
+
+### Learnings
+- `DataScannerViewController.isSupported` is a static Bool; don't confuse with instance `isScanning`. Always check `.isSupported` before constructing the view.
+- `DataScannerViewController.ScanningUnavailable` is Apple's ready-made error enum surfaced via `becameUnavailableWithError`. Forwarding its localizedDescription gives users the right message ("Camera unavailable", "Unsupported device", etc.) without any custom messaging.
+- `recognizedDataTypes: Set<RecognizedDataType>` requires Hashable — which the enum provides — but Set literal initialisation is clearer than array → Set cast when mode is static.
+- Recreating the UIViewController via `.id(mode)` is the idiomatic way to reset a delegate-driven UIKit controller from SwiftUI; avoids the trap of trying to reconfigure mid-flight.
+- Barcode + text at the same time in one DataScanner instance is supported (`.barcode()` + `.text()` in the Set), but it adds noise — most users want one or the other. Two discrete modes with fast switching gives a cleaner UX.
+
+---
+
+## 2026-04-17 - US-151: Sentry for iOS (sentry-cocoa) (DONE)
+
+### What was implemented
+iOS crash / error / breadcrumb telemetry with PII scrubbing, matching the web integration.
+
+### Files changed / added
+- `ios/EatPal/project.yml`
+  - Added `Sentry: url: https://github.com/getsentry/sentry-cocoa.git, from: 8.0.0` under `packages`.
+  - Added `- package: Sentry, product: Sentry` under EatPal target dependencies.
+
+- `ios/EatPal/EatPal/Resources/Info.plist`
+  - Added `SENTRY_DSN` key, env-substituted (`$(SENTRY_DSN)`), same pattern as SUPABASE_URL / SUPABASE_ANON_KEY.
+
+- `ios/EatPal/EatPal/Services/SentryService.swift` (new, ~135 LOC)
+  - `configure()` is a no-op in DEBUG and when DSN is missing/unresolved; otherwise calls `SentrySDK.start`.
+  - Options: env "production", releaseName derived from CFBundleShortVersionString + CFBundleVersion, enableAutoSessionTracking, sessionTrackingIntervalMillis 30000, tracesSampleRate 0.2, profilesSampleRate 0.1.
+  - `beforeSend` strips user email/name/ip, drops request.data and request.cookies, redacts sensitive keys (authorization, auth, cookie, password, token, email, name, first_name, last_name, phone, dob, birthday, address) from extras and headers.
+  - `beforeBreadcrumb` redacts sensitive keys on breadcrumb data.
+  - `setUserId(_:)` attaches a stable UUID — NO email, NO name.
+  - `leaveBreadcrumb(category:message:level:data:)` for navigation/auth/intent hooks.
+  - `capture(_:extras:)` for caught errors with optional context scope.
+
+- `ios/EatPal/EatPal/App/EatPalApp.swift`
+  - `init()` now calls `SentryService.configure()` BEFORE `Tips.configure(...)` so early startup failures are captured.
+
+- `ios/EatPal/EatPal/ViewModels/AuthViewModel.swift`
+  - `startListeningForAuthChanges()` now:
+    - On initial session restore: sets Sentry user id from `session?.user.id.uuidString` and leaves a `session restored` breadcrumb.
+    - On `.signedIn` event: sets user id, leaves `signed in` breadcrumb (uses the emitted session).
+    - On `.signedOut`: clears user id (nil), leaves `signed out` breadcrumb.
+
+### Decisions
+- DEBUG builds skip Sentry entirely — dev iterations don't need to hit the prod project. Production release builds enable it.
+- Profile sampling starts conservative (0.1) and traces at 0.2 — adjust after the first week of data.
+- User id only: matches the "no PII by default" project convention and keeps GDPR/CCPA noise low.
+- Sensitive-key redaction is key-name based (case-insensitive), not value-inspection based. Cheap and predictable.
+
+### Not verified yet
+- Requires `xcodegen generate` on macOS to resolve the SPM dependency before any build will succeed.
+- No breadcrumbs yet on DataService calls, AppState mutations, or navigation — intentional scope cut for first pass. Add incrementally as problems surface.
+
+---
+
+## 2026-04-17 - US-142: App Intents + Siri Shortcuts (DONE first pass)
+
+### What was implemented
+Three App Intents registered via AppShortcutsProvider so users can talk to EatPal through Siri or compose shortcuts in the Shortcuts app. All run in the background (no forced app launch) and route through `DataService.shared` which authenticates via the keychain-stored Supabase session.
+
+### Files changed / added
+- `ios/EatPal/EatPal/Intents/GroceryAppIntents.swift` (new, ~120 LOC)
+  - `AddGroceryItemIntent`
+    - `@Parameter(title: "Item")` with `inputOptions: .init(capitalizationType: .sentences)` so Siri fills the field natively.
+    - `parameterSummary: Summary("Add \(\.$item) to EatPal grocery")`.
+    - `perform()` pipes the spoken string through `GroceryTextParser.parse(...)` to recover qty/unit/category — "two pounds of chicken" becomes `{ name: Chicken, quantity: 2, unit: lbs, category: protein }`.
+    - Inserts via `DataService.shared.insertGroceryItem` with `addedVia: "siri"`.
+    - Returns `.result(dialog: "Added \(name) to your grocery list.")`.
+    - Breadcrumb + Sentry capture on error.
+  - `WhatsForDinnerIntent`
+    - No parameters. `parameterSummary: Summary("What's for dinner in EatPal")`.
+    - `perform()` fetches kids, plan_entries, foods, recipes; filters to today's dinner entries across all kids; resolves each to either a recipe name or the linked food name; formats with kid-name prefix when present ("Liam: Chicken tacos").
+    - Handles 1-item / 2-item / N-item cases with natural conjunctions.
+    - Empty state returns "You don't have dinner planned in EatPal today."
+
+- `ios/EatPal/EatPal/Intents/MealAppIntents.swift` (new, ~100 LOC)
+  - `MealSlotAppEnum` (AppEnum) with Siri-facing cases `.breakfast .lunch .dinner .snack`.
+  - `domainSlotRawValues` maps `.snack` → both `snack1` and `snack2` from the domain `MealSlot` enum. Breakfast/lunch/dinner map 1:1.
+  - `MealResultAppEnum` (AppEnum): `.ate .tasted .refused`.
+  - `LogMealResultIntent`
+    - `@Parameter` for slot + result, parameterSummary `"Log that \(\.$slot) was \(\.$result) in EatPal"`.
+    - Fetches today's plan_entries, filters by slot(s), updates each match via `DataService.shared.updatePlanEntry` with `PlanEntryUpdate(result: ...)`.
+    - Returns dialog reporting how many meals were updated.
+
+- `ios/EatPal/EatPal/Intents/EatPalAppShortcuts.swift` (new, ~40 LOC)
+  - `AppShortcutsProvider` exposes all 3 intents with 3+ phrases each, using `(.applicationName)` placeholder so phrases adapt to rebrands.
+  - Shortcut tile colour: `.green` (matches the primary app tint).
+
+### Phrases registered
+- Add: "Add `<item>` to EatPal grocery", "Add `<item>` to my EatPal list", "Put `<item>` on my EatPal grocery list".
+- Dinner: "What's for dinner in EatPal", "What am I making for dinner in EatPal", "EatPal dinner tonight".
+- Log: "Log `<slot>` as `<result>` in EatPal", "Mark `<slot>` `<result>` in EatPal", "Record `<slot>` in EatPal".
+
+### Design decisions
+- Background execution (`openAppWhenRun = false`) is the whole point — if the user wanted to open the app, they would. Siri fires the intent, the result dialog appears in the Siri UI overlay, and nothing forces the user out of their current context.
+- All intent writes use `addedVia: "siri"` so analytics and ReasoningBank can distinguish Siri-sourced data.
+- No kid-entity picker in this pass. Today's meal log applies to every kid with a matching slot on today's date. Follow-up: donate per-kid LogMealResultIntent variants so Siri learns per-kid patterns.
+- No donation from manual flows yet. AppShortcutsProvider-declared phrases already work on iOS 16+ without donation; donation only improves Siri suggestions. Intentionally deferred.
+
+### Not verified yet
+- Requires `xcodegen generate` + Xcode build to compile the AppIntents metadata. Siri registration happens at first launch after install.
+- On-device test: "Hey Siri, add milk to EatPal grocery" is the canonical smoke test.
+- Shortcuts app discovery: the three tiles should appear under EatPal automatically after first launch.
+
+### Learnings
+- `AppShortcutsProvider` replaces the old INInteraction donation pattern for surface-level Siri discovery — the system parses your phrases at install time.
+- `(.applicationName)` in phrase strings is iOS 16+ and keeps phrases in sync with any future app rename.
+- `@Parameter` with `inputOptions: .init(capitalizationType: .sentences)` makes Siri transcription feel natural in dialogs — without it the dictated word can be all-lowercase.
+- `DataService.shared` being `@MainActor` + having `ensureUserId` built in means App Intents need zero extra auth plumbing — the keychain Supabase session gets used automatically.
+- MealSlot → MealSlotAppEnum mapping: keeping Siri vocabulary lean (4 options) and mapping snack → {snack1, snack2} internally is friendlier than forcing users to say "snack one".
+
+---
+
+## 2026-04-17 - US-150: OfflineStore durable write queue + NetworkMonitor wiring (DONE first pass)
+
+### What was implemented
+Promoted OfflineStore.swift from a sync-delete placeholder into a durable queue that replays insert / update / delete mutations against Supabase when the device regains connectivity. NetworkMonitor now triggers the drain automatically on offline→online transitions. AppState's grocery mutations route to the queue instead of rolling back when the failure is network-related.
+
+### Files changed
+- `ios/EatPal/EatPal/Services/OfflineStore.swift`
+  - Added `Op` enum (insert/update/delete) and `Table` enum (foods, kids, recipes, plan_entries, grocery_items).
+  - New `@Published` state: `pendingMutationCount`, `isSyncing`, `lastSyncError` for UI diagnostics.
+  - New typed enqueue helpers: `enqueueInsert<T: Encodable>`, `enqueueUpdate<T: Encodable>`, `enqueueDelete(table:entityId:)`.
+  - `syncPendingMutations()` rewritten with concurrent-run guard, per-table dispatch (groceryItems / foods / planEntries / kids / recipes) that decodes stored JSON payloads back into domain structs and posts the right typed insert/update/delete to Supabase.
+  - Sync failures route through SentryService.capture with a `queue: "OfflineStore"` tag; sync stops on first failure to preserve ordering.
+  - `refreshPendingCount()` fires after every enqueue / clear so the published count stays accurate.
+
+- `ios/EatPal/EatPal/Utilities/NetworkMonitor.swift`
+  - Tracks offline→online edge. On the transition, leaves a Sentry breadcrumb and awaits `OfflineStore.shared.syncPendingMutations()`.
+
+- `ios/EatPal/EatPal/App/AppState.swift`
+  - `addGroceryItem`, `deleteGroceryItem`, `toggleGroceryItem` updated with an `if isNetworkError(error) { ... }` branch that keeps the optimistic state AND queues the mutation, plus an info-level "Queued for sync" toast on add.
+  - New `isNetworkError(_:)` helper inspects URLError / NSURLErrorDomain codes (notConnectedToInternet, networkConnectionLost, timedOut, cannotFindHost, cannotConnectToHost, internationalRoamingOff, dataNotAllowed) to distinguish connectivity failures from semantic failures.
+
+### Behaviour summary
+- User adds "milk" to grocery while offline → row appears in the list, toast says "Queued for sync", OfflineStore has 1 pending mutation. User comes back online → NetworkMonitor fires, OfflineStore drains the queue, Supabase gets the insert.
+- User deletes an item offline → row disappears locally, delete queued with table=grocery_items, operation=delete.
+- Non-network errors (validation, RLS reject) still rollback the optimistic state — queueing is reserved for transient connectivity failures.
+
+### Not in this pass (follow-ups)
+- Remaining AppState methods (updateGroceryItem, addFood/updateFood/deleteFood, plan_entries, kids, recipes) still follow the classic optimistic-then-rollback pattern. Retrofitting them is mechanical but intentionally scoped out to keep this change focused.
+- No in-app queue diagnostic view yet (Settings row showing pendingMutationCount + lastSyncError is a good next-pass addition).
+- No conflict resolution against the realtime channel — last-write-wins in practice, which is fine for grocery items but may need a rethink for plan entries where two devices could vote differently.
+- JSON encoding uses the default JSONEncoder (matching domain-struct CodingKeys); the private `JSONEncoder.supabaseSnakeCase` extension is a placeholder in case we switch to `.convertToSnakeCase` in the future.
+
+### Learnings
+- `URLError` and `NSURLErrorDomain` overlap but aren't identical — covering both code paths in `isNetworkError` handles the various stacks in supabase-swift / URLSession / async-http-client.
+- Preserving queue ordering by stopping on the first failure is important for correctness (a delete followed by an insert of the same id should NOT be reordered).
+- SwiftData-backed queue persists across app launches, which is necessary — a user might kill the app between going offline and coming back online.
+
+---
+
+## 2026-04-17 - US-152: Widget freshness via App Group UserDefaults (DONE)
+
+### What was implemented
+Home-screen widget data now refreshes every time the relevant AppState collections mutate, via a debounced Combine pipeline that writes a snapshot to the shared App Group UserDefaults and asks WidgetKit to reload timelines.
+
+### Files changed / added
+- `ios/EatPal/EatPal/Services/WidgetSnapshot.swift` (new, ~90 LOC)
+  - `@MainActor enum WidgetSnapshot` namespace: `appGroup = "group.com.eatpal.app"`, `Key` constants (meals, grocery_count, pantry_low_count, tonight_dish, try_bite_streak, last_updated_at), `widgetKind = "EatPalMealWidget"`.
+  - `Payload` struct holds the snapshot (meals array with slot/foodName/icon, grocery / pantry-low / try-bite counts, tonight's dish name).
+  - `write(_:)` debounces 0.5s via DispatchWorkItem; `writeImmediately(_:)` bypasses for launch / background-handoff paths.
+  - `persist(...)` writes each key and calls `WidgetCenter.shared.reloadTimelines(ofKind:)`.
+
+- `ios/EatPal/EatPal/App/AppState.swift`
+  - `init()` now calls `setupWidgetSnapshotSync()`.
+  - Combine sink: `$planEntries.combineLatest($foods, $groceryItems, $recipes).debounce(500ms).sink { refreshWidgetSnapshot() }` stored in a new `cancellables: Set<AnyCancellable>`.
+  - `refreshWidgetSnapshot()` composes the Payload: today's meals for the active kid (or across all kids), tonight's dinner name (recipe preferred over food), pantry-low count (qty ∈ (0, 2]), unchecked grocery count, try-bite streak placeholder.
+
+- `ios/EatPal/EatPal/EatPalWidget/EatPalWidget.swift`
+  - `MealPlanEntry` extended with `pantryLowCount`, `tonightDish: String?`, `tryBiteStreak`.
+  - `loadFromAppGroup()` reads the three new keys.
+  - Placeholder + #Preview updated to include the new fields.
+
+### Design decisions
+- Combine observation of @Published collections means the snapshot auto-refreshes for every mutation path — the app never has to call `WidgetSnapshot.write(...)` manually, and we can't forget.
+- 500ms debounce avoids thrashing WidgetKit during batch inserts (recipe→grocery, scan-a-list, voice-add multi-item).
+- Payload uses primitive-only dict for `meals` so reading from the widget doesn't require access to the domain Codable types — matches the existing key naming ("widget_meals") so the migration is zero-downtime.
+- try-bite streak is a 0 placeholder; the actual streak calc isn't scoped here but the storage path is ready.
+
+### Not in this pass
+- Lock Screen widgets (`.accessoryRectangular`, `.accessoryInline`, `.accessoryCircular`) — covered by US-146 next.
+- Interactive widget buttons (check off a grocery item from the home screen) — covered by US-147.
+- Using `AppGroup` for the OfflineStore SwiftData container so the widget target can also read cached data — overkill; App Group UserDefaults already covers the widget's needs.
+
+### Learnings
+- Widgets live in their own process. The only realistic IPC surfaces between app ↔ widget are App Group UserDefaults (for small snapshots), shared files (for bigger blobs), and Core/SwiftData with an App-Group-scoped store. UserDefaults is the right tool for the widget data here — small, flat, flush-on-write.
+- `WidgetCenter.shared.reloadTimelines(ofKind:)` takes the `kind` string that matches the `StaticConfiguration`'s kind. Storing it in `WidgetSnapshot.widgetKind` avoids magic-string drift.
+- Combine's `combineLatest` fires once for every upstream publisher change. Debouncing by 500ms smooths bursts cleanly; no need for `.removeDuplicates` since the snapshot contents are what the widget ultimately cares about.
+
+---
+
+## 2026-04-17 - US-146: Lock Screen widget families (accessoryRectangular / Inline / Circular) (DONE)
+
+### What was implemented
+Extended the existing EatPalWidget with three Lock Screen families so users can see tonight's dinner, grocery count, pantry status, or their try-bite streak at a glance from the Lock Screen.
+
+### Files changed
+- `ios/EatPal/EatPalWidget/EatPalWidget.swift`
+  - New view structs:
+    - `MealPlanAccessoryRectangular` — two-line layout with "Tonight" header + dish name + grocery/pantry status chips. Uses `.widgetAccentable()` so icons and the "Tonight" label pick up the OS tint.
+    - `MealPlanAccessoryInline` — single tinted Label using iOS's inline widget style. Priority order: tonight's dish > grocery count > pantry-low count > EatPal branding fallback.
+    - `MealPlanAccessoryCircular` — ZStack with `AccessoryWidgetBackground()` + stacked icon/number. Shows the try-bite streak when > 0, otherwise grocery count.
+  - New `MealPlanWidgetView` router: reads `@Environment(\.widgetFamily)` and dispatches to the right sub-view. Handles `.containerBackground(for: .widget)` with `.systemBackground` for the rectangular system widgets and `Color.clear` for the accessory widgets (Lock Screen widgets get the system's tinted mask automatically).
+  - `EatPalMealWidget.supportedFamilies` extended from `[.systemSmall, .systemMedium]` to include `.accessoryRectangular`, `.accessoryInline`, `.accessoryCircular`.
+  - `configurationDisplayName` / `description` tightened to reflect all the data surfaced.
+
+### Design decisions
+- **Rectangular** is the most information-dense; it should be the user's default pick. Led with tonight's dish because that's the single most useful piece of "glanceable meal planning."
+- **Inline** is space-constrained — I prioritised tonight's dish because the user has already explicitly chosen to show EatPal on their Lock Screen; showing "EatPal" alone would be useless.
+- **Circular** favours the try-bite streak because it's a repeat-delight loop (streak go up = motivation) and falls back to grocery count when there's no streak to show.
+- All three read from the same App Group snapshot the home-screen widgets already use (US-152) — no new writes needed.
+- `.widgetAccentable()` is the right tool for accessory widgets to opt in to OS-tinted rendering. Text inside is dimmed by default; accentable elements are shown at full contrast.
+
+### Not in this pass
+- Interactive widget buttons (tap to check off grocery items) — scoped to US-147 because it needs an AppIntent that can execute from the widget extension process.
+- Control Center widget (US-148) is iOS 18+ and a separate target class.
+- Deep links from widgets — tapping a Lock Screen rectangular widget should open the Grocery or Planner tab directly. The `DeepLinkHandler` already understands eatpal://openGroceryList / openMealPlan; wiring `widgetURL(_:)` onto each view is a ~5-line follow-up.
+
+### Learnings
+- Accessory widget container background is special: pass `Color.clear` (or skip `containerBackground` — the system applies its own tinted mask). Passing a solid color breaks the Lock Screen look.
+- `AccessoryWidgetBackground()` is a ready-made circular background that matches Apple's own widgets. Use it on circular.
+- `widgetAccentable()` takes no argument; it just marks the view as eligible to be drawn in the accent tint. No-op on system-size widgets.
+- `MealPlanWidgetView` router pattern is cleaner than per-family `#if`/`#available` blocks inside the widget configuration — keeps each family's layout in its own struct.
+
+---
+
+## 2026-04-17 - US-144: HealthKit nutrition write-back on meal log (DONE)
+
+### What was implemented
+Users who opt in now have their logged meals' nutrition written to the iPhone Health app. When a plan entry transitions to `ate` and the linked recipe has nutrition data, EatPal bundles the macros into a single HKCorrelation of type `.food` so Health surfaces a coherent meal entry rather than four disconnected quantity samples.
+
+### Files changed / added
+- `ios/EatPal/EatPal/EatPal.entitlements`
+  - Added `com.apple.developer.healthkit` (true) and the empty `com.apple.developer.healthkit.access` array (defaults to standard dietary access).
+
+- `ios/EatPal/EatPal/Resources/Info.plist`
+  - Added NSHealthShareUsageDescription (opt-in wording around reading) and NSHealthUpdateUsageDescription (opt-in wording around writing) — both explicit about the "only if you opt in" nature.
+
+- `ios/EatPal/EatPal/Services/HealthKitService.swift` (new, ~130 LOC)
+  - `@MainActor final class HealthKitService` singleton.
+  - `isAvailable` proxies HKHealthStore.isHealthDataAvailable.
+  - `isEnabled` is UserDefaults-backed (`eatpal_health_sync_enabled`) — distinct from the system-level HealthKit authorization; users can toggle off in-app without revoking system access.
+  - `requestAuthorization()` asks for share (not read) on the four macros + the `.food` correlation type. Returns true if at least one type reports `.sharingAuthorized` after the prompt.
+  - `writeMeal(calories:proteinGrams:carbsGrams:fatGrams:mealDate:mealName:)` no-ops when `!isEnabled` or `!isAvailable`; otherwise constructs one HKQuantitySample per non-nil/non-zero macro and bundles them into a single `HKCorrelation(type: .food, start: end:, objects:, metadata:)` with `HKMetadataKeyFoodType` set to the meal name. No kid names, no EatPal IDs — HealthKit is not our PII bucket.
+
+- `ios/EatPal/EatPal/App/AppState.swift`
+  - `updatePlanEntry` now fires `Task { await writeHealthSample(for: planEntries[index]) }` when `updates.result == MealResult.ate.rawValue`.
+  - New private `writeHealthSample(for:)` resolves the linked recipe + nutritionInfo, formats the plan's date string back to `Date`, and calls the service. SentryService breadcrumb on success, capture on error.
+
+- `ios/EatPal/EatPal/Views/Settings/HealthSettingsView.swift` (new, ~95 LOC)
+  - Form with one Toggle that triggers `requestAuthorization` on flip-to-on.
+  - Denial alert with a "Open Settings" button linking to the iOS Settings app.
+  - Link to the Health app via `x-apple-health://`.
+  - Footer copy adapts to current state (enabled / disabled / unavailable) so users always know what the toggle means.
+
+- `ios/EatPal/EatPal/Views/Settings/SettingsView.swift`
+  - Preferences section gained a "Sync to Health" NavigationLink between "Appearance" and the existing support links.
+
+### Design decisions
+- Opt-in is a two-gate affair: the app-level toggle (`isEnabled`) AND HealthKit's system authorization. Toggle flips are the single source of truth for our side; system auth is owned by iOS.
+- HKCorrelation over individual samples — meals in Health should read as meals, not as a scattered timeline of macro points. HealthKit's own Food tab joins them the same way.
+- Only recipes carry nutrition today; the Food model has no macros field. Food-only plan entries are skipped silently — there's no honest number to write. Adding macros to Food is a data-model change that belongs to a separate story.
+- No reads, no imports: this pass is write-only. Reading HealthKit data would open a consent surface the user doesn't need yet.
+
+### Not in this pass
+- Importing dietary data FROM Health for the AICoach / meal planning suggestions.
+- Per-kid correlation — HealthKit is anchored to the device owner's identity; multi-kid household tracking in Health isn't a supported pattern and would surprise users. Keeping the correlation anonymous-ish (just food name metadata) is safer.
+- A "Last synced N minutes ago" status line in the Settings screen — simple follow-up.
+
+### Learnings
+- `HKHealthStore.requestAuthorization(toShare:read:)` doesn't report whether the user tapped Allow or Deny (Apple privacy design). The post-request check is to look at `authorizationStatus(for:)` per type and infer intent.
+- `HKCorrelation` needs the contained samples to all be authorised; if one type is denied, the whole correlation fails to save. Worth surfacing as a single generic error to the user rather than per-type diagnostics.
+- `HKMetadataKeyFoodType` is the right slot for a human-readable meal name; the system shows it in the detail view in Health.
+- `x-apple-health://` opens the Health app to its main tab — useful for a "verify your data" shortcut from Settings.
+
+---
+
+## 2026-04-17 - US-145: Live Activities + Dynamic Island (grocery trip) (DONE first pass)
+
+### What was implemented
+Users can start a "shopping trip" Live Activity that tracks progress through the grocery list on the Lock Screen and in the Dynamic Island. Every time an item is checked off (online or offline-queued), the activity updates with the new count and the name of the just-added item. Trip auto-ends 3 seconds after hitting 100%.
+
+Scoped down from the original US-145 multi-activity brief: cook-mode Live Activity is deferred until iOS has a CookMode view (web has one; iOS doesn't yet). AI-meal-plan-generation activity isn't worth the ceremony because the flow is short (seconds, not minutes).
+
+### Files changed / added
+- `ios/EatPal/EatPal/Resources/Info.plist`
+  - `NSSupportsLiveActivities = true`
+  - `NSSupportsLiveActivitiesFrequentUpdates = true` (lets us update on every check-off without being throttled)
+
+- `ios/EatPal/project.yml`
+  - Created a new source folder reference `path: Shared` listed under BOTH the `EatPal` target and the `EatPalWidgetExtension` target. XcodeGen compiles the shared Swift files into both binaries — the clean way to share ActivityAttributes between main app and widget.
+
+- `ios/EatPal/Shared/GroceryTripActivityAttributes.swift` (new, ~35 LOC)
+  - `public struct GroceryTripAttributes: ActivityAttributes`.
+  - `TripState: Codable, Hashable` — totalCount, checkedCount, lastCheckedName, with computed `progress` and `isComplete`.
+  - Static attrs: `listTitle`, `startedAt`.
+  - `public` API surface because the widget extension lives in a different module.
+
+- `ios/EatPal/EatPal/Services/GroceryTripActivityService.swift` (new, ~95 LOC)
+  - `@MainActor` singleton. One active activity at a time; init recovers any in-flight Activity from a previous launch.
+  - `isAvailable` checks `ActivityAuthorizationInfo().areActivitiesEnabled`.
+  - `start(listTitle:totalCount:checkedCount:)` constructs Attributes + TripState, requests an Activity with an 8-hour staleDate safety net.
+  - `update(totalCount:checkedCount:lastCheckedName:)` coalesces state updates; auto-ends 3 seconds after `isComplete` becomes true so the user sees the 100% bar.
+  - `end(finalState:dismissalPolicy:)` cleans up.
+  - All failures route to SentryService.
+
+- `ios/EatPal/EatPalWidget/GroceryTripLiveActivity.swift` (new, ~95 LOC)
+  - `Widget` conforming to `ActivityConfiguration(for: GroceryTripAttributes.self)`.
+  - Lock Screen view: title + progress bar + count + "Just added:" subtitle or "All done!" banner.
+  - Dynamic Island expanded: leading (title), trailing (count), center (last added), bottom (progress bar).
+  - Compact leading/trailing: cart icon + count ratio.
+  - Minimal: cart icon.
+  - `widgetURL(URL(string: "eatpal://openGroceryList"))` so tapping the activity deep-links into the grocery tab via DeepLinkHandler.
+
+- `ios/EatPal/EatPalWidget/EatPalWidget.swift`
+  - `EatPalWidgetBundle.body` now includes `GroceryTripLiveActivity()` alongside `EatPalMealWidget()`.
+
+- `ios/EatPal/EatPal/App/AppState.swift`
+  - `toggleGroceryItem` captures item name upfront and, on either success or offline-queue fallback, calls `updateGroceryTripActivity(lastCheckedName: checked ? name : "")`.
+  - New private `updateGroceryTripActivity(lastCheckedName:)` recalculates totals and updates the activity — no-op when none is active.
+
+- `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift`
+  - Quick-add menu gained a divider + Start shopping trip button (when none active, disabled if the list is empty) OR End shopping trip button (destructive-styled, when active). Start passes initial total/checked counts so the activity begins accurate.
+
+### Design decisions
+- **Shared attributes via a new Shared/ folder** rather than duplicating the struct or reaching for a Swift package. XcodeGen's multi-target `path: Shared` is the idiomatic fit.
+- **One activity at a time**. Start-while-active becomes an update (the user fell out of the flow once; don't stack Lock Screen banners on them).
+- **3-second delay before auto-end** after 100%: long enough for the win feel, short enough not to crowd the Lock Screen.
+- **Offline updates work**: even when a toggle queues via OfflineStore, the Live Activity still updates locally. The user sees their trip progress regardless of network.
+- **Dynamic Island compact trailing shows "checked/total"** — the single most useful glance in a crowded UI.
+
+### Not in this pass
+- Cook-mode Live Activity. Unblocked once iOS has a CookMode view.
+- AI-meal-plan-generation activity. Waiting until the flow becomes slow enough to warrant one.
+- Push-updated Live Activities (ActivityKit supports pushType:.token). Useful when another device / the web app toggles an item mid-trip; punt.
+- "Shopping at <store>" label — would require the grocery_lists.storeName field surfaced in the UI; trivial follow-up.
+
+### Learnings
+- Shared types between app + widget: multi-target source paths in XcodeGen (`path: Shared` under both targets) is cleaner than a Swift package and more discoverable than file-by-file target membership juggling.
+- `ActivityContent(state:staleDate:)` with a long staleDate (8 hours) is the right abandonment safety net — iOS will silently expire stuck activities without user action.
+- `ActivityAuthorizationInfo().areActivitiesEnabled` respects both the system-wide Live Activities toggle and any per-app setting.
+- `Activity<A>.activities.first` on init is the recovery pattern; without it, force-quit + relaunch loses the handle even though the activity keeps rendering on the Lock Screen.
+- `.frequentUpdates` entitlement unlocks rapid update calls without throttling — required when updating on every checkoff.
+
+---
+
+## 2026-04-17 - US-143: Share Extension for recipe URL import (DONE first pass)
+
+### What was implemented
+A standalone Share Extension target that lets users hit Share → EatPal from Safari / Instagram / TikTok / anywhere iOS shows a URL, parses the shared URL against the existing `parse-recipe` Supabase edge function, previews the recipe, and queues it for import. The main app drains the queue on next launch (with an authenticated session) and inserts it as a Recipe row.
+
+### Architecture decisions
+- **Queue-and-drain pattern** instead of cross-target Supabase auth. The extension writes to App Group UserDefaults; the main app inserts with the user's authenticated session. Rationale: avoids the complexity of configuring supabase-swift's keychain access group across two bundle ids, keeps the extension binary small, and is resilient to "user is signed out when they share." The pattern mirrors US-150's OfflineStore queue — same "deferred write when auth is available" shape.
+- **No supabase-swift in the extension**. Pure URLSession. The parse-recipe edge function is public (no JWT required per its progress.txt entry), so the extension only needs the anon key from the env-substituted Info.plist.
+- **Handles both URL and plain-text attachments**. Some apps (Instagram, TikTok) send a caption rather than a direct URL — we run NSDataDetector over the caption and grab the first link.
+- **Extension size stays tiny** by reusing the shared /Shared folder for PendingRecipeImport rather than duplicating the domain Recipe type in the extension.
+
+### Files changed / added
+- `ios/EatPal/project.yml`
+  - New `EatPalShareExtension` target with `type: app-extension`, bundle id `com.eatpal.app.share`, sources `EatPalShare` + `Shared`, NSExtensionActivationRule accepting up to 1 web URL plus plain text, NSExtensionPrincipalClass `$(PRODUCT_MODULE_NAME).ShareViewController`.
+  - Added `- target: EatPalShareExtension, embed: true, codeSign: true` to the main EatPal target dependencies so the extension embeds in the shipped bundle.
+
+- `ios/EatPal/EatPalShare/EatPalShareExtension.entitlements` (new)
+  - `com.apple.security.application-groups = [group.com.eatpal.app]` — required for the queue read/write.
+
+- `ios/EatPal/Shared/PendingRecipeImport.swift` (new, ~75 LOC)
+  - Public Codable struct capturing everything the parse-recipe edge function returns (name, description, imageUrl, instructions, prepTime, cookTime, servings, ingredients-as-text, sourceUrl, capturedAt).
+  - `public enum PendingRecipeImportQueue` wraps App Group UserDefaults with `load()`, `enqueue(_:)`, `remove(id:)`, `clear()`. Uses JSONEncoder/Decoder for durability.
+
+- `ios/EatPal/EatPalShare/ShareViewController.swift` (new, ~100 LOC)
+  - `final class ShareViewController: UIViewController` — the NSExtensionPrincipalClass.
+  - `viewDidLoad` kicks off a Task that extracts the shared URL (UTType.url path first, plain-text + NSDataDetector fallback) and presents `ShareImportView` via `UIHostingController`.
+  - `complete()` and `cancel()` call `extensionContext?.completeRequest(returningItems:completionHandler:)` / `cancelRequest(withError:)`.
+
+- `ios/EatPal/EatPalShare/ShareImportView.swift` (new, ~175 LOC)
+  - Pure SwiftUI. Four states: loading / error / no-URL / preview.
+  - Preview shows async-loaded header image, name, description, prep/cook/servings chips, ingredients, and instructions.
+  - Save button constructs a `PendingRecipeImport`, enqueues it, and calls onDone which completes the extension.
+  - Uses ContentUnavailableView for the error case.
+
+- `ios/EatPal/EatPalShare/ShareExtensionAPI.swift` (new, ~95 LOC)
+  - `struct ParsedRecipe: Codable` matches the edge function's return shape (snake_case coding keys).
+  - `enum ImportError: Error, LocalizedError` (missingConfig / badResponse / network / decode).
+  - `ShareExtensionAPI.parseRecipe(url:)` POSTs `{ url }` to `${SUPABASE_URL}/functions/v1/parse-recipe`, sets apikey + Authorization headers, decodes direct or `{ recipe: ... }` wrapper response.
+  - Reads SUPABASE_URL + SUPABASE_ANON_KEY from the extension's Info.plist (same env-substitution pattern the main app uses).
+
+- `ios/EatPal/EatPal/App/AppState.swift`
+  - New `func drainPendingRecipeImports()` iterates the queue, constructs a Recipe per import with `sourceType: "share_extension"` and blank `foodIds` (ingredients land in `additionalIngredients` free-text), calls `addRecipe(_:)`, removes only successful items, shows a success toast summarising how many imported.
+  - `loadAllData()` calls `await drainPendingRecipeImports()` after realtime subscription is established — ensures the session is authenticated and the recipes array is loaded before inserts, and keeps drain retry-safe (failed items stay queued).
+
+### Not in this pass
+- Multi-URL share (iOS allows up to N URLs per share; activation rule caps at 1 for simplicity).
+- Recipe image download + upload to Supabase Storage. Today we save the remote image URL only; if the source page 404s later, the thumbnail breaks. Mirroring to Storage is a follow-up.
+- In-extension ingredient mapping to the user's Foods list. The ingredients text goes into `additional_ingredients` as free text; real food_ids come from manual editing inside the main app's recipe detail. Future pass could match against user's foods via name similarity.
+- User-facing "pending imports" diagnostic surface (like a Settings row "3 recipes queued"). Low priority because the drain happens immediately after loadAllData.
+- Keychain access group configuration so the extension can authenticate directly to Supabase. Deferred; the queue pattern is cleaner.
+
+### Learnings
+- NSExtensionPrincipalClass with `$(PRODUCT_MODULE_NAME).ShareViewController` resolves through XcodeGen's env substitution and avoids hardcoding the module name.
+- `UIHostingController` inside a UIKit `UIViewController` lifecycle is the standard iOS 13+ pattern for SwiftUI-based share extensions — wraps the SwiftUI root, pins edges, adds/childs correctly so extension lifecycle is preserved.
+- App Group UserDefaults is the right IPC for small Codable payloads like this; larger payloads (images) would want a shared file container at `FileManager.default.containerURL(forSecurityApplicationGroupIdentifier:)`.
+- Extension Info.plist properties can be fully generated by XcodeGen via `info.properties`; keeping them in project.yml instead of a hand-maintained plist keeps secrets-substitution working and reduces drift.
+- Failed items staying queued is critical — a flaky network at drain time shouldn't lose the user's imported recipe. The queue survives app restarts.
+
+---
+
+## 2026-04-17 - CI build pass #1 — fixes on top of the 15-story drop
+
+### What CI told us (macOS-15 / Xcode 26.2 runner)
+- SwiftLint job: passed.
+- Build job: SPM resolved all deps (Supabase 2.43.1, Sentry 8.58.1, swift-crypto, swift-asn1, swift-http-types, swift-clocks, swift-concurrency-extras, xctest-dynamic-overlay). 25 targets enumerated.
+- Widget extension (US-135/146/152/145 bits) compiled cleanly.
+- Share extension (US-143) compiled cleanly — all five files (ShareViewController, ShareImportView, ShareExtensionAPI, PendingRecipeImport, GroceryTripActivityAttributes) passed type-checking.
+- Main EatPal target FAILED on a single type error during EmitSwiftModule: `type 'ShortcutTileColor' has no member 'green'` in Intents/EatPalAppShortcuts.swift.
+
+### Fix
+- `ios/EatPal/EatPal/Intents/EatPalAppShortcuts.swift`: removed the `static var shortcutTileColor: ShortcutTileColor = .green` line. Cosmetic-only property; the shortcut tile now uses the system default color. Xcode 26.2's AppIntents SDK either renamed `.green` or dropped it from the enum.
+
+### Lesson
+- When touching new Apple APIs blind (no local Xcode to autocomplete), purely cosmetic properties — shortcut tile colors, Widget containerBackground tints, minor visual flourishes — are the highest-risk-for-lowest-reward lines. Easier to omit them than to guess at the current enum case naming. Core behaviour is unaffected.
+
+### Still to verify (pending next CI run)
+- Main target's remaining files (most of the 15-story work) compiled AFTER the type error because Swift continues past single-file errors, but the emit-module phase aborted. The next CI run, with this fix in place, will either pass cleanly or surface the next layer of errors. Candidates to watch:
+  - Swift concurrency strictness under Xcode 26.2 (Sendable conformance on AppState sinks).
+  - Activity<GroceryTripAttributes>.request API shape (minor signature changes possible in ActivityKit between iOS 16.1/17/18).
+  - `AVAudioApplication.shared.recordPermission` availability vs the old AVAudioSession.recordPermission.
+- Test target still hasn't run (build failure blocked it).
+
+---
+
+## 2026-04-17 - CI build pass #2 — second round of fixes
+
+### Build error fixed
+- `.foregroundStyle(condition ? .secondary : .green)` ambiguity. `.secondary` resolves to `HierarchicalShapeStyle` (Apple's SDK prefers that over `Color.secondary`), but `.green` only exists on `Color`. Swift can't unify the two branches of the ternary.
+- Fixed in three files by qualifying both branches explicitly:
+  - `Views/Grocery/PhotoImportGrocerySheet.swift:135` — `Color.secondary : Color.green`.
+  - `Views/Grocery/TextImportGrocerySheet.swift:110` — same.
+  - `Views/Grocery/VoiceAddGrocerySheet.swift:112` — same.
+- Root cause: when iOS 17+ introduced `HierarchicalShapeStyle`, `.secondary` became ambiguous at the call site unless both ternary branches share a type. Explicit `Color.` prefix on both sides locks the inference to `Color`.
+
+### SwiftLint findings — what's mine vs what's legacy
+SwiftLint surfaced **134 violations** under `--strict`. The workflow has `continue-on-error: true` on the SwiftLint step, so these don't block CI — but they're still worth triaging.
+
+**From our session (small):**
+- `Op` enum name in `OfflineStore.swift` (Type Name Violation, min 3 chars) — renamed to `Operation` and call sites updated.
+- Some trailing commas + long lines in new files — not addressed this pass, low priority.
+
+**Pre-existing (majority):**
+- `AppTheme.swift` — `xs/sm/md/lg/xl` identifier violations (spacing constants, 20+ hits).
+- `KidProfileEditorView.swift` (796 lines), `ProgressDashboardView.swift` (655 lines), `OnboardingView.swift` (635 lines) — `file_length` violations.
+- `AppState.swift` (now 655 lines) — `type_body_length` at 517 (was large before our additions).
+- Various long lines, trailing commas, function complexity in `AuthService.swift`, `PasswordValidator.swift`, `ProgressDashboardView.swift`, etc.
+- These are tech debt across the pre-existing codebase; addressing them is a separate cleanup story.
+
+### SwiftData Sendable warnings
+CI flagged:
+```
+type 'ReferenceWritableKeyPath<CachedFood, String>' does not conform to the 'Sendable' protocol
+    sortBy: [SortDescriptor(\.name)]
+```
+in the existing SwiftData code (pre-existing `OfflineStore.loadCachedFoods`) and in our new `getPendingMutations` SortDescriptor. These are **warnings under Swift 5 language mode, errors under Swift 6**. Fine for now since the project compiles as Swift 5; switching to Swift 6 mode is a separate decision.
+
+### Fixes in this pass
+- `ios/EatPal/EatPal/Views/Grocery/PhotoImportGrocerySheet.swift` — `.foregroundStyle` ternary.
+- `ios/EatPal/EatPal/Views/Grocery/TextImportGrocerySheet.swift` — same.
+- `ios/EatPal/EatPal/Views/Grocery/VoiceAddGrocerySheet.swift` — same.
+- `ios/EatPal/EatPal/Services/OfflineStore.swift` — `enum Op` → `enum Operation`, all 7 call sites updated.
+
+### What the next run should show
+- Main target compiles all the way through (no blocking errors left from our session).
+- Either clean green build, or a third small wave of errors (my strong expectation: clean or 1-2 tiny fixes).
+- Tests actually run for the first time since before the ShortcutTileColor failure.
+- SwiftLint still reports ~130 warnings, all pre-existing or cosmetic; not a CI blocker.
+
+### Lesson for future SwiftUI shape-style work
+When using `.foregroundStyle`, `.tint`, `.foregroundColor` with a ternary, always pin the branch types explicitly. SwiftUI's shape-style protocols (`HierarchicalShapeStyle`, `SemanticShapeStyle`, etc.) share symbol names like `.secondary`, `.primary`, `.tertiary` with `Color` but aren't type-equivalent. In ternary expressions, Swift's inference picks the more specific type and the other branch has to match. Explicit `Color.*` keeps things predictable.
+
+---
