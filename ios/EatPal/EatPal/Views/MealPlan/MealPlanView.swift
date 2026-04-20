@@ -1,10 +1,19 @@
 import SwiftUI
 
+/// Context object for the AddPlanEntryView sheet. Using `.sheet(item:)`
+/// with an identifiable payload forces SwiftUI to present only once the
+/// target slot + date are atomically set, avoiding the first-tap race
+/// where the sheet could open before `selectedSlot` propagated.
+private struct AddEntryContext: Identifiable, Equatable {
+    let id = UUID()
+    let date: Date
+    let slot: MealSlot
+}
+
 struct MealPlanView: View {
     @EnvironmentObject var appState: AppState
     @State private var selectedDate = Date()
-    @State private var showingAddEntry = false
-    @State private var selectedSlot: MealSlot?
+    @State private var addEntryContext: AddEntryContext?
     @State private var showingAIMealPlan = false
     @State private var showingCopyWeek = false
     @State private var showingClearWeekAlert = false
@@ -56,8 +65,7 @@ struct MealPlanView: View {
                                 date: selectedDate,
                                 entries: entriesForSelectedDate.filter { $0.mealSlot == slot.rawValue },
                                 onAdd: {
-                                    selectedSlot = slot
-                                    showingAddEntry = true
+                                    addEntryContext = AddEntryContext(date: selectedDate, slot: slot)
                                 }
                             )
                         }
@@ -120,10 +128,8 @@ struct MealPlanView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingAddEntry) {
-            if let slot = selectedSlot {
-                AddPlanEntryView(date: selectedDate, mealSlot: slot)
-            }
+        .sheet(item: $addEntryContext) { ctx in
+            AddPlanEntryView(date: ctx.date, mealSlot: ctx.slot)
         }
         .sheet(isPresented: $showingAIMealPlan) {
             AIMealPlanView(date: selectedDate)
