@@ -16,83 +16,92 @@ struct AIMealPlanView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    // Context
-                    VStack(spacing: 8) {
-                        if let kid = activeKid {
-                            Label("Suggestions for \(kid.name)", systemImage: "person.circle.fill")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        Text(DateFormatter.fullDisplay.string(from: date))
-                            .font(.headline)
-                    }
-                    .padding()
-
-                    // Generate Button
-                    if aiService.suggestions.isEmpty && !aiService.isLoading {
-                        Button {
-                            Task { await generateSuggestions() }
-                        } label: {
-                            Label("Generate Suggestions", systemImage: "wand.and.stars")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.green)
-                        .padding(.horizontal)
-                    }
-
-                    // Loading
-                    if aiService.isLoading {
-                        VStack(spacing: 12) {
-                            ProgressView()
-                                .scaleEffect(1.2)
-                            Text("Generating meal ideas...")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 40)
-                    }
-
-                    // Error
-                    if let error = aiService.errorMessage {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                            .padding(.horizontal)
-                    }
-
-                    // Suggestions
-                    if !aiService.suggestions.isEmpty {
-                        ForEach(aiService.suggestions) { suggestion in
-                            SuggestionCard(suggestion: suggestion) {
-                                Task { await addSuggestionToPlan(suggestion) }
+                    if activeKid == nil {
+                        ContentUnavailableView(
+                            "No Child Selected",
+                            systemImage: "person.crop.circle.badge.plus",
+                            description: Text("Add a child profile from the Dashboard to generate personalized meal suggestions.")
+                        )
+                        .padding(.top, 40)
+                    } else {
+                        // Context
+                        VStack(spacing: 8) {
+                            if let kid = activeKid {
+                                Label("Suggestions for \(kid.name)", systemImage: "person.circle.fill")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
                             }
-                        }
-                        .padding(.horizontal)
-
-                        // Add All button
-                        Button {
-                            Task { await addAllSuggestions() }
-                        } label: {
-                            Label("Add All to Plan", systemImage: "plus.circle.fill")
+                            Text(DateFormatter.fullDisplay.string(from: date))
                                 .font(.headline)
-                                .frame(maxWidth: .infinity)
-                                .padding()
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.green)
-                        .padding(.horizontal)
+                        .padding()
 
-                        // Regenerate
-                        Button {
-                            Task { await generateSuggestions() }
-                        } label: {
-                            Label("Regenerate", systemImage: "arrow.clockwise")
-                                .font(.subheadline)
+                        // Generate Button
+                        if aiService.suggestions.isEmpty && !aiService.isLoading {
+                            Button {
+                                Task { await generateSuggestions() }
+                            } label: {
+                                Label("Generate Suggestions", systemImage: "wand.and.stars")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.green)
+                            .padding(.horizontal)
                         }
-                        .padding(.top, 4)
+
+                        // Loading
+                        if aiService.isLoading {
+                            VStack(spacing: 12) {
+                                ProgressView()
+                                    .scaleEffect(1.2)
+                                Text("Generating meal ideas...")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 40)
+                        }
+
+                        // Error
+                        if let error = aiService.errorMessage {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                                .padding(.horizontal)
+                        }
+
+                        // Suggestions
+                        if !aiService.suggestions.isEmpty {
+                            ForEach(aiService.suggestions) { suggestion in
+                                SuggestionCard(suggestion: suggestion) {
+                                    Task { await addSuggestionToPlan(suggestion) }
+                                }
+                            }
+                            .padding(.horizontal)
+
+                            // Add All button
+                            Button {
+                                Task { await addAllSuggestions() }
+                            } label: {
+                                Label("Add All to Plan", systemImage: "plus.circle.fill")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.green)
+                            .padding(.horizontal)
+
+                            // Regenerate
+                            Button {
+                                Task { await generateSuggestions() }
+                            } label: {
+                                Label("Regenerate", systemImage: "arrow.clockwise")
+                                    .font(.subheadline)
+                            }
+                            .padding(.top, 4)
+                        }
                     }
                 }
                 .padding(.vertical)

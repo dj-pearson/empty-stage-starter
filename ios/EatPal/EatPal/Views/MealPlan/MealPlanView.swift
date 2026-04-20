@@ -84,6 +84,7 @@ struct MealPlanView: View {
                         Image(systemName: "wand.and.stars")
                     }
                     .accessibilityLabel("Generate AI meal plan")
+                    .disabled(appState.activeKidId == nil)
 
                     Menu {
                         Button {

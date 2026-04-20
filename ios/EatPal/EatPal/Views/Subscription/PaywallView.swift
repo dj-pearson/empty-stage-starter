@@ -102,7 +102,7 @@ struct PaywallView: View {
 
                         HStack(spacing: 16) {
                             Link("Privacy Policy", destination: URL(string: "https://tryeatpal.com/privacy")!)
-                            Link("Terms of Service", destination: URL(string: "https://tryeatpal.com/terms")!)
+                            Link("Terms of Use (EULA)", destination: URL(string: "https://tryeatpal.com/terms")!)
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)

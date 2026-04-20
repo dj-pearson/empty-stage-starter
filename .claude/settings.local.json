@@ -53,7 +53,9 @@
       "Bash(gh api *)",
       "Bash(command -v xcodebuild)",
       "Bash(command -v xcodegen)",
-      "Bash(command -v swift)"
+      "Bash(command -v swift)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://tryeatpal.com/terms)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://tryeatpal.com/privacy)"
     ],
     "deny": [],
     "ask": []

@@ -107,7 +107,7 @@ struct SettingsView: View {
                 }
 
                 Link(destination: URL(string: "https://tryeatpal.com/terms")!) {
-                    Label("Terms of Service", systemImage: "doc.text.fill")
+                    Label("Terms of Use (EULA)", systemImage: "doc.text.fill")
                 }
             }
 
