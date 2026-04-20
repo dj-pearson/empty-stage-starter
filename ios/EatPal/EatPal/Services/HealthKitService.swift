@@ -62,54 +62,36 @@ final class HealthKitService {
         guard !types.isEmpty else { return false }
 
         // HealthKit's internal validation can raise Objective-C exceptions
-        // (e.g. missing entitlement, invalid type, provisioning-profile
-        // capability mismatch). Swift try/catch doesn't catch those — so
-        // we probe synchronously via the catcher first to surface a
-        // friendly error, then let the normal async path do the real
-        // authorization request.
-        var preflightError: NSError?
-        let probeOK = NSExceptionCatcher.try {
-            _ = self.store.authorizationStatus(for: types.first!)
-        }
-        if !probeOK {
-            // Shouldn't happen — authorizationStatus never raises in
-            // practice — but if it does we capture and bail out.
-            let err = NSError(
-                domain: "HealthKitPreflight",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "HealthKit preflight check failed."]
-            )
-            SentryService.capture(err, extras: ["context": "healthkit_preflight"])
-            throw err
-        }
-        _ = preflightError  // silence unused
-
-        // The async API doesn't raise NSException itself (it throws Swift
-        // errors), but the synchronous callback-based API it's built on
-        // does. Use the callback form inside the catcher so we convert
-        // any raise into a normal Swift error.
+        // (e.g. invalid type passed to `toShare`, missing entitlement,
+        // provisioning-profile capability mismatch). Swift try/catch
+        // doesn't catch those — they propagate as SIGABRT. The
+        // NSExceptionCatcher bridge converts them into Swift errors.
+        //
+        // The async `requestAuthorization` validates synchronously before
+        // it schedules its completion, so the raise happens on the caller
+        // thread. Using the callback form inside the catcher is the only
+        // way to keep the raise in the @try scope.
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             var didResume = false
-            let ok = NSExceptionCatcher.try {
-                self.store.requestAuthorization(toShare: types, read: []) { _, error in
-                    guard !didResume else { return }
-                    didResume = true
-                    if let error {
-                        continuation.resume(throwing: error)
-                    } else {
-                        continuation.resume()
+            do {
+                try NSExceptionCatcher.try {
+                    self.store.requestAuthorization(toShare: types, read: []) { _, error in
+                        guard !didResume else { return }
+                        didResume = true
+                        if let error {
+                            continuation.resume(throwing: error)
+                        } else {
+                            continuation.resume()
+                        }
                     }
                 }
-            }
-            if !ok && !didResume {
+            } catch {
+                guard !didResume else { return }
                 didResume = true
-                let nsErr = NSError(
-                    domain: "HealthKit",
-                    code: 2,
-                    userInfo: [NSLocalizedDescriptionKey: "HealthKit couldn't process the authorization request on this device."]
-                )
-                SentryService.capture(nsErr, extras: ["context": "healthkit_requestAuthorization_nsexception"])
-                continuation.resume(throwing: nsErr)
+                SentryService.capture(error, extras: [
+                    "context": "healthkit_requestAuthorization_nsexception"
+                ])
+                continuation.resume(throwing: error)
             }
         }
 
