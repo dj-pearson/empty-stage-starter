@@ -55,7 +55,7 @@ ios/EatPal/
 │   │   ├── PrivacyInfo.xcprivacy
 │   │   └── Assets.xcassets
 │   └── EatPal.entitlements       # Push, Sign in with Apple, Associated Domains,
-│                                 #   App Groups, In-App Purchase
+│                                 #   App Groups
 ├── EatPalWidget/                 # Home-screen widget extension (WidgetKit)
 │   ├── EatPalWidget.swift
 │   └── EatPalWidgetExtension.entitlements
@@ -71,7 +71,8 @@ ios/EatPal/
 | Sign in with Apple | `EatPal.entitlements` → `com.apple.developer.applesignin` | Used by `AppleSignInHelper`. |
 | Associated Domains | `EatPal.entitlements` → `applinks:tryeatpal.com` | Universal links handled by `DeepLinkHandler`. |
 | App Groups | Both entitlements files → `group.com.eatpal.app` | Shared `UserDefaults` between app and widget. |
-| In-App Purchase | `EatPal.entitlements` → `com.apple.developer.in-app-payments` | Used by `StoreKitService`. |
+
+> **Note:** In-App Purchase (StoreKit) does **not** require an entitlement — it's enabled by configuring products in App Store Connect. The `com.apple.developer.in-app-payments` entitlement is for **Apple Pay** (PassKit) and must NOT be added unless the app actually presents an Apple Pay sheet, or App Store review will reject the binary (Guideline 2.1).
 
 ## CI / deploy workflows
 
