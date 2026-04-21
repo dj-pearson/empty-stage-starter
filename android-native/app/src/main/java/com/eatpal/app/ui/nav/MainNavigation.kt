@@ -28,11 +28,11 @@ import com.eatpal.app.ui.theme.Spacing
 import com.eatpal.app.ui.dashboard.DashboardScreen
 import com.eatpal.app.ui.grocery.GroceryScreen
 import com.eatpal.app.ui.kids.KidsScreen
-import com.eatpal.app.ui.mealplan.MealPlanPlaceholder
+import com.eatpal.app.ui.mealplan.MealPlanScreen
 import com.eatpal.app.ui.more.MoreScreen
 import com.eatpal.app.ui.pantry.PantryScreen
-import com.eatpal.app.ui.recipes.RecipesPlaceholder
-import com.eatpal.app.ui.settings.SettingsPlaceholder
+import com.eatpal.app.ui.recipes.RecipesScreen
+import com.eatpal.app.ui.settings.SettingsScreen
 
 /**
  * iOS `MainTabView` equivalent. NavHost hosts the full graph; the 5-item
@@ -43,15 +43,15 @@ import com.eatpal.app.ui.settings.SettingsPlaceholder
 fun MainNavigation(navController: NavHostController) {
     NavHost(navController = navController, startDestination = Routes.DASHBOARD) {
         composable(Routes.DASHBOARD) { DashboardScreen() }
-        composable(Routes.MEAL_PLAN) { MealPlanPlaceholder() }
+        composable(Routes.MEAL_PLAN) { MealPlanScreen() }
         composable(Routes.GROCERY) { GroceryScreen() }
-        composable(Routes.RECIPES) { RecipesPlaceholder() }
+        composable(Routes.RECIPES) { RecipesScreen() }
         composable(Routes.MORE) { MoreScreen(navController) }
 
         // More-menu destinations
         composable(Routes.KIDS) { KidsScreen() }
         composable(Routes.PANTRY) { PantryScreen() }
-        composable(Routes.SETTINGS) { SettingsPlaceholder() }
+        composable(Routes.SETTINGS) { SettingsScreen() }
         composable(Routes.PAYWALL) { PlaceholderScreen("Paywall") }
         composable(Routes.AI_COACH) { PlaceholderScreen("AI Coach") }
         composable(Routes.PROGRESS) { PlaceholderScreen("Progress") }

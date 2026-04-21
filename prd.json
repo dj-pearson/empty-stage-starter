@@ -2951,8 +2951,8 @@
         "CookMode screen (step-by-step with next/back, matches iOS CookMode component)"
       ],
       "priority": 45,
-      "passes": false,
-      "notes": "Android native: PENDING."
+      "passes": true,
+      "notes": "Android native: FIRST-PASS DONE 2026-04-21. New ui/recipes package: RecipesScreen (sealed-interface local nav between List/Detail/Edit/AddToPlanner so bottom bar stays visible — feels like iOS push/pop without a nested NavHost), RecipeDetail (Coil AsyncImage header, metadata row, ingredient list resolved against foods, instructions/tips/nutrition sections, Add-to-planner + Edit + Delete actions), RecipeEditor (name/desc/instructions/prepTime/cookTime/servings/difficulty/imageUrl/additional_ingredients/tips fields — ingredient picker deferred), AddToPlannerSheet (date text input, slot FilterChips across all 6 MealSlot cases, kid FilterChips, validation, creates PlanEntry with recipeId + first-linked food_id). RecipesViewModel exposes combined flow (recipes + foods lookup + kids + search query) as state, with create/update/delete/addToPlanner. Routes AppStateStore so all optimistic/offline behavior applies. Swapped RecipesPlaceholder → RecipesScreen in MainNavigation. STILL OPEN: ingredient picker UI (food_ids editor), CookMode step-by-step view, tag editor, source_url recipe import. assembleDebug green."
     },
     {
       "id": "US-206",
@@ -2967,7 +2967,7 @@
       ],
       "priority": 46,
       "passes": false,
-      "notes": "Android native: PENDING. Needs AIMealService Kotlin port (~180 lines iOS equivalent)."
+      "notes": "Android native: PARTIAL 2026-04-21. MealPlanScreen implements the week view (iOS MealPlanView parity minus AI + drag-to-reschedule). Prev/next week buttons driven by weekStartFlow (Monday-anchored via TemporalAdjusters), horizontal-scroll FilterChip strip for active-kid switching, one Card per day with MealSlot.entries rows. Empty slots show an AssistChip '+ add'; tap opens a ModalBottomSheet AddMealForm with FOOD/RECIPE mode FilterChips + typed search + up-to-30 results list. MealPlanViewModel.addEntry validates active kid + picks a foodId (required by the plan_entries NOT NULL UUID guard in DataService) from either the selected food or the recipe's first linked ingredient. Delete via AlertDialog confirm. Swapped MealPlanPlaceholder → MealPlanScreen in MainNavigation. STILL OPEN: AI meal plan generator (needs `generate-meal-plan` edge function parity), drag-to-reschedule, meal-result logging (ate/tasted/refused), regenerate/approve UI for AI results. assembleDebug green."
     },
     {
       "id": "US-207",
@@ -3024,8 +3024,8 @@
         "Uses supabase.storage.from(bucket).upload(...)"
       ],
       "priority": 50,
-      "passes": false,
-      "notes": "Android native: PENDING."
+      "passes": true,
+      "notes": "Android native: DONE 2026-04-21 (service only — no UI caller yet). data/remote/ImageUploadService.kt ports iOS ImageUploadService.swift. Same bucket ('images'), same folder enum (FOODS / RECIPES / KIDS), same JPEG quality 80 + 1024px max-dim compression, same `{folder}/{entityId}-{epochSeconds}.jpg` path scheme so URLs interchange with iOS. Uses supabase-kt storage.upload(path, bytes) with upsert=true + ContentType.Image.JPEG; returns storage.from(bucket).publicUrl(path). Reads Uri via contentResolver, two-pass BitmapFactory (bounds-only first to compute inSampleSize, then full decode) so huge camera photos don't OOM. Delete helper included. STILL OPEN: wire into KidsScreen profile-picture picker + RecipeEditor image upload + pantry barcode photo. assembleDebug green."
     },
     {
       "id": "US-211",
@@ -3051,8 +3051,8 @@
         "UI: 'Generate from meal plan' button on GroceryScreen, template gallery on MealPlanScreen"
       ],
       "priority": 52,
-      "passes": false,
-      "notes": "Android native: PENDING."
+      "passes": true,
+      "notes": "Android native: DONE 2026-04-21 (services — UI wiring TBD). domain/GroceryGeneratorService.kt ports iOS — walks a 7-day window filtered by kidIds list, tallies food_id references, dedupes against existing groceryItems.name (lowercased), folds in recipe.additional_ingredients as '1 ea' items with category='other', returns list sorted by category. addGenerated() iterates AppStateStore.addGroceryItem so offline queuing kicks in. domain/MealPlanTemplateService.kt ports iOS — MealPlanTemplate/TemplateMeal @Serializable with snake_case SerialNames matching iOS, copyWeek (ChronoUnit.DAYS.between offsets), deleteWeek, saveAsTemplate (pulls user id from auth.currentUserOrNull, throws if unsigned), fetchTemplates (order by created_at desc), applyTemplate. Same meal_plan_templates table shape — templates created on iOS work here. STILL OPEN: 'Generate from plan' button on GroceryScreen, template gallery on MealPlanScreen, save-as-template flow. assembleDebug green."
     },
     {
       "id": "US-213",
@@ -3180,7 +3180,7 @@
       ],
       "priority": 60,
       "passes": false,
-      "notes": "Android native: PENDING. Long tail of UI work — can be split further into per-screen stories if needed."
+      "notes": "Android native: PARTIAL 2026-04-21. SettingsScreen + SettingsViewModel landed: account card (email + user_id from auth.currentUser), Sync card (observable offlineStore.pendingMutationCount + isSyncing + lastSyncError, 'Sync now' button calling offlineStore.syncPendingMutations), Diagnostics card (BuildConfig version/build/appId), Sign out button (clearData + signOut), Delete account with AlertDialog confirmation calling AuthService.deleteAccount (Apple 5.1.1(v) / Play parity). OnboardingScreen (3-step welcome: plan meals / shop offline / track pantry+try-bites) with dot indicator, skip, and Next/Get-started actions; OnboardingStore (DataStore-backed completed flag) persists across sign-out. RootScreen now boots: onboarding → auth → main (MainNavigation) in that order, with offline banner + snackbar host shared across all three gates. STILL OPEN: PaywallScreen (blocked on US-214 Play Billing), Picky quiz, Food chaining, ProgressDashboard, full HapticManager/ToastManager parity. assembleDebug green."
     },
     {
       "id": "US-221",

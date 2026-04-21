@@ -23,9 +23,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
+import com.eatpal.app.data.local.OnboardingStore
 import com.eatpal.app.data.remote.AuthService
 import com.eatpal.app.domain.AppStateStore
 import com.eatpal.app.ui.auth.AuthScreen
+import com.eatpal.app.ui.auth.OnboardingScreen
 import com.eatpal.app.ui.components.LocalToastController
 import com.eatpal.app.ui.components.OfflineBanner
 import com.eatpal.app.ui.components.ToastController
@@ -39,14 +41,16 @@ import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 /**
- * Top-level app shell. Offline banner pinned to the top edge, bottom nav
- * pinned to the bottom, routed content in between. Auth gate swaps the
- * whole content area between AuthScreen and the main nav graph based on
- * Supabase SessionStatus.
+ * Boot gate. Order of precedence:
+ *   1. Onboarding — if user has never completed it, show the 3-step welcome.
+ *   2. Auth — if no session, show AuthScreen.
+ *   3. Main app — tab navigation.
+ * All three share the offline banner, snackbar host, and toast controller.
  */
 @Composable
 fun RootScreen(vm: RootViewModel = hiltViewModel()) {
     val sessionStatus by vm.sessionStatus.collectAsStateWithLifecycle()
+    val onboarded by vm.onboardingCompleted.collectAsStateWithLifecycle()
 
     LaunchedEffect(sessionStatus) {
         when (sessionStatus) {
@@ -65,30 +69,35 @@ fun RootScreen(vm: RootViewModel = hiltViewModel()) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHost) },
             bottomBar = {
-                if (sessionStatus is SessionStatus.Authenticated) {
+                if (onboarded == true && sessionStatus is SessionStatus.Authenticated) {
                     MainBottomBar(navController)
                 }
             },
         ) { inner ->
             Column(modifier = Modifier.fillMaxSize().padding(inner)) {
                 OfflineBanner()
-                when (sessionStatus) {
-                    is SessionStatus.Initializing -> {
-                        Column(
-                            modifier = Modifier.fillMaxSize().padding(24.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            horizontalAlignment = Alignment.Start,
-                        ) {
-                            Text("Starting…")
-                            CircularProgressIndicator()
-                        }
-                    }
-                    is SessionStatus.NotAuthenticated,
-                    is SessionStatus.RefreshFailure -> AuthScreen()
-                    is SessionStatus.Authenticated -> MainNavigation(navController)
+                when {
+                    onboarded == null -> BootSpinner()
+                    onboarded == false -> OnboardingScreen(onFinished = { /* flow observes store */ })
+                    sessionStatus is SessionStatus.Initializing -> BootSpinner()
+                    sessionStatus is SessionStatus.NotAuthenticated ||
+                        sessionStatus is SessionStatus.RefreshFailure -> AuthScreen()
+                    else -> MainNavigation(navController)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun BootSpinner() {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalAlignment = Alignment.Start,
+    ) {
+        Text("Starting…")
+        CircularProgressIndicator()
     }
 }
 
@@ -96,7 +105,11 @@ fun RootScreen(vm: RootViewModel = hiltViewModel()) {
 class RootViewModel @Inject constructor(
     val appState: AppStateStore,
     authService: AuthService,
+    onboardingStore: OnboardingStore,
 ) : ViewModel() {
     val sessionStatus: StateFlow<SessionStatus> = authService.sessionStatus
         .stateIn(viewModelScope, SharingStarted.Eagerly, SessionStatus.Initializing)
+
+    val onboardingCompleted: StateFlow<Boolean?> = onboardingStore.isCompleted
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 }
