@@ -49,6 +49,14 @@ android {
             "SENTRY_DSN",
             "\"${env("SENTRY_DSN")}\""
         )
+        // Google Cloud OAuth 2.0 Web client id — paste into Supabase Auth's
+        // Google provider config so Supabase accepts IDToken exchanges. iOS
+        // uses the Apple Services Id in the same role.
+        buildConfigField(
+            "String",
+            "GOOGLE_WEB_CLIENT_ID",
+            "\"${env("GOOGLE_WEB_CLIENT_ID")}\""
+        )
     }
 
     buildTypes {
@@ -138,6 +146,11 @@ dependencies {
 
     // Permissions
     implementation(libs.accompanist.permissions)
+
+    // Credential Manager (Google Sign-In)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
 
     // Testing
     testImplementation(libs.junit)
