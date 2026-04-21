@@ -16,6 +16,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,6 +33,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.eatpal.app.BuildConfig
+import com.eatpal.app.data.local.HealthConnectService
 import com.eatpal.app.data.remote.AuthService
 import com.eatpal.app.data.remote.OfflineStore
 import com.eatpal.app.domain.AppStateStore
@@ -129,6 +131,40 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
                 modifier = Modifier.padding(Spacing.lg),
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
+                Text("Health Connect", fontWeight = FontWeight.SemiBold)
+                HorizontalDivider()
+                if (!state.healthAvailable) {
+                    Text(
+                        "Health Connect isn't installed on this device.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth(1f).padding(end = Spacing.sm)) {
+                            Text("Write meals to Health Connect")
+                            Text(
+                                "Recipes with nutrition info will be logged as " +
+                                    "NutritionRecord when you mark a meal as eaten.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Switch(
+                            checked = state.healthEnabled,
+                            onCheckedChange = vm::setHealthEnabled,
+                        )
+                    }
+                }
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(Spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+            ) {
                 Text("Diagnostics", fontWeight = FontWeight.SemiBold)
                 HorizontalDivider()
                 Text("Version: ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})")
@@ -194,6 +230,7 @@ class SettingsViewModel @Inject constructor(
     private val authService: AuthService,
     private val offlineStore: OfflineStore,
     private val appState: AppStateStore,
+    private val healthConnect: HealthConnectService,
 ) : ViewModel() {
 
     data class UiState(
@@ -201,12 +238,15 @@ class SettingsViewModel @Inject constructor(
         val userId: String? = null,
         val isSyncing: Boolean = false,
         val lastSyncError: String? = null,
+        val healthAvailable: Boolean = false,
+        val healthEnabled: Boolean = false,
     )
 
     private val _state = MutableStateFlow(
         UiState(
             email = authService.currentUser()?.email,
             userId = authService.currentUser()?.id,
+            healthAvailable = healthConnect.isAvailable,
         )
     )
     val state: StateFlow<UiState> = _state.asStateFlow()
@@ -221,6 +261,15 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             offlineStore.lastSyncError.collect { err -> _state.update { it.copy(lastSyncError = err) } }
         }
+        viewModelScope.launch {
+            healthConnect.isEnabled.collect { enabled ->
+                _state.update { it.copy(healthEnabled = enabled) }
+            }
+        }
+    }
+
+    fun setHealthEnabled(value: Boolean) {
+        viewModelScope.launch { healthConnect.setEnabled(value) }
     }
 
     fun triggerSync(onResult: (err: String?) -> Unit) {

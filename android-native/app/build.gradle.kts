@@ -152,6 +152,27 @@ dependencies {
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
 
+    // Health Connect (HealthKit parity)
+    implementation(libs.health.connect.client)
+
+    // Glance (home-screen widget)
+    implementation(libs.glance.appwidget)
+    implementation(libs.glance.material3)
+
+    // CameraX + ML Kit barcode (US-208)
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.mlkit.barcode.scanning)
+
+    // CameraX ProcessCameraProvider exposes ListenableFuture from Guava as
+    // its setup API; Guava isn't on the compile classpath unless we add it.
+    implementation("com.google.guava:guava:33.3.1-android")
+
+    // Play Billing (US-214)
+    implementation(libs.billing.ktx)
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

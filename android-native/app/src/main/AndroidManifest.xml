@@ -4,6 +4,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-permission android:name="com.android.vending.BILLING" />
 
     <application
         android:name=".EatPalApplication"
@@ -18,6 +23,26 @@
         android:usesCleartextTraffic="false"
         tools:targetApi="33"
         xmlns:tools="http://schemas.android.com/tools">
+
+        <receiver
+            android:name=".data.local.LocalNotificationReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.eatpal.app.LOCAL_NOTIFICATION" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".widget.EatPalWidgetReceiver"
+            android:exported="false"
+            android:label="EatPal">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/eatpal_widget_info" />
+        </receiver>
 
         <activity
             android:name=".MainActivity"
@@ -35,6 +60,31 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="tryeatpal.com" />
+            </intent-filter>
+
+            <!-- Custom scheme for shortcuts and notifications -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="tryeatpal" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity>
+
+        <!-- Recipe URL share target — iOS Share Extension parity (US-219). -->
+        <activity
+            android:name=".ui.share.ShareReceiverActivity"
+            android:exported="true"
+            android:theme="@style/Theme.EatPal"
+            android:taskAffinity="">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
     </application>

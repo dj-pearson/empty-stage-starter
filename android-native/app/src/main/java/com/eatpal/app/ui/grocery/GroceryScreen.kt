@@ -48,6 +48,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.eatpal.app.domain.AppStateStore
+import com.eatpal.app.domain.GroceryGeneratorService
 import com.eatpal.app.models.GroceryItem
 import com.eatpal.app.models.GroceryItemUpdate
 import com.eatpal.app.ui.components.rememberToastController
@@ -75,6 +76,7 @@ fun GroceryScreen(vm: GroceryViewModel = hiltViewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     val toast = rememberToastController()
     var showAddSheet by remember { mutableStateOf(false) }
+    var showTextImport by remember { mutableStateOf(false) }
 
     Scaffold(
         floatingActionButton = {
@@ -98,14 +100,28 @@ fun GroceryScreen(vm: GroceryViewModel = hiltViewModel()) {
                 }
             }
 
-            if (state.checkedCount > 0) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                if (state.checkedCount > 0) {
+                    TextButton(onClick = {
+                        vm.clearChecked { count, err ->
+                            if (err != null) toast.error("Couldn't clear", err)
+                            else toast.success("Cleared $count items")
+                        }
+                    }) {
+                        Text("Clear ${state.checkedCount} completed")
+                    }
+                }
                 TextButton(onClick = {
-                    vm.clearChecked { count, err ->
-                        if (err != null) toast.error("Couldn't clear", err)
-                        else toast.success("Cleared $count items")
+                    vm.generateFromPlan { count, err ->
+                        if (err != null) toast.error("Couldn't generate", err)
+                        else if (count == 0) toast.info("No items needed", "Your plan is fully covered.")
+                        else toast.success("Added $count items")
                     }
                 }) {
-                    Text("Clear ${state.checkedCount} completed")
+                    Text("Generate from plan")
+                }
+                TextButton(onClick = { showTextImport = true }) {
+                    Text("Paste list")
                 }
             }
 
@@ -164,6 +180,28 @@ fun GroceryScreen(vm: GroceryViewModel = hiltViewModel()) {
                             else toast.success("Added ${draft.name}")
                         }
                         scope.launch { sheetState.hide() }.invokeOnCompletion { showAddSheet = false }
+                    },
+                )
+            }
+        }
+
+        if (showTextImport) {
+            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            val scope = rememberCoroutineScope()
+            ModalBottomSheet(
+                onDismissRequest = { showTextImport = false },
+                sheetState = sheetState,
+            ) {
+                TextImportSheet(
+                    onCancel = {
+                        scope.launch { sheetState.hide() }.invokeOnCompletion { showTextImport = false }
+                    },
+                    onAdd = { parsedItems ->
+                        vm.bulkAdd(parsedItems) { added, err ->
+                            if (err != null) toast.error("Couldn't add", err)
+                            else toast.success("Added $added items")
+                        }
+                        scope.launch { sheetState.hide() }.invokeOnCompletion { showTextImport = false }
                     },
                 )
             }
@@ -271,6 +309,7 @@ private fun AddItemForm(onCancel: () -> Unit, onAdd: (GroceryViewModel.Draft) ->
 class GroceryViewModel @Inject constructor(
     private val appState: AppStateStore,
     private val haptics: HapticManager,
+    private val generator: GroceryGeneratorService,
 ) : ViewModel() {
 
     data class Draft(
@@ -333,6 +372,67 @@ class GroceryViewModel @Inject constructor(
             runCatching { appState.deleteGroceryItem(item.id) }
                 .onSuccess { onResult(null) }
                 .onFailure { onResult(it.message) }
+        }
+    }
+
+    /**
+     * Builds a grocery list from the current ISO week + all kids, then bulk-
+     * inserts via AppStateStore so the offline queue still applies on failure.
+     */
+    fun generateFromPlan(onResult: (count: Int, err: String?) -> Unit) {
+        viewModelScope.launch {
+            val today = java.time.LocalDate.now()
+            val weekStart = today.with(
+                java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY)
+            )
+            val kidIds = appState.kids.value.map { it.id }
+            if (kidIds.isEmpty()) return@launch onResult(0, "No children yet.")
+
+            runCatching {
+                val generated = generator.generateFromMealPlan(weekStart, kidIds)
+                generator.addGenerated(generated)
+                generated.size
+            }
+                .onSuccess {
+                    haptics.success()
+                    onResult(it, null)
+                }
+                .onFailure {
+                    haptics.error()
+                    onResult(0, it.message)
+                }
+        }
+    }
+
+    /** Bulk-inserts parsed items from TextImportSheet. */
+    fun bulkAdd(
+        parsed: List<com.eatpal.app.domain.GroceryTextParser.ParsedItem>,
+        onResult: (added: Int, err: String?) -> Unit,
+    ) {
+        if (parsed.isEmpty()) return onResult(0, null)
+        val userId = appState.kids.value.firstOrNull()?.userId ?: ""
+        viewModelScope.launch {
+            var added = 0
+            for (p in parsed) {
+                val item = GroceryItem(
+                    id = UUID.randomUUID().toString(),
+                    userId = userId,
+                    name = p.name,
+                    category = p.category,
+                    quantity = p.quantity,
+                    unit = p.unit.ifBlank { "ea" },
+                    checked = false,
+                    addedVia = "text_import",
+                )
+                val result = runCatching { appState.addGroceryItem(item) }
+                if (result.isFailure) {
+                    haptics.error()
+                    return@launch onResult(added, result.exceptionOrNull()?.message)
+                }
+                added += 1
+            }
+            haptics.success()
+            onResult(added, null)
         }
     }
 

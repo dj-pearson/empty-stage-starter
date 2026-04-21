@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">EatPal</string>
+
+    <string name="shortcut_add_grocery">Add to grocery</string>
+    <string name="shortcut_add_grocery_long">Add items to your grocery list</string>
+    <string name="shortcut_log_meal">Log a meal</string>
+    <string name="shortcut_log_meal_long">Log a meal in the plan</string>
+    <string name="shortcut_dashboard">Dashboard</string>
+    <string name="shortcut_dashboard_long">Open today\'s dashboard</string>
 </resources>

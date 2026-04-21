@@ -52,8 +52,8 @@ fun MainNavigation(navController: NavHostController) {
         composable(Routes.KIDS) { KidsScreen() }
         composable(Routes.PANTRY) { PantryScreen() }
         composable(Routes.SETTINGS) { SettingsScreen() }
-        composable(Routes.PAYWALL) { PlaceholderScreen("Paywall") }
-        composable(Routes.AI_COACH) { PlaceholderScreen("AI Coach") }
+        composable(Routes.PAYWALL) { com.eatpal.app.ui.paywall.PaywallScreen() }
+        composable(Routes.AI_COACH) { com.eatpal.app.ui.aicoach.AICoachScreen() }
         composable(Routes.PROGRESS) { PlaceholderScreen("Progress") }
         composable(Routes.FOOD_CHAINING) { PlaceholderScreen("Food Chaining") }
         composable(Routes.PICKY_QUIZ) { PlaceholderScreen("Picky Eater Quiz") }

@@ -1,9 +1,20 @@
 package com.eatpal.app.domain
 
+import android.content.Context
+import com.eatpal.app.data.local.HealthConnectService
+import com.eatpal.app.data.local.WidgetSnapshotStore
+import com.eatpal.app.data.local.entities.PendingMutation
+import com.eatpal.app.models.MealSlot
+import com.eatpal.app.widget.EatPalWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.updateAll
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import com.eatpal.app.data.remote.DataService
 import com.eatpal.app.data.remote.OfflineStore
 import com.eatpal.app.data.remote.RealtimeService
-import com.eatpal.app.data.local.entities.PendingMutation
 import com.eatpal.app.models.Food
 import com.eatpal.app.models.FoodUpdate
 import com.eatpal.app.models.GroceryItem
@@ -16,7 +27,12 @@ import com.eatpal.app.models.PlanEntryUpdate
 import com.eatpal.app.models.Recipe
 import com.eatpal.app.models.RecipeUpdate
 import com.eatpal.app.util.NetworkMonitor
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,7 +56,15 @@ class AppStateStore @Inject constructor(
     private val realtimeService: RealtimeService,
     private val offlineStore: OfflineStore,
     private val networkMonitor: NetworkMonitor,
+    private val healthConnect: HealthConnectService,
+    private val widgetSnapshotStore: WidgetSnapshotStore,
+    @ApplicationContext private val appContext: Context,
 ) {
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    init {
+        setupWidgetSnapshotSync()
+    }
     // MARK: - Published state (iOS @Published -> StateFlow)
 
     private val _foods = MutableStateFlow<List<Food>>(emptyList())
@@ -234,6 +258,35 @@ class AppStateStore @Inject constructor(
             _planEntries.update { list -> list.map { if (it.id == id) original else it } }
             throw t
         }
+        // Parity with iOS US-144: push macros to Health Connect when the meal
+        // was eaten and the user has opted in. Silently skipped otherwise.
+        if (updates.result == com.eatpal.app.models.MealResult.ATE.key) {
+            val current = _planEntries.value.firstOrNull { it.id == id } ?: return
+            backgroundScope.launch { writeHealthSample(current) }
+        }
+    }
+
+    private suspend fun writeHealthSample(entry: PlanEntry) {
+        if (!healthConnect.isAvailable) return
+        if (!healthConnect.isEnabled.first()) return
+
+        val recipeId = entry.recipeId ?: return
+        val recipe = _recipes.value.firstOrNull { it.id == recipeId } ?: return
+        val nutrition = recipe.nutritionInfo ?: return
+
+        val mealDate = runCatching { java.time.LocalDate.parse(entry.date) }.getOrNull()
+            ?: java.time.LocalDate.now()
+
+        runCatching {
+            healthConnect.writeMeal(
+                calories = nutrition.calories,
+                proteinGrams = nutrition.proteinG,
+                carbsGrams = nutrition.carbsG,
+                fatGrams = nutrition.fatG,
+                mealDate = mealDate,
+                mealName = recipe.name,
+            )
+        }
     }
 
     suspend fun deletePlanEntry(id: String) {
@@ -340,6 +393,66 @@ class AppStateStore @Inject constructor(
         list.map { if (it.id == recipe.id) recipe else it }
     }
     fun onRecipeDeleted(id: String) = _recipes.update { list -> list.filterNot { it.id == id } }
+
+    /**
+     * iOS `setupWidgetSnapshotSync` parity. Debounced 500ms combine of the 4
+     * flows that feed the widget, then writes a snapshot + triggers a reload.
+     */
+    @OptIn(FlowPreview::class)
+    private fun setupWidgetSnapshotSync() {
+        backgroundScope.launch {
+            combine(
+                _planEntries,
+                _foods,
+                _groceryItems,
+                combine(_recipes, _activeKidId, ::Pair),
+            ) { entries, foods, grocery, (recipes, kidId) ->
+                composeSnapshot(entries, foods, recipes, grocery, kidId)
+            }
+                .debounce(500)
+                .collect { payload ->
+                    widgetSnapshotStore.write(payload)
+                    runCatching {
+                        GlanceAppWidgetManager(appContext).apply {
+                            EatPalWidget().updateAll(appContext)
+                        }
+                    }
+                }
+        }
+    }
+
+    private fun composeSnapshot(
+        entries: List<PlanEntry>,
+        foods: List<Food>,
+        recipes: List<Recipe>,
+        grocery: List<GroceryItem>,
+        kidId: String?,
+    ): WidgetSnapshotStore.Payload {
+        val today = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+        val todaysEntries = entries.filter {
+            it.date == today && (kidId == null || it.kidId == kidId)
+        }
+        val meals = MealSlot.entries.mapNotNull { slot ->
+            val entry = todaysEntries.firstOrNull { it.mealSlot == slot.key } ?: return@mapNotNull null
+            val name = entry.recipeId?.let { rid -> recipes.firstOrNull { it.id == rid }?.name }
+                ?: foods.firstOrNull { it.id == entry.foodId }?.name
+                ?: "Unnamed"
+            WidgetSnapshotStore.Meal(slot = slot.displayName, foodName = name)
+        }
+        val tonight = todaysEntries.firstOrNull { it.mealSlot == MealSlot.DINNER.key }?.let { entry ->
+            entry.recipeId?.let { rid -> recipes.firstOrNull { it.id == rid }?.name }
+                ?: foods.firstOrNull { it.id == entry.foodId }?.name
+        }
+        val pantryLow = foods.count { (it.quantity ?: 0.0) in 0.01..2.0 }
+        val unchecked = grocery.count { !it.checked }
+        return WidgetSnapshotStore.Payload(
+            meals = meals,
+            groceryCount = unchecked,
+            pantryLowCount = pantryLow,
+            tonightDish = tonight,
+            tryBiteStreak = 0,
+        )
+    }
 
     private suspend fun coroutineScopeAwait(vararg blocks: suspend () -> Any): List<Any> =
         kotlinx.coroutines.coroutineScope {

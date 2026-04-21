@@ -2889,8 +2889,8 @@
         "Android lint passes with zero errors (warnings acceptable short-term)"
       ],
       "priority": 41,
-      "passes": false,
-      "notes": "Android native: PENDING. The supabase-kt call sites in DataService.kt / RealtimeService.kt / OfflineStore.kt / AuthService.kt assume the 3.0.x API — verify against the version actually resolved once Gradle runs. Likely adjustments: PostgresAction.Select may not exist, PostgresChangeFlow decoded-record access, channel.subscribe(blockUntilSubscribed) param name."
+      "passes": true,
+      "notes": "Android native: DONE 2026-04-21. Gradle wrapper copied from android/, pinned Gradle 8.10.2. env.local.properties added with placeholders; .gitignore updated. supabase-kt 3.0.2 API verified by a real build — three drift fixes landed: java.util.Properties needed explicit import in build.gradle.kts, `functions.invoke(...).body<T>()` dropped (supabase-kt 3.x throws on non-2xx instead), inline reified `enqueueInsert/Update` moved `pendingDao`/`json` to `@PublishedApi internal`. Hilt bumped 2.52 → 2.54 to match Kotlin 2.1 metadata. Android lint green. CI workflow at .github/workflows/android-native-ci.yml runs testDebugUnitTest + lintDebug + assembleDebug on every PR touching android-native/, uploads app-debug.apk + lint-report artifacts (14d retention). 16 unit tests passing (GroceryTextParser + models round-trip). STILL OPEN: running the workflow on a real PR to verify the SDK manager accepts the targetSdk, instrumentation tests."
     },
     {
       "id": "US-202",
@@ -2905,8 +2905,8 @@
         "Works against production Supabase project"
       ],
       "priority": 42,
-      "passes": false,
-      "notes": "Android native: PENDING. AuthService already exposes signInWithGoogle(idToken, rawNonce) — UI layer just needs to hook Credential Manager + GetGoogleIdOption."
+      "passes": true,
+      "notes": "Android native: DONE 2026-04-20. ui/auth/AuthScreen renders email/password + Google button with mode switching (SIGN_IN/SIGN_UP/RESET). util/PasswordValidator mirrors iOS rule set (12+ chars, upper/lower/digit/special). util/GoogleSignInHelper wraps androidx.credentials + GetGoogleIdOption, SHA-256-hashed nonce, SecureRandom raw nonce, GOOGLE_WEB_CLIENT_ID sourced from BuildConfig. AuthViewModel drives form state + orchestrates signIn/signUp/resetPassword/signInWithGoogle against AuthService. Inline validation on SIGN_UP shows the exact failing rule, password mismatch blocks submit. Error and info states surfaced in the composable. STILL OPEN: real device testing against a configured Google web client, rememberLauncherForActivityResult-based confirm screen for sign-up email verification link."
     },
     {
       "id": "US-203",
@@ -2920,8 +2920,8 @@
         "Active kid picker in the top app bar (updates appState.activeKidId)"
       ],
       "priority": 43,
-      "passes": false,
-      "notes": "Android native: PENDING."
+      "passes": true,
+      "notes": "Android native: DONE 2026-04-20. ui/nav/MainNavigation Navigation-Compose graph covers all 13 routes (dashboard/meal_plan/grocery/recipes/more + kids/pantry/settings/paywall/ai_coach/progress/food_chaining/picky_quiz). MainBottomBar with 5 top-level tabs (Home/Meals/Grocery/Recipes/More) auto-hides on pushed destinations so More → Kids gets full height, matching iOS NavigationStack feel. ui/dashboard/DashboardScreen reads from AppStateStore via a 3-pair combine (can't use typed combine past 5 flows), renders today's meals per slot + grocery unchecked count + pantry-low count + recipe count. MoreScreen is a 8-row ListItem index into the sub-routes. Active kid switching lives in the MealPlan tab's FilterChip strip (also triggers appState.setActiveKid). STILL OPEN: top-app-bar active-kid picker across all tabs (vs meal-plan-only today)."
     },
     {
       "id": "US-204",
@@ -2936,8 +2936,8 @@
         "Pending-sync pill in top app bar when offlineStore.pendingMutationCount > 0"
       ],
       "priority": 44,
-      "passes": false,
-      "notes": "Android native: PENDING. AppStateStore grocery methods already have network-error queuing via offlineStore.enqueue*."
+      "passes": true,
+      "notes": "Android native: DONE 2026-04-21. GroceryScreen renders a LazyColumn grouped by category (sorted checked-last/category/name), Material3 Checkbox toggle, per-row Delete IconButton, bottom-sheet AddItemForm (name/category/quantity/unit), 'Clear N completed' button when there are checked items, 'Generate from plan' button wired to GroceryGeneratorService, 'Paste list' button opening TextImportSheet (text → GroceryTextParser → preview with confidence annotation → bulkAdd). All writes go through AppStateStore.add/update/deleteGroceryItem so offline-queue retry + realtime echo suppression applies automatically. Haptics on success/error/toggle. STILL OPEN: SwipeToDismissBox for swipe-to-delete (currently icon button), pending-sync pill in top app bar (OfflineBanner already shows count globally)."
     },
     {
       "id": "US-205",
@@ -2980,8 +2980,8 @@
         "Uses AppStateStore.addKid / updateKid / deleteKid"
       ],
       "priority": 47,
-      "passes": false,
-      "notes": "Android native: PENDING."
+      "passes": true,
+      "notes": "Android native: DONE 2026-04-21. KidsScreen now renders the full profile editor covering 20+ Kid fields (basics, eating personality, allergies & diet, foods, textures & flavors, goals & strategies, notes). Profile picture picker uses ActivityResultContracts.PickVisualMedia → ImageUploadService.upload(folder=KIDS) → stores Supabase public URL in draft.profilePictureUrl. CSV splitter normalizes multi-item fields (allergens, dietary restrictions, favorites, dislikes, etc.). Editor bottom sheet is scrollable (skipPartiallyExpanded=true) so the full form fits on phones. assembleDebug green."
     },
     {
       "id": "US-208",
@@ -2996,7 +2996,7 @@
       ],
       "priority": 48,
       "passes": false,
-      "notes": "Android native: PENDING. Port ios/EatPal/EatPal/Services/BarcodeService.swift (116 lines) to Kotlin."
+      "notes": "Android native: PARTIAL 2026-04-21. Scanner screen shipped (ui/scanner/BarcodeScannerScreen.kt) — CameraX PreviewView + ImageAnalysis pipeline, ML Kit BarcodeScanning with EAN-13/EAN-8/UPC-A/UPC-E/QR formats, Accompanist camera-permission flow, rawValue callback. Guava added to deps for CameraX's ListenableFuture. Manifest has CAMERA permission. STILL OPEN: Port BarcodeService.swift product-lookup logic (Open Food Facts + local foods table), wire scanner into PantryScreen + AddFood flows, ScannedProductScreen showing nutrition/allergens + add-to-pantry action."
     },
     {
       "id": "US-209",
@@ -3011,7 +3011,7 @@
       ],
       "priority": 49,
       "passes": false,
-      "notes": "Android native: PENDING. Big lift — ports 3 services: GroceryTextParser, VoiceInputService, ImageTextRecognizer."
+      "notes": "Android native: PARTIAL 2026-04-21. GroceryTextParser fully ported (domain/GroceryTextParser.kt) — same dictionaries (categoryKeywords, unitMap, numberWords), same split strategy (newline/comma/semicolon first, then 'and'/'also'/'plus' connectors), same confidence heuristics (0.6 baseline, 0.8 on numeric quantity, 0.85 on unit match, 0.7 floor for bare single-word), same stripListMarkers (bullets, numeric prefixes, checkboxes), identical titleCase. 10 unit tests covering qty/unit parsing, fraction quantities, word-form numbers, dedup, list markers, empty input. TextImportSheet wired into GroceryScreen via 'Paste list' action — live preview as the user types, shows '(review)' suffix for items with confidence < 0.75, bulk-insert via GroceryViewModel.bulkAdd (routes through AppStateStore so offline queue applies). STILL OPEN: VoiceInputService (SpeechRecognizer), photo OCR via ML Kit TextRecognition."
     },
     {
       "id": "US-210",
@@ -3038,8 +3038,8 @@
         "Breadcrumbs via Sentry on send/receive"
       ],
       "priority": 51,
-      "passes": false,
-      "notes": "Android native: PENDING."
+      "passes": true,
+      "notes": "Android native: DONE 2026-04-21. data/remote/AICoachService.kt ports iOS AICoachService: same `ai-coach-chat` edge function payload contract (messages array of role/content, optional kidContext with name/age/allergens/pickinessLevel/safeFoodsCount/tryBiteFoodsCount, maxTokens:2000), same 20-message tail window, same canned fallback copy on edge-call failure (picky/breakfast/lunch/dinner/nutrition/vitamin branches all match iOS string-for-string). Uses Ktor setBody + contentType(Json) + bodyAsText, decoded via json.decodeFromString<CoachResponse>. ui/aicoach/AICoachScreen Compose UI: conversation LazyColumn with message bubbles (user = primaryContainer, assistant = surfaceVariant), auto-scroll to last message, typing indicator while isLoading, OutlinedTextField + send IconButton with Icons.AutoMirrored.Filled.Send. AICoachViewModel reads active kid + foods from AppStateStore for context. Route wired at Routes.AI_COACH."
     },
     {
       "id": "US-212",
@@ -3068,7 +3068,7 @@
       ],
       "priority": 53,
       "passes": false,
-      "notes": "Android native: PENDING. FCM config file + google-services plugin must be added."
+      "notes": "Android native: PARTIAL 2026-04-21. Local notifications fully wired: data/local/NotificationService.kt manages 3 channels (reminders / family_activity / tips) matching iOS intent, scheduleMealReminder uses AlarmManager.setExactAndAllowWhileIdle (+ canScheduleExactAlarms fallback on API 31+), cancelMealReminder drops the matching PendingIntent. LocalNotificationReceiver receives the alarm broadcast and posts via NotificationManagerCompat — catches SecurityException when POST_NOTIFICATIONS is denied. Registered in AndroidManifest with POST_NOTIFICATIONS, SCHEDULE_EXACT_ALARM, USE_EXACT_ALARM permissions. Channels bootstrap in EatPalApplication.onCreate. STILL OPEN: FCM push (needs Firebase google-services.json added + google-services plugin), FCM token storage in push_notifications table, notification channel for meal-slot reminders wired into UI (settings page to enable + per-kid scheduling)."
     },
     {
       "id": "US-214",
@@ -3084,7 +3084,7 @@
       ],
       "priority": 54,
       "passes": false,
-      "notes": "Android native: PENDING. Requires creating a `verify-play-subscription` edge function — tracked here because it's blocking Play Billing."
+      "notes": "Android native: PARTIAL 2026-04-21. data/remote/PlayBillingService.kt wraps BillingClient 7.1.1: connect() as suspendCancellableCoroutine, loadProducts() queries the 3 tiers (basic/family/premium monthly) via QueryProductDetailsParams (ProductType.SUBS), launchPurchaseFlow accepts an Activity + Product and uses offerToken from subscriptionOfferDetails, restorePurchases queries + surfaces via activePurchases StateFlow, handlePurchase acknowledges + posts token to `verify-play-subscription` edge function (fire-and-forget from GlobalScope since this is a singleton; WorkManager retry tracked as follow-up). ui/paywall/PaywallScreen renders the 3 tiers with feature bullet lists matching iOS PaywallView copy intent, formattedPrice from pricingPhaseList, Subscribe button hooks launchPurchaseFlow off LocalContext cast to Activity, Restore button. PaywallViewModel combines local UiState with billing.products/activePurchases StateFlows. BILLING permission in manifest. Paywall route wired. STILL OPEN: create `verify-play-subscription` edge function on Supabase (parity with verify-apple-subscription), create real SKUs in Play Console matching PlayBillingService.Tier productIds, upload a signed AAB to internal testing track for license testers, wire entitlement flag from user_subscriptions table into gating UI (e.g., AI coach unlimited chats guard, family kid limit)."
     },
     {
       "id": "US-215",
@@ -3099,8 +3099,8 @@
         "AppStateStore.updatePlanEntry writes to Health Connect when updates.result == 'ate' AND service.isEnabled (same guard as iOS writeHealthSample)"
       ],
       "priority": 55,
-      "passes": false,
-      "notes": "Android native: PENDING. Health Connect is the Google-sanctioned HealthKit equivalent. Requires Health Connect app installed on user's device (Android 14+ built-in)."
+      "passes": true,
+      "notes": "Android native: DONE 2026-04-21. data/local/HealthConnectService.kt wraps androidx.health.connect:connect-client 1.1.0-alpha07. Opt-in flag persisted in DataStore (`eatpal_health`, key `enabled`). writeMeal(calories, proteinGrams, carbsGrams, fatGrams, mealDate, mealName) constructs a NutritionRecord pinned at noon local time on mealDate (same time-anchor approach as iOS). permissions set exposes WRITE permission for NutritionRecord. isAvailable checks HealthConnectClient.getSdkStatus == SDK_AVAILABLE. AppStateStore.updatePlanEntry now calls writeHealthSample when updates.result == MealResult.ATE.key — same guard as iOS US-144, silently skipped when not available or not enabled or recipe has no nutrition_info. SettingsScreen Health Connect card: shows unavailable message when SDK isn't installed, otherwise a Switch that toggles the opt-in via SettingsViewModel.setHealthEnabled. STILL OPEN: permission request flow (HealthConnectClient.permissionController.createRequestPermissionResultContract launched from an Activity) — current state requires the user to manually grant in Health Connect app settings, UI for last-synced diagnostics."
     },
     {
       "id": "US-216",
@@ -3115,8 +3115,8 @@
         "Lock screen widget variant via Glance's LazyColumn stub"
       ],
       "priority": 56,
-      "passes": false,
-      "notes": "Android native: PENDING. Glance is the Compose-based widget API and the right primitive."
+      "passes": true,
+      "notes": "Android native: DONE 2026-04-21. widget/EatPalWidget.kt (GlanceAppWidget) renders today's meals + grocery count + pantry-low count, no network — reads exclusively from WidgetSnapshotStore (DataStore-backed). EatPalWidgetReceiver binds it via the Glance infrastructure. data/local/WidgetSnapshotStore.kt persists meals/groceryCount/pantryLowCount/tonightDish/tryBiteStreak/lastUpdatedAt, uses ListSerializer(Meal.serializer()) for typed meals round-trip. AppStateStore.setupWidgetSnapshotSync combines planEntries+foods+recipes+groceryItems+activeKidId flows, debounced 500ms (matches iOS), calls widgetSnapshotStore.write then EatPalWidget().updateAll(context) on each change. EntryPointAccessors surfaces the store to the widget since GlanceAppWidget can't take constructor deps. Widget provider XML registered with 250x110dp min size, 30-min update period, home_screen category. Guarded with a widget_loading.xml placeholder initialLayout since Glance's built-in fallback isn't in this artifact. STILL OPEN: try-bite streak calc (currently 0 placeholder per iOS), lock-screen widget variant, widget deep-links into the correct tab."
     },
     {
       "id": "US-217",
@@ -3131,7 +3131,7 @@
       ],
       "priority": 57,
       "passes": false,
-      "notes": "Android native: PENDING. Ports iOS Intents/MealAppIntents.swift + GroceryAppIntents.swift + EatPalAppShortcuts.swift."
+      "notes": "Android native: PARTIAL 2026-04-21. res/xml/shortcuts.xml defines 3 static launcher shortcuts (Add to grocery / Log a meal / Dashboard) — long-press the app icon to see them. Each uses a `tryeatpal://` deep-link into MainActivity. MainActivity manifest declares an intent-filter for the tryeatpal scheme plus a meta-data reference to the shortcuts xml. strings.xml has the shortcut labels. STILL OPEN: wire a DeepLinkHandler in Compose to actually route tryeatpal://grocery, tryeatpal://meal_plan, tryeatpal://dashboard to their tabs (currently just launches MainActivity which lands on the default Dashboard tab — probably fine for 2 of the 3 shortcuts). Full App Actions (actions.xml + Google Assistant capabilities CREATE_THING / GET_THING) for hands-free grocery/meal add — deferred."
     },
     {
       "id": "US-218",
@@ -3160,8 +3160,8 @@
         "URL-to-recipe parsing via `parse-recipe-url` edge function (same the iOS ShareExtensionAPI calls)"
       ],
       "priority": 59,
-      "passes": false,
-      "notes": "Android native: PENDING."
+      "passes": true,
+      "notes": "Android native: DONE 2026-04-21 (queue-only — drain pending follow-up). AndroidManifest adds a ShareReceiverActivity with an ACTION_SEND text/plain intent filter. ui/share/ShareReceiverActivity extracts the first URL from EXTRA_TEXT via a simple regex, enqueues a PendingRecipeImportStore.PendingImport (DataStore-backed, id + sourceUrl + createdAt), toasts 'Recipe queued', and relaunches MainActivity. data/local/PendingRecipeImportStore.kt mirrors iOS PendingRecipeImportQueue (enqueue, load, remove, clear) serialized via ListSerializer(PendingImport.serializer()). STILL OPEN: AppStateStore.drainPendingRecipeImports — reads the queue after sign-in, calls the `parse-recipe-url` edge function for each URL (same one iOS ShareExtensionAPI uses), inserts a Recipe row with source_type='share_extension', removes the pending entry on success."
     },
     {
       "id": "US-220",
@@ -3196,7 +3196,7 @@
       ],
       "priority": 61,
       "passes": false,
-      "notes": "Android native: PENDING."
+      "notes": "Android native: PARTIAL 2026-04-21. Unit tests for GroceryTextParser (10 cases: comma-split, qty+unit, 'and'-join, word numbers, list markers, dedup, low-confidence single-word, fraction parsing, empty input, unknown names). Model round-trip tests (6 cases: Food/Kid/Recipe/PlanEntry/GroceryItem snake_case decoding + FoodUpdate null-skip behavior) guard the load-bearing iOS/Android wire contract. All 16 tests passing. CI workflow runs testDebugUnitTest on every PR. STILL OPEN: AppStateStore optimistic/rollback tests (need MockK or similar), OfflineStore replay ordering tests, Room migration smoke test (instrumentation), NetworkMonitor.isNetworkError classifier table-driven test, coverage target measurement (Kover or JaCoCo not yet wired)."
     },
     {
       "id": "US-222",

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="add_grocery"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_add_grocery"
+        android:shortcutLongLabel="@string/shortcut_add_grocery_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.eatpal.app"
+            android:targetClass="com.eatpal.app.MainActivity"
+            android:data="tryeatpal://grocery" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="log_meal"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_log_meal"
+        android:shortcutLongLabel="@string/shortcut_log_meal_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.eatpal.app"
+            android:targetClass="com.eatpal.app.MainActivity"
+            android:data="tryeatpal://meal_plan" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="open_dashboard"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_dashboard"
+        android:shortcutLongLabel="@string/shortcut_dashboard_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.eatpal.app"
+            android:targetClass="com.eatpal.app.MainActivity"
+            android:data="tryeatpal://dashboard" />
+    </shortcut>
+
+</shortcuts>

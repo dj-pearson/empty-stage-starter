@@ -1,6 +1,7 @@
 package com.eatpal.app
 
 import android.app.Application
+import com.eatpal.app.data.local.NotificationService
 import com.eatpal.app.util.NetworkMonitor
 import dagger.hilt.android.HiltAndroidApp
 import io.sentry.android.core.SentryAndroid
@@ -17,6 +18,9 @@ class EatPalApplication : Application() {
     @Inject
     lateinit var networkMonitor: NetworkMonitor
 
+    @Inject
+    lateinit var notificationService: NotificationService
+
     override fun onCreate() {
         super.onCreate()
 
@@ -32,5 +36,6 @@ class EatPalApplication : Application() {
         }
 
         networkMonitor.start()
+        notificationService.ensureChannels()
     }
 }
