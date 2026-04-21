@@ -60,7 +60,8 @@
       "Bash(java -version)",
       "Bash(chmod +x C:/Users/dpearson/Documents/EatPal/empty-stage-starter/android-native/gradlew)",
       "Bash(./gradlew :app:compileDebugKotlin --no-daemon)",
-      "Bash(./gradlew :app:compileDebugKotlin)"
+      "Bash(./gradlew :app:compileDebugKotlin)",
+      "Bash(./gradlew :app:assembleDebug)"
     ],
     "deny": [],
     "ask": []
