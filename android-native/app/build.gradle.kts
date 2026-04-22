@@ -174,9 +174,19 @@ dependencies {
     // Play Billing (US-214)
     implementation(libs.billing.ktx)
 
+    // Firebase Cloud Messaging (US-213). The `google-services` Gradle plugin
+    // and `app/google-services.json` still need to be added before this
+    // actually registers — without them FirebaseApp stays uninitialized and
+    // EatPalMessagingService.onNewToken never fires. Code ships so the day
+    // the config lands we don't have a chicken-and-egg problem.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockk)
+    testImplementation(libs.turbine)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

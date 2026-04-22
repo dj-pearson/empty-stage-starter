@@ -40,6 +40,19 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!--
+          FCM messaging service. Only functional once the Firebase
+          google-services.json config file is added under app/ and the
+          `google-services` Gradle plugin is applied. See US-213.
+        -->
+        <service
+            android:name=".data.local.EatPalMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".widget.EatPalWidgetReceiver"
             android:exported="false"

@@ -57,6 +57,7 @@ fun MainNavigation(navController: NavHostController) {
         composable(Routes.PROGRESS) { com.eatpal.app.ui.progress.ProgressScreen() }
         composable(Routes.FOOD_CHAINING) { com.eatpal.app.ui.foodchaining.FoodChainingScreen() }
         composable(Routes.PICKY_QUIZ) { com.eatpal.app.ui.quiz.PickyQuizScreen() }
+        composable(Routes.AI_MEAL_PLAN) { com.eatpal.app.ui.mealplan.AIMealPlanScreen() }
     }
 }
 

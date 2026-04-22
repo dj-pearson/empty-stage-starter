@@ -48,7 +48,11 @@ import javax.inject.Inject
  * All three share the offline banner, snackbar host, and toast controller.
  */
 @Composable
-fun RootScreen(vm: RootViewModel = hiltViewModel()) {
+fun RootScreen(
+    pendingDeepLinkRoute: String? = null,
+    onDeepLinkConsumed: () -> Unit = {},
+    vm: RootViewModel = hiltViewModel(),
+) {
     val sessionStatus by vm.sessionStatus.collectAsStateWithLifecycle()
     val onboarded by vm.onboardingCompleted.collectAsStateWithLifecycle()
 
@@ -66,6 +70,18 @@ fun RootScreen(vm: RootViewModel = hiltViewModel()) {
 
     CompositionLocalProvider(LocalToastController provides toast) {
         val navController = rememberNavController()
+
+        // Apply a pending deep link once the user is authenticated + past
+        // onboarding. Safe to apply repeatedly; launchSingleTop prevents
+        // stacking the same destination.
+        LaunchedEffect(pendingDeepLinkRoute, sessionStatus, onboarded) {
+            val route = pendingDeepLinkRoute ?: return@LaunchedEffect
+            if (onboarded == true && sessionStatus is SessionStatus.Authenticated) {
+                navController.navigate(route) { launchSingleTop = true }
+                onDeepLinkConsumed()
+            }
+        }
+
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHost) },
             bottomBar = {

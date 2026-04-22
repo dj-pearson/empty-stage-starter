@@ -32,6 +32,7 @@ fun MoreScreen(navController: NavHostController) {
         "Kids" to Routes.KIDS,
         "Pantry" to Routes.PANTRY,
         "AI Coach" to Routes.AI_COACH,
+        "AI Meal Plan" to Routes.AI_MEAL_PLAN,
         "Progress" to Routes.PROGRESS,
         "Food Chaining" to Routes.FOOD_CHAINING,
         "Picky Eater Quiz" to Routes.PICKY_QUIZ,

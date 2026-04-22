@@ -20,4 +20,5 @@ object Routes {
     const val PROGRESS = "progress"
     const val FOOD_CHAINING = "food_chaining"
     const val PICKY_QUIZ = "picky_quiz"
+    const val AI_MEAL_PLAN = "ai_meal_plan"
 }

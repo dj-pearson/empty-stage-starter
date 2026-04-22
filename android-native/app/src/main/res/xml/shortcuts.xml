@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      Static launcher shortcuts (long-press the app icon).
+      Each opens a deep-link that MainActivity interprets to route to the
+      right tab — see DeepLinkHandler + the `tryeatpal://` intent-filter in
+      AndroidManifest.
+    -->
     <shortcut
         android:shortcutId="add_grocery"
         android:enabled="true"
@@ -12,6 +18,21 @@
             android:targetPackage="com.eatpal.app"
             android:targetClass="com.eatpal.app.MainActivity"
             android:data="tryeatpal://grocery" />
+        <!--
+          Assistant / App Actions binding. Matches a user saying
+          "Hey Google, add milk to my grocery list on EatPal."
+        -->
+        <capability android:name="actions.intent.CREATE_THING">
+            <intent
+                android:action="android.intent.action.VIEW"
+                android:targetPackage="com.eatpal.app"
+                android:targetClass="com.eatpal.app.MainActivity"
+                android:data="tryeatpal://grocery">
+                <parameter
+                    android:name="thing.name"
+                    android:key="item" />
+            </intent>
+        </capability>
     </shortcut>
 
     <shortcut
@@ -25,6 +46,18 @@
             android:targetPackage="com.eatpal.app"
             android:targetClass="com.eatpal.app.MainActivity"
             android:data="tryeatpal://meal_plan" />
+        <!-- "Hey Google, log lunch in EatPal." -->
+        <capability android:name="actions.intent.CREATE_THING">
+            <intent
+                android:action="android.intent.action.VIEW"
+                android:targetPackage="com.eatpal.app"
+                android:targetClass="com.eatpal.app.MainActivity"
+                android:data="tryeatpal://meal_plan">
+                <parameter
+                    android:name="thing.name"
+                    android:key="slot" />
+            </intent>
+        </capability>
     </shortcut>
 
     <shortcut
@@ -38,6 +71,27 @@
             android:targetPackage="com.eatpal.app"
             android:targetClass="com.eatpal.app.MainActivity"
             android:data="tryeatpal://dashboard" />
+        <!-- "Hey Google, show me today in EatPal." -->
+        <capability android:name="actions.intent.GET_THING">
+            <intent
+                android:action="android.intent.action.VIEW"
+                android:targetPackage="com.eatpal.app"
+                android:targetClass="com.eatpal.app.MainActivity"
+                android:data="tryeatpal://dashboard" />
+        </capability>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="start_trip"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_start_trip"
+        android:shortcutLongLabel="@string/shortcut_start_trip_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.eatpal.app"
+            android:targetClass="com.eatpal.app.MainActivity"
+            android:data="tryeatpal://grocery?trip=start" />
     </shortcut>
 
 </shortcuts>
