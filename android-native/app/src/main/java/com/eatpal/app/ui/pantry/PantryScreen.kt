@@ -12,15 +12,21 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -34,6 +40,8 @@ import com.eatpal.app.domain.AppStateStore
 import com.eatpal.app.models.Food
 import com.eatpal.app.models.FoodUpdate
 import com.eatpal.app.ui.components.rememberToastController
+import com.eatpal.app.ui.scanner.BarcodeScannerScreen
+import com.eatpal.app.ui.scanner.ScannedProductScreen
 import com.eatpal.app.ui.theme.Spacing
 import com.eatpal.app.util.HapticManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -54,9 +62,36 @@ import javax.inject.Inject
 fun PantryScreen(vm: PantryViewModel = hiltViewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     val toast = rememberToastController()
+    var view by remember { mutableStateOf<PantryView>(PantryView.List) }
 
+    when (val current = view) {
+        is PantryView.Scanner -> {
+            BarcodeScannerScreen(
+                onCancel = { view = PantryView.List },
+                onBarcode = { code -> view = PantryView.Scanned(code) },
+            )
+            return
+        }
+        is PantryView.Scanned -> {
+            ScannedProductScreen(
+                barcode = current.barcode,
+                onRescan = { view = PantryView.Scanner },
+                onDone = { view = PantryView.List },
+            )
+            return
+        }
+        PantryView.List -> Unit
+    }
+
+    Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(onClick = { view = PantryView.Scanner }) {
+                Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan barcode")
+            }
+        },
+    ) { inner ->
     Column(
-        modifier = Modifier.fillMaxSize().padding(Spacing.lg),
+        modifier = Modifier.fillMaxSize().padding(inner).padding(Spacing.lg),
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         Text("Pantry", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -94,6 +129,13 @@ fun PantryScreen(vm: PantryViewModel = hiltViewModel()) {
             }
         }
     }
+    }
+}
+
+private sealed interface PantryView {
+    data object List : PantryView
+    data object Scanner : PantryView
+    data class Scanned(val barcode: String) : PantryView
 }
 
 @Composable

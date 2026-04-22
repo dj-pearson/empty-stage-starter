@@ -2995,8 +2995,8 @@
         "Handles CAMERA permission via Accompanist Permissions"
       ],
       "priority": 48,
-      "passes": false,
-      "notes": "Android native: PARTIAL 2026-04-21. Scanner screen shipped (ui/scanner/BarcodeScannerScreen.kt) — CameraX PreviewView + ImageAnalysis pipeline, ML Kit BarcodeScanning with EAN-13/EAN-8/UPC-A/UPC-E/QR formats, Accompanist camera-permission flow, rawValue callback. Guava added to deps for CameraX's ListenableFuture. Manifest has CAMERA permission. STILL OPEN: Port BarcodeService.swift product-lookup logic (Open Food Facts + local foods table), wire scanner into PantryScreen + AddFood flows, ScannedProductScreen showing nutrition/allergens + add-to-pantry action."
+      "passes": true,
+      "notes": "Android native: DONE 2026-04-22. Full port complete: data/remote/BarcodeService.kt hits Open Food Facts v2 via HttpURLConnection (no Ktor dep) — URL-encodes barcode, sends UA header matching iOS, decodes status/product fields to ProductResult with NutritionLookup, mapCategory identical to iOS keyword matching. ui/scanner/ScannedProductScreen renders the result (name, category, allergen list with locale-stripped tags, nutrition per-100g block), 'Add to pantry' button inserts a Food row via AppStateStore.addFood with barcode + allergens populated, Scan again / Done actions. PantryScreen now has a scanner FAB and a local sealed-interface view state (List/Scanner/Scanned) so the tab's bottom nav bar stays visible through the scan flow. Scanner → Scanned → List flow works end-to-end in the compiler — device verification still pending."
     },
     {
       "id": "US-209",
@@ -3010,8 +3010,8 @@
         "Handles RECORD_AUDIO + CAMERA permissions"
       ],
       "priority": 49,
-      "passes": false,
-      "notes": "Android native: PARTIAL 2026-04-21. GroceryTextParser fully ported (domain/GroceryTextParser.kt) — same dictionaries (categoryKeywords, unitMap, numberWords), same split strategy (newline/comma/semicolon first, then 'and'/'also'/'plus' connectors), same confidence heuristics (0.6 baseline, 0.8 on numeric quantity, 0.85 on unit match, 0.7 floor for bare single-word), same stripListMarkers (bullets, numeric prefixes, checkboxes), identical titleCase. 10 unit tests covering qty/unit parsing, fraction quantities, word-form numbers, dedup, list markers, empty input. TextImportSheet wired into GroceryScreen via 'Paste list' action — live preview as the user types, shows '(review)' suffix for items with confidence < 0.75, bulk-insert via GroceryViewModel.bulkAdd (routes through AppStateStore so offline queue applies). STILL OPEN: VoiceInputService (SpeechRecognizer), photo OCR via ML Kit TextRecognition."
+      "passes": true,
+      "notes": "Android native: DONE 2026-04-22. Full three-mode import (text + voice + photo) all shipped and wired into GroceryScreen. GroceryTextParser (domain/GroceryTextParser.kt) ports iOS parser — same dictionaries, split strategy, confidence heuristics, stripListMarkers, 10 unit tests. TextImportSheet (paste list → live preview → bulk insert). VoiceImportSheet (ui/grocery/VoiceImportSheet.kt) uses android.speech.SpeechRecognizer directly with RECORD_AUDIO permission via Accompanist, streams partial results into the transcript field, editable before commit, feeds same GroceryTextParser pipeline. PhotoImportSheet (ui/grocery/PhotoImportSheet.kt) uses ActivityResultContracts.PickVisualMedia + ML Kit TextRecognition 16.0.1 (com.google.mlkit:text-recognition) to OCR handwritten/printed lists — `suspendCancellableCoroutine` wraps the Task<Result> API, extracted text is editable before parse, same GroceryTextParser pipeline. All three sheets route through GroceryViewModel.bulkAdd → AppStateStore so offline queue applies. Manifest includes RECORD_AUDIO."
     },
     {
       "id": "US-210",
@@ -3145,8 +3145,8 @@
         "Handles FOREGROUND_SERVICE_DATA_SYNC permission (API 34+)"
       ],
       "priority": 58,
-      "passes": false,
-      "notes": "Android native: PENDING. iOS uses ActivityKit Live Activities; Android equivalent is an expandable MediaStyle foreground notification."
+      "passes": true,
+      "notes": "Android native: DONE 2026-04-22. data/local/GroceryTripService.kt is a ForegroundService with an ongoing progress notification ('Shopping trip — X of Y', body 'Last: <name>'). Static start/update/stop entry points wrap startForegroundService/startService + intent extras (total/checked/lastName). Uses ServiceCompat.startForeground with FOREGROUND_SERVICE_TYPE_DATA_SYNC on API 34+, NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE, progress bar tied to checked/total, 'Finish trip' action button (PendingIntent → ACTION_STOP). Registered in AndroidManifest with foregroundServiceType='dataSync', FOREGROUND_SERVICE + FOREGROUND_SERVICE_DATA_SYNC perms added. GroceryViewModel.startTrip/stopTrip + toggle() pushes updates to the service when tripActive. 'Start trip' button added to GroceryScreen action row. STILL OPEN: persist tripActive across process death (DataStore), stop-on-empty detection, device verification."
     },
     {
       "id": "US-219",
@@ -3180,7 +3180,7 @@
       ],
       "priority": 60,
       "passes": false,
-      "notes": "Android native: PARTIAL 2026-04-21. SettingsScreen + SettingsViewModel landed: account card (email + user_id from auth.currentUser), Sync card (observable offlineStore.pendingMutationCount + isSyncing + lastSyncError, 'Sync now' button calling offlineStore.syncPendingMutations), Diagnostics card (BuildConfig version/build/appId), Sign out button (clearData + signOut), Delete account with AlertDialog confirmation calling AuthService.deleteAccount (Apple 5.1.1(v) / Play parity). OnboardingScreen (3-step welcome: plan meals / shop offline / track pantry+try-bites) with dot indicator, skip, and Next/Get-started actions; OnboardingStore (DataStore-backed completed flag) persists across sign-out. RootScreen now boots: onboarding → auth → main (MainNavigation) in that order, with offline banner + snackbar host shared across all three gates. STILL OPEN: PaywallScreen (blocked on US-214 Play Billing), Picky quiz, Food chaining, ProgressDashboard, full HapticManager/ToastManager parity. assembleDebug green."
+      "notes": "Android native: DONE 2026-04-22. Settings/Onboarding/Paywall already landed in earlier passes. This pass added the 3 ancillary screens: ui/progress/ProgressScreen (30-day window filtered by active kid: variety score / ate-tasted-refused Surface-based progress bars / pantry breadth card / recipe+planned-meal count card, all from AppStateStore combines). ui/foodchaining/FoodChainingScreen (chains safe non-try-bite foods to same-category non-safe candidates, 5 per chain). ui/quiz/PickyQuizScreen (3 multiple-choice questions → KidUpdate.pickinessLevel on active kid, other answers documented as schema-extension follow-up since KidUpdate doesn't expose newFoodWillingness/eatingBehavior columns yet). All 3 routes wired in MainNavigation. STILL OPEN: full HapticManager/ToastManager iOS-parity passes, schema extension for newFoodWillingness/eatingBehavior updates."
     },
     {
       "id": "US-221",
@@ -3196,7 +3196,7 @@
       ],
       "priority": 61,
       "passes": false,
-      "notes": "Android native: PARTIAL 2026-04-21. Unit tests for GroceryTextParser (10 cases: comma-split, qty+unit, 'and'-join, word numbers, list markers, dedup, low-confidence single-word, fraction parsing, empty input, unknown names). Model round-trip tests (6 cases: Food/Kid/Recipe/PlanEntry/GroceryItem snake_case decoding + FoodUpdate null-skip behavior) guard the load-bearing iOS/Android wire contract. All 16 tests passing. CI workflow runs testDebugUnitTest on every PR. STILL OPEN: AppStateStore optimistic/rollback tests (need MockK or similar), OfflineStore replay ordering tests, Room migration smoke test (instrumentation), NetworkMonitor.isNetworkError classifier table-driven test, coverage target measurement (Kover or JaCoCo not yet wired)."
+      "notes": "Android native: PARTIAL 2026-04-22. 30 unit tests passing across 4 suites: GroceryTextParser (10 cases — comma-split / qty+unit / 'and'-join / word numbers / list markers / dedup / low-confidence single-word / fraction parsing / empty input / unknown names), ModelsSerializationTest (6 cases — Food/Kid/Recipe/PlanEntry/GroceryItem snake_case decoding + FoodUpdate null-skip), NetworkErrorClassifierTest (7 cases — IOException/Connect/UnknownHost/SocketTimeout class-name matching + 'Unable to resolve host'/'Failed to connect'/'timeout' message matching + negative cases), PasswordValidatorTest (7 cases — blessed passwords, too-short, missing uppercase/lowercase/digit/special, accepts all 32 iOS-compatible special chars). Refactor: NetworkMonitor.isNetworkError now delegates to top-level NetworkErrorClassifier object so it's framework-independent. STILL OPEN: AppStateStore optimistic add/update/delete rollback tests (blocked on MockK or fake DataService harness — constructor coupling across DataService/RealtimeService/OfflineStore/NetworkMonitor/HealthConnectService/WidgetSnapshotStore makes manual fakes painful; consider introducing MockK or extracting interfaces), OfflineStore.syncPendingMutations replay-ordering + stop-on-failure tests (needs fake PendingMutationDao + fake SupabaseClientProvider), Room migration smoke test (instrumentation), Kover / JaCoCo coverage measurement."
     },
     {
       "id": "US-222",

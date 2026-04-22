@@ -165,6 +165,7 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.mlkit.barcode.scanning)
+    implementation(libs.mlkit.text.recognition)
 
     // CameraX ProcessCameraProvider exposes ListenableFuture from Guava as
     // its setup API; Guava isn't on the compile classpath unless we add it.

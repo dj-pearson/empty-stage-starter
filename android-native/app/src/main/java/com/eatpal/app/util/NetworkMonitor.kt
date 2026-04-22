@@ -77,10 +77,15 @@ class NetworkMonitor @Inject constructor(
     }
 
     /**
-     * Classifies an [Exception] as connectivity-related so callers can choose
-     * to keep the optimistic update and queue the mutation for later replay.
-     * Mirrors the iOS `isNetworkError` predicate on URLError codes.
+     * Classifies an [Exception] as connectivity-related. Delegates to
+     * [NetworkErrorClassifier] so tests can exercise the predicate without
+     * constructing the full monitor.
      */
+    fun isNetworkError(t: Throwable): Boolean = NetworkErrorClassifier.isNetworkError(t)
+}
+
+/** Pure classifier — unit-testable without Android framework deps. */
+object NetworkErrorClassifier {
     fun isNetworkError(t: Throwable): Boolean {
         val name = t::class.qualifiedName.orEmpty()
         val msg = t.message.orEmpty().lowercase()

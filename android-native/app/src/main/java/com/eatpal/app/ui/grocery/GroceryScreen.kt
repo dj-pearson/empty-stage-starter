@@ -47,9 +47,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.eatpal.app.data.local.GroceryTripService
 import com.eatpal.app.domain.AppStateStore
 import com.eatpal.app.domain.GroceryGeneratorService
 import com.eatpal.app.models.GroceryItem
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import com.eatpal.app.models.GroceryItemUpdate
 import com.eatpal.app.ui.components.rememberToastController
 import com.eatpal.app.ui.theme.Spacing
@@ -77,6 +80,8 @@ fun GroceryScreen(vm: GroceryViewModel = hiltViewModel()) {
     val toast = rememberToastController()
     var showAddSheet by remember { mutableStateOf(false) }
     var showTextImport by remember { mutableStateOf(false) }
+    var showVoiceImport by remember { mutableStateOf(false) }
+    var showPhotoImport by remember { mutableStateOf(false) }
 
     Scaffold(
         floatingActionButton = {
@@ -122,6 +127,15 @@ fun GroceryScreen(vm: GroceryViewModel = hiltViewModel()) {
                 }
                 TextButton(onClick = { showTextImport = true }) {
                     Text("Paste list")
+                }
+                TextButton(onClick = { showVoiceImport = true }) {
+                    Text("Voice")
+                }
+                TextButton(onClick = { showPhotoImport = true }) {
+                    Text("Photo")
+                }
+                TextButton(onClick = { vm.startTrip() }) {
+                    Text("Start trip")
                 }
             }
 
@@ -202,6 +216,50 @@ fun GroceryScreen(vm: GroceryViewModel = hiltViewModel()) {
                             else toast.success("Added $added items")
                         }
                         scope.launch { sheetState.hide() }.invokeOnCompletion { showTextImport = false }
+                    },
+                )
+            }
+        }
+
+        if (showVoiceImport) {
+            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            val scope = rememberCoroutineScope()
+            ModalBottomSheet(
+                onDismissRequest = { showVoiceImport = false },
+                sheetState = sheetState,
+            ) {
+                VoiceImportSheet(
+                    onCancel = {
+                        scope.launch { sheetState.hide() }.invokeOnCompletion { showVoiceImport = false }
+                    },
+                    onAdd = { parsedItems ->
+                        vm.bulkAdd(parsedItems) { added, err ->
+                            if (err != null) toast.error("Couldn't add", err)
+                            else toast.success("Added $added items")
+                        }
+                        scope.launch { sheetState.hide() }.invokeOnCompletion { showVoiceImport = false }
+                    },
+                )
+            }
+        }
+
+        if (showPhotoImport) {
+            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            val scope = rememberCoroutineScope()
+            ModalBottomSheet(
+                onDismissRequest = { showPhotoImport = false },
+                sheetState = sheetState,
+            ) {
+                PhotoImportSheet(
+                    onCancel = {
+                        scope.launch { sheetState.hide() }.invokeOnCompletion { showPhotoImport = false }
+                    },
+                    onAdd = { parsedItems ->
+                        vm.bulkAdd(parsedItems) { added, err ->
+                            if (err != null) toast.error("Couldn't add", err)
+                            else toast.success("Added $added items")
+                        }
+                        scope.launch { sheetState.hide() }.invokeOnCompletion { showPhotoImport = false }
                     },
                 )
             }
@@ -310,7 +368,22 @@ class GroceryViewModel @Inject constructor(
     private val appState: AppStateStore,
     private val haptics: HapticManager,
     private val generator: GroceryGeneratorService,
+    @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
+
+    private var tripActive: Boolean = false
+
+    fun startTrip() {
+        val total = appState.groceryItems.value.size
+        val checked = appState.groceryItems.value.count { it.checked }
+        GroceryTripService.start(appContext, total, checked)
+        tripActive = true
+    }
+
+    fun stopTrip() {
+        GroceryTripService.stop(appContext)
+        tripActive = false
+    }
 
     data class Draft(
         val name: String,
@@ -362,6 +435,16 @@ class GroceryViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching {
                 appState.updateGroceryItem(item.id, GroceryItemUpdate(checked = !item.checked))
+            }.onSuccess {
+                if (tripActive) {
+                    val items = appState.groceryItems.value
+                    GroceryTripService.update(
+                        appContext,
+                        total = items.size,
+                        checked = items.count { it.checked },
+                        lastName = if (!item.checked) item.name else "",
+                    )
+                }
             }
         }
     }
