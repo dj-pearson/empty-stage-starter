@@ -3,12 +3,37 @@ import SwiftUI
 struct AICoachView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var coachService = AICoachService.shared
+    @ObservedObject private var network = NetworkMonitor.shared
     @State private var messageText = ""
     @FocusState private var isInputFocused: Bool
 
     private var activeKid: Kid? {
         guard let kidId = appState.activeKidId else { return nil }
         return appState.kids.first { $0.id == kidId }
+    }
+
+    /// US-236: True on first open — only the seeded assistant greeting is
+    /// present and the user hasn't sent anything yet.
+    private var isEmptyState: Bool {
+        coachService.messages.count <= 1 &&
+        !coachService.messages.contains(where: { $0.role == .user })
+    }
+
+    private var examplePrompts: [String] {
+        if let kid = activeKid {
+            return [
+                "Why won't \(kid.name) eat broccoli?",
+                "Plan a nut-free dinner for \(kid.name)",
+                "How do I introduce a new texture?",
+                "Quick high-protein breakfast ideas",
+            ]
+        }
+        return [
+            "Why won't my kid eat broccoli?",
+            "Plan a nut-free dinner",
+            "How do I introduce a new texture?",
+            "Quick high-protein breakfast ideas",
+        ]
     }
 
     var body: some View {
@@ -33,6 +58,21 @@ struct AICoachView: View {
                 .background(Color(.secondarySystemBackground))
             }
 
+            // US-236: Offline notice at top of chat when not connected.
+            if !network.isConnected {
+                HStack(spacing: 8) {
+                    Image(systemName: "wifi.slash")
+                    Text("AI Coach needs internet — your message will fail until you're back online.")
+                        .font(.caption)
+                    Spacer()
+                }
+                .foregroundStyle(.orange)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(Color.orange.opacity(0.1))
+                .accessibilityElement(children: .combine)
+            }
+
             // Messages
             ScrollViewReader { proxy in
                 ScrollView {
@@ -42,13 +82,26 @@ struct AICoachView: View {
                                 .id(message.id)
                         }
 
+                        // US-236: empty-state prompt chips
+                        if isEmptyState {
+                            EmptyChatPromptChips(prompts: examplePrompts) { prompt in
+                                messageText = prompt
+                                isInputFocused = true
+                            }
+                            .padding(.top, 4)
+                        }
+
                         if coachService.isLoading {
-                            HStack {
+                            HStack(spacing: 8) {
                                 TypingIndicator()
+                                Text("EatPal is thinking…")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                                 Spacer()
                             }
                             .padding(.horizontal)
                             .id("typing")
+                            .accessibilityLabel("EatPal is generating a response")
                         }
                     }
                     .padding()
@@ -78,6 +131,7 @@ struct AICoachView: View {
                     .padding(.vertical, 8)
                     .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20))
                     .focused($isInputFocused)
+                    .accessibilityLabel("Message AI Coach")
 
                 Button {
                     sendMessage()
@@ -87,6 +141,7 @@ struct AICoachView: View {
                         .foregroundStyle(messageText.trimmingCharacters(in: .whitespaces).isEmpty ? .gray : .green)
                 }
                 .disabled(messageText.trimmingCharacters(in: .whitespaces).isEmpty || coachService.isLoading)
+                .accessibilityLabel("Send message")
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
@@ -101,6 +156,7 @@ struct AICoachView: View {
                 } label: {
                     Image(systemName: "arrow.counterclockwise")
                 }
+                .accessibilityLabel("Reset conversation")
             }
         }
         .onTapGesture {
@@ -114,6 +170,48 @@ struct AICoachView: View {
         messageText = ""
         Task {
             await coachService.sendMessage(text, kid: activeKid, foods: appState.foods)
+        }
+    }
+}
+
+// MARK: - Empty-state prompt chips (US-236)
+
+private struct EmptyChatPromptChips: View {
+    let prompts: [String]
+    let onTap: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(.green)
+                Text("Try one of these")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.bottom, 2)
+
+            ForEach(prompts, id: \.self) { prompt in
+                Button {
+                    onTap(prompt)
+                } label: {
+                    HStack {
+                        Text(prompt)
+                            .font(.subheadline)
+                            .multilineTextAlignment(.leading)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "arrow.up.circle")
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Use prompt: \(prompt)")
+            }
         }
     }
 }

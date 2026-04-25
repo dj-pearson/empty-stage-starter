@@ -3284,8 +3284,8 @@
         "VoiceOver announces selection count after each toggle"
       ],
       "priority": 66,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "iOS: DONE 2026-04-24. PantryView gains `isSelecting: Bool` + `selectedIds: Set<String>` state. Toolbar's '+' button is now a Menu offering 'Select multiple' (alongside the existing Add one + Bulk add options). Entering selection mode swaps the toolbar to a single 'Done' button and the navigation title becomes 'N selected'. Each row prepends a tap-target checkmark.circle / checkmark.circle.fill that toggles selection with a haptic. The existing swipe actions and contextMenu are gated on `!isSelecting` so they don't conflict. A bottom toolbar (`.bottomBar` placement) appears in selection mode with five actions: Safe (mark safe), Try Bite (mark try-bite), Grocery (bulk-add to grocery, skipping items already on the list), Category (confirmationDialog with all 6 FoodCategory options), Delete (alert confirm → bulk delete). Each bulk action loops `appState.updateFood/addGroceryItem/deleteFood`, fires HapticManager.success, and shows an aggregate toast ('Marked safe — 12 foods updated'). Drag-to-select (native gesture in iOS 16+) works because rows still emit selection on tap. STILL OPEN: 'Select all in category' header gesture, drag-handle reorder within category, VoiceOver explicit selection-count announcement on each toggle (the .accessibilityLabel on the checkbox covers per-item state but not running total)."
     },
     {
       "id": "US-227",
@@ -3420,8 +3420,8 @@
         "Test: airplane mode → make 5 edits → toggle wifi → badge clears, toast appears"
       ],
       "priority": 74,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "iOS: DONE 2026-04-24. Two new Components shipped — Views/Components/SyncStatusBanner.swift (a top safe-area inline banner that observes OfflineStore.pendingMutationCount + isSyncing + lastSyncError and only renders when one is truthy; rotating icon while syncing) and Views/Components/PendingChangesSheet.swift (full sheet with Status header showing online/offline + last error, list of every queued mutation with op-icon + table name + relative age + truncated entityId, Sync now and Clear queue actions in the toolbar Menu, ContentUnavailableView for empty queue). Banner wired into RootView via new `.withSyncStatusBanner()` modifier chained after the existing offline banner. Tap the banner → opens the same Pending Changes sheet. MoreView gains a dedicated Sync section row showing live count badge, status subtitle, color-coded icon (green = synced, blue = pending, orange = paused with error), tap → same sheet. Status copy: 'Syncing changes…' / 'Sync paused — tap to review' / 'N pending changes'. Manual 'Sync now' calls OfflineStore.syncPendingMutations and toasts the result. Clear queue requires alert confirmation. STILL OPEN: tab-bar overlay badge (current placement is a top banner; native UITabBar badges require slightly more plumbing through MainTabView), persistent failed-mutation banner separate from the inline banner, app-launch-time auto-drain hook (already attempted by the offline retry path but not gated on cold start), telemetry event."
     },
     {
       "id": "US-235",
@@ -3453,8 +3453,8 @@
         "VoiceOver: typing indicator announces 'EatPal is generating a response'; failed message is labeled 'Failed — double-tap to retry'"
       ],
       "priority": 76,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "iOS: DONE 2026-04-24 (view-side polish; service-layer error surfacing left for follow-up). AICoachView now detects a true empty-state (only the seeded assistant greeting, no user messages) and renders a new EmptyChatPromptChips card with 4 contextual example prompts ('Why won't <kid name> eat broccoli?', 'Plan a nut-free dinner for <kid>', 'How do I introduce a new texture?', 'Quick high-protein breakfast ideas'). Prompts personalize when an active kid is selected. Tapping a chip pre-fills the input field and focuses the keyboard. Top-of-chat offline notice (orange) appears when NetworkMonitor says we're offline so the user knows their next message will fail. Typing indicator now sits next to a 'EatPal is thinking…' caption with .accessibilityLabel('EatPal is generating a response'). Send button gains .accessibilityLabel('Send message'); reset toolbar gets .accessibilityLabel('Reset conversation'); input field gains .accessibilityLabel('Message AI Coach'). STILL OPEN: surface AICoachService failures as inline error bubbles (currently swallowed into a canned fallback response — need a `lastError: String?` published property + a 'Retry' button on the failed user message). Long-pending cancel button (>15s) requires either an actor-cancellable task or a service-side timer."
     },
     {
       "id": "US-237",

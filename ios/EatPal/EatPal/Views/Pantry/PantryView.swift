@@ -12,6 +12,12 @@ struct PantryView: View {
     @State private var scannedBarcode: ScannedBarcodeItem?
     @State private var selectedFood: Food?
     @State private var showingFilters = false
+
+    // US-226: bulk-select mode
+    @State private var isSelecting = false
+    @State private var selectedIds: Set<String> = []
+    @State private var showingChangeCategory = false
+    @State private var showingDeleteConfirm = false
     @State private var filterCategories: Set<FoodCategory> = []
     @State private var filterAllergens: Set<String> = []
     @State private var filterSafeOnly = false
@@ -135,10 +141,22 @@ struct PantryView: View {
                 ForEach(groupedFoods, id: \.0) { category, foods in
                     Section {
                         ForEach(foods) { food in
-                            FoodRowView(food: food)
+                            HStack(spacing: 12) {
+                                if isSelecting {
+                                    Image(systemName: selectedIds.contains(food.id) ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(selectedIds.contains(food.id) ? .green : .secondary)
+                                        .imageScale(.large)
+                                        .accessibilityLabel(selectedIds.contains(food.id) ? "Selected" : "Not selected")
+                                }
+                                FoodRowView(food: food)
+                            }
                                 .contentShape(Rectangle())
                                 .onTapGesture {
-                                    selectedFood = food
+                                    if isSelecting {
+                                        toggleSelection(food.id)
+                                    } else {
+                                        selectedFood = food
+                                    }
                                 }
                                 .draggable(FoodTransferable(food: food)) {
                                     // Drag preview
@@ -153,137 +171,143 @@ struct PantryView: View {
                                     .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 8))
                                     .shadow(radius: 4)
                                 }
-                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                    Button {
-                                        HapticManager.lightImpact()
-                                        Task {
-                                            try? await appState.updateFood(
-                                                food.id,
-                                                updates: FoodUpdate(quantity: (food.quantity ?? 0) + 1)
-                                            )
-                                            await TipEvents.didSwipePantry.donate()
+                                .swipeActions(edge: .leading, allowsFullSwipe: !isSelecting) {
+                                    if !isSelecting {
+                                        Button {
+                                            HapticManager.lightImpact()
+                                            Task {
+                                                try? await appState.updateFood(
+                                                    food.id,
+                                                    updates: FoodUpdate(quantity: (food.quantity ?? 0) + 1)
+                                                )
+                                                await TipEvents.didSwipePantry.donate()
+                                            }
+                                        } label: {
+                                            Label("+1", systemImage: "plus.circle.fill")
                                         }
-                                    } label: {
-                                        Label("+1", systemImage: "plus.circle.fill")
-                                    }
-                                    .tint(.green)
-                                    .accessibilityLabel("Add one \(food.name) to pantry")
+                                        .tint(.green)
+                                        .accessibilityLabel("Add one \(food.name) to pantry")
 
-                                    Button {
-                                        HapticManager.selection()
-                                        Task {
-                                            try? await appState.updateFood(
-                                                food.id,
-                                                updates: FoodUpdate(isSafe: !food.isSafe)
+                                        Button {
+                                            HapticManager.selection()
+                                            Task {
+                                                try? await appState.updateFood(
+                                                    food.id,
+                                                    updates: FoodUpdate(isSafe: !food.isSafe)
+                                                )
+                                                await TipEvents.didSwipePantry.donate()
+                                            }
+                                        } label: {
+                                            Label(
+                                                food.isSafe ? "Unsafe" : "Safe",
+                                                systemImage: food.isSafe ? "xmark.shield" : "checkmark.shield"
                                             )
-                                            await TipEvents.didSwipePantry.donate()
                                         }
-                                    } label: {
-                                        Label(
-                                            food.isSafe ? "Unsafe" : "Safe",
-                                            systemImage: food.isSafe ? "xmark.shield" : "checkmark.shield"
-                                        )
+                                        .tint(food.isSafe ? .orange : .blue)
                                     }
-                                    .tint(food.isSafe ? .orange : .blue)
                                 }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        HapticManager.error()
-                                        Task { try? await appState.deleteFood(food.id) }
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-
-                                    Button {
-                                        HapticManager.success()
-                                        Task {
-                                            let item = GroceryItem(
-                                                id: UUID().uuidString,
-                                                userId: "",
-                                                name: food.name,
-                                                category: food.category,
-                                                quantity: 1,
-                                                unit: food.unit ?? "count",
-                                                checked: false,
-                                                addedVia: "restock"
-                                            )
-                                            try? await appState.addGroceryItem(item)
-                                            ToastManager.shared.success(
-                                                "Added to grocery",
-                                                message: food.name
-                                            )
-                                            await TipEvents.didSwipePantry.donate()
+                                .swipeActions(edge: .trailing, allowsFullSwipe: !isSelecting) {
+                                    if !isSelecting {
+                                        Button(role: .destructive) {
+                                            HapticManager.error()
+                                            Task { try? await appState.deleteFood(food.id) }
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
                                         }
-                                    } label: {
-                                        Label("Grocery", systemImage: "cart.fill.badge.plus")
+
+                                        Button {
+                                            HapticManager.success()
+                                            Task {
+                                                let item = GroceryItem(
+                                                    id: UUID().uuidString,
+                                                    userId: "",
+                                                    name: food.name,
+                                                    category: food.category,
+                                                    quantity: 1,
+                                                    unit: food.unit ?? "count",
+                                                    checked: false,
+                                                    addedVia: "restock"
+                                                )
+                                                try? await appState.addGroceryItem(item)
+                                                ToastManager.shared.success(
+                                                    "Added to grocery",
+                                                    message: food.name
+                                                )
+                                                await TipEvents.didSwipePantry.donate()
+                                            }
+                                        } label: {
+                                            Label("Grocery", systemImage: "cart.fill.badge.plus")
+                                        }
+                                        .tint(.blue)
+                                        .accessibilityLabel("Add \(food.name) to grocery list")
                                     }
-                                    .tint(.blue)
-                                    .accessibilityLabel("Add \(food.name) to grocery list")
                                 }
                                 .contextMenu {
-                                    Button {
-                                        HapticManager.success()
-                                        Task {
-                                            let item = GroceryItem(
-                                                id: UUID().uuidString,
-                                                userId: "",
-                                                name: food.name,
-                                                category: food.category,
-                                                quantity: 1,
-                                                unit: food.unit ?? "count",
-                                                checked: false,
-                                                addedVia: "restock"
-                                            )
-                                            try? await appState.addGroceryItem(item)
-                                            ToastManager.shared.success("Added to grocery", message: food.name)
+                                    if !isSelecting {
+                                        Button {
+                                            HapticManager.success()
+                                            Task {
+                                                let item = GroceryItem(
+                                                    id: UUID().uuidString,
+                                                    userId: "",
+                                                    name: food.name,
+                                                    category: food.category,
+                                                    quantity: 1,
+                                                    unit: food.unit ?? "count",
+                                                    checked: false,
+                                                    addedVia: "restock"
+                                                )
+                                                try? await appState.addGroceryItem(item)
+                                                ToastManager.shared.success("Added to grocery", message: food.name)
+                                            }
+                                        } label: {
+                                            Label("Add to Grocery", systemImage: "cart.fill.badge.plus")
                                         }
-                                    } label: {
-                                        Label("Add to Grocery", systemImage: "cart.fill.badge.plus")
-                                    }
 
-                                    Button {
-                                        HapticManager.selection()
-                                        Task {
-                                            try? await appState.updateFood(
-                                                food.id,
-                                                updates: FoodUpdate(isSafe: !food.isSafe)
-                                            )
-                                        }
-                                    } label: {
-                                        Label(
-                                            food.isSafe ? "Mark Unsafe" : "Mark Safe",
-                                            systemImage: food.isSafe ? "xmark.shield" : "checkmark.shield"
-                                        )
-                                    }
-
-                                    Button {
-                                        HapticManager.selection()
-                                        Task {
-                                            try? await appState.updateFood(
-                                                food.id,
-                                                updates: FoodUpdate(isTryBite: !food.isTryBite)
+                                        Button {
+                                            HapticManager.selection()
+                                            Task {
+                                                try? await appState.updateFood(
+                                                    food.id,
+                                                    updates: FoodUpdate(isSafe: !food.isSafe)
+                                                )
+                                            }
+                                        } label: {
+                                            Label(
+                                                food.isSafe ? "Mark Unsafe" : "Mark Safe",
+                                                systemImage: food.isSafe ? "xmark.shield" : "checkmark.shield"
                                             )
                                         }
-                                    } label: {
-                                        Label(
-                                            food.isTryBite ? "Clear Try Bite" : "Mark Try Bite",
-                                            systemImage: food.isTryBite ? "star.slash" : "star.fill"
-                                        )
-                                    }
 
-                                    Divider()
+                                        Button {
+                                            HapticManager.selection()
+                                            Task {
+                                                try? await appState.updateFood(
+                                                    food.id,
+                                                    updates: FoodUpdate(isTryBite: !food.isTryBite)
+                                                )
+                                            }
+                                        } label: {
+                                            Label(
+                                                food.isTryBite ? "Clear Try Bite" : "Mark Try Bite",
+                                                systemImage: food.isTryBite ? "star.slash" : "star.fill"
+                                            )
+                                        }
 
-                                    Button {
-                                        selectedFood = food
-                                    } label: {
-                                        Label("Edit", systemImage: "pencil")
-                                    }
+                                        Divider()
 
-                                    Button(role: .destructive) {
-                                        HapticManager.error()
-                                        Task { try? await appState.deleteFood(food.id) }
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
+                                        Button {
+                                            selectedFood = food
+                                        } label: {
+                                            Label("Edit", systemImage: "pencil")
+                                        }
+
+                                        Button(role: .destructive) {
+                                            HapticManager.error()
+                                            Task { try? await appState.deleteFood(food.id) }
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
                                     }
                                 }
                         }
@@ -295,50 +319,112 @@ struct PantryView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Pantry")
+        .navigationTitle(isSelecting ? "\(selectedIds.count) selected" : "Pantry")
         .searchable(text: $searchText, prompt: "Search foods...")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: 12) {
-                    Button {
-                        showingFilters = true
-                    } label: {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: "line.3.horizontal.decrease.circle")
-                            if hasActiveFilters {
-                                Text("\(activeFilterCount)")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 16, height: 16)
-                                    .background(.red, in: Circle())
-                                    .offset(x: 6, y: -6)
+                    if isSelecting {
+                        Button("Done") {
+                            isSelecting = false
+                            selectedIds.removeAll()
+                        }
+                        .fontWeight(.semibold)
+                    } else {
+                        Button {
+                            showingFilters = true
+                        } label: {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "line.3.horizontal.decrease.circle")
+                                if hasActiveFilters {
+                                    Text("\(activeFilterCount)")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 16, height: 16)
+                                        .background(.red, in: Circle())
+                                        .offset(x: 6, y: -6)
+                                }
                             }
                         }
+                        .accessibilityLabel("Filter and sort")
+
+                        Button {
+                            showingScanner = true
+                        } label: {
+                            Image(systemName: "barcode.viewfinder")
+                        }
+                        .accessibilityLabel("Scan barcode")
+
+                        Menu {
+                            Button {
+                                isSelecting = true
+                            } label: {
+                                Label("Select multiple", systemImage: "checkmark.circle")
+                            }
+                            Divider()
+                            Button {
+                                showingAddFood = true
+                            } label: {
+                                Label("Add one food", systemImage: "plus.circle")
+                            }
+                            Button {
+                                showingBulkAdd = true
+                            } label: {
+                                Label("Bulk add (paste list)", systemImage: "doc.on.clipboard")
+                            }
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .accessibilityLabel("Add food")
                     }
-                    .accessibilityLabel("Filter and sort")
+                }
+            }
+
+            // US-226: bottom action bar visible only in selection mode
+            ToolbarItemGroup(placement: .bottomBar) {
+                if isSelecting {
+                    Button {
+                        Task { await bulkSetSafe(true) }
+                    } label: {
+                        Label("Safe", systemImage: "checkmark.shield")
+                    }
+                    .disabled(selectedIds.isEmpty)
+
+                    Spacer()
 
                     Button {
-                        showingScanner = true
+                        Task { await bulkSetTryBite(true) }
                     } label: {
-                        Image(systemName: "barcode.viewfinder")
+                        Label("Try Bite", systemImage: "star")
                     }
-                    .accessibilityLabel("Scan barcode")
+                    .disabled(selectedIds.isEmpty)
 
-                    Menu {
-                        Button {
-                            showingAddFood = true
-                        } label: {
-                            Label("Add one food", systemImage: "plus.circle")
-                        }
-                        Button {
-                            showingBulkAdd = true
-                        } label: {
-                            Label("Bulk add (paste list)", systemImage: "doc.on.clipboard")
-                        }
+                    Spacer()
+
+                    Button {
+                        Task { await bulkAddToGrocery() }
                     } label: {
-                        Image(systemName: "plus")
+                        Label("Grocery", systemImage: "cart.badge.plus")
                     }
-                    .accessibilityLabel("Add food")
+                    .disabled(selectedIds.isEmpty)
+
+                    Spacer()
+
+                    Button {
+                        showingChangeCategory = true
+                    } label: {
+                        Label("Category", systemImage: "tag")
+                    }
+                    .disabled(selectedIds.isEmpty)
+
+                    Spacer()
+
+                    Button(role: .destructive) {
+                        showingDeleteConfirm = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .disabled(selectedIds.isEmpty)
                 }
             }
         }
@@ -348,6 +434,29 @@ struct PantryView: View {
         .sheet(isPresented: $showingBulkAdd) {
             BulkAddFoodSheet()
                 .environmentObject(appState)
+        }
+        .confirmationDialog(
+            "Change category for \(selectedIds.count) food\(selectedIds.count == 1 ? "" : "s")",
+            isPresented: $showingChangeCategory,
+            titleVisibility: .visible
+        ) {
+            ForEach(FoodCategory.allCases, id: \.self) { cat in
+                Button("\(cat.icon) \(cat.displayName)") {
+                    Task { await bulkChangeCategory(to: cat) }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .alert(
+            "Delete \(selectedIds.count) food\(selectedIds.count == 1 ? "" : "s")?",
+            isPresented: $showingDeleteConfirm
+        ) {
+            Button("Delete", role: .destructive) {
+                Task { await bulkDelete() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This can't be undone.")
         }
         .sheet(item: $selectedFood) { food in
             FoodDetailView(food: food)
@@ -379,6 +488,99 @@ struct PantryView: View {
         .refreshable {
             await appState.loadAllData()
         }
+    }
+
+    // MARK: - Bulk-select helpers (US-226)
+
+    private func toggleSelection(_ id: String) {
+        if selectedIds.contains(id) {
+            selectedIds.remove(id)
+        } else {
+            selectedIds.insert(id)
+        }
+        HapticManager.selection()
+    }
+
+    private func selectedFoods() -> [Food] {
+        appState.foods.filter { selectedIds.contains($0.id) }
+    }
+
+    private func bulkSetSafe(_ value: Bool) async {
+        let foods = selectedFoods()
+        for food in foods {
+            try? await appState.updateFood(food.id, updates: FoodUpdate(isSafe: value))
+        }
+        HapticManager.success()
+        ToastManager.shared.success(
+            value ? "Marked safe" : "Cleared safe",
+            message: "\(foods.count) food\(foods.count == 1 ? "" : "s") updated"
+        )
+    }
+
+    private func bulkSetTryBite(_ value: Bool) async {
+        let foods = selectedFoods()
+        for food in foods {
+            try? await appState.updateFood(food.id, updates: FoodUpdate(isTryBite: value))
+        }
+        HapticManager.success()
+        ToastManager.shared.success(
+            "Marked try-bite",
+            message: "\(foods.count) food\(foods.count == 1 ? "" : "s") updated"
+        )
+    }
+
+    private func bulkAddToGrocery() async {
+        let foods = selectedFoods()
+        let existing = Set(appState.groceryItems.map { $0.name.lowercased() })
+        var added = 0
+        for food in foods {
+            guard !existing.contains(food.name.lowercased()) else { continue }
+            let item = GroceryItem(
+                id: UUID().uuidString,
+                userId: "",
+                name: food.name,
+                category: food.category,
+                quantity: 1,
+                unit: food.unit ?? "count",
+                checked: false,
+                addedVia: "restock"
+            )
+            try? await appState.addGroceryItem(item)
+            added += 1
+        }
+        HapticManager.success()
+        let skipped = foods.count - added
+        let suffix = skipped > 0 ? " (\(skipped) already on list)" : ""
+        ToastManager.shared.success(
+            "Added to grocery",
+            message: "\(added) item\(added == 1 ? "" : "s")\(suffix)"
+        )
+    }
+
+    private func bulkChangeCategory(to category: FoodCategory) async {
+        let foods = selectedFoods()
+        for food in foods {
+            try? await appState.updateFood(food.id, updates: FoodUpdate(category: category.rawValue))
+        }
+        HapticManager.success()
+        ToastManager.shared.success(
+            "Moved to \(category.displayName)",
+            message: "\(foods.count) food\(foods.count == 1 ? "" : "s") updated"
+        )
+    }
+
+    private func bulkDelete() async {
+        let ids = Array(selectedIds)
+        for id in ids {
+            try? await appState.deleteFood(id)
+        }
+        HapticManager.warning()
+        ToastManager.shared.success(
+            "Deleted",
+            message: "\(ids.count) food\(ids.count == 1 ? "" : "s") removed"
+        )
+        selectedIds.removeAll()
+        isSelecting = false
     }
 }
 

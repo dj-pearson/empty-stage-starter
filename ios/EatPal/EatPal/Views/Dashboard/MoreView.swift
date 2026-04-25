@@ -153,6 +153,11 @@ struct MoreView: View {
                 }
             }
 
+            // Sync (US-234)
+            Section {
+                SyncStatusRow()
+            }
+
             // Settings
             Section {
                 NavigationLink {
@@ -164,6 +169,68 @@ struct MoreView: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle("More")
+    }
+}
+
+// MARK: - Sync Status Row (US-234)
+
+private struct SyncStatusRow: View {
+    @ObservedObject private var store = OfflineStore.shared
+    @ObservedObject private var network = NetworkMonitor.shared
+    @State private var showingSheet = false
+
+    private var subtitle: String {
+        if store.isSyncing { return "Syncing now…" }
+        if let err = store.lastSyncError, !err.isEmpty {
+            return "Paused — \(err)"
+        }
+        if store.pendingMutationCount == 0 { return "All changes synced" }
+        let n = store.pendingMutationCount
+        return "\(n) pending change\(n == 1 ? "" : "s")"
+    }
+
+    private var iconColor: Color {
+        if store.lastSyncError != nil { return .orange }
+        if store.pendingMutationCount > 0 { return .blue }
+        return .green
+    }
+
+    var body: some View {
+        Button {
+            showingSheet = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.triangle.2.circlepath.icloud")
+                    .foregroundStyle(iconColor)
+                    .imageScale(.large)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Sync")
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if store.pendingMutationCount > 0 {
+                    Text("\(store.pendingMutationCount)")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(iconColor, in: Capsule())
+                }
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.tertiary)
+                    .font(.caption)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showingSheet) {
+            PendingChangesSheet()
+        }
+        .accessibilityLabel("Sync — \(subtitle)")
     }
 }
 

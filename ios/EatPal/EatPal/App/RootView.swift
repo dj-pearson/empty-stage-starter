@@ -16,6 +16,7 @@ struct RootView: View {
                     MainTabView()
                         .withToasts()
                         .withOfflineBanner()
+                        .withSyncStatusBanner()
                 } else {
                     OnboardingView()
                 }
