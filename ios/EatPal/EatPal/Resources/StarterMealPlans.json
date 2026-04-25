@@ -1,0 +1,225 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "id": "starter-balanced-toddler",
+      "name": "Balanced toddler week",
+      "blurb": "Gentle starter week for ages 1-3. Familiar carbs, gentle proteins, mild flavors.",
+      "ageRangeMin": 1,
+      "ageRangeMax": 3,
+      "tags": ["balanced", "toddler", "gentle"],
+      "meals": [
+        { "dayIndex": 0, "mealSlot": "breakfast", "foodName": "Oatmeal", "category": "carb" },
+        { "dayIndex": 0, "mealSlot": "lunch", "foodName": "Cheese quesadilla", "category": "dairy" },
+        { "dayIndex": 0, "mealSlot": "dinner", "foodName": "Mini chicken meatballs", "category": "protein" },
+        { "dayIndex": 0, "mealSlot": "snack1", "foodName": "Banana", "category": "fruit" },
+
+        { "dayIndex": 1, "mealSlot": "breakfast", "foodName": "Pancakes", "category": "carb" },
+        { "dayIndex": 1, "mealSlot": "lunch", "foodName": "Turkey roll-up", "category": "protein" },
+        { "dayIndex": 1, "mealSlot": "dinner", "foodName": "Pasta with red sauce", "category": "carb" },
+        { "dayIndex": 1, "mealSlot": "snack1", "foodName": "Apple slices", "category": "fruit" },
+
+        { "dayIndex": 2, "mealSlot": "breakfast", "foodName": "Yogurt parfait", "category": "dairy" },
+        { "dayIndex": 2, "mealSlot": "lunch", "foodName": "Egg salad sandwich", "category": "protein" },
+        { "dayIndex": 2, "mealSlot": "dinner", "foodName": "Salmon and rice", "category": "protein" },
+        { "dayIndex": 2, "mealSlot": "snack1", "foodName": "Cheese cubes", "category": "dairy" },
+
+        { "dayIndex": 3, "mealSlot": "breakfast", "foodName": "Scrambled eggs", "category": "protein" },
+        { "dayIndex": 3, "mealSlot": "lunch", "foodName": "Mini bagel pizza", "category": "carb" },
+        { "dayIndex": 3, "mealSlot": "dinner", "foodName": "Beef stir-fry", "category": "protein" },
+        { "dayIndex": 3, "mealSlot": "snack1", "foodName": "Strawberries", "category": "fruit" },
+
+        { "dayIndex": 4, "mealSlot": "breakfast", "foodName": "French toast", "category": "carb" },
+        { "dayIndex": 4, "mealSlot": "lunch", "foodName": "Tuna mac and cheese", "category": "carb" },
+        { "dayIndex": 4, "mealSlot": "dinner", "foodName": "Roast chicken", "category": "protein" },
+        { "dayIndex": 4, "mealSlot": "snack1", "foodName": "Carrot sticks", "category": "vegetable" },
+
+        { "dayIndex": 5, "mealSlot": "breakfast", "foodName": "Cereal with milk", "category": "carb" },
+        { "dayIndex": 5, "mealSlot": "lunch", "foodName": "Grilled cheese", "category": "dairy" },
+        { "dayIndex": 5, "mealSlot": "dinner", "foodName": "Spaghetti bolognese", "category": "carb" },
+        { "dayIndex": 5, "mealSlot": "snack1", "foodName": "Blueberries", "category": "fruit" },
+
+        { "dayIndex": 6, "mealSlot": "breakfast", "foodName": "Waffles", "category": "carb" },
+        { "dayIndex": 6, "mealSlot": "lunch", "foodName": "Chicken nuggets", "category": "protein" },
+        { "dayIndex": 6, "mealSlot": "dinner", "foodName": "Mini meatloaf", "category": "protein" },
+        { "dayIndex": 6, "mealSlot": "snack1", "foodName": "Grapes", "category": "fruit" }
+      ]
+    },
+    {
+      "id": "starter-texture-variety",
+      "name": "Texture variety week",
+      "blurb": "Rotates crunchy, creamy, soft, and chewy through every day to expand the texture comfort zone.",
+      "ageRangeMin": 2,
+      "ageRangeMax": 8,
+      "tags": ["texture", "exposure", "variety"],
+      "meals": [
+        { "dayIndex": 0, "mealSlot": "breakfast", "foodName": "Crunchy granola with yogurt", "category": "dairy" },
+        { "dayIndex": 0, "mealSlot": "lunch", "foodName": "Chicken with crisp veggies", "category": "protein" },
+        { "dayIndex": 0, "mealSlot": "dinner", "foodName": "Soft pasta carbonara", "category": "carb" },
+        { "dayIndex": 0, "mealSlot": "tryBite", "foodName": "Roasted chickpeas", "category": "protein" },
+
+        { "dayIndex": 1, "mealSlot": "breakfast", "foodName": "Smooth banana smoothie", "category": "fruit" },
+        { "dayIndex": 1, "mealSlot": "lunch", "foodName": "Crunchy chicken wrap", "category": "protein" },
+        { "dayIndex": 1, "mealSlot": "dinner", "foodName": "Chewy beef stew", "category": "protein" },
+        { "dayIndex": 1, "mealSlot": "tryBite", "foodName": "Cucumber slices", "category": "vegetable" },
+
+        { "dayIndex": 2, "mealSlot": "breakfast", "foodName": "Soft scrambled eggs", "category": "protein" },
+        { "dayIndex": 2, "mealSlot": "lunch", "foodName": "Crunchy taco bowl", "category": "carb" },
+        { "dayIndex": 2, "mealSlot": "dinner", "foodName": "Creamy mac and cheese", "category": "carb" },
+        { "dayIndex": 2, "mealSlot": "tryBite", "foodName": "Mango chunks", "category": "fruit" },
+
+        { "dayIndex": 3, "mealSlot": "breakfast", "foodName": "Crisp toast with avocado", "category": "carb" },
+        { "dayIndex": 3, "mealSlot": "lunch", "foodName": "Soft turkey sliders", "category": "protein" },
+        { "dayIndex": 3, "mealSlot": "dinner", "foodName": "Chewy chicken kebabs", "category": "protein" },
+        { "dayIndex": 3, "mealSlot": "tryBite", "foodName": "Bell pepper strips", "category": "vegetable" },
+
+        { "dayIndex": 4, "mealSlot": "breakfast", "foodName": "Crunchy peanut butter toast", "category": "carb" },
+        { "dayIndex": 4, "mealSlot": "lunch", "foodName": "Creamy chicken soup", "category": "protein" },
+        { "dayIndex": 4, "mealSlot": "dinner", "foodName": "Soft fish tacos", "category": "protein" },
+        { "dayIndex": 4, "mealSlot": "tryBite", "foodName": "Snap peas", "category": "vegetable" },
+
+        { "dayIndex": 5, "mealSlot": "breakfast", "foodName": "Smooth oatmeal", "category": "carb" },
+        { "dayIndex": 5, "mealSlot": "lunch", "foodName": "Crunchy veggie pizza", "category": "vegetable" },
+        { "dayIndex": 5, "mealSlot": "dinner", "foodName": "Chewy meatballs", "category": "protein" },
+        { "dayIndex": 5, "mealSlot": "tryBite", "foodName": "Pomegranate seeds", "category": "fruit" },
+
+        { "dayIndex": 6, "mealSlot": "breakfast", "foodName": "Soft pancakes", "category": "carb" },
+        { "dayIndex": 6, "mealSlot": "lunch", "foodName": "Crispy chicken tenders", "category": "protein" },
+        { "dayIndex": 6, "mealSlot": "dinner", "foodName": "Creamy risotto", "category": "carb" },
+        { "dayIndex": 6, "mealSlot": "tryBite", "foodName": "Steamed broccoli", "category": "vegetable" }
+      ]
+    },
+    {
+      "id": "starter-nut-free-family",
+      "name": "Nut-free family week",
+      "blurb": "Allergen-aware: zero peanut, tree nut, or sesame ingredients. Safe for school lunch packing.",
+      "ageRangeMin": 3,
+      "ageRangeMax": 12,
+      "tags": ["nut-free", "school-safe", "allergy"],
+      "meals": [
+        { "dayIndex": 0, "mealSlot": "breakfast", "foodName": "Sunbutter toast", "category": "carb" },
+        { "dayIndex": 0, "mealSlot": "lunch", "foodName": "Turkey and cheese wrap", "category": "protein" },
+        { "dayIndex": 0, "mealSlot": "dinner", "foodName": "Lemon chicken with rice", "category": "protein" },
+        { "dayIndex": 0, "mealSlot": "snack1", "foodName": "Apple slices", "category": "fruit" },
+
+        { "dayIndex": 1, "mealSlot": "breakfast", "foodName": "Oatmeal with berries", "category": "carb" },
+        { "dayIndex": 1, "mealSlot": "lunch", "foodName": "Ham and cheese sandwich", "category": "protein" },
+        { "dayIndex": 1, "mealSlot": "dinner", "foodName": "Beef tacos", "category": "protein" },
+        { "dayIndex": 1, "mealSlot": "snack1", "foodName": "Pretzels", "category": "snack" },
+
+        { "dayIndex": 2, "mealSlot": "breakfast", "foodName": "Yogurt and fruit", "category": "dairy" },
+        { "dayIndex": 2, "mealSlot": "lunch", "foodName": "Pasta salad", "category": "carb" },
+        { "dayIndex": 2, "mealSlot": "dinner", "foodName": "Baked salmon", "category": "protein" },
+        { "dayIndex": 2, "mealSlot": "snack1", "foodName": "Cheese cubes", "category": "dairy" },
+
+        { "dayIndex": 3, "mealSlot": "breakfast", "foodName": "Scrambled eggs and toast", "category": "protein" },
+        { "dayIndex": 3, "mealSlot": "lunch", "foodName": "Chicken caesar wrap", "category": "protein" },
+        { "dayIndex": 3, "mealSlot": "dinner", "foodName": "Spaghetti and meatballs", "category": "carb" },
+        { "dayIndex": 3, "mealSlot": "snack1", "foodName": "Bell pepper strips", "category": "vegetable" },
+
+        { "dayIndex": 4, "mealSlot": "breakfast", "foodName": "Cinnamon french toast", "category": "carb" },
+        { "dayIndex": 4, "mealSlot": "lunch", "foodName": "Grilled cheese and tomato soup", "category": "dairy" },
+        { "dayIndex": 4, "mealSlot": "dinner", "foodName": "Chicken stir-fry", "category": "protein" },
+        { "dayIndex": 4, "mealSlot": "snack1", "foodName": "Grapes", "category": "fruit" },
+
+        { "dayIndex": 5, "mealSlot": "breakfast", "foodName": "Bagel with cream cheese", "category": "carb" },
+        { "dayIndex": 5, "mealSlot": "lunch", "foodName": "Quesadilla", "category": "dairy" },
+        { "dayIndex": 5, "mealSlot": "dinner", "foodName": "Mini meatloaf", "category": "protein" },
+        { "dayIndex": 5, "mealSlot": "snack1", "foodName": "Strawberries", "category": "fruit" },
+
+        { "dayIndex": 6, "mealSlot": "breakfast", "foodName": "Pancakes with syrup", "category": "carb" },
+        { "dayIndex": 6, "mealSlot": "lunch", "foodName": "Sliced chicken plate", "category": "protein" },
+        { "dayIndex": 6, "mealSlot": "dinner", "foodName": "Sheet-pan chicken and veggies", "category": "protein" },
+        { "dayIndex": 6, "mealSlot": "snack1", "foodName": "Carrot sticks with hummus", "category": "vegetable" }
+      ]
+    },
+    {
+      "id": "starter-budget-friendly",
+      "name": "Budget-friendly week",
+      "blurb": "Built around eggs, beans, oats, rice, and seasonal produce. Pantry-staple-heavy.",
+      "ageRangeMin": 2,
+      "ageRangeMax": 12,
+      "tags": ["budget", "pantry-friendly"],
+      "meals": [
+        { "dayIndex": 0, "mealSlot": "breakfast", "foodName": "Oatmeal", "category": "carb" },
+        { "dayIndex": 0, "mealSlot": "lunch", "foodName": "Bean and rice bowl", "category": "protein" },
+        { "dayIndex": 0, "mealSlot": "dinner", "foodName": "Pasta with marinara", "category": "carb" },
+
+        { "dayIndex": 1, "mealSlot": "breakfast", "foodName": "Scrambled eggs", "category": "protein" },
+        { "dayIndex": 1, "mealSlot": "lunch", "foodName": "Peanut butter and jelly", "category": "carb" },
+        { "dayIndex": 1, "mealSlot": "dinner", "foodName": "Lentil soup", "category": "protein" },
+
+        { "dayIndex": 2, "mealSlot": "breakfast", "foodName": "Banana oatmeal", "category": "carb" },
+        { "dayIndex": 2, "mealSlot": "lunch", "foodName": "Cheese quesadilla", "category": "dairy" },
+        { "dayIndex": 2, "mealSlot": "dinner", "foodName": "Stir-fried rice with egg", "category": "carb" },
+
+        { "dayIndex": 3, "mealSlot": "breakfast", "foodName": "Toast with jam", "category": "carb" },
+        { "dayIndex": 3, "mealSlot": "lunch", "foodName": "Hard-boiled eggs and crackers", "category": "protein" },
+        { "dayIndex": 3, "mealSlot": "dinner", "foodName": "Chili", "category": "protein" },
+
+        { "dayIndex": 4, "mealSlot": "breakfast", "foodName": "Yogurt with oats", "category": "dairy" },
+        { "dayIndex": 4, "mealSlot": "lunch", "foodName": "Tuna sandwich", "category": "protein" },
+        { "dayIndex": 4, "mealSlot": "dinner", "foodName": "Bean burritos", "category": "protein" },
+
+        { "dayIndex": 5, "mealSlot": "breakfast", "foodName": "Pancakes", "category": "carb" },
+        { "dayIndex": 5, "mealSlot": "lunch", "foodName": "Cheese and crackers", "category": "dairy" },
+        { "dayIndex": 5, "mealSlot": "dinner", "foodName": "Spaghetti with meat sauce", "category": "carb" },
+
+        { "dayIndex": 6, "mealSlot": "breakfast", "foodName": "French toast", "category": "carb" },
+        { "dayIndex": 6, "mealSlot": "lunch", "foodName": "Egg salad sandwich", "category": "protein" },
+        { "dayIndex": 6, "mealSlot": "dinner", "foodName": "Roasted chicken thighs and rice", "category": "protein" }
+      ]
+    },
+    {
+      "id": "starter-active-kid",
+      "name": "Active kid week",
+      "blurb": "Higher-protein, higher-calorie picks for sport-heavy weeks. 4 meals + 2 snacks per day.",
+      "ageRangeMin": 5,
+      "ageRangeMax": 16,
+      "tags": ["high-protein", "athlete", "growing"],
+      "meals": [
+        { "dayIndex": 0, "mealSlot": "breakfast", "foodName": "Protein oatmeal with banana", "category": "carb" },
+        { "dayIndex": 0, "mealSlot": "lunch", "foodName": "Chicken burrito bowl", "category": "protein" },
+        { "dayIndex": 0, "mealSlot": "dinner", "foodName": "Steak and roasted potatoes", "category": "protein" },
+        { "dayIndex": 0, "mealSlot": "snack1", "foodName": "Greek yogurt with honey", "category": "dairy" },
+        { "dayIndex": 0, "mealSlot": "snack2", "foodName": "Protein smoothie", "category": "dairy" },
+
+        { "dayIndex": 1, "mealSlot": "breakfast", "foodName": "Eggs and avocado toast", "category": "protein" },
+        { "dayIndex": 1, "mealSlot": "lunch", "foodName": "Turkey wrap with cheese", "category": "protein" },
+        { "dayIndex": 1, "mealSlot": "dinner", "foodName": "Salmon with quinoa", "category": "protein" },
+        { "dayIndex": 1, "mealSlot": "snack1", "foodName": "Apple with peanut butter", "category": "fruit" },
+        { "dayIndex": 1, "mealSlot": "snack2", "foodName": "Cheese and crackers", "category": "dairy" },
+
+        { "dayIndex": 2, "mealSlot": "breakfast", "foodName": "Protein pancakes", "category": "carb" },
+        { "dayIndex": 2, "mealSlot": "lunch", "foodName": "Chicken caesar wrap", "category": "protein" },
+        { "dayIndex": 2, "mealSlot": "dinner", "foodName": "Beef stir-fry with rice", "category": "protein" },
+        { "dayIndex": 2, "mealSlot": "snack1", "foodName": "Trail mix", "category": "snack" },
+        { "dayIndex": 2, "mealSlot": "snack2", "foodName": "Banana", "category": "fruit" },
+
+        { "dayIndex": 3, "mealSlot": "breakfast", "foodName": "Greek yogurt parfait", "category": "dairy" },
+        { "dayIndex": 3, "mealSlot": "lunch", "foodName": "Tuna and pasta salad", "category": "protein" },
+        { "dayIndex": 3, "mealSlot": "dinner", "foodName": "Pork tenderloin and sweet potato", "category": "protein" },
+        { "dayIndex": 3, "mealSlot": "snack1", "foodName": "Hard-boiled eggs", "category": "protein" },
+        { "dayIndex": 3, "mealSlot": "snack2", "foodName": "Berries with cottage cheese", "category": "dairy" },
+
+        { "dayIndex": 4, "mealSlot": "breakfast", "foodName": "Breakfast burrito", "category": "protein" },
+        { "dayIndex": 4, "mealSlot": "lunch", "foodName": "Chicken and rice bowl", "category": "protein" },
+        { "dayIndex": 4, "mealSlot": "dinner", "foodName": "Spaghetti and meatballs", "category": "carb" },
+        { "dayIndex": 4, "mealSlot": "snack1", "foodName": "Protein bar", "category": "snack" },
+        { "dayIndex": 4, "mealSlot": "snack2", "foodName": "Orange", "category": "fruit" },
+
+        { "dayIndex": 5, "mealSlot": "breakfast", "foodName": "Egg sandwich with cheese", "category": "protein" },
+        { "dayIndex": 5, "mealSlot": "lunch", "foodName": "Beef quesadilla", "category": "protein" },
+        { "dayIndex": 5, "mealSlot": "dinner", "foodName": "Grilled chicken and pasta", "category": "protein" },
+        { "dayIndex": 5, "mealSlot": "snack1", "foodName": "Smoothie with protein powder", "category": "dairy" },
+        { "dayIndex": 5, "mealSlot": "snack2", "foodName": "Whole grain crackers", "category": "carb" },
+
+        { "dayIndex": 6, "mealSlot": "breakfast", "foodName": "Whole-grain waffles with eggs", "category": "carb" },
+        { "dayIndex": 6, "mealSlot": "lunch", "foodName": "Roast beef sandwich", "category": "protein" },
+        { "dayIndex": 6, "mealSlot": "dinner", "foodName": "Chicken alfredo", "category": "carb" },
+        { "dayIndex": 6, "mealSlot": "snack1", "foodName": "Cottage cheese and pineapple", "category": "dairy" },
+        { "dayIndex": 6, "mealSlot": "snack2", "foodName": "Granola", "category": "snack" }
+      ]
+    }
+  ]
+}

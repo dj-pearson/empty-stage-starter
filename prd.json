@@ -3319,8 +3319,8 @@
         "Graceful no-op if HealthKit not available (iPad without Health, simulator, denied permission) — button hidden with no error"
       ],
       "priority": 68,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "iOS: DONE 2026-04-24. Extended HealthKitService with read-side capabilities — new `readTypes` (HKQuantityType.height, .bodyMass + characteristicType .dateOfBirth), `requestReadAuthorization()` (mirrors the existing write-auth NSException-catcher pattern), `readKidGrowthSnapshot() -> KidGrowthSnapshot { dateOfBirth, heightCm, weightKg, lastSyncedAt, derivedAge }`, plus `readMostRecentQuantity` and `readDateOfBirth` private helpers (HKSampleQuery with limit=1 sorted by endDate desc). KidProfileEditorView gains an 'Import from Health' button under the Measurements section (only shown when HealthKitService.isAvailable), which prompts permission then pre-fills age (from DOB), heightCm, weightKg. Each pre-filled field shows a pink HealthSourcePill (heart icon + 'Health' label) inline. Editing any of those fields removes the pill via .onChange handlers (manual override). 'Last synced from Health <relative>' caption appears below the Import button on success. Errors surface inline (red caption). Button is hidden entirely on devices where HealthKit isn't available (iPad without Health, simulator). STILL OPEN: 'Auto-refresh from Health on app open' toggle in HealthSettingsView, growth-curve trend display, two-way sync (write back EatPal-recorded weights to Health)."
     },
     {
       "id": "US-229",
@@ -3437,8 +3437,8 @@
         "Telemetry: `starter_template_applied` with template_name + foods_created_count"
       ],
       "priority": 75,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "iOS: DONE 2026-04-24. Bundled `Resources/StarterMealPlans.json` with 5 hand-curated weeks: Balanced toddler week (ages 1–3), Texture variety week (ages 2–8, exposure-focused), Nut-free family week (ages 3–12, school-safe), Budget-friendly week (eggs/beans/oats heavy), Active kid week (ages 5–16, 4 meals + 2 snacks/day). Each entry has dayIndex/mealSlot/foodName/category. New `Services/StarterMealPlanService.swift` is a @MainActor enum that loads + caches the catalog (with Sentry breadcrumb on miss), fuzzy-matches food names against `appState.foods` (case-insensitive exact), auto-creates missing foods (with `addedVia` provenance — currently elided since GroceryItem is the only addedVia user; Food schema doesn't track it yet), and returns `ApplyResult { entriesCreated, foodsCreated, allergenSkips, allergenSkipCount }`. `conflictPreview()` returns the foods that will be skipped due to active kid allergens (only checks foods that already exist in pantry). New `Views/MealPlan/StarterTemplatesSheet.swift` is a two-level sheet — a list of templates (StarterTemplateRow card with name + Curated chip + blurb + age range + meal count) and a detail sheet showing the per-day breakdown grouped by weekday name with allergen warnings + Apply button. Wired into MealPlanView via (1) a new toolbar Menu item 'Start from a template', and (2) a green CTA card above the meal slots when the active kid's week is empty ('Empty week — start from a template?'). Toast on apply: 'Applied <name> — N meals · M new foods (3 skipped: peanut)'. STILL OPEN: telemetry event (US-245), allergen check against new auto-created foods (currently only checks pre-existing pantry foods; new foods always pass since they have no declared allergens), age-range filtering of the template list against active kid's age."
     },
     {
       "id": "US-236",
@@ -3504,8 +3504,8 @@
         "Each scheduled notification's payload includes a `topic` field so analytics can attribute opens"
       ],
       "priority": 79,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "iOS: DONE 2026-04-24. Extended NotificationService with a `Topic` enum (mealReminders, groceryReady, tryBite, expiringFood, aiSummary, streakMilestone) — each carries title/subtitle/icon, a `supportsDailyTime` flag, and three derived UserDefaults keys (enabled/hour/minute). Added `mute(forSeconds:)` + `unmute()` + `mutedUntil` (UserDefaults-backed epoch), and `fireTestNotification(for:)` which fires a UNTimeIntervalNotificationTrigger after 2s with topic-appropriate sample copy ('Sarah just tried broccoli — log a result?', '5-day try-bite streak unlocked! 🎉', etc). NotificationSettingsView refactored: master toggle on top with the existing system-permission denied path, a new Mute-all-for-24h chip that swaps to a 'Muted until <time>' pill + Unmute button when active, then one Section per Topic via a private NotificationTopicSection helper that uses dynamic-key @AppStorage init for enabled/hour/minute. Each topic section shows a Toggle (with title + subtitle + icon), a DatePicker for daily-time-supporting topics, and a 'Send test notification' button that flips to 'Test sent — check notification center' after firing. STILL OPEN: actually scheduling per-topic recurring local notifications based on the per-topic time (current scheduleMealReminders/cancelMealReminders only knows about the legacy 8/12/18 trio), Supabase mirror of preferences for cross-device install (currently UserDefaults-only), telemetry topic field on payloads."
     },
     {
       "id": "US-240",

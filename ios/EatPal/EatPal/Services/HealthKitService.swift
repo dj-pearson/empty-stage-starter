@@ -46,6 +46,20 @@ final class HealthKitService {
         ]
     }
 
+    // US-228: Types we READ to pre-fill kid profile growth fields.
+    // Includes a characteristic (date of birth — one-shot, never changes) and
+    // two quantity types (height, body mass) we sample most-recent only.
+    private var readTypes: Set<HKObjectType> {
+        var types: Set<HKObjectType> = [
+            HKQuantityType(.height),
+            HKQuantityType(.bodyMass)
+        ]
+        if let dob = HKObjectType.characteristicType(forIdentifier: .dateOfBirth) {
+            types.insert(dob)
+        }
+        return types
+    }
+
     private init() {}
 
     // MARK: - Authorization
@@ -100,6 +114,116 @@ final class HealthKitService {
         // distinguishes .notDetermined from .sharingAuthorized / .sharingDenied.
         return types.contains { type in
             store.authorizationStatus(for: type) == .sharingAuthorized
+        }
+    }
+
+    // MARK: - Reading growth data (US-228)
+
+    struct KidGrowthSnapshot: Equatable {
+        let dateOfBirth: Date?
+        let heightCm: Double?
+        let weightKg: Double?
+        let lastSyncedAt: Date
+
+        var derivedAge: Int? {
+            guard let dob = dateOfBirth else { return nil }
+            let comps = Calendar.current.dateComponents([.year], from: dob, to: Date())
+            guard let years = comps.year, years >= 0 else { return nil }
+            return years
+        }
+    }
+
+    /// Requests read permission for date of birth, height, and body mass.
+    /// Returns true if HealthKit is available and permission was at least
+    /// presented. Read auth status is opaque to the app per Apple privacy
+    /// rules — callers should attempt the read and treat absence as "no data".
+    func requestReadAuthorization() async throws -> Bool {
+        guard isAvailable else { return false }
+
+        let types = readTypes
+        guard !types.isEmpty else { return false }
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            var didResume = false
+            do {
+                try NSExceptionCatcher.try {
+                    self.store.requestAuthorization(toShare: [], read: types) { _, error in
+                        guard !didResume else { return }
+                        didResume = true
+                        if let error {
+                            continuation.resume(throwing: error)
+                        } else {
+                            continuation.resume()
+                        }
+                    }
+                }
+            } catch {
+                guard !didResume else { return }
+                didResume = true
+                SentryService.capture(error, extras: [
+                    "context": "healthkit_read_request_nsexception"
+                ])
+                continuation.resume(throwing: error)
+            }
+        }
+        return true
+    }
+
+    /// Reads the most recent height + weight samples and the user's date of
+    /// birth (if available). Any individual field returns nil when unset or
+    /// access was denied — the caller decides whether to surface a message.
+    func readKidGrowthSnapshot() async -> KidGrowthSnapshot {
+        guard isAvailable else {
+            return KidGrowthSnapshot(dateOfBirth: nil, heightCm: nil, weightKg: nil, lastSyncedAt: Date())
+        }
+
+        let dob = readDateOfBirth()
+        async let height = readMostRecentQuantity(
+            HKQuantityType(.height),
+            unit: HKUnit.meterUnit(with: .centi)
+        )
+        async let weight = readMostRecentQuantity(
+            HKQuantityType(.bodyMass),
+            unit: HKUnit.gramUnit(with: .kilo)
+        )
+
+        return KidGrowthSnapshot(
+            dateOfBirth: dob,
+            heightCm: await height,
+            weightKg: await weight,
+            lastSyncedAt: Date()
+        )
+    }
+
+    private func readDateOfBirth() -> Date? {
+        do {
+            let components = try store.dateOfBirthComponents()
+            return Calendar(identifier: components.calendar?.identifier ?? .gregorian)
+                .date(from: components)
+        } catch {
+            return nil
+        }
+    }
+
+    private func readMostRecentQuantity(
+        _ type: HKQuantityType,
+        unit: HKUnit
+    ) async -> Double? {
+        await withCheckedContinuation { continuation in
+            let sortByEnd = NSSortDescriptor(
+                key: HKSampleSortIdentifierEndDate,
+                ascending: false
+            )
+            let query = HKSampleQuery(
+                sampleType: type,
+                predicate: nil,
+                limit: 1,
+                sortDescriptors: [sortByEnd]
+            ) { _, samples, _ in
+                let sample = (samples?.first as? HKQuantitySample)?.quantity.doubleValue(for: unit)
+                continuation.resume(returning: sample)
+            }
+            store.execute(query)
         }
     }
 

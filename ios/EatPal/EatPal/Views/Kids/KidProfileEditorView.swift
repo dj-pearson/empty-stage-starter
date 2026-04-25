@@ -43,6 +43,14 @@ struct KidProfileEditorView: View {
     @State private var profileImage: UIImage?
     @State private var isSubmitting = false
 
+    // US-228: HealthKit import state
+    @State private var isImportingFromHealth = false
+    @State private var healthImportError: String?
+    @State private var healthSyncedAt: Date?
+    @State private var healthSourcedFields: Set<HealthSourcedField> = []
+
+    enum HealthSourcedField: String { case age, height, weight }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -64,7 +72,15 @@ struct KidProfileEditorView: View {
                 // Basic Info
                 Section("Basic Information") {
                     TextField("Name", text: $name)
-                    Stepper("Age: \(age)", value: $age, in: 0...18)
+                    HStack {
+                        Stepper("Age: \(age)", value: $age, in: 0...18)
+                            .onChange(of: age) { _, _ in
+                                healthSourcedFields.remove(.age)
+                            }
+                        if healthSourcedFields.contains(.age) {
+                            HealthSourcePill()
+                        }
+                    }
                     Picker("Gender", selection: $gender) {
                         Text("Not Specified").tag("")
                         Text("Male").tag("male")
@@ -79,27 +95,68 @@ struct KidProfileEditorView: View {
                 }
 
                 // Measurements
-                Section("Measurements") {
+                Section {
                     HStack {
                         Text("Height")
+                        if healthSourcedFields.contains(.height) {
+                            HealthSourcePill()
+                        }
                         Spacer()
                         TextField("cm", text: $heightCm)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(width: 80)
+                            .onChange(of: heightCm) { _, _ in
+                                healthSourcedFields.remove(.height)
+                            }
                         Text("cm")
                             .foregroundStyle(.secondary)
                     }
                     HStack {
                         Text("Weight")
+                        if healthSourcedFields.contains(.weight) {
+                            HealthSourcePill()
+                        }
                         Spacer()
                         TextField("kg", text: $weightKg)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(width: 80)
+                            .onChange(of: weightKg) { _, _ in
+                                healthSourcedFields.remove(.weight)
+                            }
                         Text("kg")
                             .foregroundStyle(.secondary)
                     }
+
+                    if HealthKitService.shared.isAvailable {
+                        Button {
+                            Task { await importFromHealth() }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if isImportingFromHealth {
+                                    ProgressView().controlSize(.small)
+                                }
+                                Image(systemName: "heart.text.square.fill")
+                                    .foregroundStyle(.pink)
+                                Text(isImportingFromHealth ? "Importing…" : "Import from Health")
+                                Spacer()
+                            }
+                        }
+                        .disabled(isImportingFromHealth)
+                    }
+
+                    if let healthImportError {
+                        Text(healthImportError)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    } else if let healthSyncedAt {
+                        Text("Last synced from Health \(healthSyncedAt, style: .relative)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Measurements")
                 }
 
                 // Allergens & Diet
@@ -252,6 +309,74 @@ struct KidProfileEditorView: View {
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
         return items.isEmpty ? nil : items
+    }
+
+    // MARK: - HealthKit import (US-228)
+
+    private func importFromHealth() async {
+        let service = HealthKitService.shared
+        isImportingFromHealth = true
+        healthImportError = nil
+        defer { isImportingFromHealth = false }
+
+        do {
+            _ = try await service.requestReadAuthorization()
+        } catch {
+            healthImportError = "Couldn't ask Health for permission: \(error.localizedDescription)"
+            HapticManager.error()
+            return
+        }
+
+        let snapshot = await service.readKidGrowthSnapshot()
+
+        var anyImported = false
+
+        if let derivedAge = snapshot.derivedAge, derivedAge >= 0, derivedAge <= 18 {
+            age = derivedAge
+            healthSourcedFields.insert(.age)
+            anyImported = true
+        }
+        if let h = snapshot.heightCm, h > 0 {
+            heightCm = String(format: "%.1f", h)
+            healthSourcedFields.insert(.height)
+            anyImported = true
+        }
+        if let w = snapshot.weightKg, w > 0 {
+            weightKg = String(format: "%.1f", w)
+            healthSourcedFields.insert(.weight)
+            anyImported = true
+        }
+
+        if anyImported {
+            healthSyncedAt = snapshot.lastSyncedAt
+            HapticManager.success()
+            ToastManager.shared.success(
+                "Imported from Health",
+                message: "\(healthSourcedFields.count) field\(healthSourcedFields.count == 1 ? "" : "s") updated"
+            )
+        } else {
+            healthImportError = "No height, weight, or date of birth found in Health (or permission denied)."
+            HapticManager.warning()
+        }
+    }
+}
+
+// MARK: - Health source pill (US-228)
+
+private struct HealthSourcePill: View {
+    var body: some View {
+        HStack(spacing: 2) {
+            Image(systemName: "heart.fill")
+                .font(.caption2)
+            Text("Health")
+                .font(.caption2)
+                .fontWeight(.medium)
+        }
+        .foregroundStyle(.pink)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Color.pink.opacity(0.12), in: Capsule())
+        .accessibilityLabel("Imported from Health")
     }
 }
 

@@ -210,17 +210,19 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - Notification Settings
+// MARK: - Notification Settings (US-239)
 
 struct NotificationSettingsView: View {
     @AppStorage("notificationsEnabled") private var notificationsEnabled = false
-    @AppStorage("mealReminders") private var mealReminders = true
-    @AppStorage("groceryReminders") private var groceryReminders = false
     @StateObject private var notificationService = NotificationService.shared
     @State private var showingPermissionAlert = false
+    @State private var muteRefreshTick = 0  // forces re-render when we toggle mute
+
+    private var mutedUntil: Date? { notificationService.mutedUntil }
 
     var body: some View {
         Form {
+            // Master toggle + system-permission state
             Section {
                 Toggle("Enable Notifications", isOn: $notificationsEnabled)
                     .onChange(of: notificationsEnabled) { _, enabled in
@@ -254,29 +256,49 @@ struct NotificationSettingsView: View {
                 }
             }
 
-            Section("Meal Planning") {
-                Toggle("Meal Reminders", isOn: $mealReminders)
-                    .disabled(!notificationsEnabled)
-                    .onChange(of: mealReminders) { _, enabled in
-                        Task {
-                            if enabled && notificationsEnabled {
-                                await notificationService.scheduleMealReminders()
-                            } else {
-                                notificationService.cancelMealReminders()
+            // Mute-all chip
+            if notificationsEnabled {
+                Section {
+                    if let until = mutedUntil {
+                        HStack {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Muted until \(until, style: .time)")
+                                        .font(.subheadline)
+                                    Text(until, style: .relative)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: "bell.slash.fill")
+                                    .foregroundStyle(.orange)
                             }
+                            Spacer()
+                            Button("Unmute") {
+                                notificationService.unmute()
+                                muteRefreshTick += 1
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                    } else {
+                        Button {
+                            notificationService.mute(forSeconds: 24 * 60 * 60)
+                            muteRefreshTick += 1
+                            HapticManager.warning()
+                        } label: {
+                            Label("Mute all for 24h", systemImage: "bell.slash")
                         }
                     }
-
-                if mealReminders && notificationsEnabled {
-                    Text("Reminders at 8:00 AM, 12:00 PM, and 6:00 PM")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
 
-            Section("Grocery") {
-                Toggle("Grocery Reminders", isOn: $groceryReminders)
-                    .disabled(!notificationsEnabled)
+            // Per-topic toggles
+            ForEach(NotificationService.Topic.allCases) { topic in
+                NotificationTopicSection(
+                    topic: topic,
+                    masterEnabled: notificationsEnabled
+                )
             }
         }
         .navigationTitle("Notifications")
@@ -296,6 +318,85 @@ struct NotificationSettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Please enable notifications in Settings to receive meal and grocery reminders.")
+        }
+        .id(muteRefreshTick)  // re-evaluate body when mute state changes
+    }
+}
+
+/// Per-topic settings row — toggle, optional time picker, and a Test button.
+private struct NotificationTopicSection: View {
+    let topic: NotificationService.Topic
+    let masterEnabled: Bool
+
+    @AppStorage private var enabled: Bool
+    @AppStorage private var hour: Int
+    @AppStorage private var minute: Int
+
+    @State private var didFireTest = false
+
+    init(topic: NotificationService.Topic, masterEnabled: Bool) {
+        self.topic = topic
+        self.masterEnabled = masterEnabled
+        self._enabled = AppStorage(wrappedValue: false, topic.enabledKey)
+        self._hour = AppStorage(wrappedValue: topic.defaultHour, topic.hourKey)
+        self._minute = AppStorage(wrappedValue: topic.defaultMinute, topic.minuteKey)
+    }
+
+    private var pickerBinding: Binding<Date> {
+        Binding(
+            get: {
+                var comps = DateComponents()
+                comps.hour = hour
+                comps.minute = minute
+                return Calendar.current.date(from: comps) ?? Date()
+            },
+            set: { newValue in
+                let comps = Calendar.current.dateComponents([.hour, .minute], from: newValue)
+                hour = comps.hour ?? topic.defaultHour
+                minute = comps.minute ?? topic.defaultMinute
+            }
+        )
+    }
+
+    var body: some View {
+        Section {
+            Toggle(isOn: $enabled) {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(topic.title)
+                        Text(topic.subtitle)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: topic.icon)
+                        .foregroundStyle(.green)
+                }
+            }
+            .disabled(!masterEnabled)
+
+            if enabled, masterEnabled, topic.supportsDailyTime {
+                DatePicker(
+                    "Daily time",
+                    selection: pickerBinding,
+                    displayedComponents: .hourAndMinute
+                )
+            }
+
+            if enabled, masterEnabled {
+                Button {
+                    Task {
+                        await NotificationService.shared.fireTestNotification(for: topic)
+                        didFireTest = true
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: didFireTest ? "checkmark.circle.fill" : "paperplane")
+                        Text(didFireTest ? "Test sent — check notification center" : "Send test notification")
+                    }
+                    .font(.callout)
+                }
+            }
         }
     }
 }

@@ -19,9 +19,18 @@ struct MealPlanView: View {
     @State private var showingClearWeekAlert = false
     @State private var showingSaveTemplate = false
     @State private var showingCopyToKid = false
+    @State private var showingStarterTemplates = false
     @State private var templateName = ""
     @State private var copyTargetDate = Date()
     @State private var copyToKidId: String?
+
+    /// US-235: true when there's an active kid with no meals planned for this week.
+    private var weekIsEmpty: Bool {
+        guard let kidId = appState.activeKidId else { return false }
+        return weekDates.allSatisfy { date in
+            appState.planEntriesForDate(date, kidId: kidId).isEmpty
+        }
+    }
 
     private var weekDates: [Date] {
         selectedDate.weekDates
@@ -50,6 +59,36 @@ struct MealPlanView: View {
                     selectedDate: $selectedDate,
                     weekDates: weekDates
                 )
+
+                // US-235: empty-week starter prompt
+                if appState.activeKidId != nil, weekIsEmpty, !appState.isLoading {
+                    Button {
+                        showingStarterTemplates = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "square.grid.2x2.fill")
+                                .foregroundStyle(.green)
+                                .imageScale(.large)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Empty week — start from a template?")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.primary)
+                                Text("Apply a curated week, then tweak.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(12)
+                        .background(Color.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal)
+                    .accessibilityLabel("Start from a meal-plan template")
+                }
 
                 // Meal Slots
                 if appState.isLoading && appState.planEntries.isEmpty {
@@ -97,6 +136,12 @@ struct MealPlanView: View {
                     .disabled(appState.activeKidId == nil)
 
                     Menu {
+                        Button {
+                            showingStarterTemplates = true
+                        } label: {
+                            Label("Start from a template", systemImage: "square.grid.2x2")
+                        }
+
                         Button {
                             showingCopyWeek = true
                         } label: {
@@ -186,6 +231,10 @@ struct MealPlanView: View {
                 onDismiss: { showingCopyToKid = false }
             )
             .environmentObject(appState)
+        }
+        .sheet(isPresented: $showingStarterTemplates) {
+            StarterTemplatesSheet(weekStart: weekStart)
+                .environmentObject(appState)
         }
         .alert("Clear This Week?", isPresented: $showingClearWeekAlert) {
             Button("Clear", role: .destructive) {
