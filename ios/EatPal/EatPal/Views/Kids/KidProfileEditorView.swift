@@ -51,6 +51,9 @@ struct KidProfileEditorView: View {
 
     enum HealthSourcedField: String { case age, height, weight }
 
+    // US-240: PickyEaterQuiz sheet
+    @State private var showingQuiz = false
+
     var body: some View {
         NavigationStack {
             Form {
@@ -180,6 +183,42 @@ struct KidProfileEditorView: View {
                     TextField("Flavor preferences (comma separated)", text: $flavorPreferences)
                 }
 
+                // US-240: Eating personality / picky-eater quiz entry point.
+                // Persists results to pickinessLevel + helpfulStrategies so the
+                // rest of the form reflects the quiz outcome immediately.
+                Section {
+                    Button {
+                        showingQuiz = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.pink.opacity(0.15))
+                                    .frame(width: 40, height: 40)
+                                Image(systemName: "questionmark.circle.fill")
+                                    .foregroundStyle(.pink)
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(hasTakenQuiz ? "Retake the picky-eater quiz" : "Discover \(kid.name)'s eating style")
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+                                Text(hasTakenQuiz
+                                     ? "Refresh recommended strategies"
+                                     : "8 quick questions • saves pickiness + tailored strategies")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                } header: {
+                    Text("Eating Personality")
+                }
+
                 // Behavioral Notes
                 Section("Behavioral Notes") {
                     TextEditor(text: $behavioralNotes)
@@ -234,7 +273,23 @@ struct KidProfileEditorView: View {
                 }
             }
             .onAppear { loadKid() }
+            .sheet(isPresented: $showingQuiz) {
+                // Pull the freshest copy of the kid from AppState so the result
+                // reflects any in-flight edits and the post-save toast updates
+                // the same record the form is bound to.
+                PickyEaterQuizView(
+                    kid: appState.kids.first { $0.id == kid.id } ?? kid
+                )
+            }
         }
+    }
+
+    /// True once the kid has either an explicit pickinessLevel or any saved
+    /// strategies — used to flip the CTA copy from "Discover" to "Retake".
+    private var hasTakenQuiz: Bool {
+        if let level = kid.pickinessLevel, !level.isEmpty { return true }
+        if let strategies = kid.helpfulStrategies, !strategies.isEmpty { return true }
+        return false
     }
 
     // MARK: - Load
@@ -354,6 +409,7 @@ struct KidProfileEditorView: View {
                 "Imported from Health",
                 message: "\(healthSourcedFields.count) field\(healthSourcedFields.count == 1 ? "" : "s") updated"
             )
+            AnalyticsService.track(.healthImportRequested(fields: healthSourcedFields.count))
         } else {
             healthImportError = "No height, weight, or date of birth found in Health (or permission denied)."
             HapticManager.warning()

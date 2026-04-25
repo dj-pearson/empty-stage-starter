@@ -45,6 +45,13 @@ struct MainTabView: View {
         .tint(.green)
         .task {
             await appState.loadAllData()
+            // US-245: First screen view of the session.
+            AnalyticsService.screen("tab_\(selectedTab.rawValue)")
+        }
+        .onChange(of: selectedTab) { _, newTab in
+            // US-245: One screen-view event per tab switch so funnels reflect
+            // actual user navigation rather than just startup.
+            AnalyticsService.screen("tab_\(newTab.rawValue)")
         }
     }
 

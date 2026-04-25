@@ -1068,7 +1068,7 @@ struct CopyWeekToKidSheet: View {
             onDismiss()
         } catch {
             HapticManager.error()
-            ToastManager.shared.error("Copy failed", message: error.localizedDescription)
+            ToastManager.shared.show(error, as: { .save(entity: "week copy", underlying: $0) })
         }
     }
 }

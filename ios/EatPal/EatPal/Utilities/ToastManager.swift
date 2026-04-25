@@ -74,6 +74,32 @@ final class ToastManager: ObservableObject {
         show(Toast(type: .error, title: title, message: message, duration: 4.0))
     }
 
+    /// US-247: Show a toast for an `AppError` with consistent title + recovery
+    /// hint, and forward the underlying system error to Sentry so we still get
+    /// breadcrumbs without leaking the raw description to the user.
+    func show(_ appError: AppError) {
+        show(Toast(
+            type: appError.telemetryCategory == "offline" ? .warning : .error,
+            title: appError.title,
+            message: appError.recoveryHint,
+            duration: 4.0
+        ))
+        if let underlying = appError.underlying {
+            SentryService.capture(underlying, extras: [
+                "app_error_category": appError.telemetryCategory
+            ])
+        }
+    }
+
+    /// Convenience that wraps an arbitrary `Error` into an `AppError` first.
+    /// Use at catch-sites so we never have to write
+    /// `error.localizedDescription` into a toast body again.
+    ///
+    ///     catch { toast.show(error, as: { .save(entity: "food", underlying: $0) }) }
+    func show(_ error: Error, as context: (Error) -> AppError) {
+        show(AppError.wrap(error, as: context))
+    }
+
     func warning(_ title: String, message: String? = nil) {
         show(Toast(type: .warning, title: title, message: message))
     }

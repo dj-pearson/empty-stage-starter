@@ -133,10 +133,14 @@ final class AuthViewModel: ObservableObject {
         do {
             switch authMode {
             case .signIn:
+                AnalyticsService.track(.signInStarted(method: "email"))
                 _ = try await authService.signIn(email: email, password: password)
+                AnalyticsService.track(.signInCompleted(method: "email"))
             case .signUp:
+                AnalyticsService.track(.signInStarted(method: "email_signup"))
                 _ = try await authService.signUp(email: email, password: password)
                 successMessage = "Account created! Check your email to verify."
+                AnalyticsService.track(.signInCompleted(method: "email_signup"))
             case .forgotPassword:
                 try await authService.resetPassword(email: email)
                 successMessage = "Password reset email sent. Check your inbox."
@@ -151,6 +155,7 @@ final class AuthViewModel: ObservableObject {
     func signOut() async {
         do {
             try await authService.signOut()
+            AnalyticsService.track(.signOutCompleted)
         } catch {
             errorMessage = error.localizedDescription
         }

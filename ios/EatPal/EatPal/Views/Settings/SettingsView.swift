@@ -198,7 +198,10 @@ struct SettingsView: View {
             // back to the login screen.
             appState.clearData()
         } catch {
-            deleteAccountError = error.localizedDescription
+            // Standardize the friendly error string + Sentry breadcrumb.
+            // Sentry's `extras` context is preserved alongside the AppError tag.
+            let appError = AppError.wrap(error, as: { .delete(entity: "account", underlying: $0) })
+            deleteAccountError = appError.errorDescription
             SentryService.capture(error, extras: ["context": "settings_delete_account"])
         }
     }

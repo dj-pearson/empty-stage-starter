@@ -248,6 +248,9 @@ struct KidDetailView: View {
     @State private var pickinessLevel: String = "not_picky"
     @State private var notes: String = ""
 
+    // US-240: Picky-eater quiz sheet
+    @State private var showingQuiz = false
+
     var body: some View {
         NavigationStack {
             Form {
@@ -270,6 +273,23 @@ struct KidDetailView: View {
                         Text("Somewhat Picky").tag("somewhat_picky")
                         Text("Very Picky").tag("very_picky")
                     }
+
+                    // US-240: Quiz entry point — drives the picker above and
+                    // populates helpfulStrategies on the underlying kid record.
+                    Button {
+                        showingQuiz = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "questionmark.circle.fill")
+                                .foregroundStyle(.pink)
+                            Text(kidHasTakenQuiz ? "Retake picky-eater quiz" : "Take picky-eater quiz")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .foregroundStyle(.primary)
                 }
 
                 if let allergens = kid.allergens, !allergens.isEmpty {
@@ -330,7 +350,31 @@ struct KidDetailView: View {
                 pickinessLevel = kid.pickinessLevel ?? "not_picky"
                 notes = kid.notes ?? ""
             }
+            .sheet(isPresented: $showingQuiz) {
+                // Always pull the latest kid record so the quiz applies its
+                // result on top of in-flight edits, not the stale snapshot.
+                PickyEaterQuizView(
+                    kid: appState.kids.first { $0.id == kid.id } ?? kid
+                )
+            }
+            .onChange(of: appState.kids) { _, latest in
+                // After the quiz writes a new pickinessLevel, sync the local
+                // picker so the user sees the change without reopening.
+                if let updated = latest.first(where: { $0.id == kid.id }),
+                   let level = updated.pickinessLevel,
+                   level != pickinessLevel {
+                    pickinessLevel = level
+                }
+            }
         }
+    }
+
+    /// US-240: True once the kid has either an explicit pickinessLevel or
+    /// quiz-derived strategies on file. Drives the CTA copy.
+    private var kidHasTakenQuiz: Bool {
+        if let level = kid.pickinessLevel, !level.isEmpty { return true }
+        if let strategies = kid.helpfulStrategies, !strategies.isEmpty { return true }
+        return false
     }
 }
 

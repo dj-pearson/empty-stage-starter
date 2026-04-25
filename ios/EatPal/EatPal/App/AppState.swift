@@ -217,8 +217,11 @@ final class AppState: ObservableObject {
             // user was signed out or the app was backgrounded.
             await drainPendingRecipeImports()
         } catch {
-            errorMessage = error.localizedDescription
-            toast.error("Failed to load data", message: error.localizedDescription)
+            // Single AppError mapping powers both the inline `errorMessage`
+            // banner and the global toast so they stay in sync.
+            let appError = AppError.wrap(error, as: { .load(entity: "your data", underlying: $0) })
+            errorMessage = appError.errorDescription
+            toast.show(appError)
             HapticManager.error()
         }
 
@@ -244,9 +247,10 @@ final class AppState: ObservableObject {
             try await dataService.insertFood(food)
             toast.success("Food added", message: "\(food.name) added to pantry")
             HapticManager.success()
+            AnalyticsService.track(.foodAdded(via: .manual, category: food.category))
         } catch {
             foods.removeAll { $0.id == food.id }
-            toast.error("Failed to add food", message: error.localizedDescription)
+            toast.show(error, as: { .save(entity: "food", underlying: $0) })
             HapticManager.error()
             throw error
         }
@@ -260,9 +264,10 @@ final class AppState: ObservableObject {
             try await dataService.updateFood(id, updates: updates)
             toast.success("Food updated")
             HapticManager.lightImpact()
+            AnalyticsService.track(.foodUpdated)
         } catch {
             foods[index] = original
-            toast.error("Failed to update food", message: error.localizedDescription)
+            toast.show(error, as: { .save(entity: "food", underlying: $0) })
             HapticManager.error()
             throw error
         }
@@ -275,9 +280,10 @@ final class AppState: ObservableObject {
             try await dataService.deleteFood(id)
             toast.success("Food deleted")
             HapticManager.mediumImpact()
+            AnalyticsService.track(.foodDeleted)
         } catch {
             foods.append(contentsOf: removed)
-            toast.error("Failed to delete food", message: error.localizedDescription)
+            toast.show(error, as: { .delete(entity: "food", underlying: $0) })
             HapticManager.error()
             throw error
         }
@@ -292,9 +298,10 @@ final class AppState: ObservableObject {
             if activeKidId == nil { activeKidId = kid.id }
             toast.success("Child added", message: "\(kid.name) added to family")
             HapticManager.success()
+            AnalyticsService.track(.kidAdded)
         } catch {
             kids.removeAll { $0.id == kid.id }
-            toast.error("Failed to add child", message: error.localizedDescription)
+            toast.show(error, as: { .save(entity: "child profile", underlying: $0) })
             HapticManager.error()
             throw error
         }
@@ -308,12 +315,35 @@ final class AppState: ObservableObject {
             try await dataService.updateKid(id, updates: updates)
             toast.success("Profile updated")
             HapticManager.lightImpact()
+            // Coarse field categorization — never includes the actual values.
+            AnalyticsService.track(.kidUpdated(field: Self.classify(updates)))
         } catch {
             kids[index] = original
-            toast.error("Failed to update profile", message: error.localizedDescription)
+            toast.show(error, as: { .save(entity: "profile", underlying: $0) })
             HapticManager.error()
             throw error
         }
+    }
+
+    /// Maps a KidUpdate to a `KidField` bucket for analytics. Falls back to
+    /// `.other` when the update touches an uncategorized field — keeps the
+    /// dashboard interpretable as we add new fields without forcing every
+    /// new property into a category at the call-site.
+    private static func classify(_ updates: KidUpdate) -> KidField {
+        if updates.allergens != nil || updates.dietaryRestrictions != nil { return .allergens }
+        if updates.heightCm != nil || updates.weightKg != nil { return .measurements }
+        if updates.helpfulStrategies != nil || updates.pickinessLevel != nil { return .quiz }
+        if updates.favoriteFoods != nil || updates.dislikedFoods != nil
+           || updates.texturePreferences != nil || updates.flavorPreferences != nil { return .preferences }
+        if updates.name != nil || updates.age != nil || updates.gender != nil { return .basicInfo }
+        return .other
+    }
+
+    /// Maps GroceryItem.addedVia (a free-form string set at insert sites) to
+    /// the typed `EntrySource` enum used by analytics events.
+    private static func entrySource(_ raw: String?) -> EntrySource {
+        guard let raw, let mapped = EntrySource(rawValue: raw) else { return .manual }
+        return mapped
     }
 
     func deleteKid(_ id: String) async throws {
@@ -324,9 +354,10 @@ final class AppState: ObservableObject {
             try await dataService.deleteKid(id)
             toast.success("Child removed")
             HapticManager.mediumImpact()
+            AnalyticsService.track(.kidDeleted)
         } catch {
             kids.append(contentsOf: removed)
-            toast.error("Failed to remove child", message: error.localizedDescription)
+            toast.show(error, as: { .delete(entity: "child profile", underlying: $0) })
             HapticManager.error()
             throw error
         }
@@ -340,9 +371,12 @@ final class AppState: ObservableObject {
             try await dataService.insertRecipe(recipe)
             toast.success("Recipe created", message: "\(recipe.name) saved")
             HapticManager.success()
+            // `addRecipe` callers default to `.manual` here; the URL-import path
+            // emits `.recipeImported(...)` itself before invoking this method.
+            AnalyticsService.track(.recipeCreated(via: .manual))
         } catch {
             recipes.removeAll { $0.id == recipe.id }
-            toast.error("Failed to create recipe", message: error.localizedDescription)
+            toast.show(error, as: { .save(entity: "recipe", underlying: $0) })
             HapticManager.error()
             throw error
         }
@@ -356,9 +390,10 @@ final class AppState: ObservableObject {
             try await dataService.updateRecipe(id, updates: updates)
             toast.success("Recipe updated")
             HapticManager.lightImpact()
+            AnalyticsService.track(.recipeUpdated)
         } catch {
             recipes[index] = original
-            toast.error("Failed to update recipe", message: error.localizedDescription)
+            toast.show(error, as: { .save(entity: "recipe", underlying: $0) })
             HapticManager.error()
             throw error
         }
@@ -371,9 +406,10 @@ final class AppState: ObservableObject {
             try await dataService.deleteRecipe(id)
             toast.success("Recipe deleted")
             HapticManager.mediumImpact()
+            AnalyticsService.track(.recipeDeleted)
         } catch {
             recipes.append(contentsOf: removed)
-            toast.error("Failed to delete recipe", message: error.localizedDescription)
+            toast.show(error, as: { .delete(entity: "recipe", underlying: $0) })
             HapticManager.error()
             throw error
         }
@@ -387,9 +423,10 @@ final class AppState: ObservableObject {
             try await dataService.insertPlanEntry(entry)
             toast.success("Meal added to plan")
             HapticManager.success()
+            AnalyticsService.track(.mealPlanned(slot: entry.mealSlot, kidId: entry.kidId))
         } catch {
             planEntries.removeAll { $0.id == entry.id }
-            toast.error("Failed to add meal", message: error.localizedDescription)
+            toast.show(error, as: { .save(entity: "meal", underlying: $0) })
             HapticManager.error()
             throw error
         }
@@ -403,6 +440,10 @@ final class AppState: ObservableObject {
             try await dataService.updatePlanEntry(id, updates: updates)
             if let result = updates.result {
                 toast.success("Result logged", message: "Marked as \(result)")
+                AnalyticsService.track(.mealResultLogged(
+                    result: result,
+                    kidId: planEntries[index].kidId
+                ))
                 // US-144: write nutrition to Health when the meal was eaten
                 // and the user has opted in. No-op otherwise.
                 if result == MealResult.ate.rawValue {
@@ -412,7 +453,7 @@ final class AppState: ObservableObject {
             HapticManager.lightImpact()
         } catch {
             planEntries[index] = original
-            toast.error("Failed to update meal", message: error.localizedDescription)
+            toast.show(error, as: { .save(entity: "meal", underlying: $0) })
             HapticManager.error()
             throw error
         }
@@ -458,9 +499,10 @@ final class AppState: ObservableObject {
         do {
             try await dataService.deletePlanEntry(id)
             HapticManager.mediumImpact()
+            AnalyticsService.track(.mealRemoved)
         } catch {
             planEntries.append(contentsOf: removed)
-            toast.error("Failed to remove meal", message: error.localizedDescription)
+            toast.show(error, as: { .delete(entity: "meal", underlying: $0) })
             HapticManager.error()
             throw error
         }
@@ -479,6 +521,9 @@ final class AppState: ObservableObject {
             try await dataService.insertGroceryItem(item)
             toast.success("Item added", message: "\(item.name) added to list")
             HapticManager.success()
+            // Map the GroceryItem.addedVia string back to the typed enum so
+            // the analytics event keeps the same vocabulary across web/iOS.
+            AnalyticsService.track(.groceryItemAdded(via: Self.entrySource(item.addedVia)))
         } catch {
             if isNetworkError(error) {
                 // US-150: keep the optimistic update and queue for later replay.
@@ -487,7 +532,7 @@ final class AppState: ObservableObject {
                 HapticManager.lightImpact()
             } else {
                 groceryItems.removeAll { $0.id == item.id }
-                toast.error("Failed to add item", message: error.localizedDescription)
+                toast.show(error, as: { .save(entity: "grocery item", underlying: $0) })
                 HapticManager.error()
                 throw error
             }
@@ -503,7 +548,7 @@ final class AppState: ObservableObject {
             HapticManager.lightImpact()
         } catch {
             groceryItems[index] = original
-            toast.error("Failed to update item", message: error.localizedDescription)
+            toast.show(error, as: { .save(entity: "grocery item", underlying: $0) })
             HapticManager.error()
             throw error
         }
@@ -515,13 +560,14 @@ final class AppState: ObservableObject {
         do {
             try await dataService.deleteGroceryItem(id)
             HapticManager.mediumImpact()
+            AnalyticsService.track(.groceryItemDeleted)
         } catch {
             if isNetworkError(error) {
                 OfflineStore.shared.enqueueDelete(table: .groceryItems, entityId: id)
                 HapticManager.lightImpact()
             } else {
                 groceryItems.append(contentsOf: removed)
-                toast.error("Failed to delete item", message: error.localizedDescription)
+                toast.show(error, as: { .delete(entity: "grocery item", underlying: $0) })
                 HapticManager.error()
                 throw error
             }
@@ -540,6 +586,12 @@ final class AppState: ObservableObject {
             )
             HapticManager.lightImpact()
             await updateGroceryTripActivity(lastCheckedName: checked ? itemName : "")
+            // Default to .tap; ShoppingModeView and swipe-action call sites
+            // could later override by emitting their own event with .swipe /
+            // .shoppingMode. For now this captures the dominant case.
+            if checked {
+                AnalyticsService.track(.groceryItemChecked(method: .tap))
+            }
         } catch {
             if isNetworkError(error) {
                 OfflineStore.shared.enqueueUpdate(
@@ -625,9 +677,10 @@ final class AppState: ObservableObject {
             }
             toast.success("Cleared \(checkedIds.count) items")
             HapticManager.success()
+            AnalyticsService.track(.groceryListCleared(checkedCount: checkedIds.count))
         } catch {
             groceryItems.append(contentsOf: checked)
-            toast.error("Failed to clear items", message: error.localizedDescription)
+            toast.show(error, as: { .delete(entity: "grocery items", underlying: $0) })
             HapticManager.error()
             throw error
         }

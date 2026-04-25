@@ -13,6 +13,8 @@ struct GroceryView: View {
     @State private var showingClearAlert = false
     @State private var isGenerating = false
     @State private var editingItem: GroceryItem?
+    // US-232: Shopping Mode (one-handed in-store UI)
+    @State private var showingShoppingMode = false
 
     private var swipeTip = SwipeGroceryTip()
     private var contextMenuTip = ContextMenuTip()
@@ -239,6 +241,22 @@ struct GroceryView: View {
             return true
         }
         .toolbar {
+            // US-232: Shopping mode entry — placed on the leading edge so the
+            // grab is reachable with the same hand that's already holding the
+            // phone in-store. Disabled when the list is empty.
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    HapticManager.mediumImpact()
+                    showingShoppingMode = true
+                } label: {
+                    Image(systemName: "figure.walk.motion")
+                        .symbolRenderingMode(.hierarchical)
+                }
+                .disabled(uncheckedItems.isEmpty)
+                .accessibilityLabel("Start shopping mode")
+                .accessibilityHint("One-handed in-store view with large rows and dim screen")
+            }
+
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: 12) {
                     Menu {
@@ -341,6 +359,9 @@ struct GroceryView: View {
         .sheet(item: $editingItem) { item in
             EditGroceryItemView(item: item)
         }
+        .fullScreenCover(isPresented: $showingShoppingMode) {
+            ShoppingModeView()
+        }
         .alert("Clear Completed Items?", isPresented: $showingClearAlert) {
             Button("Clear", role: .destructive) {
                 Task { try? await appState.clearCheckedGroceryItems() }
@@ -372,8 +393,7 @@ struct GroceryView: View {
                 toast.info("No new items", message: "All ingredients are already on your list.")
             }
         } catch {
-            let toast = ToastManager.shared
-            toast.error("Generation failed", message: error.localizedDescription)
+            ToastManager.shared.show(error, as: { .save(entity: "grocery list", underlying: $0) })
         }
         isGenerating = false
     }

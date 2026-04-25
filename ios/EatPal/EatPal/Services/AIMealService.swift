@@ -140,11 +140,17 @@ final class AIMealService: ObservableObject {
                 options: .init(body: request)
             )
             suggestions = decoded
+            await MainActor.run {
+                AnalyticsService.track(.aiPlanGenerated(promptType: "remote_edge_function"))
+            }
         } catch {
             errorMessage = "Failed to generate suggestions: \(error.localizedDescription)"
 
             // Fallback: generate local suggestions from safe foods
             suggestions = generateLocalFallback(safeFoods: foods.filter(\.isSafe))
+            await MainActor.run {
+                AnalyticsService.track(.aiPlanGenerated(promptType: "local_fallback"))
+            }
         }
 
         isLoading = false

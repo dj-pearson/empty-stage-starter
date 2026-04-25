@@ -20,6 +20,10 @@ final class AICoachService: ObservableObject {
         let userMessage = ChatMessage(role: .user, content: text)
         messages.append(userMessage)
         isLoading = true
+        // US-245: track only the count, never the prompt body. Lets us chart
+        // engagement depth (1-message tries vs full conversations) without
+        // ever sending the user's actual question.
+        AnalyticsService.track(.aiCoachMessageSent(messageCount: messages.count))
 
         do {
             // Edge function contract (see supabase/functions/ai-coach-chat):

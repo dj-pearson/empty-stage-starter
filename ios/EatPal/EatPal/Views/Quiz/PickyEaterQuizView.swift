@@ -2,11 +2,19 @@ import SwiftUI
 
 /// Picky eater personality quiz that helps parents understand their child's eating behavior
 /// and provides tailored strategies.
+///
+/// US-240: When `kid` is non-nil, the result screen offers an "Apply to <name>"
+/// action that writes the suggested pickiness level + strategies onto the kid
+/// profile. Without `kid` (e.g., the standalone tool from More) it stays an
+/// informational tool only.
 struct PickyEaterQuizView: View {
     @Environment(\.dismiss) var dismiss
     @State private var currentQuestion = 0
     @State private var answers: [Int] = []
     @State private var showingResult = false
+
+    /// Optional kid the result should be saved to. nil = pure exploration mode.
+    var kid: Kid? = nil
 
     var body: some View {
         NavigationStack {
@@ -14,8 +22,17 @@ struct PickyEaterQuizView: View {
                 if showingResult {
                     QuizResultView(
                         personality: calculatePersonality(),
+                        kid: kid,
                         onDismiss: { dismiss() }
                     )
+                    .onAppear {
+                        // US-245: Fire on result reveal — pairs with quiz_started
+                        // to give us a completion-rate funnel.
+                        AnalyticsService.track(.quizCompleted(
+                            personality: String(describing: calculatePersonality()),
+                            kidId: kid?.id
+                        ))
+                    }
                 } else {
                     // Progress
                     ProgressView(value: Double(currentQuestion), total: Double(questions.count))
@@ -63,6 +80,13 @@ struct PickyEaterQuizView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                 }
+            }
+            .task {
+                // US-245: Quiz funnel start. Pair with .quizCompleted to compute
+                // abandon rate; deeper question-level abandon tracking lives
+                // in `selectAnswer` if we add it later.
+                AnalyticsService.track(.quizStarted)
+                AnalyticsService.screen("quiz_picky_eater")
             }
         }
     }
@@ -224,13 +248,38 @@ enum PickyEaterPersonality {
             ]
         }
     }
+
+    /// US-240: Maps the 4 personality buckets onto the 3 pickiness levels we
+    /// store on the Kid profile. The two middle personalities both land on
+    /// `somewhat_picky` since the quiz is more granular than the legacy field.
+    var suggestedPickinessLevel: String {
+        switch self {
+        case .adventurousEater: return "not_picky"
+        case .cautiousExplorer, .selectiveSampler: return "somewhat_picky"
+        case .routineReliant: return "very_picky"
+        }
+    }
+
+    var pickinessDisplay: String {
+        switch suggestedPickinessLevel {
+        case "not_picky": return "Not Picky"
+        case "somewhat_picky": return "Somewhat Picky"
+        case "very_picky": return "Very Picky"
+        default: return suggestedPickinessLevel
+        }
+    }
 }
 
 // MARK: - Result View
 
 struct QuizResultView: View {
+    @EnvironmentObject var appState: AppState
     let personality: PickyEaterPersonality
+    var kid: Kid? = nil
     let onDismiss: () -> Void
+
+    @State private var isApplying = false
+    @State private var didApply = false
 
     var body: some View {
         ScrollView {
@@ -271,13 +320,66 @@ struct QuizResultView: View {
                 .padding()
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
 
-                Button("Done") {
+                // US-240: When the quiz was launched from a kid context, offer
+                // to persist the result onto that kid (pickiness + strategies).
+                if let kid {
+                    VStack(spacing: 8) {
+                        Button {
+                            Task { await applyToKid(kid) }
+                        } label: {
+                            HStack {
+                                if isApplying {
+                                    ProgressView().tint(.white)
+                                } else {
+                                    Image(systemName: didApply ? "checkmark.circle.fill" : "person.crop.circle.badge.checkmark")
+                                }
+                                Text(didApply ? "Applied to \(kid.name)" : "Apply to \(kid.name)")
+                                    .fontWeight(.semibold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 4)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(didApply ? .gray : .green)
+                        .disabled(isApplying || didApply)
+
+                        Text("Sets pickiness to \(personality.pickinessDisplay) and saves these strategies to \(kid.name)'s profile.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.horizontal)
+                }
+
+                Button(kid == nil ? "Done" : "Close") {
                     onDismiss()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(kid == nil ? .borderedProminent : .bordered)
                 .tint(.green)
             }
             .padding()
+        }
+    }
+
+    private func applyToKid(_ kid: Kid) async {
+        isApplying = true
+        defer { isApplying = false }
+
+        let updates = KidUpdate(
+            pickinessLevel: personality.suggestedPickinessLevel,
+            helpfulStrategies: personality.strategies
+        )
+
+        do {
+            try await appState.updateKid(kid.id, updates: updates)
+            didApply = true
+            HapticManager.success()
+            // updateKid already shows a success toast; auto-dismiss after a beat
+            // so the user lands back where they started.
+            try? await Task.sleep(for: .milliseconds(700))
+            onDismiss()
+        } catch {
+            // updateKid surfaces its own error toast; no need to double-up.
         }
     }
 }

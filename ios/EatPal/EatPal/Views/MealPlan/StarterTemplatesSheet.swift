@@ -227,10 +227,11 @@ private struct StarterTemplateDetailSheet: View {
                 "Applied \(template.name)",
                 message: "\(result.entriesCreated) meals · \(result.foodsCreated) new foods\(allergenSuffix)"
             )
+            AnalyticsService.track(.starterTemplateApplied(templateId: template.id))
             onApplied()
         } catch {
             HapticManager.error()
-            ToastManager.shared.error("Couldn't apply template", message: error.localizedDescription)
+            ToastManager.shared.show(error, as: { .save(entity: "starter template", underlying: $0) })
         }
     }
 }

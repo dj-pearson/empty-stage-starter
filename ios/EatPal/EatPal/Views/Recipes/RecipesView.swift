@@ -915,12 +915,20 @@ struct AddRecipeView: View {
             let parsed = try await RecipeImportService.parse(trimmed)
             applyParsed(parsed, sourceURL: trimmed)
             HapticManager.success()
+            AnalyticsService.track(.recipeImported(source: .url, success: true))
         } catch let error as RecipeImportService.ImportError {
+            // ImportError already has friendly localized descriptions; surface
+            // them as-is. AppError.wrap would lose that domain-specific copy.
             importError = error.errorDescription
             HapticManager.error()
+            AnalyticsService.track(.recipeImported(source: .url, success: false))
         } catch {
-            importError = error.localizedDescription
+            // Anything else (transient network, decode hiccup) gets the
+            // standard import-failure message + offline detection.
+            importError = AppError.wrap(error, as: { .importFailed(source: "URL", underlying: $0) })
+                .errorDescription
             HapticManager.error()
+            AnalyticsService.track(.recipeImported(source: .url, success: false))
         }
     }
 

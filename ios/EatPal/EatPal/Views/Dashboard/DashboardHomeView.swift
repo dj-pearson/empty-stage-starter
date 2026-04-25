@@ -6,6 +6,17 @@ struct DashboardHomeView: View {
     @State private var showingAddFood = false
     @State private var scannedBarcode: ScannedBarcodeItem?
 
+    /// US-240: First active kid that has neither a saved pickinessLevel nor
+    /// strategies — these are the parents who will benefit most from the quiz.
+    /// Returns nil once everyone has a profile set up.
+    private var kidNeedingQuiz: Kid? {
+        appState.kids.first { kid in
+            let noPickiness = (kid.pickinessLevel ?? "").isEmpty
+            let noStrategies = (kid.helpfulStrategies ?? []).isEmpty
+            return noPickiness && noStrategies
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -17,6 +28,12 @@ struct DashboardHomeView: View {
                 // Today's Meals Summary
                 if let kidId = appState.activeKidId {
                     TodayMealSummaryCard(kidId: kidId)
+                }
+
+                // US-240: Quiz nudge card for kids without a pickiness profile.
+                // Auto-hides once they've taken the quiz so it doesn't nag.
+                if let kid = kidNeedingQuiz {
+                    PickyEaterQuizNudgeCard(kid: kid)
                 }
 
                 // Quick Stats
@@ -271,6 +288,67 @@ struct QuickActionButton: View {
             .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Picky Eater Quiz Nudge (US-240)
+
+/// Dashboard prompt shown when an active kid has no pickiness profile yet.
+/// One tap opens the quiz pre-targeted to that kid; the result screen then
+/// offers an "Apply to <name>" button that persists the personality result.
+private struct PickyEaterQuizNudgeCard: View {
+    let kid: Kid
+    @State private var showingQuiz = false
+
+    var body: some View {
+        Button {
+            showingQuiz = true
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(Color.pink.opacity(0.18))
+                        .frame(width: 48, height: 48)
+                    Image(systemName: "questionmark.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.pink)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Discover \(kid.name)'s eating style")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                    Text("8 questions • personalized strategies")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding()
+            .background(
+                LinearGradient(
+                    colors: [Color.pink.opacity(0.08), Color.purple.opacity(0.05)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 12)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(Color.pink.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showingQuiz) {
+            PickyEaterQuizView(kid: kid)
+        }
+        .accessibilityLabel("Discover \(kid.name)'s eating style — take the picky-eater quiz")
     }
 }
 
