@@ -450,11 +450,49 @@ struct AddGroceryItemView: View {
     private let units = ["count", "oz", "lb", "g", "kg", "cups", "tbsp", "tsp", "ml", "l"]
     private let priorities = ["low", "medium", "high"]
 
+    // US-225: autocomplete from grocery history
+    private var suggestions: [GrocerySuggestion] {
+        GrocerySuggestionEngine.suggestions(
+            for: name,
+            history: appState.groceryItems,
+            pantry: appState.foods,
+            limit: 5
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 Section("Item Details") {
                     TextField("Item name", text: $name)
+
+                    if !suggestions.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(suggestions) { suggestion in
+                                    Button {
+                                        apply(suggestion)
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Text(FoodCategory(rawValue: suggestion.category)?.icon ?? "🛒")
+                                                .font(.caption)
+                                            Text(suggestion.name)
+                                                .font(.caption)
+                                                .lineLimit(1)
+                                        }
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(Color.green.opacity(0.12), in: Capsule())
+                                        .foregroundStyle(.primary)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("Use suggestion \(suggestion.name)")
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                    }
 
                     Picker("Category", selection: $category) {
                         ForEach(FoodCategory.allCases, id: \.self) { cat in
@@ -505,6 +543,20 @@ struct AddGroceryItemView: View {
                 }
             }
         }
+    }
+
+    private func apply(_ suggestion: GrocerySuggestion) {
+        name = suggestion.name
+        if let cat = FoodCategory(rawValue: suggestion.category) {
+            category = cat
+        }
+        if units.contains(suggestion.unit) {
+            unit = suggestion.unit
+        }
+        if priorities.contains(suggestion.priority) {
+            priority = suggestion.priority
+        }
+        HapticManager.selection()
     }
 
     private func addItem() async {

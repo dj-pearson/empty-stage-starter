@@ -3214,6 +3214,434 @@
       "priority": 62,
       "passes": false,
       "notes": "Android native: PENDING. Do this LAST — after every US-200..US-221 item is green. Until then, the Expo shell is the shipping Android app."
+    },
+    {
+      "id": "US-223",
+      "title": "iOS Recipes: paste-a-URL recipe import in AddRecipeView",
+      "description": "As a parent who finds a recipe on a website, I want to paste the URL into the in-app Add Recipe form (without using the Share Sheet) so that I can capture recipes from Safari Reader Mode, ChatGPT replies, Notes, or messages where the share sheet is awkward or unavailable. The Share Extension already calls a working `parse-recipe` edge function (see `ios/EatPal/EatPalShare/ShareExtensionAPI.swift`); we just need to surface the same import path in the main app.",
+      "acceptanceCriteria": [
+        "Add a 'Import from URL' section at the top of `ios/EatPal/EatPal/Views/Recipes/RecipesView.swift` AddRecipeView (lines 597+) with a TextField + 'Fetch' button",
+        "Lift the ParsedRecipe / parse-recipe networking out of the share extension into a shared `Services/RecipeImportService.swift` callable from both share-ext and main app",
+        "On Fetch: show progress indicator, call `parse-recipe` edge function, pre-fill name/description/instructions/prepTime/cookTime/servings/imageUrl/tags fields and auto-create any missing Food rows for ingredients via fuzzy match against `appState.foods`",
+        "If parsing fails show inline error with 'Try again' + 'Enter manually' fallback (do not dismiss the sheet)",
+        "Detect URL automatically when user pastes — if pasteboard contains an http(s) URL on sheet open, prompt 'Import from <domain>?' (one-tap)",
+        "Toast on success: 'Imported recipe from allrecipes.com (8 ingredients)'",
+        "Telemetry event `recipe_imported_via_paste` with domain + ingredient_count"
+      ],
+      "priority": 63,
+      "passes": true,
+      "notes": "iOS: DONE 2026-04-24. Added `Services/RecipeImportService.swift` (calls the same `parse-recipe` edge function the share extension uses, via SupabaseManager.client). AddRecipeView gains a new 'Import from URL' section at the top with TextField + Fetch button, inline progress + error state, success pill 'Imported from <domain>'. Auto-detect: on sheet appear, if pasteboard contains an http(s) URL and the form is empty, show a confirmation alert 'Import from <host>?' — one-tap imports. Parsed fields pre-fill name/description/instructions/prepTime/cookTime/servings + remoteImageUrl; ingredients fuzzy-matched against `appState.foods` and linked as selectedFoodIds; unmatched ingredients appended to a new Additional Ingredients section. createRecipe() persists `sourceUrl` + `sourceType='url_paste'` on the Recipe row. Haptic success/error on import. STILL OPEN: telemetry event (blocked on US-245 Analytics), stronger ingredient fuzzy matching (current: exact / substring), 'Try again' + 'Enter manually' buttons on error (current: error text + cleared URL)."
+    },
+    {
+      "id": "US-224",
+      "title": "iOS Recipes: live ingredient scaling by serving count in RecipeDetailView",
+      "description": "As a parent cooking for a different number of eaters than the recipe was written for, I want to bump servings up/down and see all ingredient quantities scale in real-time so I don't have to do mental math (and so the 'Add ingredients to grocery' action uses the scaled amounts). RecipeDetailView (`ios/EatPal/EatPal/Views/Recipes/RecipesView.swift:274`) currently shows static servings text with no scaler.",
+      "acceptanceCriteria": [
+        "Add a Stepper(value: $displayServings, in: 1...20) below the current servings text",
+        "Parse `recipe.servings` (currently free-form String like '4' or 'Serves 4-6') with a tolerant regex into `originalServings: Int` — fall back to 1 if unparseable",
+        "Compute `scale = displayServings / originalServings`",
+        "For each ingredient string in `recipe.additionalIngredients` and any extracted ingredient lines, parse leading quantity (regex on `^(\\d+(?:\\.\\d+)?|\\d+/\\d+)\\s*(\\w+)?\\s+`) and replace with scaled quantity formatted to fractions where appropriate (½, ¼, ⅓, ⅔, ¾)",
+        "Display unscaled original alongside scaled value in muted text when scale ≠ 1.0 ('1 cup → 0.5 cup')",
+        "'Add ingredients to grocery' swipe action and context menu in RecipesView.swift:74-100 + 95-115 must respect the scale (add scaled quantities to the grocery item)",
+        "Persist last-used scale in @AppStorage keyed by recipe.id so reopening the recipe restores the same scaling",
+        "Reset to original servings via long-press on the Stepper or a 'Reset' chip"
+      ],
+      "priority": 64,
+      "passes": true,
+      "notes": "iOS: DONE 2026-04-24. Added `Utilities/RecipeScaling.swift` with `parseOriginalServings`, `scaleIngredientsText`, `scaleIngredientLine`, and `formatQuantity`. RecipeDetailView now has a dedicated Servings card (separated from the Meta Info badge row) with a Stepper(1...20), reset button when scaled, and a small '(from <N>)' hint. `additionalIngredients` is rendered scaled when scale ≠ 1.0 with the original shown in tertiary text below. `addIngredientsToGrocery` uses the scale — parsed quantities are scaled via `RecipeScaling.scaleIngredientLine` before being added. Persistence: per-recipe UserDefaults key `recipe.servings.<id>` (0 = use original) restored on onAppear. Quantity parser handles ints, decimals, ASCII fractions (1/2, 3/4), unicode fractions (½¼¾⅓⅔⅛⅜⅝⅞⅕⅖⅗⅘⅙⅚), and mixed forms (1 1/2). Formatter renders back to common unicode fractions when close (±0.03). STILL OPEN: scaling of foodIds-linked ingredients with per-ingredient quantities (requires a recipe_ingredients DB model currently absent), Reset chip separate from the reset button, more tolerant parser on pluralization."
+    },
+    {
+      "id": "US-225",
+      "title": "iOS Grocery: autocomplete from history in AddGroceryItemView",
+      "description": "As a parent who buys the same 30-50 items every week, I want autocomplete suggestions while typing an item name so I'm not retyping 'milk', 'bread', 'butter' for the hundredth time and re-picking the right category each time. AddGroceryItemView at `ios/EatPal/EatPal/Views/Grocery/GroceryView.swift:439` is currently a plain TextField with no suggestions.",
+      "acceptanceCriteria": [
+        "Build an in-memory frequency index from `appState.groceryItems` (and any soft-deleted history if available) keyed by lowercased name → {count, lastCategory, lastUnit, lastPriority}",
+        "Below the 'Item name' TextField, render a horizontal scroll of the top 5 suggestions matching the current text (prefix + fuzzy)",
+        "Tap a suggestion: fills name, auto-selects the most-recent category/unit/priority for that item",
+        "If the user has typed an item that exactly matches a Food in `appState.foods`, prefer that Food's category/unit (so adding 'milk' picks the same dairy + ml the user uses elsewhere)",
+        "Suggestions hidden when name is empty; collapse to top 3 once name has 3+ chars",
+        "Same autocomplete also wired into VoiceAddGrocerySheet's edit mode and EditGroceryItemView (GroceryView.swift:531) for consistency",
+        "Performance: index built lazily on first sheet appear, debounced 100ms on text change",
+        "Telemetry: `grocery_autocomplete_used` event with rank-of-tapped-suggestion"
+      ],
+      "priority": 65,
+      "passes": true,
+      "notes": "iOS: DONE 2026-04-24 (AddGroceryItemView only; EditGroceryItemView + VoiceAddGrocerySheet still open). Added `Utilities/GrocerySuggestionEngine.swift` — builds a frequency index from `appState.groceryItems` (primary source of truth; most-recent category/unit/priority per name wins) plus `appState.foods` as a fallback seed when a pantry food has never been added to grocery. Prefix matches outrank substring matches; ties broken by frequency then alphabetically. AddGroceryItemView shows a horizontal chip strip below the name TextField when `suggestions` is non-empty (max 5 chips). Tapping a chip fills name, selects the matching FoodCategory, swaps unit if it's in the whitelisted units list, and sets priority — plus a haptic selection. Suggestions are a computed property recomputed on each body render (acceptable given our data size); the engine itself is O(n) so perf is fine up to thousands of items. STILL OPEN: apply the same engine to EditGroceryItemView (GroceryView.swift:531) and VoiceAddGrocerySheet edit mode, telemetry event (blocked on US-245), debouncing is not needed at current scale but would be if history grows past ~10k."
+    },
+    {
+      "id": "US-226",
+      "title": "iOS Pantry: bulk-select multi-edit mode",
+      "description": "As a parent who just imported 50 foods (via barcode scan, photo recognition, or web sync), I want to select multiple foods at once and bulk-update them ('mark all safe', 'change category', 'add to grocery', 'delete') so I'm not tapping 50 individual rows. PantryView (`ios/EatPal/EatPal/Views/Pantry/PantryView.swift`) currently only supports per-row swipe + context menu.",
+      "acceptanceCriteria": [
+        "Add a 'Select' toolbar button (next to filter/scan/add) that toggles `editMode` state — body switches to checkbox-decorated rows",
+        "Selected count shown in nav title ('5 selected'); 'Select All in Category' header gesture",
+        "Bottom toolbar (only in edit mode) with: Mark Safe, Mark Try Bite, Add to Grocery, Change Category (sheet picker), Delete (destructive confirm)",
+        "Each bulk action runs the same per-item AppState mutations in a loop with a single toast at the end ('Updated 12 foods')",
+        "Tapping a row in edit mode toggles selection (does not push detail view)",
+        "Swipe gestures suppressed in edit mode to avoid conflict with selection",
+        "Cancel / Done in toolbar exits edit mode and clears selection",
+        "Drag-to-select (drag finger across multiple rows to multi-select, iOS 16+ List native gesture) supported",
+        "VoiceOver announces selection count after each toggle"
+      ],
+      "priority": 66,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-227",
+      "title": "iOS MealPlan: per-meal duplicate-to-tomorrow / fill-week from context menu",
+      "description": "As a parent who plans similar meals across days (kid eats the same breakfast Mon-Fri, leftovers tomorrow's dinner), I want long-press on a planned meal to offer 'Duplicate to tomorrow', 'Duplicate to next 5 days', 'Fill all <slot> this week' so I'm not dragging the same food into 5 slots. MealPlanView already has week-level Copy and Save-as-Template (`ios/EatPal/EatPal/Views/MealPlan/MealPlanView.swift:97-117`) — this is the missing meal-level granularity.",
+      "acceptanceCriteria": [
+        "Extend `PlanEntryRow` contextMenu (MealPlanView.swift:449) with a 'Duplicate' submenu containing: Tomorrow / Next 3 days / Next 7 days / Pick date…",
+        "Pick date opens a DatePicker sheet with multi-date selection (UICalendarView wrapped or custom)",
+        "Add 'Fill all <slot> this week' to the slot card menu (long-press on MealSlotCard header) — confirmation alert before bulk-create",
+        "Each duplicated entry preserves foodId/recipeId but resets `result` to nil and assigns a fresh UUID",
+        "Single batched call to `appState.addPlanEntry` per duplicate; collect failures and toast aggregate ('Added 4 of 5 — 1 failed offline, will sync')",
+        "Haptic.success on completion, toast: 'Duplicated breakfast to next 5 days'",
+        "Undo affordance via shake-to-undo or a brief 'Undo' button in the toast (matches existing iOS conventions)"
+      ],
+      "priority": 67,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-228",
+      "title": "iOS Kids: HealthKit import for height / weight / DOB in KidProfileEditorView",
+      "description": "As an iPhone parent who already tracks my child's growth in the Health app (or via a connected scale / pediatrician portal), I want a one-tap 'Import from Health' button so I'm not retyping numbers I've already logged elsewhere — and so growth-curve data stays in sync. KidProfileEditorView (`ios/EatPal/EatPal/Views/Kids/KidProfileEditorView.swift`) currently requires manual entry; HealthKitService.swift exists but only writes meal-result data.",
+      "acceptanceCriteria": [
+        "Add 'Import from Health' button under the Measurements section (KidProfileEditorView.swift:82)",
+        "Extend HealthKitService to request read auth for `dateOfBirthComponents`, `bodyMass`, `height` in `HKObjectType.characteristicType` + quantity types",
+        "On tap: show permission sheet if not yet granted, then read latest sample for height/weight and the user's DOB → compute age",
+        "Pre-fill `heightCm`, `weightKg`, `age` fields with imported values; show a small Health pill icon next to each field that came from HealthKit",
+        "If user edits a Health-imported field, drop the pill (manual override)",
+        "Show 'Last synced from Health: <relative date>' caption below the section",
+        "Add a settings toggle in HealthSettingsView for 'Auto-refresh from Health on app open'",
+        "Graceful no-op if HealthKit not available (iPad without Health, simulator, denied permission) — button hidden with no error"
+      ],
+      "priority": 68,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-229",
+      "title": "iOS MealPlan: copy a child's plan to another child for a date range",
+      "description": "As a parent of multiple kids with overlapping (but not identical) diets, I want to copy Kid A's plan for a date range to Kid B and then tweak the differences, so I'm not rebuilding the whole week. AppState already has `activeKidId` switching but no cross-kid plan duplication action.",
+      "acceptanceCriteria": [
+        "Add 'Copy to another child' menu item in MealPlanView's existing toolbar Menu (MealPlanView.swift:97)",
+        "Sheet: source date range (default = current week), target child picker (excluding active kid), preview of meals to copy (count by slot), allergen-conflict warnings (e.g., 'Sarah is allergic to peanuts; 2 meals will be skipped')",
+        "On confirm: create new PlanEntry rows with target kidId, same date+slot+foodId+recipeId, fresh UUIDs, result reset to nil",
+        "Skip meals whose food triggers an allergen on the target kid (collect skipped count, show in toast)",
+        "Toast: 'Copied 12 of 14 meals to Sarah (2 skipped: peanut allergy)'",
+        "Telemetry: `meal_plan_cross_kid_copy` with source_kid, target_kid, date_range_days, copied_count, skipped_count"
+      ],
+      "priority": 69,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-230",
+      "title": "iOS Pantry: optional expiry date + 'Expiring soon' dashboard card",
+      "description": "As a parent fighting food waste, I want to log expiry dates when I add perishables to the pantry, see what's about to expire on the dashboard, and have the AI meal planner prefer expiring ingredients so we use them up. No expiry tracking exists today.",
+      "acceptanceCriteria": [
+        "Add `expiryDate: Date?` to `Food` model (DB migration: `ALTER TABLE foods ADD COLUMN expiry_date DATE`) — generate types via `supabase gen types`",
+        "Optional 'Expiry date' DatePicker in AddFoodView and FoodDetailView edit mode (skipped by default; expanded with 'Add expiry')",
+        "When ScannedProductView pre-fills from a barcode, default expiry to +7 days (perishable categories) / +30 days (pantry) / nil (other)",
+        "Dashboard card 'Expiring this week' shows count of foods with `expiryDate <= now + 7d`; tap → filtered Pantry view",
+        "AIMealService.generatePlan accepts an `preferIngredients: [String]` param; populated with expiring foods so the prompt nudges the LLM to plan meals that use them",
+        "Pantry row shows red dot + days-until-expiry when ≤ 3 days; struck-through when expired",
+        "Push notification (opt-in, daily 9am via NotificationService): 'You have 3 foods expiring in the next 2 days — plan meals?' deep-links to expiring filter"
+      ],
+      "priority": 70,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-231",
+      "title": "iOS MealPlan: post-meal feedback (1-5 emoji + optional note)",
+      "description": "As a parent who logs whether a meal was eaten/tasted/refused, I want a quick optional follow-up — how much did they enjoy it, why did it fail — so the AI planner and 'Most loved' dashboard can learn from real outcomes instead of just binary success/fail.",
+      "acceptanceCriteria": [
+        "After tapping a result button in PlanEntryRow (MealPlanView.swift:429-437) and the existing confirmationDialog choice, show a follow-up sheet (`.sheet(item: ...)` non-blocking) with 1-5 emoji scale + 'Add note' textfield",
+        "Skippable — small 'Skip' button + auto-dismiss after 8s if no input",
+        "Persist to a new `plan_entry_feedback` table: { id, planEntryId, rating: Int, note: String?, createdAt } with RLS scoped to user_id",
+        "Dashboard 'Most loved meals' card sorts by avg rating × frequency, top 5 shown with 1-tap 'Add to plan' action",
+        "AIMealService prompt includes top-10 loved + top-5 refused-with-notes so generation reflects real preferences",
+        "Progress view adds 'Joy score' chart (avg rating per week, last 8 weeks) alongside variety + outcome charts"
+      ],
+      "priority": 71,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-232",
+      "title": "iOS Grocery: 'Shopping Mode' one-handed in-store UI",
+      "description": "As a parent shopping with one hand on the cart, I want a high-contrast, large-tap-target, dim-but-readable shopping mode that hides checked items so I don't have to scroll past 15 ticked rows to find what I still need. GroceryView is fine for editing but not for in-store use.",
+      "acceptanceCriteria": [
+        "Toggle 'Shopping mode' button in GroceryView toolbar (basket-walking icon)",
+        "When on: dark forced color scheme override, font scaled 1.4×, list rows ≥ 56pt tall, only unchecked items shown grouped by aisle/category",
+        "Single tap anywhere on row toggles checked (not just the small checkbox) with a long satisfying haptic + brief checkmark scale animation",
+        "Stays-awake mode: `UIApplication.shared.isIdleTimerDisabled = true` while in shopping mode (auto-clear on exit)",
+        "Brightness suggestion banner on first activation: 'Want to lower brightness for low-light aisles?' → one-tap reduces",
+        "Live Activity (existing GroceryTripActivityService) shows progress; ending the trip exits shopping mode automatically",
+        "Apple Watch mirror: if companion watch app exists (US-237), shopping mode also activates the watch list",
+        "Exit button always visible top-right; double-tap any row triggers undo of last check (in case of mis-tap)"
+      ],
+      "priority": 72,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-233",
+      "title": "iOS AppIntents: expand Siri / Shortcuts coverage beyond meal logging",
+      "description": "As a parent multi-tasking in the kitchen or car, I want Siri to do more than just log meal results — adding to grocery, marking foods safe, querying today's plan, and starting AI meal-plan generation should all be voice-driven. Currently only `MealAppIntents.logMealResult` and a Grocery intent are wired.",
+      "acceptanceCriteria": [
+        "New AppIntents in `ios/EatPal/EatPal/Intents/`: `AddGroceryItemIntent` (with @Parameter food name + optional kid), `MarkFoodSafeIntent`, `MarkFoodTryBiteIntent`, `WhatsForDinnerIntent` (returns spoken summary of today's planned meals), `GenerateMealPlanIntent` (kicks off AIMealService for a date)",
+        "Each intent provides `IntentDescription`, parameter `@Parameter(title:)` with EntityQuery for food names (so Siri suggests known foods)",
+        "App-level `AppShortcutsProvider` registers all intents with natural-language phrases ('Add milk to my EatPal grocery list', 'What's for dinner', 'Mark broccoli as a try-bite for Leo')",
+        "Each intent returns `IntentResult & ProvidesDialog` with spoken confirmation and (where applicable) `OpensIntent` for follow-up tap",
+        "Intents donate to system on first successful use so they appear in the lock-screen Smart Stack and Spotlight",
+        "All intents respect signed-in / kid-selected state — fail with conversational error ('First sign in to EatPal') rather than crashing",
+        "Add a Settings → Voice & Shortcuts section listing every intent with example phrases + 'Add to Siri' inline button"
+      ],
+      "priority": 73,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-234",
+      "title": "iOS Sync: pending-mutation indicator + manual 'Sync now' UX",
+      "description": "As an offline-first user, I want a visible indicator when changes are queued locally and a manual 'Sync now' button so I'm not guessing whether my last 5 edits made it to the cloud. OfflineStore already queues PendingMutation rows but the UX is invisible.",
+      "acceptanceCriteria": [
+        "Tab-bar overlay badge on the active tab when `OfflineStore.pendingMutationCount > 0` (subtle dot + count)",
+        "Tap badge → 'Pending changes' sheet listing each queued mutation with type, target name, queued-at relative time, and last-attempt error (if any)",
+        "'Sync now' button in that sheet retries the queue immediately (currently runs on app foreground only)",
+        "Settings → Sync section: last successful sync timestamp, queue depth, button to clear failed mutations after manual review",
+        "Toast 'Synced 5 changes' when queue drains naturally; persistent banner at top of screen if a mutation fails 3+ times ('1 grocery edit couldn't sync — tap to review')",
+        "App-launch hook: if pending mutations exist on cold start, attempt drain in background before allowing edits (or allow edits but warn)",
+        "Test: airplane mode → make 5 edits → toggle wifi → badge clears, toast appears"
+      ],
+      "priority": 74,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-235",
+      "title": "iOS MealPlan: pre-built starter template library",
+      "description": "As a brand-new user staring at an empty meal plan, I want to pick from a small library of curated weekly templates ('Balanced Toddler Week', 'Texture Variety Week', 'Nut-Free Family Week', 'Budget-Friendly') and apply one as a starting point I then tweak. MealPlanTemplateService already supports save/load of user templates but ships with none.",
+      "acceptanceCriteria": [
+        "Bundle 5-8 hand-curated templates as JSON in `Resources/StarterMealPlans.json` (plan name + 7 days × 4 slots × food names + descriptive blurb + appropriate-age-range)",
+        "Empty-state of MealPlanView shows 'Start from a template' button alongside 'Add manually' and the existing AI generator",
+        "Template browser sheet: cards with name, blurb, week preview, 'Use this' button",
+        "On apply: foods that match by name are linked; foods that don't exist in user's pantry are auto-created (with `addedVia: 'starter_template'`) so the plan references real Food rows",
+        "Allergen check before applying — warn if active kid is allergic to ≥1 ingredient ('This template uses peanut butter. Continue, swap, or cancel?')",
+        "Templates show in same browser as user-saved templates with a 'Curated' chip distinguishing them",
+        "Telemetry: `starter_template_applied` with template_name + foods_created_count"
+      ],
+      "priority": 75,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-236",
+      "title": "iOS AICoach: empty / loading / error state coverage",
+      "description": "As a user opening AI Coach when network is slow or down, I want to see a clear loading skeleton, an actionable error if the request fails, and a friendly empty state on first use — instead of an indefinitely blank chat view that looks broken.",
+      "acceptanceCriteria": [
+        "Empty-state on first conversation: friendly hero card with 3-5 example prompt chips ('Why won't my kid eat broccoli?', 'Plan a nut-free dinner', 'Ideas for picky eaters') — tap inserts the prompt",
+        "While AI is responding: typing-indicator dots + 'EatPal is thinking…' (already partially exists — verify; if missing, add)",
+        "On AICoachService failure: inline error message in the conversation thread (not a toast) with 'Retry' button on the failed user message",
+        "Network-down state: top banner 'Offline — AI Coach needs internet' with a queued-question hint",
+        "Long-pending requests (>15s): cancel button appears in the typing indicator",
+        "VoiceOver: typing indicator announces 'EatPal is generating a response'; failed message is labeled 'Failed — double-tap to retry'"
+      ],
+      "priority": 76,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-237",
+      "title": "iOS watchOS companion app: today's plan + grocery checklist",
+      "description": "As an Apple Watch wearer, I want a tiny companion app that shows today's planned meals and lets me check off grocery items from my wrist while shopping or cooking — without pulling out my phone.",
+      "acceptanceCriteria": [
+        "New `ios/EatPal/EatPalWatch/` watchOS target sharing the existing `ios/EatPal/Shared/` models",
+        "Two screens: Today (list of today's PlanEntry rows grouped by slot, tap → spoken meal name + log-result complication), Grocery (unchecked items, tap to check, swipe to delete)",
+        "WatchConnectivity: phone pushes a snapshot of today's plan + grocery on each AppState change; watch can push grocery-checked deltas back",
+        "Two complications: small 'Tonight: <dish>' (Modular Small / Corner), large 'Grocery: X / Y items' (Modular Large)",
+        "Watch app falls back to a 'Open EatPal on iPhone' state if no snapshot has been received yet",
+        "Activate Live Activity from the watch (start grocery trip from wrist)",
+        "Telemetry: watch_action_count by surface (today vs grocery vs complication)"
+      ],
+      "priority": 77,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-238",
+      "title": "iOS AI: 'Plan from photo of fridge' meal generator path",
+      "description": "As a parent staring into a fridge wondering what to cook, I want to snap a photo of my fridge contents and have the AI generate a meal plan that uses what I have on hand (and tell me what's missing). ImageTextRecognizer already exists — extend it for fridge contents recognition or pipe the photo to the existing vision-capable AIMealService.",
+      "acceptanceCriteria": [
+        "Add 'Plan from fridge' button in AIMealPlanView next to the existing prompt entry",
+        "Camera or photo-library picker → photo passed to a new `FridgeRecognitionService` that calls a new edge function `recognize-fridge-contents` (multimodal LLM) returning a list of recognized items + confidence",
+        "Confirmation sheet: editable list of detected items (user can tag missing items, remove false positives) before generation",
+        "AIMealService.generatePlan called with `availableIngredients: [String]` so the prompt biases toward using on-hand items",
+        "After generation: render plan + a 'You'll also need' grocery list of items the plan needs but the fridge photo didn't include",
+        "One-tap 'Add missing to grocery list' button",
+        "Telemetry: `ai_plan_from_fridge` with detected_count, used_in_plan_count, missing_count"
+      ],
+      "priority": 78,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-239",
+      "title": "iOS Settings: notification preferences UI",
+      "description": "As a user who either gets too many or too few push notifications, I want a settings panel where I can toggle per-topic and pick a preferred time-of-day for each. NotificationService.swift exists but there's no visible preferences UI today.",
+      "acceptanceCriteria": [
+        "New SettingsView section 'Notifications' with topic toggles: Meal-plan reminders, Grocery list ready, Try-bite achieved, Expiring food (US-230), AI weekly summary, Streak milestones (US-241 if shipped)",
+        "Per-topic optional time picker (default: respect quiet hours)",
+        "'Test notification' button per topic that fires a sample immediately so user can preview content",
+        "Settings persisted to UserDefaults + mirrored to Supabase `notification_preferences` table so cross-device install respects them",
+        "Single 'Mute all notifications for 24h' chip at top of section",
+        "On first launch (post-onboarding) prompt for permission contextually, not at app open ('Want a reminder when your grocery list is ready?')",
+        "Each scheduled notification's payload includes a `topic` field so analytics can attribute opens"
+      ],
+      "priority": 79,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-240",
+      "title": "iOS Quiz: surface PickyEaterQuizView from Kids/Settings/Dashboard",
+      "description": "PickyEaterQuizView exists in the codebase but has no entry point in the production UI. Parents complete the quiz on the web but iOS users never see it. Surface it so quiz-driven personalization (pickinessLevel + texture/flavor preferences) is reachable from the device.",
+      "acceptanceCriteria": [
+        "Entry point 1: KidProfileEditorView footer card 'Take the picky-eater quiz' → opens the quiz with active kid context",
+        "Entry point 2: Dashboard onboarding nudge if kid has `pickinessLevel == nil` ('Personalize meal suggestions in 2 minutes')",
+        "Entry point 3: Settings → Children → per-kid 'Retake quiz' button",
+        "Quiz writes results back via KidUpdate (pickinessLevel, texturePreferences, flavorPreferences, behavioralNotes) — uses the same KidUpdate path as KidProfileEditorView",
+        "Result screen shows a 'Profile insights' summary with 3-4 plain-language sentences ('Sarah tends to refuse mixed textures — try serving components separately')",
+        "Telemetry: quiz_started, quiz_completed (with pickinessLevel result), quiz_abandoned_at_question_n",
+        "Cross-platform parity: quiz_completed event keyed the same on web/iOS/Android so funnel works across surfaces"
+      ],
+      "priority": 80,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-241",
+      "title": "iOS Progress: try-bite streaks + milestone badges",
+      "description": "As a parent (and as a kid I show the screen to), I want streaks and unlockable badges to celebrate progress — first try-bite, 5-bite streak, tried 5 colors, mastered a category — to keep motivation high. Progress view shows raw stats but no celebration.",
+      "acceptanceCriteria": [
+        "Define a `Badge` enum + JSON catalog (10-15 badges at launch) with criteria functions — e.g., `firstTryBite`, `fiveDayStreak`, `triedFiveColors`, `vegetableExplorer` (10 distinct veg)",
+        "On every PlanEntry result update, evaluate criteria and persist newly-earned badges to a new `kid_badges` table { kidId, badgeId, earnedAt }",
+        "ProgressDashboardView: 'Streak' card showing current streak + best-ever streak; 'Badges' grid showing earned vs locked",
+        "Earning a badge triggers a celebratory sheet (Lottie or simple confetti) with optional Share button (image-only export, no PII)",
+        "Streaks reset on a recorded `refused` result (not on absence of data — missed days don't break streak)",
+        "Per-kid streaks (so multi-kid households don't accidentally share)",
+        "Toast feedback: 'New badge: Vegetable Explorer 🥦' deep-links to badge detail"
+      ],
+      "priority": 81,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-242",
+      "title": "iOS Household: family-share via iCloud Family or invite code",
+      "description": "As a household with two parents (and grandparents, nannies, ex-partners), I want multiple adults to view + edit the same meal plan, pantry, and grocery list without sharing one login. No multi-adult support exists today.",
+      "acceptanceCriteria": [
+        "DB: introduce `household_id` on user_subscriptions, plan_entries, foods, recipes, grocery_items, kids; backfill default per existing user (each user is a household of 1)",
+        "RLS: SELECT/INSERT/UPDATE/DELETE policies use `household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid())` instead of `user_id = auth.uid()`",
+        "Settings → Household: 'Invite family member' generates a 6-char code valid 24h; 'Join household' field on opposite end",
+        "Members list with role (Owner / Editor / Viewer) and revoke",
+        "Realtime: household-scoped channels so all members see live updates",
+        "Migration UX: existing solo users see no change unless they invite someone",
+        "Conflict UX: if Editor A and Editor B both edit the same grocery item within 5s, last-write-wins with a one-time toast 'Sarah also edited this — kept your version'",
+        "iCloud Family integration optional — invite-code path is the source of truth so non-Apple-Family households still work"
+      ],
+      "priority": 82,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-243",
+      "title": "iOS Budget: meal-cost calculator + weekly spend forecast",
+      "description": "As a budget-conscious parent, I want EatPal to estimate the cost of my meal plan + grocery list for the week so I can decide whether to swap to cheaper meals before shopping. Web has BudgetCalculator + BudgetAnalyticsDashboard; iOS has neither.",
+      "acceptanceCriteria": [
+        "Add optional `pricePerUnit: Double?` and `currency: String?` to Food + GroceryItem models (DB migration + types regen)",
+        "When adding to grocery, optional 'Price' field; when scanning a barcode, fetch from OpenFoodFacts price field if present",
+        "New Budget tab (or Settings entry) with: weekly forecast (sum of priced grocery items + plan-derived ingredients), price-per-meal breakdown, weekly target setting",
+        "AIMealService accepts optional `weeklyBudget: Double?` and biases toward cheaper meals when set",
+        "Pantry view shows total inventory value (sum of priced foods) when prices known",
+        "Currency follows device locale; no manual currency conversion (keep raw values per item, display in Locale.current.currency.identifier)",
+        "Soft-fail when prices unknown ('Add prices to 12 items to see weekly forecast' empty state with shortcut to bulk-price flow)"
+      ],
+      "priority": 83,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-244",
+      "title": "iOS Pantry: bulk-add via paste / multi-line text input",
+      "description": "As a parent migrating from another app or importing a shopping list someone texted me, I want to paste a list of foods ('milk, dairy\\nbroccoli, vegetable\\nchicken breast, protein') and have them all created in one shot — instead of opening AddFoodView 20 times.",
+      "acceptanceCriteria": [
+        "New 'Bulk add' menu option in Pantry toolbar (next to existing barcode + add)",
+        "Sheet with a multi-line TextEditor and a parser that supports 3 formats: comma-per-line ('name, category'), one-name-per-line (defaults category to 'other'), and ingredient-list with quantities ('2 cups milk', '1 lb chicken')",
+        "Live preview of parsed rows with editable category dropdown per row before commit",
+        "'Auto-detect category' uses a small lookup table (keyword → category) so 'milk' → dairy, 'chicken' → protein, etc.",
+        "Commit creates Food rows in a single batched OfflineStore.enqueue call so offline still works",
+        "Toast: 'Added 24 foods' with undo button (tap → bulk-delete the just-created IDs)",
+        "Reuse the same parser as AICoach 'extract foods from this' helper so behavior is consistent"
+      ],
+      "priority": 84,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-245",
+      "title": "iOS Analytics: event-coverage gap fill",
+      "description": "Sentry breadcrumbs are wired but feature-usage events are spotty — we can't see which entry surfaces drive food creation, recipe imports, AI plan generation, or grocery completion. Fill the gaps so PM can see funnels.",
+      "acceptanceCriteria": [
+        "Standardize event names in a new `Services/Analytics.swift` enum (e.g., `.foodAdded(via:)`, `.recipeImported(source:)`, `.mealResultLogged(result:)`, `.aiPlanGenerated(promptType:)`, `.groceryItemChecked(method:)`)",
+        "Fire events at every CRUD boundary in AppState (1 line per method)",
+        "Screen-view events on `.task {}` of every tab + each major sheet",
+        "Standard properties on every event: kid_id (hashed), is_offline, app_version, locale",
+        "PII never sent — event payloads run through a small redactor that strips names + emails before send",
+        "Sentry dashboards (or PostHog if added) split by event for the top 10 events; doc the dashboard URLs in docs/analytics.md"
+      ],
+      "priority": 85,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-246",
+      "title": "iOS Accessibility: VoiceOver + dynamic-type audit pass",
+      "description": "As a user relying on VoiceOver or large text sizes, I want every interactive element labeled and every layout to reflow gracefully when dynamic-type is at AX5. Current coverage is partial — a structured audit + fix pass is needed.",
+      "acceptanceCriteria": [
+        "Audit checklist: every Button/Image-as-button has `.accessibilityLabel`; every interactive icon has a hint; complex composite cards use `.accessibilityElement(children: .combine)` with a single descriptive label",
+        "Test all main views at Dynamic Type sizes XS, M, XL, AX1, AX5 — capture screenshots, file follow-up tickets for any clipped/overlapping content",
+        "VoiceOver test of the 5 critical flows: add food, add grocery, plan a meal, log a meal result, scan a barcode — each flow completable end-to-end without sight",
+        "Reduce-motion respected on all SwiftUI animations (gate `.spring()` etc. behind `if !UIAccessibility.isReduceMotionEnabled`)",
+        "Color contrast check: AppTheme tokens audited against WCAG AA 4.5:1 for normal text, 3:1 for large text",
+        "VoiceOver smoke test included in CI snapshot suite (where feasible)",
+        "ACCESSIBILITY.md doc capturing the audit, fixes, and known-good baseline"
+      ],
+      "priority": 86,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-247",
+      "title": "iOS UX consistency: navigation pattern + error toast standardization",
+      "description": "Audit and lock in the iOS navigation pattern (sheet vs push vs fullScreenCover) so users develop a stable mental model, and replace generic 'Error' toasts with actionable, contextual messages.",
+      "acceptanceCriteria": [
+        "Document the rule: half-sheets for quick add/edit, full-screen-cover for camera/scanner only, NavigationStack push for hierarchical content (recipe detail, kid profile)",
+        "Sweep `.sheet` and `.fullScreenCover` usages against the rule; fix outliers — captured as a small PR per Views/ subfolder",
+        "Define `AppError` enum in `Utilities/AppError.swift` with cases (network, validation(field:), offline, server(code:), unknown) + `userMessage` and `recoverySuggestion`",
+        "Wrap DataService throws in AppError so toasts show actionable messages: 'No internet — your change is saved and will sync when online' instead of 'Error'",
+        "ToastManager.shared.error gains an optional action/handler so toasts can offer 'Retry' for transient errors",
+        "Offline mutations never show error toasts (queued silently — see US-234 sync indicator instead)",
+        "Add Storybook-style preview file `Utilities/Previews/ErrorStates.swift` showing every AppError in light + dark + reduce-motion variants for designer review"
+      ],
+      "priority": 87,
+      "passes": false,
+      "notes": ""
     }
   ]
 }

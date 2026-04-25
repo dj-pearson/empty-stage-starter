@@ -277,8 +277,30 @@ struct RecipeDetailView: View {
     let recipe: Recipe
     @State private var showingEditRecipe = false
 
+    // US-224: live serving scaler. 0 == "show original".
+    @State private var displayServings: Int = 0
+
+    private var scaleStorageKey: String { "recipe.servings.\(recipe.id)" }
+
     private var currentRecipe: Recipe {
         appState.recipes.first { $0.id == recipe.id } ?? recipe
+    }
+
+    private var originalServings: Int {
+        RecipeScaling.parseOriginalServings(currentRecipe.servings)
+    }
+
+    private var effectiveServings: Int {
+        displayServings > 0 ? displayServings : originalServings
+    }
+
+    private var servingScale: Double {
+        guard originalServings > 0 else { return 1.0 }
+        return Double(effectiveServings) / Double(originalServings)
+    }
+
+    private var isScaled: Bool {
+        abs(servingScale - 1.0) > 0.001
     }
 
     var body: some View {
@@ -318,13 +340,58 @@ struct RecipeDetailView: View {
                         if let cookTime = currentRecipe.cookTime {
                             MetaBadge(icon: "flame.fill", text: cookTime)
                         }
-                        if let servings = currentRecipe.servings {
-                            MetaBadge(icon: "person.2.fill", text: "\(servings) servings")
-                        }
                         if let difficulty = currentRecipe.difficultyLevel {
                             MetaBadge(icon: "chart.bar.fill", text: difficulty.capitalized)
                         }
                     }
+
+                    // US-224: Servings scaler
+                    HStack(spacing: 12) {
+                        Image(systemName: "person.2.fill")
+                            .foregroundStyle(.green)
+                        Text("Servings")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Spacer()
+                        Stepper(
+                            value: Binding(
+                                get: { effectiveServings },
+                                set: { newValue in
+                                    let clamped = max(1, min(20, newValue))
+                                    displayServings = clamped
+                                    let persisted = (clamped == originalServings) ? 0 : clamped
+                                    UserDefaults.standard.set(persisted, forKey: scaleStorageKey)
+                                }
+                            ),
+                            in: 1...20
+                        ) {
+                            HStack(spacing: 6) {
+                                Text("\(effectiveServings)")
+                                    .font(.headline)
+                                    .monospacedDigit()
+                                if isScaled {
+                                    Text("(from \(originalServings))")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .labelsHidden()
+
+                        if isScaled {
+                            Button {
+                                displayServings = originalServings
+                                UserDefaults.standard.set(0, forKey: scaleStorageKey)
+                                HapticManager.lightImpact()
+                            } label: {
+                                Image(systemName: "arrow.uturn.backward.circle")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .accessibilityLabel("Reset to original servings")
+                        }
+                    }
+                    .padding(12)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
 
                     // Ingredients
                     VStack(alignment: .leading, spacing: 10) {
@@ -343,9 +410,19 @@ struct RecipeDetailView: View {
                         }
 
                         if let additional = currentRecipe.additionalIngredients, !additional.isEmpty {
-                            Text("Additional: \(additional)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            let rendered = isScaled
+                                ? RecipeScaling.scaleIngredientsText(additional, scale: servingScale)
+                                : additional
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Additional: \(rendered)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                if isScaled {
+                                    Text("Original: \(additional)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
                         }
 
                         Button {
@@ -423,11 +500,21 @@ struct RecipeDetailView: View {
             .sheet(isPresented: $showingEditRecipe) {
                 EditRecipeView(recipe: currentRecipe)
             }
+            .onAppear {
+                // Restore the persisted per-recipe servings scale if any.
+                let stored = UserDefaults.standard.integer(forKey: scaleStorageKey)
+                if stored > 0 {
+                    displayServings = stored
+                } else if displayServings == 0 {
+                    displayServings = originalServings
+                }
+            }
         }
     }
 
     private func addIngredientsToGrocery() async {
         let existingNames = Set(appState.groceryItems.map { $0.name.lowercased() })
+        let scale = servingScale
         var added = 0
 
         for foodId in currentRecipe.foodIds {
@@ -439,7 +526,7 @@ struct RecipeDetailView: View {
                 userId: "",
                 name: food.name,
                 category: food.category,
-                quantity: 1,
+                quantity: max(1.0, (1.0 * scale).rounded()),
                 unit: food.unit ?? "count",
                 checked: false,
                 addedVia: "recipe"
@@ -449,14 +536,21 @@ struct RecipeDetailView: View {
         }
 
         if let additional = currentRecipe.additionalIngredients, !additional.isEmpty {
-            let ingredients = additional.split(separator: ",").map {
-                $0.trimmingCharacters(in: .whitespaces)
-            }
-            for ingredient in ingredients where !existingNames.contains(ingredient.lowercased()) {
+            let ingredients = additional
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+
+            for ingredient in ingredients {
+                let scaledLine = isScaled
+                    ? RecipeScaling.scaleIngredientLine(ingredient, scale: scale)
+                    : ingredient
+                guard !existingNames.contains(scaledLine.lowercased()) else { continue }
+
                 let item = GroceryItem(
                     id: UUID().uuidString,
                     userId: "",
-                    name: ingredient,
+                    name: scaledLine,
                     category: "other",
                     quantity: 1,
                     unit: "",
@@ -469,7 +563,11 @@ struct RecipeDetailView: View {
         }
 
         let toast = ToastManager.shared
-        toast.success("Added to grocery list", message: "\(added) ingredients added.")
+        let scaleNote = isScaled ? " (scaled for \(effectiveServings) servings)" : ""
+        toast.success(
+            "Added to grocery list",
+            message: "\(added) ingredients added\(scaleNote)."
+        )
         HapticManager.success()
     }
 }
@@ -607,17 +705,96 @@ struct AddRecipeView: View {
     @State private var difficulty = "easy"
     @State private var selectedFoodIds: Set<String> = []
     @State private var tags = ""
+    @State private var additionalIngredients = ""
     @State private var recipeImage: UIImage?
+    @State private var remoteImageUrl: String?
     @State private var isSubmitting = false
+
+    // US-223: paste-URL import state
+    @State private var importURL = ""
+    @State private var isImporting = false
+    @State private var importError: String?
+    @State private var importedFrom: String?
+    @State private var showPastePrompt = false
+    @State private var pasteboardURL: URL?
 
     var body: some View {
         NavigationStack {
             Form {
+                // US-223: Import from URL
+                Section {
+                    HStack {
+                        Image(systemName: "link")
+                            .foregroundStyle(.secondary)
+                        TextField("Paste a recipe URL", text: $importURL)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled(true)
+                            .disabled(isImporting)
+                            .submitLabel(.go)
+                            .onSubmit { Task { await importFromURL() } }
+                        if !importURL.isEmpty {
+                            Button {
+                                importURL = ""
+                                importError = nil
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Clear URL")
+                        }
+                    }
+
+                    Button {
+                        Task { await importFromURL() }
+                    } label: {
+                        HStack {
+                            if isImporting {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text(isImporting ? "Fetching recipe…" : "Fetch recipe")
+                        }
+                    }
+                    .disabled(importURL.trimmingCharacters(in: .whitespaces).isEmpty || isImporting)
+
+                    if let importError {
+                        Text(importError)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    } else if let importedFrom {
+                        Label("Imported from \(importedFrom)", systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    }
+                } header: {
+                    Text("Import from URL")
+                } footer: {
+                    Text("Paste a recipe link from a website or blog and we'll fill in the details.")
+                        .font(.caption2)
+                }
+
                 Section("Recipe Photo") {
                     HStack {
                         Spacer()
                         ImagePicker(selectedImage: $recipeImage)
                         Spacer()
+                    }
+
+                    if recipeImage == nil, let remoteImageUrl, let url = URL(string: remoteImageUrl) {
+                        HStack {
+                            Spacer()
+                            CachedAsyncImage(
+                                url: url,
+                                size: CGSize(width: 120, height: 120)
+                            ) {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color(.systemGray5))
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            Spacer()
+                        }
                     }
                 }
 
@@ -669,6 +846,16 @@ struct AddRecipeView: View {
                         .lineLimit(8)
                 }
 
+                Section {
+                    TextField("Extra ingredients (comma separated)", text: $additionalIngredients, axis: .vertical)
+                        .lineLimit(3)
+                } header: {
+                    Text("Additional Ingredients")
+                } footer: {
+                    Text("Ingredients imported from a URL that couldn't be matched to your pantry live here.")
+                        .font(.caption2)
+                }
+
                 Section("Tags") {
                     TextField("Tags (comma separated)", text: $tags)
                         .textInputAutocapitalization(.never)
@@ -687,7 +874,111 @@ struct AddRecipeView: View {
                     .disabled(name.isEmpty || isSubmitting)
                 }
             }
+            .onAppear(perform: detectPasteboardURL)
+            .alert("Import from \(pasteboardURL?.host ?? "clipboard")?", isPresented: $showPastePrompt, presenting: pasteboardURL) { url in
+                Button("Import") {
+                    importURL = url.absoluteString
+                    Task { await importFromURL() }
+                }
+                Button("Not now", role: .cancel) {}
+            } message: { url in
+                Text(url.absoluteString)
+                    .font(.caption)
+            }
         }
+    }
+
+    // MARK: - Recipe URL import (US-223)
+
+    private func detectPasteboardURL() {
+        guard let clipboard = UIPasteboard.general.string,
+              let url = RecipeImportService.firstURL(in: clipboard) else {
+            return
+        }
+        // Only prompt if fields are empty (first-open heuristic) so we don't
+        // pester users who are in the middle of editing.
+        guard name.isEmpty, importURL.isEmpty else { return }
+        pasteboardURL = url
+        showPastePrompt = true
+    }
+
+    private func importFromURL() async {
+        let trimmed = importURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        isImporting = true
+        importError = nil
+        importedFrom = nil
+        defer { isImporting = false }
+
+        do {
+            let parsed = try await RecipeImportService.parse(trimmed)
+            applyParsed(parsed, sourceURL: trimmed)
+            HapticManager.success()
+        } catch let error as RecipeImportService.ImportError {
+            importError = error.errorDescription
+            HapticManager.error()
+        } catch {
+            importError = error.localizedDescription
+            HapticManager.error()
+        }
+    }
+
+    private func applyParsed(_ parsed: RecipeImportService.ParsedRecipe, sourceURL: String) {
+        if name.isEmpty { name = parsed.name }
+        if description.isEmpty, let d = parsed.description { description = d }
+        if instructions.isEmpty, let i = parsed.instructions { instructions = i }
+        if prepTime.isEmpty, let p = parsed.prepTime { prepTime = p }
+        if cookTime.isEmpty, let c = parsed.cookTime { cookTime = c }
+        if servings.isEmpty, let s = parsed.servings { servings = s }
+        if remoteImageUrl == nil { remoteImageUrl = parsed.imageUrl }
+
+        // Link any parsed ingredient that fuzzy-matches an existing pantry
+        // food; everything else goes into additionalIngredients so the user
+        // still has the text even if we couldn't auto-link it.
+        var unmatched: [String] = []
+        for ingredient in parsed.ingredients {
+            if let match = fuzzyMatchFood(ingredient) {
+                selectedFoodIds.insert(match.id)
+            } else {
+                unmatched.append(ingredient)
+            }
+        }
+        if !unmatched.isEmpty {
+            let existing = additionalIngredients.trimmingCharacters(in: .whitespaces)
+            additionalIngredients = existing.isEmpty
+                ? unmatched.joined(separator: ", ")
+                : existing + ", " + unmatched.joined(separator: ", ")
+        }
+
+        importedFrom = URL(string: sourceURL)?.host ?? sourceURL
+
+        let totalIngredients = parsed.ingredients.count
+        let matched = totalIngredients - unmatched.count
+        ToastManager.shared.success(
+            "Imported recipe",
+            message: "\(parsed.name) · \(matched)/\(totalIngredients) ingredients linked"
+        )
+    }
+
+    private func fuzzyMatchFood(_ ingredient: String) -> Food? {
+        let normalizedIngredient = ingredient
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedIngredient.isEmpty else { return nil }
+
+        // Exact or substring match on food name.
+        for food in appState.foods {
+            let normalizedFood = food.name.lowercased()
+            if normalizedIngredient == normalizedFood {
+                return food
+            }
+            if normalizedIngredient.contains(normalizedFood),
+               normalizedFood.count >= 3 {
+                return food
+            }
+        }
+        return nil
     }
 
     private func createRecipe() async {
@@ -696,7 +987,7 @@ struct AddRecipeView: View {
             tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
 
         let recipeId = UUID().uuidString
-        var imageUrl: String?
+        var imageUrl: String? = remoteImageUrl
         if let image = recipeImage {
             imageUrl = try? await ImageUploadService.upload(
                 image: image,
@@ -704,6 +995,10 @@ struct AddRecipeView: View {
                 id: recipeId
             )
         }
+
+        let trimmedAdditional = additionalIngredients.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let trimmedImportURL = importURL.trimmingCharacters(in: .whitespacesAndNewlines)
 
         let recipe = Recipe(
             id: recipeId,
@@ -715,7 +1010,10 @@ struct AddRecipeView: View {
             prepTime: prepTime.isEmpty ? nil : prepTime,
             cookTime: cookTime.isEmpty ? nil : cookTime,
             servings: servings.isEmpty ? nil : servings,
+            additionalIngredients: trimmedAdditional.isEmpty ? nil : trimmedAdditional,
             imageUrl: imageUrl,
+            sourceUrl: trimmedImportURL.isEmpty ? nil : trimmedImportURL,
+            sourceType: trimmedImportURL.isEmpty ? nil : "url_paste",
             tags: tagList,
             difficultyLevel: difficulty
         )
