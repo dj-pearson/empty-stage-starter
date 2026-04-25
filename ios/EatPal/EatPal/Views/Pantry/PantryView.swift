@@ -7,6 +7,7 @@ struct PantryView: View {
     @State private var selectedCategory: FoodCategory?
     @State private var filterMode: PantryFilter = .all
     @State private var showingAddFood = false
+    @State private var showingBulkAdd = false
     @State private var showingScanner = false
     @State private var scannedBarcode: ScannedBarcodeItem?
     @State private var selectedFood: Food?
@@ -323,8 +324,17 @@ struct PantryView: View {
                     }
                     .accessibilityLabel("Scan barcode")
 
-                    Button {
-                        showingAddFood = true
+                    Menu {
+                        Button {
+                            showingAddFood = true
+                        } label: {
+                            Label("Add one food", systemImage: "plus.circle")
+                        }
+                        Button {
+                            showingBulkAdd = true
+                        } label: {
+                            Label("Bulk add (paste list)", systemImage: "doc.on.clipboard")
+                        }
                     } label: {
                         Image(systemName: "plus")
                     }
@@ -334,6 +344,10 @@ struct PantryView: View {
         }
         .sheet(isPresented: $showingAddFood) {
             AddFoodView()
+        }
+        .sheet(isPresented: $showingBulkAdd) {
+            BulkAddFoodSheet()
+                .environmentObject(appState)
         }
         .sheet(item: $selectedFood) { food in
             FoodDetailView(food: food)

@@ -18,8 +18,10 @@ struct MealPlanView: View {
     @State private var showingCopyWeek = false
     @State private var showingClearWeekAlert = false
     @State private var showingSaveTemplate = false
+    @State private var showingCopyToKid = false
     @State private var templateName = ""
     @State private var copyTargetDate = Date()
+    @State private var copyToKidId: String?
 
     private var weekDates: [Date] {
         selectedDate.weekDates
@@ -101,6 +103,16 @@ struct MealPlanView: View {
                             Label("Copy This Week", systemImage: "doc.on.doc")
                         }
 
+                        // US-229: cross-kid copy
+                        if appState.kids.count > 1 {
+                            Button {
+                                copyToKidId = appState.kids.first { $0.id != appState.activeKidId }?.id
+                                showingCopyToKid = true
+                            } label: {
+                                Label("Copy to another child", systemImage: "person.2.crop.square.stack")
+                            }
+                        }
+
                         Button(role: .destructive) {
                             showingClearWeekAlert = true
                         } label: {
@@ -165,6 +177,15 @@ struct MealPlanView: View {
                 }
             }
             .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showingCopyToKid) {
+            CopyWeekToKidSheet(
+                weekStart: weekStart,
+                sourceKidId: appState.activeKidId,
+                targetKidId: $copyToKidId,
+                onDismiss: { showingCopyToKid = false }
+            )
+            .environmentObject(appState)
         }
         .alert("Clear This Week?", isPresented: $showingClearWeekAlert) {
             Button("Clear", role: .destructive) {
@@ -330,7 +351,7 @@ struct MealSlotCard: View {
                 .padding(.vertical, 8)
             } else {
                 ForEach(entries) { entry in
-                    PlanEntryRow(entry: entry)
+                    PlanEntryRow(entry: entry, slot: slot, date: date)
                 }
             }
         }
@@ -390,7 +411,11 @@ struct MealSlotCard: View {
 struct PlanEntryRow: View {
     @EnvironmentObject var appState: AppState
     let entry: PlanEntry
+    let slot: MealSlot
+    let date: Date
     @State private var showingResultPicker = false
+    @State private var showingDatePicker = false
+    @State private var pickedDate: Date = Date()
 
     private var food: Food? {
         appState.foods.first { $0.id == entry.foodId }
@@ -399,6 +424,10 @@ struct PlanEntryRow: View {
     private var recipe: Recipe? {
         guard let recipeId = entry.recipeId else { return nil }
         return appState.recipes.first { $0.id == recipeId }
+    }
+
+    private var entryName: String {
+        recipe?.name ?? food?.name ?? "this meal"
     }
 
     var body: some View {
@@ -467,12 +496,127 @@ struct PlanEntryRow: View {
 
             Divider()
 
+            // US-227: Duplicate submenu
+            Menu {
+                Button {
+                    Task { await duplicate(toOffsets: [1]) }
+                } label: {
+                    Label("Tomorrow", systemImage: "arrow.right.to.line")
+                }
+                Button {
+                    Task { await duplicate(toOffsets: Array(1...3)) }
+                } label: {
+                    Label("Next 3 days", systemImage: "calendar")
+                }
+                Button {
+                    Task { await duplicate(toOffsets: Array(1...7)) }
+                } label: {
+                    Label("Next 7 days", systemImage: "calendar.badge.plus")
+                }
+                Button {
+                    Task { await duplicateAcrossWeek() }
+                } label: {
+                    Label("Apply to whole week (\(slot.displayName))", systemImage: "square.fill.on.square.fill")
+                }
+                Divider()
+                Button {
+                    pickedDate = date.addingDays(1)
+                    showingDatePicker = true
+                } label: {
+                    Label("Pick date…", systemImage: "calendar.badge.clock")
+                }
+            } label: {
+                Label("Duplicate", systemImage: "doc.on.doc")
+            }
+
+            Divider()
+
             Button(role: .destructive) {
                 HapticManager.error()
                 Task { try? await appState.deletePlanEntry(entry.id) }
             } label: {
                 Label("Remove from plan", systemImage: "trash")
             }
+        }
+        .sheet(isPresented: $showingDatePicker) {
+            NavigationStack {
+                Form {
+                    Section {
+                        DatePicker(
+                            "Target date",
+                            selection: $pickedDate,
+                            displayedComponents: .date
+                        )
+                        .datePickerStyle(.graphical)
+                    } header: {
+                        Text("Duplicate \(entryName) to")
+                    }
+                }
+                .navigationTitle("Pick date")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { showingDatePicker = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Duplicate") {
+                            let target = pickedDate
+                            showingDatePicker = false
+                            Task { await duplicate(toDates: [target]) }
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
+    }
+
+    // MARK: - Duplicate helpers (US-227)
+
+    private func duplicate(toOffsets offsets: [Int]) async {
+        let dates = offsets.map { date.addingDays($0) }
+        await duplicate(toDates: dates)
+    }
+
+    private func duplicateAcrossWeek() async {
+        let week = date.weekDates
+        // Skip the source date itself; duplicate to every other day of the week.
+        let targets = week.filter { !Calendar.current.isDate($0, inSameDayAs: date) }
+        await duplicate(toDates: targets)
+    }
+
+    private func duplicate(toDates dates: [Date]) async {
+        guard !dates.isEmpty else { return }
+
+        var added = 0
+        var failed = 0
+        for target in dates {
+            let copy = PlanEntry(
+                id: UUID().uuidString,
+                userId: entry.userId,
+                kidId: entry.kidId,
+                date: DateFormatter.isoDate.string(from: target),
+                mealSlot: entry.mealSlot,
+                foodId: entry.foodId,
+                recipeId: entry.recipeId
+            )
+            do {
+                try await appState.addPlanEntry(copy)
+                added += 1
+            } catch {
+                failed += 1
+            }
+        }
+
+        HapticManager.success()
+        if added > 0 {
+            let suffix = failed > 0 ? " (\(failed) failed)" : ""
+            ToastManager.shared.success(
+                "Duplicated \(slot.displayName.lowercased())",
+                message: "\(entryName) → \(added) day\(added == 1 ? "" : "s")\(suffix)"
+            )
+        } else if failed > 0 {
+            ToastManager.shared.error("Couldn't duplicate \(entryName)")
         }
     }
 
@@ -686,6 +830,196 @@ struct AddPlanEntryView: View {
         } catch {
             // AppState already surfaces a toast; stay on the sheet so the
             // user can correct the input.
+        }
+    }
+}
+
+// MARK: - Cross-Kid Copy Sheet (US-229)
+
+struct CopyWeekToKidSheet: View {
+    @EnvironmentObject var appState: AppState
+    let weekStart: Date
+    let sourceKidId: String?
+    @Binding var targetKidId: String?
+    let onDismiss: () -> Void
+
+    @State private var isCopying = false
+
+    private var sourceKid: Kid? {
+        guard let id = sourceKidId else { return nil }
+        return appState.kids.first { $0.id == id }
+    }
+
+    private var targetKid: Kid? {
+        guard let id = targetKidId else { return nil }
+        return appState.kids.first { $0.id == id }
+    }
+
+    private var availableTargets: [Kid] {
+        appState.kids.filter { $0.id != sourceKidId }
+    }
+
+    private var sourceEntries: [PlanEntry] {
+        guard let id = sourceKidId else { return [] }
+        let calendar = Calendar.current
+        return (0..<7).flatMap { offset in
+            let date = calendar.date(byAdding: .day, value: offset, to: weekStart) ?? weekStart
+            return appState.planEntriesForDate(date, kidId: id)
+        }
+    }
+
+    private var slotCounts: [(slot: MealSlot, count: Int)] {
+        MealSlot.allCases.map { slot in
+            let n = sourceEntries.filter { $0.mealSlot == slot.rawValue }.count
+            return (slot, n)
+        }.filter { $0.count > 0 }
+    }
+
+    /// Foods in the source week whose allergens conflict with the target kid.
+    private var conflictingFoods: [(food: Food, allergens: [String])] {
+        guard let target = targetKid else { return [] }
+        let targetAllergens = Set((target.allergens ?? []).map { $0.lowercased() })
+        guard !targetAllergens.isEmpty else { return [] }
+
+        var seen: Set<String> = []
+        var result: [(Food, [String])] = []
+        for entry in sourceEntries {
+            guard !seen.contains(entry.foodId),
+                  let food = appState.foods.first(where: { $0.id == entry.foodId }) else { continue }
+            let foodAllergens = Set((food.allergens ?? []).map { $0.lowercased() })
+            let conflict = foodAllergens.intersection(targetAllergens)
+            if !conflict.isEmpty {
+                seen.insert(entry.foodId)
+                result.append((food, Array(conflict).sorted()))
+            }
+        }
+        return result
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    if let sourceKid {
+                        LabeledContent("From") { Text(sourceKid.name) }
+                    }
+                    if availableTargets.isEmpty {
+                        Text("Add a second child profile to use this.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Picker("To child", selection: $targetKidId) {
+                            ForEach(availableTargets) { kid in
+                                Text(kid.name).tag(Optional(kid.id))
+                            }
+                        }
+                    }
+                    LabeledContent("Week of") {
+                        Text(DateFormatter.shortDisplay.string(from: weekStart))
+                    }
+                } header: {
+                    Text("Copy this week's meals")
+                }
+
+                Section("Preview") {
+                    if sourceEntries.isEmpty {
+                        Text("No meals planned this week.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(slotCounts, id: \.slot) { row in
+                            HStack {
+                                Image(systemName: row.slot.icon)
+                                    .foregroundStyle(.green)
+                                Text(row.slot.displayName)
+                                Spacer()
+                                Text("\(row.count)")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        HStack {
+                            Text("Total")
+                                .fontWeight(.semibold)
+                            Spacer()
+                            Text("\(sourceEntries.count) meals")
+                                .fontWeight(.semibold)
+                        }
+                    }
+                }
+
+                if !conflictingFoods.isEmpty {
+                    Section {
+                        ForEach(conflictingFoods, id: \.food.id) { row in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(row.food.name)
+                                    .font(.subheadline)
+                                Text("Allergen: \(row.allergens.joined(separator: ", "))")
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+                    } header: {
+                        Label(
+                            "\(conflictingFoods.count) meal\(conflictingFoods.count == 1 ? "" : "s") will be skipped",
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                    } footer: {
+                        Text("These foods conflict with \(targetKid?.name ?? "the target child")'s allergens.")
+                            .font(.caption2)
+                    }
+                }
+            }
+            .navigationTitle("Copy to child")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { onDismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isCopying ? "Copying…" : "Copy") {
+                        Task { await performCopy() }
+                    }
+                    .disabled(targetKidId == nil || sourceEntries.isEmpty || isCopying)
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+
+    private func performCopy() async {
+        guard let sourceId = sourceKidId,
+              let targetId = targetKidId else { return }
+
+        isCopying = true
+        defer { isCopying = false }
+
+        do {
+            let result = try await MealPlanTemplateService.shared.copyWeekToOtherKid(
+                weekStart: weekStart,
+                sourceKidId: sourceId,
+                targetKidId: targetId,
+                appState: appState
+            )
+
+            HapticManager.success()
+            let targetName = targetKid?.name ?? "child"
+            if result.copied > 0 {
+                let allergenNote = result.skippedAllergens.isEmpty
+                    ? ""
+                    : " — \(result.skippedCount) skipped (\(result.skippedAllergens.joined(separator: ", ")))"
+                ToastManager.shared.success(
+                    "Copied to \(targetName)",
+                    message: "\(result.copied) meal\(result.copied == 1 ? "" : "s")\(allergenNote)"
+                )
+            } else if result.skippedCount > 0 {
+                ToastManager.shared.warning(
+                    "Nothing copied to \(targetName)",
+                    message: "All meals conflict with their allergens."
+                )
+            }
+
+            onDismiss()
+        } catch {
+            HapticManager.error()
+            ToastManager.shared.error("Copy failed", message: error.localizedDescription)
         }
     }
 }

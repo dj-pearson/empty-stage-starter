@@ -85,6 +85,81 @@ final class MealPlanTemplateService {
         HapticManager.success()
     }
 
+    // MARK: - Cross-Kid Plan Copy (US-229)
+
+    struct CrossKidCopyResult {
+        let copied: Int
+        let skippedAllergens: [String] // unique allergen names that triggered skips
+        let skippedCount: Int
+    }
+
+    /// Copies plan entries for a given week from `sourceKidId` to `targetKidId`.
+    /// Skips meals whose food triggers any of the target kid's allergens.
+    func copyWeekToOtherKid(
+        weekStart: Date,
+        sourceKidId: String,
+        targetKidId: String,
+        appState: AppState
+    ) async throws -> CrossKidCopyResult {
+        let calendar = Calendar.current
+        let dates = (0..<7).map { offset in
+            calendar.date(byAdding: .day, value: offset, to: weekStart)!
+        }
+
+        let sourceEntries = dates.flatMap { date in
+            appState.planEntriesForDate(date, kidId: sourceKidId)
+        }
+
+        guard !sourceEntries.isEmpty else {
+            toast.warning("Nothing to copy", message: "The source kid has no meals planned this week.")
+            return CrossKidCopyResult(copied: 0, skippedAllergens: [], skippedCount: 0)
+        }
+
+        let targetKid = appState.kids.first { $0.id == targetKidId }
+        let targetAllergens = Set((targetKid?.allergens ?? []).map { $0.lowercased() })
+
+        var copied = 0
+        var skipped = 0
+        var skippedAllergenSet: Set<String> = []
+
+        for entry in sourceEntries {
+            // Allergen guard: if the entry's food declares any allergen the
+            // target kid reacts to, skip it and remember which one.
+            if !targetAllergens.isEmpty,
+               let food = appState.foods.first(where: { $0.id == entry.foodId }) {
+                let foodAllergens = Set((food.allergens ?? []).map { $0.lowercased() })
+                let conflict = foodAllergens.intersection(targetAllergens)
+                if !conflict.isEmpty {
+                    skipped += 1
+                    skippedAllergenSet.formUnion(conflict)
+                    continue
+                }
+            }
+
+            let copy = PlanEntry(
+                id: UUID().uuidString,
+                userId: entry.userId,
+                kidId: targetKidId,
+                date: entry.date,
+                mealSlot: entry.mealSlot,
+                foodId: entry.foodId,
+                recipeId: entry.recipeId
+            )
+            do {
+                try await appState.addPlanEntry(copy)
+                copied += 1
+            } catch {
+                skipped += 1
+            }
+        }
+
+        return CrossKidCopyResult(
+            copied: copied,
+            skippedAllergens: Array(skippedAllergenSet).sorted(),
+            skippedCount: skipped
+        )
+    }
+
     // MARK: - Delete Week Plan
 
     /// Deletes all plan entries for a given week and kid.

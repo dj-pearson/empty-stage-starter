@@ -3301,8 +3301,8 @@
         "Undo affordance via shake-to-undo or a brief 'Undo' button in the toast (matches existing iOS conventions)"
       ],
       "priority": 67,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "iOS: DONE 2026-04-24 (per-meal duplicate). PlanEntryRow now takes `slot: MealSlot` and `date: Date` so it can derive duplicate targets (MealSlotCard plumbs them through). Context menu gains a 'Duplicate' submenu with: Tomorrow / Next 3 days / Next 7 days / Apply to whole week (slot) / Pick date… The 'Pick date' option opens a graphical DatePicker sheet for an arbitrary single target date. Each path calls `duplicate(toDates:)` which iterates `appState.addPlanEntry`, freshly UUIDs each copy, preserves foodId+recipeId, and resets `result` to nil. Aggregate toast 'Duplicated breakfast — Eggs → 5 days (1 failed)'. Haptic.success on completion. STILL OPEN: 'Fill all <slot> this week' at the slot-card header level (currently only available per-row via 'Apply to whole week'), shake-to-undo (per-toast undo would require ToastManager API extension)."
     },
     {
       "id": "US-228",
@@ -3335,8 +3335,8 @@
         "Telemetry: `meal_plan_cross_kid_copy` with source_kid, target_kid, date_range_days, copied_count, skipped_count"
       ],
       "priority": 69,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "iOS: DONE 2026-04-24. Added `MealPlanTemplateService.copyWeekToOtherKid(weekStart:sourceKidId:targetKidId:appState:)` returning `CrossKidCopyResult { copied, skippedAllergens, skippedCount }`. The service iterates the source kid's 7-day plan entries, looks up the target kid's allergens, and skips any entry whose food's allergens intersect them. New `CopyWeekToKidSheet` view shows source kid + target picker (excludes active kid) + week, slot-by-slot count preview, and a warning section listing the foods that will be skipped with the conflicting allergen names. Wired into MealPlanView's existing toolbar Menu as 'Copy to another child' — only shows when `appState.kids.count > 1`. Toast aggregates copied + skipped: 'Copied to Sarah — 12 meals — 2 skipped (peanut)'. Source range is the currently-displayed week (always 7 days); custom date ranges are NOT in this pass. STILL OPEN: telemetry event (blocked on US-245), custom source date range, allergen warning with one-tap 'swap food' suggestion."
     },
     {
       "id": "US-230",
@@ -3590,8 +3590,8 @@
         "Reuse the same parser as AICoach 'extract foods from this' helper so behavior is consistent"
       ],
       "priority": 84,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "iOS: DONE 2026-04-24. Added `Utilities/FoodBulkParser.swift` that auto-detects three input shapes per line: (1) `name, category` exact category name match, (2) `<qty> <unit?> <name>` leading number with optional known unit (cup/tbsp/oz/lb/g/kg/ml/l/can/jar/pack/box/bag/bottle/stick/slice/piece + plurals), (3) bare name. Lines that fully fail to parse are dropped. Category guessing uses a keyword lookup table covering ~50 common foods; bare unknowns default to .snack. New `Views/Pantry/BulkAddFoodSheet.swift` has a multi-line TextEditor that re-parses on every change via .onChange, renders editable rows below with category Picker per row, swipe-to-delete per row, batched commit via appState.addFood loop. Post-commit: toast 'N foods added', input + rows cleared so user can paste another batch, Undo section appears showing 'Undo last add (N foods)' which deletes by collected ids. Wired into PantryView's '+' toolbar button — converted from a single button to a Menu with 'Add one food' + 'Bulk add (paste list)'. STILL OPEN: AICoach parser unification (would require refactoring AICoach's local parser if any), category-keyword catalog could be loaded from Resources for localization, drag-reorder on parsed rows."
     },
     {
       "id": "US-245",
