@@ -3642,6 +3642,221 @@
       "priority": 87,
       "passes": true,
       "notes": "AppError enum landed at Utilities/AppError.swift with cases: offline, network, notSignedIn, save(entity), load(entity), delete(entity), importFailed(source), permission(feature), invalidInput(reason), subscriptionRequired(feature), unknown. Conforms to LocalizedError so rethrown errors stay friendly. Exposes title, recoveryHint, telemetryCategory, and an underlying Error for Sentry. AppError.wrap(_:as:) at catch sites converts arbitrary errors and auto-promotes URLError network-loss codes to .offline. ToastManager gained two helpers: show(_ AppError) and show(_ Error, as: (Error) -> AppError) — both forward the underlying error to Sentry with the app_error_category tag while showing a clean title + hint to the user. Refactored 18+ call sites: all 16 AppState CRUD operations (foods/kids/recipes/plan_entries/grocery_items + load), Settings → Delete Account, RecipesView URL import (preserves existing ImportError case), GroceryView GroceryGenerator, StarterTemplatesSheet, MealPlanView cross-kid copy. Navigation pattern audit + retry-action ToastManager API + ErrorStates.swift preview file deferred to a follow-up; current pass is the user-facing copy + Sentry-tagging refactor that delivers the bulk of the value."
+    },
+    {
+      "id": "US-248",
+      "title": "iOS Pantry: nightly expiry-notification scheduler + clear-expiry UX",
+      "description": "Follow-up to US-230. The expiry data + 'Expiring this week' card landed but the opt-in 'X foods expire in N days' push notification never gets scheduled, and there's no UI path to clear an expiry once it's been set (the UserDefaults toggle currently only adds/changes).",
+      "acceptanceCriteria": [
+        "Background scheduler: BGAppRefreshTask registered at app launch; daily 9am-ish (per US-239 expiringFood topic settings) it scans foods, fires UNCalendarNotificationTrigger when expiring-within-2-days count > 0",
+        "Notification body honors plurals ('1 food expires tomorrow' vs '3 foods expire in 2 days')",
+        "Notification tap deep-links to Pantry tab with the (already-implemented) ExpiringFoodsSheet auto-presented",
+        "Add 'Clear expiry' destructive Button in FoodDetailView when an expiry is set — uses a sentinel-aware encoder OR a dedicated DataService.clearExpiry(id:) method that issues a Postgrest update with explicit NULL",
+        "If a sentinel-aware encoder route is taken, document it in CLAUDE.md so future Optional clears follow the same pattern",
+        "Telemetry: expiry_notification_fired event with foods_count"
+      ],
+      "priority": 70,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-249",
+      "title": "iOS Badges: kid_badges DB persistence + UserDefaults migration",
+      "description": "Follow-up to US-241. Badges currently persist to UserDefaults only — uninstall wipes the streak history, and a multi-device user sees inconsistent badges. Move to a `kid_badges` table so progress survives device changes and household members see the same earned set.",
+      "acceptanceCriteria": [
+        "Migration: kid_badges (id, kid_id FK ON DELETE CASCADE, badge_id text, earned_at timestamptz, household_id) with unique (kid_id, badge_id) so re-evaluation can't double-insert",
+        "RLS: household-scoped (mirror plan_entries pattern); auto_fill_household_id trigger applied",
+        "BadgeService.earnedIds reads from a new AppState.kidBadges array sourced from DataService.fetchKidBadges; UserDefaults becomes a write-through cache for offline-friendly reads",
+        "One-time migration helper: on first launch after the schema lands, sweep UserDefaults badges.<kidId>.earned keys and INSERT them with their earnedAt timestamps; mark migration done via @AppStorage flag",
+        "BadgeService.evaluate persists newly-earned badges via dataService.insertKidBadge alongside the existing UserDefaults write",
+        "Realtime: when another household member earns a badge for a shared kid, the celebration sheet fires on this device too (gated by a 'last seen' UserDefaults timestamp to avoid replaying old earns on first sync)"
+      ],
+      "priority": 73,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-250",
+      "title": "iOS Progress: Joy Score weekly chart",
+      "description": "Follow-up to US-231. The post-meal feedback ratings now flow into AI prompts + the dashboard 'Most loved' card, but the Progress tab's Weekly section doesn't yet visualize the trend.",
+      "acceptanceCriteria": [
+        "Add 'Joy score' chart to Progress → Weekly tab: average rating per week for the last 8 weeks (only counts ratings ≥1)",
+        "Use Charts framework (already iOS 17+ in OverviewTab); simple LineMark with dots, week labels on x-axis, 1-5 on y-axis",
+        "Empty state when fewer than 2 weeks have any ratings: 'Rate a few meals to see your joy trend.'",
+        "Per-kid scoping (same activeKidId pattern as the badges + streak cards)",
+        "Tap a chart point → toast or sheet listing that week's loved/refused titles"
+      ],
+      "priority": 65,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-251",
+      "title": "iOS Recipes: per-ingredient pricing → recipe-based budget contribution",
+      "description": "Follow-up to US-243. The budget weeklyCostBySlot currently SKIPS recipe-based plan entries because recipes don't carry priced ingredients yet. Adding optional per-ingredient pricing closes the gap so a fully-recipe-based meal plan still contributes to the weekly forecast.",
+      "acceptanceCriteria": [
+        "Recipe.ingredients gets per-row optional pricePerUnit + unit (text) so 'pasta — $3.20 / 500g' is representable",
+        "AddRecipe / EditRecipe: ingredient row gains an optional Price column (collapsed under a chevron to keep the form simple)",
+        "BudgetService.weeklyCostBySlot recipe path: sum the priced-ingredient subtotals for each plan entry's recipeId; partial pricing is shown with a 'partial' tag so the user knows the number isn't complete",
+        "Pantry inventory math: when a Food is consumed by a planned-recipe, debit qty proportionally (out of scope for v1 — track as US-262)",
+        "Imported recipes (RecipeImportService URL parse) leave price NULL; a future enhancement can heuristically split a known total across N ingredients"
+      ],
+      "priority": 67,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-252",
+      "title": "iOS Pantry: bulk-price flow + OpenFoodFacts price ingestion",
+      "description": "Follow-up to US-243. Pricing every food one at a time is friction. Add a guided 'Set prices' flow that walks the user through unpriced foods in one sitting, and pull prices from OpenFoodFacts when the barcode-scan field exists.",
+      "acceptanceCriteria": [
+        "BarcodeService.fetchProduct: when OFF returns a `prices` field (rare but present for some EU products), surface it as the default in ScannedProductView's new optional Price field",
+        "New 'Set prices for N items' shortcut on the Budget view's empty state — opens a card-stack flow showing one unpriced food at a time with a price field + Skip + Save buttons",
+        "Card stack respects category order (perishables first since they're most price-sensitive)",
+        "Bulk save batches the updates so we don't hammer Postgrest with 30 single-row updates",
+        "Telemetry: bulk_price_session_completed with priced_count + skipped_count"
+      ],
+      "priority": 64,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-253",
+      "title": "iOS watchOS v2: log-result from wrist + Live Activity start + telemetry",
+      "description": "Follow-up to US-237. The watch scaffold ships read-only Today + interactive Grocery; close the loop by adding the deferred features that need confirmation UX or new WCSession message types.",
+      "acceptanceCriteria": [
+        "TodayView meal tap: confirmation overlay with three big buttons (Ate / Tasted / Refused) + 30-second auto-cancel",
+        "Selection sends `{log_result: {entry_id, result}}` over WCSession; iPhone-side WatchConnectivityService routes to appState.updatePlanEntry",
+        "GroceryWatchView gains a 'Start shopping trip' toolbar button that sends `{start_grocery_trip: {item_count}}` so the phone fires GroceryTripActivityService.start; mirror an 'End trip' action when active",
+        "Telemetry: AnalyticsEvent.watchAction(surface:) with cases today/grocery/complication; iPhone-side WatchConnectivityService receives a `{telemetry: {surface}}` message and dispatches",
+        "WidgetCenter.shared.reloadAllTimelines() called on the watch process whenever WatchSessionStore receives a fresh snapshot — keeps complications honest without waiting on the 15-30 min timeline policy"
+      ],
+      "priority": 69,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-254",
+      "title": "iOS Siri: GenerateMealPlanIntent (full plan from voice)",
+      "description": "Follow-up to US-233. The food-status + today's-plan intents shipped, but the 'Hey Siri, plan tomorrow's lunch in EatPal' flow was deferred because AIMealService isn't background-friendly yet.",
+      "acceptanceCriteria": [
+        "New GenerateMealPlanIntent with @Parameter(title: 'Date') var when: DateComponents (defaults to today, supports 'tomorrow' / 'this Friday')",
+        "AIMealService.generateSuggestions made nonisolated-callable: lift the AppState reads into a background-friendly snapshot fetch via DataService.shared",
+        "Returns `IntentResult & ProvidesDialog & OpensIntent` — spoken summary of the 3-meal plan + a tap that opens AIMealPlanView pre-loaded with the suggestions for review",
+        "Conversational error path when the user has no kid profile or no signed-in session — Siri reads a friendly 'Add a child profile in EatPal first' instead of throwing",
+        "Wired into EatPalAppShortcuts with phrases: 'Plan tomorrow with EatPal', 'Generate EatPal plan for Friday', 'EatPal plan for the week'"
+      ],
+      "priority": 68,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-255",
+      "title": "iOS Household: 5s last-write-wins conflict toast",
+      "description": "Follow-up to US-242. Household sharing landed but the 'Sarah also edited this — kept your version' nicety from the AC was deferred. Without it, two parents editing the same grocery item silently overwrite each other.",
+      "acceptanceCriteria": [
+        "RealtimeService logs the user_id of the last UPDATE on grocery_items + plan_entries it processes",
+        "When a remote UPDATE arrives within 5s of a local mutation on the same row by THIS user, surface a one-time toast: 'Sarah also edited <item name> — kept your version' (other member's display name resolved from household_members + profiles)",
+        "Same treatment for plan entries: '<name> also rescheduled this — kept your move'",
+        "Toast appears at most once per (row, 5s window) — debounce on a row-id keyed dictionary",
+        "Surfaces only when the conflicting member is from the same household (single-user edits across devices stay silent)",
+        "Telemetry: household_conflict_resolved event with table + conflict_age_ms"
+      ],
+      "priority": 66,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-256",
+      "title": "iOS Accessibility: remaining reduce-motion + contrast sweep",
+      "description": "Follow-up to US-246. The audit shipped + the worst offenders (BarcodeScannerView repeatForever, AICoachView typing dots) were fixed, but the ACCESSIBILITY.md known-follow-ups list calls out specific remaining sites.",
+      "acceptanceCriteria": [
+        "ShoppingModeView: gate `withAnimation(.spring(...))` undo banner + ShoppingRow tap-confirm spring behind @Environment(\\.accessibilityReduceMotion)",
+        "RecipeDetailView photo carousel: skip the cross-fade transition under reduce motion",
+        "OnboardingView page transitions: replace TabView swipe animation with instant-paginate variant",
+        "PaywallView hero: pulsing crown / sparkle gated",
+        "AppTheme.Colors.primary → primaryDark substitution sweep on every body-text combo (grep for `Colors.primary` and `.green` paired with `.body` / `.subheadline`)",
+        "ACCESSIBILITY.md updated with the closeout — move follow-ups into the 'respected' table",
+        "Stretch: Snapshot-test harness gates the audit so future regressions get caught in CI"
+      ],
+      "priority": 71,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-257",
+      "title": "iOS UX polish: navigation audit + ToastManager retry callback + ErrorStates preview",
+      "description": "Follow-up to US-247. The AppError enum + Sentry-tagging refactor shipped, but the three other items called out in the AC (sweep .sheet vs push usage, optional retry action on toasts, ErrorStates Storybook preview file) were deferred.",
+      "acceptanceCriteria": [
+        "Audit doc: sheet for quick add/edit, fullScreenCover for camera/scanner only, NavigationStack push for hierarchical content. Sweep all .sheet / .fullScreenCover usages and migrate outliers (one PR per Views/ subfolder)",
+        "ToastManager.error gains optional `retry: () async -> Void` parameter; ToastView renders a 'Retry' button when present that runs the closure and dismisses",
+        "AppError.wrap call sites optionally pass a retry closure (e.g. `toast.show(error, as: { .save(...) }, retry: { try await appState.addFood(food) })`)",
+        "Utilities/Previews/ErrorStates.swift: SwiftUI preview file rendering every AppError case in light + dark + reduce-motion variants for designer review",
+        "Document the retry pattern in CLAUDE.md so the convention spreads"
+      ],
+      "priority": 64,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-258",
+      "title": "iOS Analytics: PostHog destination + docs/analytics.md",
+      "description": "Follow-up to US-245. The 28-event AnalyticsEvent enum + 40 call sites are wired, but events currently only ride along Sentry breadcrumbs. To answer real product questions (funnels, cohort retention) we need a real analytics destination + documentation.",
+      "acceptanceCriteria": [
+        "Add a thin PostHog (or Mixpanel) iOS SDK integration; AnalyticsService.track fans out to BOTH SentryService.leaveBreadcrumb (kept for error trace context) and the new destination",
+        "Same PII redactor applies; same kid-id hashing",
+        "docs/analytics.md catalogs every AnalyticsEvent case with its expected properties, the funnel it powers, and the dashboard URL",
+        "Document the top-10 events for the iOS team (foodAdded by source, recipeImported success rate, mealResultLogged, aiPlanGenerated, shoppingModeStarted/Exited)",
+        "AppStorage flag 'analytics.optedIn' so privacy-conscious users can disable downstream analytics while keeping local Sentry breadcrumbs"
+      ],
+      "priority": 72,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-259",
+      "title": "iOS Household: iCloud Family auto-suggest",
+      "description": "Follow-up to US-242. The invite-code path is the source of truth and works for everyone, but Apple-Family households should get a one-tap 'join your family member' nudge instead of having to swap a code.",
+      "acceptanceCriteria": [
+        "On HouseholdSettingsView appear: check if the device is in an Apple Family group (UIApplication.shared.delegate route to a CKContainer.default().fetchUserRecordID + family check)",
+        "If a family member is already an EatPal user (lookup via a new lightweight `family_member_lookup` edge function that joins family Apple IDs to EatPal user_ids — opt-in disclosed at sign-up), surface 'Join Sarah's family' button that auto-creates an invite for the current user",
+        "All discovery is opt-in — show a 'Find family on EatPal' Toggle in HouseholdSettingsView, off by default",
+        "When Family is unavailable (non-Apple Family households), section is hidden entirely so it never confuses solo users",
+        "Telemetry: family_auto_join_offered, family_auto_join_accepted"
+      ],
+      "priority": 60,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-260",
+      "title": "iOS Analytics: fridge-photo funnel events",
+      "description": "Follow-up to US-238. Recognition fires `aiPlanGenerated(promptType: 'fridge_photo_recognized')`, but the AC's full funnel telemetry (detected_count, used_in_plan_count, missing_count) was deferred.",
+      "acceptanceCriteria": [
+        "New AnalyticsEvent cases: .fridgePhotoTaken, .fridgePhotoRecognized(detectedCount:), .fridgePhotoConfirmed(keptCount: manualCount:), .fridgePlanGenerated(usedCount: missingCount:)",
+        "Wired in FridgePhotoSheet (per state transition) + AIMealPlanView (when missingFromFridge is computed)",
+        "Replaces the placeholder .aiPlanGenerated('fridge_photo_recognized') event with the new vocabulary",
+        "Privacy: detected food NAMES are never sent — only counts; the existing redactor catches this but we should also document it in Services/Analytics.swift"
+      ],
+      "priority": 62,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-261",
+      "title": "iOS watchOS: manual Xcode target setup completion",
+      "description": "Operational follow-up to US-237. The Swift source for the watch app + complications is complete, but the .xcodeproj targets themselves still need to be added by hand (impossible to automate safely outside Xcode). README enumerates the steps.",
+      "acceptanceCriteria": [
+        "Add watchOS App target 'EatPalWatch' embedded in the iPhone app per README step 1-2",
+        "Add the existing Shared/WatchSnapshot.swift to BOTH targets",
+        "Add Widget Extension target 'EatPalWatchComplications' embedded in the watch app",
+        "Apply `group.com.eatpal.app` App Group entitlement to both watch targets so the snapshot cache is shared",
+        "Link WatchConnectivity.framework on the iPhone EatPal target",
+        "Smoke test: simulator pair with iPhone + Apple Watch; add grocery item on iPhone, verify it lands on watch within 3s; tap grocery row on watch, verify iPhone removes it"
+      ],
+      "priority": 75,
+      "passes": false,
+      "notes": ""
     }
   ]
 }
