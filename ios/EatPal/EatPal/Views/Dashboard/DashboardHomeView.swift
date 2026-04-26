@@ -475,7 +475,9 @@ private struct ExpiringFoodsSheet: View {
 private struct MostLovedMealsCard: View {
     @EnvironmentObject var appState: AppState
 
-    private struct Loved: Identifiable {
+    // fileprivate so the sibling `LovedMealRow` (also fileprivate) can
+    // reference it in its `let item: MostLovedMealsCard.Loved` property.
+    fileprivate struct Loved: Identifiable {
         let id: String  // food or recipe id
         let name: String
         let avgRating: Double

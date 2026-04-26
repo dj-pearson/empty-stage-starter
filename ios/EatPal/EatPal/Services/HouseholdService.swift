@@ -76,10 +76,17 @@ enum HouseholdService {
     /// Create a fresh 6-char invite code valid 24h. Returns the raw code
     /// so the UI can show it immediately without a follow-up fetch.
     static func createInvite(role: String = "parent") async throws -> String {
-        struct Args: Encodable { let p_role: String }
+        // Postgrest expects the JSON keys to match the SQL function param
+        // names (`p_role`, `p_code`). Swift identifier rules forbid
+        // underscores in property names, so we use camelCase Swift +
+        // CodingKeys to control the wire format.
+        struct Args: Encodable {
+            let role: String
+            enum CodingKeys: String, CodingKey { case role = "p_role" }
+        }
         let code: String = try await client.rpc(
             "create_household_invite",
-            params: Args(p_role: role)
+            params: Args(role: role)
         ).execute().value
         return code
     }
@@ -87,11 +94,14 @@ enum HouseholdService {
     /// Accept an invite code. Returns the household id the user just
     /// joined so the UI can refresh into the new household context.
     static func acceptInvite(code: String) async throws -> String {
-        struct Args: Encodable { let p_code: String }
+        struct Args: Encodable {
+            let code: String
+            enum CodingKeys: String, CodingKey { case code = "p_code" }
+        }
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let householdId: String = try await client.rpc(
             "accept_household_invite",
-            params: Args(p_code: trimmed)
+            params: Args(code: trimmed)
         ).execute().value
         return householdId
     }

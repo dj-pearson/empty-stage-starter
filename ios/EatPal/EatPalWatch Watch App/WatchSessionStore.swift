@@ -85,7 +85,7 @@ final class WatchSessionStore: NSObject, ObservableObject {
     }
 }
 
-extension WatchSessionStore: @preconcurrency WCSessionDelegate {
+extension WatchSessionStore: WCSessionDelegate {
     nonisolated func session(
         _ session: WCSession,
         activationDidCompleteWith activationState: WCSessionActivationState,

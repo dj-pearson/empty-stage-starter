@@ -145,7 +145,7 @@ final class WatchConnectivityService: NSObject, ObservableObject {
     }
 }
 
-extension WatchConnectivityService: @preconcurrency WCSessionDelegate {
+extension WatchConnectivityService: WCSessionDelegate {
     nonisolated func session(
         _ session: WCSession,
         activationDidCompleteWith activationState: WCSessionActivationState,
