@@ -280,7 +280,7 @@ private struct DetectedRow: View {
                         // might be spinach OR arugula).
                         Text("\(Int(item.confidence * 100))%")
                             .font(.caption2)
-                            .foregroundStyle(item.confidence >= 0.6 ? .secondary : .orange)
+                            .foregroundStyle(item.confidence >= 0.6 ? Color.secondary : Color.orange)
                     }
                 }
 

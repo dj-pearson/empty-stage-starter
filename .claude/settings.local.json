@@ -63,7 +63,8 @@
       "Bash(./gradlew :app:compileDebugKotlin)",
       "Bash(./gradlew :app:assembleDebug)",
       "Bash(./gradlew :app:testDebugUnitTest)",
-      "Bash(./gradlew :app:assembleDebug :app:testDebugUnitTest)"
+      "Bash(./gradlew :app:assembleDebug :app:testDebugUnitTest)",
+      "Bash(xargs -I {} grep -l \"CREATE TABLE.*households\" supabase/migrations/{})"
     ],
     "deny": [],
     "ask": []
