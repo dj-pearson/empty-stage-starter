@@ -364,7 +364,10 @@ private struct FreshlyMintedCodeRow: View {
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity)
                 .background(Color.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
-                .accessibilityLabel("Invite code: \(Array(code).joined(separator: " "))")
+                // Spell each character individually for VoiceOver
+                // ("A B C 1 2 3" instead of "ABC123"). map(String.init) is
+                // unambiguous; Array(code) hits the variadic-literal overload.
+                .accessibilityLabel("Invite code: \(code.map(String.init).joined(separator: " "))")
 
             HStack(spacing: 10) {
                 Button {
