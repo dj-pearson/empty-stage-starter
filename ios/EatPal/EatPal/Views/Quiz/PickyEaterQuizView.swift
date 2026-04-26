@@ -351,11 +351,22 @@ struct QuizResultView: View {
                     .padding(.horizontal)
                 }
 
-                Button(kid == nil ? "Done" : "Close") {
-                    onDismiss()
+                // Standalone-mode dismiss is the primary CTA (filled green);
+                // when there's a kid the "Apply to <name>" button above is
+                // primary, so this becomes a softer outlined Close. Two
+                // separate Buttons because `.buttonStyle(condition ? .a : .b)`
+                // tries to pick a common type from two different concrete
+                // ButtonStyle types and ends up at the protocol, which has
+                // no static `.borderedProminent`/`.bordered` members.
+                if kid == nil {
+                    Button("Done") { onDismiss() }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.green)
+                } else {
+                    Button("Close") { onDismiss() }
+                        .buttonStyle(.bordered)
+                        .tint(.green)
                 }
-                .buttonStyle(kid == nil ? .borderedProminent : .bordered)
-                .tint(.green)
             }
             .padding()
         }
