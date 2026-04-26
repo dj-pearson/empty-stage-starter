@@ -30,6 +30,11 @@ struct EatPalApp: App {
                 .onOpenURL { url in
                     deepLinkHandler.handle(url: url)
                 }
+                .task {
+                    // US-237: hand AppState to the WatchConnectivity service
+                    // once it's ready. Idempotent — re-activation is cheap.
+                    WatchConnectivityService.shared.start(appState: appState)
+                }
         }
     }
 }

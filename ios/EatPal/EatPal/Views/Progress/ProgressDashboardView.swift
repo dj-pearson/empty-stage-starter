@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ProgressDashboardView: View {
     @EnvironmentObject var appState: AppState
+    @ObservedObject private var badgeService = BadgeService.shared
     @State private var selectedTab = 0
 
     var body: some View {
@@ -27,6 +28,15 @@ struct ProgressDashboardView: View {
         }
         .navigationTitle("Progress")
         .navigationBarTitleDisplayMode(.inline)
+        // US-241: surface newly-earned badge from any screen that's currently
+        // showing the Progress dashboard. The sheet auto-clears the queued
+        // celebration on dismiss so re-earns can refire.
+        .sheet(item: $badgeService.pendingCelebration) { earned in
+            BadgeCelebrationSheet(
+                earned: earned,
+                kidName: appState.kids.first { $0.id == earned.kidId }?.name ?? "Your child"
+            )
+        }
     }
 }
 
@@ -163,157 +173,270 @@ struct ProgressStatCard: View {
     }
 }
 
-// MARK: - Achievements Tab
+// MARK: - Achievements Tab (US-241)
 
 struct AchievementsTab: View {
     @EnvironmentObject var appState: AppState
+    @ObservedObject private var badgeService = BadgeService.shared
 
-    private var achievements: [Achievement] {
-        var list: [Achievement] = []
-
-        // Food milestones
-        if appState.foods.count >= 1 {
-            list.append(Achievement(icon: "leaf.fill", title: "First Food", description: "Added your first food to the pantry", color: .green))
-        }
-        if appState.safeFoods.count >= 10 {
-            list.append(Achievement(icon: "checkmark.shield.fill", title: "Safe 10", description: "10 foods marked as safe", color: .blue))
-        }
-        if appState.safeFoods.count >= 25 {
-            list.append(Achievement(icon: "star.fill", title: "Super Safe", description: "25 foods marked as safe", color: .yellow))
-        }
-        if appState.safeFoods.count >= 50 {
-            list.append(Achievement(icon: "crown.fill", title: "Food Champion", description: "50 safe foods - incredible!", color: .purple))
-        }
-
-        // Recipe milestones
-        if appState.recipes.count >= 1 {
-            list.append(Achievement(icon: "book.fill", title: "First Recipe", description: "Created your first recipe", color: .orange))
-        }
-        if appState.recipes.count >= 10 {
-            list.append(Achievement(icon: "books.vertical.fill", title: "Recipe Collection", description: "10 recipes in your collection", color: .teal))
-        }
-
-        // Category diversity
-        let categories = Set(appState.foods.map(\.category))
-        if categories.count >= 5 {
-            list.append(Achievement(icon: "square.grid.3x3.fill", title: "Diverse Eater", description: "Foods in 5+ categories", color: .indigo))
-        }
-
-        // Meal planning
-        let resultsLogged = appState.planEntries.filter { $0.result != nil }.count
-        if resultsLogged >= 7 {
-            list.append(Achievement(icon: "calendar.badge.checkmark", title: "Week Warrior", description: "Logged 7+ meal results", color: .green))
-        }
-        if resultsLogged >= 30 {
-            list.append(Achievement(icon: "flame.fill", title: "Consistent Tracker", description: "Logged 30+ meal results", color: .red))
-        }
-
-        // Grocery
-        if appState.groceryItems.count >= 1 {
-            list.append(Achievement(icon: "cart.fill", title: "Grocery Starter", description: "Created your first grocery list", color: .green))
-        }
-
-        return list
+    /// Per-kid scope. Falls back to the first kid when the active selection
+    /// is unset so the screen never empties out — parents wandering into
+    /// Progress without selecting a kid still see meaningful data.
+    private var activeKidId: String {
+        appState.activeKidId ?? appState.kids.first?.id ?? ""
     }
 
-    private var lockedAchievements: [Achievement] {
-        var locked: [Achievement] = []
+    private var activeKidName: String {
+        appState.kids.first { $0.id == activeKidId }?.name ?? "your child"
+    }
 
-        if appState.foods.isEmpty {
-            locked.append(Achievement(icon: "leaf.fill", title: "First Food", description: "Add your first food to the pantry", color: .gray))
-        }
-        if appState.safeFoods.count < 10 {
-            locked.append(Achievement(icon: "checkmark.shield.fill", title: "Safe 10", description: "Mark 10 foods as safe (\(appState.safeFoods.count)/10)", color: .gray))
-        }
-        if appState.recipes.isEmpty {
-            locked.append(Achievement(icon: "book.fill", title: "First Recipe", description: "Create your first recipe", color: .gray))
-        }
+    private var currentStreak: Int {
+        badgeService.currentStreak(kidId: activeKidId, planEntries: appState.planEntries)
+    }
 
-        let resultsLogged = appState.planEntries.filter { $0.result != nil }.count
-        if resultsLogged < 7 {
-            locked.append(Achievement(icon: "calendar.badge.checkmark", title: "Week Warrior", description: "Log 7 meal results (\(resultsLogged)/7)", color: .gray))
-        }
-
-        return locked
+    private var bestStreak: Int {
+        badgeService.bestStreak(kidId: activeKidId, planEntries: appState.planEntries)
     }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                // Earned
-                if !achievements.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Earned (\(achievements.count))")
-                            .font(.headline)
-                            .padding(.horizontal)
+                if appState.kids.isEmpty {
+                    ContentUnavailableView(
+                        "Add a child profile",
+                        systemImage: "person.crop.circle.badge.plus",
+                        description: Text("Streaks and badges are tracked per child.")
+                    )
+                    .padding(.top, 40)
+                } else {
+                    StreakCard(
+                        kidName: activeKidName,
+                        current: currentStreak,
+                        best: bestStreak
+                    )
 
-                        ForEach(achievements) { achievement in
-                            AchievementRow(achievement: achievement, isEarned: true)
-                        }
-                    }
-                }
-
-                // Locked
-                if !lockedAchievements.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("In Progress")
-                            .font(.headline)
-                            .padding(.horizontal)
-
-                        ForEach(lockedAchievements) { achievement in
-                            AchievementRow(achievement: achievement, isEarned: false)
-                        }
-                    }
+                    BadgesGrid(kidId: activeKidId)
                 }
             }
             .padding()
         }
+        // Touching revisionCounter forces SwiftUI to re-read the per-kid
+        // earned set when a new badge gets persisted. The grid otherwise
+        // wouldn't refresh until something else dirtied appState.
+        .id(badgeService.revisionCounter)
     }
 }
 
-struct Achievement: Identifiable {
-    let id = UUID()
-    let icon: String
-    let title: String
-    let description: String
-    let color: Color
-}
+// MARK: - Streak card
 
-struct AchievementRow: View {
-    let achievement: Achievement
-    let isEarned: Bool
+private struct StreakCard: View {
+    let kidName: String
+    let current: Int
+    let best: Int
+
+    private var headline: String {
+        if current == 0 {
+            return "Start a streak!"
+        }
+        if current == 1 {
+            return "1 day streak"
+        }
+        return "\(current) day streak"
+    }
+
+    private var subtitle: String {
+        if current == 0 {
+            return "Log a try-bite today to begin."
+        }
+        if current >= best {
+            return "New personal best for \(kidName)!"
+        }
+        return "Best ever: \(best) days"
+    }
 
     var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: achievement.icon)
-                .font(.title2)
-                .foregroundStyle(isEarned ? achievement.color : .gray)
-                .frame(width: 40, height: 40)
-                .background(
-                    (isEarned ? achievement.color : .gray).opacity(0.15),
-                    in: Circle()
-                )
+        HStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(Color.orange.opacity(0.18))
+                    .frame(width: 64, height: 64)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(achievement.title)
+                Image(systemName: current > 0 ? "flame.fill" : "flame")
+                    .font(.system(size: 30))
+                    .foregroundStyle(current > 0 ? .orange : .secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(headline)
+                    .font(.title3)
+                    .fontWeight(.bold)
+                Text(subtitle)
                     .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(isEarned ? .primary : .secondary)
-                Text(achievement.description)
-                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
-
-            if isEarned {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-            }
         }
         .padding()
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
-        .opacity(isEarned ? 1 : 0.7)
+        .background(
+            LinearGradient(
+                colors: [Color.orange.opacity(0.10), Color.red.opacity(0.05)],
+                startPoint: .leading,
+                endPoint: .trailing
+            ),
+            in: RoundedRectangle(cornerRadius: 14)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(Color.orange.opacity(0.20), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(headline). \(subtitle)")
+    }
+}
+
+// MARK: - Badges grid
+
+private struct BadgesGrid: View {
+    let kidId: String
+    @ObservedObject private var badgeService = BadgeService.shared
+
+    private var earnedIds: Set<String> {
+        badgeService.earnedIds(forKid: kidId)
+    }
+
+    private var earnedBadges: [Badge] {
+        Badge.allCases.filter { earnedIds.contains($0.id) }
+            // Highest tier first so the prized badges sit at the top.
+            .sorted { $0.tier.rawValue > $1.tier.rawValue }
+    }
+
+    private var lockedBadges: [Badge] {
+        Badge.allCases.filter { !earnedIds.contains($0.id) }
+            .sorted { $0.tier.rawValue < $1.tier.rawValue }
+    }
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if !earnedBadges.isEmpty {
+                Text("Earned (\(earnedBadges.count))")
+                    .font(.headline)
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(earnedBadges) { badge in
+                        BadgeTile(badge: badge, isEarned: true)
+                    }
+                }
+            }
+
+            Text(earnedBadges.isEmpty ? "Badges to unlock" : "Locked (\(lockedBadges.count))")
+                .font(.headline)
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(lockedBadges) { badge in
+                    BadgeTile(badge: badge, isEarned: false)
+                }
+            }
+        }
+    }
+}
+
+private struct BadgeTile: View {
+    let badge: Badge
+    let isEarned: Bool
+
+    @State private var showingDetail = false
+
+    var body: some View {
+        Button {
+            showingDetail = true
+        } label: {
+            VStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill((isEarned ? badge.color : Color.gray).opacity(0.15))
+                        .frame(width: 56, height: 56)
+
+                    Image(systemName: badge.icon)
+                        .font(.title2)
+                        .foregroundStyle(isEarned ? badge.color : .gray)
+                }
+
+                Text(badge.title)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(isEarned ? .primary : .secondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+            }
+            .frame(maxWidth: .infinity, minHeight: 110)
+            .padding(.vertical, 8)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+            .opacity(isEarned ? 1.0 : 0.65)
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showingDetail) {
+            BadgeDetailView(badge: badge, isEarned: isEarned)
+        }
+        .accessibilityLabel("\(isEarned ? "Earned" : "Locked"): \(badge.title)")
+        .accessibilityHint(badge.description)
+    }
+}
+
+private struct BadgeDetailView: View {
+    @Environment(\.dismiss) var dismiss
+    let badge: Badge
+    let isEarned: Bool
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                Spacer()
+
+                ZStack {
+                    Circle()
+                        .fill((isEarned ? badge.color : Color.gray).opacity(0.18))
+                        .frame(width: 140, height: 140)
+                    Image(systemName: badge.icon)
+                        .font(.system(size: 64))
+                        .foregroundStyle(isEarned ? badge.color : .gray)
+                }
+
+                VStack(spacing: 8) {
+                    Text(badge.title)
+                        .font(.title)
+                        .fontWeight(.bold)
+
+                    Text(badge.description)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+
+                    if !isEarned {
+                        Text("Keep going — every meal log counts!")
+                            .font(.callout)
+                            .foregroundStyle(.tertiary)
+                            .padding(.top, 8)
+                    }
+                }
+
+                Spacer()
+
+                Button("Done") { dismiss() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(isEarned ? badge.color : .gray)
+                    .padding(.bottom, 24)
+            }
+            .padding(.horizontal)
+            .navigationBarTitleDisplayMode(.inline)
+            .presentationDetents([.medium])
+        }
     }
 }
 

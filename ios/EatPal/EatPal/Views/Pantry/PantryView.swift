@@ -636,6 +636,11 @@ struct FoodRowView: View {
                 Text(food.name)
                     .font(.body)
                     .fontWeight(.medium)
+                    // US-230: visual cue that the food is past its expiry.
+                    // The badge below carries the redundant text so VO is
+                    // still informative when strikethrough is the only signal.
+                    .strikethrough(food.isExpired, color: .red)
+                    .foregroundStyle(food.isExpired ? .secondary : .primary)
 
                 HStack(spacing: 6) {
                     if food.isSafe {
@@ -652,6 +657,11 @@ struct FoodRowView: View {
                         Label("\(allergens.count) allergens", systemImage: "exclamationmark.triangle.fill")
                             .font(.caption2)
                             .foregroundStyle(.red)
+                    }
+                    // US-230: expiry chip — red dot for ≤3 days, full red
+                    // 'Expired' chip when past, otherwise the days-until.
+                    if let days = food.daysUntilExpiry {
+                        ExpiryChip(days: days)
                     }
                 }
             }
@@ -825,6 +835,11 @@ struct AddFoodView: View {
     @State private var allergens = ""
     @State private var isSubmitting = false
 
+    // US-230: optional expiry. Defaults to a sensible per-category window
+    // when the user enables it (perishables → +7d, pantry → +30d).
+    @State private var hasExpiry = false
+    @State private var expiryDate: Date = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
+
     var body: some View {
         NavigationStack {
             Form {
@@ -836,11 +851,42 @@ struct AddFoodView: View {
                             Text("\(cat.icon) \(cat.displayName)").tag(cat)
                         }
                     }
+                    .onChange(of: category) { _, newCategory in
+                        // Bump the default forward when the user picks a less
+                        // perishable category before enabling the toggle —
+                        // they shouldn't see "+7d" while looking at carbs.
+                        if !hasExpiry {
+                            expiryDate = defaultExpiry(for: newCategory)
+                        }
+                    }
                 }
 
                 Section("Status") {
                     Toggle("Safe Food", isOn: $isSafe)
                     Toggle("Try Bite", isOn: $isTryBite)
+                }
+
+                // US-230: collapsed by default — user must opt in to add an
+                // expiry. Most pantry items don't need one and we don't want
+                // to nag with a date picker for every add.
+                Section {
+                    Toggle("Track expiry date", isOn: $hasExpiry.animation())
+
+                    if hasExpiry {
+                        DatePicker(
+                            "Expires on",
+                            selection: $expiryDate,
+                            in: Date()...,
+                            displayedComponents: .date
+                        )
+                    }
+                } header: {
+                    Text("Expiry")
+                } footer: {
+                    if hasExpiry {
+                        Text("We'll surface this on the dashboard a few days before expiry and prefer it in AI meal suggestions.")
+                            .font(.caption2)
+                    }
                 }
 
                 Section("Allergens") {
@@ -861,7 +907,22 @@ struct AddFoodView: View {
                     .disabled(name.isEmpty || isSubmitting)
                 }
             }
+            .onAppear {
+                expiryDate = defaultExpiry(for: category)
+            }
         }
+    }
+
+    /// Per-category default expiry window — fruit/veg/dairy/protein get the
+    /// 7-day perishable default, carbs/snacks get 30. Pure heuristic; users
+    /// always edit before saving anyway.
+    private func defaultExpiry(for category: FoodCategory) -> Date {
+        let days: Int
+        switch category {
+        case .fruit, .vegetable, .dairy, .protein: days = 7
+        case .carb, .snack: days = 30
+        }
+        return Calendar.current.date(byAdding: .day, value: days, to: Date()) ?? Date()
     }
 
     private func addFood() async {
@@ -876,7 +937,8 @@ struct AddFoodView: View {
             category: category.rawValue,
             isSafe: isSafe,
             isTryBite: isTryBite,
-            allergens: allergenList
+            allergens: allergenList,
+            expiryDate: hasExpiry ? DateFormatter.isoDate.string(from: expiryDate) : nil
         )
 
         try? await appState.addFood(food)
@@ -897,6 +959,10 @@ struct FoodDetailView: View {
     @State private var isTryBite: Bool = false
     @State private var quantity: Double = 0
     @State private var unit: String = "count"
+
+    // US-230
+    @State private var hasExpiry: Bool = false
+    @State private var expiryDate: Date = Date()
 
     private let units = ["count", "oz", "lb", "g", "kg", "cups", "tbsp", "tsp", "ml", "l", "servings"]
 
@@ -953,6 +1019,21 @@ struct FoodDetailView: View {
                     Toggle("Try Bite", isOn: $isTryBite)
                 }
 
+                // US-230: same opt-in pattern as AddFoodView so the editor
+                // can also set, change, or clear an expiry on existing foods.
+                Section {
+                    Toggle("Track expiry date", isOn: $hasExpiry.animation())
+                    if hasExpiry {
+                        DatePicker(
+                            "Expires on",
+                            selection: $expiryDate,
+                            displayedComponents: .date
+                        )
+                    }
+                } header: {
+                    Text("Expiry")
+                }
+
                 if let allergens = food.allergens, !allergens.isEmpty {
                     Section("Allergens") {
                         ForEach(allergens, id: \.self) { allergen in
@@ -965,6 +1046,13 @@ struct FoodDetailView: View {
                 Section {
                     Button("Save Changes") {
                         Task {
+                            // US-230: only send expiryDate when the toggle is
+                            // on. Setting nil via Codable would just omit the
+                            // field (encodeIfPresent), so existing values are
+                            // preserved when the user leaves the toggle off.
+                            // Clearing an existing date via this UI isn't
+                            // wired (would need a sentinel-aware encoder); the
+                            // workaround is to set it to a far-future date.
                             try? await appState.updateFood(
                                 food.id,
                                 updates: FoodUpdate(
@@ -973,7 +1061,10 @@ struct FoodDetailView: View {
                                     isSafe: isSafe,
                                     isTryBite: isTryBite,
                                     quantity: quantity,
-                                    unit: unit
+                                    unit: unit,
+                                    expiryDate: hasExpiry
+                                        ? DateFormatter.isoDate.string(from: expiryDate)
+                                        : nil
                                 )
                             )
                             dismiss()
@@ -996,7 +1087,59 @@ struct FoodDetailView: View {
                 isTryBite = food.isTryBite
                 quantity = food.quantity ?? 0
                 unit = food.unit ?? "count"
+                if let raw = food.expiryDate, let date = DateFormatter.isoDate.date(from: raw) {
+                    hasExpiry = true
+                    expiryDate = date
+                } else {
+                    hasExpiry = false
+                    expiryDate = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
+                }
             }
+        }
+    }
+}
+
+// MARK: - US-230 expiry chip
+
+/// Compact expiry indicator surfaced in the pantry list. Color tier mirrors
+/// the AppTheme semantic palette: red for expired, orange for ≤3 days,
+/// muted secondary for everything else (only shown when ≤7 days remain so
+/// rows don't get cluttered with months-away badges).
+struct ExpiryChip: View {
+    let days: Int
+
+    private var label: String {
+        if days < 0 { return "Expired" }
+        if days == 0 { return "Today" }
+        if days == 1 { return "1 day" }
+        return "\(days)d"
+    }
+
+    private var color: Color {
+        if days < 0 { return .red }
+        if days <= 3 { return .orange }
+        return .secondary
+    }
+
+    private var icon: String {
+        if days < 0 { return "xmark.circle.fill" }
+        if days <= 3 { return "circle.fill" }
+        return "clock"
+    }
+
+    var body: some View {
+        // Hide far-future expiries entirely — only surface what the user
+        // can actually act on this week. Shaving the noise here keeps the
+        // pantry row visually clean for the 90% of foods that aren't urgent.
+        if days <= 7 {
+            Label(label, systemImage: icon)
+                .font(.caption2)
+                .foregroundStyle(color)
+                .accessibilityLabel(days < 0
+                                    ? "Expired"
+                                    : days == 0
+                                        ? "Expires today"
+                                        : "Expires in \(days) day\(days == 1 ? "" : "s")")
         }
     }
 }

@@ -1,6 +1,6 @@
 import AppIntents
 
-/// US-142: Exposes the three EatPal App Intents to Siri and the Shortcuts
+/// US-142 + US-233: Exposes the EatPal App Intents to Siri and the Shortcuts
 /// app. Phrases are pre-filled so users can trigger them without configuring
 /// a shortcut first — Siri surface appears in Settings › Siri › EatPal.
 struct EatPalAppShortcuts: AppShortcutsProvider {
@@ -36,6 +36,42 @@ struct EatPalAppShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Log meal result",
             systemImageName: "checkmark.circle.fill"
+        )
+
+        // US-233: pantry-status intents — `\(\.$food)` gets resolved by
+        // `FoodEntityQuery.entities(matching:)` so a spoken food name maps
+        // to the user's actual pantry record.
+        AppShortcut(
+            intent: MarkFoodSafeIntent(),
+            phrases: [
+                "Mark \(\.$food) as a safe food in \(.applicationName)",
+                "Mark \(\.$food) safe in \(.applicationName)",
+                "\(.applicationName) safe food \(\.$food)"
+            ],
+            shortTitle: "Mark food safe",
+            systemImageName: "checkmark.shield.fill"
+        )
+
+        AppShortcut(
+            intent: MarkFoodTryBiteIntent(),
+            phrases: [
+                "Mark \(\.$food) as a try-bite in \(.applicationName)",
+                "Flag \(\.$food) as a try-bite in \(.applicationName)",
+                "\(.applicationName) try-bite \(\.$food)"
+            ],
+            shortTitle: "Mark try-bite",
+            systemImageName: "star.fill"
+        )
+
+        AppShortcut(
+            intent: TodaysPlanIntent(),
+            phrases: [
+                "What's planned in \(.applicationName) today",
+                "Today's \(.applicationName) plan",
+                "\(.applicationName) meal plan today"
+            ],
+            shortTitle: "Today's plan",
+            systemImageName: "calendar"
         )
     }
 }

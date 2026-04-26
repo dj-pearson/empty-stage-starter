@@ -39,6 +39,7 @@ struct KidsView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add child")
             }
         }
         .sheet(isPresented: $showingAddKid) {

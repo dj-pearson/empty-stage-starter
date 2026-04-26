@@ -14,6 +14,10 @@ final class AppState: ObservableObject {
     @Published var planEntries: [PlanEntry] = []
     @Published var groceryItems: [GroceryItem] = []
     @Published var groceryLists: [GroceryList] = []
+    /// US-231: optional 1-5 ratings + notes attached to plan entries.
+    /// Loaded lazily — first read of the dashboard "Most loved" card or
+    /// the AI prompt enrichment triggers `loadPlanEntryFeedback()`.
+    @Published var planEntryFeedback: [PlanEntryFeedback] = []
 
     @Published var activeKidId: String?
     @Published var isLoading = false
@@ -98,6 +102,11 @@ final class AppState: ObservableObject {
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
             .sink { [weak self] _, _, _, _ in
                 self?.refreshWidgetSnapshot()
+                // US-237: piggy-back the watch sync on the same change stream.
+                // WatchConnectivityService has its own 1.5s debounce on top
+                // so a burst of mutations doesn't translate into a burst of
+                // userInfo transfers.
+                WatchConnectivityService.shared.scheduleSnapshotPush()
             }
             .store(in: &cancellables)
     }
@@ -212,6 +221,10 @@ final class AppState: ObservableObject {
 
             // Start real-time subscriptions after initial load
             await realtimeService.subscribe(appState: self)
+
+            // US-231: feedback isn't on the critical path of the meal planner
+            // so it loads in the background after primary data is on screen.
+            Task { await loadPlanEntryFeedback() }
 
             // US-143: drain any recipes the share extension saved while the
             // user was signed out or the app was backgrounded.
@@ -374,6 +387,18 @@ final class AppState: ObservableObject {
             // `addRecipe` callers default to `.manual` here; the URL-import path
             // emits `.recipeImported(...)` itself before invoking this method.
             AnalyticsService.track(.recipeCreated(via: .manual))
+            // US-241: recipeChef badge is household-wide, but the catalog still
+            // wants a kid context to persist against. Use the active kid; if
+            // none is selected we silently skip (eval will pick it up next
+            // time a kid logs a meal).
+            if let activeKidId = activeKidId {
+                BadgeService.shared.evaluate(
+                    kidId: activeKidId,
+                    foods: foods,
+                    recipes: recipes,
+                    planEntries: planEntries
+                )
+            }
         } catch {
             recipes.removeAll { $0.id == recipe.id }
             toast.show(error, as: { .save(entity: "recipe", underlying: $0) })
@@ -449,6 +474,15 @@ final class AppState: ObservableObject {
                 if result == MealResult.ate.rawValue {
                     Task { await writeHealthSample(for: planEntries[index]) }
                 }
+                // US-241: re-evaluate badges after each result update. Cheap —
+                // only runs criteria for unearned badges, and the planEntries
+                // / foods / recipes arrays are already in memory.
+                BadgeService.shared.evaluate(
+                    kidId: planEntries[index].kidId,
+                    foods: foods,
+                    recipes: recipes,
+                    planEntries: planEntries
+                )
             }
             HapticManager.lightImpact()
         } catch {
@@ -511,6 +545,59 @@ final class AppState: ObservableObject {
     func planEntriesForDate(_ date: Date, kidId: String) -> [PlanEntry] {
         let dateString = DateFormatter.isoDate.string(from: date)
         return planEntries.filter { $0.kidId == kidId && $0.date == dateString }
+    }
+
+    // MARK: - Plan Entry Feedback (US-231)
+
+    /// Background-loadable. Failures are quietly swallowed: feedback is a
+    /// secondary signal and we never want a transient error to block the
+    /// dashboard from rendering with stale-but-useful data.
+    func loadPlanEntryFeedback() async {
+        do {
+            planEntryFeedback = try await dataService.fetchPlanEntryFeedback()
+        } catch {
+            SentryService.capture(error, extras: ["context": "loadPlanEntryFeedback"])
+        }
+    }
+
+    /// Records a 1-5 rating + optional note for a plan entry. Optimistic —
+    /// the local @Published list updates immediately; on server failure we
+    /// surface the standard error toast and roll back.
+    func addPlanEntryFeedback(planEntryId: String, rating: Int, note: String?) async {
+        let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let optimistic = PlanEntryFeedback(
+            id: UUID().uuidString,
+            planEntryId: planEntryId,
+            userId: "",
+            rating: rating,
+            note: trimmedNote?.isEmpty == true ? nil : trimmedNote,
+            createdAt: ISO8601DateFormatter().string(from: Date())
+        )
+        planEntryFeedback.append(optimistic)
+        do {
+            try await dataService.insertPlanEntryFeedback(
+                PlanEntryFeedbackInsert(
+                    planEntryId: planEntryId,
+                    userId: "",
+                    rating: rating,
+                    note: optimistic.note
+                )
+            )
+            AnalyticsService.track(.mealResultLogged(
+                result: "rated_\(rating)",
+                kidId: planEntries.first { $0.id == planEntryId }?.kidId
+            ))
+        } catch {
+            planEntryFeedback.removeAll { $0.id == optimistic.id }
+            toast.show(error, as: { .save(entity: "feedback", underlying: $0) })
+        }
+    }
+
+    /// Latest feedback (by `createdAt`) for a given plan entry.
+    func latestFeedback(for planEntryId: String) -> PlanEntryFeedback? {
+        planEntryFeedback
+            .filter { $0.planEntryId == planEntryId }
+            .max { ($0.createdAt ?? "") < ($1.createdAt ?? "") }
     }
 
     // MARK: - Grocery Operations

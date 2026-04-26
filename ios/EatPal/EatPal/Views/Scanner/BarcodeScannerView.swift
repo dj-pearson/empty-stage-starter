@@ -139,12 +139,17 @@ struct BarcodeScannerView: View {
 
 struct ScanLineView: View {
     @State private var offset: CGFloat = -60
+    // US-246: respect Reduce Motion. A repeatForever sweep is one of the
+    // worst offenders for vestibular sensitivity — we render a static
+    // mid-aligned line instead when the system preference is on.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Rectangle()
             .fill(Color.green.opacity(0.8))
-            .offset(y: offset)
+            .offset(y: reduceMotion ? 0 : offset)
             .onAppear {
+                guard !reduceMotion else { return }
                 withAnimation(
                     .easeInOut(duration: 1.5)
                     .repeatForever(autoreverses: true)
@@ -152,6 +157,7 @@ struct ScanLineView: View {
                     offset = 60
                 }
             }
+            .accessibilityHidden(true)  // decorative; the camera preview narrates the actual scan state
     }
 }
 

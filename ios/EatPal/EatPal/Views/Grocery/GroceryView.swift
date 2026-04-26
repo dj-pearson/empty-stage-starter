@@ -466,6 +466,8 @@ struct AddGroceryItemView: View {
     @State private var unit = "count"
     @State private var notes = ""
     @State private var priority = "medium"
+    // US-243: optional unit price + locale-default currency
+    @State private var pricePerUnit: Double = 0
 
     private let units = ["count", "oz", "lb", "g", "kg", "cups", "tbsp", "tsp", "ml", "l"]
     private let priorities = ["low", "medium", "high"]
@@ -544,6 +546,28 @@ struct AddGroceryItemView: View {
                     .pickerStyle(.segmented)
                 }
 
+                // US-243: optional price per unit. Empty (0) is treated as
+                // "untracked" by the budget view — no fake $0.00 totals.
+                Section {
+                    HStack {
+                        Text("Price")
+                        Spacer()
+                        TextField("Optional", value: $pricePerUnit, format: .number.precision(.fractionLength(0...2)))
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 100)
+                            .monospacedDigit()
+                        Text(BudgetService.defaultCurrencyCode)
+                            .foregroundStyle(.tertiary)
+                            .font(.caption)
+                    }
+                } header: {
+                    Text("Price (optional)")
+                } footer: {
+                    Text("Skip if unknown — Budget will only count priced items.")
+                        .font(.caption2)
+                }
+
                 Section("Notes") {
                     TextField("Optional notes", text: $notes, axis: .vertical)
                         .lineLimit(3)
@@ -580,6 +604,13 @@ struct AddGroceryItemView: View {
     }
 
     private func addItem() async {
+        // US-243: only persist a price when the user actually entered one
+        // (zero is the sentinel for "untracked" — see Budget view logic).
+        let resolvedPrice: Double? = pricePerUnit > 0 ? pricePerUnit : nil
+        let resolvedCurrency: String? = resolvedPrice != nil
+            ? BudgetService.defaultCurrencyCode
+            : nil
+
         let item = GroceryItem(
             id: UUID().uuidString,
             userId: "",
@@ -590,7 +621,9 @@ struct AddGroceryItemView: View {
             checked: false,
             notes: notes.isEmpty ? nil : notes,
             priority: priority,
-            addedVia: "manual"
+            addedVia: "manual",
+            pricePerUnit: resolvedPrice,
+            currency: resolvedCurrency
         )
 
         try? await appState.addGroceryItem(item)

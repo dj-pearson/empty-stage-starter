@@ -254,6 +254,10 @@ struct ChatBubble: View {
 
 struct TypingIndicator: View {
     @State private var dotIndex = 0
+    @State private var animationTimer: Timer?
+    // US-246: skip the bouncing-dot animation under Reduce Motion; the
+    // accompanying "EatPal is thinking…" caption already conveys the state.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 4) {
@@ -268,11 +272,19 @@ struct TypingIndicator: View {
         .padding(.vertical, 12)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
         .onAppear {
-            Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
+            guard !reduceMotion else { return }
+            animationTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
                 withAnimation(.easeInOut(duration: 0.3)) {
                     dotIndex = (dotIndex + 1) % 3
                 }
             }
         }
+        .onDisappear {
+            // Stop the timer when the indicator goes away — leaving it running
+            // burns CPU and posts pointless animations to off-screen views.
+            animationTimer?.invalidate()
+            animationTimer = nil
+        }
+        .accessibilityLabel("EatPal is thinking")
     }
 }

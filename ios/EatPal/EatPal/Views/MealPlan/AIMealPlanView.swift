@@ -4,8 +4,16 @@ struct AIMealPlanView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
     @StateObject private var aiService = AIMealService.shared
+    /// US-243: read the same UserDefault the Budget view writes — when set,
+    /// gets passed to the edge function so the LLM prefers cheaper picks.
+    @AppStorage("budget.weeklyTarget") private var weeklyTarget: Double = 0
 
     let date: Date
+
+    /// US-238: optional fridge-detected ingredients passed to the planner.
+    /// Set by the FridgePhotoSheet confirmation step; cleared on Close.
+    @State private var fridgeIngredients: [String] = []
+    @State private var showingFridgeSheet = false
 
     private var activeKid: Kid? {
         guard let kidId = appState.activeKidId else { return nil }
@@ -38,16 +46,43 @@ struct AIMealPlanView: View {
 
                         // Generate Button
                         if aiService.suggestions.isEmpty && !aiService.isLoading {
-                            Button {
-                                Task { await generateSuggestions() }
-                            } label: {
-                                Label("Generate Suggestions", systemImage: "wand.and.stars")
-                                    .font(.headline)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
+                            VStack(spacing: 10) {
+                                Button {
+                                    Task { await generateSuggestions() }
+                                } label: {
+                                    Label("Generate Suggestions", systemImage: "wand.and.stars")
+                                        .font(.headline)
+                                        .frame(maxWidth: .infinity)
+                                        .padding()
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(.green)
+
+                                // US-238: alternate entry — snap a fridge photo,
+                                // then generate using whatever the model recognized.
+                                Button {
+                                    showingFridgeSheet = true
+                                } label: {
+                                    Label("Plan from fridge photo", systemImage: "refrigerator.fill")
+                                        .font(.subheadline)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 8)
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(.blue)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.green)
+                            .padding(.horizontal)
+                        }
+
+                        // US-238: confirmed-from-fridge ingredients chip strip.
+                        // Removable inline so the user can tweak before generating.
+                        if !fridgeIngredients.isEmpty {
+                            FridgeIngredientsChips(
+                                names: fridgeIngredients,
+                                onRemove: { name in
+                                    fridgeIngredients.removeAll { $0 == name }
+                                }
+                            )
                             .padding(.horizontal)
                         }
 
@@ -93,6 +128,16 @@ struct AIMealPlanView: View {
                             .tint(.green)
                             .padding(.horizontal)
 
+                            // US-238: items the plan needs but the fridge
+                            // photo didn't include — one tap to add to grocery.
+                            if !missingFromFridge.isEmpty {
+                                MissingFromFridgeCard(
+                                    missing: missingFromFridge,
+                                    onAddToGrocery: { Task { await addMissingToGrocery() } }
+                                )
+                                .padding(.horizontal)
+                            }
+
                             // Regenerate
                             Button {
                                 Task { await generateSuggestions() }
@@ -113,9 +158,27 @@ struct AIMealPlanView: View {
                     Button("Close") { dismiss() }
                 }
             }
+            .sheet(isPresented: $showingFridgeSheet) {
+                FridgePhotoSheet { confirmed in
+                    fridgeIngredients = confirmed
+                    Task { await generateSuggestions() }
+                }
+            }
         }
         .onDisappear {
             aiService.clearSuggestions()
+            fridgeIngredients = []
+        }
+    }
+
+    /// US-238: ingredients the plan called for that the fridge photo did
+    /// NOT include — i.e. what the user still needs to buy. Match is a
+    /// case-insensitive substring against the suggestion's foodName.
+    private var missingFromFridge: [AIMealService.MealSuggestion] {
+        guard !fridgeIngredients.isEmpty else { return [] }
+        let lowered = fridgeIngredients.map { $0.lowercased() }
+        return aiService.suggestions.filter { suggestion in
+            !lowered.contains { suggestion.foodName.lowercased().contains($0) }
         }
     }
 
@@ -131,7 +194,17 @@ struct AIMealPlanView: View {
             date: date,
             foods: appState.foods,
             recentEntries: Array(recentEntries),
-            allFoods: appState.foods
+            allFoods: appState.foods,
+            // US-231: pass recipes + feedback so the prompt picks up
+            // loved_meals / refused_meals enrichment when available.
+            recipes: appState.recipes,
+            feedback: appState.planEntryFeedback,
+            // US-243: pass through the budget target so the LLM prefers
+            // cheaper meals when one is configured. Zero = unset.
+            weeklyBudget: weeklyTarget,
+            // US-238: when the fridge sheet was used, the LLM gets a strong
+            // signal about what's already on hand.
+            availableIngredients: fridgeIngredients.isEmpty ? nil : fridgeIngredients
         )
     }
 
@@ -158,6 +231,36 @@ struct AIMealPlanView: View {
         let toast = ToastManager.shared
         toast.success("All added", message: "\(aiService.suggestions.count) meals added to plan.")
         dismiss()
+    }
+
+    /// US-238: bulk-create grocery items for everything the plan needs
+    /// that the fridge photo didn't already have.
+    private func addMissingToGrocery() async {
+        var added = 0
+        for suggestion in missingFromFridge {
+            let item = GroceryItem(
+                id: UUID().uuidString,
+                userId: "",
+                name: suggestion.foodName,
+                category: "snack",  // unknown — user can re-categorize later
+                quantity: 1,
+                unit: "count",
+                checked: false,
+                addedVia: "ai"
+            )
+            do {
+                try await appState.addGroceryItem(item)
+                added += 1
+            } catch {
+                continue
+            }
+        }
+        if added > 0 {
+            ToastManager.shared.success(
+                "Added to grocery",
+                message: "\(added) item\(added == 1 ? "" : "s") to round out the plan."
+            )
+        }
     }
 }
 

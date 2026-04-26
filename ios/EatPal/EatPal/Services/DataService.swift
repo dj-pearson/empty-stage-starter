@@ -176,6 +176,24 @@ final class DataService {
             .execute()
     }
 
+    // MARK: - Plan Entry Feedback (US-231)
+
+    func fetchPlanEntryFeedback() async throws -> [PlanEntryFeedback] {
+        try await client.from("plan_entry_feedback")
+            .select()
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+    }
+
+    func insertPlanEntryFeedback(_ feedback: PlanEntryFeedbackInsert) async throws {
+        var payload = feedback
+        payload.userId = try await ensureUserId(payload.userId)
+        try await client.from("plan_entry_feedback")
+            .insert(payload)
+            .execute()
+    }
+
     // MARK: - Grocery Items
 
     func fetchGroceryItems() async throws -> [GroceryItem] {

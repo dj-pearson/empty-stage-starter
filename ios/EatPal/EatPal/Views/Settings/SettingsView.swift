@@ -109,6 +109,24 @@ struct SettingsView: View {
                 } label: {
                     Label("Sync to Health", systemImage: "heart.text.square.fill")
                 }
+
+                NavigationLink {
+                    VoiceShortcutsSettingsView()
+                } label: {
+                    Label("Voice & Shortcuts", systemImage: "mic.badge.plus")
+                }
+
+                NavigationLink {
+                    BudgetView()
+                } label: {
+                    Label("Budget", systemImage: "dollarsign.circle.fill")
+                }
+
+                NavigationLink {
+                    HouseholdSettingsView()
+                } label: {
+                    Label("Household", systemImage: "house.fill")
+                }
             }
 
             // Support

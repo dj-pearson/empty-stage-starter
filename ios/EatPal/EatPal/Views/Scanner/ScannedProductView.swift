@@ -151,6 +151,20 @@ struct ScannedProductView: View {
         let allergenList = allergens.isEmpty ? nil :
             allergens.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
 
+        // US-230: barcode-scanned items get a sensible default expiry based
+        // on category — perishables 7d, pantry 30d. The user can edit later
+        // in FoodDetailView; this just removes the friction of opening that
+        // editor right after a scan to set "produce expires next week".
+        let defaultExpiryDays: Int = {
+            switch category {
+            case .fruit, .vegetable, .dairy, .protein: return 7
+            case .carb, .snack: return 30
+            }
+        }()
+        let expiryISO: String? = Calendar.current
+            .date(byAdding: .day, value: defaultExpiryDays, to: Date())
+            .map { DateFormatter.isoDate.string(from: $0) }
+
         let food = Food(
             id: UUID().uuidString,
             userId: "",
@@ -159,7 +173,8 @@ struct ScannedProductView: View {
             isSafe: isSafe,
             isTryBite: isTryBite,
             allergens: allergenList,
-            barcode: barcode
+            barcode: barcode,
+            expiryDate: expiryISO
         )
 
         try? await appState.addFood(food)

@@ -292,6 +292,7 @@ struct WeekNavigationView: View {
                 } label: {
                     Image(systemName: "chevron.left")
                 }
+                .accessibilityLabel("Previous week")
 
                 Spacer()
 
@@ -305,6 +306,7 @@ struct WeekNavigationView: View {
                 } label: {
                     Image(systemName: "chevron.right")
                 }
+                .accessibilityLabel("Next week")
             }
             .padding(.horizontal)
 
@@ -317,7 +319,13 @@ struct WeekNavigationView: View {
                             isSelected: Calendar.current.isDate(date, inSameDayAs: selectedDate),
                             isToday: Calendar.current.isDateInToday(date)
                         ) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
+                            // US-246: respect Reduce Motion on the day-switch
+                            // animation; users on reduce motion see an instant
+                            // selection change instead of the chip slide.
+                            accessibleWithAnimation(
+                                .easeInOut(duration: 0.2),
+                                reduceMotion: UIAccessibility.isReduceMotionEnabled
+                            ) {
                                 selectedDate = date
                             }
                         }
@@ -465,6 +473,9 @@ struct PlanEntryRow: View {
     @State private var showingResultPicker = false
     @State private var showingDatePicker = false
     @State private var pickedDate: Date = Date()
+    /// US-231: post-result feedback sheet. Wrapper is Identifiable so we
+    /// can present it via .sheet(item:) and pass the entry name + result.
+    @State private var feedbackContext: MealFeedbackContext?
 
     private var food: Food? {
         appState.foods.first { $0.id == entry.foodId }
@@ -515,12 +526,7 @@ struct PlanEntryRow: View {
         .confirmationDialog("How did it go?", isPresented: $showingResultPicker) {
             ForEach(MealResult.allCases, id: \.self) { result in
                 Button(result.displayName) {
-                    Task {
-                        try? await appState.updatePlanEntry(
-                            entry.id,
-                            updates: PlanEntryUpdate(result: result.rawValue)
-                        )
-                    }
+                    Task { await logResult(result) }
                 }
             }
         }
@@ -532,12 +538,7 @@ struct PlanEntryRow: View {
                     case .tasted: HapticManager.lightImpact()
                     case .refused: HapticManager.warning()
                     }
-                    Task {
-                        try? await appState.updatePlanEntry(
-                            entry.id,
-                            updates: PlanEntryUpdate(result: result.rawValue)
-                        )
-                    }
+                    Task { await logResult(result) }
                 } label: {
                     Label("Log \(result.displayName)", systemImage: result.icon)
                 }
@@ -617,6 +618,43 @@ struct PlanEntryRow: View {
                 }
             }
             .presentationDetents([.medium, .large])
+        }
+        // US-231: post-result feedback. Non-blocking — `.sheet(item:)` so
+        // the row isn't paused waiting for it; the parent can swipe-down
+        // (or hit Skip / let the auto-dismiss timer fire) at any time.
+        .sheet(item: $feedbackContext) { context in
+            MealFeedbackSheet(
+                planEntryId: context.id,
+                entryName: context.entryName,
+                result: context.result
+            )
+        }
+    }
+
+    // MARK: - Result logging (US-231)
+
+    /// Persists the result, then surfaces the optional 1-5 feedback sheet.
+    /// Pulled out so the confirmationDialog and contextMenu paths share
+    /// one definition — both used to call updatePlanEntry inline.
+    private func logResult(_ result: MealResult) async {
+        do {
+            try await appState.updatePlanEntry(
+                entry.id,
+                updates: PlanEntryUpdate(result: result.rawValue)
+            )
+            // Only prompt for feedback once per (entry, parent) — if there's
+            // already a rating on file, skip the modal so re-logging doesn't
+            // pester the user. They can still re-rate via a future detail
+            // view if we add one.
+            if appState.latestFeedback(for: entry.id) == nil {
+                feedbackContext = MealFeedbackContext(
+                    id: entry.id,
+                    entryName: entryName,
+                    result: result
+                )
+            }
+        } catch {
+            // updatePlanEntry already raised an error toast.
         }
     }
 

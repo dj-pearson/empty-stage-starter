@@ -130,6 +130,7 @@ struct RecipesView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add recipe")
             }
         }
         .sheet(isPresented: $showingAddRecipe) {
