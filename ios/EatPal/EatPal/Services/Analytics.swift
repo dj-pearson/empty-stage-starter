@@ -53,7 +53,13 @@ enum AnalyticsService {
     /// SHA256-hash a raw kid/user UUID to a stable 8-char tag. Same input
     /// always yields the same output so we can group events per-kid without
     /// the raw identifier ever leaving the device.
-    static func hash(_ raw: String?) -> String? {
+    ///
+    /// `nonisolated` because the function is pure (no actor-isolated state
+    /// touched) and `AnalyticsEvent.properties` — a non-isolated computed
+    /// property — needs to call it synchronously when building the event
+    /// payload. Without this, Swift 6 strict concurrency rejects the call
+    /// site as "main actor-isolated method called from nonisolated context".
+    nonisolated static func hash(_ raw: String?) -> String? {
         guard let raw, !raw.isEmpty else { return nil }
         let data = Data(raw.utf8)
         let digest = SHA256.hash(data: data)
