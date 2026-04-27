@@ -64,7 +64,10 @@
       "Bash(./gradlew :app:assembleDebug)",
       "Bash(./gradlew :app:testDebugUnitTest)",
       "Bash(./gradlew :app:assembleDebug :app:testDebugUnitTest)",
-      "Bash(xargs -I {} grep -l \"CREATE TABLE.*households\" supabase/migrations/{})"
+      "Bash(xargs -I {} grep -l \"CREATE TABLE.*households\" supabase/migrations/{})",
+      "Bash(sed -n '50,75p' C:/Users/pears/Documents/EatPal/empty-stage-starter/ios/EatPal/EatPal/Services/AICoachService.swift)",
+      "Bash(sed -n '195,220p' C:/Users/pears/Documents/EatPal/empty-stage-starter/ios/EatPal/EatPal/Services/AIMealService.swift)",
+      "Bash(sed -n '85,100p' C:/Users/pears/Documents/EatPal/empty-stage-starter/ios/EatPal/EatPal/Services/AuthService.swift)"
     ],
     "deny": [],
     "ask": []

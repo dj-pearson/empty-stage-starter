@@ -70,12 +70,11 @@ enum FridgeRecognitionService {
         }
         let base64 = jpeg.base64EncodedString()
 
-        let client = SupabaseManager.client
-
         do {
-            let response: ResponseBody = try await client.functions.invoke(
+            let response: ResponseBody = try await EdgeFunctions.invoke(
                 "recognize-fridge-contents",
-                options: .init(body: RequestBody(imageBase64: base64))
+                body: RequestBody(imageBase64: base64),
+                as: ResponseBody.self
             )
             guard !response.items.isEmpty else { throw FridgeError.empty }
             return response.items

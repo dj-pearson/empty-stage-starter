@@ -1,10 +1,8 @@
 import Foundation
-import Supabase
 
 @MainActor
 final class AICoachService: ObservableObject {
     static let shared = AICoachService()
-    private let client = SupabaseManager.client
 
     @Published var messages: [ChatMessage] = []
     @Published var isLoading = false
@@ -56,9 +54,10 @@ final class AICoachService: ObservableObject {
                 let message: String
             }
 
-            let decoded: CoachResponse = try await client.functions.invoke(
+            let decoded: CoachResponse = try await EdgeFunctions.invoke(
                 "ai-coach-chat",
-                options: .init(body: requestBody)
+                jsonBody: requestBody,
+                as: CoachResponse.self
             )
             let assistantMessage = ChatMessage(role: .assistant, content: decoded.message)
             messages.append(assistantMessage)

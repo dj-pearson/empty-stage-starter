@@ -1,12 +1,10 @@
 import Foundation
-import Supabase
 
 /// Integrates with the backend AI meal suggestion edge function.
 /// Sends kid profile + pantry data and receives meal plan suggestions.
 @MainActor
 final class AIMealService: ObservableObject {
     static let shared = AIMealService()
-    private let client = SupabaseManager.client
 
     @Published var suggestions: [MealSuggestion] = []
     @Published var isLoading = false
@@ -205,9 +203,10 @@ final class AIMealService: ObservableObject {
         )
 
         do {
-            let decoded: [MealSuggestion] = try await client.functions.invoke(
+            let decoded: [MealSuggestion] = try await EdgeFunctions.invoke(
                 "generate-meal-suggestions",
-                options: .init(body: request)
+                body: request,
+                as: [MealSuggestion].self
             )
             suggestions = decoded
             await MainActor.run {

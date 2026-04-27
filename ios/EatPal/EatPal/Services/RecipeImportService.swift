@@ -58,21 +58,23 @@ enum RecipeImportService {
             throw ImportError.invalidURL
         }
 
-        let client = SupabaseManager.client
+        let body = RequestBody(url: url.absoluteString)
 
         do {
             // Try decoding as ParsedRecipe directly first.
-            if let direct: ParsedRecipe = try? await client.functions.invoke(
+            if let direct: ParsedRecipe = try? await EdgeFunctions.invoke(
                 "parse-recipe",
-                options: .init(body: RequestBody(url: url.absoluteString))
+                body: body,
+                as: ParsedRecipe.self
             ) {
                 return direct
             }
 
             // Fall back to wrapper shape.
-            let wrapper: ResponseWrapper = try await client.functions.invoke(
+            let wrapper: ResponseWrapper = try await EdgeFunctions.invoke(
                 "parse-recipe",
-                options: .init(body: RequestBody(url: url.absoluteString))
+                body: body,
+                as: ResponseWrapper.self
             )
             guard let recipe = wrapper.recipe else {
                 throw ImportError.decode("Empty response")

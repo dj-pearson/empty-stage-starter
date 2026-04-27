@@ -64,7 +64,7 @@ final class AppState: ObservableObject {
                 additionalIngredients: pending.additionalIngredients,
                 imageUrl: pending.imageUrl,
                 sourceUrl: pending.sourceUrl,
-                sourceType: "share_extension"
+                sourceType: "imported"
             )
 
             do {

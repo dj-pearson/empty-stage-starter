@@ -1022,7 +1022,7 @@ struct AddRecipeView: View {
             additionalIngredients: trimmedAdditional.isEmpty ? nil : trimmedAdditional,
             imageUrl: imageUrl,
             sourceUrl: trimmedImportURL.isEmpty ? nil : trimmedImportURL,
-            sourceType: trimmedImportURL.isEmpty ? nil : "url_paste",
+            sourceType: trimmedImportURL.isEmpty ? nil : "url",
             tags: tagList,
             difficultyLevel: difficulty
         )

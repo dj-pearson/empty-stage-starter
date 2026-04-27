@@ -44,13 +44,16 @@ enum ShareExtensionAPI {
     }
 
     /// Calls the Supabase edge function `parse-recipe` with the shared URL.
+    /// Hits `functions.tryeatpal.com/<name>` directly — Kong's `/functions/v1/*`
+    /// upstream is broken on this Coolify Supabase deployment, see
+    /// `EdgeFunctions.swift` in the main app for context.
     static func parseRecipe(url: URL) async throws -> ParsedRecipe {
-        guard let supabaseUrl = supabaseBaseUrl(),
+        guard let functionsUrl = functionsBaseUrl(),
               let anonKey = supabaseAnonKey() else {
             throw ImportError.missingConfig
         }
 
-        let endpoint = supabaseUrl.appendingPathComponent("functions/v1/parse-recipe")
+        let endpoint = functionsUrl.appendingPathComponent("parse-recipe")
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -59,7 +62,9 @@ enum ShareExtensionAPI {
 
         let body = ["url": url.absoluteString]
         request.httpBody = try? JSONEncoder().encode(body)
-        request.timeoutInterval = 20
+        // 60s — cold-start path is URL fetch + first-request esm.sh dep
+        // download + Claude call, which can run 30–45s on a fresh container.
+        request.timeoutInterval = 60
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -86,14 +91,22 @@ enum ShareExtensionAPI {
 
     // MARK: - Config lookup
 
-    private static func supabaseBaseUrl() -> URL? {
-        guard let raw = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_URL") as? String,
-              !raw.isEmpty,
-              raw != "$(SUPABASE_URL)",
-              let url = URL(string: raw) else {
-            return nil
+    private static func functionsBaseUrl() -> URL? {
+        // Explicit override first.
+        if let raw = Bundle.main.object(forInfoDictionaryKey: "FUNCTIONS_URL") as? String,
+           !raw.isEmpty,
+           raw != "$(FUNCTIONS_URL)",
+           let url = URL(string: raw) {
+            return url
         }
-        return url
+        // Derive from SUPABASE_URL by swapping `api.` for `functions.`.
+        if let raw = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_URL") as? String,
+           !raw.isEmpty,
+           raw != "$(SUPABASE_URL)" {
+            let derived = raw.replacingOccurrences(of: "://api.", with: "://functions.")
+            if let url = URL(string: derived) { return url }
+        }
+        return URL(string: "https://functions.tryeatpal.com")
     }
 
     private static func supabaseAnonKey() -> String? {

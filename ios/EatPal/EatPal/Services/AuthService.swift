@@ -88,9 +88,10 @@ final class AuthService {
         }
 
         let body = try JSONEncoder().encode(Empty())
-        let response: DeleteResponse = try await client.functions.invoke(
+        let response: DeleteResponse = try await EdgeFunctions.invoke(
             "delete-account",
-            options: .init(body: body)
+            jsonBody: body,
+            as: DeleteResponse.self
         )
 
         if let error = response.error {
