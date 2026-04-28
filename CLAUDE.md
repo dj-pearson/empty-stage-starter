@@ -1,232 +1,112 @@
 # CLAUDE.md - EatPal (Munch Maker Mate)
 
-> Meal planning & nutrition tracking app. Vite + React 19 + TypeScript + Supabase + Expo.
+> Meal planning & nutrition tracking. Vite 7 + React 19 + TS 5.8 + Supabase + Expo 54.
 
----
+## Critical Rules
 
-## CRITICAL RULES
+- **No real secrets** in any file — use placeholders (`sk_live_XXXX`, `REPLACE_WITH_...`). If one is committed: stop, alert user, replace.
+- **Never** modify `src/components/ui/` (shadcn), commit `.env`, hardcode colors, use `any`, or skip RLS on new tables.
+- Default to concise docs. Ask before writing long docs or many files.
 
-### Security
-- **NEVER** include real secrets (API keys, JWT tokens, DB passwords, OAuth secrets) in any file.
-- Use placeholders like `sk_live_XXXXXXXXXXXXXXXX` or `REPLACE_WITH_...` in examples.
-- If you accidentally commit a real secret: STOP, tell the user, replace with placeholder.
+## Stack
 
-### Documentation & Token Usage
-- Ask scope before creating docs (one file vs many, level of detail).
-- Default to concise. One document at a time, then ask if more needed.
-- Don't write 1000+ line documents without checking.
+Frontend: Vite, React 19, TS, shadcn-ui, Tailwind 3.4, Three.js, Framer Motion. Backend: Supabase (Postgres/Auth/Realtime/Edge Functions). Mobile: Expo Router 6. Deploy: Cloudflare Pages + EAS. Test: Vitest, Playwright, K6. Monitor: Sentry.
 
----
-
-## Stack Summary
-
-- **Frontend**: Vite 7, React 19, TypeScript 5.8, shadcn-ui, Tailwind 3.4
-- **3D/Animation**: Three.js, @react-three/fiber, Framer Motion, GSAP
-- **Backend**: Supabase 2.74 (Postgres, Auth, Realtime, Edge Functions)
-- **Mobile**: Expo 54 + Expo Router 6
-- **Deploy**: Cloudflare Pages (web), EAS Build (mobile)
-- **Testing**: Vitest, Playwright, K6
-- **Monitoring**: Sentry 10
-
----
-
-## Directory Structure
+## Layout
 
 ```
 src/
-├── components/          # 264 components
-│   ├── ui/             # shadcn-ui (DO NOT modify directly)
-│   ├── admin/          # Admin dashboard
-│   ├── schema/         # SEO JSON-LD components (9 schemas)
-│   └── [feature]/      # Feature components
-├── contexts/AppContext.tsx  # Main state (~1052 lines)
-├── hooks/              # 33 custom hooks
-├── integrations/supabase/   # Client & generated types
-├── lib/                # Business logic & utilities
-├── pages/              # 43 page components
-supabase/migrations/    # DB migrations
-functions/              # Supabase Edge Functions
-tests/                  # Playwright E2E
+  components/{ui,admin,schema,[feature]}/   # shadcn-ui untouched; schema = JSON-LD
+  contexts/AppContext.tsx                    # global state, ~1052 lines
+  hooks/                                     # 33 custom hooks
+  integrations/supabase/{client.ts,types.ts} # types.ts auto-generated
+  lib/platform.ts                            # web/mobile storage abstraction
+  pages/                                     # 43 pages
+supabase/migrations/   functions/   tests/
 ```
 
-### Key Files
-| Purpose | Location |
-|---------|----------|
-| Routes | `src/App.tsx` |
-| Global state | `src/contexts/AppContext.tsx` |
-| Supabase client | `src/integrations/supabase/client.ts` |
-| DB types | `src/integrations/supabase/types.ts` (auto-generated) |
-| Platform utils | `src/lib/platform.ts` (web/mobile storage) |
-
----
+Entry points: routes → `src/App.tsx`; state → `AppContext.tsx`; supabase → `integrations/supabase/client.ts`.
 
 ## Commands
 
 ```bash
-# Dev
-npm run dev              # Vite dev server (port 8080)
-npm run expo:start       # Expo dev server
-npm run build            # Production build
-
-# Test
-npm run test             # Vitest watch
-npm run test:run         # Vitest once
-npm run test:e2e         # Playwright
-npm run test:a11y        # Accessibility
-npm run test:perf        # K6 load
-
-# Quality
-npm run lint
-npm run format
-npm run analyze:bundle
+npm run dev              # port 8080
+npm run build
+npm run test:run         # vitest
+npm run test:e2e         # playwright
+npm run lint && npm run format
 ```
 
-### Environment Variables
-Required: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_FUNCTIONS_URL`
-Optional: `VITE_SENTRY_DSN`, `VITE_STRIPE_PUBLISHABLE_KEY`, `VITE_GA_MEASUREMENT_ID`, `RESEND_API_KEY`
+Required env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_FUNCTIONS_URL`. Optional: `VITE_SENTRY_DSN`, `VITE_STRIPE_PUBLISHABLE_KEY`, `VITE_GA_MEASUREMENT_ID`, `RESEND_API_KEY`.
 
----
+Run `npm run lint && npm run format && npm run test:run` before committing. Conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`.
 
 ## Conventions
 
-### TypeScript
-- **Interfaces** for object shapes, **types** for unions/primitives.
-- Use generated DB types: `Database['public']['Tables']['foods']['Row']`.
-- No `any` types.
+- **TS**: interfaces for shapes, types for unions. Use `Database['public']['Tables']['foods']['Row']`. No `any`.
+- **Styling**: Tailwind + `cn()`; semantic tokens (`bg-background`); responsive via `md:` prefixes.
+- **Components**: named exports (default only for pages). Add shadcn via `npx shadcn-ui@latest add [name]`. Naming: `PascalCase.tsx` / `camelCase.ts` / `use*.ts`.
+- **Errors**: try-catch async; `toast` from `sonner` for feedback; Zod at boundaries.
+- **a11y**: semantic HTML, ARIA on icon buttons, respect `useReducedMotion()`.
+- **Perf**: `lazy()` + `Suspense` for routes/heavy components; `useMemo`/`useCallback`/`memo()` where it matters; `OptimizedImage` for images.
 
-### Styling
-- Tailwind utility classes with `cn()` for conditionals.
-- Use semantic tokens (`bg-background`, `text-foreground`) — never hardcode colors.
-- Responsive: `flex-col md:flex-row`.
+## State (AppContext)
 
-### Components
-- Named exports for components; default export only for pages.
-- Add shadcn components via CLI: `npx shadcn-ui@latest add [name]`.
-- File naming: `PascalCase.tsx` for components, `camelCase.ts` for utils, `use*.ts` for hooks.
-
-### Error Handling
-- Try-catch around async ops; user feedback via `toast` from `sonner`.
-- Validate with Zod at boundaries.
-
-### Git / Commits
-- Conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`.
-- Run `npm run lint && npm run format && npm run test:run` before committing.
-
----
-
-## State Management (AppContext)
-
-Location: `src/contexts/AppContext.tsx`. Single source of truth, dual storage (localStorage + Supabase), realtime sync.
+Single source of truth, dual storage (localStorage + Supabase), realtime sync.
 
 ```typescript
-import { useApp } from '@/contexts/AppContext';
 const { foods, addFood, updateFood, deleteFood, kids, activeKidId } = useApp();
 ```
 
-Entities managed: foods, recipes, kids, plan entries, grocery items. Each has `add/update/delete` + bulk variants. Flow: component → AppContext method → local state (immediate) → Supabase (async) → localStorage (backup) → realtime subscription → debounced update (300ms).
+Entities: foods, recipes, kids, plan entries, grocery items (each with add/update/delete + bulk). Flow: component → AppContext → local state (sync) → Supabase (async) → localStorage backup → realtime subscription (300ms debounce).
 
-**Note**: DB uses snake_case, UI uses camelCase. See `normalizeRecipeFromDB()` for mapping pattern.
-
----
+**DB is snake_case, UI is camelCase** — see `normalizeRecipeFromDB()`.
 
 ## Supabase
 
-### Basic Query
 ```typescript
-import { supabase } from '@/integrations/supabase/client';
+// Query
 const { data, error } = await supabase.from('foods').select('*').eq('user_id', userId);
-```
 
-### Realtime
-```typescript
+// Realtime — remember channel.unsubscribe() in useEffect cleanup
 const channel = supabase.channel('changes').on('postgres_changes',
   { event: '*', schema: 'public', table: 'grocery_items', filter: `household_id=eq.${id}` },
   (payload) => { /* handle */ }
 ).subscribe();
-// Cleanup in useEffect return: channel.unsubscribe();
 ```
 
-### Migrations
-```bash
-supabase migration new add_my_table
-# Edit the SQL file
-supabase db push
-supabase gen types typescript --local > src/integrations/supabase/types.ts
-```
+Migrations: `supabase migration new <name>` → edit SQL → `supabase db push` → `supabase gen types typescript --local > src/integrations/supabase/types.ts`.
 
-### RLS — ALWAYS enable on new tables
+**Always enable RLS on new tables**:
 ```sql
 ALTER TABLE public.my_table ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users view own" ON public.my_table FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users insert own" ON public.my_table FOR INSERT WITH CHECK (auth.uid() = user_id);
--- Similar for UPDATE, DELETE
+-- Repeat for INSERT (WITH CHECK), UPDATE, DELETE
 ```
 
-### Core Tables
-`kids`, `foods`, `recipes`, `plan_entries`, `grocery_items`, `grocery_lists`, `user_subscriptions`, plus newer: `meal_plan_templates`, `meal_voting`, `voting_sessions`, `grocery_delivery`, `delivery_providers`, `quiz_responses`, `budget_calculations`, `prompt_templates`, `admin_alerts`, `system_health`, `workflow_automations`.
+Core tables: `kids`, `foods`, `recipes`, `plan_entries`, `grocery_items`, `grocery_lists`, `user_subscriptions`. Newer: `meal_plan_templates`, `meal_voting`, `voting_sessions`, `grocery_delivery`, `quiz_responses`, `budget_calculations`, `admin_alerts`, `system_health`, `workflow_automations`.
 
----
+## Hooks
 
-## Key Hooks
+`useApp` (global), `useLocalStorage`, `useIsMobile/Tablet/Desktop`, `useSubscription` (Stripe), `useReducedMotion`, `useKeyboardNavigation`, `useInView`, `useSwipeGesture`, `usePullToRefresh`, `useWindowSize`, `useUndoRedo`, `useFeatureFlag`.
 
-```typescript
-useApp()                  // Global state
-useLocalStorage(key, val) // Persisted state
-useIsMobile/Tablet/Desktop()
-useSubscription()         // Stripe subscription state
-useReducedMotion()        // a11y
-useKeyboardNavigation()
-useInView(ref)
-useSwipeGesture() / usePullToRefresh() / useWindowSize()
-useUndoRedo(initial)
-useFeatureFlag(name)
-```
+## SEO Schemas
 
----
+Nine JSON-LD components in `src/components/schema/` (Article, FAQ, Breadcrumb, HowTo, Organization, SoftwareApp, Recipe, Review, Video). Drop into page JSX.
 
-## SEO Schema Components
+## New Page Recipe
 
-Nine JSON-LD components in `src/components/schema/`: `ArticleSchema`, `FAQSchema`, `BreadcrumbSchema`, `HowToSchema`, `OrganizationSchema`, `SoftwareAppSchema`, `RecipeSchema`, `ReviewSchema`, `VideoSchema`. Drop into page JSX for rich search results.
-
----
-
-## Common Patterns
-
-### New Page
-1. Create `src/pages/MyPage.tsx` with `<Helmet>` for title/meta.
-2. Add lazy route in `src/App.tsx` with `<Suspense>` fallback.
+1. `src/pages/MyPage.tsx` with `<Helmet>` for meta.
+2. Add lazy route in `src/App.tsx` with `<Suspense>`.
 3. Wrap in `<ProtectedRoute>` if auth required.
 
-### New Component
-Location: `src/components/[feature]/Name.tsx`. Use shadcn UI primitives, `cn()` for classes, destructure props with defaults.
+## Troubleshooting
 
-### Performance
-- Lazy load routes/heavy components with `lazy()` + `Suspense`.
-- `useMemo` for expensive compute, `useCallback` for handler props, `memo()` for pure components.
-- `OptimizedImage` component handles lazy loading, WebP/AVIF, priority LCP.
-
-### Accessibility
-- Semantic HTML, ARIA labels on icon buttons, keyboard handlers (Escape/Enter).
-- Respect `useReducedMotion()`.
+- `localStorage is not defined` → use `getStorage()` from `src/lib/platform.ts`.
+- Realtime silent → check RLS allows SELECT on the filter match.
+- `JWT expired` → refresh or redirect to `/auth`.
+- Hydration mismatch → no browser-only APIs in initial render.
+- Slow page → `npm run analyze:bundle`, lazy load, optimize images.
 
 ---
-
-## Troubleshooting Quick Reference
-
-- **"localStorage is not defined"**: Use `getStorage()` from `src/lib/platform.ts`.
-- **Realtime not firing**: Check RLS policies allow SELECT on filter match.
-- **"JWT expired"**: Implement refresh or redirect to `/auth`.
-- **Hydration mismatch**: No browser-only APIs in initial render.
-- **Slow page**: Run `npm run analyze:bundle`, lazy load, optimize images.
-
----
-
-## Do / Don't
-
-**Do**: TypeScript strict, conventional commits, enable RLS, clean up subscriptions, optimize images, accessibility attrs, toast feedback, loading states.
-
-**Don't**: Commit `.env`, modify `src/components/ui/` directly, hardcode colors, use `any`, expose keys in frontend, skip RLS, leave console.logs in production.
-
----
-
-**Last Updated**: 2026-04-14
+**Last Updated**: 2026-04-28
