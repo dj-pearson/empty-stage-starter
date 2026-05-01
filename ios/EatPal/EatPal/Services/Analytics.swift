@@ -214,7 +214,7 @@ enum AnalyticsEvent {
         case .foodAdded, .foodUpdated, .foodDeleted,
              .kidAdded, .kidUpdated, .kidDeleted,
              .recipeCreated, .recipeUpdated, .recipeDeleted,
-             .mealPlanned, .mealResultLogged, .mealRemoved,
+             .mealPlanned, .mealResultLogged, .mealRemoved, .mealMadeLogged,
              .groceryItemAdded, .groceryItemChecked,
              .groceryItemDeleted, .groceryListCleared:
             return "crud"
