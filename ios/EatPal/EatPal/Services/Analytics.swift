@@ -222,7 +222,9 @@ enum AnalyticsEvent {
              .quizStarted, .quizCompleted,
              .shoppingModeStarted, .shoppingModeExited,
              .healthImportRequested, .starterTemplateApplied,
-             .groceryGeneratedFromPlan:
+             .groceryGeneratedFromPlan,
+             .cookableMatchOpened, .cookableRecipeAddedToPlan,
+             .cookableMissingAddedToGrocery:
             return "feature"
         case .paywallShown, .purchaseCompleted:
             return "monetization"
@@ -242,7 +244,8 @@ enum AnalyticsEvent {
         case .foodUpdated, .foodDeleted, .kidAdded, .kidDeleted,
              .recipeUpdated, .recipeDeleted,
              .mealRemoved, .groceryItemDeleted,
-             .quizStarted, .shoppingModeStarted, .signOutCompleted:
+             .quizStarted, .shoppingModeStarted, .signOutCompleted,
+             .cookableMatchOpened, .cookableRecipeAddedToPlan:
             return [:]
         case .kidUpdated(let field):
             return ["field": field.rawValue]
