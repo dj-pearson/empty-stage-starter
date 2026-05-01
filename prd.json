@@ -3857,6 +3857,186 @@
       "priority": 75,
       "passes": false,
       "notes": ""
+    },
+    {
+      "id": "US-262",
+      "title": "iOS Cross-module: 'Mark meal made' debits pantry + checks recipe-sourced grocery items",
+      "description": "Follow-up to US-251 (deferred pantry inventory math). When a parent confirms a planned recipe was actually eaten, the foods consumed should debit from pantry inventory and any grocery items linked to that recipe should auto-check, closing the recipe -> plan -> pantry -> grocery loop without manual bookkeeping.",
+      "acceptanceCriteria": [
+        "MealPlanView PlanEntryRow swipe + contextMenu gain 'Made it' action (separate from existing Ate/Tasted/Refused result), shown only when the entry has a non-nil recipeId",
+        "AppState.markPlanEntryMade(_ entryId:) async: walks recipe.foodIds + structured RecipeIngredient rows (after US-265 ships), debits Food.quantity proportionally to recipe servings * portionsServed",
+        "Pantry foods at quantity <= 0 stay in DB but emit a one-tap 'Restock 4 items?' banner via ToastManager that auto-creates grocery items with addedVia 'pantry_depleted'",
+        "Grocery items whose grocery_item_sources.recipe_id matches the made recipe get marked checked atomically in the same RPC transaction",
+        "Idempotent: re-tapping 'Made it' on the same entry within 1h shows 'Already logged - undo?' instead of double-debiting; an undo writes a reverse row to plan_entry_made_log",
+        "Telemetry: AnalyticsEvent.mealMadeLogged(recipeId:debitedCount:restockProposedCount:)",
+        "New supabase migration with RPC rpc_mark_meal_made(plan_entry_id uuid) that does the debit + grocery-check in one transaction; AppState calls the RPC instead of orchestrating multi-row writes from the client",
+        "Edit MealPlanView.swift, AppState.swift, add ios/EatPal/EatPal/Models/PlanEntryMadeLog.swift"
+      ],
+      "priority": 55,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-263",
+      "title": "iOS Grocery: expanded store-section taxonomy (32 aisles)",
+      "description": "Today FoodCategory has six values (protein/carb/dairy/fruit/vegetable/snack) so frozen pizza, household items, condiments, ethnic aisles, etc. all bucket as 'snack' or 'other'. Real shoppers walk the store by aisle - produce, bakery, frozen, dairy, ethnic, household. Add a parallel GroceryAisle taxonomy that drives section grouping in GroceryView and Shopping Mode without disturbing FoodCategory (which is still used for nutrition coloring).",
+      "acceptanceCriteria": [
+        "New ios/EatPal/EatPal/Models/GroceryAisle.swift enum with 32 cases: produce, bakery, bread, meatDeli, seafood, dairy, eggs, refrigerated, frozenMeals, frozenVeg, frozenTreats, canned, drySoups, pasta, riceGrains, condiments, baking, breakfast, snacks, crackers, candy, beverages, alcohol, ethnicMexican, ethnicAsian, ethnicEuropean, household, paperGoods, cleaning, personalCare, baby, pet, other",
+        "Each case exposes displayName, icon (SF Symbol), color, and storeWalkOrder Int so the list can be sorted by typical store layout (produce first, frozen last)",
+        "Migration add_aisle_section_to_grocery_items.sql: ALTER TABLE grocery_items ADD COLUMN aisle_section TEXT; backfill from existing FoodCategory mapping (protein->meatDeli, carb->pasta, dairy->dairy, fruit/vegetable->produce, snack->snacks, other->other)",
+        "GroceryItem.swift gains aisleSection: String? with snake_case CodingKey aisle_section; GroceryItemUpdate gains the field",
+        "GroceryView 'By Aisle' section headers use GroceryAisle.icon + displayName; sort sections by storeWalkOrder when aisleSection is set, fall back to existing FoodCategory grouping otherwise",
+        "AddGroceryItemView and EditGroceryItemView gain a Picker('Aisle') alongside the existing Category picker; selecting an aisle auto-derives a sensible category for back-compat",
+        "ShoppingModeView sorts rows by storeWalkOrder; new toggle in HealthSettingsView (or new GrocerySettingsView) to flip walk order for users who shop the store back-to-front",
+        "FoodCategory enum stays as-is - aisleSection is purely for grocery store routing",
+        "Telemetry: groceryAisleSet(aisle:source: 'manual'|'auto'|'backfill')"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-264",
+      "title": "iOS Grocery: 'By Aisle <-> By Recipe' segmented view with per-meal grouping",
+      "description": "When a user generates a grocery list from a week's meal plan, GroceryGeneratorService dedupes by name and discards which recipe each item came from. Users want to see the week's meals laid out with the items needed for each one, then flip back to traditional aisle-grouped view for the actual store walk. Preserve recipe -> item linkage and add a toggle.",
+      "acceptanceCriteria": [
+        "New table grocery_item_sources(id, grocery_item_id FK CASCADE, recipe_id FK, plan_entry_id FK, meal_date DATE, meal_slot TEXT, contributed_quantity NUMERIC, created_at) with RLS allowing only owners of the linked grocery_item row",
+        "GroceryGeneratorService.generateFromMealPlan rewritten: instead of dropping recipe origin during dedupe, insert one grocery_item + N grocery_item_sources rows (one per recipe contribution); existing autoGenerated bool retained for back-compat",
+        "GroceryView toolbar gains Picker(viewMode: .byAisle | .byRecipe) persisted via @AppStorage('grocery.viewMode')",
+        "'By Recipe' rendering: per-recipe Section with RecipeThumbnail + recipe.name header and a subtitle listing every meal it covers (e.g. 'Mon dinner . Wed lunch'); items grouped under their recipe",
+        "Two synthetic sections in 'By Recipe' mode: top 'Shared across recipes' (items linked to >=2 recipes) and bottom 'Manual additions' (items with no source rows)",
+        "Tapping a recipe section header navigates to RecipeDetailView via DeepLinkHandler.handle(.recipe(id:))",
+        "Items checked in 'By Recipe' view stay in their recipe section (don't jump to Completed) for visual continuity until the user flips back to By Aisle",
+        "ShoppingModeView always uses By Aisle (in-store walk) regardless of saved preference",
+        "AppState gains groceryItemSources: [GroceryItemSource] kept in sync via realtime subscription on grocery_item_sources",
+        "Telemetry: groceryViewModeChanged(to:)"
+      ],
+      "priority": 52,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-265",
+      "title": "iOS Recipes: structured ingredients (RecipeIngredient with quantity/unit/foodId)",
+      "description": "Recipe.additionalIngredients is currently a comma-split string. This blocks per-recipe grocery views (US-264), serving-scaled grocery generation, and 'already in pantry' inference. Introduce a structured RecipeIngredient model alongside the legacy field, with a one-time lazy migration on first edit.",
+      "acceptanceCriteria": [
+        "Migration create_recipe_ingredients.sql: new table recipe_ingredients(id, recipe_id FK CASCADE, food_id FK NULL, position INT, name TEXT NOT NULL, quantity NUMERIC, unit TEXT, group_label TEXT, optional_notes TEXT, created_at) + RLS via recipe ownership",
+        "ios/EatPal/EatPal/Models/RecipeIngredient.swift Codable model + RecipeIngredientUpdate",
+        "Recipe.swift gains ingredients: [RecipeIngredient] populated from a joined select in DataService.fetchRecipes",
+        "EditRecipeView (ios/EatPal/EatPal/Views/Recipes/EditRecipeView.swift) replaces the additionalIngredients TextField with a dynamic ingredient list editor: add row, type-ahead autocomplete from appState.foods (sets foodId), inline qty + unit, drag-reorder (.onMove), optional 'group' label (e.g. 'For the sauce')",
+        "Lazy migration: when a recipe with additional_ingredients but no recipe_ingredients rows is opened in EditRecipeView, parse the legacy string into rows on first save - do NOT auto-migrate on read; preserve the old field as fallback for unmigrated recipes",
+        "GroceryGeneratorService prefers structured ingredients when present (uses qty + unit), falls back to existing food_ids + additional_ingredients path for unmigrated recipes",
+        "RecipeScaling.swift respects structured ingredient quantities for the live serving slider",
+        "Recipe detail view shows ingredients grouped by group_label when present",
+        "Telemetry: recipeIngredientsMigrated(legacyCount:structuredCount:)"
+      ],
+      "priority": 53,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-266",
+      "title": "iOS Grocery: smart aisle auto-classifier (local table + edge fn fallback)",
+      "description": "After US-263 introduces 32 aisles, manually picking one for every item is friction. Most common items are deterministic - milk -> dairy, frozen pizza -> frozenMeals, soy sauce -> ethnicAsian. Provide a two-tier classifier: local lookup table (zero latency) for the top ~500 items, edge function (LLM) for unknowns, plus a personal-preference table so user overrides stick across devices.",
+      "acceptanceCriteria": [
+        "ios/EatPal/EatPal/Utilities/GroceryAisleClassifier.swift: static method classify(name: String) -> GroceryAisle? backed by a Resources/grocery_aisle_lookup.json bundled at build time (~500 entries seeded from a starter dictionary covering common US grocery items)",
+        "Edge function functions/classify-grocery-item: takes {name}, returns {aisle, confidence}; cached server-side by lowercased name (Postgres table classifier_cache); uses cheap Haiku model with a 6-token max response",
+        "AddGroceryItemView, voice/photo/scan/Siri import paths all auto-classify on add: try local first synchronously, fire async edge call only if local returns nil - never block UI submission",
+        "User overrides persist: new table user_grocery_aliases(user_id, name_lower, aisle_section, confirmed_at, PRIMARY KEY(user_id, name_lower)) with RLS; next time user adds an item with the same lowercased name it picks their override instantly",
+        "One-time review screen on first app open after the US-263 backfill: 'We auto-categorized 47 items - review?' card-stack of the lowest-confidence assignments (confidence < 0.7) for swipe-to-approve",
+        "Telemetry: groceryAisleClassified(source: 'local'|'edge'|'override', confidence:)"
+      ],
+      "priority": 58,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-267",
+      "title": "iOS Cross-module: Quick Actions Hub (long-press tab bar + dashboard universal +)",
+      "description": "Adding a food, recipe, grocery item, or meal currently requires navigating to the right tab first. Provide a universal 'add anything' affordance reachable from any screen that auto-routes the user, reducing taps for the most common write actions.",
+      "acceptanceCriteria": [
+        "MainTabView: long-press on the tab bar surfaces a custom MenuActionSheet with 6 buttons (Add food, Add recipe, Add to grocery, Plan a meal, Scan barcode, Voice add) - implemented via UIKit gesture interaction since SwiftUI tab-bar long-press isn't native",
+        "DashboardHomeView gains a primary 'Add' FAB (bottom-right, 56pt, AppTheme.Colors.primaryDark) that opens the same MenuActionSheet",
+        "Each menu action opens the existing target sheet (AddGroceryItemView, AddRecipeView, AddPlanEntryView via a constructed AddEntryContext, UnifiedScannerView, VoiceAddGrocerySheet) directly without a tab switch",
+        "If the user is already on a tab matching the action, the menu omits that action (e.g. on Pantry, hide 'Add food' since the tab's own + does the same thing)",
+        "Discoverability: TipKit nudge (QuickActionsTip) fires after the user's 5th tap-then-add cycle, dismissed permanently after first long-press donation",
+        "Haptics: HapticManager.mediumImpact() on long-press recognition; HapticManager.selection() on menu choice",
+        "Respects @Environment(\\.accessibilityReduceMotion) - menu uses fade only when reduce-motion is on",
+        "Telemetry: quickAddOpened(source: 'tab'|'fab'), quickAddTapped(action:)"
+      ],
+      "priority": 56,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-268",
+      "title": "iOS Cross-module: drag-drop expansion (tab-hover, Recipe->Plan, Grocery->Pantry)",
+      "description": "Follow-up to US-219. Pantry-to-Grocery and Pantry-to-MealPlan drag paths shipped, but three follow-ups deferred: drag-hover-over-tab to switch tabs mid-drag, drag a recipe from RecipesView onto a meal slot, and drag a checked grocery item back to Pantry to mark as bought + add to inventory.",
+      "acceptanceCriteria": [
+        "MainTabView: each tab item gets a .dropDestination that on enter (after a 600ms hover timer) programmatically switches to that tab WITHOUT consuming the drag - drag continues so user can drop on the destination view",
+        "RecipesView: each RecipeRowView gains .draggable(RecipeTransferable(recipe:)); MealPlanView MealSlotCard already has dropDestination - extend it to accept RecipeTransferable, creating a PlanEntry with recipeId set + a sentinel foodId of the recipe's primary ingredient",
+        "GroceryView: GroceryItemRow checked items gain .draggable(GroceryTransferable); PantryView gains .dropDestination(for: GroceryTransferable.self) that creates a Food (or increments existing matching food.name) with quantity = grocery item's quantity, marks the grocery item checked, and shows a 'Restocked Apples (+3 ct)' toast",
+        "Visual feedback: drop targets show GroceryAisle.color or MealSlot.color tinted overlay border (matches existing isTargeted pattern from US-219)",
+        "New transferables added in ios/EatPal/EatPal/Models/ alongside FoodTransferable.swift: RecipeTransferable, GroceryTransferable",
+        "Tab-hover-switch is gated behind UserDefaults flag drag.tabHover.enabled (default true) so power users can disable if it interferes with their muscle memory",
+        "Telemetry: dragCrossModule(from: 'pantry'|'grocery'|'recipe'|'plan', to:, succeeded:)"
+      ],
+      "priority": 61,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-269",
+      "title": "iOS Maintenance: bulk operations suite (multi-select Pantry, Grocery, Recipes)",
+      "description": "Pantry, Grocery, and Recipes lists today only support single-item taps. Bulk recategorize, bulk price set, bulk delete, bulk add-to-grocery currently require N round-trips. Add a standard SwiftUI EditMode-driven multi-select with a floating action bar for batched mutations.",
+      "acceptanceCriteria": [
+        "PantryView, GroceryView, RecipesView each gain a 'Select' toolbar button that toggles List EditMode + a Set<String> selection state held on the view",
+        "Bottom-anchored ActionBar (SwiftUI overlay, not a sheet) appears with selection count + scope-appropriate actions: Pantry (Set Category, Set Price, Move to Grocery, Mark Safe/Unsafe, Delete); Grocery (Set Aisle, Set Priority, Mark Bought, Delete); Recipes (Add to Grocery, Set Difficulty, Add Tag, Delete)",
+        "All bulk mutations batched in one Supabase request - update via .in('id', ids) with a single payload; delete via single .in delete - never N x 1 round-trips",
+        "Confirmation alert for destructive bulk actions (Delete) with selection count in body",
+        "'Select All' toolbar button when in select mode; auto-exit edit mode after a successful bulk action; preserve selection across pull-to-refresh",
+        "VoiceOver announces 'Selecting 1 of N items' on each selection toggle and 'Bulk delete 12 items, confirm or cancel' on the alert",
+        "ActionBar respects keyboard avoidance and reduce-motion (slide -> fade)",
+        "Telemetry: bulkActionPerformed(scope: 'pantry'|'grocery'|'recipes', action:, count:)"
+      ],
+      "priority": 63,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-270",
+      "title": "iOS Cross-module: 'What can I make?' recipe matcher from pantry + grocery",
+      "description": "Users with a stocked pantry don't always remember what they can cook. Surface a one-tap matcher that scores recipes by how many of their ingredients are already in pantry or on the grocery list (so you can plan to cook tomorrow if you'll have shopped today).",
+      "acceptanceCriteria": [
+        "RecipesView toolbar gains a 'sparkles' button that opens a CookableRecipesSheet",
+        "CookableRecipesSheet ranks recipes by coverage = (in_pantry + in_grocery_unchecked) / total_ingredients; threshold >= 0.8 = 'Cook now' (green), 0.5-0.8 = 'Almost there' (orange)",
+        "Each recipe row shows coverage % + a list of missing items with one-tap 'Add 3 missing to grocery' button (uses GroceryGeneratorService with addedVia 'cookable_match')",
+        "Tap a recipe in the sheet -> 'Add to plan' opens AddPlanEntryView with the recipe pre-selected via DeepLinkHandler",
+        "GroceryView empty state ALSO surfaces this matcher: 'No grocery items? See what you can already cook' with a button into the same sheet",
+        "Algorithm in ios/EatPal/EatPal/Utilities/RecipeMatcher.swift, pure Swift, no edge fn - runs locally on appState data; uses fuzzy name matching (case + plural insensitive) when foodId isn't set",
+        "Performance: dataset of 50 recipes x 15 ingredients x 200 foods sorts in <30ms (measured with CFAbsoluteTimeGetCurrent in a unit test)",
+        "Telemetry: cookableMatchOpened, cookableRecipeAddedToPlan, cookableMissingAddedToGrocery(count:)"
+      ],
+      "priority": 65,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-271",
+      "title": "iOS Cross-module: universal entity inspector (one bottom sheet for Food/Recipe/Grocery/Plan)",
+      "description": "Every module today has its own bespoke detail/edit sheet with slightly different actions. Unify behind a single EntityInspectorSheet with a consistent header, quick-actions row, and 'See in [module]' deep-link buttons so users can pivot between modules without losing context.",
+      "acceptanceCriteria": [
+        "ios/EatPal/EatPal/Views/Components/EntityInspectorSheet.swift: presents one sheet that takes an EntityRef enum (.food(Food), .recipe(Recipe), .groceryItem(GroceryItem), .planEntry(PlanEntry))",
+        "Consistent header: 36pt thumbnail or category icon, name, secondary line (category/quantity/recipe time/meal slot)",
+        "Quick-actions row of 4 buttons appropriate to entity: Food (Add to Grocery, Edit, Mark Safe, Delete); Recipe (Add Ingredients, Add to Plan, Scale Servings, Delete); GroceryItem (Mark Bought, Edit, Find Recipe, Delete); PlanEntry (Mark Made, Move Day, Delete, View Recipe)",
+        "Bottom 'See in...' deep-link buttons: every entity shows up to 3 cross-module destinations (e.g. GroceryItem -> 'See recipe', 'See in pantry', 'Plan with this'), wired via DeepLinkHandler.handle(.recipe(id:)) / .pantry(foodId:) / .plan(entryId:)",
+        "Sheet uses .presentationDetents([.medium, .large]) and respects @Environment(\\.accessibilityReduceMotion) for transitions",
+        "Replace ad-hoc preview cards in ContextMenu (RecipePreviewCard etc.) with EntityInspectorSheet so long-press preview matches the inspector exactly",
+        "Telemetry: inspectorOpened(entityType:), inspectorDeepLinked(from:to:)"
+      ],
+      "priority": 67,
+      "passes": false,
+      "notes": ""
     }
   ]
 }

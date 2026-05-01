@@ -49,7 +49,10 @@ struct AddGroceryItemIntent: AppIntent {
             quantity: quantity,
             unit: unit,
             checked: false,
-            addedVia: "siri"
+            addedVia: "siri",
+            // US-263: derive aisle from the parsed FoodCategory so Siri-added
+            // items also land in the right store section.
+            aisleSection: GroceryAisle.fromLegacyCategory(category).rawValue
         )
 
         do {

@@ -29,9 +29,26 @@ struct ShoppingModeView: View {
         appState.groceryItems.filter { !$0.checked }
     }
 
+    /// US-263: prefer aisleSection (32-value store walk order) when set,
+    /// fall back to legacy `category` for unmigrated items. Composite key
+    /// uses the same "aisle:" / "category:" prefix as GroceryView so the
+    /// section header can render the right icon + label.
     private var groupedUnchecked: [(String, [GroceryItem])] {
-        Dictionary(grouping: unchecked, by: { $0.category })
-            .sorted { $0.key < $1.key }
+        let grouped = Dictionary(grouping: unchecked) { item -> String in
+            if let raw = item.aisleSection, GroceryAisle(rawValue: raw) != nil {
+                return "aisle:\(raw)"
+            }
+            return "category:\(item.category)"
+        }
+        return grouped.sorted { sortKey($0.key) < sortKey($1.key) }
+    }
+
+    private func sortKey(_ key: String) -> (Int, String) {
+        if key.hasPrefix("aisle:"),
+           let aisle = GroceryAisle(rawValue: String(key.dropFirst("aisle:".count))) {
+            return (aisle.storeWalkOrder, aisle.displayName)
+        }
+        return (10_000, key)
     }
 
     private var totalRemaining: Int { unchecked.count }
@@ -131,8 +148,18 @@ struct ShoppingModeView: View {
                         )
                     }
                 } header: {
-                    let cat = FoodCategory(rawValue: category)
-                    Text("\(cat?.icon ?? "🛒") \(cat?.displayName ?? category)")
+                    Group {
+                        if category.hasPrefix("aisle:"),
+                           let aisle = GroceryAisle(rawValue: String(category.dropFirst("aisle:".count))) {
+                            Label(aisle.displayName, systemImage: aisle.icon)
+                        } else {
+                            let raw = category.hasPrefix("category:")
+                                ? String(category.dropFirst("category:".count))
+                                : category
+                            let cat = FoodCategory(rawValue: raw)
+                            Text("\(cat?.icon ?? "🛒") \(cat?.displayName ?? raw)")
+                        }
+                    }
                         .font(.title3)
                         .fontWeight(.bold)
                         .foregroundStyle(.primary)

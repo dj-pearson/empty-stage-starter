@@ -27,9 +27,33 @@ struct GroceryView: View {
         appState.groceryItems.filter { $0.checked && matchesSearch($0) }
     }
 
+    /// US-263: group by aisleSection when present (32-value store
+    /// taxonomy), fall back to legacy `category` otherwise. The composite
+    /// key uses an "aisle:" / "category:" prefix so headers can render
+    /// the right icon + label without an extra lookup.
     private var groupedUncheckedItems: [(String, [GroceryItem])] {
-        Dictionary(grouping: uncheckedItems, by: { $0.category })
-            .sorted { $0.key < $1.key }
+        let grouped = Dictionary(grouping: uncheckedItems) { item -> String in
+            if let raw = item.aisleSection, GroceryAisle(rawValue: raw) != nil {
+                return "aisle:\(raw)"
+            }
+            return "category:\(item.category)"
+        }
+        return grouped.sorted { sortKey($0.key) < sortKey($1.key) }
+    }
+
+    /// Aisle keys sort by store walk order; legacy category keys sort
+    /// alphabetically and always come after aisles so a half-migrated
+    /// list reads cleanly.
+    private func sortKey(_ key: String) -> (Int, String) {
+        if let aisle = aisle(from: key) {
+            return (aisle.storeWalkOrder, aisle.displayName)
+        }
+        return (10_000, key)
+    }
+
+    private func aisle(from key: String) -> GroceryAisle? {
+        guard key.hasPrefix("aisle:") else { return nil }
+        return GroceryAisle(rawValue: String(key.dropFirst("aisle:".count)))
     }
 
     private func matchesSearch(_ item: GroceryItem) -> Bool {
@@ -167,8 +191,15 @@ struct GroceryView: View {
                                 }
                         }
                     } header: {
-                        let cat = FoodCategory(rawValue: category)
-                        Text("\(cat?.icon ?? "🛒") \(cat?.displayName ?? category)")
+                        if let aisle = aisle(from: category) {
+                            Label(aisle.displayName, systemImage: aisle.icon)
+                        } else {
+                            let raw = category.hasPrefix("category:")
+                                ? String(category.dropFirst("category:".count))
+                                : category
+                            let cat = FoodCategory(rawValue: raw)
+                            Text("\(cat?.icon ?? "🛒") \(cat?.displayName ?? raw)")
+                        }
                     }
                 }
 
@@ -210,6 +241,10 @@ struct GroceryView: View {
             Task {
                 var addedCount = 0
                 for dropped in droppedFoods {
+                    // US-263: derive aisle from the dropped food's FoodCategory
+                    // so the new item lands in the right store section
+                    // immediately rather than stuck under a "category:" header.
+                    let aisle = GroceryAisle.fromLegacyCategory(dropped.category)
                     let item = GroceryItem(
                         id: UUID().uuidString,
                         userId: "",
@@ -218,7 +253,8 @@ struct GroceryView: View {
                         quantity: 1,
                         unit: dropped.unit ?? "count",
                         checked: false,
-                        addedVia: "drag"
+                        addedVia: "drag",
+                        aisleSection: aisle.rawValue
                     )
                     do {
                         try await appState.addGroceryItem(item)
@@ -462,6 +498,10 @@ struct AddGroceryItemView: View {
 
     @State private var name = ""
     @State private var category: FoodCategory = .protein
+    // US-263: store-section taxonomy. Defaults to .other so the user
+    // explicitly opts into a real aisle; auto-classification (US-266)
+    // will pre-fill this for known item names.
+    @State private var aisleSection: GroceryAisle = .other
     @State private var quantity: Double = 1
     @State private var unit = "count"
     @State private var notes = ""
@@ -471,6 +511,12 @@ struct AddGroceryItemView: View {
 
     private let units = ["count", "oz", "lb", "g", "kg", "cups", "tbsp", "tsp", "ml", "l"]
     private let priorities = ["low", "medium", "high"]
+
+    /// US-263: aisles sorted by typical store walk order (produce first,
+    /// other last) so the picker matches in-store routing.
+    private var sortedAisles: [GroceryAisle] {
+        GroceryAisle.allCases.sorted()
+    }
 
     // US-225: autocomplete from grocery history
     private var suggestions: [GrocerySuggestion] {
@@ -516,7 +562,16 @@ struct AddGroceryItemView: View {
                         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                     }
 
-                    Picker("Category", selection: $category) {
+                    Picker("Aisle", selection: $aisleSection) {
+                        ForEach(sortedAisles, id: \.self) { aisle in
+                            Label(aisle.displayName, systemImage: aisle.icon).tag(aisle)
+                        }
+                    }
+                    .onChange(of: aisleSection) { _, newAisle in
+                        category = newAisle.derivedFoodCategory
+                    }
+
+                    Picker("Nutrition Category", selection: $category) {
                         ForEach(FoodCategory.allCases, id: \.self) { cat in
                             Text("\(cat.icon) \(cat.displayName)").tag(cat)
                         }
@@ -623,7 +678,8 @@ struct AddGroceryItemView: View {
             priority: priority,
             addedVia: "manual",
             pricePerUnit: resolvedPrice,
-            currency: resolvedCurrency
+            currency: resolvedCurrency,
+            aisleSection: aisleSection.rawValue
         )
 
         try? await appState.addGroceryItem(item)
@@ -640,6 +696,8 @@ struct EditGroceryItemView: View {
 
     @State private var name: String = ""
     @State private var category: FoodCategory = .protein
+    // US-263: aisle taxonomy. Loaded from item.aisleSectionEnum on appear.
+    @State private var aisleSection: GroceryAisle = .other
     @State private var quantity: Double = 1
     @State private var unit: String = "count"
     @State private var notes: String = ""
@@ -648,13 +706,26 @@ struct EditGroceryItemView: View {
     private let units = ["count", "oz", "lb", "g", "kg", "cups", "tbsp", "tsp", "ml", "l"]
     private let priorities = ["low", "medium", "high"]
 
+    private var sortedAisles: [GroceryAisle] {
+        GroceryAisle.allCases.sorted()
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 Section("Item Details") {
                     TextField("Item name", text: $name)
 
-                    Picker("Category", selection: $category) {
+                    Picker("Aisle", selection: $aisleSection) {
+                        ForEach(sortedAisles, id: \.self) { aisle in
+                            Label(aisle.displayName, systemImage: aisle.icon).tag(aisle)
+                        }
+                    }
+                    .onChange(of: aisleSection) { _, newAisle in
+                        category = newAisle.derivedFoodCategory
+                    }
+
+                    Picker("Nutrition Category", selection: $category) {
                         ForEach(FoodCategory.allCases, id: \.self) { cat in
                             Text("\(cat.icon) \(cat.displayName)").tag(cat)
                         }
@@ -728,6 +799,7 @@ struct EditGroceryItemView: View {
             .onAppear {
                 name = item.name
                 category = FoodCategory(rawValue: item.category) ?? .protein
+                aisleSection = item.aisleSectionEnum ?? .other
                 quantity = item.quantity
                 unit = item.unit
                 notes = item.notes ?? ""
@@ -745,7 +817,8 @@ struct EditGroceryItemView: View {
                 quantity: quantity,
                 unit: unit,
                 notes: notes.isEmpty ? nil : notes,
-                priority: priority
+                priority: priority,
+                aisleSection: aisleSection.rawValue
             )
         )
         dismiss()
