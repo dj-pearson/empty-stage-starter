@@ -223,7 +223,7 @@ private struct FlowChips<Item: Identifiable & Hashable>: View {
     let onTap: (Item) -> Void
 
     var body: some View {
-        FlowLayout(spacing: 8, lineSpacing: 8) {
+        WrappingFlowLayout(spacing: 8, lineSpacing: 8) {
             ForEach(items) { item in
                 CategoryChip(
                     title: title(item),
@@ -236,7 +236,7 @@ private struct FlowChips<Item: Identifiable & Hashable>: View {
     }
 }
 
-private struct FlowLayout: Layout {
+private struct WrappingFlowLayout: Layout {
     var spacing: CGFloat = 8
     var lineSpacing: CGFloat = 8
 
