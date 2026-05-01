@@ -198,19 +198,25 @@ final class AppState: ObservableObject {
             async let fetchedFoods = dataService.fetchFoods()
             async let fetchedKids = dataService.fetchKids()
             async let fetchedRecipes = dataService.fetchRecipes()
+            async let fetchedRecipeIngredients = dataService.fetchRecipeIngredients()
             async let fetchedPlanEntries = dataService.fetchPlanEntries()
             async let fetchedGroceryItems = dataService.fetchGroceryItems()
             async let fetchedGroceryLists = dataService.fetchGroceryLists()
 
             let (loadedFoods, loadedKids, loadedRecipes,
-                 loadedPlanEntries, loadedGroceryItems, loadedGroceryLists) = try await (
+                 loadedRecipeIngredients, loadedPlanEntries,
+                 loadedGroceryItems, loadedGroceryLists) = try await (
                 fetchedFoods, fetchedKids, fetchedRecipes,
-                fetchedPlanEntries, fetchedGroceryItems, fetchedGroceryLists
+                fetchedRecipeIngredients, fetchedPlanEntries,
+                fetchedGroceryItems, fetchedGroceryLists
             )
 
             foods = loadedFoods
             kids = loadedKids
-            recipes = loadedRecipes
+            // US-265: splat structured ingredients into each recipe so
+            // consumers (RecipeDetailView, GroceryGeneratorService,
+            // RecipeMatcher) can read them without a separate fetch.
+            recipes = Self.attachIngredients(loadedRecipeIngredients, to: loadedRecipes)
             planEntries = loadedPlanEntries
             groceryItems = loadedGroceryItems
             groceryLists = loadedGroceryLists
@@ -359,6 +365,23 @@ final class AppState: ObservableObject {
         return mapped
     }
 
+    /// US-265: Splat a flat list of `recipe_ingredients` rows back onto
+    /// their parent recipes in one O(n) pass. Used by `loadAllData()`
+    /// after the parallel fetch returns. Ingredient rows arrive sorted
+    /// by (recipe_id, sort_order) so the per-recipe slice is already in
+    /// the right order — no extra sort needed.
+    private static func attachIngredients(
+        _ ingredients: [RecipeIngredient],
+        to recipes: [Recipe]
+    ) -> [Recipe] {
+        let grouped = Dictionary(grouping: ingredients, by: \.recipeId)
+        return recipes.map { recipe in
+            var copy = recipe
+            copy.ingredients = grouped[recipe.id] ?? []
+            return copy
+        }
+    }
+
     func deleteKid(_ id: String) async throws {
         let removed = kids.filter { $0.id == id }
         kids.removeAll { $0.id == id }
@@ -413,6 +436,35 @@ final class AppState: ObservableObject {
         recipes[index].apply(updates)
         do {
             try await dataService.updateRecipe(id, updates: updates)
+            toast.success("Recipe updated")
+            HapticManager.lightImpact()
+            AnalyticsService.track(.recipeUpdated)
+        } catch {
+            recipes[index] = original
+            toast.show(error, as: { .save(entity: "recipe", underlying: $0) })
+            HapticManager.error()
+            throw error
+        }
+    }
+
+    /// US-265: Save a recipe + its structured ingredients together. The
+    /// editor builds the full ingredient set client-side and we replace
+    /// the whole bag in one shot — simpler than diffing inserts/updates/
+    /// deletes and good enough for typical recipes (10–20 lines).
+    /// Optimistic: the local copy updates immediately; on failure we
+    /// roll the recipe + ingredients back to their pre-save state.
+    func updateRecipeWithIngredients(
+        _ id: String,
+        updates: RecipeUpdate,
+        ingredients: [RecipeIngredient]
+    ) async throws {
+        guard let index = recipes.firstIndex(where: { $0.id == id }) else { return }
+        let original = recipes[index]
+        recipes[index].apply(updates)
+        recipes[index].ingredients = ingredients
+        do {
+            try await dataService.updateRecipe(id, updates: updates)
+            try await dataService.replaceRecipeIngredients(recipeId: id, with: ingredients)
             toast.success("Recipe updated")
             HapticManager.lightImpact()
             AnalyticsService.track(.recipeUpdated)

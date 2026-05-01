@@ -20,6 +20,13 @@ struct EditRecipeView: View {
     @State private var recipeImage: UIImage?
     @State private var isSubmitting = false
 
+    /// US-265: structured ingredient rows. Loaded from recipe.ingredients
+    /// on appear; if that's empty and the legacy `additional_ingredients`
+    /// string has content, we lazy-parse it once on first save.
+    @State private var structuredIngredients: [RecipeIngredient] = []
+
+    private let ingredientUnits = ["", "count", "oz", "lb", "g", "kg", "cups", "tbsp", "tsp", "ml", "l", "pinch", "clove", "slice"]
+
     var body: some View {
         NavigationStack {
             Form {
@@ -90,8 +97,65 @@ struct EditRecipeView: View {
                     }
                 }
 
-                Section("Additional Ingredients") {
-                    TextField("Extra ingredients (comma separated)", text: $additionalIngredients, axis: .vertical)
+                // US-265: Structured ingredient editor. Replaces the
+                // legacy comma-string field. Each row carries name + qty
+                // + unit; the legacy field stays in place as a fallback
+                // for unmigrated recipes and for free-text overflow.
+                Section {
+                    ForEach($structuredIngredients) { $ing in
+                        VStack(alignment: .leading, spacing: 6) {
+                            TextField("Ingredient", text: $ing.name)
+                            HStack(spacing: 8) {
+                                TextField(
+                                    "Qty",
+                                    value: $ing.quantity,
+                                    format: .number.precision(.fractionLength(0...2))
+                                )
+                                .keyboardType(.decimalPad)
+                                .frame(width: 70)
+                                .multilineTextAlignment(.trailing)
+
+                                Picker("Unit", selection: Binding(
+                                    get: { ing.unit ?? "" },
+                                    set: { ing.unit = $0.isEmpty ? nil : $0 }
+                                )) {
+                                    ForEach(ingredientUnits, id: \.self) { u in
+                                        Text(u.isEmpty ? "—" : u).tag(u)
+                                    }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.menu)
+
+                                Spacer()
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .onDelete { offsets in
+                        structuredIngredients.remove(atOffsets: offsets)
+                        renumberSortOrders()
+                    }
+                    .onMove { source, destination in
+                        structuredIngredients.move(fromOffsets: source, toOffset: destination)
+                        renumberSortOrders()
+                    }
+
+                    Button {
+                        appendBlankIngredient()
+                    } label: {
+                        Label("Add Ingredient", systemImage: "plus.circle.fill")
+                    }
+                } header: {
+                    Text("Ingredients (\(structuredIngredients.count))")
+                } footer: {
+                    if structuredIngredients.isEmpty, !additionalIngredients.isEmpty {
+                        Text("Tap Save to convert your existing free-text ingredients into structured rows.")
+                            .font(.caption2)
+                    }
+                }
+
+                Section("Additional Notes") {
+                    TextField("Extra ingredients or notes (free text)", text: $additionalIngredients, axis: .vertical)
                         .lineLimit(3)
                 }
 
@@ -135,8 +199,52 @@ struct EditRecipeView: View {
                 tags = recipe.tags?.joined(separator: ", ") ?? ""
                 additionalIngredients = recipe.additionalIngredients ?? ""
                 tips = recipe.tips ?? ""
+
+                // US-265: structured ingredients arrive on the recipe via
+                // AppState.attachIngredients. If the recipe pre-dates
+                // this feature and has only the legacy comma-string,
+                // structuredIngredients stays empty and we'll lazy-migrate
+                // on first save.
+                structuredIngredients = recipe.ingredients.sorted(by: { $0.sortOrder < $1.sortOrder })
             }
         }
+    }
+
+    // MARK: - US-265 ingredient editor helpers
+
+    private func appendBlankIngredient() {
+        structuredIngredients.append(
+            .new(recipeId: recipe.id, sortOrder: structuredIngredients.count)
+        )
+    }
+
+    private func renumberSortOrders() {
+        for i in structuredIngredients.indices {
+            structuredIngredients[i].sortOrder = i
+        }
+    }
+
+    /// Lazy-migrate the legacy comma string into structured rows. Runs
+    /// on first save when the user has no structured rows yet but the
+    /// legacy field has content. Returns the rows that should be saved.
+    private func resolveIngredientsForSave() -> [RecipeIngredient] {
+        if !structuredIngredients.isEmpty {
+            return structuredIngredients
+                .filter { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                .enumerated()
+                .map { offset, ing in
+                    var copy = ing
+                    copy.sortOrder = offset
+                    return copy
+                }
+        }
+        if !additionalIngredients.isEmpty {
+            return RecipeIngredientLegacyParser.parse(
+                additionalIngredients,
+                recipeId: recipe.id
+            )
+        }
+        return []
     }
 
     private func saveRecipe() async {
@@ -154,6 +262,16 @@ struct EditRecipeView: View {
         let tagList = tags.isEmpty ? nil :
             tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
 
+        let resolvedIngredients = resolveIngredientsForSave()
+
+        // Once the user has structured rows we no longer need to keep the
+        // legacy comma string in lockstep — clear it so future loads
+        // can't double-insert from both sources.
+        let legacyToPersist: String? = {
+            if !resolvedIngredients.isEmpty { return nil }
+            return additionalIngredients.isEmpty ? nil : additionalIngredients
+        }()
+
         let updates = RecipeUpdate(
             name: name,
             description: description.isEmpty ? nil : description,
@@ -165,11 +283,15 @@ struct EditRecipeView: View {
             tags: tagList,
             difficultyLevel: difficulty,
             imageUrl: imageUrl ?? recipe.imageUrl,
-            additionalIngredients: additionalIngredients.isEmpty ? nil : additionalIngredients,
+            additionalIngredients: legacyToPersist,
             tips: tips.isEmpty ? nil : tips
         )
 
-        try? await appState.updateRecipe(recipe.id, updates: updates)
+        try? await appState.updateRecipeWithIngredients(
+            recipe.id,
+            updates: updates,
+            ingredients: resolvedIngredients
+        )
         dismiss()
     }
 }

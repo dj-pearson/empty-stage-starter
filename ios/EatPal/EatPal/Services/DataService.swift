@@ -124,6 +124,62 @@ final class DataService {
             .execute()
     }
 
+    // MARK: - Recipe Ingredients (US-265)
+
+    /// Fetch all structured ingredient rows for the signed-in user. RLS
+    /// scopes through recipe ownership so we can pull the whole set in
+    /// one query and group client-side. Returned sorted by recipe + sort_order
+    /// so callers can splat into `Recipe.ingredients` without re-sorting.
+    func fetchRecipeIngredients() async throws -> [RecipeIngredient] {
+        try await client.from("recipe_ingredients")
+            .select()
+            .order("recipe_id")
+            .order("sort_order")
+            .execute()
+            .value
+    }
+
+    /// Bulk-insert ingredient rows for a single recipe. Caller is
+    /// responsible for setting `sortOrder` and `recipeId` correctly.
+    func insertRecipeIngredients(_ rows: [RecipeIngredient]) async throws {
+        guard !rows.isEmpty else { return }
+        try await client.from("recipe_ingredients")
+            .insert(rows)
+            .execute()
+    }
+
+    /// Replace the full ingredient set for a recipe in one transaction:
+    /// delete existing rows, insert the new set. Used by the structured
+    /// editor on save (simpler than diffing inserts/updates/deletes).
+    func replaceRecipeIngredients(
+        recipeId: String,
+        with rows: [RecipeIngredient]
+    ) async throws {
+        try await client.from("recipe_ingredients")
+            .delete()
+            .eq("recipe_id", value: recipeId)
+            .execute()
+        if !rows.isEmpty {
+            try await client.from("recipe_ingredients")
+                .insert(rows)
+                .execute()
+        }
+    }
+
+    func updateRecipeIngredient(_ id: String, updates: RecipeIngredientUpdate) async throws {
+        try await client.from("recipe_ingredients")
+            .update(updates)
+            .eq("id", value: id)
+            .execute()
+    }
+
+    func deleteRecipeIngredient(_ id: String) async throws {
+        try await client.from("recipe_ingredients")
+            .delete()
+            .eq("id", value: id)
+            .execute()
+    }
+
     // MARK: - Plan Entries
 
     func fetchPlanEntries() async throws -> [PlanEntry] {
