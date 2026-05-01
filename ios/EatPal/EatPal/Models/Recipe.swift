@@ -51,6 +51,12 @@ struct Recipe: Identifiable, Codable, Equatable {
     var createdAt: String?
     var updatedAt: String?
 
+    /// US-265: Structured ingredient rows from `recipe_ingredients`. Lives
+    /// in a separate table so it isn't part of the `recipes` Codable
+    /// payload — left out of CodingKeys (default `[]`) and populated by
+    /// a follow-up fetch in `DataService.fetchRecipeIngredients(...)`.
+    var ingredients: [RecipeIngredient] = []
+
     enum CodingKeys: String, CodingKey {
         case id
         case userId = "user_id"
