@@ -544,6 +544,19 @@ struct PlanEntryRow: View {
                 }
             }
 
+            // US-262: "Made it" debits pantry foods + auto-checks
+            // recipe-sourced grocery items in one server-side
+            // transaction. Only meaningful when the entry has a recipe.
+            if entry.recipeId != nil {
+                Divider()
+                Button {
+                    HapticManager.success()
+                    Task { try? await appState.markPlanEntryMade(entry.id) }
+                } label: {
+                    Label("Made it", systemImage: "fork.knife.circle.fill")
+                }
+            }
+
             Divider()
 
             // US-227: Duplicate submenu

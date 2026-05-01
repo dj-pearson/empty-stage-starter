@@ -213,6 +213,23 @@ final class DataService {
             .execute()
     }
 
+    // MARK: - Mark Meal Made (US-262)
+
+    /// Calls the `rpc_mark_meal_made` Postgres function. Server-side it
+    /// debits pantry foods linked to the recipe's structured ingredients
+    /// and auto-checks grocery items sourced from this plan entry — all
+    /// in one transaction.
+    func markMealMade(planEntryId: String) async throws -> MarkMealMadeResult {
+        struct Args: Encodable {
+            let planEntryId: String
+            enum CodingKeys: String, CodingKey { case planEntryId = "p_plan_entry_id" }
+        }
+        return try await client.rpc(
+            "rpc_mark_meal_made",
+            params: Args(planEntryId: planEntryId)
+        ).execute().value
+    }
+
     // MARK: - Plan Entries
 
     func fetchPlanEntries() async throws -> [PlanEntry] {

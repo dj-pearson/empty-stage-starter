@@ -130,6 +130,9 @@ enum AnalyticsEvent {
     case mealPlanned(slot: String, kidId: String?)
     case mealResultLogged(result: String, kidId: String?)
     case mealRemoved
+    /// US-262: parent confirmed a planned recipe was eaten; pantry was
+    /// debited and recipe-sourced grocery items got auto-checked.
+    case mealMadeLogged(debitedCount: Int, checkedCount: Int)
 
     case groceryItemAdded(via: EntrySource)
     case groceryItemChecked(method: CheckMethod)
@@ -171,6 +174,7 @@ enum AnalyticsEvent {
         case .mealPlanned:              return "meal_planned"
         case .mealResultLogged:         return "meal_result_logged"
         case .mealRemoved:              return "meal_removed"
+        case .mealMadeLogged:           return "meal_made_logged"
         case .groceryItemAdded:         return "grocery_item_added"
         case .groceryItemChecked:       return "grocery_item_checked"
         case .groceryItemDeleted:       return "grocery_item_deleted"
@@ -243,6 +247,11 @@ enum AnalyticsEvent {
             var p = ["result": result]
             if let hashed = AnalyticsService.hash(kidId) { p["kid_id"] = hashed }
             return p
+        case .mealMadeLogged(let debited, let checked):
+            return [
+                "debited_count": String(debited),
+                "checked_count": String(checked)
+            ]
         case .groceryItemAdded(let via):
             return ["via": via.rawValue]
         case .groceryItemChecked(let method):

@@ -610,6 +610,86 @@ final class AppState: ObservableObject {
         return planEntries.filter { $0.kidId == kidId && $0.date == dateString }
     }
 
+    // MARK: - Mark Meal Made (US-262)
+
+    /// Logs a planned recipe as eaten. Server-side, the
+    /// `rpc_mark_meal_made` function debits pantry foods linked via
+    /// `recipe_ingredients.food_id`, auto-checks any grocery items
+    /// sourced from this plan entry, and writes a log row for
+    /// idempotency. We then optimistically refresh local state so the
+    /// UI reflects the changes without a full reload.
+    func markPlanEntryMade(_ entryId: String) async throws {
+        do {
+            let result = try await dataService.markMealMade(planEntryId: entryId)
+            switch result.status {
+            case .alreadyLogged:
+                toast.info(
+                    "Already logged",
+                    message: "This meal was logged within the last hour."
+                )
+                HapticManager.lightImpact()
+            case .logged, .noRecipe:
+                let debited = result.debitedCount ?? 0
+                let checked = result.checkedCount ?? 0
+                // Mirror the server-side mutations in our in-memory
+                // state so the UI doesn't have to wait for a reload.
+                applyMealMadeMutationsLocally(planEntryId: entryId)
+                let detail: String
+                switch (debited, checked) {
+                case (0, 0):
+                    detail = "Logged."
+                case (let d, 0):
+                    detail = "Debited \(d) pantry item\(d == 1 ? "" : "s")."
+                case (0, let c):
+                    detail = "Checked \(c) grocery item\(c == 1 ? "" : "s")."
+                case (let d, let c):
+                    detail = "Debited \(d) · checked \(c)."
+                }
+                toast.success("Meal logged", message: detail)
+                HapticManager.success()
+                AnalyticsService.track(.mealMadeLogged(
+                    debitedCount: debited,
+                    checkedCount: checked
+                ))
+            }
+        } catch {
+            toast.show(error, as: { .save(entity: "meal made log", underlying: $0) })
+            HapticManager.error()
+            throw error
+        }
+    }
+
+    /// Optimistically apply the side effects of a successful
+    /// `rpc_mark_meal_made` to local state so the user sees the pantry
+    /// debit + grocery check immediately. The next `loadAllData` will
+    /// confirm; until then this keeps the UI honest.
+    private func applyMealMadeMutationsLocally(planEntryId: String) {
+        guard let entry = planEntries.first(where: { $0.id == planEntryId }) else { return }
+        // Pantry debit: mirror the server's "decrement linked-food qty
+        // by 1" rule. We can derive linked food ids from the recipe's
+        // structured ingredients without an extra fetch.
+        if let recipeId = entry.recipeId,
+           let recipe = recipes.first(where: { $0.id == recipeId }) {
+            for ing in recipe.ingredients {
+                guard let foodId = ing.foodId,
+                      let idx = foods.firstIndex(where: { $0.id == foodId }) else { continue }
+                let current = foods[idx].quantity ?? 0
+                foods[idx].quantity = max(0, current - 1)
+            }
+        }
+        // Grocery checks: any item with a source row pointing at this entry.
+        let affectedIds = Set(
+            groceryItemSources
+                .filter { $0.planEntryId == planEntryId }
+                .map { $0.groceryItemId }
+        )
+        for id in affectedIds {
+            if let idx = groceryItems.firstIndex(where: { $0.id == id }) {
+                groceryItems[idx].checked = true
+            }
+        }
+    }
+
     // MARK: - Plan Entry Feedback (US-231)
 
     /// Background-loadable. Failures are quietly swallowed: feedback is a
