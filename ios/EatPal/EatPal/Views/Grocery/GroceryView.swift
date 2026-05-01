@@ -1,6 +1,27 @@
 import SwiftUI
 import TipKit
 
+/// US-264: GroceryView display mode. Persisted via @AppStorage so the
+/// user's preference survives across app launches.
+enum GroceryViewMode: String, CaseIterable {
+    case byAisle = "by_aisle"
+    case byRecipe = "by_recipe"
+
+    var title: String {
+        switch self {
+        case .byAisle:  return "By Aisle"
+        case .byRecipe: return "By Recipe"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .byAisle:  return "list.bullet.indent"
+        case .byRecipe: return "book.closed.fill"
+        }
+    }
+}
+
 struct GroceryView: View {
     @EnvironmentObject var appState: AppState
     @State private var searchText = ""
@@ -15,6 +36,17 @@ struct GroceryView: View {
     @State private var editingItem: GroceryItem?
     // US-232: Shopping Mode (one-handed in-store UI)
     @State private var showingShoppingMode = false
+    // US-264: tapping a recipe section header opens the recipe detail.
+    @State private var inspectedRecipe: Recipe?
+
+    /// US-264: persisted view-mode preference. Defaults to .byAisle so
+    /// existing users see no behavior change until they opt in.
+    @AppStorage("grocery.viewMode") private var viewModeRaw: String =
+        GroceryViewMode.byAisle.rawValue
+
+    private var viewMode: GroceryViewMode {
+        GroceryViewMode(rawValue: viewModeRaw) ?? .byAisle
+    }
 
     private var swipeTip = SwipeGroceryTip()
     private var contextMenuTip = ContextMenuTip()
@@ -58,6 +90,240 @@ struct GroceryView: View {
 
     private func matchesSearch(_ item: GroceryItem) -> Bool {
         searchText.isEmpty || item.name.localizedCaseInsensitiveContains(searchText)
+    }
+
+    // MARK: - US-264 By Recipe grouping
+
+    /// Tag for the synthetic top + bottom buckets in By Recipe mode.
+    private enum RecipeBucket: Hashable {
+        case recipe(String)
+        case shared
+        case manual
+    }
+
+    /// Per-bucket items for By Recipe mode. Order: Shared first
+    /// (multi-recipe items the user should weigh against multiple meals),
+    /// then individual recipes alphabetically by name, then Manual at the
+    /// bottom (items with no source rows).
+    private var groupedByRecipeBuckets: [(RecipeBucket, String, [GroceryItem])] {
+        let sourcesByItem = Dictionary(grouping: appState.groceryItemSources, by: \.groceryItemId)
+        var sharedItems: [GroceryItem] = []
+        var manualItems: [GroceryItem] = []
+        var perRecipe: [String: [GroceryItem]] = [:]
+
+        for item in uncheckedItems {
+            let sources = sourcesByItem[item.id] ?? []
+            let recipeIds = Set(sources.compactMap(\.recipeId))
+            if recipeIds.isEmpty {
+                manualItems.append(item)
+            } else if recipeIds.count >= 2 {
+                sharedItems.append(item)
+            } else if let only = recipeIds.first {
+                perRecipe[only, default: []].append(item)
+            }
+        }
+
+        var result: [(RecipeBucket, String, [GroceryItem])] = []
+        if !sharedItems.isEmpty {
+            result.append((.shared, "Shared across recipes", sharedItems))
+        }
+        let recipesById = Dictionary(uniqueKeysWithValues: appState.recipes.map { ($0.id, $0) })
+        let recipeSections = perRecipe
+            .compactMap { (recipeId, items) -> (RecipeBucket, String, [GroceryItem])? in
+                let title = recipesById[recipeId]?.name ?? "Unknown recipe"
+                return (.recipe(recipeId), title, items)
+            }
+            .sorted { $0.1.localizedCaseInsensitiveCompare($1.1) == .orderedAscending }
+        result.append(contentsOf: recipeSections)
+        if !manualItems.isEmpty {
+            result.append((.manual, "Manual additions", manualItems))
+        }
+        return result
+    }
+
+    /// Subtitle for a recipe section: "Mon dinner · Wed lunch" — every
+    /// meal slot the recipe covers in the current sources data.
+    private func recipeSectionSubtitle(for recipeId: String) -> String {
+        let sources = appState.groceryItemSources.filter { $0.recipeId == recipeId }
+        let labels: [String] = sources.compactMap { src -> String? in
+            guard let dateStr = src.mealDate, let slot = src.mealSlot else { return nil }
+            guard let date = DateFormatter.isoDate.date(from: dateStr) else { return nil }
+            let weekday = Self.weekdayShortFormatter.string(from: date)
+            let slotName = MealSlot(rawValue: slot)?.displayName ?? slot.capitalized
+            return "\(weekday) \(slotName.lowercased())"
+        }
+        // Dedupe + cap so we don't render endless subtitles for recipes
+        // that show up many times in the week.
+        let unique = Array(Set(labels)).sorted()
+        return unique.prefix(3).joined(separator: " · ")
+    }
+
+    private static let weekdayShortFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "EEE"
+        return f
+    }()
+
+    /// Wrap a GroceryItemRow with all the swipe + tap + context menu
+    /// modifiers. Extracted so both view modes can share the behavior
+    /// without duplicating ~80 lines.
+    @ViewBuilder
+    private func decoratedRow(for item: GroceryItem) -> some View {
+        GroceryItemRow(item: item)
+            .contentShape(Rectangle())
+            .onTapGesture { editingItem = item }
+            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                Button {
+                    HapticManager.success()
+                    Task {
+                        try? await appState.toggleGroceryItem(item.id)
+                        await TipEvents.didSwipeGrocery.donate()
+                    }
+                } label: {
+                    Label("Check", systemImage: "checkmark.circle.fill")
+                }
+                .tint(.green)
+                .accessibilityLabel("Mark \(item.name) as bought")
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                Button(role: .destructive) {
+                    HapticManager.error()
+                    Task {
+                        try? await appState.deleteGroceryItem(item.id)
+                        await TipEvents.didSwipeGrocery.donate()
+                    }
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+                Button {
+                    HapticManager.lightImpact()
+                    editingItem = item
+                    Task { await TipEvents.didSwipeGrocery.donate() }
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+                .tint(.blue)
+            }
+            .contextMenu {
+                Button {
+                    HapticManager.success()
+                    Task { try? await appState.toggleGroceryItem(item.id) }
+                } label: {
+                    Label(item.checked ? "Uncheck" : "Mark Bought",
+                          systemImage: item.checked ? "arrow.uturn.backward.circle" : "checkmark.circle.fill")
+                }
+
+                Button {
+                    HapticManager.lightImpact()
+                    editingItem = item
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+
+                Button {
+                    HapticManager.success()
+                    Task {
+                        let duplicate = GroceryItem(
+                            id: UUID().uuidString,
+                            userId: "",
+                            name: item.name,
+                            category: item.category,
+                            quantity: item.quantity,
+                            unit: item.unit,
+                            checked: false,
+                            notes: item.notes,
+                            priority: item.priority,
+                            addedVia: "manual"
+                        )
+                        try? await appState.addGroceryItem(duplicate)
+                        ToastManager.shared.success("Duplicated", message: item.name)
+                    }
+                } label: {
+                    Label("Duplicate", systemImage: "plus.square.on.square")
+                }
+
+                Divider()
+
+                Button(role: .destructive) {
+                    HapticManager.error()
+                    Task { try? await appState.deleteGroceryItem(item.id) }
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var byAisleSections: some View {
+        ForEach(groupedUncheckedItems, id: \.0) { category, items in
+            Section {
+                ForEach(items) { item in
+                    decoratedRow(for: item)
+                }
+            } header: {
+                if let aisle = aisle(from: category) {
+                    Label(aisle.displayName, systemImage: aisle.icon)
+                } else {
+                    let raw = category.hasPrefix("category:")
+                        ? String(category.dropFirst("category:".count))
+                        : category
+                    let cat = FoodCategory(rawValue: raw)
+                    Text("\(cat?.icon ?? "🛒") \(cat?.displayName ?? raw)")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var byRecipeSections: some View {
+        ForEach(groupedByRecipeBuckets, id: \.0) { bucket, title, items in
+            Section {
+                ForEach(items) { item in
+                    decoratedRow(for: item)
+                }
+            } header: {
+                byRecipeSectionHeader(bucket: bucket, title: title)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func byRecipeSectionHeader(bucket: RecipeBucket, title: String) -> some View {
+        switch bucket {
+        case .recipe(let recipeId):
+            Button {
+                if let recipe = appState.recipes.first(where: { $0.id == recipeId }) {
+                    inspectedRecipe = recipe
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "book.closed.fill")
+                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title)
+                            .textCase(nil)
+                        let subtitle = recipeSectionSubtitle(for: recipeId)
+                        if !subtitle.isEmpty {
+                            Text(subtitle)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .textCase(nil)
+                        }
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.tertiary)
+                        .font(.caption)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens \(title) recipe details")
+        case .shared:
+            Label(title, systemImage: "rectangle.connected.to.line.below")
+        case .manual:
+            Label(title, systemImage: "hand.point.up.left.fill")
+        }
     }
 
     var body: some View {
@@ -104,103 +370,14 @@ struct GroceryView: View {
                     )
                 }
             } else {
-                ForEach(groupedUncheckedItems, id: \.0) { category, items in
-                    Section {
-                        ForEach(items) { item in
-                            GroceryItemRow(item: item)
-                                .contentShape(Rectangle())
-                                .onTapGesture { editingItem = item }
-                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                    Button {
-                                        HapticManager.success()
-                                        Task {
-                                            try? await appState.toggleGroceryItem(item.id)
-                                            await TipEvents.didSwipeGrocery.donate()
-                                        }
-                                    } label: {
-                                        Label("Check", systemImage: "checkmark.circle.fill")
-                                    }
-                                    .tint(.green)
-                                    .accessibilityLabel("Mark \(item.name) as bought")
-                                }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        HapticManager.error()
-                                        Task {
-                                            try? await appState.deleteGroceryItem(item.id)
-                                            await TipEvents.didSwipeGrocery.donate()
-                                        }
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                    Button {
-                                        HapticManager.lightImpact()
-                                        editingItem = item
-                                        Task { await TipEvents.didSwipeGrocery.donate() }
-                                    } label: {
-                                        Label("Edit", systemImage: "pencil")
-                                    }
-                                    .tint(.blue)
-                                }
-                                .contextMenu {
-                                    Button {
-                                        HapticManager.success()
-                                        Task { try? await appState.toggleGroceryItem(item.id) }
-                                    } label: {
-                                        Label(item.checked ? "Uncheck" : "Mark Bought",
-                                              systemImage: item.checked ? "arrow.uturn.backward.circle" : "checkmark.circle.fill")
-                                    }
-
-                                    Button {
-                                        HapticManager.lightImpact()
-                                        editingItem = item
-                                    } label: {
-                                        Label("Edit", systemImage: "pencil")
-                                    }
-
-                                    Button {
-                                        HapticManager.success()
-                                        Task {
-                                            let duplicate = GroceryItem(
-                                                id: UUID().uuidString,
-                                                userId: "",
-                                                name: item.name,
-                                                category: item.category,
-                                                quantity: item.quantity,
-                                                unit: item.unit,
-                                                checked: false,
-                                                notes: item.notes,
-                                                priority: item.priority,
-                                                addedVia: "manual"
-                                            )
-                                            try? await appState.addGroceryItem(duplicate)
-                                            ToastManager.shared.success("Duplicated", message: item.name)
-                                        }
-                                    } label: {
-                                        Label("Duplicate", systemImage: "plus.square.on.square")
-                                    }
-
-                                    Divider()
-
-                                    Button(role: .destructive) {
-                                        HapticManager.error()
-                                        Task { try? await appState.deleteGroceryItem(item.id) }
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
-                        }
-                    } header: {
-                        if let aisle = aisle(from: category) {
-                            Label(aisle.displayName, systemImage: aisle.icon)
-                        } else {
-                            let raw = category.hasPrefix("category:")
-                                ? String(category.dropFirst("category:".count))
-                                : category
-                            let cat = FoodCategory(rawValue: raw)
-                            Text("\(cat?.icon ?? "🛒") \(cat?.displayName ?? raw)")
-                        }
-                    }
+                // US-264: branch on view mode. By Aisle uses the existing
+                // walk-order grouping; By Recipe groups items under the
+                // recipes that contributed to them.
+                switch viewMode {
+                case .byAisle:
+                    byAisleSections
+                case .byRecipe:
+                    byRecipeSections
                 }
 
                 // Checked Items
@@ -291,6 +468,40 @@ struct GroceryView: View {
                 .disabled(uncheckedItems.isEmpty)
                 .accessibilityLabel("Start shopping mode")
                 .accessibilityHint("One-handed in-store view with large rows and dim screen")
+            }
+
+            // US-264: View-mode toggle. Placed near the title so it
+            // reads as a list-display switcher rather than a write
+            // action; uses a Menu with checkmarks so the current mode
+            // is glanceable without opening the menu twice.
+            ToolbarItem(placement: .principal) {
+                Menu {
+                    ForEach(GroceryViewMode.allCases, id: \.self) { mode in
+                        Button {
+                            if viewMode != mode {
+                                HapticManager.selection()
+                                viewModeRaw = mode.rawValue
+                            }
+                        } label: {
+                            Label(mode.title, systemImage: mode.icon)
+                            if viewMode == mode {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: viewMode.icon)
+                            .imageScale(.small)
+                        Text(viewMode.title)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                        Image(systemName: "chevron.down")
+                            .imageScale(.small)
+                            .foregroundStyle(.secondary)
+                    }
+                    .accessibilityLabel("Grocery view mode: \(viewMode.title)")
+                }
             }
 
             ToolbarItem(placement: .primaryAction) {
@@ -395,6 +606,11 @@ struct GroceryView: View {
         .sheet(item: $editingItem) { item in
             EditGroceryItemView(item: item)
         }
+        // US-264: tap a recipe section header in By Recipe mode → open
+        // the recipe detail without leaving the Grocery tab.
+        .sheet(item: $inspectedRecipe) { recipe in
+            RecipeDetailView(recipe: recipe)
+        }
         .fullScreenCover(isPresented: $showingShoppingMode) {
             ShoppingModeView()
         }
@@ -417,13 +633,16 @@ struct GroceryView: View {
         let kidIds = appState.activeKidId.map { [$0] } ?? appState.kids.map(\.id)
 
         do {
-            let items = try await GroceryGeneratorService.generateFromMealPlan(
+            // US-264: returns both new items and the source-link rows
+            // that map them back to the recipes/plan entries that
+            // contributed. addGeneratedItems persists both atomically.
+            let result = try await GroceryGeneratorService.generateFromMealPlan(
                 weekStart: weekStart,
                 kidIds: kidIds,
                 appState: appState
             )
-            if !items.isEmpty {
-                try await GroceryGeneratorService.addGeneratedItems(items, appState: appState)
+            if !result.items.isEmpty || !result.sources.isEmpty {
+                try await GroceryGeneratorService.addGeneratedItems(result, appState: appState)
             } else {
                 let toast = ToastManager.shared
                 toast.info("No new items", message: "All ingredients are already on your list.")

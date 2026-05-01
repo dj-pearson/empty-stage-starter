@@ -14,6 +14,10 @@ final class AppState: ObservableObject {
     @Published var planEntries: [PlanEntry] = []
     @Published var groceryItems: [GroceryItem] = []
     @Published var groceryLists: [GroceryList] = []
+    /// US-264: many-to-many link from grocery items to the recipes /
+    /// plan entries they were generated from. Powers the GroceryView
+    /// "By Recipe" view mode. Refreshed alongside groceryItems.
+    @Published var groceryItemSources: [GroceryItemSource] = []
     /// US-231: optional 1-5 ratings + notes attached to plan entries.
     /// Loaded lazily — first read of the dashboard "Most loved" card or
     /// the AI prompt enrichment triggers `loadPlanEntryFeedback()`.
@@ -202,13 +206,16 @@ final class AppState: ObservableObject {
             async let fetchedPlanEntries = dataService.fetchPlanEntries()
             async let fetchedGroceryItems = dataService.fetchGroceryItems()
             async let fetchedGroceryLists = dataService.fetchGroceryLists()
+            async let fetchedGroceryItemSources = dataService.fetchGroceryItemSources()
 
             let (loadedFoods, loadedKids, loadedRecipes,
                  loadedRecipeIngredients, loadedPlanEntries,
-                 loadedGroceryItems, loadedGroceryLists) = try await (
+                 loadedGroceryItems, loadedGroceryLists,
+                 loadedGroceryItemSources) = try await (
                 fetchedFoods, fetchedKids, fetchedRecipes,
                 fetchedRecipeIngredients, fetchedPlanEntries,
-                fetchedGroceryItems, fetchedGroceryLists
+                fetchedGroceryItems, fetchedGroceryLists,
+                fetchedGroceryItemSources
             )
 
             foods = loadedFoods
@@ -220,6 +227,9 @@ final class AppState: ObservableObject {
             planEntries = loadedPlanEntries
             groceryItems = loadedGroceryItems
             groceryLists = loadedGroceryLists
+            // US-264: source-link rows feed the "By Recipe" grouping in
+            // GroceryView; refreshed in lockstep with groceryItems.
+            groceryItemSources = loadedGroceryItemSources
 
             if activeKidId == nil, let firstKid = kids.first {
                 activeKidId = firstKid.id
@@ -255,6 +265,7 @@ final class AppState: ObservableObject {
         planEntries = []
         groceryItems = []
         groceryLists = []
+        groceryItemSources = []
         activeKidId = nil
     }
 
@@ -695,17 +706,23 @@ final class AppState: ObservableObject {
 
     func deleteGroceryItem(_ id: String) async throws {
         let removed = groceryItems.filter { $0.id == id }
+        let removedSources = groceryItemSources.filter { $0.groceryItemId == id }
         groceryItems.removeAll { $0.id == id }
+        // US-264: keep the in-memory source-link array in sync; DB-side
+        // ON DELETE CASCADE handles the persisted side.
+        groceryItemSources.removeAll { $0.groceryItemId == id }
         do {
             try await dataService.deleteGroceryItem(id)
             HapticManager.mediumImpact()
             AnalyticsService.track(.groceryItemDeleted)
+            _ = removedSources // referenced in the rollback path below
         } catch {
             if isNetworkError(error) {
                 OfflineStore.shared.enqueueDelete(table: .groceryItems, entityId: id)
                 HapticManager.lightImpact()
             } else {
                 groceryItems.append(contentsOf: removed)
+                groceryItemSources.append(contentsOf: removedSources)
                 toast.show(error, as: { .delete(entity: "grocery item", underlying: $0) })
                 HapticManager.error()
                 throw error
@@ -808,8 +825,13 @@ final class AppState: ObservableObject {
 
     func clearCheckedGroceryItems() async throws {
         let checked = groceryItems.filter(\.checked)
-        let checkedIds = checked.map(\.id)
+        let checkedIds = Set(checked.map(\.id))
+        // US-264: hold the source rows for the rollback path; DB-side
+        // ON DELETE CASCADE handles persisted cleanup once the parent
+        // grocery_items rows are gone.
+        let removedSources = groceryItemSources.filter { checkedIds.contains($0.groceryItemId) }
         groceryItems.removeAll { $0.checked }
+        groceryItemSources.removeAll { checkedIds.contains($0.groceryItemId) }
         do {
             for id in checkedIds {
                 try await dataService.deleteGroceryItem(id)
@@ -819,6 +841,7 @@ final class AppState: ObservableObject {
             AnalyticsService.track(.groceryListCleared(checkedCount: checkedIds.count))
         } catch {
             groceryItems.append(contentsOf: checked)
+            groceryItemSources.append(contentsOf: removedSources)
             toast.show(error, as: { .delete(entity: "grocery items", underlying: $0) })
             HapticManager.error()
             throw error

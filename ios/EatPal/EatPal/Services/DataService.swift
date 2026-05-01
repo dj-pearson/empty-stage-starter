@@ -180,6 +180,39 @@ final class DataService {
             .execute()
     }
 
+    // MARK: - Grocery Item Sources (US-264)
+
+    /// Fetch all source-link rows visible to the signed-in user. RLS
+    /// scopes through grocery_items ownership, so this returns only the
+    /// rows that belong to the user's own grocery items.
+    func fetchGroceryItemSources() async throws -> [GroceryItemSource] {
+        try await client.from("grocery_item_sources")
+            .select()
+            .execute()
+            .value
+    }
+
+    /// Bulk-insert source rows for one or more grocery items. The
+    /// generator builds the full set client-side and inserts in a
+    /// single round-trip per generation pass.
+    func insertGroceryItemSources(_ rows: [GroceryItemSource]) async throws {
+        guard !rows.isEmpty else { return }
+        try await client.from("grocery_item_sources")
+            .insert(rows)
+            .execute()
+    }
+
+    /// Drop every source row pointing at a grocery item. Used by the
+    /// generator before re-running so we don't accumulate stale links
+    /// across generations. (DB-side ON DELETE CASCADE handles deletion
+    /// when the grocery item itself is removed.)
+    func deleteGroceryItemSourcesForItem(_ groceryItemId: String) async throws {
+        try await client.from("grocery_item_sources")
+            .delete()
+            .eq("grocery_item_id", value: groceryItemId)
+            .execute()
+    }
+
     // MARK: - Plan Entries
 
     func fetchPlanEntries() async throws -> [PlanEntry] {
