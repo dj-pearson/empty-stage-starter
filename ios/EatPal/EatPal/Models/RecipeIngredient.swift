@@ -87,9 +87,11 @@ struct RecipeIngredientUpdate: Codable {
 /// Lazy-migrate a legacy `additional_ingredients` comma-separated string
 /// into structured rows on first save in EditRecipeView.
 ///
-/// The legacy parser is intentionally lossy — it can't recover quantities
-/// or units that were never typed in. It just preserves the names so the
-/// UI doesn't lose data, and lets the user fill in qty + unit afterward.
+/// Each split chunk is run through `IngredientTextParser` so that lines
+/// like `"4 tablespoons vegetable oil"` produce a row with
+/// `name = "vegetable oil"`, `quantity = 4`, `unit = "tbsp"` — instead
+/// of the whole raw string landing in `name` and trickling through to
+/// the grocery list as the displayed item.
 enum RecipeIngredientLegacyParser {
     static func parse(
         _ legacy: String,
@@ -101,11 +103,14 @@ enum RecipeIngredientLegacyParser {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .enumerated()
-            .map { offset, name in
-                RecipeIngredient.new(
+            .map { offset, raw in
+                let parsed = IngredientTextParser.parse(raw)
+                return RecipeIngredient.new(
                     recipeId: recipeId,
                     sortOrder: startingSortOrder + offset,
-                    name: name
+                    name: parsed.name,
+                    quantity: parsed.quantity,
+                    unit: parsed.unit
                 )
             }
     }

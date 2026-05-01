@@ -1119,21 +1119,34 @@ final class AppState: ObservableObject {
         for recipe in selected {
             if !recipe.ingredients.isEmpty {
                 for ing in recipe.ingredients {
-                    let key = ing.name.lowercased()
+                    // Defensive reparse — recipes imported before the
+                    // qty/unit split landed the whole "4 tablespoons
+                    // vegetable oil" line in `name`. Cleaning here gives
+                    // a presentable grocery item without requiring users
+                    // to re-edit every imported recipe.
+                    let parsed = IngredientTextParser.parse(ing.name)
+                    let displayName = parsed.name
+                    let key = displayName.lowercased()
                     guard !seen.contains(key) else { continue }
                     seen.insert(key)
                     let linkedFood = ing.foodId.flatMap { fid in foods.first(where: { $0.id == fid }) }
                     let category = linkedFood?.category ?? "other"
+                    // Linked food → use its FoodCategory→Aisle mapping;
+                    // otherwise lean on the keyword classifier so unlinked
+                    // ingredients land in a real aisle, not "Other".
+                    let aisle: GroceryAisle = linkedFood != nil
+                        ? GroceryAisle.fromLegacyCategory(category)
+                        : GroceryAisle.classify(displayName)
                     newItems.append(GroceryItem(
                         id: UUID().uuidString,
                         userId: "",
-                        name: ing.name,
+                        name: displayName,
                         category: category,
-                        quantity: ing.quantity ?? 1,
-                        unit: ing.unit ?? "",
+                        quantity: ing.quantity ?? parsed.quantity ?? 1,
+                        unit: ing.unit ?? parsed.unit ?? "",
                         checked: false,
                         addedVia: "bulk_recipe",
-                        aisleSection: GroceryAisle.fromLegacyCategory(category).rawValue
+                        aisleSection: aisle.rawValue
                     ))
                 }
                 continue

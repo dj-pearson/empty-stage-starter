@@ -245,31 +245,50 @@ enum GroceryGeneratorService {
     ) {
         let trimmed = ing.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        let key = trimmed.lowercased()
+
+        // Defensive reparse: rows imported before US-265's name/qty/unit
+        // split landed the whole raw string ("4 tablespoons vegetable
+        // oil") in `name` with nil qty/unit. Running them through the
+        // parser idempotently cleans the display name and recovers the
+        // quantity + unit on the way to the grocery list.
+        let parsed = IngredientTextParser.parse(trimmed)
+        let displayName = parsed.name
+        let resolvedQty = ing.quantity ?? parsed.quantity
+        let resolvedUnit = ing.unit ?? parsed.unit
+
+        let key = displayName.lowercased()
         let linkedFood = ing.foodId.flatMap { fid in
             appState.foods.first(where: { $0.id == fid })
         }
         let category = linkedFood?.category ?? "other"
-        let aisle = GroceryAisle.fromLegacyCategory(category)
+        // Prefer the linked food's category mapping; fall back to a
+        // name-keyword classifier so unlinked ingredients still land in
+        // a real aisle instead of one giant "Other" bucket.
+        let aisle: GroceryAisle = {
+            if linkedFood != nil {
+                return GroceryAisle.fromLegacyCategory(category)
+            }
+            return GroceryAisle.classify(displayName)
+        }()
 
         var existing = candidates[key] ?? Candidate(
-            displayName: trimmed,
+            displayName: displayName,
             category: category,
-            unit: ing.unit ?? "",
+            unit: resolvedUnit ?? "",
             totalQuantity: 0,
             aisleHint: linkedFood?.aisle,
             aisle: aisle,
             contributions: []
         )
-        let qty = ing.quantity ?? 1
+        let qty = resolvedQty ?? 1
         existing.totalQuantity += qty
-        if existing.unit.isEmpty, let unit = ing.unit { existing.unit = unit }
+        if existing.unit.isEmpty, let unit = resolvedUnit { existing.unit = unit }
         existing.contributions.append(Contribution(
             recipeId: recipe.id,
             planEntryId: entry.id,
             mealDate: dateString,
             mealSlot: entry.mealSlot,
-            quantity: ing.quantity
+            quantity: resolvedQty
         ))
         candidates[key] = existing
     }
@@ -312,23 +331,29 @@ enum GroceryGeneratorService {
         dateString: String,
         into candidates: inout [String: Candidate]
     ) {
-        let key = name.lowercased()
+        // Same parse + classify path as the structured side so legacy
+        // recipes (those still serving from `recipe.additional_ingredients`)
+        // produce clean display names + aisles too.
+        let parsed = IngredientTextParser.parse(name)
+        let displayName = parsed.name
+        let key = displayName.lowercased()
+        let aisle = GroceryAisle.classify(displayName)
         var existing = candidates[key] ?? Candidate(
-            displayName: name,
+            displayName: displayName,
             category: "other",
-            unit: "",
+            unit: parsed.unit ?? "",
             totalQuantity: 0,
             aisleHint: nil,
-            aisle: .other,
+            aisle: aisle,
             contributions: []
         )
-        existing.totalQuantity += 1
+        existing.totalQuantity += parsed.quantity ?? 1
         existing.contributions.append(Contribution(
             recipeId: recipe.id,
             planEntryId: entry.id,
             mealDate: dateString,
             mealSlot: entry.mealSlot,
-            quantity: nil
+            quantity: parsed.quantity
         ))
         candidates[key] = existing
     }
