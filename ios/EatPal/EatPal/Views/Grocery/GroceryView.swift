@@ -48,6 +48,9 @@ struct GroceryView: View {
     @State private var showingChooseAisle = false
     @State private var showingBulkDeleteConfirm = false
 
+    // US-270: cookable-recipes empty-state CTA.
+    @State private var showingCookable = false
+
     /// US-264: persisted view-mode preference. Defaults to .byAisle so
     /// existing users see no behavior change until they opt in.
     @AppStorage("grocery.viewMode") private var viewModeRaw: String =
@@ -403,6 +406,37 @@ struct GroceryView: View {
                         description: Text("Add items to your grocery list to get started.")
                     )
                 }
+                // US-270: surface the cookable-recipes matcher right where
+                // the user is most receptive — "no list yet, but maybe
+                // you can already cook something."
+                if !appState.recipes.isEmpty {
+                    Section {
+                        Button {
+                            HapticManager.lightImpact()
+                            AnalyticsService.track(.cookableMatchOpened)
+                            showingCookable = true
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "sparkles")
+                                    .foregroundStyle(.green)
+                                    .imageScale(.large)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("What can I cook with what I have?")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(.primary)
+                                    Text("Match recipes against your pantry.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             } else {
                 // US-264: branch on view mode. By Aisle uses the existing
                 // walk-order grouping; By Recipe groups items under the
@@ -737,6 +771,10 @@ struct GroceryView: View {
         }
         .sheet(item: $editingItem) { item in
             EditGroceryItemView(item: item)
+        }
+        .sheet(isPresented: $showingCookable) {
+            CookableRecipesSheet()
+                .environmentObject(appState)
         }
         // US-264: tap a recipe section header in By Recipe mode → open
         // the recipe detail without leaving the Grocery tab.

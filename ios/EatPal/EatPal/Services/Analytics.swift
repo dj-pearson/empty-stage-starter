@@ -134,6 +134,14 @@ enum AnalyticsEvent {
     /// debited and recipe-sourced grocery items got auto-checked.
     case mealMadeLogged(debitedCount: Int, checkedCount: Int)
 
+    /// US-270: "What can I make?" sheet was opened.
+    case cookableMatchOpened
+    /// US-270: user added a cookable-match recipe to the meal plan.
+    case cookableRecipeAddedToPlan
+    /// US-270: user added a cookable-match's missing ingredients to the
+    /// grocery list.
+    case cookableMissingAddedToGrocery(count: Int)
+
     case groceryItemAdded(via: EntrySource)
     case groceryItemChecked(method: CheckMethod)
     case groceryItemDeleted
@@ -175,6 +183,9 @@ enum AnalyticsEvent {
         case .mealResultLogged:         return "meal_result_logged"
         case .mealRemoved:              return "meal_removed"
         case .mealMadeLogged:           return "meal_made_logged"
+        case .cookableMatchOpened:      return "cookable_match_opened"
+        case .cookableRecipeAddedToPlan: return "cookable_recipe_added_to_plan"
+        case .cookableMissingAddedToGrocery: return "cookable_missing_added_to_grocery"
         case .groceryItemAdded:         return "grocery_item_added"
         case .groceryItemChecked:       return "grocery_item_checked"
         case .groceryItemDeleted:       return "grocery_item_deleted"
@@ -252,6 +263,8 @@ enum AnalyticsEvent {
                 "debited_count": String(debited),
                 "checked_count": String(checked)
             ]
+        case .cookableMissingAddedToGrocery(let count):
+            return ["count": String(count)]
         case .groceryItemAdded(let via):
             return ["via": via.rawValue]
         case .groceryItemChecked(let method):

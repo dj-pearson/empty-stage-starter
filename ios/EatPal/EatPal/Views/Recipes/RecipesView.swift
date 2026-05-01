@@ -13,6 +13,9 @@ struct RecipesView: View {
     @State private var selectedIds: Set<String> = []
     @State private var showingBulkDeleteConfirm = false
 
+    // US-270: cookable-recipes sheet entry.
+    @State private var showingCookable = false
+
     private var swipeTip = SwipeRecipeTip()
 
     private var filteredRecipes: [Recipe] {
@@ -166,6 +169,15 @@ struct RecipesView: View {
                         } label: {
                             Label("Add Recipe", systemImage: "plus")
                         }
+                        // US-270: open the "What can I make?" sheet.
+                        Button {
+                            HapticManager.lightImpact()
+                            AnalyticsService.track(.cookableMatchOpened)
+                            showingCookable = true
+                        } label: {
+                            Label("What can I make?", systemImage: "sparkles")
+                        }
+                        .disabled(appState.recipes.isEmpty)
                         Divider()
                         Button {
                             HapticManager.lightImpact()
@@ -225,6 +237,10 @@ struct RecipesView: View {
         }
         .sheet(item: $selectedRecipe) { recipe in
             RecipeDetailView(recipe: recipe)
+        }
+        .sheet(isPresented: $showingCookable) {
+            CookableRecipesSheet()
+                .environmentObject(appState)
         }
         .alert(
             "Delete \(selectedIds.count) recipe\(selectedIds.count == 1 ? "" : "s")?",
