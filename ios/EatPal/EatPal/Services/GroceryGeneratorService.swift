@@ -7,6 +7,7 @@ import Foundation
 /// both the new grocery items and the `grocery_item_sources` rows that
 /// link them back to their meals — together they power the "By Recipe"
 /// view in `GroceryView`.
+@MainActor
 enum GroceryGeneratorService {
 
     /// Output bundle from a generation run. `items` and `sources` are
@@ -22,7 +23,6 @@ enum GroceryGeneratorService {
     /// lowercased name) are skipped — but their planned occurrences are
     /// still tagged with sources so the "By Recipe" view shows them
     /// under the right recipes after the user re-checks them.
-    @MainActor
     static func generateFromMealPlan(
         weekStart: Date,
         kidIds: [String],
@@ -111,7 +111,6 @@ enum GroceryGeneratorService {
 
     /// Persist the generation Result. Items go in first so the source
     /// FK is satisfiable; sources follow in a single bulk insert.
-    @MainActor
     static func addGeneratedItems(
         _ result: Result,
         appState: AppState
