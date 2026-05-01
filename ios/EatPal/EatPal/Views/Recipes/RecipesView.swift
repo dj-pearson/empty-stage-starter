@@ -6,7 +6,12 @@ struct RecipesView: View {
     @State private var searchText = ""
     @State private var selectedRecipe: Recipe?
     @State private var showingAddRecipe = false
-    @State private var selectedDifficulty: String?
+
+    // US-272: full filter state. Replaces the single-difficulty pill;
+    // search bar binds to `filters.ingredientQuery` so the chip strip
+    // can show + clear it like any other filter.
+    @State private var filters = RecipeFilters()
+    @State private var showingFiltersSheet = false
 
     // US-269: bulk-select mode for recipes.
     @State private var isSelecting = false
@@ -18,45 +23,116 @@ struct RecipesView: View {
 
     private var swipeTip = SwipeRecipeTip()
 
+    /// Cuisines surfaced inline in the chip row. The full list lives in
+    /// the filter sheet; this is just the top-of-mind set so people can
+    /// one-tap into "Italian" without opening a sheet.
+    private let inlineCuisines: [Cuisine] = [
+        .italian, .mexican, .asian, .american, .mediterranean, .indian
+    ]
+
     private var filteredRecipes: [Recipe] {
-        var recipes = appState.recipes
-
-        if let difficulty = selectedDifficulty {
-            recipes = recipes.filter { $0.difficultyLevel == difficulty }
+        // Fold the search bar text into the filter's ingredient query
+        // before applying — keeps a single code path for "what counts
+        // as a match" so chip-strip removals + searchable both work the
+        // same way.
+        var working = filters
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty, working.ingredientQuery.isEmpty {
+            working.ingredientQuery = trimmed
         }
-
-        if !searchText.isEmpty {
-            recipes = recipes.filter {
-                $0.name.localizedCaseInsensitiveContains(searchText) ||
-                ($0.tags ?? []).contains { $0.localizedCaseInsensitiveContains(searchText) }
-            }
-        }
-
-        return recipes
+        return working.apply(
+            to: appState.recipes,
+            pantry: appState.foods,
+            grocery: appState.groceryItems
+        )
     }
 
     var body: some View {
         List {
-            // Difficulty Filter
+            // US-272: filter chip rail — quick-access filters on the
+            // left, "Filters…" button to expose the full sheet.
             Section {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        CategoryChip(title: "All", isSelected: selectedDifficulty == nil) {
-                            selectedDifficulty = nil
+                        CategoryChip(title: "All", isSelected: !filters.isAnyActive && searchText.isEmpty) {
+                            HapticManager.lightImpact()
+                            filters = RecipeFilters()
+                            searchText = ""
+                        }
+                        CategoryChip(
+                            title: "✨ Cookable",
+                            isSelected: filters.cookableOnly
+                        ) {
+                            HapticManager.selection()
+                            filters.cookableOnly.toggle()
                         }
                         ForEach(["easy", "medium", "hard"], id: \.self) { level in
                             CategoryChip(
                                 title: "\(difficultyIcon(level)) \(level.capitalized)",
-                                isSelected: selectedDifficulty == level
+                                isSelected: filters.difficulty == level
                             ) {
-                                selectedDifficulty = selectedDifficulty == level ? nil : level
+                                HapticManager.selection()
+                                filters.difficulty = filters.difficulty == level ? nil : level
                             }
+                        }
+                        ForEach(inlineCuisines) { cuisine in
+                            CategoryChip(
+                                title: "\(cuisine.emoji) \(cuisine.displayName)",
+                                isSelected: filters.cuisines.contains(cuisine)
+                            ) {
+                                HapticManager.selection()
+                                if filters.cuisines.contains(cuisine) {
+                                    filters.cuisines.remove(cuisine)
+                                } else {
+                                    filters.cuisines.insert(cuisine)
+                                }
+                            }
+                        }
+                        CategoryChip(
+                            title: filters.activeCount > 0
+                                ? "⚙︎ Filters (\(filters.activeCount))"
+                                : "⚙︎ Filters",
+                            isSelected: filters.activeCount > 0
+                        ) {
+                            HapticManager.lightImpact()
+                            showingFiltersSheet = true
                         }
                     }
                     .padding(.vertical, 4)
                 }
                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                 .popoverTip(swipeTip)
+            }
+
+            // Active-filter chip strip — only shows the dimensions
+            // that aren't already obvious from the rail above (so we
+            // don't double-render Cookable / Difficulty / Cuisine).
+            if let activeChips = activeFilterChips, !activeChips.isEmpty {
+                Section {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(activeChips, id: \.id) { chip in
+                                Button {
+                                    HapticManager.selection()
+                                    chip.remove()
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Text(chip.label).font(.caption.weight(.semibold))
+                                        Image(systemName: "xmark")
+                                            .font(.caption2.weight(.semibold))
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.accentColor.opacity(0.15), in: Capsule())
+                                    .foregroundStyle(Color.accentColor)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                }
             }
 
             // Recipes
@@ -68,11 +144,19 @@ struct RecipesView: View {
                 }
             } else if filteredRecipes.isEmpty {
                 Section {
-                    ContentUnavailableView(
-                        "No Recipes",
-                        systemImage: "book.fill",
-                        description: Text("Add recipes to start building your collection.")
-                    )
+                    if filters.isAnyActive || !searchText.isEmpty {
+                        ContentUnavailableView(
+                            "No matches",
+                            systemImage: "line.3.horizontal.decrease.circle",
+                            description: Text("Try clearing some filters to see more recipes.")
+                        )
+                    } else {
+                        ContentUnavailableView(
+                            "No Recipes",
+                            systemImage: "book.fill",
+                            description: Text("Add recipes to start building your collection.")
+                        )
+                    }
                 }
             } else {
                 ForEach(filteredRecipes) { recipe in
@@ -153,7 +237,7 @@ struct RecipesView: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle(isSelecting ? "\(selectedIds.count) selected" : "Recipes")
-        .searchable(text: $searchText, prompt: "Search recipes...")
+        .searchable(text: $searchText, prompt: "Search by name or ingredient…")
         .toolbar {
             // US-269: select-mode entry + Done.
             ToolbarItem(placement: .primaryAction) {
@@ -242,6 +326,10 @@ struct RecipesView: View {
             CookableRecipesSheet()
                 .environmentObject(appState)
         }
+        .sheet(isPresented: $showingFiltersSheet) {
+            RecipeFiltersSheet(filters: $filters)
+                .environmentObject(appState)
+        }
         .alert(
             "Delete \(selectedIds.count) recipe\(selectedIds.count == 1 ? "" : "s")?",
             isPresented: $showingBulkDeleteConfirm
@@ -279,6 +367,49 @@ struct RecipesView: View {
             try await appState.bulkDeleteRecipes(selectedIds)
             exitSelectMode()
         } catch { }
+    }
+
+    // MARK: - US-272 active-filter chips
+
+    /// Removable chips representing filters that aren't already shown
+    /// in the inline rail (so we don't double-render Cookable /
+    /// Difficulty / Cuisine which the rail handles directly). Returns
+    /// nil when nothing's worth showing — caller skips the section.
+    private var activeFilterChips: [ActiveFilterChip]? {
+        var chips: [ActiveFilterChip] = []
+
+        // Selected pantry foods → one chip each so the user can remove
+        // them individually without going back into the sheet.
+        for id in filters.requiredFoodIds {
+            let name = appState.foods.first(where: { $0.id == id })?.name ?? "food"
+            chips.append(ActiveFilterChip(
+                id: "food-\(id)",
+                label: "🥕 \(name)"
+            ) { filters.requiredFoodIds.remove(id) })
+        }
+
+        let q = filters.ingredientQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !q.isEmpty {
+            chips.append(ActiveFilterChip(
+                id: "ingredient-query",
+                label: "🔍 \(q)"
+            ) { filters.ingredientQuery = "" })
+        }
+
+        if let max = filters.maxTotalMinutes {
+            chips.append(ActiveFilterChip(
+                id: "max-time",
+                label: "⏱ ≤\(max) min"
+            ) { filters.maxTotalMinutes = nil })
+        }
+
+        return chips.isEmpty ? nil : chips
+    }
+
+    private struct ActiveFilterChip {
+        let id: String
+        let label: String
+        let remove: () -> Void
     }
 
     private func difficultyIcon(_ level: String) -> String {
