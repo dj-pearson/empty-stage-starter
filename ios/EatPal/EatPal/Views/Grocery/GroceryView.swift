@@ -39,6 +39,15 @@ struct GroceryView: View {
     // US-264: tapping a recipe section header opens the recipe detail.
     @State private var inspectedRecipe: Recipe?
 
+    // US-269: bulk-select mode. Mirrors PantryView's pattern: a
+    // toolbar "Select" button enters edit mode, taps toggle item
+    // membership in `selectedIds`, and a bottomBar action group surfaces
+    // the bulk actions while selection is active.
+    @State private var isSelecting = false
+    @State private var selectedIds: Set<String> = []
+    @State private var showingChooseAisle = false
+    @State private var showingBulkDeleteConfirm = false
+
     /// US-264: persisted view-mode preference. Defaults to .byAisle so
     /// existing users see no behavior change until they opt in.
     @AppStorage("grocery.viewMode") private var viewModeRaw: String =
@@ -167,43 +176,68 @@ struct GroceryView: View {
 
     /// Wrap a GroceryItemRow with all the swipe + tap + context menu
     /// modifiers. Extracted so both view modes can share the behavior
-    /// without duplicating ~80 lines.
+    /// without duplicating ~80 lines. In select mode (US-269), a leading
+    /// checkbox replaces the tap-to-edit behavior and swipe actions are
+    /// suppressed so the user can drive selection without surprises.
     @ViewBuilder
     private func decoratedRow(for item: GroceryItem) -> some View {
-        GroceryItemRow(item: item)
-            .contentShape(Rectangle())
-            .onTapGesture { editingItem = item }
-            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                Button {
-                    HapticManager.success()
-                    Task {
-                        try? await appState.toggleGroceryItem(item.id)
-                        await TipEvents.didSwipeGrocery.donate()
-                    }
-                } label: {
-                    Label("Check", systemImage: "checkmark.circle.fill")
-                }
-                .tint(.green)
-                .accessibilityLabel("Mark \(item.name) as bought")
+        HStack(spacing: 8) {
+            if isSelecting {
+                Image(systemName: selectedIds.contains(item.id) ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selectedIds.contains(item.id) ? .green : .secondary)
+                    .font(.title3)
+                    .accessibilityLabel(selectedIds.contains(item.id) ? "Selected" : "Not selected")
             }
-            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                Button(role: .destructive) {
-                    HapticManager.error()
-                    Task {
-                        try? await appState.deleteGroceryItem(item.id)
-                        await TipEvents.didSwipeGrocery.donate()
+            GroceryItemRow(item: item)
+        }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if isSelecting {
+                    HapticManager.selection()
+                    if selectedIds.contains(item.id) {
+                        selectedIds.remove(item.id)
+                    } else {
+                        selectedIds.insert(item.id)
                     }
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-                Button {
-                    HapticManager.lightImpact()
+                } else {
                     editingItem = item
-                    Task { await TipEvents.didSwipeGrocery.donate() }
-                } label: {
-                    Label("Edit", systemImage: "pencil")
                 }
-                .tint(.blue)
+            }
+            .swipeActions(edge: .leading, allowsFullSwipe: !isSelecting) {
+                if !isSelecting {
+                    Button {
+                        HapticManager.success()
+                        Task {
+                            try? await appState.toggleGroceryItem(item.id)
+                            await TipEvents.didSwipeGrocery.donate()
+                        }
+                    } label: {
+                        Label("Check", systemImage: "checkmark.circle.fill")
+                    }
+                    .tint(.green)
+                    .accessibilityLabel("Mark \(item.name) as bought")
+                }
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: !isSelecting) {
+                if !isSelecting {
+                    Button(role: .destructive) {
+                        HapticManager.error()
+                        Task {
+                            try? await appState.deleteGroceryItem(item.id)
+                            await TipEvents.didSwipeGrocery.donate()
+                        }
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    Button {
+                        HapticManager.lightImpact()
+                        editingItem = item
+                        Task { await TipEvents.didSwipeGrocery.donate() }
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    .tint(.blue)
+                }
             }
             .contextMenu {
                 Button {
@@ -411,7 +445,7 @@ struct GroceryView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Grocery List")
+        .navigationTitle(isSelecting ? "\(selectedIds.count) selected" : "Grocery List")
         .searchable(text: $searchText, prompt: "Search items...")
         .dropDestination(for: FoodTransferable.self) { droppedFoods, _ in
             guard !droppedFoods.isEmpty else { return false }
@@ -504,6 +538,19 @@ struct GroceryView: View {
                 }
             }
 
+            // US-269: select-mode toggle. When active, the Cancel button
+            // sits next to "Done"-equivalent (handled by exiting via the
+            // bottom bar's actions or this same button toggling off).
+            ToolbarItem(placement: .primaryAction) {
+                if isSelecting {
+                    Button("Done") {
+                        HapticManager.lightImpact()
+                        exitSelectMode()
+                    }
+                    .accessibilityLabel("Exit selection mode")
+                }
+            }
+
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: 12) {
                     Menu {
@@ -533,6 +580,18 @@ struct GroceryView: View {
                             Label("Generate from this week's plan", systemImage: "calendar.badge.plus")
                         }
                         .disabled(isGenerating)
+
+                        Divider()
+
+                        // US-269: enter bulk-select mode.
+                        Button {
+                            HapticManager.lightImpact()
+                            isSelecting = true
+                            selectedIds.removeAll()
+                        } label: {
+                            Label("Select multiple", systemImage: "checkmark.circle")
+                        }
+                        .disabled(appState.groceryItems.isEmpty)
 
                         Divider()
 
@@ -575,6 +634,79 @@ struct GroceryView: View {
                     .accessibilityLabel("Add grocery item")
                 }
             }
+
+            // US-269: bottom action bar visible only in select mode.
+            ToolbarItemGroup(placement: .bottomBar) {
+                if isSelecting {
+                    Button {
+                        Task { await bulkMarkBought() }
+                    } label: {
+                        Label("Bought", systemImage: "checkmark.circle.fill")
+                    }
+                    .disabled(selectedIds.isEmpty)
+
+                    Spacer()
+
+                    Button {
+                        showingChooseAisle = true
+                    } label: {
+                        Label("Aisle", systemImage: "tag")
+                    }
+                    .disabled(selectedIds.isEmpty)
+
+                    Spacer()
+
+                    Button {
+                        if selectedIds.count == uncheckedItems.count {
+                            selectedIds.removeAll()
+                        } else {
+                            selectedIds = Set(uncheckedItems.map(\.id))
+                        }
+                        HapticManager.selection()
+                    } label: {
+                        Label(
+                            selectedIds.count == uncheckedItems.count ? "None" : "All",
+                            systemImage: "checkmark.rectangle.stack"
+                        )
+                    }
+                    .disabled(uncheckedItems.isEmpty)
+
+                    Spacer()
+
+                    Button(role: .destructive) {
+                        showingBulkDeleteConfirm = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .disabled(selectedIds.isEmpty)
+                }
+            }
+        }
+        .confirmationDialog(
+            "Set aisle for \(selectedIds.count) item\(selectedIds.count == 1 ? "" : "s")",
+            isPresented: $showingChooseAisle,
+            titleVisibility: .visible
+        ) {
+            // Top 8 most-walked aisles for the dialog (full picker would
+            // overflow on smaller phones — power users can edit per-item
+            // for the long tail).
+            ForEach(Array(GroceryAisle.allCases.sorted().prefix(8)), id: \.self) { aisle in
+                Button("\(aisle.displayName)") {
+                    Task { await bulkSetAisle(aisle) }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .alert(
+            "Delete \(selectedIds.count) item\(selectedIds.count == 1 ? "" : "s")?",
+            isPresented: $showingBulkDeleteConfirm
+        ) {
+            Button("Delete", role: .destructive) {
+                Task { await bulkDelete() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This can't be undone.")
         }
         .sheet(isPresented: $showingAddItem) {
             AddGroceryItemView()
@@ -625,6 +757,43 @@ struct GroceryView: View {
         .refreshable {
             await appState.loadAllData()
         }
+    }
+
+    // MARK: - US-269 bulk actions
+
+    private func exitSelectMode() {
+        selectedIds.removeAll()
+        isSelecting = false
+    }
+
+    private func bulkMarkBought() async {
+        guard !selectedIds.isEmpty else { return }
+        do {
+            try await appState.bulkCheckGroceryItems(selectedIds, checked: true)
+            ToastManager.shared.success(
+                "Marked bought",
+                message: "\(selectedIds.count) item\(selectedIds.count == 1 ? "" : "s")"
+            )
+            exitSelectMode()
+        } catch {
+            // toast surfaced inside bulkCheckGroceryItems
+        }
+    }
+
+    private func bulkSetAisle(_ aisle: GroceryAisle) async {
+        guard !selectedIds.isEmpty else { return }
+        do {
+            try await appState.bulkSetGroceryAisle(selectedIds, aisle: aisle)
+            exitSelectMode()
+        } catch { }
+    }
+
+    private func bulkDelete() async {
+        guard !selectedIds.isEmpty else { return }
+        do {
+            try await appState.bulkDeleteGroceryItems(selectedIds)
+            exitSelectMode()
+        } catch { }
     }
 
     private func generateFromWeekPlan() async {

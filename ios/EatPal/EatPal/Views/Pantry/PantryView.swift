@@ -505,80 +505,89 @@ struct PantryView: View {
         appState.foods.filter { selectedIds.contains($0.id) }
     }
 
+    // US-269: bulk methods now batch through `bulkUpdateFoods` /
+    // `bulkDeleteFoods` so a 30-food selection costs one HTTP request,
+    // not 30. Each method auto-exits select mode on success and clears
+    // the selection set so the user lands cleanly back in browse mode.
+
     private func bulkSetSafe(_ value: Bool) async {
-        let foods = selectedFoods()
-        for food in foods {
-            try? await appState.updateFood(food.id, updates: FoodUpdate(isSafe: value))
+        guard !selectedIds.isEmpty else { return }
+        let ids = selectedIds
+        do {
+            try await DataService.shared.bulkUpdateFoods(
+                Array(ids),
+                updates: FoodUpdate(isSafe: value)
+            )
+            // Mirror the change in-memory so the UI updates immediately.
+            for i in appState.foods.indices where ids.contains(appState.foods[i].id) {
+                appState.foods[i].isSafe = value
+            }
+            HapticManager.success()
+            ToastManager.shared.success(
+                value ? "Marked safe" : "Cleared safe",
+                message: "\(ids.count) food\(ids.count == 1 ? "" : "s") updated"
+            )
+            exitSelectMode()
+        } catch {
+            ToastManager.shared.show(error, as: { .save(entity: "foods", underlying: $0) })
+            HapticManager.error()
         }
-        HapticManager.success()
-        ToastManager.shared.success(
-            value ? "Marked safe" : "Cleared safe",
-            message: "\(foods.count) food\(foods.count == 1 ? "" : "s") updated"
-        )
     }
 
     private func bulkSetTryBite(_ value: Bool) async {
-        let foods = selectedFoods()
-        for food in foods {
-            try? await appState.updateFood(food.id, updates: FoodUpdate(isTryBite: value))
+        guard !selectedIds.isEmpty else { return }
+        let ids = selectedIds
+        do {
+            try await DataService.shared.bulkUpdateFoods(
+                Array(ids),
+                updates: FoodUpdate(isTryBite: value)
+            )
+            for i in appState.foods.indices where ids.contains(appState.foods[i].id) {
+                appState.foods[i].isTryBite = value
+            }
+            HapticManager.success()
+            ToastManager.shared.success(
+                "Marked try-bite",
+                message: "\(ids.count) food\(ids.count == 1 ? "" : "s") updated"
+            )
+            exitSelectMode()
+        } catch {
+            ToastManager.shared.show(error, as: { .save(entity: "foods", underlying: $0) })
+            HapticManager.error()
         }
-        HapticManager.success()
-        ToastManager.shared.success(
-            "Marked try-bite",
-            message: "\(foods.count) food\(foods.count == 1 ? "" : "s") updated"
-        )
     }
 
     private func bulkAddToGrocery() async {
-        let foods = selectedFoods()
-        let existing = Set(appState.groceryItems.map { $0.name.lowercased() })
-        var added = 0
-        for food in foods {
-            guard !existing.contains(food.name.lowercased()) else { continue }
-            let item = GroceryItem(
-                id: UUID().uuidString,
-                userId: "",
-                name: food.name,
-                category: food.category,
-                quantity: 1,
-                unit: food.unit ?? "count",
-                checked: false,
-                addedVia: "restock"
-            )
-            try? await appState.addGroceryItem(item)
-            added += 1
+        guard !selectedIds.isEmpty else { return }
+        do {
+            try await appState.bulkMoveFoodsToGrocery(selectedIds)
+            exitSelectMode()
+        } catch {
+            // toast already surfaced inside bulkMoveFoodsToGrocery
         }
-        HapticManager.success()
-        let skipped = foods.count - added
-        let suffix = skipped > 0 ? " (\(skipped) already on list)" : ""
-        ToastManager.shared.success(
-            "Added to grocery",
-            message: "\(added) item\(added == 1 ? "" : "s")\(suffix)"
-        )
     }
 
     private func bulkChangeCategory(to category: FoodCategory) async {
-        let foods = selectedFoods()
-        for food in foods {
-            try? await appState.updateFood(food.id, updates: FoodUpdate(category: category.rawValue))
+        guard !selectedIds.isEmpty else { return }
+        do {
+            try await appState.bulkSetFoodCategory(selectedIds, category: category.rawValue)
+            exitSelectMode()
+        } catch {
+            // toast surfaced inside bulkSetFoodCategory
         }
-        HapticManager.success()
-        ToastManager.shared.success(
-            "Moved to \(category.displayName)",
-            message: "\(foods.count) food\(foods.count == 1 ? "" : "s") updated"
-        )
     }
 
     private func bulkDelete() async {
-        let ids = Array(selectedIds)
-        for id in ids {
-            try? await appState.deleteFood(id)
+        guard !selectedIds.isEmpty else { return }
+        do {
+            try await appState.bulkDeleteFoods(selectedIds)
+            exitSelectMode()
+        } catch {
+            // toast surfaced inside bulkDeleteFoods
         }
-        HapticManager.warning()
-        ToastManager.shared.success(
-            "Deleted",
-            message: "\(ids.count) food\(ids.count == 1 ? "" : "s") removed"
-        )
+    }
+
+    private func exitSelectMode() {
         selectedIds.removeAll()
         isSelecting = false
     }

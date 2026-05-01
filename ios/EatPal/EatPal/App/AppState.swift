@@ -927,4 +927,250 @@ final class AppState: ObservableObject {
             throw error
         }
     }
+
+    // MARK: - Bulk operations (US-269)
+
+    /// Mass-delete pantry foods. Single round-trip via `.in('id', ids)`;
+    /// on failure the local snapshot is restored.
+    func bulkDeleteFoods(_ ids: Set<String>) async throws {
+        let removed = foods.filter { ids.contains($0.id) }
+        foods.removeAll { ids.contains($0.id) }
+        do {
+            try await dataService.bulkDeleteFoods(Array(ids))
+            toast.success("Deleted \(removed.count) foods")
+            HapticManager.success()
+        } catch {
+            foods.append(contentsOf: removed)
+            toast.show(error, as: { .delete(entity: "foods", underlying: $0) })
+            HapticManager.error()
+            throw error
+        }
+    }
+
+    /// Mass-update FoodCategory across a batch. Local mutation is
+    /// optimistic; server PATCH applies the same payload to every row.
+    func bulkSetFoodCategory(_ ids: Set<String>, category: String) async throws {
+        let originals = foods.filter { ids.contains($0.id) }
+        for i in foods.indices where ids.contains(foods[i].id) {
+            foods[i].category = category
+        }
+        do {
+            try await dataService.bulkUpdateFoods(
+                Array(ids),
+                updates: FoodUpdate(category: category)
+            )
+            toast.success("Updated \(ids.count) foods")
+            HapticManager.lightImpact()
+        } catch {
+            for original in originals {
+                if let idx = foods.firstIndex(where: { $0.id == original.id }) {
+                    foods[idx] = original
+                }
+            }
+            toast.show(error, as: { .save(entity: "foods", underlying: $0) })
+            HapticManager.error()
+            throw error
+        }
+    }
+
+    /// Copy a set of pantry foods onto the grocery list. The pantry rows
+    /// are left in place — moving here means "also need to buy more of
+    /// this", not "this isn't in the pantry anymore". Skips foods that
+    /// already have a matching grocery item by lowercased name.
+    func bulkMoveFoodsToGrocery(_ ids: Set<String>) async throws {
+        let existing = Set(groceryItems.map { $0.name.lowercased() })
+        let toCopy = foods.filter { ids.contains($0.id) }
+        let newItems: [GroceryItem] = toCopy.compactMap { food in
+            guard !existing.contains(food.name.lowercased()) else { return nil }
+            return GroceryItem(
+                id: UUID().uuidString,
+                userId: "",
+                name: food.name,
+                category: food.category,
+                quantity: 1,
+                unit: food.unit ?? "count",
+                checked: false,
+                aisle: food.aisle,
+                addedVia: "bulk_pantry_move",
+                aisleSection: GroceryAisle.fromLegacyCategory(food.category).rawValue
+            )
+        }
+        guard !newItems.isEmpty else {
+            toast.info("Already on list", message: "All selected items are already on your grocery list.")
+            return
+        }
+        groceryItems.append(contentsOf: newItems)
+        do {
+            try await dataService.bulkInsertGroceryItems(newItems)
+            toast.success("Added \(newItems.count) to grocery")
+            HapticManager.success()
+        } catch {
+            let newIds = Set(newItems.map(\.id))
+            groceryItems.removeAll { newIds.contains($0.id) }
+            toast.show(error, as: { .save(entity: "grocery items", underlying: $0) })
+            HapticManager.error()
+            throw error
+        }
+    }
+
+    /// Mass-delete grocery items. Source-link rows cascade-delete in DB
+    /// and we mirror that locally so the By Recipe view stays clean.
+    func bulkDeleteGroceryItems(_ ids: Set<String>) async throws {
+        let removed = groceryItems.filter { ids.contains($0.id) }
+        let removedSources = groceryItemSources.filter { ids.contains($0.groceryItemId) }
+        groceryItems.removeAll { ids.contains($0.id) }
+        groceryItemSources.removeAll { ids.contains($0.groceryItemId) }
+        do {
+            try await dataService.bulkDeleteGroceryItems(Array(ids))
+            toast.success("Deleted \(removed.count) items")
+            HapticManager.success()
+        } catch {
+            groceryItems.append(contentsOf: removed)
+            groceryItemSources.append(contentsOf: removedSources)
+            toast.show(error, as: { .delete(entity: "grocery items", underlying: $0) })
+            HapticManager.error()
+            throw error
+        }
+    }
+
+    /// Mass-set the GroceryAisle on a batch of items. Updates `aisle_section`
+    /// (the new 32-value taxonomy) and refreshes `category` to a
+    /// best-fit FoodCategory so legacy consumers stay coherent.
+    func bulkSetGroceryAisle(_ ids: Set<String>, aisle: GroceryAisle) async throws {
+        let originals = groceryItems.filter { ids.contains($0.id) }
+        let derivedCategory = aisle.derivedFoodCategory.rawValue
+        for i in groceryItems.indices where ids.contains(groceryItems[i].id) {
+            groceryItems[i].aisleSection = aisle.rawValue
+            groceryItems[i].category = derivedCategory
+        }
+        do {
+            try await dataService.bulkUpdateGroceryItems(
+                Array(ids),
+                updates: GroceryItemUpdate(
+                    category: derivedCategory,
+                    aisleSection: aisle.rawValue
+                )
+            )
+            toast.success("Moved \(ids.count) to \(aisle.displayName)")
+            HapticManager.lightImpact()
+        } catch {
+            for original in originals {
+                if let idx = groceryItems.firstIndex(where: { $0.id == original.id }) {
+                    groceryItems[idx] = original
+                }
+            }
+            toast.show(error, as: { .save(entity: "grocery items", underlying: $0) })
+            HapticManager.error()
+            throw error
+        }
+    }
+
+    /// Bulk-toggle checked state. Used by "Mark Bought" to clear
+    /// everything in the selection in one shot.
+    func bulkCheckGroceryItems(_ ids: Set<String>, checked: Bool) async throws {
+        let originals = groceryItems.filter { ids.contains($0.id) }
+        for i in groceryItems.indices where ids.contains(groceryItems[i].id) {
+            groceryItems[i].checked = checked
+        }
+        do {
+            try await dataService.bulkUpdateGroceryItems(
+                Array(ids),
+                updates: GroceryItemUpdate(checked: checked)
+            )
+            HapticManager.success()
+        } catch {
+            for original in originals {
+                if let idx = groceryItems.firstIndex(where: { $0.id == original.id }) {
+                    groceryItems[idx] = original
+                }
+            }
+            toast.show(error, as: { .save(entity: "grocery items", underlying: $0) })
+            HapticManager.error()
+            throw error
+        }
+    }
+
+    /// Mass-delete recipes. Cascade-deletes their structured ingredients
+    /// in DB; we mirror that locally so the GroceryGenerator + matchers
+    /// don't see dangling rows.
+    func bulkDeleteRecipes(_ ids: Set<String>) async throws {
+        let removed = recipes.filter { ids.contains($0.id) }
+        recipes.removeAll { ids.contains($0.id) }
+        do {
+            try await dataService.bulkDeleteRecipes(Array(ids))
+            toast.success("Deleted \(removed.count) recipes")
+            HapticManager.success()
+        } catch {
+            recipes.append(contentsOf: removed)
+            toast.show(error, as: { .delete(entity: "recipes", underlying: $0) })
+            HapticManager.error()
+            throw error
+        }
+    }
+
+    /// Add every linked food + structured ingredient from a batch of
+    /// recipes onto the grocery list. Dedupes against existing grocery
+    /// items by lowercased name. One bulk insert at the end.
+    func bulkAddRecipesToGrocery(_ recipeIds: Set<String>) async throws {
+        let existing = Set(groceryItems.map { $0.name.lowercased() })
+        var seen = existing
+        var newItems: [GroceryItem] = []
+        let selected = recipes.filter { recipeIds.contains($0.id) }
+        for recipe in selected {
+            if !recipe.ingredients.isEmpty {
+                for ing in recipe.ingredients {
+                    let key = ing.name.lowercased()
+                    guard !seen.contains(key) else { continue }
+                    seen.insert(key)
+                    let linkedFood = ing.foodId.flatMap { fid in foods.first(where: { $0.id == fid }) }
+                    let category = linkedFood?.category ?? "other"
+                    newItems.append(GroceryItem(
+                        id: UUID().uuidString,
+                        userId: "",
+                        name: ing.name,
+                        category: category,
+                        quantity: ing.quantity ?? 1,
+                        unit: ing.unit ?? "",
+                        checked: false,
+                        addedVia: "bulk_recipe",
+                        aisleSection: GroceryAisle.fromLegacyCategory(category).rawValue
+                    ))
+                }
+                continue
+            }
+            for foodId in recipe.foodIds {
+                guard let food = foods.first(where: { $0.id == foodId }) else { continue }
+                let key = food.name.lowercased()
+                guard !seen.contains(key) else { continue }
+                seen.insert(key)
+                newItems.append(GroceryItem(
+                    id: UUID().uuidString,
+                    userId: "",
+                    name: food.name,
+                    category: food.category,
+                    quantity: 1,
+                    unit: food.unit ?? "count",
+                    checked: false,
+                    addedVia: "bulk_recipe",
+                    aisleSection: GroceryAisle.fromLegacyCategory(food.category).rawValue
+                ))
+            }
+        }
+        guard !newItems.isEmpty else {
+            toast.info("Already on list", message: "All ingredients are already on your grocery list.")
+            return
+        }
+        groceryItems.append(contentsOf: newItems)
+        do {
+            try await dataService.bulkInsertGroceryItems(newItems)
+            toast.success("Added \(newItems.count) ingredients")
+            HapticManager.success()
+        } catch {
+            let newIds = Set(newItems.map(\.id))
+            groceryItems.removeAll { newIds.contains($0.id) }
+            toast.show(error, as: { .save(entity: "grocery items", underlying: $0) })
+            HapticManager.error()
+            throw error
+        }
+    }
 }

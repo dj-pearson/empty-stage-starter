@@ -8,6 +8,11 @@ struct RecipesView: View {
     @State private var showingAddRecipe = false
     @State private var selectedDifficulty: String?
 
+    // US-269: bulk-select mode for recipes.
+    @State private var isSelecting = false
+    @State private var selectedIds: Set<String> = []
+    @State private var showingBulkDeleteConfirm = false
+
     private var swipeTip = SwipeRecipeTip()
 
     private var filteredRecipes: [Recipe] {
@@ -68,28 +73,51 @@ struct RecipesView: View {
                 }
             } else {
                 ForEach(filteredRecipes) { recipe in
-                    RecipeRowView(recipe: recipe)
-                        .contentShape(Rectangle())
-                        .onTapGesture { selectedRecipe = recipe }
-                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                            Button {
-                                HapticManager.success()
-                                Task {
-                                    await addRecipeIngredientsToGrocery(recipe)
-                                    await TipEvents.didSwipeRecipe.donate()
-                                }
-                            } label: {
-                                Label("Grocery", systemImage: "cart.fill.badge.plus")
-                            }
-                            .tint(.blue)
-                            .accessibilityLabel("Add \(recipe.name) ingredients to grocery list")
+                    HStack(spacing: 8) {
+                        if isSelecting {
+                            Image(systemName: selectedIds.contains(recipe.id) ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(selectedIds.contains(recipe.id) ? .green : .secondary)
+                                .font(.title3)
+                                .accessibilityLabel(selectedIds.contains(recipe.id) ? "Selected" : "Not selected")
                         }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                HapticManager.error()
-                                Task { try? await appState.deleteRecipe(recipe.id) }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
+                        RecipeRowView(recipe: recipe)
+                    }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if isSelecting {
+                                HapticManager.selection()
+                                if selectedIds.contains(recipe.id) {
+                                    selectedIds.remove(recipe.id)
+                                } else {
+                                    selectedIds.insert(recipe.id)
+                                }
+                            } else {
+                                selectedRecipe = recipe
+                            }
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: !isSelecting) {
+                            if !isSelecting {
+                                Button {
+                                    HapticManager.success()
+                                    Task {
+                                        await addRecipeIngredientsToGrocery(recipe)
+                                        await TipEvents.didSwipeRecipe.donate()
+                                    }
+                                } label: {
+                                    Label("Grocery", systemImage: "cart.fill.badge.plus")
+                                }
+                                .tint(.blue)
+                                .accessibilityLabel("Add \(recipe.name) ingredients to grocery list")
+                            }
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: !isSelecting) {
+                            if !isSelecting {
+                                Button(role: .destructive) {
+                                    HapticManager.error()
+                                    Task { try? await appState.deleteRecipe(recipe.id) }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
                             }
                         }
                         .contextMenu {
@@ -121,16 +149,75 @@ struct RecipesView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Recipes")
+        .navigationTitle(isSelecting ? "\(selectedIds.count) selected" : "Recipes")
         .searchable(text: $searchText, prompt: "Search recipes...")
         .toolbar {
+            // US-269: select-mode entry + Done.
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showingAddRecipe = true
-                } label: {
-                    Image(systemName: "plus")
+                if isSelecting {
+                    Button("Done") {
+                        HapticManager.lightImpact()
+                        exitSelectMode()
+                    }
+                } else {
+                    Menu {
+                        Button {
+                            showingAddRecipe = true
+                        } label: {
+                            Label("Add Recipe", systemImage: "plus")
+                        }
+                        Divider()
+                        Button {
+                            HapticManager.lightImpact()
+                            isSelecting = true
+                            selectedIds.removeAll()
+                        } label: {
+                            Label("Select multiple", systemImage: "checkmark.circle")
+                        }
+                        .disabled(appState.recipes.isEmpty)
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Add or select recipes")
                 }
-                .accessibilityLabel("Add recipe")
+            }
+
+            // US-269: bottom action bar in select mode.
+            ToolbarItemGroup(placement: .bottomBar) {
+                if isSelecting {
+                    Button {
+                        Task { await bulkAddIngredientsToGrocery() }
+                    } label: {
+                        Label("To Grocery", systemImage: "cart.fill.badge.plus")
+                    }
+                    .disabled(selectedIds.isEmpty)
+
+                    Spacer()
+
+                    Button {
+                        if selectedIds.count == filteredRecipes.count {
+                            selectedIds.removeAll()
+                        } else {
+                            selectedIds = Set(filteredRecipes.map(\.id))
+                        }
+                        HapticManager.selection()
+                    } label: {
+                        Label(
+                            selectedIds.count == filteredRecipes.count ? "None" : "All",
+                            systemImage: "checkmark.rectangle.stack"
+                        )
+                    }
+                    .disabled(filteredRecipes.isEmpty)
+
+                    Spacer()
+
+                    Button(role: .destructive) {
+                        showingBulkDeleteConfirm = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .disabled(selectedIds.isEmpty)
+                }
             }
         }
         .sheet(isPresented: $showingAddRecipe) {
@@ -139,9 +226,43 @@ struct RecipesView: View {
         .sheet(item: $selectedRecipe) { recipe in
             RecipeDetailView(recipe: recipe)
         }
+        .alert(
+            "Delete \(selectedIds.count) recipe\(selectedIds.count == 1 ? "" : "s")?",
+            isPresented: $showingBulkDeleteConfirm
+        ) {
+            Button("Delete", role: .destructive) {
+                Task { await bulkDelete() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This can't be undone.")
+        }
         .refreshable {
             await appState.loadAllData()
         }
+    }
+
+    // MARK: - US-269 bulk actions
+
+    private func exitSelectMode() {
+        selectedIds.removeAll()
+        isSelecting = false
+    }
+
+    private func bulkAddIngredientsToGrocery() async {
+        guard !selectedIds.isEmpty else { return }
+        do {
+            try await appState.bulkAddRecipesToGrocery(selectedIds)
+            exitSelectMode()
+        } catch { }
+    }
+
+    private func bulkDelete() async {
+        guard !selectedIds.isEmpty else { return }
+        do {
+            try await appState.bulkDeleteRecipes(selectedIds)
+            exitSelectMode()
+        } catch { }
     }
 
     private func difficultyIcon(_ level: String) -> String {

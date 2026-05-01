@@ -60,6 +60,38 @@ final class DataService {
             .execute()
     }
 
+    // MARK: - Bulk operations (US-269)
+
+    /// Bulk delete foods. Single round-trip via `.in('id', ids)` so the
+    /// user doesn't pay for N HTTP requests when clearing 30 items.
+    func bulkDeleteFoods(_ ids: [String]) async throws {
+        guard !ids.isEmpty else { return }
+        try await client.from("foods")
+            .delete()
+            .in("id", values: ids)
+            .execute()
+    }
+
+    /// Apply the same partial update to a batch of foods. The single
+    /// FoodUpdate payload is sent once; the `.in` filter scopes the rows.
+    func bulkUpdateFoods(_ ids: [String], updates: FoodUpdate) async throws {
+        guard !ids.isEmpty else { return }
+        try await client.from("foods")
+            .update(updates)
+            .in("id", values: ids)
+            .execute()
+    }
+
+    func bulkInsertFoods(_ foods: [Food]) async throws {
+        guard !foods.isEmpty else { return }
+        var payload = foods
+        let userId = try await ensureUserId(payload.first?.userId ?? "")
+        for i in payload.indices { payload[i].userId = userId }
+        try await client.from("foods")
+            .insert(payload)
+            .execute()
+    }
+
     // MARK: - Kids
 
     func fetchKids() async throws -> [Kid] {
@@ -329,6 +361,44 @@ final class DataService {
         try await client.from("grocery_items")
             .delete()
             .eq("id", value: id)
+            .execute()
+    }
+
+    // MARK: - Bulk operations: grocery (US-269)
+
+    func bulkDeleteGroceryItems(_ ids: [String]) async throws {
+        guard !ids.isEmpty else { return }
+        try await client.from("grocery_items")
+            .delete()
+            .in("id", values: ids)
+            .execute()
+    }
+
+    func bulkUpdateGroceryItems(_ ids: [String], updates: GroceryItemUpdate) async throws {
+        guard !ids.isEmpty else { return }
+        try await client.from("grocery_items")
+            .update(updates)
+            .in("id", values: ids)
+            .execute()
+    }
+
+    func bulkInsertGroceryItems(_ items: [GroceryItem]) async throws {
+        guard !items.isEmpty else { return }
+        var payload = items
+        let userId = try await ensureUserId(payload.first?.userId ?? "")
+        for i in payload.indices { payload[i].userId = userId }
+        try await client.from("grocery_items")
+            .insert(payload)
+            .execute()
+    }
+
+    // MARK: - Bulk operations: recipes (US-269)
+
+    func bulkDeleteRecipes(_ ids: [String]) async throws {
+        guard !ids.isEmpty else { return }
+        try await client.from("recipes")
+            .delete()
+            .in("id", values: ids)
             .execute()
     }
 
