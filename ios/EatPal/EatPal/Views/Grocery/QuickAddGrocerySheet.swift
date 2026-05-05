@@ -201,7 +201,7 @@ struct QuickAddGrocerySheet: View {
                     Task { await toggleDictation() }
                 } label: {
                     Image(systemName: isDictating ? "mic.fill" : "mic")
-                        .foregroundStyle(isDictating ? .red : .tint)
+                        .foregroundStyle(isDictating ? Color.red : Color.accentColor)
                         .symbolEffect(.pulse, options: .repeating, isActive: isDictating)
                 }
                 .buttonStyle(.plain)

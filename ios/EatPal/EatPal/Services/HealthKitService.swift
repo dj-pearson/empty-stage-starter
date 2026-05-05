@@ -1,5 +1,6 @@
 import Foundation
 import HealthKit
+import os
 
 /// US-144: Writes logged meals (plan_entries with result == .ate) into the
 /// iPhone Health app as dietary samples — calories, protein, carbs, fat —
@@ -85,13 +86,21 @@ final class HealthKitService {
         // it schedules its completion, so the raise happens on the caller
         // thread. Using the callback form inside the catcher is the only
         // way to keep the raise in the @try scope.
+        // The HealthKit completion fires on an arbitrary queue while the
+        // NSException catch runs synchronously on the caller — both paths
+        // can race to resume. The lock makes the one-shot guard
+        // Sendable-safe under Swift 6.
+        let didResume = OSAllocatedUnfairLock<Bool>(initialState: false)
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            var didResume = false
             do {
                 try NSExceptionCatcher.try {
                     self.store.requestAuthorization(toShare: types, read: []) { _, error in
-                        guard !didResume else { return }
-                        didResume = true
+                        let alreadyResumed = didResume.withLock { state -> Bool in
+                            if state { return true }
+                            state = true
+                            return false
+                        }
+                        guard !alreadyResumed else { return }
                         if let error {
                             continuation.resume(throwing: error)
                         } else {
@@ -100,8 +109,12 @@ final class HealthKitService {
                     }
                 }
             } catch {
-                guard !didResume else { return }
-                didResume = true
+                let alreadyResumed = didResume.withLock { state -> Bool in
+                    if state { return true }
+                    state = true
+                    return false
+                }
+                guard !alreadyResumed else { return }
                 SentryService.capture(error, extras: [
                     "context": "healthkit_requestAuthorization_nsexception"
                 ])
@@ -143,13 +156,20 @@ final class HealthKitService {
         let types = readTypes
         guard !types.isEmpty else { return false }
 
+        // See note in requestWriteAuthorization: completion handler and
+        // NSException catch can race to resume the continuation, so the
+        // one-shot guard needs Sendable-safe storage.
+        let didResume = OSAllocatedUnfairLock<Bool>(initialState: false)
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            var didResume = false
             do {
                 try NSExceptionCatcher.try {
                     self.store.requestAuthorization(toShare: [], read: types) { _, error in
-                        guard !didResume else { return }
-                        didResume = true
+                        let alreadyResumed = didResume.withLock { state -> Bool in
+                            if state { return true }
+                            state = true
+                            return false
+                        }
+                        guard !alreadyResumed else { return }
                         if let error {
                             continuation.resume(throwing: error)
                         } else {
@@ -158,8 +178,12 @@ final class HealthKitService {
                     }
                 }
             } catch {
-                guard !didResume else { return }
-                didResume = true
+                let alreadyResumed = didResume.withLock { state -> Bool in
+                    if state { return true }
+                    state = true
+                    return false
+                }
+                guard !alreadyResumed else { return }
                 SentryService.capture(error, extras: [
                     "context": "healthkit_read_request_nsexception"
                 ])
