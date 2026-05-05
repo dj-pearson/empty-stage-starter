@@ -53,6 +53,15 @@ struct QuickAddGrocerySheet: View {
 
     @FocusState private var nameFocused: Bool
 
+    /// US-278: live dictation for the name field. Hold-to-talk on the
+    /// inline mic button starts the recognizer and streams partial
+    /// transcripts into the form.
+    @StateObject private var voice = VoiceInputService()
+    /// Set when the user starts dictating so we can flip the mic button
+    /// state and the cancel handler. Separate from `voice.state` so we
+    /// can debounce the button without flickering during preparing.
+    @State private var isDictating = false
+
     private let units = ["count", "oz", "lb", "g", "kg", "cups", "tbsp", "tsp", "ml", "l", "pack", "box", "bag", "bottle", "can", "jar"]
 
     private var suggestions: [GrocerySuggestion] {
@@ -155,6 +164,18 @@ struct QuickAddGrocerySheet: View {
                     await resolveAndApply(name: snapshot, barcode: barcode)
                 }
             }
+            // US-278: stream live transcripts into the form. We parse via
+            // GroceryTextParser so "two pounds of chicken" updates name,
+            // quantity, AND unit — not just the raw name.
+            .onChange(of: voice.liveTranscript) { _, transcript in
+                applyDictatedTranscript(transcript)
+            }
+            .onChange(of: voice.finalTranscript) { _, transcript in
+                applyDictatedTranscript(transcript)
+                // Final transcript means the recognizer finished; flip
+                // the button state back so the mic isn't stuck red.
+                isDictating = false
+            }
         }
     }
 
@@ -172,6 +193,20 @@ struct QuickAddGrocerySheet: View {
                     .onSubmit {
                         Task { await save() }
                     }
+                // US-278: tap-to-dictate. Streams partial transcripts
+                // into the name field; the resolver `.onChange(of: name)`
+                // already debounces and pre-fills aisle/unit/qty so
+                // dictation lights up the whole form.
+                Button {
+                    Task { await toggleDictation() }
+                } label: {
+                    Image(systemName: isDictating ? "mic.fill" : "mic")
+                        .foregroundStyle(isDictating ? .red : .tint)
+                        .symbolEffect(.pulse, options: .repeating, isActive: isDictating)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isDictating ? "Stop dictation" : "Dictate item")
+                .accessibilityHint("Speak the item, quantity, and unit")
             }
 
             HStack(spacing: 12) {
@@ -448,6 +483,45 @@ struct QuickAddGrocerySheet: View {
         barcode = payload
         showingScanner = false
         Task { await resolveAndApply(name: nil, barcode: payload) }
+    }
+
+    /// US-278: toggle the dictation mic. Tapping while idle starts the
+    /// recognizer; tapping while listening stops + commits the final
+    /// transcript through `voice.finalTranscript`.
+    private func toggleDictation() async {
+        if isDictating {
+            voice.stop()
+            isDictating = false
+            return
+        }
+        do {
+            try await voice.start()
+            isDictating = true
+            AnalyticsService.track(.quickAddVoiceUsed)
+            HapticManager.lightImpact()
+        } catch {
+            // VoiceInputService surfaces its own .error state; reflect
+            // that into the button so we don't appear stuck.
+            isDictating = false
+        }
+    }
+
+    /// US-278: pipe a transcript through `GroceryTextParser` and patch
+    /// the form fields. The parser already handles "two pounds of",
+    /// "a dozen", "half a" via its number-words + unit map, so live
+    /// transcripts populate name/quantity/unit in one shot.
+    private func applyDictatedTranscript(_ transcript: String) {
+        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let parsed = GroceryTextParser.parse(trimmed).first else { return }
+        name = parsed.name
+        if parsed.quantity > 0 {
+            quantity = parsed.quantity
+        }
+        let unitOut = parsed.unit.isEmpty ? "count" : parsed.unit
+        if units.contains(unitOut) {
+            unit = unitOut
+        }
     }
 
     /// US-273: pipe a single photo through the vision identifier, layer

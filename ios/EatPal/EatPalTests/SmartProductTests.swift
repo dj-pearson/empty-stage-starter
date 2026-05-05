@@ -217,6 +217,170 @@ final class SmartProductTests: XCTestCase {
         XCTAssertTrue(filtered.isEmpty, "case-insensitive match should remove the suggestion")
     }
 
+    // MARK: - US-279 UnitInference
+
+    func testUnitInferenceMilkIsGallon() {
+        let r = UnitInference.infer(name: "Whole Milk")
+        XCTAssertEqual(r?.unit, "gal")
+        XCTAssertEqual(r?.quantity, 1)
+    }
+
+    func testUnitInferenceEggsAreDozen() {
+        // The rule keys on "egg " (with trailing space) so plural and
+        // singular hit the same row.
+        let r = UnitInference.infer(name: "egg carton")
+        XCTAssertEqual(r?.unit, "dozen")
+    }
+
+    func testUnitInferenceRiceIsBag() {
+        let r = UnitInference.infer(name: "Jasmine rice")
+        XCTAssertEqual(r?.unit, "bag")
+    }
+
+    func testUnitInferenceBananaIsCount6() {
+        let r = UnitInference.infer(name: "Banana")
+        XCTAssertEqual(r?.unit, "count")
+        XCTAssertEqual(r?.quantity, 6)
+    }
+
+    func testUnitInferenceUnknownReturnsNil() {
+        XCTAssertNil(UnitInference.infer(name: "asdfqwer"))
+    }
+
+    func testUnitInferenceFrozenPizzaBeatsGenericChip() {
+        // "Frozen pizza" comes before generic chip rules in the priority
+        // list — verify priority ordering didn't get accidentally rotated.
+        let r = UnitInference.infer(name: "Frozen pizza")
+        XCTAssertEqual(r?.unit, "box")
+    }
+
+    func testResolverFallsBackToUnitInference() async {
+        // Service.resolve returns .unitInference when the inference table
+        // matches but no user/catalog/barcode rows exist. This integration
+        // path is what makes "milk" auto-pick gallon for a brand-new user.
+        // We can't easily exercise SmartProductService against a live
+        // backend in unit tests, but we can confirm the deterministic
+        // mapping that the tier-3.5 fallback uses.
+        let r = UnitInference.infer(name: "milk") // generic — first matching keyword "milk"
+        XCTAssertEqual(r?.unit, "gal")
+    }
+
+    // MARK: - US-280 ExpiringRestockSuggester
+
+    private func food(name: String, daysToExpiry: Int?) -> Food {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = .current
+        let expiryString: String? = daysToExpiry.map {
+            let date = Calendar.current.date(byAdding: .day, value: $0, to: Date())!
+            return formatter.string(from: date)
+        }
+        return Food(
+            id: UUID().uuidString,
+            userId: "u",
+            householdId: nil,
+            name: name,
+            category: "dairy",
+            isSafe: true,
+            isTryBite: false,
+            allergens: nil,
+            barcode: nil,
+            aisle: nil,
+            quantity: 1,
+            unit: "count",
+            servingsPerContainer: nil,
+            packageQuantity: nil,
+            expiryDate: expiryString,
+            pricePerUnit: nil,
+            currency: nil,
+            createdAt: nil,
+            updatedAt: nil
+        )
+    }
+
+    private func expiryPref(name: String) -> UserProductPreference {
+        UserProductPreference(
+            id: UUID().uuidString,
+            userId: "u",
+            householdId: nil,
+            catalogId: nil,
+            name: name,
+            nameNormalized: ProductNameNormalizer.normalize(name),
+            barcode: nil,
+            preferredAisleSection: "dairy",
+            preferredCategory: "dairy",
+            preferredUnit: "gal",
+            preferredQuantity: 1,
+            preferredBrand: nil,
+            notes: nil,
+            timesAdded: 5,
+            lastAddedAt: nil,
+            addHistory: nil,
+            createdAt: nil,
+            updatedAt: nil
+        )
+    }
+
+    func testExpiringSuggesterFiltersOutAlreadyExpired() {
+        let f = food(name: "Milk", daysToExpiry: -2)
+        let p = expiryPref(name: "Milk")
+        let result = ExpiringRestockSuggester.suggestions(
+            foods: [f],
+            groceryItems: [],
+            preferences: [p]
+        )
+        XCTAssertTrue(result.isEmpty, "already-expired foods should be skipped")
+    }
+
+    func testExpiringSuggesterFiltersOutBeyondWindow() {
+        let f = food(name: "Milk", daysToExpiry: 10)
+        let p = expiryPref(name: "Milk")
+        let result = ExpiringRestockSuggester.suggestions(
+            foods: [f],
+            groceryItems: [],
+            preferences: [p]
+        )
+        XCTAssertTrue(result.isEmpty, "outside-window foods should be skipped")
+    }
+
+    func testExpiringSuggesterIncludesNearExpiry() {
+        let f = food(name: "Milk", daysToExpiry: 1)
+        let p = expiryPref(name: "Milk")
+        let result = ExpiringRestockSuggester.suggestions(
+            foods: [f],
+            groceryItems: [],
+            preferences: [p]
+        )
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result.first?.daysUntilExpiry, 1)
+    }
+
+    func testExpiringSuggesterRequiresPreferenceRow() {
+        // No prefs row → no signal that the user buys this again → skip.
+        let f = food(name: "Random Imported Food", daysToExpiry: 1)
+        let result = ExpiringRestockSuggester.suggestions(
+            foods: [f],
+            groceryItems: [],
+            preferences: []
+        )
+        XCTAssertTrue(result.isEmpty)
+    }
+
+    func testExpiringSuggesterRespectsAlreadyOnList() {
+        let f = food(name: "Milk", daysToExpiry: 1)
+        let p = expiryPref(name: "Milk")
+        let onList = GroceryItem(
+            id: "g1", userId: "u", name: "milk",
+            category: "dairy", quantity: 1, unit: "gal", checked: false
+        )
+        let result = ExpiringRestockSuggester.suggestions(
+            foods: [f],
+            groceryItems: [onList],
+            preferences: [p]
+        )
+        XCTAssertTrue(result.isEmpty, "already-on-list should be filtered")
+    }
+
     // MARK: - US-275 StoreLayout fallback
 
     func testStoreLayoutDecodes() throws {

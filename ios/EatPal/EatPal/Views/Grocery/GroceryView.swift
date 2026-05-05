@@ -42,6 +42,9 @@ struct GroceryView: View {
     @State private var editingItem: GroceryItem?
     // US-232: Shopping Mode (one-handed in-store UI)
     @State private var showingShoppingMode = false
+    /// US-277: AR shelf-finder fullscreen overlay. Live-tracks
+    /// barcodes against the user's grocery list + preferences.
+    @State private var showingARShelfFinder = false
     // US-264: tapping a recipe section header opens the recipe detail.
     @State private var inspectedRecipe: Recipe?
 
@@ -677,6 +680,20 @@ struct GroceryView: View {
                 .accessibilityHint("One-handed in-store view with large rows and dim screen")
             }
 
+            // US-277: AR shelf-finder. Placed adjacent to shopping mode
+            // so both in-store actions live on the same edge.
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    HapticManager.mediumImpact()
+                    showingARShelfFinder = true
+                } label: {
+                    Image(systemName: "viewfinder.circle")
+                        .symbolRenderingMode(.hierarchical)
+                }
+                .accessibilityLabel("AR shelf finder")
+                .accessibilityHint("Live camera that overlays chips on every product on your list")
+            }
+
             // US-264: View-mode toggle. Placed near the title so it
             // reads as a list-display switcher rather than a write
             // action; uses a Menu with checkmarks so the current mode
@@ -961,6 +978,10 @@ struct GroceryView: View {
         }
         .fullScreenCover(isPresented: $showingShoppingMode) {
             ShoppingModeView()
+        }
+        .fullScreenCover(isPresented: $showingARShelfFinder) {
+            ARShelfFinderView()
+                .environmentObject(appState)
         }
         .alert("Clear Completed Items?", isPresented: $showingClearAlert) {
             Button("Clear", role: .destructive) {

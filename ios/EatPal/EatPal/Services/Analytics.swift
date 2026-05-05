@@ -156,6 +156,14 @@ enum AnalyticsEvent {
     case storeLayoutSelected(slug: String)
     /// US-276: a "Suggested for you" restock chip was tapped.
     case restockSuggestionTapped(daysUntilDue: Int)
+    /// US-280: a pantry-expiring "Suggested for you" chip was tapped.
+    case expiringRestockTapped(daysUntilExpiry: Int)
+    /// US-278: voice quick-add inside QuickAddGrocerySheet was used.
+    case quickAddVoiceUsed
+    /// US-277: AR shelf-finder was opened from the grocery toolbar.
+    case arShelfFinderOpened
+    /// US-277: a chip in the AR shelf-finder was tapped (action: "check" / "add").
+    case arShelfChipTapped(action: String)
     case groceryListCleared(checkedCount: Int)
     case groceryGeneratedFromPlan(itemCount: Int)
 
@@ -207,6 +215,10 @@ enum AnalyticsEvent {
         case .householdPreferenceSyncToggled: return "household_preference_sync_toggled"
         case .storeLayoutSelected:      return "store_layout_selected"
         case .restockSuggestionTapped:  return "restock_suggestion_tapped"
+        case .expiringRestockTapped:    return "expiring_restock_tapped"
+        case .quickAddVoiceUsed:        return "quick_add_voice_used"
+        case .arShelfFinderOpened:      return "ar_shelf_finder_opened"
+        case .arShelfChipTapped:        return "ar_shelf_chip_tapped"
         case .aiPlanGenerated:          return "ai_plan_generated"
         case .aiCoachMessageSent:       return "ai_coach_message_sent"
         case .quizStarted:              return "quiz_started"
@@ -243,7 +255,8 @@ enum AnalyticsEvent {
              .cookableMissingAddedToGrocery,
              .quickAddResolveSource, .productPhotoIdentified,
              .householdPreferenceSyncToggled, .storeLayoutSelected,
-             .restockSuggestionTapped:
+             .restockSuggestionTapped, .expiringRestockTapped,
+             .quickAddVoiceUsed, .arShelfFinderOpened, .arShelfChipTapped:
             return "feature"
         case .paywallShown, .purchaseCompleted:
             return "monetization"
@@ -327,6 +340,12 @@ enum AnalyticsEvent {
             return ["slug": slug]
         case .restockSuggestionTapped(let days):
             return ["days_until_due": String(days)]
+        case .expiringRestockTapped(let days):
+            return ["days_until_expiry": String(days)]
+        case .arShelfChipTapped(let action):
+            return ["action": action]
+        case .quickAddVoiceUsed, .arShelfFinderOpened:
+            return [:]
         }
     }
 }
