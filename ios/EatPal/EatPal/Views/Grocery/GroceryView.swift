@@ -62,6 +62,12 @@ struct GroceryView: View {
     /// items dropped onto the list disappear from "Suggested for you".
     @State private var restockSuggestions: [RestockPredictor.Suggestion] = []
 
+    /// US-280: Pantry-driven "expiring soon" suggestions. Renders next
+    /// to the cadence-based restock chips with a distinct orange color
+    /// so users can tell "you usually buy this" from "you have this and
+    /// it's about to spoil".
+    @State private var expiringSuggestions: [ExpiringRestockSuggester.Suggestion] = []
+
     /// US-264: persisted view-mode preference. Defaults to .byAisle so
     /// existing users see no behavior change until they opt in.
     @AppStorage("grocery.viewMode") private var viewModeRaw: String =
@@ -310,16 +316,50 @@ struct GroceryView: View {
             }
     }
 
-    /// US-276: "Suggested for you" pill row. Empty-state safe — returns
-    /// an EmptyView when the predictor has nothing useful, so the
-    /// section header doesn't render.
+    /// US-276 + US-280: "Suggested for you" pill row. Empty-state safe
+    /// — returns an EmptyView when neither the cadence predictor nor
+    /// the expiry suggester has anything useful, so the section header
+    /// doesn't render.
+    ///
+    /// Expiring chips render first (most urgent), capped at 4, then the
+    /// cadence-due chips fill the remaining space.
     @ViewBuilder
     private var restockSuggestionsSection: some View {
         let due = restockSuggestions.prefix(8)
-        if !due.isEmpty {
+        let expiring = expiringSuggestions.prefix(4)
+        if !due.isEmpty || !expiring.isEmpty {
             Section {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
+                        ForEach(Array(expiring), id: \.id) { suggestion in
+                            Button {
+                                Task { await addFromExpiringSuggestion(suggestion) }
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "clock.badge.exclamationmark")
+                                            .font(.caption)
+                                        Text(suggestion.name)
+                                            .font(.callout)
+                                            .fontWeight(.semibold)
+                                            .lineLimit(1)
+                                    }
+                                    Text(expiringSubtitle(for: suggestion))
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.orange.opacity(0.5), lineWidth: 0.5)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Restock expiring \(suggestion.name)")
+                            .accessibilityHint(expiringSubtitle(for: suggestion))
+                        }
                         ForEach(Array(due), id: \.id) { suggestion in
                             Button {
                                 Task { await addFromSuggestion(suggestion) }
@@ -356,6 +396,16 @@ struct GroceryView: View {
                 Label("Suggested for you", systemImage: "sparkles")
                     .textCase(nil)
             }
+        }
+    }
+
+    /// US-280: subtitle copy for an expiring chip — "Expires in 2d" or
+    /// "Expires today" so the user knows why it's there.
+    private func expiringSubtitle(for s: ExpiringRestockSuggester.Suggestion) -> String {
+        switch s.daysUntilExpiry {
+        case 0: return "Expires today"
+        case 1: return "Expires tomorrow"
+        default: return "Expires in \(s.daysUntilExpiry)d"
         }
     }
 
@@ -999,9 +1049,11 @@ struct GroceryView: View {
         }
     }
 
-    /// US-276: re-runs the predictor against the current preferences +
-    /// grocery list. Cheap (≤200 products × 12 timestamps), so we call
-    /// it on appear and after every successful add.
+    /// US-276 + US-280: re-runs both the cadence predictor and the
+    /// expiry suggester against the current preferences, foods, and
+    /// grocery list. Cheap (≤200 products × 12 timestamps + a single
+    /// pass over foods), so we call it on appear and after every
+    /// successful add.
     private func refreshRestockSuggestions() async {
         let prefs = await SmartProductService.shared.fetchAllPreferences()
         let raw = RestockPredictor.suggestions(from: prefs)
@@ -1009,6 +1061,41 @@ struct GroceryView: View {
             suggestions: raw,
             groceryItems: appState.groceryItems
         )
+        expiringSuggestions = ExpiringRestockSuggester.suggestions(
+            foods: appState.foods,
+            groceryItems: appState.groceryItems,
+            preferences: prefs
+        )
+    }
+
+    /// US-280: drop an expiring-pantry suggestion onto the grocery list
+    /// using the user's saved preferences. Logs telemetry as
+    /// `restockSuggestionTapped` with `daysUntilDue: 0` so the dashboard
+    /// keeps a single funnel — the chip color in the UI is what
+    /// distinguishes the source.
+    private func addFromExpiringSuggestion(_ suggestion: ExpiringRestockSuggester.Suggestion) async {
+        let resolved = await SmartProductService.shared.resolve(name: suggestion.name)
+        let item = GroceryItem(
+            id: UUID().uuidString,
+            userId: "",
+            name: resolved.name.isEmpty ? suggestion.name : resolved.name,
+            category: resolved.category.rawValue,
+            quantity: suggestion.preferredQuantity ?? resolved.quantity,
+            unit: suggestion.preferredUnit ?? resolved.unit,
+            checked: false,
+            brandPreference: resolved.brand,
+            priority: "medium",
+            addedVia: "expiring_restock",
+            aisleSection: resolved.aisleSection.rawValue
+        )
+        do {
+            try await appState.addGroceryItem(item)
+            HapticManager.success()
+            AnalyticsService.track(.expiringRestockTapped(daysUntilExpiry: suggestion.daysUntilExpiry))
+            await refreshRestockSuggestions()
+        } catch {
+            // AppState surfaces a toast already.
+        }
     }
 
     /// US-275: pin the active grocery list to a store layout (or

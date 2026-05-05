@@ -101,6 +101,11 @@ struct ResolvedProduct: Equatable {
         /// First time anywhere — Open Food Facts barcode lookup
         /// succeeded and provided a name + nutrition hints.
         case barcodeFresh
+        /// US-279: Keyword classifier picked the aisle but
+        /// `UnitInference` upgraded the unit/quantity from the generic
+        /// "count, 1" to a sensible default (milk → gallon, eggs →
+        /// dozen). Treated as a soft-confirm in the UI.
+        case unitInference
         /// Free-text classifier-based fallback. Lowest confidence.
         case keywordFallback
     }
@@ -121,7 +126,7 @@ struct ResolvedProduct: Equatable {
     var needsConfirmation: Bool {
         switch source {
         case .userPreference, .catalog: return false
-        case .barcodeFresh, .keywordFallback: return true
+        case .barcodeFresh, .unitInference, .keywordFallback: return true
         }
     }
 }

@@ -136,7 +136,24 @@ final class SmartProductService {
         }
 
         // Tier 4 — keyword classifier. Always returns *something*.
+        // US-279: when the classifier hits but the unit/quantity is the
+        // generic "count, 1", upgrade via UnitInference so eggs default
+        // to a dozen, milk to a gallon, rice to a bag, etc. The source
+        // flips to .unitInference so the UI shows a soft-confirm chip.
         let aisle = GroceryAisle.classify(trimmedName)
+        if let inference = UnitInference.infer(name: trimmedName) {
+            return ResolvedProduct(
+                name: trimmedName,
+                aisleSection: aisle,
+                category: aisle.derivedFoodCategory,
+                unit: inference.unit,
+                quantity: inference.quantity,
+                brand: nil,
+                barcode: barcode,
+                notes: nil,
+                source: .unitInference
+            )
+        }
         return ResolvedProduct(
             name: trimmedName,
             aisleSection: aisle,

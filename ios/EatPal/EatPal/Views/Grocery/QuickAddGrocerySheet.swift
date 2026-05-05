@@ -382,6 +382,12 @@ struct QuickAddGrocerySheet: View {
             Label("Scanned", systemImage: "barcode")
                 .font(.caption2)
                 .foregroundStyle(.orange)
+        case .unitInference:
+            // US-279: classifier picked the aisle but the unit/qty
+            // came from the embedded inference table.
+            Label("Smart default", systemImage: "ruler")
+                .font(.caption2)
+                .foregroundStyle(.purple)
         case .keywordFallback:
             Label("Auto-detected", systemImage: "wand.and.sparkles")
                 .font(.caption2)
@@ -391,7 +397,9 @@ struct QuickAddGrocerySheet: View {
 
     @ViewBuilder
     private var sourceFooter: some View {
-        if lastResolveSource == .keywordFallback || lastResolveSource == .barcodeFresh {
+        if lastResolveSource == .keywordFallback
+            || lastResolveSource == .barcodeFresh
+            || lastResolveSource == .unitInference {
             Text("First time adding this — tap the aisle to confirm it's right. We'll remember next time.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
