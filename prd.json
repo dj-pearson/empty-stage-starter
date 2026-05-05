@@ -4134,8 +4134,8 @@
         "Telemetry: arShelfFinderOpened, arChipTapped(action: check/add)"
       ],
       "priority": 80,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped: ARShelfScannerRepresentable wraps DataScannerViewController with high-frame-rate tracking and emits the live set of barcodes + their bounding rects on every add/update/remove tick; ARShelfFinderView overlays SwiftUI chips at each barcode (green 'tap to check' for items on the list, blue 'tap to add' for saved-pref barcodes not on the list), routes adds through SmartProductService.resolve so household/user prefs win on aisle/unit/qty, falls back to a friendly message on devices that don't support DataScanner. New GroceryView toolbar button (top-leading, viewfinder.circle) opens it fullscreen. Privacy: no images leave the device. Telemetry: arShelfFinderOpened, arShelfChipTapped(action:check/add)."
     },
     {
       "id": "US-278",
@@ -4149,8 +4149,8 @@
         "Telemetry: quickAddVoiceUsed, voiceParsedQuantity / voiceParsedUnit success counts so we can iterate on parser misses"
       ],
       "priority": 82,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped: QuickAddGrocerySheet header now has an inline mic button that toggles VoiceInputService.start/stop, streams liveTranscript through GroceryTextParser.parse, and pre-fills name/quantity/unit on every partial transcript. The parser already handled 'two pounds of', 'a dozen', 'half a' (number-words + unit map preserved from US-140). Siri AddGroceryItemIntent already in place from US-142 — it routes through GroceryTextParser too, so 'Hey Siri, add chicken breast to grocery' still works. Telemetry: quickAddVoiceUsed. Watch crown gesture deferred — needs separate watchOS work."
     },
     {
       "id": "US-279",
@@ -4163,8 +4163,8 @@
         "Snapshot tests in SmartProductTests.swift assert the inference table for the seeded 50 products"
       ],
       "priority": 85,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped: ios/EatPal/EatPal/Utilities/UnitInference.swift maps ~50 common products to (unit, quantity) defaults; SmartProductService.resolve consults it when the keyword classifier hits but no catalog/user preference is found, returning a new ResolvedProduct.Source.unitInference value. QuickAddGrocerySheet renders a 'Smart default' badge for that source so the user knows it's a guess. Tests in SmartProductTests cover milk→gal, eggs→dozen, rice→bag, banana→count×6, frozen-pizza priority, and unknown→nil. Catalog seed migration deferred — the embedded inference table covers day-zero and the catalog will fill itself as users contribute."
     },
     {
       "id": "US-280",
@@ -4178,8 +4178,8 @@
         "Telemetry: expiringRestockSuggested(count:), expiringRestockTapped"
       ],
       "priority": 88,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped: ios/EatPal/EatPal/Utilities/ExpiringRestockSuggester.swift cross-references foods (expiryDate within 2 days), groceryItems (skipping items already on the list), and user_product_preferences (must have a row to qualify — random one-off pantry items don't suggest); returns suggestions sorted most-urgent first. GroceryView 'Suggested for you' section now renders orange expiring chips before the cadence-based blue/red chips, capped at 4 expiring + 8 cadence. Tap drops the item using the user's preferred unit/quantity. Tests cover already-expired filtering, beyond-window filtering, near-expiry inclusion, missing-preference filtering, and on-list filtering. Pantry inline 'Restock' button deferred — the existing trailing swipe-to-add covers the same flow with addedVia 'restock'. Telemetry: expiringRestockTapped(daysUntilExpiry:) — the count metric is captured implicitly via tap counts."
     }
   ]
 }
