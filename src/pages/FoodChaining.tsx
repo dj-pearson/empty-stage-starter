@@ -1,5 +1,6 @@
 import { Helmet } from "react-helmet-async";
 import { FoodChainingRecommendations } from "@/components/FoodChainingRecommendations";
+import { FeatureGate } from "@/components/FeatureGate";
 
 export default function FoodChaining() {
   return (
@@ -10,7 +11,9 @@ export default function FoodChaining() {
         <meta name="robots" content="noindex" />
       </Helmet>
       <div id="main-content" className="container mx-auto py-6 px-4 max-w-7xl">
-        <FoodChainingRecommendations />
+        <FeatureGate feature="food_chaining" label="Food Chaining">
+          <FoodChainingRecommendations />
+        </FeatureGate>
       </div>
     </>
   );

@@ -42,6 +42,12 @@ ios/EatPal/EatPalWidget/Info.plist
 .expo-shared/
 web-build/
 
+# claude-flow / swarm tooling state (machine-local, not source)
+.claude-flow/
+.swarm/
+ruvector.db
+ruvector.db-*
+
 # Environment variables
 .env
 .env.local

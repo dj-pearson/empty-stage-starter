@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateId, debounce } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
+import { checkFeatureLimit } from "@/lib/featureLimits";
+import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
 import { useAuth } from "./AuthContext";
 
 interface RealtimePayload<T> {
@@ -17,7 +19,7 @@ interface KidsContextType {
   setKids: React.Dispatch<React.SetStateAction<Kid[]>>;
   activeKidId: string | null;
   setActiveKidId: React.Dispatch<React.SetStateAction<string | null>>;
-  addKid: (kid: Omit<Kid, "id">) => void;
+  addKid: (kid: Omit<Kid, "id">) => Promise<boolean>;
   updateKid: (id: string, kid: Partial<Kid>) => void;
   deleteKid: (id: string) => void;
   setActiveKid: (id: string | null) => void;
@@ -65,25 +67,35 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [userId, householdId]);
 
-  const addKid = useCallback((kid: Omit<Kid, "id">) => {
+  const addKid = useCallback(async (kid: Omit<Kid, "id">): Promise<boolean> => {
     if (userId && householdId) {
-      supabase
+      const limit = await checkFeatureLimit('children', kids.length);
+      if (!limit.allowed) {
+        requestUpgradePrompt({
+          feature: 'Additional child profiles',
+          message: limit.message,
+        });
+        return false;
+      }
+
+      const { data, error } = await supabase
         .from('kids')
         .insert([{ ...kid, user_id: userId, household_id: householdId }])
         .select()
-        .single()
-        .then(({ data, error }) => {
-          if (error) {
-            logger.error('Supabase addKid error:', error);
-            setKids(prev => [...prev, { ...kid, id: generateId() }]);
-          } else if (data) {
-            setKids(prev => [...prev, data as unknown as Kid]);
-          }
-        });
-    } else {
-      setKids(prev => [...prev, { ...kid, id: generateId() }]);
+        .single();
+
+      if (error) {
+        logger.error('Supabase addKid error:', error);
+        setKids(prev => [...prev, { ...kid, id: generateId() }]);
+      } else if (data) {
+        setKids(prev => [...prev, data as unknown as Kid]);
+      }
+      return true;
     }
-  }, [userId, householdId]);
+
+    setKids(prev => [...prev, { ...kid, id: generateId() }]);
+    return true;
+  }, [userId, householdId, kids.length]);
 
   const updateKid = useCallback((id: string, updates: Partial<Kid>) => {
     if (userId) {
