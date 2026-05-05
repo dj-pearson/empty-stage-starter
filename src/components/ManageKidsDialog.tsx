@@ -124,9 +124,13 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
         toast.success("Child updated!");
         setOpen(false);
       } else {
-        await addKid(kidData);
-        toast.success("Child added!");
-        setOpen(false);
+        const added = await addKid(kidData);
+        if (added) {
+          toast.success("Child added!");
+          setOpen(false);
+        }
+        // If blocked by plan limit, the upgrade modal handles the messaging and
+        // we leave the form open so the user can review without losing input.
       }
     } finally {
       setIsSubmitting(false);

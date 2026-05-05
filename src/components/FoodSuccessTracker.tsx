@@ -45,6 +45,8 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { calculateAge } from "@/lib/utils";
 import { logger } from "@/lib/logger";
+import { checkFeatureLimit } from "@/lib/featureLimits";
+import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
 import { useNavigate } from "react-router-dom";
 
 interface FoodSuccessTrackerProps {
@@ -209,6 +211,16 @@ export function FoodSuccessTracker({ onAddChild }: FoodSuccessTrackerProps) {
     try {
       setLoading(true);
 
+      // Plan-limit gate: free / lower-tier plans cap monthly food-tracker entries.
+      const limit = await checkFeatureLimit("food_tracker");
+      if (!limit.allowed) {
+        requestUpgradePrompt({
+          feature: "Food tracking",
+          message: limit.message,
+        });
+        return;
+      }
+
       const { error } = await supabase.from("food_attempts").insert([
         {
           kid_id: activeKidId,
@@ -217,6 +229,15 @@ export function FoodSuccessTracker({ onAddChild }: FoodSuccessTrackerProps) {
       ]);
 
       if (error) throw error;
+
+      // Bump monthly usage so the next check reflects this entry.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.rpc("increment_usage", {
+          p_user_id: user.id,
+          p_feature_type: "food_tracker",
+        });
+      }
 
       toast.success("Food attempt logged!");
       setShowAddDialog(false);

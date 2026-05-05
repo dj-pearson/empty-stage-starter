@@ -240,7 +240,7 @@ export function FoodChainingRecommendations() {
     }
   };
 
-  const handleAddToPantry = (suggestion: FoodChainSuggestion) => {
+  const handleAddToPantry = async (suggestion: FoodChainSuggestion) => {
     // Check if food already exists
     const existingFood = foods.find((f) => f.id === suggestion.food_id);
 
@@ -250,7 +250,7 @@ export function FoodChainingRecommendations() {
     }
 
     // Add as a try bite to pantry
-    addFood({
+    const added = await addFood({
       name: suggestion.food_name,
       category: "snack", // Default category
       is_safe: false,
@@ -258,9 +258,12 @@ export function FoodChainingRecommendations() {
       quantity: 0,
     });
 
-    toast.success(`${suggestion.food_name} added to pantry as Try Bite!`, {
-      description: "Add it to your grocery list to purchase"
-    });
+    if (added) {
+      toast.success(`${suggestion.food_name} added to pantry as Try Bite!`, {
+        description: "Add it to your grocery list to purchase"
+      });
+    }
+    // If blocked, the upgrade modal handles messaging.
   };
 
   const getReasonBadge = (reason: string) => {

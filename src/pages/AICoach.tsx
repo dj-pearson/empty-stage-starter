@@ -1,5 +1,6 @@
 import { Helmet } from "react-helmet-async";
 import { AIMealCoach } from "@/components/AIMealCoach";
+import { FeatureGate } from "@/components/FeatureGate";
 
 export default function AICoach() {
   return (
@@ -10,7 +11,9 @@ export default function AICoach() {
         <meta name="robots" content="noindex" />
       </Helmet>
       <div className="container mx-auto py-6 px-4 max-w-7xl">
-        <AIMealCoach />
+        <FeatureGate feature="ai_coach" label="AI Coach">
+          <AIMealCoach />
+        </FeatureGate>
       </div>
     </>
   );

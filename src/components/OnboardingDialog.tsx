@@ -84,7 +84,7 @@ interface OnboardingDialogProps {
 }
 
 export function OnboardingDialog({ open, onComplete, onOpenChange }: OnboardingDialogProps) {
-  const { addKid, addFood } = useApp();
+  const { addKid, addFoods } = useApp();
   const [step, setStep] = useState(1);
   const [uploading, setUploading] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
@@ -187,7 +187,7 @@ export function OnboardingDialog({ open, onComplete, onOpenChange }: OnboardingD
     }
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     // Add child to app
     const kidData = {
       name: childData.name,
@@ -201,19 +201,22 @@ export function OnboardingDialog({ open, onComplete, onOpenChange }: OnboardingD
       favorite_foods: childData.favorite_foods.length > 0 ? childData.favorite_foods : undefined,
     };
 
-    addKid(kidData);
+    const kidAdded = await addKid(kidData);
+    if (!kidAdded) {
+      // Plan limit hit — upgrade modal handles messaging; abort onboarding completion.
+      return;
+    }
 
-    // Add some starter foods to pantry based on favorites
+    // Add some starter foods to pantry based on favorites in a single batched call so
+    // a plan-limit block fires the upgrade modal at most once.
     if (childData.favorite_foods.length > 0) {
-      childData.favorite_foods.forEach((foodName) => {
-        const category = getCategoryForFood(foodName);
-        addFood({
-          name: foodName,
-          category,
-          is_safe: true,
-          is_try_bite: false,
-        });
-      });
+      const favoriteFoods = childData.favorite_foods.map((foodName) => ({
+        name: foodName,
+        category: getCategoryForFood(foodName),
+        is_safe: true,
+        is_try_bite: false,
+      }));
+      await addFoods(favoriteFoods);
     }
 
     // Track completion and update profile

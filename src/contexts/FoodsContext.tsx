@@ -3,15 +3,17 @@ import { Food } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
+import { checkFeatureLimit } from "@/lib/featureLimits";
+import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
 import { useAuth } from "./AuthContext";
 
 interface FoodsContextType {
   foods: Food[];
   setFoods: React.Dispatch<React.SetStateAction<Food[]>>;
-  addFood: (food: Omit<Food, "id">) => void;
+  addFood: (food: Omit<Food, "id">) => Promise<boolean>;
   updateFood: (id: string, food: Partial<Food>) => void;
   deleteFood: (id: string) => void;
-  addFoods: (foods: Omit<Food, "id">[]) => Promise<void>;
+  addFoods: (foods: Omit<Food, "id">[]) => Promise<boolean>;
   updateFoods: (updates: { id: string; updates: Partial<Food> }[]) => Promise<void>;
   deleteFoods: (ids: string[]) => Promise<void>;
   refreshFoods: () => Promise<void>;
@@ -23,25 +25,35 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
   const [foods, setFoods] = useState<Food[]>([]);
   const { userId, householdId } = useAuth();
 
-  const addFood = useCallback((food: Omit<Food, "id">) => {
+  const addFood = useCallback(async (food: Omit<Food, "id">): Promise<boolean> => {
     if (userId && householdId) {
-      supabase
+      const limit = await checkFeatureLimit('pantry_foods', foods.length);
+      if (!limit.allowed) {
+        requestUpgradePrompt({
+          feature: 'More pantry foods',
+          message: limit.message,
+        });
+        return false;
+      }
+
+      const { data, error } = await supabase
         .from('foods')
         .insert([{ ...food, user_id: userId, household_id: householdId }])
         .select()
-        .single()
-        .then(({ data, error }) => {
-          if (error) {
-            logger.error('Supabase addFood error:', error);
-            setFoods(prev => [...prev, { ...food, id: generateId() }]);
-          } else if (data) {
-            setFoods(prev => [...prev, data as unknown as Food]);
-          }
-        });
-    } else {
-      setFoods(prev => [...prev, { ...food, id: generateId() }]);
+        .single();
+
+      if (error) {
+        logger.error('Supabase addFood error:', error);
+        setFoods(prev => [...prev, { ...food, id: generateId() }]);
+      } else if (data) {
+        setFoods(prev => [...prev, data as unknown as Food]);
+      }
+      return true;
     }
-  }, [userId, householdId]);
+
+    setFoods(prev => [...prev, { ...food, id: generateId() }]);
+    return true;
+  }, [userId, householdId, foods.length]);
 
   const updateFood = useCallback((id: string, updates: Partial<Food>) => {
     if (userId) {
@@ -73,8 +85,22 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [userId]);
 
-  const addFoods = useCallback(async (foodsToAdd: Omit<Food, "id">[]) => {
+  const addFoods = useCallback(async (foodsToAdd: Omit<Food, "id">[]): Promise<boolean> => {
+    if (foodsToAdd.length === 0) return true;
+
     if (userId && householdId) {
+      // Check whether the new total would exceed the plan limit. The RPC blocks when
+      // current_count >= max, so we pass the count *after* the batch would be inserted.
+      const projectedTotal = foods.length + foodsToAdd.length;
+      const limit = await checkFeatureLimit('pantry_foods', projectedTotal - 1);
+      if (!limit.allowed) {
+        requestUpgradePrompt({
+          feature: 'More pantry foods',
+          message: limit.message,
+        });
+        return false;
+      }
+
       const foodsWithUserData = foodsToAdd.map(f => ({ ...f, user_id: userId, household_id: householdId }));
       const { data, error } = await supabase
         .from('foods')
@@ -88,11 +114,13 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
       } else if (data) {
         setFoods(prev => [...prev, ...(data as unknown as Food[])]);
       }
-    } else {
-      const localFoods = foodsToAdd.map(f => ({ ...f, id: generateId() }));
-      setFoods(prev => [...prev, ...localFoods]);
+      return true;
     }
-  }, [userId, householdId]);
+
+    const localFoods = foodsToAdd.map(f => ({ ...f, id: generateId() }));
+    setFoods(prev => [...prev, ...localFoods]);
+    return true;
+  }, [userId, householdId, foods.length]);
 
   const updateFoods = useCallback(async (updates: { id: string; updates: Partial<Food> }[]) => {
     if (userId) {

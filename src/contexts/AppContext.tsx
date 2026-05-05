@@ -18,10 +18,10 @@ interface AppContextType {
   activeKidId: string | null;
   planEntries: PlanEntry[];
   groceryItems: GroceryItem[];
-  addFood: (food: Omit<Food, "id">) => void;
+  addFood: (food: Omit<Food, "id">) => Promise<boolean>;
   updateFood: (id: string, food: Partial<Food>) => void;
   deleteFood: (id: string) => void;
-  addKid: (kid: Omit<Kid, "id">) => void;
+  addKid: (kid: Omit<Kid, "id">) => Promise<boolean>;
   updateKid: (id: string, kid: Partial<Kid>) => void;
   deleteKid: (id: string) => void;
   setActiveKid: (id: string | null) => void;
@@ -43,7 +43,7 @@ interface AppContextType {
   exportData: () => string;
   importData: (jsonData: string) => void;
   resetAllData: () => void;
-  addFoods: (foods: Omit<Food, "id">[]) => Promise<void>;
+  addFoods: (foods: Omit<Food, "id">[]) => Promise<boolean>;
   updateFoods: (updates: { id: string; updates: Partial<Food> }[]) => Promise<void>;
   deleteFoods: (ids: string[]) => Promise<void>;
   copyWeekPlan: (fromDate: string, toDate: string, kidId: string) => Promise<void>;

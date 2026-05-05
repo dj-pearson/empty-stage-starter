@@ -1,5 +1,6 @@
 import { Helmet } from "react-helmet-async";
 import { KidMealBuilder } from "@/components/KidMealBuilder";
+import { FeatureGate } from "@/components/FeatureGate";
 
 export default function MealBuilder() {
   return (
@@ -10,7 +11,9 @@ export default function MealBuilder() {
         <meta name="robots" content="noindex" />
       </Helmet>
       <div className="container mx-auto py-6 px-4 max-w-7xl">
-        <KidMealBuilder />
+        <FeatureGate feature="meal_builder" label="Meal Builder">
+          <KidMealBuilder />
+        </FeatureGate>
       </div>
     </>
   );

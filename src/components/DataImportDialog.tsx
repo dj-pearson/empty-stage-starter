@@ -61,7 +61,7 @@ export function DataImportDialog() {
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const { addFood } = useApp();
+  const { addFoods } = useApp();
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -85,18 +85,22 @@ export function DataImportDialog() {
     setImporting(true);
 
     try {
-      for (const row of parseResult.valid) {
-        await addFood({
-          name: row.name,
-          category: row.category || "other",
-          allergens: row.allergens ? row.allergens.split(";").map((a) => a.trim()) : [],
-          nutrition_info: row.calories ? { calories: Number(row.calories) } : undefined,
-        } as any);
-      }
+      const newFoods = parseResult.valid.map((row) => ({
+        name: row.name,
+        category: row.category || "other",
+        allergens: row.allergens ? row.allergens.split(";").map((a) => a.trim()) : [],
+        nutrition_info: row.calories ? { calories: Number(row.calories) } : undefined,
+      } as any));
 
-      toast.success(`Successfully imported ${parseResult.valid.length} food(s)`);
-      setOpen(false);
-      setParseResult(null);
+      const added = await addFoods(newFoods);
+
+      if (added) {
+        toast.success(`Successfully imported ${parseResult.valid.length} food(s)`);
+        setOpen(false);
+        setParseResult(null);
+      }
+      // If blocked by plan limit, the upgrade modal handles messaging and the
+      // dialog stays open so the user can review the rows after upgrading.
     } catch (error) {
       toast.error("Import failed");
     } finally {

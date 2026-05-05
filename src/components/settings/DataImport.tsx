@@ -47,7 +47,7 @@ function parseCSV(text: string): Record<string, string>[] {
 }
 
 export function DataImport() {
-  const { addFood, addRecipe } = useApp();
+  const { addFoods, addRecipe } = useApp();
   const [importType, setImportType] = useState<"foods" | "recipes">("foods");
   const [preview, setPreview] = useState<ParsedRow[] | null>(null);
   const [importing, setImporting] = useState(false);
@@ -93,17 +93,22 @@ export function DataImport() {
     setImporting(true);
     try {
       if (importType === "foods") {
-        for (const row of validRows) {
+        const newFoods = validRows.map((row) => {
           const category = VALID_CATEGORIES.includes(row.data.category as FoodCategory)
             ? (row.data.category as FoodCategory)
             : "snack";
-          await addFood({
+          return {
             name: row.data.name,
             category,
             is_safe: true,
             is_try_bite: false,
             allergens: row.data.allergens ? row.data.allergens.split(";").map((a) => a.trim()) : undefined,
-          });
+          };
+        });
+        const added = await addFoods(newFoods);
+        if (!added) {
+          // Plan limit blocked the import; the upgrade modal handles messaging.
+          return;
         }
       } else {
         for (const row of validRows) {

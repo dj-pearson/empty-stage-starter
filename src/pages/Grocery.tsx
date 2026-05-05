@@ -259,6 +259,7 @@ export default function Grocery() {
 
       // Add/update pantry inventory
       const existingFood = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+      let pantryUpdated = true;
       if (existingFood) {
         updateFood(existingFood.id, {
           ...existingFood,
@@ -266,7 +267,7 @@ export default function Grocery() {
           unit: item.unit
         });
       } else {
-        addFood({
+        pantryUpdated = await addFood({
           name: item.name,
           category: item.category,
           is_safe: true,
@@ -277,23 +278,28 @@ export default function Grocery() {
         });
       }
 
-      toast.success(`${item.name} added to pantry`, {
-        description: `${item.quantity} ${item.unit} moved to inventory`,
-        action: {
-          label: "Undo",
-          onClick: () => {
-            toggleGroceryItem(itemId);
-            // Reverse pantry update
-            const food = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
-            if (food && food.quantity) {
-              updateFood(food.id, {
-                ...food,
-                quantity: Math.max(0, food.quantity - item.quantity),
-              });
+      if (pantryUpdated) {
+        toast.success(`${item.name} added to pantry`, {
+          description: `${item.quantity} ${item.unit} moved to inventory`,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              toggleGroceryItem(itemId);
+              // Reverse pantry update
+              const food = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+              if (food && food.quantity) {
+                updateFood(food.id, {
+                  ...food,
+                  quantity: Math.max(0, food.quantity - item.quantity),
+                });
+              }
             }
           }
-        }
-      });
+        });
+      }
+      // If pantry add was blocked by plan limit, the upgrade modal already fired.
+      // The grocery item remains checked so the user can finish shopping; on upgrade
+      // they can re-check to sync to pantry.
     } else {
       // Unchecking - remove from pantry
       const existingFood = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
