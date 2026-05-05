@@ -80,6 +80,7 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
       if (item.added_via) newItem.added_via = item.added_via;
       if (item.brand_preference) newItem.brand_preference = item.brand_preference;
       if (item.barcode) newItem.barcode = item.barcode;
+      if (item.source_recipe_id) newItem.source_recipe_id = item.source_recipe_id;
 
       supabase.from('grocery_items').insert(newItem).select().single()
         .then(({ data, error }) => {

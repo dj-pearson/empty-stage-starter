@@ -166,6 +166,10 @@ enum AnalyticsEvent {
     case arShelfChipTapped(action: String)
     case groceryListCleared(checkedCount: Int)
     case groceryGeneratedFromPlan(itemCount: Int)
+    /// US-283: user batch-moved completed grocery items into the pantry.
+    /// `unknownUnits` is the subset that had a unit the merge logic
+    /// couldn't reconcile against an existing pantry food.
+    case groceryMovedToPantry(count: Int, unknownUnits: Int)
 
     // Feature-level events — surface usage of high-value flows
     case aiPlanGenerated(promptType: String)
@@ -210,6 +214,7 @@ enum AnalyticsEvent {
         case .groceryItemDeleted:       return "grocery_item_deleted"
         case .groceryListCleared:       return "grocery_list_cleared"
         case .groceryGeneratedFromPlan: return "grocery_generated_from_plan"
+        case .groceryMovedToPantry:     return "grocery_moved_to_pantry"
         case .quickAddResolveSource:    return "quick_add_resolve_source"
         case .productPhotoIdentified:   return "product_photo_identified"
         case .householdPreferenceSyncToggled: return "household_preference_sync_toggled"
@@ -250,7 +255,7 @@ enum AnalyticsEvent {
              .quizStarted, .quizCompleted,
              .shoppingModeStarted, .shoppingModeExited,
              .healthImportRequested, .starterTemplateApplied,
-             .groceryGeneratedFromPlan,
+             .groceryGeneratedFromPlan, .groceryMovedToPantry,
              .cookableMatchOpened, .cookableRecipeAddedToPlan,
              .cookableMissingAddedToGrocery,
              .quickAddResolveSource, .productPhotoIdentified,
@@ -308,6 +313,11 @@ enum AnalyticsEvent {
             return ["checked_count": String(count)]
         case .groceryGeneratedFromPlan(let count):
             return ["item_count": String(count)]
+        case .groceryMovedToPantry(let count, let unknownUnits):
+            return [
+                "count": String(count),
+                "unknown_units": String(unknownUnits)
+            ]
         case .aiPlanGenerated(let promptType):
             return ["prompt_type": promptType]
         case .aiCoachMessageSent(let messageCount):

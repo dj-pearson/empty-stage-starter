@@ -339,14 +339,61 @@ export default function Grocery() {
     updateGroceryItem(itemId, { quantity: newQty });
   }, [groceryItems, updateGroceryItem]);
 
+  // US-282: explicit "Move completed to pantry" action.
+  //
+  // Per-item toggle (handleToggleItem) already increments pantry on check,
+  // so by the time the user hits this button the pantry is up-to-date —
+  // this commit just sweeps the bought items off the active list. Undo
+  // restores both halves: re-creates the grocery rows and rolls back the
+  // pantry quantity delta we attributed to each item.
   const handleDoneShopping = useCallback(() => {
-    const count = purchasedItems.length;
+    const moved = purchasedItems.map(item => ({
+      name: item.name,
+      category: item.category,
+      quantity: item.quantity,
+      unit: item.unit,
+      aisle: item.aisle,
+      is_manual: item.is_manual,
+      added_via: item.added_via,
+      source_recipe_id: item.source_recipe_id,
+    }));
+    if (moved.length === 0) return;
     clearCheckedGroceryItems();
     setPurchasedOpen(false);
-    toast.success(`Shopping trip complete!`, {
-      description: `${count} item${count === 1 ? '' : 's'} cleared from list and saved to pantry`
+
+    toast.success(`Moved ${moved.length} item${moved.length === 1 ? '' : 's'} to pantry`, {
+      description: 'Bought items committed to your inventory',
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          // Re-insert each grocery row (as active — user can re-check) and
+          // decrement the pantry food we incremented on the original
+          // toggle. Best-effort: name-based pantry match is consistent
+          // with the toggle path; if no matching food is found we skip
+          // the decrement and just restore the grocery row.
+          moved.forEach(item => {
+            addGroceryItem({
+              name: item.name,
+              category: item.category,
+              quantity: item.quantity,
+              unit: item.unit,
+              aisle: item.aisle,
+              is_manual: item.is_manual,
+              added_via: item.added_via,
+              source_recipe_id: item.source_recipe_id,
+            });
+            const food = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+            if (food && food.quantity) {
+              updateFood(food.id, {
+                ...food,
+                quantity: Math.max(0, food.quantity - item.quantity),
+              });
+            }
+          });
+        },
+      },
     });
-  }, [purchasedItems.length, clearCheckedGroceryItems]);
+  }, [purchasedItems, clearCheckedGroceryItems, addGroceryItem, foods, updateFood]);
 
   const handleSmartRestock = async () => {
     setIsGeneratingRestock(true);
@@ -974,7 +1021,7 @@ export default function Grocery() {
                 </p>
                 <Button onClick={handleDoneShopping} size="sm">
                   <Check className="h-4 w-4 mr-1.5" />
-                  Done Shopping
+                  Move {purchasedItems.length} to pantry
                 </Button>
               </Card>
             ) : null}
@@ -1003,14 +1050,14 @@ export default function Grocery() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                      className="h-7 text-xs"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDoneShopping();
                       }}
                     >
-                      <Trash2 className="h-3 w-3 mr-1" />
-                      Clear
+                      <Check className="h-3 w-3 mr-1" />
+                      Move to pantry
                     </Button>
                   </CollapsibleTrigger>
 
@@ -1042,7 +1089,7 @@ export default function Grocery() {
               </Collapsible>
             )}
 
-            {/* ─── Done Shopping Button (floating) ─── */}
+            {/* ─── US-282: Move completed to pantry (floating) ─── */}
             {purchasedItems.length > 0 && activeItems.length > 0 && (
               <div className="fixed bottom-24 md:bottom-8 left-0 right-0 flex justify-center z-30 pointer-events-none">
                 <Button
@@ -1051,7 +1098,7 @@ export default function Grocery() {
                   className="shadow-lg pointer-events-auto rounded-full px-6"
                 >
                   <Check className="h-4 w-4 mr-2" />
-                  Done Shopping ({purchasedItems.length} item{purchasedItems.length === 1 ? '' : 's'})
+                  Move {purchasedItems.length} to pantry
                 </Button>
               </div>
             )}

@@ -966,6 +966,124 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// US-283: explicit "Move completed to pantry" — the closeout for a
+    /// finished shopping trip.
+    ///
+    /// For each checked grocery item:
+    ///   - If a pantry food exists with the same lowercased name, increment
+    ///     its quantity by the grocery item's quantity (preserving the
+    ///     pantry food's existing unit).
+    ///   - Otherwise create a new pantry food with the grocery item's
+    ///     name, category, quantity, unit, and aisle.
+    /// Then delete the grocery items in one pass.
+    ///
+    /// Distinct from `clearCheckedGroceryItems`, which destructively drops
+    /// items without crediting the pantry. The "unknown units" return field
+    /// flags items whose unit didn't match the existing pantry food's unit
+    /// — current behavior is to still increment, but US-287 will eventually
+    /// normalize/convert and resolve these.
+    func moveCheckedToPantry() async throws {
+        let checkedSnapshot = groceryItems.filter(\.checked)
+        guard !checkedSnapshot.isEmpty else { return }
+
+        // Two-phase optimistic update: first compute the food deltas
+        // (find-or-create + new quantity), then commit them locally, then
+        // persist. On failure we replay the inverse to restore both halves.
+        struct PantryDelta {
+            let foodId: String
+            let previousQuantity: Double?
+            let createdNewFood: Bool
+            let increment: Double
+        }
+        var deltas: [PantryDelta] = []
+        var newFoods: [Food] = []
+        var unknownUnits = 0
+
+        for item in checkedSnapshot {
+            if let idx = foods.firstIndex(where: { $0.name.lowercased() == item.name.lowercased() }) {
+                let previous = foods[idx].quantity
+                if let existingUnit = foods[idx].unit, existingUnit != item.unit {
+                    unknownUnits += 1
+                }
+                foods[idx].quantity = (previous ?? 0) + item.quantity
+                deltas.append(PantryDelta(
+                    foodId: foods[idx].id,
+                    previousQuantity: previous,
+                    createdNewFood: false,
+                    increment: item.quantity
+                ))
+            } else {
+                let newFood = Food(
+                    id: UUID().uuidString,
+                    userId: "",
+                    name: item.name,
+                    category: item.category,
+                    isSafe: true,
+                    isTryBite: false,
+                    aisle: item.aisle,
+                    quantity: item.quantity,
+                    unit: item.unit
+                )
+                foods.append(newFood)
+                newFoods.append(newFood)
+                deltas.append(PantryDelta(
+                    foodId: newFood.id,
+                    previousQuantity: nil,
+                    createdNewFood: true,
+                    increment: item.quantity
+                ))
+            }
+        }
+
+        let checkedIds = Set(checkedSnapshot.map(\.id))
+        let removedSources = groceryItemSources.filter { checkedIds.contains($0.groceryItemId) }
+        groceryItems.removeAll { checkedIds.contains($0.id) }
+        groceryItemSources.removeAll { checkedIds.contains($0.groceryItemId) }
+
+        do {
+            // Persist new foods first so the pantry references resolve.
+            for food in newFoods {
+                try await dataService.insertFood(food)
+            }
+            // Persist quantity increments for existing foods.
+            for delta in deltas where !delta.createdNewFood {
+                let updated = (delta.previousQuantity ?? 0) + delta.increment
+                try await dataService.updateFood(
+                    delta.foodId,
+                    updates: FoodUpdate(quantity: updated)
+                )
+            }
+            // Finally remove the grocery rows. ON DELETE CASCADE on
+            // grocery_item_sources cleans those up server-side.
+            for id in checkedIds {
+                try await dataService.deleteGroceryItem(id)
+            }
+            toast.success(
+                "Moved \(checkedSnapshot.count) item\(checkedSnapshot.count == 1 ? "" : "s") to pantry"
+            )
+            HapticManager.success()
+            AnalyticsService.track(.groceryMovedToPantry(
+                count: checkedSnapshot.count,
+                unknownUnits: unknownUnits
+            ))
+        } catch {
+            // Roll back: restore grocery items + sources, undo pantry deltas
+            // (delete created foods, decrement existing food quantities).
+            groceryItems.append(contentsOf: checkedSnapshot)
+            groceryItemSources.append(contentsOf: removedSources)
+            for delta in deltas {
+                if delta.createdNewFood {
+                    foods.removeAll { $0.id == delta.foodId }
+                } else if let idx = foods.firstIndex(where: { $0.id == delta.foodId }) {
+                    foods[idx].quantity = delta.previousQuantity
+                }
+            }
+            toast.show(error, as: { .save(entity: "pantry", underlying: $0) })
+            HapticManager.error()
+            throw error
+        }
+    }
+
     // MARK: - Bulk operations (US-269)
 
     /// Mass-delete pantry foods. Single round-trip via `.in('id', ids)`;

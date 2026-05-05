@@ -83,7 +83,7 @@ export interface GroceryItem {
   barcode?: string;
   source_recipe_id?: string;
   added_by_user_id?: string;
-  added_via?: 'manual' | 'voice' | 'recipe' | 'restock' | 'barcode' | 'plan' | 'import';
+  added_via?: string;
   priority?: 'low' | 'medium' | 'high';
 }
 
@@ -143,15 +143,21 @@ export interface GroceryList {
 export interface RecipeIngredient {
   id: string;
   recipe_id: string;
-  food_id?: string;
-  ingredient_name: string;
-  quantity?: number;
-  unit?: string;
-  preparation_notes?: string;
-  is_optional: boolean;
-  section?: string;
+  food_id?: string | null;
   sort_order: number;
-  created_at: string;
+  name: string;
+  quantity?: number | null;
+  unit?: string | null;
+  group_label?: string | null;
+  optional_notes?: string | null;
+  created_at?: string;
+  // Legacy field aliases — kept so orphan/scaling components compile
+  // while we migrate them. New code should read `name`, `group_label`,
+  // `optional_notes` instead.
+  ingredient_name?: string;
+  preparation_notes?: string | null;
+  is_optional?: boolean;
+  section?: string | null;
 }
 
 export interface RecipeCollection {

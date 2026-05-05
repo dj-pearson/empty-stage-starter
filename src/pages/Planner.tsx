@@ -21,6 +21,8 @@ import {
 import { toast } from "sonner";
 import { MealSlot, PlanEntry } from "@/types";
 import { SwapMealDialog } from "@/components/SwapMealDialog";
+import { MissingIngredientsDialog } from "@/components/MissingIngredientsDialog";
+import { computeRecipeShortfall, type Shortfall } from "@/lib/recipeShortfall";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { format, startOfWeek, addWeeks, subWeeks, addDays } from "date-fns";
@@ -46,6 +48,8 @@ export default function Planner() {
     updateFood,
     copyWeekPlan,
     deleteWeekPlan,
+    addGroceryItem,
+    groceryItems,
   } = useApp();
 
   const isMobile = useMediaQuery("(max-width: 1023px)");
@@ -67,7 +71,84 @@ export default function Planner() {
   const [detailedTrackingOpen, setDetailedTrackingOpen] = useState(false);
   const [trackingEntry, setTrackingEntry] = useState<PlanEntry | null>(null);
 
+  // US-284: missing-ingredient prompt state. `pendingRecipe` holds the
+  // recipe that triggered the dialog so we can pass its name to the UI
+  // and stamp `source_recipe_id` on the bulk-inserted grocery rows.
+  const [missingDialogOpen, setMissingDialogOpen] = useState(false);
+  const [missingShortfalls, setMissingShortfalls] = useState<Shortfall[]>([]);
+  const [pendingRecipeForMissing, setPendingRecipeForMissing] = useState<
+    { id: string; name: string } | null
+  >(null);
+
   const activeKid = kids.find((k) => k.id === activeKidId);
+
+  /**
+   * US-284: after a recipe is scheduled into the planner, compute the
+   * shortfall against current pantry. If anything is missing AND the
+   * recipe carries structured ingredients (US-281), open the bulk-add
+   * dialog. Silent no-op when the recipe has no structured ingredients
+   * (legacy data) or has no shortfall.
+   */
+  const openMissingIngredientsForRecipe = useCallback((recipeId: string) => {
+    const recipe = recipes.find((r) => r.id === recipeId);
+    if (!recipe) return;
+    const ings = recipe.recipe_ingredients ?? [];
+    if (ings.length === 0) return;
+
+    const shortfalls = computeRecipeShortfall(recipe, foods);
+    if (shortfalls.length === 0) {
+      toast.success("You have everything for this recipe");
+      return;
+    }
+    setPendingRecipeForMissing({ id: recipe.id, name: recipe.name });
+    setMissingShortfalls(shortfalls);
+    setMissingDialogOpen(true);
+  }, [recipes, foods]);
+
+  /**
+   * Bulk-add the user's selected shortfalls. Each row goes in as a
+   * grocery_items insert with `added_via='recipe'` and `source_recipe_id`
+   * pointing at the source recipe so US-262's auto-check on mark-made
+   * and the planned-meal flag (US-290) can later resolve them.
+   * Dedupes against existing pending grocery items by lowercased name —
+   * a second recipe asking for the same thing won't double-add.
+   */
+  const handleConfirmMissingIngredients = useCallback((selected: Shortfall[]) => {
+    if (!pendingRecipeForMissing) return;
+    const existingNames = new Set(
+      groceryItems
+        .filter((g) => !g.checked)
+        .map((g) => g.name.trim().toLowerCase())
+    );
+    let added = 0;
+    let skipped = 0;
+    for (const s of selected) {
+      const name = s.ingredient.name.trim();
+      if (existingNames.has(name.toLowerCase())) {
+        skipped += 1;
+        continue;
+      }
+      addGroceryItem({
+        name,
+        quantity: s.needed > 0 ? s.needed : 1,
+        unit: s.neededUnit ?? s.ingredient.unit ?? "",
+        category: s.matchedFood?.category ?? "snack",
+        added_via: "recipe",
+        source_recipe_id: pendingRecipeForMissing.id,
+      });
+      added += 1;
+    }
+    if (added > 0) {
+      toast.success(
+        `Added ${added} item${added === 1 ? "" : "s"} to grocery`,
+        { description: skipped > 0 ? `${skipped} already on your list` : undefined }
+      );
+    } else if (skipped > 0) {
+      toast.info("Already on your list", {
+        description: `All ${skipped} item${skipped === 1 ? "" : "s"} were already pending.`,
+      });
+    }
+  }, [addGroceryItem, groceryItems, pendingRecipeForMissing]);
 
   // --- Shared handlers (used by both mobile and desktop) ---
 
@@ -260,12 +341,15 @@ export default function Planner() {
         toast.success(
           `${recipe.name} (${recipe.food_ids.length} items) added`
         );
+
+        // US-284: prompt for missing ingredients on successful schedule.
+        openMissingIngredientsForRecipe(recipe.id);
       } catch (error) {
         logger.error("Error scheduling recipe:", error);
         toast.error("Failed to schedule recipe");
       }
     },
-    [recipes, setPlanEntries]
+    [recipes, setPlanEntries, openMissingIngredientsForRecipe]
   );
 
   const handlePreviousWeek = () => {
@@ -379,6 +463,9 @@ export default function Planner() {
       toast.success(
         `${recipe.name} (${recipe.food_ids.length} items) added to calendar`
       );
+
+      // US-284: prompt for missing ingredients on successful schedule.
+      openMissingIngredientsForRecipe(recipe.id);
     } catch (error) {
       logger.error("Error scheduling recipe:", error);
       toast.error("Failed to schedule recipe");
@@ -778,6 +865,20 @@ export default function Planner() {
                 handleMarkResult(trackingEntry, result, attemptId);
               }
             }}
+          />
+        )}
+
+        {/* US-284: missing-ingredient prompt after a recipe is added to a slot */}
+        {pendingRecipeForMissing && (
+          <MissingIngredientsDialog
+            open={missingDialogOpen}
+            onOpenChange={(open) => {
+              setMissingDialogOpen(open);
+              if (!open) setPendingRecipeForMissing(null);
+            }}
+            recipeName={pendingRecipeForMissing.name}
+            shortfalls={missingShortfalls}
+            onConfirm={handleConfirmMissingIngredients}
           />
         )}
 

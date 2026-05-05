@@ -4180,6 +4180,196 @@
       "priority": 88,
       "passes": true,
       "notes": "Shipped: ios/EatPal/EatPal/Utilities/ExpiringRestockSuggester.swift cross-references foods (expiryDate within 2 days), groceryItems (skipping items already on the list), and user_product_preferences (must have a row to qualify — random one-off pantry items don't suggest); returns suggestions sorted most-urgent first. GroceryView 'Suggested for you' section now renders orange expiring chips before the cadence-based blue/red chips, capped at 4 expiring + 8 cadence. Tap drops the item using the user's preferred unit/quantity. Tests cover already-expired filtering, beyond-window filtering, near-expiry inclusion, missing-preference filtering, and on-list filtering. Pantry inline 'Restock' button deferred — the existing trailing swipe-to-add covers the same flow with addedVia 'restock'. Telemetry: expiringRestockTapped(daysUntilExpiry:) — the count metric is captured implicitly via tap counts."
+    },
+    {
+      "id": "US-281",
+      "title": "Foundation: query structured recipe_ingredients across web + iOS",
+      "description": "Recipes today rely on the legacy recipes.food_ids string array, which loses per-ingredient quantity and unit. The recipe_ingredients table (migration 20260430000001) already stores food_id, quantity, unit, sort_order, and group_label per ingredient — but no client code reads it. This is the data-layer prerequisite for every other story in the Grocery↔Pantry↔Planner loop (US-282..US-292). Wire fetchers on web (AppContext + RecipeImport edge function) and iOS (DataService + Recipe model) so that loading a recipe always hydrates its structured ingredients.",
+      "acceptanceCriteria": [
+        "Web Recipe type already has recipe_ingredients?: RecipeIngredient[]; AppContext recipe-fetch path populates it via a single nested select or a follow-up query keyed by recipe_id",
+        "iOS Recipe model adds recipeIngredients: [RecipeIngredient]; DataService.loadRecipes() hydrates from recipe_ingredients (snake_case → camelCase)",
+        "When ingredients are absent (legacy recipes), fall back to deriving 1×count, 'item' unit per food_id so downstream code never has to special-case",
+        "RecipeIngredient shape: { id, recipeId, foodId, quantity, unit, sortOrder, groupLabel? } with the same JSON encoding on both platforms",
+        "Recipe save/edit flows write to recipe_ingredients (replacing the row set on update), keeping recipes.food_ids in sync as a denormalized cache for now",
+        "Vitest + iOS XCTest coverage: recipe with ingredients hydrates correctly; recipe without ingredients falls back; save round-trips structure"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Shipped 2026-05-05. iOS path was already complete under US-265 (AppState.swift:205 fetches recipe_ingredients, attachIngredients(to:) splats them into Recipe.ingredients). Web path now hydrates via a nested Supabase select declared as RECIPE_WITH_INGREDIENTS_SELECT in src/contexts/RecipesContext.tsx and used by AppContext.tsx (initial load + post-migration refetch) and refreshRecipes(). normalizeRecipeFromDB now returns Recipe.recipe_ingredients sorted by sort_order, defaulting to []. RecipeIngredient interface in src/types/index.ts updated to match the live DB schema (name, group_label, optional_notes, food_id), with legacy field aliases (ingredient_name, preparation_notes, is_optional, section) kept optional so the orphan RecipeScalingControl/RecipeViewWithScaling components compile. Follow-up cleanup: orphan components and the stale src/integrations/supabase/types.ts (still describes the old recipe_ingredients shape) should be reconciled — run supabase gen types after the next migration."
+    },
+    {
+      "id": "US-282",
+      "title": "Web Grocery: 'Move completed to pantry' batch button",
+      "description": "Today, toggling a grocery item to bought auto-creates/increments the matching pantry food (Grocery.tsx:221–308). That's good per-item, but a real shopping trip ends with a stack of 10–30 checked items the user wants to commit in one motion. Add an explicit 'Move completed to pantry' batch action that takes every bought item still on the list, upserts/increments the matching food, removes the items, and toasts an undo for the whole batch. Keep the existing per-item toggle behavior and the bulk-clear destructive action separate.",
+      "acceptanceCriteria": [
+        "Grocery page shows a 'Move completed to pantry (N)' button when ≥1 item is checked off; disabled with helper text when N=0",
+        "On click: for each bought item, find pantry food by lower(name) match; if absent create a new food with quantity=item.quantity, unit=item.unit; if present increment quantity (after unit normalization stub — US-287)",
+        "Atomic-ish: collect operations, fire them, then bulk-delete the moved grocery items in one DB call; on partial failure, surface a toast with the number that failed and leave them on the list",
+        "Toast: 'Moved N items to pantry' with Undo that restores both the grocery items AND the pantry quantity delta (best-effort)",
+        "Distinct from existing destructive 'Clear list' bulk action — both must remain available",
+        "Telemetry: groceryMovedToPantry(count, hadUnknownUnits)",
+        "Vitest covers happy path, mixed new+existing pantry items, undo, empty list"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Shipped 2026-05-05. Renamed the existing handleDoneShopping flow on src/pages/Grocery.tsx into a proper 'Move N to pantry' action: snapshots purchased items pre-clear, calls clearCheckedGroceryItems(), and emits a toast with Undo that re-inserts the grocery rows AND decrements the pantry food we credited on the original toggle. Floating CTA, all-purchased card CTA, and the inline collapsible-header action all use the new label. Per-item toggle (handleToggleItem) keeps its existing increment-on-check behavior — the new button is the explicit closeout, not a second pantry write. Destructive bulk-clear-without-pantry-credit is still pending and tracked separately."
+    },
+    {
+      "id": "US-283",
+      "title": "iOS Grocery: 'Move completed to pantry' batch button",
+      "description": "Mirror US-282 on iOS. AppState already has a moveBoughtToPantry-shaped helper hinted at by addedVia: 'bulk_pantry_move' tags (AppState.swift:1032), but there is no toolbar/button surface today. Add the button to GroceryView's toolbar/footer area, with the same atomic-ish semantics, telemetry, and undo as the web version. Both surfaces must converge on the same backend behavior.",
+      "acceptanceCriteria": [
+        "GroceryView shows a 'Move to pantry (N)' button (chip or toolbar item) visible when ≥1 grocery item has bought=true",
+        "Tapping moves all bought items to pantry: name-matched foods get quantity incremented; new items become new foods with the grocery-supplied quantity/unit",
+        "Bought items are removed from the grocery list in one batch operation after the pantry writes succeed",
+        "ToastManager shows 'Moved N items to pantry' with an Undo action that reverses both halves",
+        "Bulk-clear (existing destructive action) remains separate and prominent",
+        "Telemetry: AnalyticsService.track(.groceryMovedToPantry(count:, hadUnknownUnits:))",
+        "Existing addedVia: 'bulk_pantry_move' references in AppState are reconciled — kept for analytics on the inverse direction (pantry→grocery restock) and renamed if collisions occur"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Shipped 2026-05-05. AppState.moveCheckedToPantry() does the full grocery→pantry transfer in one optimistic batch: for each checked item, find-or-create the matching pantry food (lowercased name match, increment quantity if present, create new Food otherwise), then delete the grocery rows in one pass. On any persistence failure the local snapshot is restored — both pantry-side (delete created foods, decrement existing food quantities back to their snapshotted values) and grocery-side (re-add rows + their grocery_item_sources). GroceryView summary header now shows a primary 'Move N to pantry' button (.borderedProminent) above a small destructive 'Clear Done' link, so the two paths are clearly distinct. New analytics event groceryMovedToPantry(count:, unknownUnits:) — unit-mismatch tracking will become useful once US-287 normalization lands."
+    },
+    {
+      "id": "US-284",
+      "title": "Web Planner: missing-ingredient bulk prompt on recipe-add",
+      "description": "Headline feature. When the user drags/selects a recipe into a plan slot on web, run a pantry-vs-recipe-ingredients diff: for each ingredient with quantity > pantry stock, collect the shortfall. Present a single dialog showing the recipe name, every missing line (food, needed qty/unit, on-hand qty/unit), with checkboxes (default-checked). 'Add N to grocery' inserts each as a grocery item with added_via='recipe' and source_recipe_id set. Cancelling adds the recipe to the plan but skips the grocery write.",
+      "acceptanceCriteria": [
+        "After plan_entries insert succeeds, hook fires useMissingIngredientsForRecipe(recipeId, servings) which loads recipe_ingredients (US-281) and computes shortfall against current pantry foods",
+        "Quantity comparison uses the unit normalization layer (US-287); when units are incomparable, the line is shown as 'unknown — verify' (still default-checked but flagged)",
+        "Dialog component MissingIngredientsDialog renders: recipe title, list rows with food name + 'need X unit / have Y unit' + checkbox + per-row qty editor; 'Add to grocery' / 'Skip' actions",
+        "Submit creates grocery_items rows in one batch insert with added_via='recipe', source_recipe_id=recipeId, default category from food, and dedupes against existing pending grocery items (increments instead of double-adding)",
+        "Telemetry: missingIngredientPromptShown(missingCount, totalCount), missingIngredientsAddedToGrocery(addedCount)",
+        "Edge: zero ingredients (legacy recipe) → no dialog, plan add proceeds silently",
+        "Edge: zero shortfalls → no dialog, brief 'You have everything for this recipe' toast",
+        "Vitest covers shortfall detection, unit-mismatch handling, dedupe-against-existing, dialog snapshot"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Shipped 2026-05-05 (initial cut). New shortfall helper at src/lib/recipeShortfall.ts compares recipe.recipe_ingredients (US-281) against pantry foods, matching by food_id then lowercased name; same-unit shortfalls are arithmetic, unit mismatches are flagged comparable=false (treated as 0 on-hand, conservative). New dialog src/components/MissingIngredientsDialog.tsx renders shortfall rows with default-checked checkboxes, a 'verify' badge for unit mismatches, and a 'Skip' / 'Add N to grocery' footer. Planner.tsx invokes openMissingIngredientsForRecipe(recipeId) after both schedule_recipe_to_plan paths (handleSelectRecipe + handleMobileSelectRecipe) succeed; silent no-op when the recipe has no structured ingredients (legacy data) or the household has full stock. handleConfirmMissingIngredients dedupes against existing unchecked grocery items by lowercased name and stamps added_via='recipe' + source_recipe_id on each insert (GroceryContext now passes source_recipe_id through). Telemetry events not yet wired — that's tracked as a follow-up. Unit normalization (US-287) will replace the conservative 'mismatch=zero on-hand' with proper conversions."
+    },
+    {
+      "id": "US-285",
+      "title": "iOS Planner: missing-ingredient bulk prompt on recipe-add (parity)",
+      "description": "Mirror US-284 on iOS MealPlanView. When a recipe is dropped into a plan slot, compute the shortfall against pantry, present a sheet with checkbox rows and a single 'Add N to grocery' CTA. Use the same backend semantics so a household with one user on web and one on iOS sees consistent grocery additions.",
+      "acceptanceCriteria": [
+        "MealPlanView's add-recipe handler awaits ShortfallCalculator.compute(recipe:pantry:) returning [(ingredient, neededQty, onHandQty, comparable)]",
+        "Sheet MissingIngredientsSheet renders the rows; default-checked; per-row Stepper for quantity adjustment; 'Add to grocery' inserts with addedVia: 'recipe' and sourceRecipeId set",
+        "Skip-and-plan-anyway path is one tap; no friction added when nothing is missing (silent success)",
+        "Telemetry: missingIngredientPromptShown(missingCount:totalCount:), missingIngredientsAddedToGrocery(addedCount:)",
+        "Tests: shortfall arithmetic correct under unit normalization, sheet appears only when missingCount > 0"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Depends on US-281."
+    },
+    {
+      "id": "US-286",
+      "title": "iOS Planner: pantry decrement on mark-made (web parity)",
+      "description": "Web Planner.tsx:388–431 already calls deduct_food_quantity(food_id, 1) when a meal is marked as 'ate'. iOS MealPlanView has no equivalent — meals can be marked but pantry stock is unchanged. Wire the iOS mark-made flow to call the same RPC (or a new mark_meal_made RPC that also handles structured recipe_ingredients) so the household pantry stays accurate regardless of which device logs the meal.",
+      "acceptanceCriteria": [
+        "MealPlanView mark-made path resolves the recipe's recipe_ingredients (US-281) and calls deduct_food_quantity per ingredient with the recipe's serving-scaled quantity",
+        "Falls back to legacy 1-per-food_id behavior when ingredients absent",
+        "Optimistically updates AppState.foods so the UI reflects the decrement immediately, with rollback on RPC failure",
+        "Plan entry's result goes from 'planned' to 'ate' in the same write batch",
+        "Telemetry: mealMarkedMade(decrementedCount:fallbackUsed:)",
+        "XCTest covers happy path, RPC failure rollback, legacy fallback"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Mirrors existing web flow. Should reuse the existing RPC; new mark_meal_made RPC is optional (cleaner but not required)."
+    },
+    {
+      "id": "US-287",
+      "title": "Unit normalization layer (web util mirroring iOS UnitInference)",
+      "description": "Recipe ingredients say '2 cups flour'; pantry stocks 'flour, quantity=1, unit=bag'. Without a normalization layer, every shortfall comparison degrades to 'unknown'. iOS already has UnitInference.swift; create a parallel src/lib/unitNormalize.ts (TypeScript) with the same canonical units, plus a small conversion table (mass: g/kg/oz/lb; volume: ml/l/cup/tsp/tbsp/floz; count: piece/dozen/pack). Comparisons that span families (mass↔volume) return 'incomparable' rather than crashing.",
+      "acceptanceCriteria": [
+        "src/lib/unitNormalize.ts exports normalize(qty, unit) → { qty: number, canonicalUnit, family } and compare(a, b) → 'less' | 'equal' | 'greater' | 'incomparable'",
+        "Mirrors the iOS canonical-unit list so backend-stored values normalize identically across platforms",
+        "Fuzzy aliases: 'tbsp' / 'tablespoon' / 'T' all normalize to the same canonical",
+        "Used by US-282 (move-to-pantry merge), US-284/US-285 (shortfall detection), US-286 (decrement scaling)",
+        "Vitest matrix: 50+ unit pairs; documents which conversions are exact vs. approximate"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Pure utility. No UI. Lights up the rest of the loop."
+    },
+    {
+      "id": "US-288",
+      "title": "Web Pantry: insanely-fast quick-add UX",
+      "description": "Pantry.tsx today has a multi-field add flow that's friction-heavy when the user just bought 12 things. Add a single-line input at the top: typing parses 'name [qty] [unit]' (e.g., '2 lb chicken breast', 'eggs 12 ct', 'milk gal'), shows live category/aisle inference, ⏎ saves and clears for the next item. Bulk-paste mode accepts newline-separated lines and creates all at once.",
+      "acceptanceCriteria": [
+        "Pantry header shows a quick-add input with placeholder '2 lb chicken — try voice or paste a list'",
+        "Parser handles: leading qty+unit ('2 lb chicken'), trailing qty+unit ('chicken 2 lb'), bare name ('milk' → qty=1, unit inferred via UnitInference port from US-287)",
+        "Live preview chip under the input shows '→ Pantry • Meat & Seafood • 2 lb' before submit",
+        "Enter key saves; Ctrl/Cmd+Enter triggers bulk-paste mode (textarea); each non-empty line becomes one pantry item",
+        "Voice input button (already present in iOS) reuses the same parser; web uses Web Speech API where available",
+        "Telemetry: pantryQuickAddSubmitted(parseConfidence)",
+        "Vitest snapshot of parser on 30+ realistic strings"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Pairs with US-289 for parity."
+    },
+    {
+      "id": "US-289",
+      "title": "iOS Pantry: insanely-fast quick-add UX (parity)",
+      "description": "Mirror US-288 on iOS PantryView. The iOS BulkAddFoodSheet already exists for paste flow; add a single-line quick-add field at the top of PantryView with the same parser and live preview.",
+      "acceptanceCriteria": [
+        "PantryView header gains a TextField with submit-on-return that parses via FoodBulkParser (already exists for the bulk sheet)",
+        "Live preview shows category/aisle/qty inference under the field",
+        "Voice button uses VoiceInputService and pipes through the same parser",
+        "Telemetry: pantryQuickAddSubmitted(parseConfidence:)",
+        "Existing BulkAddFoodSheet is kept for paste workflows; quick-add is the new fast path"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Pairs with US-288."
+    },
+    {
+      "id": "US-290",
+      "title": "Plan-aware grocery flags: badge planned meals with unmet needs",
+      "description": "Once US-284/US-285 are live, planned meals can be marked 'missing X ingredients' until the user buys them. On both web and iOS Planner, badge each plan entry with the count of still-missing ingredients (recomputed from current pantry on every render). When the user moves bought items to pantry (US-282/US-283), badges that drop to zero clear immediately.",
+      "acceptanceCriteria": [
+        "Web Planner.tsx renders a small chip per plan entry: '⚠ 3 missing' / no chip when ≥0",
+        "iOS MealPlanView shows the same chip in the plan-cell footer",
+        "Tap on chip opens the same MissingIngredientsDialog/Sheet from US-284/US-285 with the still-missing rows pre-filtered",
+        "Recomputation is cheap: derived from cached recipe_ingredients + current foods state, no extra DB round trip",
+        "Telemetry: planEntryMissingChipShown(count), planEntryMissingChipTapped"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Depends on US-281, US-284, US-285."
+    },
+    {
+      "id": "US-291",
+      "title": "Recipe view: 'Add missing to grocery' one-tap (no plan needed)",
+      "description": "Sometimes a user just wants to cook tonight without planning. On the recipe detail view (web + iOS), show a primary CTA 'Add missing ingredients to grocery (N)' that reuses the same shortfall detector from US-284/US-285. Tap → bulk-insert → toast. No plan entry created.",
+      "acceptanceCriteria": [
+        "Web RecipeDetailView shows 'Add 4 missing to grocery' under the ingredients block when shortfall > 0; primary button when = 0 changes to 'You have everything'",
+        "iOS RecipeDetailView shows the same CTA; behavior identical to US-284 minus the plan-entry insert",
+        "Telemetry: recipeAddMissingToGrocery(missingCount, totalIngredients)",
+        "Edge: legacy recipe with no ingredients shows 'Ingredients not detailed — add manually' instead of the CTA"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Reuses the shortfall detector + bulk-insert paths from US-284/US-285."
+    },
+    {
+      "id": "US-292",
+      "title": "Loop close-out: clear missing flags when groceries become pantry",
+      "description": "The cycle closes when groceries get bought. After US-282/US-283 'Move completed to pantry' runs, any plan-entry badges from US-290 that are now satisfied must clear without a manual refresh. Same for US-291 recipe-detail CTAs. Implementation is mostly state-derivation correctness — no new schema — but it has to be tested deliberately because async ordering can leave stale badges.",
+      "acceptanceCriteria": [
+        "After moveBoughtToPantry succeeds, both surfaces re-derive missing-counts for visible plan entries within 1 render frame",
+        "Realtime sync: a household member moving items to pantry on iOS updates the badges on web within the existing realtime debounce window",
+        "Vitest + XCTest: integration test that simulates plan-add → buy missing → move to pantry, asserting badge transitions through (3 missing) → (1 missing) → (cleared)",
+        "Optimistic UI: the transition starts the moment the user taps 'Move to pantry', not when the realtime echo arrives",
+        "Telemetry: missingFlagsClearedAfterPantryMove(planEntriesCleared)"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Final story in the loop. Depends on US-282, US-283, US-290."
     }
   ]
 }

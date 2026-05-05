@@ -7,7 +7,7 @@ import { logger } from "@/lib/logger";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { FoodsProvider, useFoods } from "./FoodsContext";
 import { KidsProvider, useKids } from "./KidsContext";
-import { RecipesProvider, useRecipes, normalizeRecipeFromDB } from "./RecipesContext";
+import { RecipesProvider, useRecipes, normalizeRecipeFromDB, RECIPE_WITH_INGREDIENTS_SELECT } from "./RecipesContext";
 import { PlanProvider, usePlan } from "./PlanContext";
 import { GroceryProvider, useGrocery } from "./GroceryContext";
 
@@ -157,8 +157,8 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
             ? supabase.from('foods').select('*').eq('household_id', householdId).order('name', { ascending: true }).limit(500)
             : supabase.from('foods').select('*').order('name', { ascending: true }).limit(500),
           householdId
-            ? supabase.from('recipes').select('*').eq('household_id', householdId).order('created_at', { ascending: true }).limit(200)
-            : supabase.from('recipes').select('*').order('created_at', { ascending: true }).limit(200),
+            ? supabase.from('recipes').select(RECIPE_WITH_INGREDIENTS_SELECT).eq('household_id', householdId).order('created_at', { ascending: true }).limit(200)
+            : supabase.from('recipes').select(RECIPE_WITH_INGREDIENTS_SELECT).order('created_at', { ascending: true }).limit(200),
           householdId
             ? supabase.from('plan_entries').select('*').eq('household_id', householdId)
                 .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
@@ -179,7 +179,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         }
         if (foodsRes.data) setFoods(foodsRes.data as unknown as Food[]);
         if (recipesRes.data) {
-          const dbRecipes = recipesRes.data.map(normalizeRecipeFromDB);
+          const dbRecipes = (recipesRes.data as unknown[]).map((r) => normalizeRecipeFromDB(r as Parameters<typeof normalizeRecipeFromDB>[0]));
           // Check for local recipes and migrate them
           const localData = localStorage.getItem(STORAGE_KEY);
           if (localData) {
@@ -207,8 +207,11 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
                   return dbPayload;
                 });
                 await supabase.from('recipes').insert(bulkPayload);
-                const { data: updatedRecipes } = await supabase.from('recipes').select('*').order('created_at', { ascending: true });
-                if (updatedRecipes) setRecipes(updatedRecipes.map(normalizeRecipeFromDB));
+                const { data: updatedRecipes } = await supabase
+                  .from('recipes')
+                  .select(RECIPE_WITH_INGREDIENTS_SELECT)
+                  .order('created_at', { ascending: true });
+                if (updatedRecipes) setRecipes((updatedRecipes as unknown[]).map((r) => normalizeRecipeFromDB(r as Parameters<typeof normalizeRecipeFromDB>[0])));
               } else {
                 setRecipes(dbRecipes);
               }

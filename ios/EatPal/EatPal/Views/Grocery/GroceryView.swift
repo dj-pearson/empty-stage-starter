@@ -517,11 +517,33 @@ struct GroceryView: View {
                     Spacer()
 
                     if !checkedItems.isEmpty {
-                        Button("Clear Done") {
-                            showingClearAlert = true
+                        // US-283: primary path is "Move to pantry" — credits
+                        // the bought items into the inventory and removes
+                        // them from the list. "Clear Done" stays as the
+                        // destructive escape hatch for items the user
+                        // doesn't actually want to stock.
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Button {
+                                Task { try? await appState.moveCheckedToPantry() }
+                            } label: {
+                                Label(
+                                    "Move \(checkedItems.count) to pantry",
+                                    systemImage: "arrow.right.square.fill"
+                                )
+                                .font(.subheadline.weight(.semibold))
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .accessibilityLabel(
+                                "Move \(checkedItems.count) completed item\(checkedItems.count == 1 ? "" : "s") to pantry"
+                            )
+
+                            Button("Clear Done") {
+                                showingClearAlert = true
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.red)
                         }
-                        .font(.subheadline)
-                        .foregroundStyle(.red)
                     }
                 }
                 .popoverTip(swipeTip)

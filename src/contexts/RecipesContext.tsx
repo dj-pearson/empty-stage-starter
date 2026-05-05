@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from "react";
-import { Recipe } from "@/types";
+import { Recipe, RecipeIngredient } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
@@ -8,8 +8,31 @@ import type { Database } from "@/integrations/supabase/types";
 
 type RecipeRow = Database['public']['Tables']['recipes']['Row'];
 
+/**
+ * Joined select string for `recipes` queries that need ingredient data.
+ * US-281: every recipe-fetch path uses this so `recipe.recipe_ingredients`
+ * is hydrated and downstream consumers (US-284 missing-ingredient prompt,
+ * grocery-from-recipe, scaling) don't need a follow-up round trip.
+ *
+ * String-typed because the generated `Database` types are stale on the
+ * `recipe_ingredients` table (lists `ingredient_name` etc. while the live
+ * schema uses `name`, `group_label`, `optional_notes`). Run
+ * `supabase gen types typescript --local > src/integrations/supabase/types.ts`
+ * after the next migration to sync them.
+ */
+export const RECIPE_WITH_INGREDIENTS_SELECT =
+  '*, recipe_ingredients(id, recipe_id, food_id, sort_order, name, quantity, unit, group_label, optional_notes, created_at)';
+
+/** Loose row shape with optionally joined ingredients. */
+type RecipeRowWithIngredients = RecipeRow & {
+  recipe_ingredients?: RecipeIngredient[] | null;
+};
+
 /** Map snake_case DB row to camelCase Recipe type */
-export function normalizeRecipeFromDB(r: RecipeRow): Recipe {
+export function normalizeRecipeFromDB(r: RecipeRow | RecipeRowWithIngredients): Recipe {
+  const ingredients = ((r as RecipeRowWithIngredients).recipe_ingredients ?? [])
+    .slice()
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   return {
     id: r.id,
     name: r.name,
@@ -36,6 +59,7 @@ export function normalizeRecipeFromDB(r: RecipeRow): Recipe {
     is_favorite: r.is_favorite ?? false,
     created_at: r.created_at ?? undefined,
     nutrition_info: r.nutrition_info ?? undefined,
+    recipe_ingredients: ingredients,
   };
 }
 
@@ -174,8 +198,11 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
 
   const refreshRecipes = useCallback(async () => {
     if (userId) {
-      const { data } = await supabase.from('recipes').select('*').order('created_at', { ascending: true });
-      if (data) setRecipes(data.map(normalizeRecipeFromDB));
+      const { data } = await supabase
+        .from('recipes')
+        .select(RECIPE_WITH_INGREDIENTS_SELECT)
+        .order('created_at', { ascending: true });
+      if (data) setRecipes((data as unknown[]).map((r) => normalizeRecipeFromDB(r as RecipeRowWithIngredients)));
     }
   }, [userId]);
 
