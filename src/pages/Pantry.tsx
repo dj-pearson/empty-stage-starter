@@ -403,18 +403,20 @@ export default function Pantry() {
     if (!open) setEditFood(null);
   }, []);
 
-  const handleLoadStarterList = () => {
-    let addedCount = 0;
-    starterFoods.forEach((starterFood) => {
-      const exists = foods.some(
-        (f) => f.name.toLowerCase() === starterFood.name.toLowerCase()
-      );
-      if (!exists) {
-        addFood(starterFood);
-        addedCount++;
-      }
-    });
-    toast("Starter List Loaded", { description: `${addedCount} foods added to your pantry!` });
+  const handleLoadStarterList = async () => {
+    const newFoods = starterFoods.filter(
+      (starterFood) =>
+        !foods.some((f) => f.name.toLowerCase() === starterFood.name.toLowerCase())
+    );
+    if (newFoods.length === 0) {
+      toast("Starter List Loaded", { description: "All starter foods are already in your pantry." });
+      return;
+    }
+    const added = await addFoods(newFoods);
+    if (added) {
+      toast("Starter List Loaded", { description: `${newFoods.length} foods added to your pantry!` });
+    }
+    // If blocked by plan limit, the upgrade modal handles the messaging.
   };
 
   const handleFoodIdentified = (foodData: any) => {
@@ -449,8 +451,11 @@ export default function Pantry() {
       return;
     }
     try {
-      await addFoods(newFoods);
-      toast.success("Foods Added", { description: `${newFoods.length} food${newFoods.length !== 1 ? "s" : ""} added to your pantry` });
+      const added = await addFoods(newFoods);
+      if (added) {
+        toast.success("Foods Added", { description: `${newFoods.length} food${newFoods.length !== 1 ? "s" : ""} added to your pantry` });
+      }
+      // If blocked by plan limit, the upgrade modal handles the messaging.
     } catch (error) {
       logger.error("Error bulk adding foods:", error);
       toast.error("Error", { description: "Failed to add foods. Please try again." });
