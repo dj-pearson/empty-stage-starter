@@ -7787,43 +7787,44 @@ export type Database = {
         ]
       }
       recipe_ingredients: {
+        // Hand-patched 2026-05-05 to match migration
+        // 20260430000001_create_recipe_ingredients.sql. Re-run
+        // `supabase gen types typescript --local` after the next
+        // schema change to regenerate.
         Row: {
-          created_at: string | null
+          created_at: string
           food_id: string | null
+          group_label: string | null
           id: string
-          ingredient_name: string
-          is_optional: boolean | null
-          preparation_notes: string | null
+          name: string
+          optional_notes: string | null
           quantity: number | null
-          recipe_id: string | null
-          section: string | null
-          sort_order: number | null
+          recipe_id: string
+          sort_order: number
           unit: string | null
         }
         Insert: {
-          created_at?: string | null
+          created_at?: string
           food_id?: string | null
+          group_label?: string | null
           id?: string
-          ingredient_name: string
-          is_optional?: boolean | null
-          preparation_notes?: string | null
+          name: string
+          optional_notes?: string | null
           quantity?: number | null
-          recipe_id?: string | null
-          section?: string | null
-          sort_order?: number | null
+          recipe_id: string
+          sort_order?: number
           unit?: string | null
         }
         Update: {
-          created_at?: string | null
+          created_at?: string
           food_id?: string | null
+          group_label?: string | null
           id?: string
-          ingredient_name?: string
-          is_optional?: boolean | null
-          preparation_notes?: string | null
+          name?: string
+          optional_notes?: string | null
           quantity?: number | null
-          recipe_id?: string | null
-          section?: string | null
-          sort_order?: number | null
+          recipe_id?: string
+          sort_order?: number
           unit?: string | null
         }
         Relationships: [

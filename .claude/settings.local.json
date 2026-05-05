@@ -68,7 +68,10 @@
       "Bash(sed -n '50,75p' C:/Users/pears/Documents/EatPal/empty-stage-starter/ios/EatPal/EatPal/Services/AICoachService.swift)",
       "Bash(sed -n '195,220p' C:/Users/pears/Documents/EatPal/empty-stage-starter/ios/EatPal/EatPal/Services/AIMealService.swift)",
       "Bash(sed -n '85,100p' C:/Users/pears/Documents/EatPal/empty-stage-starter/ios/EatPal/EatPal/Services/AuthService.swift)",
-      "Bash(echo \"---EXIT $?---\")"
+      "Bash(echo \"---EXIT $?---\")",
+      "Bash(supabase --version)",
+      "Bash(supabase status *)",
+      "Bash(echo \"---tsc EXIT $?---\")"
     ],
     "deny": [],
     "ask": []

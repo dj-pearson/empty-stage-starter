@@ -151,13 +151,6 @@ export interface RecipeIngredient {
   group_label?: string | null;
   optional_notes?: string | null;
   created_at?: string;
-  // Legacy field aliases — kept so orphan/scaling components compile
-  // while we migrate them. New code should read `name`, `group_label`,
-  // `optional_notes` instead.
-  ingredient_name?: string;
-  preparation_notes?: string | null;
-  is_optional?: boolean;
-  section?: string | null;
 }
 
 export interface RecipeCollection {
