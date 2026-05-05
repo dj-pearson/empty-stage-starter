@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 /// US-272: Quick Add — the single-screen, optimized-for-speed grocery add
@@ -40,6 +41,12 @@ struct QuickAddGrocerySheet: View {
 
     @State private var showingScanner = false
     @State private var showingPhotoImport = false
+    // US-273: Single-product vision identification — different from
+    // the list-OCR flow. Photo button uses a Menu so the user can
+    // choose "identify one product" vs "scan a list".
+    @State private var photoIdentifyPickerItem: PhotosPickerItem?
+    @State private var photoIdentifyError: String?
+    @State private var isIdentifying = false
     @State private var showingFullAislePicker = false
     @State private var isSaving = false
     @State private var addedThisSession = 0
@@ -111,6 +118,28 @@ struct QuickAddGrocerySheet: View {
                     }
                 }
             }
+            // US-273: Single-product photo capture. Uses the system camera
+            // picker — same UX as `ImageFoodCapture` for consistency.
+            .sheet(isPresented: $showingPhotoIdentify) {
+                ImagePicker(sourceType: .camera) { image in
+                    showingPhotoIdentify = false
+                    if let image {
+                        Task { await identifyAndApply(image: image) }
+                    }
+                }
+            }
+            .alert(
+                "Couldn't identify product",
+                isPresented: Binding(
+                    get: { photoIdentifyError != nil },
+                    set: { if !$0 { photoIdentifyError = nil } }
+                ),
+                presenting: photoIdentifyError
+            ) { _ in
+                Button("OK", role: .cancel) {}
+            } message: { msg in
+                Text(msg)
+            }
             .onAppear { nameFocused = true }
             .onChange(of: name) { _, newValue in
                 // Debounce: cancel any in-flight resolve and start a new one.
@@ -151,14 +180,29 @@ struct QuickAddGrocerySheet: View {
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
 
-                Button {
-                    showingPhotoImport = true
+                Menu {
+                    // US-273: photo picker triggers a single-product
+                    // identify flow. Wrapping the PhotosPicker in the
+                    // Menu would block the picker from presenting, so we
+                    // expose it as a separate PhotosPicker control below
+                    // the menu and route the menu's "Identify" button to
+                    // a sentinel state that pops the picker.
+                    PhotosPicker(selection: $photoIdentifyPickerItem, matching: .images) {
+                        Label("Identify one product", systemImage: "viewfinder.circle")
+                    }
+                    Button {
+                        showingPhotoImport = true
+                    } label: {
+                        Label("Scan a list", systemImage: "list.bullet.rectangle.portrait")
+                    }
                 } label: {
-                    Label("Photo", systemImage: "photo.on.rectangle.angled")
+                    Label(isIdentifying ? "Identifying…" : "Photo", systemImage: "photo.on.rectangle.angled")
                         .frame(maxWidth: .infinity)
                 }
+                .menuStyle(.borderlessButton)
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
+                .disabled(isIdentifying)
             }
             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
         } header: {
