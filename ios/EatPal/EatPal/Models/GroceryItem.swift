@@ -109,6 +109,10 @@ struct GroceryList: Identifiable, Codable, Equatable {
     var icon: String?
     var color: String?
     var storeName: String?
+    /// US-275: Optional FK into `store_layouts`. When set, the
+    /// shopping/grocery views sort by that chain's aisle walk order
+    /// instead of `GroceryAisle.storeWalkOrder`.
+    var storeLayoutId: String?
     var isDefault: Bool?
     var isArchived: Bool?
     var createdAt: String?
@@ -120,6 +124,7 @@ struct GroceryList: Identifiable, Codable, Equatable {
         case householdId = "household_id"
         case name, description, icon, color
         case storeName = "store_name"
+        case storeLayoutId = "store_layout_id"
         case isDefault = "is_default"
         case isArchived = "is_archived"
         case createdAt = "created_at"

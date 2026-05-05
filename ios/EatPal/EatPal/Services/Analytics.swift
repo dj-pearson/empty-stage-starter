@@ -145,6 +145,25 @@ enum AnalyticsEvent {
     case groceryItemAdded(via: EntrySource)
     case groceryItemChecked(method: CheckMethod)
     case groceryItemDeleted
+    /// US-272: which tier of the smart-add resolver served the pre-fill.
+    case quickAddResolveSource(source: String)
+    /// US-273: a single-product photo identification fired with this
+    /// 0-1 confidence. Used to tune the model + UI threshold.
+    case productPhotoIdentified(confidence: Double)
+    /// US-274: a household member toggled preference sharing on/off.
+    case householdPreferenceSyncToggled(enabled: Bool)
+    /// US-275: a user picked a store layout for a grocery list.
+    case storeLayoutSelected(slug: String)
+    /// US-276: a "Suggested for you" restock chip was tapped.
+    case restockSuggestionTapped(daysUntilDue: Int)
+    /// US-280: a pantry-expiring "Suggested for you" chip was tapped.
+    case expiringRestockTapped(daysUntilExpiry: Int)
+    /// US-278: voice quick-add inside QuickAddGrocerySheet was used.
+    case quickAddVoiceUsed
+    /// US-277: AR shelf-finder was opened from the grocery toolbar.
+    case arShelfFinderOpened
+    /// US-277: a chip in the AR shelf-finder was tapped (action: "check" / "add").
+    case arShelfChipTapped(action: String)
     case groceryListCleared(checkedCount: Int)
     case groceryGeneratedFromPlan(itemCount: Int)
 
@@ -191,6 +210,15 @@ enum AnalyticsEvent {
         case .groceryItemDeleted:       return "grocery_item_deleted"
         case .groceryListCleared:       return "grocery_list_cleared"
         case .groceryGeneratedFromPlan: return "grocery_generated_from_plan"
+        case .quickAddResolveSource:    return "quick_add_resolve_source"
+        case .productPhotoIdentified:   return "product_photo_identified"
+        case .householdPreferenceSyncToggled: return "household_preference_sync_toggled"
+        case .storeLayoutSelected:      return "store_layout_selected"
+        case .restockSuggestionTapped:  return "restock_suggestion_tapped"
+        case .expiringRestockTapped:    return "expiring_restock_tapped"
+        case .quickAddVoiceUsed:        return "quick_add_voice_used"
+        case .arShelfFinderOpened:      return "ar_shelf_finder_opened"
+        case .arShelfChipTapped:        return "ar_shelf_chip_tapped"
         case .aiPlanGenerated:          return "ai_plan_generated"
         case .aiCoachMessageSent:       return "ai_coach_message_sent"
         case .quizStarted:              return "quiz_started"
@@ -224,7 +252,11 @@ enum AnalyticsEvent {
              .healthImportRequested, .starterTemplateApplied,
              .groceryGeneratedFromPlan,
              .cookableMatchOpened, .cookableRecipeAddedToPlan,
-             .cookableMissingAddedToGrocery:
+             .cookableMissingAddedToGrocery,
+             .quickAddResolveSource, .productPhotoIdentified,
+             .householdPreferenceSyncToggled, .storeLayoutSelected,
+             .restockSuggestionTapped, .expiringRestockTapped,
+             .quickAddVoiceUsed, .arShelfFinderOpened, .arShelfChipTapped:
             return "feature"
         case .paywallShown, .purchaseCompleted:
             return "monetization"
@@ -296,6 +328,24 @@ enum AnalyticsEvent {
             return ["product_id": productId]
         case .signInStarted(let method), .signInCompleted(let method):
             return ["method": method]
+        case .quickAddResolveSource(let source):
+            return ["source": source]
+        case .productPhotoIdentified(let confidence):
+            // Round to 2 decimals so the dashboard groups "0.86" with
+            // "0.857" — keeps the histogram useful.
+            return ["confidence": String(format: "%.2f", confidence)]
+        case .householdPreferenceSyncToggled(let enabled):
+            return ["enabled": enabled ? "true" : "false"]
+        case .storeLayoutSelected(let slug):
+            return ["slug": slug]
+        case .restockSuggestionTapped(let days):
+            return ["days_until_due": String(days)]
+        case .expiringRestockTapped(let days):
+            return ["days_until_expiry": String(days)]
+        case .arShelfChipTapped(let action):
+            return ["action": action]
+        case .quickAddVoiceUsed, .arShelfFinderOpened:
+            return [:]
         }
     }
 }

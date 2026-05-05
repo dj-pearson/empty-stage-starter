@@ -22,6 +22,13 @@ struct HouseholdSettingsView: View {
     @State private var memberToRemove: HouseholdMember?
     @State private var inviteToRevoke: HouseholdInviteCode?
 
+    /// US-274: Household-shared smart-add preferences. Off by default so
+    /// existing users see no behavior change; turning it on routes
+    /// future preference writes to the household-scoped row that all
+    /// members read from.
+    @AppStorage(SmartProductService.householdShareEnabledKey)
+    private var householdShareEnabled: Bool = false
+
     var body: some View {
         Form {
             if isLoading && household == nil {
@@ -43,6 +50,7 @@ struct HouseholdSettingsView: View {
             if let household {
                 householdSection(household)
                 membersSection
+                smartAddSharingSection
                 invitesSection
             }
 
@@ -112,6 +120,33 @@ struct HouseholdSettingsView: View {
             }
         } header: {
             Text("Family")
+        }
+    }
+
+    /// US-274: opt-in toggle for household-shared product preferences.
+    /// When on, the smart-add resolver checks the household tier before
+    /// the user-only tier and writes future preferences as household-
+    /// scoped rows visible to every member.
+    private var smartAddSharingSection: some View {
+        Section {
+            Toggle(isOn: $householdShareEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Share smart-add preferences")
+                        .font(.body)
+                    Text("Aisle, brand, and unit choices apply for everyone in the household.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .onChange(of: householdShareEnabled) { _, enabled in
+                AnalyticsService.track(.householdPreferenceSyncToggled(enabled: enabled))
+                HapticManager.selection()
+            }
+        } header: {
+            Text("Smart Add")
+        } footer: {
+            Text("Future picks go into the shared layer when on. Existing per-user preferences keep working until you replace them.")
+                .font(.caption2)
         }
     }
 

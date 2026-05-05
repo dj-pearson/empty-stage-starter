@@ -245,6 +245,16 @@ final class AppState: ObservableObject {
             // US-143: drain any recipes the share extension saved while the
             // user was signed out or the app was backgrounded.
             await drainPendingRecipeImports()
+
+            // US-274: cache the household id on SmartProductService so
+            // the resolver can include the household tier without an
+            // extra round trip per add. Failure is non-fatal — the
+            // resolver simply stays in single-user mode.
+            Task {
+                if let h = try? await HouseholdService.currentHousehold() {
+                    SmartProductService.shared.setHouseholdContext(householdId: h.id)
+                }
+            }
         } catch {
             // Single AppError mapping powers both the inline `errorMessage`
             // banner and the global toast so they stay in sync.
@@ -754,6 +764,10 @@ final class AppState: ObservableObject {
             // Map the GroceryItem.addedVia string back to the typed enum so
             // the analytics event keeps the same vocabulary across web/iOS.
             AnalyticsService.track(.groceryItemAdded(via: Self.entrySource(item.addedVia)))
+            // US-272: Learn from this add. Fire-and-forget — preference
+            // upserts must never block the parent save or trigger an
+            // error toast on the user.
+            Task.detached { await SmartProductService.shared.recordAdd(item: item) }
         } catch {
             if isNetworkError(error) {
                 // US-150: keep the optimistic update and queue for later replay.
@@ -776,12 +790,36 @@ final class AppState: ObservableObject {
         do {
             try await dataService.updateGroceryItem(id, updates: updates)
             HapticManager.lightImpact()
+            // US-272: A user-initiated edit is the strongest signal we
+            // get — propagate the new aisle/category/unit/etc. into the
+            // user_product_preferences row so the next add reflects it.
+            // Skip pure check-state toggles (those don't change product
+            // attributes and would just churn the preference row).
+            if Self.isProductAttributeUpdate(updates) {
+                let updatedItem = groceryItems[index]
+                Task.detached { await SmartProductService.shared.recordEdit(item: updatedItem) }
+            }
         } catch {
             groceryItems[index] = original
             toast.show(error, as: { .save(entity: "grocery item", underlying: $0) })
             HapticManager.error()
             throw error
         }
+    }
+
+    /// US-272: Returns true when a GroceryItemUpdate touches at least one
+    /// field that informs the user's product preference (aisle, category,
+    /// quantity, unit, notes). A `checked: true` toggle alone returns
+    /// false so we don't churn the preference row on every shopping tap.
+    private static func isProductAttributeUpdate(_ updates: GroceryItemUpdate) -> Bool {
+        updates.name != nil
+            || updates.category != nil
+            || updates.aisleSection != nil
+            || updates.aisle != nil
+            || updates.unit != nil
+            || updates.quantity != nil
+            || updates.notes != nil
+            || updates.priority != nil
     }
 
     func deleteGroceryItem(_ id: String) async throws {
