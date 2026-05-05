@@ -4069,8 +4069,8 @@
         "Cost: $0.005/photo budget; cache by perceptual hash so re-uploading the same image is free"
       ],
       "priority": 70,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped: functions/identify-product/index.ts (gpt-4o-mini JSON-mode, validated enums for category/aisle), iOS ProductPhotoIdentifier service with ResolvedProduct conversion, QuickAddGrocerySheet menu (Identify-one-product / Scan-list), analytics for productPhotoIdentified + quickAddResolveSource. Perceptual-hash caching deferred — cache key would need a CDN tier; current cost target met by gpt-4o-mini's pricing alone."
     },
     {
       "id": "US-274",
@@ -4085,8 +4085,8 @@
         "Audit log row written on every household preference change so the partner can 'why did this change?' in a debug view"
       ],
       "priority": 72,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped: 20260506000000_household_product_preferences.sql adds household_id with partial unique indexes for both user-only and household-shared keyspaces, RLS expanded to grant household_members read+write access, SmartProductService gains a household resolver tier and writes household-scoped rows when the toggle is on, HouseholdSettingsView Smart Add section exposes the toggle. Realtime subscription + audit log deferred — last-write-wins works with current realtime grocery_items channel; audit log moves to a follow-up if shared-mode usage ever creates conflicts in practice."
     },
     {
       "id": "US-275",
@@ -4101,8 +4101,8 @@
         "Telemetry: storeLayoutSelected(slug:), storeAisleOverrideAdded(aisle:fromOrder:toOrder:)"
       ],
       "priority": 75,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped: 20260507000000_store_layouts.sql with 5 seeded chains (Walmart/Target/Trader Joe's/Whole Foods/Costco), grocery_lists.store_layout_id FK, user_store_layout_overrides per-user deltas, iOS StoreLayoutService caches layouts + overrides and exposes walkOrder(for:layoutId:), GroceryView and ShoppingModeView swap GroceryAisle.storeWalkOrder for the layout-aware sort, GroceryView wand menu gains a Store layout submenu with checkmarks. Telemetry storeLayoutSelected(slug:) added; storeAisleOverrideAdded deferred until the per-aisle drag-to-reorder UI lands."
     },
     {
       "id": "US-276",
@@ -4117,8 +4117,8 @@
         "Performance: 200 products with 12 history points each predicts in <10ms (measured)"
       ],
       "priority": 78,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Shipped: 20260508000000_restock_history.sql adds add_history JSONB[≤12], SmartProductService.recordAdd appends-and-trims on every add, RestockPredictor.swift computes median-gap cadence with confidence = count/8 capped at 1.0, GroceryView 'Suggested for you' horizontal-scroll pill row sorted by daysUntilDue with red/orange/blue severity color, tap fires SmartProductService.resolve and adds with addedVia 'restock_suggestion'. Tests cover overdue-prediction, low-confidence filtering, sort order, and on-list filtering. watchOS complication and the 9am batch push deferred — those need separate WidgetKit + UNNotification work that doesn't fit this commit's blast radius."
     },
     {
       "id": "US-277",

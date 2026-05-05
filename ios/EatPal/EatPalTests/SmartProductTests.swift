@@ -144,6 +144,100 @@ final class SmartProductTests: XCTestCase {
         XCTAssertEqual(entry.timesAdded, 5)
     }
 
+    // MARK: - US-276 RestockPredictor
+
+    /// Helper to build a preference row with a synthetic add history.
+    private func pref(name: String, daysAgo: [Int], aisle: String? = "produce") -> UserProductPreference {
+        let formatter = ISO8601DateFormatter()
+        let now = Date()
+        let history = daysAgo
+            .sorted(by: >)  // oldest first after .reversed below
+            .reversed()
+            .map { formatter.string(from: now.addingTimeInterval(-Double($0) * 86_400)) }
+        return UserProductPreference(
+            id: UUID().uuidString,
+            userId: "u",
+            householdId: nil,
+            catalogId: nil,
+            name: name,
+            nameNormalized: name.lowercased(),
+            barcode: nil,
+            preferredAisleSection: aisle,
+            preferredCategory: "vegetable",
+            preferredUnit: "count",
+            preferredQuantity: 1,
+            preferredBrand: nil,
+            notes: nil,
+            timesAdded: daysAgo.count,
+            lastAddedAt: nil,
+            addHistory: Array(history),
+            createdAt: nil,
+            updatedAt: nil
+        )
+    }
+
+    func testRestockPredictsOverdue() {
+        // Bought every ~7 days; most recent add was 14d ago, so 7d overdue.
+        let p = pref(name: "Milk", daysAgo: [49, 42, 35, 28, 21, 14])
+        let suggestions = RestockPredictor.suggestions(from: [p])
+        XCTAssertEqual(suggestions.count, 1)
+        let s = suggestions[0]
+        XCTAssertEqual(s.cadenceDays, 7)
+        XCTAssertLessThan(s.daysUntilDue, 0, "overdue should be negative")
+    }
+
+    func testRestockHidesLowConfidence() {
+        // Only two adds → confidence 2/8 = 0.25, below default floor 0.5.
+        let p = pref(name: "Bread", daysAgo: [10, 3])
+        XCTAssertTrue(RestockPredictor.suggestions(from: [p]).isEmpty)
+    }
+
+    func testRestockSortsMostOverdueFirst() {
+        let overdue = pref(name: "Apples", daysAgo: [40, 35, 30, 25, 20, 15, 10, 5])
+        // Cadence ~5d, last 5d ago → due now-ish.
+        let dueSoon = pref(name: "Bananas", daysAgo: [49, 42, 35, 28, 21, 14, 7, 1])
+        let result = RestockPredictor.suggestions(from: [dueSoon, overdue])
+        // Apples last add was 5d ago with 5d cadence = due now (0).
+        // Bananas last add was 1d ago with 7d cadence = due in 6.
+        // So Apples should sort first.
+        XCTAssertEqual(result.first?.name, "Apples")
+        XCTAssertEqual(result.last?.name, "Bananas")
+    }
+
+    func testRestockFilterRemovesItemsAlreadyOnList() {
+        let p = pref(name: "Milk", daysAgo: [49, 42, 35, 28, 21, 14])
+        let raw = RestockPredictor.suggestions(from: [p])
+        XCTAssertEqual(raw.count, 1)
+
+        let onList = GroceryItem(
+            id: "1", userId: "u", name: "milk", category: "dairy",
+            quantity: 1, unit: "gal", checked: false
+        )
+        let filtered = RestockPredictor.filterNotInList(suggestions: raw, groceryItems: [onList])
+        XCTAssertTrue(filtered.isEmpty, "case-insensitive match should remove the suggestion")
+    }
+
+    // MARK: - US-275 StoreLayout fallback
+
+    func testStoreLayoutDecodes() throws {
+        let json = """
+        {
+          "id": "00000000-0000-0000-0000-000000000099",
+          "name": "Trader Joe's",
+          "slug": "trader_joes",
+          "banner_image_url": null,
+          "aisle_overrides": {"produce": 200, "meat_deli": 220},
+          "created_at": "2026-05-07T00:00:00Z",
+          "updated_at": "2026-05-07T00:00:00Z"
+        }
+        """.data(using: .utf8)!
+        let layout = try JSONDecoder().decode(StoreLayout.self, from: json)
+        XCTAssertEqual(layout.slug, "trader_joes")
+        XCTAssertEqual(layout.aisleOverrides["produce"], 200)
+    }
+
+    // MARK: - Existing US-272 tests below
+
     func testUserPreferenceDecodes() throws {
         let json = """
         {

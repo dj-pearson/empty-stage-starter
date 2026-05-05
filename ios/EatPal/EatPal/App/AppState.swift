@@ -245,6 +245,16 @@ final class AppState: ObservableObject {
             // US-143: drain any recipes the share extension saved while the
             // user was signed out or the app was backgrounded.
             await drainPendingRecipeImports()
+
+            // US-274: cache the household id on SmartProductService so
+            // the resolver can include the household tier without an
+            // extra round trip per add. Failure is non-fatal — the
+            // resolver simply stays in single-user mode.
+            Task {
+                if let h = try? await HouseholdService.currentHousehold() {
+                    SmartProductService.shared.setHouseholdContext(householdId: h.id)
+                }
+            }
         } catch {
             // Single AppError mapping powers both the inline `errorMessage`
             // banner and the global toast so they stay in sync.

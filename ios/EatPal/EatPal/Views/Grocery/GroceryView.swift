@@ -24,6 +24,9 @@ enum GroceryViewMode: String, CaseIterable {
 
 struct GroceryView: View {
     @EnvironmentObject var appState: AppState
+    /// US-275: cached store layouts for the active grocery list. Drives
+    /// per-chain walk order in the by-aisle grouping below.
+    @ObservedObject private var storeLayouts = StoreLayoutService.shared
     @State private var searchText = ""
     @State private var showingAddItem = false
     // US-272: Quick Add sheet — the smart-prefill flow that beats the
@@ -53,6 +56,11 @@ struct GroceryView: View {
 
     // US-270: cookable-recipes empty-state CTA.
     @State private var showingCookable = false
+
+    /// US-276: Restock suggestions computed off the user's preference
+    /// add_history. Refreshed on appear and after every grocery edit so
+    /// items dropped onto the list disappear from "Suggested for you".
+    @State private var restockSuggestions: [RestockPredictor.Suggestion] = []
 
     /// US-264: persisted view-mode preference. Defaults to .byAisle so
     /// existing users see no behavior change until they opt in.
@@ -88,12 +96,20 @@ struct GroceryView: View {
         return grouped.sorted { sortKey($0.key) < sortKey($1.key) }
     }
 
-    /// Aisle keys sort by store walk order; legacy category keys sort
+    /// US-275: pinned store layout (if any) for the user's default
+    /// grocery list. nil means the universal walk order is used.
+    private var activeStoreLayoutId: String? {
+        appState.groceryLists.first { $0.isDefault == true }?.storeLayoutId
+    }
+
+    /// Aisle keys sort by store walk order (per-chain when the active
+    /// list pins a `store_layout_id`); legacy category keys sort
     /// alphabetically and always come after aisles so a half-migrated
     /// list reads cleanly.
     private func sortKey(_ key: String) -> (Int, String) {
         if let aisle = aisle(from: key) {
-            return (aisle.storeWalkOrder, aisle.displayName)
+            let order = storeLayouts.walkOrder(for: aisle, layoutId: activeStoreLayoutId)
+            return (order, aisle.displayName)
         }
         return (10_000, key)
     }
@@ -294,6 +310,70 @@ struct GroceryView: View {
             }
     }
 
+    /// US-276: "Suggested for you" pill row. Empty-state safe — returns
+    /// an EmptyView when the predictor has nothing useful, so the
+    /// section header doesn't render.
+    @ViewBuilder
+    private var restockSuggestionsSection: some View {
+        let due = restockSuggestions.prefix(8)
+        if !due.isEmpty {
+            Section {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(due), id: \.id) { suggestion in
+                            Button {
+                                Task { await addFromSuggestion(suggestion) }
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 4) {
+                                        Text(suggestion.category?.icon ?? "🛒")
+                                        Text(suggestion.name)
+                                            .font(.callout)
+                                            .fontWeight(.semibold)
+                                            .lineLimit(1)
+                                    }
+                                    Text(restockSubtitle(for: suggestion))
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(restockColor(for: suggestion).opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(restockColor(for: suggestion).opacity(0.4), lineWidth: 0.5)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Restock \(suggestion.name)")
+                            .accessibilityHint(restockSubtitle(for: suggestion))
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+            } header: {
+                Label("Suggested for you", systemImage: "sparkles")
+                    .textCase(nil)
+            }
+        }
+    }
+
+    private func restockSubtitle(for s: RestockPredictor.Suggestion) -> String {
+        if s.daysUntilDue <= 0 {
+            return s.daysUntilDue == 0
+                ? "Due today · usually every \(s.cadenceDays)d"
+                : "\(-s.daysUntilDue)d overdue · usually every \(s.cadenceDays)d"
+        }
+        return "Due in \(s.daysUntilDue)d · usually every \(s.cadenceDays)d"
+    }
+
+    private func restockColor(for s: RestockPredictor.Suggestion) -> Color {
+        if s.daysUntilDue <= 0 { return .red }
+        if s.daysUntilDue <= 2 { return .orange }
+        return .blue
+    }
+
     @ViewBuilder
     private var byAisleSections: some View {
         ForEach(groupedUncheckedItems, id: \.0) { category, items in
@@ -393,6 +473,12 @@ struct GroceryView: View {
                 }
                 .popoverTip(swipeTip)
             }
+
+            // US-276: Suggested for you (restock predictions). Tappable
+            // chips that drop the item onto the grocery list with the
+            // user's saved preferences. Hidden when empty so we don't
+            // leave a header floating over nothing.
+            restockSuggestionsSection
 
             // Unchecked Items by Category
             if appState.isLoading && appState.groceryItems.isEmpty {
@@ -626,6 +712,35 @@ struct GroceryView: View {
 
                         Divider()
 
+                        // US-275: store layout picker. Tapping "Universal"
+                        // clears the pin; tapping a chain pins the
+                        // default grocery list to that walk order so the
+                        // by-aisle grouping (and ShoppingMode) reorder.
+                        Menu {
+                            Button {
+                                Task { await setStoreLayout(nil) }
+                            } label: {
+                                Label("Universal walk order", systemImage: "globe")
+                                if activeStoreLayoutId == nil {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                            ForEach(storeLayouts.layouts) { layout in
+                                Button {
+                                    Task { await setStoreLayout(layout) }
+                                } label: {
+                                    Label(layout.name, systemImage: "cart")
+                                    if layout.id == activeStoreLayoutId {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        } label: {
+                            Label("Store layout", systemImage: "map")
+                        }
+
+                        Divider()
+
                         // US-269: enter bulk-select mode.
                         Button {
                             HapticManager.lightImpact()
@@ -807,6 +922,14 @@ struct GroceryView: View {
         }
         .refreshable {
             await appState.loadAllData()
+            await storeLayouts.reload()
+        }
+        // US-275: warm the store layout cache once when the user opens
+        // the grocery tab — `ensureLoaded` is idempotent.
+        // US-276: prime the restock predictor at the same time.
+        .task {
+            await storeLayouts.ensureLoaded()
+            await refreshRestockSuggestions()
         }
     }
 
@@ -845,6 +968,82 @@ struct GroceryView: View {
             try await appState.bulkDeleteGroceryItems(selectedIds)
             exitSelectMode()
         } catch { }
+    }
+
+    /// US-276: drop a restock-suggestion onto the grocery list using
+    /// the user's saved preferences (aisle, category, unit). Reuses
+    /// SmartProductService.resolve so household defaults still win
+    /// when sharing is on.
+    private func addFromSuggestion(_ suggestion: RestockPredictor.Suggestion) async {
+        let resolved = await SmartProductService.shared.resolve(name: suggestion.name)
+        let item = GroceryItem(
+            id: UUID().uuidString,
+            userId: "",
+            name: resolved.name.isEmpty ? suggestion.name : resolved.name,
+            category: resolved.category.rawValue,
+            quantity: resolved.quantity,
+            unit: resolved.unit,
+            checked: false,
+            brandPreference: resolved.brand,
+            priority: "medium",
+            addedVia: "restock_suggestion",
+            aisleSection: resolved.aisleSection.rawValue
+        )
+        do {
+            try await appState.addGroceryItem(item)
+            HapticManager.success()
+            AnalyticsService.track(.restockSuggestionTapped(daysUntilDue: suggestion.daysUntilDue))
+            await refreshRestockSuggestions()
+        } catch {
+            // AppState surfaces a toast already.
+        }
+    }
+
+    /// US-276: re-runs the predictor against the current preferences +
+    /// grocery list. Cheap (≤200 products × 12 timestamps), so we call
+    /// it on appear and after every successful add.
+    private func refreshRestockSuggestions() async {
+        let prefs = await SmartProductService.shared.fetchAllPreferences()
+        let raw = RestockPredictor.suggestions(from: prefs)
+        restockSuggestions = RestockPredictor.filterNotInList(
+            suggestions: raw,
+            groceryItems: appState.groceryItems
+        )
+    }
+
+    /// US-275: pin the active grocery list to a store layout (or
+    /// universal walk order when `layout` is nil). Updates the row in
+    /// `grocery_lists` and refreshes the local cache so the by-aisle
+    /// grouping reorders without a manual pull-to-refresh.
+    private func setStoreLayout(_ layout: StoreLayout?) async {
+        guard let listId = appState.groceryLists.first(where: { $0.isDefault == true })?.id else {
+            ToastManager.shared.info(
+                "No default list",
+                message: "Create a grocery list before pinning a store."
+            )
+            return
+        }
+        struct Patch: Encodable { let store_layout_id: String? }
+        do {
+            try await SupabaseManager.client
+                .from("grocery_lists")
+                .update(Patch(store_layout_id: layout?.id))
+                .eq("id", value: listId)
+                .execute()
+            // Optimistic local update so the section sort flips immediately.
+            if let idx = appState.groceryLists.firstIndex(where: { $0.id == listId }) {
+                appState.groceryLists[idx].storeLayoutId = layout?.id
+            }
+            HapticManager.success()
+            AnalyticsService.track(.storeLayoutSelected(slug: layout?.slug ?? "universal"))
+            ToastManager.shared.success(
+                "Store updated",
+                message: layout?.name ?? "Universal walk order"
+            )
+        } catch {
+            ToastManager.shared.show(error, as: { .save(entity: "store layout", underlying: $0) })
+            HapticManager.error()
+        }
     }
 
     private func generateFromWeekPlan() async {

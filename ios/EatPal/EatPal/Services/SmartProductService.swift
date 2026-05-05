@@ -28,13 +28,43 @@ final class SmartProductService {
 
     private let client = SupabaseManager.client
 
+    /// US-274: UserDefaults key for the household preference-sharing
+    /// toggle. Off by default so existing users see no behavior change.
+    static let householdShareEnabledKey = "smartProduct.householdShareEnabled"
+
+    /// US-274: Cached household id for the signed-in user. Populated by
+    /// `setHouseholdContext` after Settings reads it; read on every
+    /// resolve/upsert so we don't pay an `ensure_user_household` round
+    /// trip per call.
+    private var cachedHouseholdId: String?
+
     private init() {}
+
+    // MARK: - US-274 household context
+
+    /// Pushes the current household id into the service. Called once on
+    /// app launch (and after household membership changes) so the
+    /// resolver/upsert path can include the household tier without
+    /// touching the network.
+    func setHouseholdContext(householdId: String?) {
+        cachedHouseholdId = householdId
+    }
+
+    /// Whether the user has opted into household-shared preferences.
+    /// Read fresh on every resolve so flipping the toggle takes effect
+    /// without restarting the app.
+    private var householdShareEnabled: Bool {
+        UserDefaults.standard.bool(forKey: Self.householdShareEnabledKey)
+    }
 
     // MARK: - Resolve (tiered lookup)
 
-    /// Walks the lookup tiers in order (user → catalog → barcode → keyword)
-    /// and returns the first hit. Always returns a value — the keyword
-    /// classifier is the floor.
+    /// Walks the lookup tiers in order. With US-274 household sharing
+    /// enabled the walk becomes:
+    ///   household → user → catalog → barcode → keyword
+    /// Without sharing it stays:
+    ///   user → catalog → barcode → keyword
+    /// Always returns a value — the keyword classifier is the floor.
     ///
     /// - Parameters:
     ///   - name: Free-text item name. Required for keyword fallback;
@@ -45,6 +75,19 @@ final class SmartProductService {
         let trimmedName = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let normalized = ProductNameNormalizer.normalize(trimmedName)
         let userId = (try? await currentUserId()) ?? ""
+        let householdId: String? = householdShareEnabled ? cachedHouseholdId : nil
+
+        // Tier 0 — household-shared preference (US-274).
+        if let householdId, !householdId.isEmpty {
+            if let barcode, !barcode.isEmpty,
+               let pref = try? await fetchHouseholdPreference(householdId: householdId, barcode: barcode) {
+                return apply(preference: pref, fallbackName: trimmedName)
+            }
+            if !normalized.isEmpty,
+               let pref = try? await fetchHouseholdPreference(householdId: householdId, nameNormalized: normalized) {
+                return apply(preference: pref, fallbackName: trimmedName)
+            }
+        }
 
         // Tier 1 — user preference.
         if !userId.isEmpty {
@@ -158,6 +201,70 @@ final class SmartProductService {
             .select()
             .eq("user_id", value: userId)
             .eq("name_normalized", value: nameNormalized)
+            .is("household_id", value: nil)
+            .limit(1)
+            .execute()
+            .value
+        return rows.first
+    }
+
+    /// US-276: Fetches every preference row for the signed-in user (and
+    /// their household, if shared mode is on). Used by the
+    /// RestockPredictor to compute cadence + due-soon suggestions.
+    /// Returns an empty array on auth/network failure.
+    func fetchAllPreferences() async -> [UserProductPreference] {
+        do {
+            let userId = try await currentUserId()
+            // OR (user_id, household_id) — Supabase swift's filter chain
+            // doesn't ship an `or` helper at the version we use, so two
+            // queries + dedupe by id is the cheapest path.
+            async let mine: [UserProductPreference] = (try? await client
+                .from("user_product_preferences")
+                .select()
+                .eq("user_id", value: userId)
+                .execute()
+                .value) ?? []
+            async let household: [UserProductPreference] = await {
+                guard householdShareEnabled, let hid = cachedHouseholdId else { return [] }
+                return (try? await client
+                    .from("user_product_preferences")
+                    .select()
+                    .eq("household_id", value: hid)
+                    .execute()
+                    .value) ?? []
+            }()
+            let (a, b) = await (mine, household)
+            // Dedupe by id; household rows are owned by some user_id so
+            // they may show up in `mine` too.
+            var byId: [String: UserProductPreference] = [:]
+            for row in a + b { byId[row.id] = row }
+            return Array(byId.values)
+        } catch {
+            return []
+        }
+    }
+
+    /// US-274: Reads a household-shared preference row. The partial
+    /// unique index `(household_id, name_normalized) WHERE household_id
+    /// IS NOT NULL` guarantees at most one match.
+    private func fetchHouseholdPreference(householdId: String, barcode: String) async throws -> UserProductPreference? {
+        let rows: [UserProductPreference] = try await client
+            .from("user_product_preferences")
+            .select()
+            .eq("household_id", value: householdId)
+            .eq("barcode", value: barcode)
+            .limit(1)
+            .execute()
+            .value
+        return rows.first
+    }
+
+    private func fetchHouseholdPreference(householdId: String, nameNormalized: String) async throws -> UserProductPreference? {
+        let rows: [UserProductPreference] = try await client
+            .from("user_product_preferences")
+            .select()
+            .eq("household_id", value: householdId)
+            .eq("name_normalized", value: nameNormalized)
             .limit(1)
             .execute()
             .value
@@ -205,6 +312,8 @@ final class SmartProductService {
     private struct PreferenceUpsert: Encodable {
         let id: String
         let user_id: String
+        /// US-274: nil for user-only rows, a household uuid for shared rows.
+        let household_id: String?
         let catalog_id: String?
         let name: String
         let name_normalized: String
@@ -217,7 +326,14 @@ final class SmartProductService {
         let notes: String?
         let times_added: Int
         let last_added_at: String
+        /// US-276: capped to 12 entries on the client before upsert.
+        let add_history: [String]
     }
+
+    /// US-276: cap on `add_history` length. Keeps the JSONB column tiny
+    /// while still giving the cadence predictor enough datapoints to
+    /// drop the worst outliers (we use the median of gaps).
+    private static let addHistoryCap = 12
 
     /// Returns the catalog row id (existing or freshly created), or nil
     /// when the upsert hit a network/RLS error. Failures are swallowed —
@@ -256,13 +372,38 @@ final class SmartProductService {
         item: GroceryItem,
         normalized: String
     ) async {
+        // US-274: route writes to the household-scoped row when sharing
+        // is enabled and we have a cached household. Conflict target +
+        // existing-row lookup must match — household path uses
+        // (household_id, name_normalized) and ignores any older user-
+        // only row for the same product (those continue to exist until
+        // manually consolidated).
+        let writeToHousehold = householdShareEnabled && cachedHouseholdId != nil
+        let householdId = writeToHousehold ? cachedHouseholdId : nil
+        let conflictTarget = writeToHousehold
+            ? "household_id,name_normalized"
+            : "user_id,name_normalized"
+
         do {
             // Read existing so we can carry forward the times_added
             // counter without an extra round trip.
-            let existing = try? await fetchUserPreference(userId: userId, nameNormalized: normalized)
+            let existing: UserProductPreference? = await {
+                if let householdId {
+                    return try? await fetchHouseholdPreference(householdId: householdId, nameNormalized: normalized)
+                }
+                return try? await fetchUserPreference(userId: userId, nameNormalized: normalized)
+            }()
+            // US-276: append "now" to history and trim to the cap.
+            // Newer entries are at the end (chronological) so the
+            // predictor reads the array as `let last = .last`.
+            let nowISO = ISO8601DateFormatter().string(from: Date())
+            let priorHistory = existing?.addHistory ?? []
+            let history = Array((priorHistory + [nowISO]).suffix(Self.addHistoryCap))
+
             let row = PreferenceUpsert(
                 id: existing?.id ?? UUID().uuidString,
                 user_id: userId,
+                household_id: householdId,
                 catalog_id: catalogId ?? existing?.catalogId,
                 name: item.name,
                 name_normalized: normalized,
@@ -274,11 +415,12 @@ final class SmartProductService {
                 preferred_brand: item.brandPreference ?? existing?.preferredBrand,
                 notes: item.notes ?? existing?.notes,
                 times_added: (existing?.timesAdded ?? 0) + 1,
-                last_added_at: ISO8601DateFormatter().string(from: Date())
+                last_added_at: nowISO,
+                add_history: history
             )
             try await client
                 .from("user_product_preferences")
-                .upsert(row, onConflict: "user_id,name_normalized")
+                .upsert(row, onConflict: conflictTarget)
                 .execute()
         } catch {
             // Best-effort: don't surface to the user.

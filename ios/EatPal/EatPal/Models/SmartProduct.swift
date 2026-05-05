@@ -44,6 +44,9 @@ struct ProductCatalogEntry: Codable, Identifiable, Equatable, Hashable {
 struct UserProductPreference: Codable, Identifiable, Equatable, Hashable {
     let id: String
     var userId: String
+    /// US-274: when non-nil this row is shared with all household
+    /// members and lives in the household-scoped uniqueness namespace.
+    var householdId: String?
     var catalogId: String?
     var name: String
     var nameNormalized: String
@@ -56,12 +59,17 @@ struct UserProductPreference: Codable, Identifiable, Equatable, Hashable {
     var notes: String?
     var timesAdded: Int
     var lastAddedAt: String?
+    /// US-276: ordered ISO-8601 timestamps for the last ≤12 adds. Used
+    /// by `RestockPredictor` to estimate cadence and surface "due to
+    /// restock" suggestions.
+    var addHistory: [String]?
     var createdAt: String?
     var updatedAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id, name, barcode, notes
         case userId = "user_id"
+        case householdId = "household_id"
         case catalogId = "catalog_id"
         case nameNormalized = "name_normalized"
         case preferredAisleSection = "preferred_aisle_section"
@@ -71,6 +79,7 @@ struct UserProductPreference: Codable, Identifiable, Equatable, Hashable {
         case preferredBrand = "preferred_brand"
         case timesAdded = "times_added"
         case lastAddedAt = "last_added_at"
+        case addHistory = "add_history"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

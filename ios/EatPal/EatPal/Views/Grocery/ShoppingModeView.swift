@@ -10,6 +10,7 @@ import UIKit
 /// focus mode, not a redesign.
 struct ShoppingModeView: View {
     @EnvironmentObject var appState: AppState
+    @ObservedObject private var storeLayouts = StoreLayoutService.shared
     @Environment(\.dismiss) var dismiss
 
     /// `lastCheckedItemId` powers the inline Undo button shown for ~5s after
@@ -43,10 +44,20 @@ struct ShoppingModeView: View {
         return grouped.sorted { sortKey($0.key) < sortKey($1.key) }
     }
 
+    /// US-275: When the active grocery list pins a store layout, the
+    /// walk order comes from `StoreLayoutService` (per-user override →
+    /// chain default → universal fallback). For unpinned lists the
+    /// ordering matches the universal `GroceryAisle.storeWalkOrder`,
+    /// preserving the prior behavior.
+    private var activeStoreLayoutId: String? {
+        appState.groceryLists.first { $0.isDefault == true }?.storeLayoutId
+    }
+
     private func sortKey(_ key: String) -> (Int, String) {
         if key.hasPrefix("aisle:"),
            let aisle = GroceryAisle(rawValue: String(key.dropFirst("aisle:".count))) {
-            return (aisle.storeWalkOrder, aisle.displayName)
+            let order = storeLayouts.walkOrder(for: aisle, layoutId: activeStoreLayoutId)
+            return (order, aisle.displayName)
         }
         return (10_000, key)
     }
@@ -109,6 +120,8 @@ struct ShoppingModeView: View {
             // US-245
             AnalyticsService.track(.shoppingModeStarted)
             AnalyticsService.screen("grocery_shopping_mode")
+            // US-275: ensure the layout cache is warm before sort fires.
+            Task { await storeLayouts.ensureLoaded() }
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false

@@ -118,14 +118,18 @@ struct QuickAddGrocerySheet: View {
                     }
                 }
             }
-            // US-273: Single-product photo capture. Uses the system camera
-            // picker — same UX as `ImageFoodCapture` for consistency.
-            .sheet(isPresented: $showingPhotoIdentify) {
-                ImagePicker(sourceType: .camera) { image in
-                    showingPhotoIdentify = false
-                    if let image {
-                        Task { await identifyAndApply(image: image) }
+            // US-273: Single-product photo identify. The PhotosPicker
+            // lives inside the Photo menu; this onChange catches the
+            // selection, loads the data, and runs it through
+            // ProductPhotoIdentifier before resetting the picker item.
+            .onChange(of: photoIdentifyPickerItem) { _, item in
+                guard let item else { return }
+                Task {
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       let image = UIImage(data: data) {
+                        await identifyAndApply(image: image)
                     }
+                    photoIdentifyPickerItem = nil
                 }
             }
             .alert(
@@ -438,6 +442,49 @@ struct QuickAddGrocerySheet: View {
         Task { await resolveAndApply(name: nil, barcode: payload) }
     }
 
+    /// US-273: pipe a single photo through the vision identifier, layer
+    /// the result onto SmartProductService.resolve so any user-pref
+    /// memory wins, then pre-fill the form. Stays open so the user can
+    /// confirm low-confidence guesses before tapping Add.
+    private func identifyAndApply(image: UIImage) async {
+        isIdentifying = true
+        defer { isIdentifying = false }
+        do {
+            let identified = try await ProductPhotoIdentifier.identify(image)
+            // Run the recognized name through the resolver so any prior
+            // user-prefs win over the vision defaults — same flow as
+            // typing the name yourself.
+            let resolved = await SmartProductService.shared.resolve(
+                name: identified.name,
+                barcode: nil
+            )
+            // Vision result is fresher than keyword classifier — use it
+            // when the user has no prior preference. Confidence chip
+            // surfaces when we fall back to the vision result.
+            let useVision = resolved.source == .keywordFallback
+            self.name = identified.name
+            self.aisle = useVision
+                ? (GroceryAisle(rawValue: identified.aisleSection) ?? resolved.aisleSection)
+                : resolved.aisleSection
+            self.category = useVision
+                ? (FoodCategory(rawValue: identified.category) ?? resolved.category)
+                : resolved.category
+            self.unit = useVision ? (identified.packageUnit ?? "count") : resolved.unit
+            self.quantity = useVision ? (identified.packageSize ?? 1) : resolved.quantity
+            self.brand = identified.brand ?? resolved.brand ?? ""
+            self.notes = resolved.notes ?? ""
+            self.lastResolveSource = useVision ? .barcodeFresh : resolved.source
+            AnalyticsService.track(.productPhotoIdentified(confidence: identified.confidence))
+            HapticManager.success()
+        } catch let error as ProductPhotoIdentifier.IdentifyError {
+            photoIdentifyError = error.errorDescription
+            HapticManager.error()
+        } catch {
+            photoIdentifyError = error.localizedDescription
+            HapticManager.error()
+        }
+    }
+
     private func resolveAndApply(name: String?, barcode: String?) async {
         let resolved = await SmartProductService.shared.resolve(
             name: name?.isEmpty == false ? name : nil,
@@ -461,6 +508,7 @@ struct QuickAddGrocerySheet: View {
         self.brand = resolved.brand ?? ""
         self.notes = resolved.notes ?? ""
         self.lastResolveSource = resolved.source
+        AnalyticsService.track(.quickAddResolveSource(source: resolved.source.rawValue))
     }
 
     private func save() async {
