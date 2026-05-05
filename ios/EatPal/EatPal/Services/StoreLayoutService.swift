@@ -92,12 +92,14 @@ final class StoreLayoutService: ObservableObject {
     /// Persists a per-user aisle override. Upserts so the same aisle
     /// can be reordered repeatedly without producing duplicate rows.
     func setAisleOverride(layoutId: String, aisle: GroceryAisle, walkOrder: Int) async throws {
+        // swiftlint:disable identifier_name
         struct Upsert: Encodable {
             let user_id: String
             let store_layout_id: String
             let aisle: String
             let walk_order: Int
         }
+        // swiftlint:enable identifier_name
         let userId = try await currentUserId()
         let row = Upsert(
             user_id: userId,

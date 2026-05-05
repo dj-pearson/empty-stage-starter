@@ -232,6 +232,10 @@ final class SmartProductService {
     func fetchAllPreferences() async -> [UserProductPreference] {
         do {
             let userId = try await currentUserId()
+            // Snapshot MainActor-isolated state before the `async let`
+            // crosses an isolation boundary in Swift 6.
+            let shareEnabled = householdShareEnabled
+            let householdId = cachedHouseholdId
             // OR (user_id, household_id) — Supabase swift's filter chain
             // doesn't ship an `or` helper at the version we use, so two
             // queries + dedupe by id is the cheapest path.
@@ -242,7 +246,7 @@ final class SmartProductService {
                 .execute()
                 .value) ?? []
             async let household: [UserProductPreference] = await {
-                guard householdShareEnabled, let hid = cachedHouseholdId else { return [] }
+                guard shareEnabled, let hid = householdId else { return [] }
                 return (try? await client
                     .from("user_product_preferences")
                     .select()
@@ -312,6 +316,9 @@ final class SmartProductService {
 
     // MARK: - Upserts
 
+    // swiftlint:disable identifier_name
+    // Field names mirror Postgres column names so Supabase's default
+    // Encodable -> JSON path doesn't need a CodingKeys map.
     private struct CatalogUpsert: Encodable {
         let id: String
         let name: String
@@ -346,6 +353,7 @@ final class SmartProductService {
         /// US-276: capped to 12 entries on the client before upsert.
         let add_history: [String]
     }
+    // swiftlint:enable identifier_name
 
     /// US-276: cap on `add_history` length. Keeps the JSONB column tiny
     /// while still giving the cadence predictor enough datapoints to

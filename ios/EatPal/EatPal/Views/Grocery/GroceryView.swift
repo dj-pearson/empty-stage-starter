@@ -1131,6 +1131,7 @@ struct GroceryView: View {
             )
             return
         }
+        // swiftlint:disable:next identifier_name
         struct Patch: Encodable { let store_layout_id: String? }
         do {
             try await SupabaseManager.client
