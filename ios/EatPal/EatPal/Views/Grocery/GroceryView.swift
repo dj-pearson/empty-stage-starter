@@ -26,6 +26,9 @@ struct GroceryView: View {
     @EnvironmentObject var appState: AppState
     @State private var searchText = ""
     @State private var showingAddItem = false
+    // US-272: Quick Add sheet — the smart-prefill flow that beats the
+    // legacy AddGroceryItemView for repeat-add speed.
+    @State private var showingQuickAdd = false
     @State private var showingVoiceAdd = false
     @State private var showingPhotoImport = false
     @State private var showingListScanner = false
@@ -589,6 +592,12 @@ struct GroceryView: View {
                 HStack(spacing: 12) {
                     Menu {
                         Button {
+                            showingAddItem = true
+                        } label: {
+                            Label("Detailed add (price, priority…)", systemImage: "square.and.pencil")
+                        }
+
+                        Button {
                             showingVoiceAdd = true
                         } label: {
                             Label("Dictate items", systemImage: "mic.fill")
@@ -661,11 +670,12 @@ struct GroceryView: View {
                     .accessibilityLabel("Quick add options")
 
                     Button {
-                        showingAddItem = true
+                        showingQuickAdd = true
                     } label: {
                         Image(systemName: "plus")
                     }
-                    .accessibilityLabel("Add grocery item")
+                    .accessibilityLabel("Quick add grocery item")
+                    .accessibilityHint("Opens the smart quick-add sheet that auto-fills aisle, unit, and brand")
                 }
             }
 
@@ -744,6 +754,9 @@ struct GroceryView: View {
         }
         .sheet(isPresented: $showingAddItem) {
             AddGroceryItemView()
+        }
+        .sheet(isPresented: $showingQuickAdd) {
+            QuickAddGrocerySheet()
         }
         .sheet(isPresented: $showingVoiceAdd) {
             VoiceAddGrocerySheet()

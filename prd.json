@@ -4037,6 +4037,149 @@
       "priority": 67,
       "passes": false,
       "notes": ""
+    },
+    {
+      "id": "US-272",
+      "title": "iOS Grocery Smart Add: tiered product lookup + Quick Add sheet",
+      "description": "Make adding grocery items effortless: type or scan, the app pre-fills aisle/category/unit/brand/quantity from the user's own history first, then a community catalog, then a barcode lookup, then a keyword classifier. Subsequent edits feed back into the user preference layer so 'chicken breast → meat_deli' sticks across sessions and devices. Ships the migration, the SmartProductService resolver, and the QuickAddGrocerySheet replacing the legacy AddGroceryItemView for the primary '+' button.",
+      "acceptanceCriteria": [
+        "Migration 20260505000000_smart_product_catalog.sql creates grocery_product_catalog (community-shared, RLS allow-auth-read/write) and user_product_preferences (per-user, full RLS) with unique indexes on (barcode), (name_normalized) and (user_id, name_normalized), (user_id, barcode)",
+        "ios/EatPal/EatPal/Services/SmartProductService.swift exposes resolve(name:barcode:) async -> ResolvedProduct that walks user pref → catalog → BarcodeService (Open Food Facts) → GroceryAisleClassifier in order, returning a source-tagged ResolvedProduct that the UI uses to drive a confidence badge",
+        "SmartProductService.recordAdd(item:) and recordEdit(item:) upsert the user preference row and seed/update the catalog row; never throws; never blocks the parent save (Task.detached)",
+        "AppState.addGroceryItem and updateGroceryItem call recordAdd / recordEdit after a successful round-trip; updateGroceryItem skips check-only toggles via isProductAttributeUpdate",
+        "ios/EatPal/EatPal/Views/Grocery/QuickAddGrocerySheet.swift presents a single-screen form with debounced (300ms) name resolve, a 6-aisle quick-pill row + full picker fallback, qty stepper + unit menu, scanner + photo buttons, source badge ('Your defaults' / 'Community defaults' / 'Scanned' / 'Auto-detected'), and clears the form after Add so the user can keep adding without dismissing",
+        "GroceryView toolbar '+' opens QuickAddGrocerySheet by default; the wand menu still surfaces the legacy detailed add ('Detailed add (price, priority…)')",
+        "Tests in ios/EatPal/EatPalTests/SmartProductTests.swift cover ProductNameNormalizer (whitespace, idempotence), ResolvedProduct.needsConfirmation per source, GroceryAisle.classify regression cases, and Codable round-trips for both new tables",
+        "Telemetry: groceryItemAdded(via:) already covers the path; add quickAddResolveSource(source:) when the resolver returns userPreference / catalog / barcodeFresh / keywordFallback (deferred — see US-273 telemetry note)"
+      ],
+      "priority": 68,
+      "passes": true,
+      "notes": "Built. Resolver tiers, learn-on-add/edit, and Quick Add sheet shipped together; the resolveSource telemetry event was the only piece deferred to keep blast radius small and is covered by US-273."
+    },
+    {
+      "id": "US-273",
+      "title": "iOS Grocery: AI photo-to-product attribute extraction (size/quantity/category in one shot)",
+      "description": "Today PhotoImportGrocerySheet OCRs a list of names. Users want to point the camera at a single product and have AI return name + brand + package size + quantity + category in one go, then drop straight into Quick Add. Builds on FridgeRecognitionService but with a single-product mode and richer attribute extraction.",
+      "acceptanceCriteria": [
+        "New supabase function functions/identify-product/index.ts: takes a base64 image, returns { name, brand, packageSize, packageUnit, category (FoodCategory), aisleSection (GroceryAisle.rawValue), confidence } via vision-capable LLM",
+        "iOS Services/ProductPhotoIdentifier.swift wraps the edge fn (parallel structure to FridgeRecognitionService); handles the standard FridgeError set and resizes to 1024px (single product needs more pixels than fridge view)",
+        "QuickAddGrocerySheet 'Photo' button gains a long-press menu: 'Scan list' (existing PhotoImportGrocerySheet) vs 'Identify one product' (new flow). The single-product flow returns the attributes, runs them through SmartProductService.resolve to layer user prefs on top, and pre-fills the form in one tap",
+        "Confidence < 0.7 surfaces a 'Tap to confirm' chip on each pre-filled field so the user reviews before saving",
+        "Telemetry: productPhotoIdentified(confidence:), quickAddResolveSource(source:); the latter also fires from US-272's resolver path",
+        "Cost: $0.005/photo budget; cache by perceptual hash so re-uploading the same image is free"
+      ],
+      "priority": 70,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-274",
+      "title": "iOS Grocery: household-shared product preferences (CRDT-style merge)",
+      "description": "Today user_product_preferences is per-user. Households (parents + kids' caregiver, partners) want their preferences to merge: if mom puts chicken nuggets in the freezer aisle and dad in refrigerated, both adds should land in the same default. This story extends the schema with household_id and a deterministic merge policy.",
+      "acceptanceCriteria": [
+        "Migration adds household_id (nullable FK) and a partial unique index on (household_id, name_normalized) WHERE household_id IS NOT NULL; per-user uniqueness preserved with WHERE household_id IS NULL",
+        "When user is in a household, SmartProductService.resolve checks (household_id, name_normalized) before (user_id, name_normalized); both before catalog tier",
+        "Conflict policy: most-recent last_added_at wins for aisle/category/unit; preferred_brand merges via 'most-recently-added by anyone' rule; notes union-merge with timestamp dividers",
+        "GroceryView/Settings exposes a 'Sync preferences with household' toggle; off = current per-user behavior, on = household merging (default off so existing users see no behavior change)",
+        "Realtime subscription on user_product_preferences filtered by household_id triggers a quiet refresh of in-memory preferences cache",
+        "Audit log row written on every household preference change so the partner can 'why did this change?' in a debug view"
+      ],
+      "priority": 72,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-275",
+      "title": "iOS Grocery: store-specific aisle maps (Trader Joe's vs Walmart vs Whole Foods)",
+      "description": "GroceryAisle currently has one universal store-walk-order. Real users shop different stores; the produce section is the back of Trader Joe's but the front of Walmart. Let the user pick a store per grocery_list and have the walk order reflect that store's layout.",
+      "acceptanceCriteria": [
+        "Migration creates store_layouts table (name, slug, banner_image_url, aisle_overrides JSONB[aisle: order_int]) seeded with 5 common US chains (Walmart, Target, Trader Joe's, Whole Foods, Costco)",
+        "grocery_lists.store_layout_id FK added; default null = use universal walk order",
+        "Per-store crowd-sourced overrides: users can drag aisles to reorder for their local store; the change lands in user_store_layout_overrides keyed by (user_id, store_layout_id, aisle); overrides win over store defaults",
+        "ShoppingModeView reads the layout off the active grocery_list and sorts sections by store_layouts.aisle_overrides[aisle] ?? GroceryAisle.storeWalkOrder",
+        "GroceryListSelector adds a 'Store' picker per list; picking 'Trader Joe's' updates the layout immediately with a 200ms transition",
+        "Telemetry: storeLayoutSelected(slug:), storeAisleOverrideAdded(aisle:fromOrder:toOrder:)"
+      ],
+      "priority": 75,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-276",
+      "title": "iOS Grocery: recurring-restock predictor (suggest 'add eggs back?' when you're due)",
+      "description": "Track per-product cadence (last 8 add timestamps) and predict when the user will run out, then surface a one-tap restock suggestion in the Grocery empty state and as a watchOS complication.",
+      "acceptanceCriteria": [
+        "user_product_preferences gains add_history JSONB[timestamp] (capped at last 12 entries; older trimmed on upsert) so we can compute interquartile cadence without a separate table",
+        "ios/EatPal/EatPal/Utilities/RestockPredictor.swift: pure-Swift, returns [(name, lastAdded, daysUntilDue, confidence)] sorted by daysUntilDue. Confidence = number_of_history_points / 8 capped at 1.0; suppresses suggestions with confidence < 0.5",
+        "GroceryView empty state and a new 'Suggested for you' section render due items as one-tap chips: tap = QuickAddGrocerySheet pre-filled with that product",
+        "watchOS complication shows the next 3 due items so the user can glance at their wrist while in the store",
+        "Notification (US-152 follow-up): if 3+ items become due on the same day and the user has notifications enabled, fire a single 'restock day?' push at 9am",
+        "Performance: 200 products with 12 history points each predicts in <10ms (measured)"
+      ],
+      "priority": 78,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-277",
+      "title": "iOS Grocery: AR shelf-finder for in-store quick scan + add",
+      "description": "When walking the store, hold up the phone and the camera live-overlays an 'Add' chip on every product the user already has on their grocery list (matched by barcode). Powered by ARKit + Vision data scanner. Lets a parent quickly walk down an aisle and tick off everything without one-by-one taps.",
+      "acceptanceCriteria": [
+        "ios/EatPal/EatPal/Views/Grocery/ARShelfFinderView.swift uses VNDetectBarcodesRequest in real time on the live camera feed",
+        "When a recognized barcode matches an unchecked grocery_item, render a green 'In your list — tap to check' chip anchored to the barcode in screen space",
+        "When the barcode matches a user_product_preferences row but isn't on the current list, render a blue 'Saved product — tap to add' chip; tap = silent QuickAdd with that product's last preferences",
+        "Requires camera + ARKit; gracefully degrades to UnifiedScannerView on devices without LiDAR/A12+ (per Apple's DataScanner availability)",
+        "Toolbar button in GroceryView (only visible when shopping mode is active) opens ARShelfFinderView fullscreen",
+        "Privacy: no images leave the device; Sentry breadcrumbs only carry counts (chips_shown:, chips_tapped:)",
+        "Telemetry: arShelfFinderOpened, arChipTapped(action: check/add)"
+      ],
+      "priority": 80,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-278",
+      "title": "iOS Grocery: voice-driven Quick Add ('hey EatPal, add 2 lbs ground beef')",
+      "description": "VoiceAddGrocerySheet exists for batch dictation but isn't wired into Quick Add. Add Siri/AppIntent + a quick mic-tap path inside QuickAddGrocerySheet that streams partial transcripts and parses them into a name + quantity + unit before hitting Add.",
+      "acceptanceCriteria": [
+        "QuickAddGrocerySheet header gains a microphone button that streams Speech framework transcripts; partial transcripts auto-fill the name field (debounced) so the user sees parsing in real time",
+        "GroceryTextParser extended to handle 'two pounds of' / 'a dozen' / 'half a' phrasings → quantity + unit tokens before falling back to free-text name parsing",
+        "AppIntent 'AddGroceryItemIntent' exposed for Siri ('Hey Siri, add chicken breast to grocery'); resolves through SmartProductService and silently saves with addedVia 'siri'",
+        "Apple Watch crown gesture in GroceryWatchView triggers the same intent (existing watch app)",
+        "Telemetry: quickAddVoiceUsed, voiceParsedQuantity / voiceParsedUnit success counts so we can iterate on parser misses"
+      ],
+      "priority": 82,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-279",
+      "title": "iOS Grocery: smart unit + container inference ('milk' → gallon, 'eggs' → dozen, 'rice' → bag)",
+      "description": "When a user types a product the app should default to the right unit instead of always 'count'. Eggs are a dozen, milk is a gallon, rice is a bag, apples are a count. Drive this from the catalog row's default_unit when present and a small embedded heuristic when not.",
+      "acceptanceCriteria": [
+        "ios/EatPal/EatPal/Utilities/UnitInference.swift maps ~50 common product names to default unit + reasonable starting quantity; QuickAddGrocerySheet uses it as a tier-3.5 fallback (between catalog and keyword classifier)",
+        "Catalog seed migration prepopulates ~200 common-product rows with default_unit + default_quantity so brand-new users still get smart defaults from day one",
+        "When the resolver picks a unit from inference vs catalog vs preference, the source badge in the Quick Add header reflects which (extends US-272's source enum with .unitInference case as a non-blocking sub-source)",
+        "Snapshot tests in SmartProductTests.swift assert the inference table for the seeded 50 products"
+      ],
+      "priority": 85,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-280",
+      "title": "iOS Grocery: expiry-aware suggestions ('milk expires Friday — add to next list?')",
+      "description": "Foods already track expiry_date (US-225). Cross-link with the grocery list: when a pantry food is within 2 days of expiry AND has been added to grocery in the past, surface a chip 'Expiring soon — restock?' that one-taps into Quick Add.",
+      "acceptanceCriteria": [
+        "ios/EatPal/EatPal/Utilities/ExpiringRestockSuggester.swift cross-references foods (expiry_date within 2 days), groceryItems (currently on list), and user_product_preferences (has been added before); returns the diff",
+        "GroceryView 'Suggested for you' section (US-276 share) renders expiring items distinct from cadence-due items (orange chip vs blue chip)",
+        "Tap-to-restock fires QuickAddGrocerySheet with the user's preferred quantity + unit pre-filled; silently logs the source as 'expiring_restock'",
+        "Pantry view also surfaces this — every food card with <2 days to expiry shows a 'Restock' button that opens the same flow",
+        "Telemetry: expiringRestockSuggested(count:), expiringRestockTapped"
+      ],
+      "priority": 88,
+      "passes": false,
+      "notes": ""
     }
   ]
 }
