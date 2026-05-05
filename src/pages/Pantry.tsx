@@ -345,14 +345,17 @@ export default function Pantry() {
     }
   };
 
-  const handleAddSuggestion = (suggestion: FoodSuggestion) => {
-    addFood({
+  const handleAddSuggestion = async (suggestion: FoodSuggestion) => {
+    const added = await addFood({
       name: suggestion.name,
       category: suggestion.category,
       is_safe: false,
       is_try_bite: true,
     });
-    toast.success("Food Added", { description: `${suggestion.name} has been added to your pantry as a try bite food.` });
+    if (added) {
+      toast.success("Food Added", { description: `${suggestion.name} has been added to your pantry as a try bite food.` });
+    }
+    // If blocked by plan limit, the upgrade modal handles messaging.
   };
 
   const handleEdit = useCallback((food: Food) => {
@@ -419,7 +422,7 @@ export default function Pantry() {
     // If blocked by plan limit, the upgrade modal handles the messaging.
   };
 
-  const handleFoodIdentified = (foodData: any) => {
+  const handleFoodIdentified = async (foodData: any) => {
     logger.debug("handleFoodIdentified received:", foodData);
     const existingFood = foods.find(
       (f) =>
@@ -433,7 +436,7 @@ export default function Pantry() {
       updateFood(existingFood.id, { ...existingFood, quantity: newQuantity });
       toast.success("Quantity Updated", { description: `Added ${foodData.quantity || 1} to existing ${foodData.name}. Total: ${newQuantity}` });
     } else {
-      addFood({
+      const added = await addFood({
         name: foodData.name,
         category: foodData.category,
         is_safe: foodData.is_safe ?? true,
@@ -441,7 +444,10 @@ export default function Pantry() {
         quantity: foodData.quantity || 1,
         package_quantity: foodData.servingSize || undefined,
       });
-      toast.success("Food Added from Photo", { description: `${foodData.name} has been added to your pantry!` });
+      if (added) {
+        toast.success("Food Added from Photo", { description: `${foodData.name} has been added to your pantry!` });
+      }
+      // If blocked by plan limit, the upgrade modal handles messaging.
     }
   };
 

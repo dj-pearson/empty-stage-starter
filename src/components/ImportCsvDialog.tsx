@@ -15,7 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FoodCategory } from "@/types";
 
 export function ImportCsvDialog() {
-  const { addFood, foods } = useApp();
+  const { addFoods, foods } = useApp();
   const [open, setOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<any[]>([]);
@@ -116,30 +116,31 @@ Hummus,protein,false,true,sesame,Deli`;
     reader.readAsText(file);
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (preview.length === 0) {
       toast.error("No foods to import");
       return;
     }
 
-    let imported = 0;
-    let skipped = 0;
+    const toImport = preview.filter(
+      (food) => !foods.some((f) => f.name.toLowerCase() === food.name.toLowerCase()),
+    );
+    const skipped = preview.length - toImport.length;
 
-    preview.forEach(food => {
-      // Check if food already exists
-      const exists = foods.find(f => f.name.toLowerCase() === food.name.toLowerCase());
-      if (exists) {
-        skipped++;
-      } else {
-        addFood(food);
-        imported++;
-      }
-    });
+    if (toImport.length === 0) {
+      toast.info(`Skipped ${skipped} duplicates — nothing new to import`);
+      return;
+    }
 
-    toast.success(`Imported ${imported} foods${skipped > 0 ? `, skipped ${skipped} duplicates` : ""}`);
-    setOpen(false);
-    setPreview([]);
-    setErrors([]);
+    const added = await addFoods(toImport);
+
+    if (added) {
+      toast.success(`Imported ${toImport.length} foods${skipped > 0 ? `, skipped ${skipped} duplicates` : ""}`);
+      setOpen(false);
+      setPreview([]);
+      setErrors([]);
+    }
+    // If blocked by plan limit, the upgrade modal handles messaging.
   };
 
   return (
