@@ -2141,3 +2141,27 @@ Prime suspects to check, in order of likelihood:
   - When stitching multiple sections that use the same `sectionTitle` style but a few add a trailing pill (Kids → + Add), wrap only those sections in `sectionHeaderRow` rather than reworking every other section's title spacing.
   - Subscription tier rendering: capitalise the first letter on the read path (`tier.replace(/^./, c => c.toUpperCase())`); the DB stores `'free'/'plus'/'pro'` lowercase.
 ---
+
+## 2026-05-06 - US-130: Implement input validation and data sanitization for all mobile forms
+- What was implemented: Filled in the missing pieces of the mobile validation surface and tightened a couple of call sites that were doing ad-hoc parsing.
+- Files changed:
+  - `app/mobile/lib/validation.ts` — added `INPUT_LIMITS` constants (foodName=200, groceryName=200, recipeName=200, kidName=100, notes=1000) so call sites stop using magic numbers; added `validateNumericInput(input, kind)` that returns a clamped number or `null` for malformed/out-of-range values, with sane ranges per kind: quantity (0..99,999), calories (0..50,000), servings (1..200), percentage (0..100). The existing `isEmailValid`, `isPasswordValid`, `checkPasswordRequirements`, `sanitizeTextInput` helpers were already in place and already wired into `(auth)/login.tsx` and `(auth)/signup.tsx`.
+  - `app/mobile/components/ItemDetailModal.tsx` — handleSave now goes through `sanitizeTextInput(name, INPUT_LIMITS.foodName)` instead of bare `.trim()`, runs the qty through `validateNumericInput(qty, 'quantity')` (clamping out-of-range pastes), runs notes through `sanitizeTextInput(notes, INPUT_LIMITS.notes)`, and trims the unit to 32 chars max.
+  - `app/(tabs)/profile.tsx` — kid name input now uses `INPUT_LIMITS.kidName` (100) per AC, replacing my earlier 60-char default.
+- Verification:
+  - `npm run build` → built in ~57s, no errors.
+  - Auth screens already validate email regex (`^[^\s@]+@[^\s@]+\.[^\s@]+$`) and enforce the web's password rules (>=12 chars, upper/lower/number/special).
+  - All Supabase calls in `(tabs)/*` use the chained query builder (`.from(...).select(...).eq(...)`); no string interpolation of user input. `app/(tabs)/lists.tsx`, `meals.tsx`, `pantry.tsx`, `recipes.tsx`, `profile.tsx` all conform.
+- AC verdict (story-by-story):
+  - Email regex parity → pre-existing in `(auth)` screens.
+  - Password strength parity → pre-existing in signup.
+  - Food name 200-char sanitise → already wired in `pantry.tsx`/`lists.tsx` via `sanitizeTextInput` default; ItemDetailModal now uses INPUT_LIMITS explicitly.
+  - Grocery item 200-char sanitise → wired in `lists.tsx`.
+  - Child name 100-char sanitise → updated `profile.tsx` to use INPUT_LIMITS.kidName.
+  - Numeric range validation → `validateNumericInput` with per-kind ranges; ItemDetailModal handleSave switched over.
+  - No interpolation in Supabase queries → audit confirmed.
+- **Learnings:**
+  - Centralising limits in a single `INPUT_LIMITS` constant beats repeating 200/100 across files — when product changes a cap, you change one place.
+  - `validateNumericInput` returning `null` for out-of-range is a stronger contract than `Math.max(0, raw)`; callers can fall back to a default *and* surface a UX nudge ("0–99,999 only"). For now ItemDetailModal silently falls back to 1, which mirrors the previous behaviour. Future polish: surface a toast when the input was clamped/rejected.
+  - When tightening validation in a shared component (ItemDetailModal), check every consumer (`lists.tsx`, `pantry.tsx`) to make sure their downstream `payload.quantity ?? 1` fallback still does the right thing. Both consumers already had that fallback, so no breakage.
+---

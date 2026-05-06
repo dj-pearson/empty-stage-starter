@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/integrations/supabase/client.mobile';
 import { safeStorage } from '@/lib/platform';
-import { sanitizeTextInput } from '../../app/mobile/lib/validation';
+import { sanitizeTextInput, INPUT_LIMITS } from '../../app/mobile/lib/validation';
 import { colors, spacing, fontSize, borderRadius } from '../../app/mobile/lib/theme';
 
 const PREF_KEYS = {
@@ -136,7 +136,7 @@ export default function ProfileScreen() {
         {
           text: 'Add',
           onPress: async (input?: string) => {
-            const name = sanitizeTextInput(input ?? '', 60);
+            const name = sanitizeTextInput(input ?? '', INPUT_LIMITS.kidName);
             if (!name) return;
             try {
               const { data: { user } } = await supabase.auth.getUser();
@@ -168,7 +168,7 @@ export default function ProfileScreen() {
         {
           text: 'Save',
           onPress: async (input?: string) => {
-            const name = sanitizeTextInput(input ?? '', 60);
+            const name = sanitizeTextInput(input ?? '', INPUT_LIMITS.kidName);
             if (!name || name === kid.name) return;
             try {
               const { error } = await supabase.from('kids').update({ name }).eq('id', kid.id);

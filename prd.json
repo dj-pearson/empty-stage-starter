@@ -2459,8 +2459,8 @@
         "App builds without errors"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": "ANDROID AUDIT - Security - Medium: Input validation prevents data corruption and injection"
+      "passes": true,
+      "notes": "ANDROID AUDIT - Security - Medium: Input validation prevents data corruption and injection | Completed 2026-05-06: existing email/password validation already in (auth) screens; added INPUT_LIMITS constants (foodName/groceryName/recipeName/kidName/notes) and validateNumericInput(quantity|calories|servings|percentage) to app/mobile/lib/validation.ts; ItemDetailModal handleSave now sanitises name/notes via sanitizeTextInput and clamps qty via validateNumericInput; profile.tsx kid name now sanitised at the AC-mandated 100-char limit (was 60). All Supabase queries use parameterized chaining (no string interpolation)."
     },
     {
       "id": "US-131",
