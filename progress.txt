@@ -2074,3 +2074,34 @@ Prime suspects to check, in order of likelihood:
   - Realtime subscription pattern in mobile: get user via `supabase.auth.getUser()` inside the effect, build a unique channel name (`mobile-plan-entries-<userId>`), `.on('postgres_changes', { event:'*', schema:'public', table, filter:'user_id=eq.<id>' }, cb).subscribe()`, and clean up via `supabase.removeChannel(channel)` in the effect cleanup. The `refresh()` callback is debounced naturally by React's render cycle but watch out for tight loops if the same client is also performing the writes.
   - Long-press pattern: TouchableOpacity supports `onLongPress` + `delayLongPress`. Pair with `Alert.alert` for confirmation; use `style: 'destructive'` for the delete action.
 ---
+
+## 2026-05-06 - US-108: Fix ProductShowcase3D phone mockup colors for dark mode
+- What was implemented: Updated `src/components/ProductShowcase3D.tsx` so the 3D phone mockup reads correctly in dark mode.
+  - Phone chassis: `bg-gray-900 dark:bg-neutral-800 dark:ring-1 dark:ring-neutral-700` so the dark phone has a slight ring against the dark page background instead of disappearing.
+  - Screen surface: was hardcoded `bg-white text-?` — now `bg-card text-card-foreground` (semantic tokens that already swap in dark mode).
+  - Notch: matches chassis (`bg-gray-900 dark:bg-neutral-800`).
+  - Side buttons: `bg-gray-800 dark:bg-neutral-600` for visible separation from the chassis in dark mode.
+  - Carousel gradient: kept the trust-pink/blue brand gradient but lowered opacity in dark mode (`dark:from-trust-softPink/10 dark:to-trust-blue/5`) so the screen doesn't glow.
+  - Carousel title text now uses `text-card-foreground` so it inverts with the screen surface.
+- Files changed:
+  - `src/components/ProductShowcase3D.tsx` (phone-mockup JSX only, mobile/reduced-motion fallback already used semantic tokens).
+- Verification: visible classes only; the lazy-loaded 3D path never runs on mobile or reduced-motion (early-return fallback). Build green.
+- **Learnings:**
+  - The CLAUDE.md "no hardcoded colors" rule has a soft exception for stylized device chrome (phone chassis is supposed to look like a dark phone, even in light mode), so `dark:` overrides are the right pattern there rather than mapping every shade onto a semantic token.
+  - When swapping a hardcoded `bg-white` to `bg-card`, also swap any text classes that assumed a white background (`text-card-foreground` is the partner).
+---
+
+## 2026-05-06 - US-107: Convert remaining unoptimized PNGs to WebP (screenshots, product images)
+- What was implemented: Generated WebP siblings for the three iOS-style icon PNGs in `public/` that did not yet have one. All other public PNGs already had `.webp` and `.avif` siblings, except favicons + apple-touch-icon which **must** stay as PNG (browser + iOS spec).
+- Files added:
+  - `public/Icon_120.webp` (13.2K → 2.7K, 79% smaller)
+  - `public/Icon_152.webp` (16.7K → 3.4K, 79% smaller)
+  - `public/Icon_1024.webp` (367K → 22K, 94% smaller)
+- Tooling: used the project-installed `sharp@0.34.5` — no extra deps needed. `webp({ quality: 90 })`.
+- PNGs intentionally NOT converted (must remain PNG):
+  - `apple-touch-icon.png` (Apple Web App spec requires PNG)
+  - `favicon-16x16.png`, `favicon-32x32.png` (PNG mandated for `.ico` fallback chain)
+- **Learnings:**
+  - `sharp` is already a transitive dep — no need to add `cwebp`/ImageMagick to dev deps for image work.
+  - Quick audit script: `find public -name '*.png' -exec sh -c '[ -f "${0%.png}.webp" ] || echo "missing webp: $0"' {} \;`
+---

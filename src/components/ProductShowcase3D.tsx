@@ -166,13 +166,13 @@ export function ProductShowcase3D({
                 }}
                 className="relative"
               >
-                {/* Phone Frame */}
-                <div className="relative w-[300px] h-[620px] bg-gray-900 rounded-[3rem] shadow-2xl p-3">
-                  {/* Screen */}
-                  <div className="w-full h-full bg-white rounded-[2.5rem] overflow-hidden relative">
-                    {/* Notch */}
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/3 h-7 bg-gray-900 rounded-b-3xl z-10" />
-                    
+                {/* Phone Frame: keep the dark chassis in light mode; in dark mode shift to neutral-700 with a subtle border so the phone doesn't blend into the page background. */}
+                <div className="relative w-[300px] h-[620px] bg-gray-900 dark:bg-neutral-800 dark:ring-1 dark:ring-neutral-700 rounded-[3rem] shadow-2xl p-3">
+                  {/* Screen: card token so it inherits dark-mode surface colour. */}
+                  <div className="w-full h-full bg-card text-card-foreground rounded-[2.5rem] overflow-hidden relative">
+                    {/* Notch matches the chassis */}
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/3 h-7 bg-gray-900 dark:bg-neutral-800 rounded-b-3xl z-10" />
+
                     {/* Screenshot Carousel */}
                     <m.div
                       animate={{
@@ -186,27 +186,27 @@ export function ProductShowcase3D({
                       className="flex h-full"
                     >
                       {[...screenshots, screenshots[0]].map((screenshot, index) => (
-                        <div 
+                        <div
                           key={index}
-                          className="flex-shrink-0 w-[276px] h-full bg-gradient-to-br from-trust-softPink/20 to-trust-blue/10 flex items-center justify-center"
+                          className="flex-shrink-0 w-[276px] h-full bg-gradient-to-br from-trust-softPink/20 to-trust-blue/10 dark:from-trust-softPink/10 dark:to-trust-blue/5 flex items-center justify-center"
                         >
                           {/* Placeholder content */}
                           <div className="text-center p-8">
                             <div className="text-6xl mb-4">
                               {index === 0 ? '🍽️' : index === 1 ? '📊' : '🛒'}
                             </div>
-                            <h4 className="font-bold text-lg mb-2">{screenshot.title}</h4>
+                            <h4 className="font-bold text-lg mb-2 text-card-foreground">{screenshot.title}</h4>
                             <p className="text-sm text-muted-foreground">{screenshot.description}</p>
                           </div>
                         </div>
                       ))}
                     </m.div>
                   </div>
-                  
-                  {/* Side buttons */}
-                  <div className="absolute -left-1 top-24 w-1 h-12 bg-gray-800 rounded-l" />
-                  <div className="absolute -left-1 top-40 w-1 h-16 bg-gray-800 rounded-l" />
-                  <div className="absolute -right-1 top-32 w-1 h-20 bg-gray-800 rounded-r" />
+
+                  {/* Side buttons (slightly lighter than chassis) */}
+                  <div className="absolute -left-1 top-24 w-1 h-12 bg-gray-800 dark:bg-neutral-600 rounded-l" />
+                  <div className="absolute -left-1 top-40 w-1 h-16 bg-gray-800 dark:bg-neutral-600 rounded-l" />
+                  <div className="absolute -right-1 top-32 w-1 h-20 bg-gray-800 dark:bg-neutral-600 rounded-r" />
                 </div>
                 
                 {/* Floating elements for depth */}

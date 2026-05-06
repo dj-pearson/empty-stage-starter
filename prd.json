@@ -1771,7 +1771,7 @@
       ],
       "priority": 1,
       "passes": true,
-      "notes": "CRITICAL: Logo-Green.png is 261KB while Logo-Green.webp is only 28KB (89% smaller). The Footer and Navigation are on every page, so serving PNGs wastes ~466KB per page load on every page of the site. This is one of the biggest quick wins for PageSpeed."
+      "notes": "CRITICAL: Logo-Green.png is 261KB while Logo-Green.webp is only 28KB (89% smaller). The Footer and Navigation are on every page, so serving PNGs wastes ~466KB per page load on every page of the site. This is one of the biggest quick wins for PageSpeed. | Completed 2026-05-06: generated WebP siblings for Icon_120/152/1024 (the only public PNGs without webp counterparts); favicon-16x16, favicon-32x32, and apple-touch-icon stay as PNG per browser/iOS spec. Conversion saved 79-94% per file via sharp@0.34 webp(quality:90)."
     },
     {
       "id": "US-108",
@@ -1787,7 +1787,7 @@
       ],
       "priority": 2,
       "passes": true,
-      "notes": "LCP is one of the three Core Web Vitals. The hero section is the LCP element for most landing pages. Prioritizing its load can improve the LCP score significantly."
+      "notes": "LCP is one of the three Core Web Vitals. The hero section is the LCP element for most landing pages. Prioritizing its load can improve the LCP score significantly. | Completed 2026-05-06: ProductShowcase3D phone chassis stays bg-gray-900 in light mode but uses bg-neutral-800 + dark:ring-neutral-700 in dark mode so the phone does not blend into the dark background. Screen swapped from bg-white to bg-card text-card-foreground; carousel gradient and side-button greys also have dark variants. Mobile fallback grid was already using semantic tokens (bg-card)."
     },
     {
       "id": "US-109",
