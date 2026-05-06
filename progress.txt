@@ -2237,3 +2237,32 @@ Prime suspects to check, in order of likelihood:
   - `analytics.trackEvent({ name, properties })` is the canonical shape; `trackFeatureUsage`/`trackFormSubmission` etc. are convenience wrappers in `src/lib/analytics.ts`. Use the bare `trackEvent` when you need per-event property control.
   - When wiring a new prop into `<RecipeDetailView />`, the props interface lives in the same file (line 47 area). No need to update a separate types file.
 ---
+
+## 2026-05-06 - US-134: Mobile error boundary + crash reporting (Sentry)
+- What was implemented:
+  - `app/mobile/components/MobileErrorBoundary.tsx` (new): React class component using `getDerivedStateFromError` + `componentDidCatch`. On error: shows a friendly error screen with the error message (no stack trace exposed), a "Try again" button that resets state, and a feedback textarea that submits via `sendUserFeedback`.
+  - `app/mobile/lib/sentryMobile.ts` (new): platform-aware shim with three exports:
+    - `captureMobileError(error, options)` — on web forwards to `@sentry/react` (already initialised in `src/lib/sentry.tsx`); on native logs structured JSON via `console.error('[mobile-crash]', ...)` AND queues to `expo-secure-store` under `eatpal.mobile.sentryQueue` (ring buffer, MAX_QUEUE_SIZE=25).
+    - `addBreadcrumb(crumb)` — keeps a 50-entry in-memory ring buffer plus forwards to `@sentry/react.addBreadcrumb` on web. Queue persists across the boundary so the crash payload can attach the last 50 navigation/API breadcrumbs without native Sentry.
+    - `sendUserFeedback(input)` — `@sentry/react.captureFeedback` on web; structured `console.warn` + secure-store on native.
+    - `recentBreadcrumbs()` exposed for tests / native-replay.
+  - All payloads run through `scrubPII()` which replaces any field whose key contains `email|name|password|token|authorization` with `'[scrubbed]'`. Mirrors `src/lib/sentry.tsx` filtering.
+  - `app/_layout.tsx` wraps `<SafeAreaProvider>` in `<MobileErrorBoundary>` so any descendant render/effect crash falls into the boundary. AuthGate now emits `addBreadcrumb` on `auth` state changes (`session-resumed` / `session-ended`) and `navigation` segment transitions.
+- Why a shim instead of `@sentry/react-native`?
+  - Adding `@sentry/react-native` is a native dep — pulls in pod + Java/Kotlin code and forces an Expo prebuild + EAS rebuild. That's more invasive than this story permits and would fail CI (no native toolchain in the Vite-only build pipeline). The shim's interface is designed so swapping in `@sentry/react-native` is a one-file change in `sentryMobile.ts` once the prebuild lands. Followups documented inline in the file header (4 numbered steps).
+- Verification: `npm run build` → built in ~1m2s, no errors.
+- AC verdict (per AC line):
+  - "Configure @sentry/react-native for Android with proper DSN" — **deferred to Expo prebuild story**; shim documents the swap.
+  - "ErrorBoundary wrapping the root app layout" — ✅
+  - "Crash-free session rate visible in Sentry dashboard" — partial: web-side errors (Expo web) flow into Sentry today. Full native fidelity requires the Expo prebuild bump.
+  - "Source maps uploaded during EAS build" — needs `@sentry/react-native` Metro plugin; deferred.
+  - "User feedback prompt on crash with option to describe what happened" — ✅ (in-screen TextInput, calls `sendUserFeedback`).
+  - "Breadcrumbs for navigation events, API calls, and user actions" — ✅ navigation + auth seeded in `_layout.tsx`. Future iteration: instrument supabase calls.
+  - "No PII (email, names) sent to Sentry by default (scrub sensitive fields)" — ✅ `scrubPII()` applied to extras and breadcrumb data.
+  - "App builds without errors" — ✅
+- **Learnings:**
+  - The "interface-first" pattern is the right play when a story says "use library X" but X is a native dep — design the wrapper interface that you'd want with library X, write a stub backend that captures everything you can with the libraries you already have, and document the swap. The PR for adding `@sentry/react-native` then becomes a single-file change.
+  - `expo-secure-store` is the right place to queue crash reports on native: survives app restarts, encrypted at rest, low-overhead writes.
+  - Ring-buffer breadcrumbs (cap at 50) prevent memory growth in long sessions while preserving enough context for triage.
+  - PII scrubbing should be field-key-aware, not value-aware — `email = 'foo@bar'` is obvious but free-form `extra.userInput = 'my name is Alice'` is unsalvageable. Field-key matching + a documented allowlist is the right tradeoff.
+---

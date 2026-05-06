@@ -5,6 +5,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Platform, ActivityIndicator, View } from 'react-native';
 import { supabase } from '@/integrations/supabase/client.mobile';
 import type { Session } from '@supabase/supabase-js';
+import { MobileErrorBoundary } from './mobile/components/MobileErrorBoundary';
+import { addBreadcrumb } from './mobile/lib/sentryMobile';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -16,6 +18,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s ?? null);
+      addBreadcrumb({
+        category: 'auth',
+        level: 'info',
+        message: s ? 'session-resumed' : 'session-ended',
+      });
     });
 
     return () => subscription.unsubscribe();
@@ -25,6 +32,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (session === undefined) return; // Still loading
 
     const inAuthGroup = segments[0] === '(auth)';
+    addBreadcrumb({
+      category: 'navigation',
+      level: 'info',
+      message: `route:${segments.join('/') || 'index'}`,
+    });
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login');
@@ -50,12 +62,14 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <StatusBar style="auto" />
-      <AuthGate>
-        <Slot />
-      </AuthGate>
-    </SafeAreaProvider>
+    <MobileErrorBoundary>
+      <SafeAreaProvider>
+        <StatusBar style="auto" />
+        <AuthGate>
+          <Slot />
+        </AuthGate>
+      </SafeAreaProvider>
+    </MobileErrorBoundary>
   );
 }
 

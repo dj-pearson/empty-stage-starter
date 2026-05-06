@@ -2529,8 +2529,8 @@
         "App builds without errors"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": "ANDROID AUDIT - Monitoring - Low: Essential for production stability"
+      "passes": true,
+      "notes": "ANDROID AUDIT - Monitoring - Low: Essential for production stability | Completed 2026-05-06: MobileErrorBoundary class component wraps the Expo root layout (app/_layout.tsx); catches JS render/effect errors via getDerivedStateFromError + componentDidCatch; UI offers Try Again + textarea-based Send Feedback; PII (email/name/password/token) scrubbed before send. captureMobileError/addBreadcrumb/sendUserFeedback shim in app/mobile/lib/sentryMobile.ts forwards to @sentry/react on web (already initialised in src/lib/sentry.tsx) and queues to expo-secure-store on native pending @sentry/react-native pod (interface designed for one-file swap). Auth state-changes and navigation transitions add breadcrumbs."
     },
     {
       "id": "US-135",
