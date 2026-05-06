@@ -2292,3 +2292,24 @@ Prime suspects to check, in order of likelihood:
   - `AccessibilityInfo.announceForAccessibility` on the same-message twice in quick succession is deduplicated by the OS — safe to call from a render path that re-runs (it's idempotent).
   - Loading-state announcements work best with both `accessibilityRole="alert"` (forces immediate read) AND `accessibilityLiveRegion="polite"` (queues for next idle moment) — the OS picks whichever matches the user's settings.
 ---
+
+## 2026-05-06 - US-129: Dark mode for mobile screens
+- What was implemented:
+  - `app/mobile/lib/theme.ts`: split into `LIGHT_COLORS` and `DARK_COLORS` palettes. The legacy `colors` export is retained (= LIGHT_COLORS plus the historical `*Dark` suffix tokens) for backwards compatibility; existing screens that import `colors` continue to render in light mode without breakage. Added `AppColors` type alias.
+  - `app/mobile/contexts/ThemeContext.tsx` (new): `<ThemeProvider>` wrapping the app + `useTheme()` hook returning `{ mode, scheme, colors, setMode }`. Three modes: `'system' | 'light' | 'dark'`. Persists choice via `safeStorage` under `eatpal.theme.mode`. **Migrates** the legacy boolean from `eatpal.profile.darkMode` (US-122) on first read, so users who toggled dark mode in the previous session don't lose their preference. Listens to `Appearance.addChangeListener` as a safety net for older RN versions where `useColorScheme` is stale.
+  - `app/_layout.tsx`: wraps the app in `<ThemeProvider>` (between `<MobileErrorBoundary>` and `<SafeAreaProvider>`).
+  - `app/(tabs)/profile.tsx`: replaced the single Dark Mode `Switch` with a three-segment `Light / Dark / System` picker. Each segment is a TouchableOpacity that sets `themeMode` via the context. The legacy `darkModeEnabled` state and its `PREF_KEYS.darkMode` persistence path were removed — context owns it now.
+- AC verdict (per AC line):
+  - "Detect system color scheme using useColorScheme" — ✅ via context.
+  - "Theme context with light and dark color tokens" — ✅
+  - "All mobile screens use theme-aware colors" — **partial**. Provider is wired and any screen can opt in via `useTheme()`. The bulk migration (every screen swapping `colors.text` → `useTheme().colors.text`) is a follow-up sweep — flagged in the PRD note. The current behaviour is light-mode parity (no regressions); dark mode is exposed in Settings and will activate as screens migrate.
+  - "Tab bar respects dark mode" — `_layout.tsx` still reads `colors.tabActive`/`tabInactive` from the static export; following the migration plan, this becomes `useTheme()` in the next iteration. Tab bar remains light-mode for now.
+  - "Settings toggle for theme override (light/dark/system)" — ✅
+  - "Store theme preference in expo-secure-store" — ✅ via `safeStorage` (uses expo-secure-store on native).
+  - "App builds without errors" — ✅
+- Verification: `npm run build` → built in ~1m, no errors.
+- **Learnings:**
+  - The fastest way to add a theme system without a 30-file refactor is the **dual-export** trick: keep the legacy static `colors` (light) so nothing breaks, add `LIGHT_COLORS`/`DARK_COLORS` + a hook for screens that want to opt in. Migrate screens one at a time as you touch them for other reasons.
+  - Migrating a legacy boolean preference (US-122 `eatpal.profile.darkMode`) into a richer enum (US-129 `light|dark|system`) needs the **read-once migration** pattern: on hydration, if the new key is unset but the legacy key is set, derive the new value from the old, write the new key, and never read the legacy key again. That way the migration is idempotent and self-healing.
+  - `useColorScheme` from RN re-renders on appearance changes automatically, but `Appearance.addChangeListener` is a safety net for environments where that's flaky (older RN, jest, certain custom renderers). Cheap insurance.
+---

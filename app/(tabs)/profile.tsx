@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client.mobile';
 import { safeStorage } from '@/lib/platform';
 import { sanitizeTextInput, INPUT_LIMITS } from '../../app/mobile/lib/validation';
 import { colors, spacing, fontSize, borderRadius } from '../../app/mobile/lib/theme';
+import { useTheme, type ThemeMode } from '../../app/mobile/contexts/ThemeContext';
 
 const PREF_KEYS = {
   notifications: 'eatpal.profile.notifications',
@@ -51,20 +52,19 @@ export default function ProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
-  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
+  // Dark-mode preference is now owned by ThemeContext (light / dark / system).
+  const { mode: themeMode, setMode: setThemeMode } = useTheme();
 
-  // Load persisted settings on mount.
+  // Load persisted settings on mount. (ThemeContext handles its own hydration.)
   useEffect(() => {
     (async () => {
       try {
-        const [notif, bio, dark] = await Promise.all([
+        const [notif, bio] = await Promise.all([
           safeStorage.getItem(PREF_KEYS.notifications),
           safeStorage.getItem(PREF_KEYS.biometric),
-          safeStorage.getItem(PREF_KEYS.darkMode),
         ]);
         if (notif !== null) setNotificationsEnabled(notif === 'true');
         if (bio !== null) setBiometricEnabled(bio === 'true');
-        if (dark !== null) setDarkModeEnabled(dark === 'true');
       } catch (err) {
         console.error('Failed to load profile prefs:', err);
       }
@@ -353,16 +353,28 @@ export default function ProfileScreen() {
             />
           </View>
 
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>Dark Mode</Text>
-            <Switch
-              value={darkModeEnabled}
-              onValueChange={(v) => { setDarkModeEnabled(v); void persistPref(PREF_KEYS.darkMode, v); }}
-              trackColor={{ false: colors.border, true: colors.primaryLight }}
-              thumbColor={darkModeEnabled ? colors.primary : '#f4f3f4'}
-              accessibilityLabel="Toggle dark mode"
-              accessibilityRole="switch"
-            />
+          {/* US-129: theme mode picker — Light / Dark / System */}
+          <View style={styles.settingColumn}>
+            <Text style={styles.settingLabel}>Appearance</Text>
+            <View style={styles.themeSegment}>
+              {(['light', 'dark', 'system'] as ThemeMode[]).map((m) => {
+                const active = themeMode === m;
+                return (
+                  <TouchableOpacity
+                    key={m}
+                    style={[styles.themeSegmentBtn, active && styles.themeSegmentBtnActive]}
+                    onPress={() => setThemeMode(m)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set appearance to ${m}`}
+                    accessibilityState={{ selected: active }}
+                  >
+                    <Text style={[styles.themeSegmentText, active && styles.themeSegmentTextActive]}>
+                      {m === 'light' ? 'Light' : m === 'dark' ? 'Dark' : 'System'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
         </View>
 
@@ -453,6 +465,25 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   settingLabel: { fontSize: fontSize.md, color: colors.text },
+  settingColumn: {
+    backgroundColor: colors.background, borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    marginBottom: spacing.xs, borderWidth: 1, borderColor: colors.border,
+    minHeight: 48,
+  },
+  themeSegment: {
+    flexDirection: 'row', backgroundColor: colors.surface,
+    borderRadius: borderRadius.md, padding: 4, marginTop: spacing.sm,
+    borderWidth: 1, borderColor: colors.border, gap: 4,
+  },
+  themeSegmentBtn: {
+    flex: 1, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.sm, alignItems: 'center', justifyContent: 'center',
+    minHeight: 40,
+  },
+  themeSegmentBtnActive: { backgroundColor: colors.primary },
+  themeSegmentText: { fontSize: fontSize.sm, color: colors.text, fontWeight: '600' },
+  themeSegmentTextActive: { color: colors.background, fontWeight: '700' },
   signOutButton: {
     height: 48, backgroundColor: '#fef2f2', borderRadius: borderRadius.md,
     justifyContent: 'center', alignItems: 'center', marginTop: spacing.md,

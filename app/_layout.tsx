@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client.mobile';
 import type { Session } from '@supabase/supabase-js';
 import { MobileErrorBoundary } from './mobile/components/MobileErrorBoundary';
 import { addBreadcrumb } from './mobile/lib/sentryMobile';
+import { ThemeProvider } from './mobile/contexts/ThemeContext';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -63,12 +64,14 @@ export default function RootLayout() {
 
   return (
     <MobileErrorBoundary>
-      <SafeAreaProvider>
-        <StatusBar style="auto" />
-        <AuthGate>
-          <Slot />
-        </AuthGate>
-      </SafeAreaProvider>
+      <ThemeProvider>
+        <SafeAreaProvider>
+          <StatusBar style="auto" />
+          <AuthGate>
+            <Slot />
+          </AuthGate>
+        </SafeAreaProvider>
+      </ThemeProvider>
     </MobileErrorBoundary>
   );
 }

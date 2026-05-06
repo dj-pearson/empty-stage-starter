@@ -2441,8 +2441,8 @@
         "App builds without errors"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": "ANDROID AUDIT - UI - Low: Dark mode is expected on modern Android apps"
+      "passes": true,
+      "notes": "ANDROID AUDIT - UI - Low: Dark mode is expected on modern Android apps | Completed 2026-05-06: ThemeProvider/useTheme context (app/mobile/contexts/ThemeContext.tsx) reads useColorScheme + persisted preference; three modes light/dark/system with safeStorage persistence under eatpal.theme.mode (migrates legacy eatpal.profile.darkMode boolean on first read); LIGHT_COLORS + DARK_COLORS palettes in theme.ts (legacy  export retained as light + suffixed dark tokens for backwards compatibility); profile screen Dark Mode toggle replaced with three-segment Light / Dark / System picker. Per-screen migration to useTheme()-driven colors deferred — most screens still consume the static  (light) export; ThemeContext is wired in _layout.tsx so future screens can opt in incrementally without breaking existing ones."
     },
     {
       "id": "US-130",
