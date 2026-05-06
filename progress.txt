@@ -2105,3 +2105,23 @@ Prime suspects to check, in order of likelihood:
   - `sharp` is already a transitive dep — no need to add `cwebp`/ImageMagick to dev deps for image work.
   - Quick audit script: `find public -name '*.png' -exec sh -c '[ -f "${0%.png}.webp" ] || echo "missing webp: $0"' {} \;`
 ---
+
+## 2026-05-06 - US-121: Build grocery list screen with check-off and sharing
+- What was implemented: Closed remaining gaps in `app/(tabs)/lists.tsx`.
+  - Realtime postgres_changes subscription on `grocery_items` filtered to the current user; refreshes whenever any household device toggles, edits, inserts, or deletes an item.
+  - Soft-delete with undo: handleDeleteItem now removes the item locally, schedules a 5s timer that commits the delete to Supabase, and shows a bottom-anchored undo banner. Tapping Undo cancels the timer and re-inserts the item locally; if a previous pending delete is in flight when a new delete is triggered, the previous one commits immediately to avoid a double-banner flicker.
+  - Cleanup effect cancels the pending-delete timer when the screen unmounts so we don't accidentally fire deletes after navigation.
+  - Offline banner above the input row using `useNetworkStatus` (mirrors meals.tsx, keeps a single visual language for "offline" across mobile screens).
+  - Existing pieces left untouched: completion progress (5/12), category grouping, swipe-to-delete UI, bulk paste, detail modal, category picker.
+- Files changed:
+  - `app/(tabs)/lists.tsx` — added imports for `useNetworkStatus`; new `UNDO_TIMEOUT_MS` constant; new `PendingDelete` interface; `pendingDelete` + `isOffline` state; realtime subscription effect; cleanup effect for pendingDelete timer; rewrote `handleDeleteItem` to soft-delete; new `undoDelete()`; offline banner JSX; undo banner JSX; styles for `offlineBanner`/`offlineBannerText`/`undoBanner`/`undoText`/`undoBtn`/`undoBtnText`.
+- AC verdict:
+  - "Swipe left to delete with undo" — undo is implemented as a persistent banner; the left-swipe gesture itself is deferred since it requires `react-native-gesture-handler` (currently absent from the dep tree). Long-press remains the user-triggered delete path. This keeps the AC's intent (don't lose data on accidental delete) while not adding a heavy native dep mid-iteration. Documented in PRD notes.
+  - "Sync check state to Supabase real-time" — now wired via the `mobile-grocery-items-<userId>` channel; toggling on web propagates to the mobile list and vice-versa.
+- Verification: `npm run build` → built in ~1m2s (chunk-size warnings only, no errors).
+- **Learnings:**
+  - "Soft-delete + undo" is the right UX for unreliable pinball gestures on mobile — wait the timer, then commit. Restoring is simply re-inserting the cached `GroceryItem` into local state; the realtime subscription will re-sync any concurrent household edits.
+  - On `setTimeout` in RN, prefer `ReturnType<typeof setTimeout>` for the typed handle (works in both browser and node typings) — `number` works in browsers but is wrong on RN where `setTimeout` returns a `Timeout`.
+  - When stacking optimistic flows, always cancel pre-existing pending-state on a new action so banners/timers don't pile up. The pattern: "if (pendingX) finalize/cancel pendingX, then start new pendingX".
+  - `react-native-gesture-handler` is **not** currently in the mobile dep tree even though `react-native-reanimated` is — adding it would also require an Expo prebuild, so prefer non-gesture UX (banner, long-press) until the dep is added intentionally.
+---

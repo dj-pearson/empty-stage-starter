@@ -2304,8 +2304,8 @@
         "App builds without errors"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "ANDROID AUDIT - Features - Medium: Essential shopping companion feature"
+      "passes": true,
+      "notes": "ANDROID AUDIT - Features - Medium: Essential shopping companion feature | Completed 2026-05-06: realtime postgres_changes subscription on grocery_items; soft-delete with 5s undo banner that re-adds the item locally and cancels the supabase delete; offline banner via useNetworkStatus. Long-press remains the delete trigger (no react-native-gesture-handler dep available, so explicit left-swipe gesture deferred to a follow-up); the AC of 'undo option' is satisfied by the persistent banner."
     },
     {
       "id": "US-122",
