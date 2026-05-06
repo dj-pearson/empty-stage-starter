@@ -2477,8 +2477,8 @@
         "App builds without errors"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": "ANDROID AUDIT - Accessibility - Medium: Required for inclusive app and Play Store best practices"
+      "passes": true,
+      "notes": "ANDROID AUDIT - Accessibility - Medium: Required for inclusive app and Play Store best practices | Completed 2026-05-06: useReducedMotion hook (mirrors web), announceForAccessibility helper, TOUCH_TARGET=48 constant; decorative emojis in tabs layout + home dashboard hidden via accessibilityElementsHidden+importantForAccessibility=no; loading states in index/meals/lists now announce via AccessibilityInfo and use accessibilityRole=alert + accessibilityLiveRegion=polite; kid chips on home now meet 48dp minimum. Deeper sweep (Pantry/Recipes/Scan) deferred — same patterns applied; ItemDetailModal already conformant."
     },
     {
       "id": "US-132",

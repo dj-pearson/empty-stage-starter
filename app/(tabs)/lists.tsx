@@ -22,6 +22,7 @@ import { ItemDetailModal, type EditableItem } from '../../app/mobile/components/
 import { BulkAddSheet } from '../../app/mobile/components/BulkAddSheet';
 import { QuickCategoryPicker } from '../../app/mobile/components/QuickCategoryPicker';
 import { useNetworkStatus } from '../../app/mobile/hooks/useNetworkStatus';
+import { announceForAccessibility } from '../../app/mobile/lib/a11y';
 
 const UNDO_TIMEOUT_MS = 5000;
 
@@ -412,10 +413,15 @@ export default function ListsScreen() {
   const totalCount = items.length;
 
   if (isLoading) {
+    announceForAccessibility('Loading grocery list');
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView
+        style={styles.container}
+        accessibilityRole="alert"
+        accessibilityLiveRegion="polite"
+      >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.primary} accessibilityLabel="Loading" />
         </View>
       </SafeAreaView>
     );

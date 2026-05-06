@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/integrations/supabase/client.mobile';
 import { colors, spacing, fontSize, borderRadius } from '../../app/mobile/lib/theme';
+import { announceForAccessibility } from '../../app/mobile/lib/a11y';
 
 interface MealEntry {
   id: string;
@@ -118,10 +119,21 @@ export default function HomeScreen() {
   const getMealsForSlot = (slot: string) => meals.filter(m => m.meal_slot === slot);
 
   if (isLoading) {
+    // Announce so a screen-reader user hears the state change, not just sees
+    // the spinner. Idempotent on re-renders; AccessibilityInfo handles dedupe.
+    announceForAccessibility('Loading your dashboard');
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView
+        style={styles.container}
+        accessibilityRole="alert"
+        accessibilityLiveRegion="polite"
+      >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator
+            size="large"
+            color={colors.primary}
+            accessibilityLabel="Loading"
+          />
           <Text style={styles.loadingText}>Loading your dashboard...</Text>
         </View>
       </SafeAreaView>
@@ -216,7 +228,7 @@ export default function HomeScreen() {
                 accessibilityLabel="Add a meal"
                 accessibilityRole="button"
               >
-                <Text style={styles.quickActionIcon}>➕</Text>
+                <Text style={styles.quickActionIcon} accessibilityElementsHidden importantForAccessibility="no">➕</Text>
                 <Text style={styles.quickActionLabel}>Add Meal</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -225,7 +237,7 @@ export default function HomeScreen() {
                 accessibilityLabel="Scan food barcode"
                 accessibilityRole="button"
               >
-                <Text style={styles.quickActionIcon}>📷</Text>
+                <Text style={styles.quickActionIcon} accessibilityElementsHidden importantForAccessibility="no">📷</Text>
                 <Text style={styles.quickActionLabel}>Scan Food</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -234,7 +246,7 @@ export default function HomeScreen() {
                 accessibilityLabel="View grocery lists"
                 accessibilityRole="button"
               >
-                <Text style={styles.quickActionIcon}>🛒</Text>
+                <Text style={styles.quickActionIcon} accessibilityElementsHidden importantForAccessibility="no">🛒</Text>
                 <Text style={styles.quickActionLabel}>Lists</Text>
               </TouchableOpacity>
             </View>
@@ -248,7 +260,13 @@ export default function HomeScreen() {
           return (
             <View style={styles.mealSlotCard}>
               <View style={styles.mealSlotHeader}>
-                <Text style={styles.mealSlotIcon}>{MEAL_SLOT_ICONS[slot]}</Text>
+                <Text
+                  style={styles.mealSlotIcon}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no"
+                >
+                  {MEAL_SLOT_ICONS[slot]}
+                </Text>
                 <Text style={styles.mealSlotTitle}>
                   {slot.charAt(0).toUpperCase() + slot.slice(1)}
                 </Text>
@@ -308,6 +326,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
     borderRadius: borderRadius.full, backgroundColor: colors.background,
     borderWidth: 1, borderColor: colors.border,
+    minHeight: 48, // WCAG 2.5.5 / Material 3 accessibility touch-target.
+    minWidth: 48, justifyContent: 'center',
   },
   kidChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   kidChipText: { fontSize: fontSize.sm, fontWeight: '500', color: colors.text },

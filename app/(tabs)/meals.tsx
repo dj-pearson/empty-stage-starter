@@ -16,6 +16,7 @@ import { colors, spacing, fontSize, borderRadius } from '../../app/mobile/lib/th
 import { suggestCategory } from '../../app/mobile/lib/unit-suggestions';
 import { sanitizeTextInput } from '../../app/mobile/lib/validation';
 import { useNetworkStatus } from '../../app/mobile/hooks/useNetworkStatus';
+import { announceForAccessibility } from '../../app/mobile/lib/a11y';
 import {
   PlannerSearchSheet,
   type PlannerSelection,
@@ -574,10 +575,16 @@ export default function MealsScreen() {
   );
 
   if (loading) {
+    announceForAccessibility('Loading meal plan');
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView
+        style={styles.container}
+        edges={['top']}
+        accessibilityRole="alert"
+        accessibilityLiveRegion="polite"
+      >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.primary} accessibilityLabel="Loading" />
         </View>
       </SafeAreaView>
     );
