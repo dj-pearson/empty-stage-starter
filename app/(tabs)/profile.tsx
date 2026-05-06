@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/integrations/supabase/client.mobile';
+import { safeStorage } from '@/lib/platform';
+import { sanitizeTextInput } from '../../app/mobile/lib/validation';
 import { colors, spacing, fontSize, borderRadius } from '../../app/mobile/lib/theme';
+
+const PREF_KEYS = {
+  notifications: 'eatpal.profile.notifications',
+  biometric: 'eatpal.profile.biometric',
+  darkMode: 'eatpal.profile.darkMode',
+} as const;
 
 interface UserProfile {
   email: string;
@@ -25,20 +33,53 @@ interface Kid {
   age?: number;
 }
 
+interface SubscriptionSummary {
+  plan: string;
+  isActive: boolean;
+  renewalDate: string | null;
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [kids, setKids] = useState<Kid[]>([]);
+  const [subscription, setSubscription] = useState<SubscriptionSummary>({
+    plan: 'Free',
+    isActive: true,
+    renewalDate: null,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
 
+  // Load persisted settings on mount.
   useEffect(() => {
-    fetchProfile();
+    (async () => {
+      try {
+        const [notif, bio, dark] = await Promise.all([
+          safeStorage.getItem(PREF_KEYS.notifications),
+          safeStorage.getItem(PREF_KEYS.biometric),
+          safeStorage.getItem(PREF_KEYS.darkMode),
+        ]);
+        if (notif !== null) setNotificationsEnabled(notif === 'true');
+        if (bio !== null) setBiometricEnabled(bio === 'true');
+        if (dark !== null) setDarkModeEnabled(dark === 'true');
+      } catch (err) {
+        console.error('Failed to load profile prefs:', err);
+      }
+    })();
   }, []);
 
-  const fetchProfile = async () => {
+  const persistPref = useCallback(async (key: string, value: boolean) => {
+    try {
+      await safeStorage.setItem(key, value ? 'true' : 'false');
+    } catch (err) {
+      console.error('Failed to persist pref', key, err);
+    }
+  }, []);
+
+  const fetchProfile = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -54,14 +95,119 @@ export default function ProfileScreen() {
       const { data: kidsData } = await supabase
         .from('kids')
         .select('id, name, age')
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .order('name');
 
-      if (kidsData) setKids(kidsData);
+      if (kidsData) setKids(kidsData as Kid[]);
+
+      // Fetch real subscription so the screen doesn't always show "Free Plan".
+      const { data: subRows } = await supabase
+        .from('user_subscriptions')
+        .select('tier, status, current_period_end')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      if (subRows && subRows.length > 0) {
+        const sub = subRows[0] as { tier: string | null; status: string | null; current_period_end: string | null };
+        setSubscription({
+          plan: (sub.tier ?? 'free').replace(/^./, c => c.toUpperCase()),
+          isActive: sub.status === 'active' || sub.status === 'trialing',
+          renewalDate: sub.current_period_end,
+        });
+      }
     } catch (err) {
       console.error('Error fetching profile:', err);
     } finally {
       setIsLoading(false);
     }
+  }, [router]);
+
+  useEffect(() => {
+    void fetchProfile();
+  }, [fetchProfile]);
+
+  const handleAddKid = () => {
+    Alert.prompt(
+      'Add a kid',
+      "What's their name?",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Add',
+          onPress: async (input?: string) => {
+            const name = sanitizeTextInput(input ?? '', 60);
+            if (!name) return;
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (!user) return;
+              const { data, error } = await supabase
+                .from('kids')
+                .insert({ user_id: user.id, name })
+                .select('id, name, age')
+                .single();
+              if (error) throw error;
+              if (data) setKids(prev => [...prev, data as Kid].sort((a, b) => a.name.localeCompare(b.name)));
+            } catch (err) {
+              console.error('Add kid failed:', err);
+              Alert.alert('Could not add kid', 'Please try again.');
+            }
+          },
+        },
+      ],
+      'plain-text'
+    );
+  };
+
+  const handleEditKid = (kid: Kid) => {
+    Alert.prompt(
+      'Rename kid',
+      'New name',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Save',
+          onPress: async (input?: string) => {
+            const name = sanitizeTextInput(input ?? '', 60);
+            if (!name || name === kid.name) return;
+            try {
+              const { error } = await supabase.from('kids').update({ name }).eq('id', kid.id);
+              if (error) throw error;
+              setKids(prev => prev.map(k => k.id === kid.id ? { ...k, name } : k).sort((a, b) => a.name.localeCompare(b.name)));
+            } catch (err) {
+              console.error('Rename kid failed:', err);
+              Alert.alert('Could not rename', 'Please try again.');
+            }
+          },
+        },
+      ],
+      'plain-text',
+      kid.name
+    );
+  };
+
+  const handleDeleteKid = (kid: Kid) => {
+    Alert.alert(
+      'Delete kid?',
+      `Remove ${kid.name} and all of their meal data?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase.from('kids').delete().eq('id', kid.id);
+              if (error) throw error;
+              setKids(prev => prev.filter(k => k.id !== kid.id));
+            } catch (err) {
+              console.error('Delete kid failed:', err);
+              Alert.alert('Could not delete', 'Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleSignOut = () => {
@@ -110,10 +256,28 @@ export default function ProfileScreen() {
 
         {/* Kids Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Kids</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Kids</Text>
+            <TouchableOpacity
+              onPress={handleAddKid}
+              accessibilityLabel="Add kid"
+              accessibilityRole="button"
+              style={styles.addKidPill}
+            >
+              <Text style={styles.addKidPillText}>＋ Add</Text>
+            </TouchableOpacity>
+          </View>
           {kids.length > 0 ? (
             kids.map((kid) => (
-              <View key={kid.id} style={styles.kidRow}>
+              <TouchableOpacity
+                key={kid.id}
+                style={styles.kidRow}
+                onPress={() => handleEditKid(kid)}
+                onLongPress={() => handleDeleteKid(kid)}
+                delayLongPress={400}
+                accessibilityLabel={`${kid.name}. Tap to rename, long-press to delete.`}
+                accessibilityHint="Tap to rename, long-press to delete"
+              >
                 <View style={styles.kidAvatar}>
                   <Text style={styles.kidAvatarText}>
                     {kid.name.charAt(0).toUpperCase()}
@@ -125,11 +289,12 @@ export default function ProfileScreen() {
                     <Text style={styles.kidAge}>Age {kid.age}</Text>
                   )}
                 </View>
-              </View>
+                <Text style={styles.kidChevron}>›</Text>
+              </TouchableOpacity>
             ))
           ) : (
             <Text style={styles.emptyText}>
-              No kids added yet. Add kids in the web app to get started.
+              No kids added yet. Tap + Add to create a profile.
             </Text>
           )}
         </View>
@@ -138,15 +303,25 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Subscription</Text>
           <View style={styles.subCard}>
-            <Text style={styles.subPlan}>Free Plan</Text>
-            <Text style={styles.subDetail}>Upgrade to unlock AI meal planning and more</Text>
-            <TouchableOpacity
-              style={styles.upgradeButton}
-              accessibilityLabel="Upgrade subscription"
-              accessibilityRole="button"
-            >
-              <Text style={styles.upgradeButtonText}>Upgrade</Text>
-            </TouchableOpacity>
+            <Text style={styles.subPlan}>{subscription.plan} Plan</Text>
+            {subscription.isActive && subscription.renewalDate ? (
+              <Text style={styles.subDetail}>
+                Renews {new Date(subscription.renewalDate).toLocaleDateString()}
+              </Text>
+            ) : (
+              <Text style={styles.subDetail}>
+                Upgrade to unlock AI meal planning and more
+              </Text>
+            )}
+            {!subscription.isActive || subscription.plan.toLowerCase() === 'free' ? (
+              <TouchableOpacity
+                style={styles.upgradeButton}
+                accessibilityLabel="Upgrade subscription"
+                accessibilityRole="button"
+              >
+                <Text style={styles.upgradeButtonText}>Upgrade</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
 
@@ -158,7 +333,7 @@ export default function ProfileScreen() {
             <Text style={styles.settingLabel}>Notifications</Text>
             <Switch
               value={notificationsEnabled}
-              onValueChange={setNotificationsEnabled}
+              onValueChange={(v) => { setNotificationsEnabled(v); void persistPref(PREF_KEYS.notifications, v); }}
               trackColor={{ false: colors.border, true: colors.primaryLight }}
               thumbColor={notificationsEnabled ? colors.primary : '#f4f3f4'}
               accessibilityLabel="Toggle notifications"
@@ -170,7 +345,7 @@ export default function ProfileScreen() {
             <Text style={styles.settingLabel}>Biometric Lock</Text>
             <Switch
               value={biometricEnabled}
-              onValueChange={setBiometricEnabled}
+              onValueChange={(v) => { setBiometricEnabled(v); void persistPref(PREF_KEYS.biometric, v); }}
               trackColor={{ false: colors.border, true: colors.primaryLight }}
               thumbColor={biometricEnabled ? colors.primary : '#f4f3f4'}
               accessibilityLabel="Toggle biometric authentication"
@@ -182,7 +357,7 @@ export default function ProfileScreen() {
             <Text style={styles.settingLabel}>Dark Mode</Text>
             <Switch
               value={darkModeEnabled}
-              onValueChange={setDarkModeEnabled}
+              onValueChange={(v) => { setDarkModeEnabled(v); void persistPref(PREF_KEYS.darkMode, v); }}
               trackColor={{ false: colors.border, true: colors.primaryLight }}
               thumbColor={darkModeEnabled ? colors.primary : '#f4f3f4'}
               accessibilityLabel="Toggle dark mode"
@@ -229,10 +404,21 @@ const styles = StyleSheet.create({
   userName: { fontSize: fontSize.xl, fontWeight: '700', color: colors.text },
   userEmail: { fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 2 },
   section: { marginBottom: spacing.md },
+  sectionHeaderRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: spacing.sm, paddingHorizontal: spacing.xs,
+  },
   sectionTitle: {
     fontSize: fontSize.md, fontWeight: '700', color: colors.text,
     marginBottom: spacing.sm, paddingHorizontal: spacing.xs,
   },
+  addKidPill: {
+    paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full, backgroundColor: colors.primary,
+    minHeight: 32, justifyContent: 'center',
+  },
+  addKidPillText: { color: colors.background, fontSize: fontSize.xs, fontWeight: '700' },
+  kidChevron: { fontSize: fontSize.xl, color: colors.textSecondary, paddingHorizontal: spacing.xs },
   kidRow: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.md,
     backgroundColor: colors.background, borderRadius: borderRadius.md,

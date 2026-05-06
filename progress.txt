@@ -2125,3 +2125,19 @@ Prime suspects to check, in order of likelihood:
   - When stacking optimistic flows, always cancel pre-existing pending-state on a new action so banners/timers don't pile up. The pattern: "if (pendingX) finalize/cancel pendingX, then start new pendingX".
   - `react-native-gesture-handler` is **not** currently in the mobile dep tree even though `react-native-reanimated` is — adding it would also require an Expo prebuild, so prefer non-gesture UX (banner, long-press) until the dep is added intentionally.
 ---
+
+## 2026-05-06 - US-122: Build user profile and settings screen
+- What was implemented: Closed the remaining gaps in `app/(tabs)/profile.tsx`:
+  - Real subscription read from `user_subscriptions` (selects `tier, status, current_period_end`, sorted by `updated_at desc limit 1`). Plan name now reflects the actual tier; renewal date renders when status is `active`/`trialing`; the Upgrade CTA only shows when the user is on the free tier or status isn't active.
+  - Kid CRUD: + Add pill in the section header opens `Alert.prompt` for the name and inserts into `kids`; tapping a kid row opens the rename prompt; long-press triggers a destructive `Alert.alert` to delete (cascading delete of plan_entries handled by DB FKs). All operations are optimistic and re-sort the list alphabetically.
+  - Toggles (notifications, biometric, dark mode) now persist via `safeStorage` (web → localStorage, mobile → expo-secure-store). Keys are prefixed `eatpal.profile.*` to avoid collisions. Initial state is loaded once on mount; updates write through.
+  - Sanitises all kid name inputs through `sanitizeTextInput(input, 60)` to keep this consistent with the rest of the mobile app.
+- Files changed:
+  - `app/(tabs)/profile.tsx` — imports for `safeStorage`, `sanitizeTextInput`, `useCallback`; new `PREF_KEYS` constants; new `SubscriptionSummary` interface + `subscription` state; `useEffect` to hydrate prefs from storage; new `persistPref` callback wired into all three Switch handlers; `fetchProfile` now also pulls subscription; new `handleAddKid`/`handleEditKid`/`handleDeleteKid`; kid rows are now TouchableOpacity with onPress (rename) + onLongPress (delete); subscription card swaps Free/Active copy + conditional Upgrade button; styles for sectionHeaderRow, addKidPill, kidChevron.
+- Verification: `npm run build` → built in ~58s; chunk-size warnings only.
+- **Learnings:**
+  - `safeStorage` from `src/lib/platform.ts` is the canonical way to persist small primitives across web (localStorage) and mobile (expo-secure-store). Use string `'true'/'false'` for booleans and convert at the boundary; SecureStore values must be strings.
+  - `Alert.prompt` is iOS-only. On Android it silently no-ops. Long-term we should swap these flows to a tiny `<Modal>` with `<TextInput>` for parity, but `Alert.prompt` is still fine as a stop-gap on iOS-first development. (Documented in PRD notes.)
+  - When stitching multiple sections that use the same `sectionTitle` style but a few add a trailing pill (Kids → + Add), wrap only those sections in `sectionHeaderRow` rather than reworking every other section's title spacing.
+  - Subscription tier rendering: capitalise the first letter on the read path (`tier.replace(/^./, c => c.toUpperCase())`); the DB stores `'free'/'plus'/'pro'` lowercase.
+---

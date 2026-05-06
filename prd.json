@@ -2321,8 +2321,8 @@
         "App builds without errors"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "ANDROID AUDIT - UX - Medium: Account management needed for complete app"
+      "passes": true,
+      "notes": "ANDROID AUDIT - UX - Medium: Account management needed for complete app | Completed 2026-05-06: real subscription read from user_subscriptions (tier/status/current_period_end); kid CRUD via Alert.prompt for add/rename and Alert.alert for delete; toggle states (notifications, biometric, dark mode) now persist via safeStorage (expo-secure-store on mobile, localStorage on web)."
     },
     {
       "id": "US-123",
