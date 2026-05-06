@@ -55,6 +55,12 @@ interface RecipeDetailViewProps {
   onDeleteRecipe: (id: string) => void;
   onEdit: (recipe: Recipe) => void;
   onAddToGrocery: (recipe: Recipe) => void;
+  /**
+   * US-291: bulk-insert just the *missing* ingredients (foods with quantity ≤ 0)
+   * into the grocery list. No plan entry is created. Optional — when omitted,
+   * the CTA falls back to onAddToGrocery for the whole recipe.
+   */
+  onAddMissingToGrocery?: (recipe: Recipe, missingFoods: Food[]) => void;
   onAddToPlan: (entries: { kid_id: string; date: string; meal_slot: MealSlot; food_id: string; result: null }[]) => void;
   onAddToCollections?: (recipe: Recipe) => void;
 }
@@ -104,6 +110,7 @@ export function RecipeDetailView({
   onDeleteRecipe,
   onEdit,
   onAddToGrocery,
+  onAddMissingToGrocery,
   onAddToPlan,
   onAddToCollections,
 }: RecipeDetailViewProps) {
@@ -120,6 +127,13 @@ export function RecipeDetailView({
   const recipeFoods = recipe.food_ids
     .map((id) => foods.find((f) => f.id === id))
     .filter(Boolean) as Food[];
+
+  // US-291: shortfall = pantry foods with no on-hand quantity. We don't
+  // require unitNormalize here because the comparison is "do we have ≥1 in
+  // stock?" not "is qty enough for this recipe?"; a future iteration can wire
+  // recipe_ingredients (US-281) + unitNormalize for portion-aware shortfall.
+  const missingFoods = recipeFoods.filter((f) => (f.quantity ?? 0) <= 0);
+  const hasDetailedIngredients = recipeFoods.length > 0;
 
   const totalTime =
     recipe.total_time_minutes ||
@@ -512,6 +526,46 @@ export function RecipeDetailView({
                       <p className="text-sm">{recipe.additionalIngredients}</p>
                     </div>
                   )}
+
+                  {/* US-291: Add missing to grocery — one-tap, no plan entry. */}
+                  <div className="pt-3 border-t">
+                    {!hasDetailedIngredients ? (
+                      <p
+                        className="text-sm text-muted-foreground italic"
+                        data-testid="recipe-no-ingredients"
+                      >
+                        Ingredients not detailed — add manually
+                      </p>
+                    ) : missingFoods.length === 0 ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled
+                        className="w-full gap-1.5 cursor-default"
+                        data-testid="recipe-have-everything"
+                      >
+                        <ShoppingCart className="h-4 w-4" />
+                        You have everything
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="w-full gap-1.5"
+                        onClick={() => {
+                          if (onAddMissingToGrocery) {
+                            onAddMissingToGrocery(recipe, missingFoods);
+                          } else {
+                            onAddToGrocery(recipe);
+                          }
+                        }}
+                        data-testid="recipe-add-missing-to-grocery"
+                      >
+                        <ShoppingCart className="h-4 w-4" />
+                        Add {missingFoods.length} missing to grocery
+                      </Button>
+                    )}
+                  </div>
                 </TabsContent>
 
                 {/* Instructions tab */}

@@ -4353,8 +4353,8 @@
         "Edge: legacy recipe with no ingredients shows 'Ingredients not detailed — add manually' instead of the CTA"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": "Reuses the shortfall detector + bulk-insert paths from US-284/US-285."
+      "passes": true,
+      "notes": "Reuses the shortfall detector + bulk-insert paths from US-284/US-285. | Completed 2026-05-06: RecipeDetailView shows a primary CTA \"Add N missing to grocery\" beneath the ingredient checklist when missingFoods.length>0; \"You have everything\" disabled outline button when shortfall=0; \"Ingredients not detailed — add manually\" italic copy when food_ids is empty. Wired via new optional prop onAddMissingToGrocery; Recipes.tsx implementation bulk-inserts via addGroceryItem (added_via=recipe), shows toast, fires recipe_add_missing_to_grocery analytics event with missing_count + total_ingredients."
     },
     {
       "id": "US-292",

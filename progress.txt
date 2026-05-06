@@ -2208,3 +2208,32 @@ Prime suspects to check, in order of likelihood:
   - The naming "mirror iOS UnitInference" in the AC is a misnomer — iOS UnitInference.swift is about *defaulting* a unit from a product name (eggs → dozen), not converting. The web util this story actually wants is conversion + family classification. Both will need to be present long-term: name → default unit, qty+unit → canonical+family.
   - `src/lib/unitNormalize.ts` is consumed by the upcoming shortfall logic for US-284/US-285 (recipe-add bulk prompt) and US-290/US-291 (plan-aware grocery flags + recipe-detail one-tap).
 ---
+
+## 2026-05-06 - US-291: Recipe view — 'Add missing to grocery' one-tap (no plan needed)
+- What was implemented: RecipeDetailView gained a one-tap CTA for the
+  "I want to cook this tonight, what am I missing?" flow — no plan entry
+  created, no SmartGroceryDialog round-trip.
+- Files changed:
+  - `src/components/recipes/RecipeDetailView.tsx`
+    - New optional prop `onAddMissingToGrocery?: (recipe, missingFoods) => void`. Falls back to `onAddToGrocery` when omitted, so existing call sites that haven't wired it up keep working.
+    - Compute `missingFoods = recipeFoods.filter(f => (f.quantity ?? 0) <= 0)` from the existing `recipeFoods` array (no extra DB hit).
+    - New CTA block at the end of the Ingredients tab covers all three states: empty `food_ids` → italic "Ingredients not detailed — add manually"; `missingFoods.length === 0` → disabled outline "You have everything"; otherwise → primary "Add N missing to grocery".
+    - data-testids (`recipe-no-ingredients`, `recipe-have-everything`, `recipe-add-missing-to-grocery`) so vitest/playwright can assert the right state.
+  - `src/pages/Recipes.tsx`
+    - New `handleAddMissingToGrocery(recipe, missingFoods)` callback. Iterates through `addGroceryItem({ name, quantity:1, unit, category, added_via:'recipe' })`. Toast: "Added N items to grocery / <recipe name>".
+    - Imports `analytics` from `@/lib/analytics` and fires `recipe_add_missing_to_grocery` event with `recipe_id`, `missing_count`, `total_ingredients` properties.
+    - Imports `Food` from `@/types` (was previously implicit via `Recipe`).
+    - Wires `onAddMissingToGrocery={handleAddMissingToGrocery}` on the RecipeDetailView render.
+- AC verdict:
+  - "Add 4 missing to grocery" CTA shown under ingredients when shortfall > 0 ✅
+  - "You have everything" success state when shortfall = 0 ✅
+  - "Ingredients not detailed — add manually" edge case for legacy recipes ✅
+  - Telemetry: `recipe_add_missing_to_grocery(missing_count, total_ingredients)` ✅
+  - iOS parity (the mirror in iOS RecipeDetailView) is a follow-up — flagged in PRD note. Web is shipped.
+- Verification: `npm run build` → built in ~58s, no errors.
+- **Learnings:**
+  - The shortfall today is binary ("do we have ≥1 of this food in stock?"). Once US-281 (RecipeIngredient with quantity/unit/foodId) lands, this CTA can use `unitNormalize.compare` (US-287) to ask the *right* question — "do we have enough flour for 2 cups?" — and surface partial shortfalls. Documented inline near `missingFoods` so the next iteration knows where to plug in.
+  - Optional props with prop fallback (onAddMissingToGrocery → onAddToGrocery) is a safe migration pattern. Saves a breaking-change refactor of every call site.
+  - `analytics.trackEvent({ name, properties })` is the canonical shape; `trackFeatureUsage`/`trackFormSubmission` etc. are convenience wrappers in `src/lib/analytics.ts`. Use the bare `trackEvent` when you need per-event property control.
+  - When wiring a new prop into `<RecipeDetailView />`, the props interface lives in the same file (line 47 area). No need to update a separate types file.
+---
