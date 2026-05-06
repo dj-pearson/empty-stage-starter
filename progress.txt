@@ -16,6 +16,15 @@
 - Schema components: ArticleSchema/FAQSchema/BreadcrumbSchema use Helmet (mock react-helmet-async); RecipeSchema uses useEffect + DOM manipulation (test via document.getElementById)
 - US-001 through US-006 already completed strict mode, dead code cleanup, env validation, error boundaries, route error boundaries, and API retry logic
 - Build: `npx vite build` (the `npm run build` has an Expo prebuild step that requires native deps; Cloudflare Pages should use `npx vite build`)
+- Mobile screens under `app/(tabs)/` use the shared `useNetworkStatus` hook from `app/mobile/hooks/useNetworkStatus.ts` (NetInfo dynamic import, web-safe). Reuse it for any future offline UX.
+- Mobile realtime subscription pattern: `supabase.auth.getUser()` inside the effect, build a unique channel name (`mobile-<table>-<userId>`), `.on('postgres_changes', { event:'*', schema:'public', table, filter:'user_id=eq.<id>' }, cb).subscribe()`, clean up via `supabase.removeChannel(channel)` on unmount.
+- Soft-delete + 5s undo banner: hide locally, schedule `setTimeout` that commits the supabase.delete, expose Undo to cancel + re-add. If a new delete arrives mid-window, finalise the previous one to prevent stacking banners.
+- Cross-platform persistent prefs: `safeStorage` from `src/lib/platform.ts` (web→localStorage, mobile→expo-secure-store). Booleans round-trip as `'true'/'false'`.
+- Vite `?raw` imports resolve relative to the importing file. Markdown content lives at `documents/*.md`; before relocating, run `git grep -E '\.md\?raw'`.
+- Mobile validation lives in `app/mobile/lib/validation.ts`: use `INPUT_LIMITS.{foodName|groceryName|recipeName|kidName|notes}` constants instead of magic numbers; use `validateNumericInput(input, kind)` for range-bounded parsing of quantity/calories/servings/percentage.
+- Phone-mockup / device-chrome dark mode: keep the styled chassis colour for both modes via `bg-gray-900 dark:bg-neutral-800`, but always switch the screen surface to semantic tokens (`bg-card text-card-foreground`).
+- Image optimisation: `sharp` is already a transitive dep — no need for cwebp/ImageMagick. `sharp(src).webp({ quality: 90 }).toFile(dest)` typically saves 79–94% on icons.
+- `react-native-gesture-handler` is **not** in the mobile dep tree even though `react-native-reanimated` is. Don't add gesture-based UX without an intentional dep + Expo prebuild bump; prefer non-gesture patterns (banner, long-press) until the dep is added.
 
 ---
 
@@ -2164,4 +2173,18 @@ Prime suspects to check, in order of likelihood:
   - Centralising limits in a single `INPUT_LIMITS` constant beats repeating 200/100 across files — when product changes a cap, you change one place.
   - `validateNumericInput` returning `null` for out-of-range is a stronger contract than `Math.max(0, raw)`; callers can fall back to a default *and* surface a UX nudge ("0–99,999 only"). For now ItemDetailModal silently falls back to 1, which mirrors the previous behaviour. Future polish: surface a toast when the input was clamped/rejected.
   - When tightening validation in a shared component (ItemDetailModal), check every consumer (`lists.tsx`, `pantry.tsx`) to make sure their downstream `payload.quantity ?? 1` fallback still does the right thing. Both consumers already had that fallback, so no breakage.
+---
+
+## 2026-05-06 - Ralph loop session summary
+- Stories completed this session: US-107, US-108, US-119, US-121, US-122, US-130 (6 stories).
+- Sequencing: started by fixing a pre-existing build break (`Blog_Titles.md ?raw` import path) so `npm run build` could run, then iterated on the highest-priority web/mobile-Expo stories whose AC could be exercised by the Vite build (`vite build`). Swift-only iOS stories (US-285/286/etc.) and Android-native Kotlin stories (US-123–US-129/131/132/133) were skipped because they require Xcode / Gradle to verify and are outside the scope of `npm run build`.
+- PRD status before session: 56 incomplete / 265 total.
+- PRD status after session: 50 incomplete / 265 total — 213 passing, 80% complete overall.
+- Final `npm run build`: ✓ built in ~58s (chunk-size warnings only, no errors).
+- Branch: `claude/ralph-loops-prd-progress-lNpGu` (per repo instructions).
+- Recommended next iterations (highest-priority remaining that this branch can verify with `npm run build`):
+  - US-120 (mobile barcode scanner): currently a placeholder — would need expo-camera wired up and OpenFoodFacts integration.
+  - US-134 (mobile error boundary + Sentry): existing Sentry web integration is reusable; mobile entry point needs an `ErrorBoundary` wrapper and a `Sentry.init` for the mobile bundle.
+  - US-129 (dark mode for mobile screens): partially blocked by lack of an app-wide theme provider. Would need to extend `app/mobile/lib/theme.ts` to be theme-aware.
+  - iOS-only stories require a separate Xcode-validated session.
 ---
