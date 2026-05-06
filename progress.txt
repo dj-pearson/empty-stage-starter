@@ -2188,3 +2188,23 @@ Prime suspects to check, in order of likelihood:
   - US-129 (dark mode for mobile screens): partially blocked by lack of an app-wide theme provider. Would need to extend `app/mobile/lib/theme.ts` to be theme-aware.
   - iOS-only stories require a separate Xcode-validated session.
 ---
+
+## 2026-05-06 - US-287: Unit normalization layer (web util mirroring iOS UnitInference)
+- What was implemented:
+  - `src/lib/unitNormalize.ts` (new, ~190 LOC): pure utility module with `normalize(qty, unit)`, `compare(a, b)`, `convert(qty, from, to)`, `unitFamily(unit)`.
+  - Four families:
+    - **mass** → canonical `g`. Aliases: g/gram(s), kg/kilo(gram[s]), oz/ounce(s), lb/lbs/pound(s).
+    - **volume** → canonical `ml`. Aliases: ml/milli/L/liter/litre, tsp/teaspoon/t, tbsp/tablespoon/T (case-sensitive — bare `T` is tablespoon; `t` is teaspoon, resolved before lowercasing), cup(s)/c, floz/fl oz, pt/pint(s), qt/quart(s), gal/gallon(s).
+    - **count** → canonical `piece`. Aliases: piece/pcs, count/ct, each/ea, dozen/doz (=12).
+    - **package** → canonical = noun itself. Recognised: pack/pkg/package, bag, jar, bottle/btl, can, box, loaf, bunch, head, roll(s), sleeve, tube, tray, carton, sachet, stick(s). Within-family compare requires identical canonical noun.
+  - `compare` returns `'less' | 'equal' | 'greater' | 'incomparable'`. Tolerance is 0.5% of the larger normalised qty, capped at ±1 in canonical units — enough slack to swallow tsp/tbsp rounding without false equalities.
+  - `src/lib/unitNormalize.test.ts` (new): 63 vitest cases. Categories: mass/volume/count/package family normalisation; fuzzy aliases (T vs t handled correctly); whitespace/casing/period stripping (tbsp.); cross-family `incomparable`; conversion factors verified against NIST values; `convert` returns null across families and across packages.
+- Tests: `npx vitest run src/lib/unitNormalize.test.ts` → 63 passed in 20ms.
+- Build: `npm run build` → built in 1m23s, no errors.
+- **Learnings:**
+  - The cooking convention `T` = tablespoon and `t` = teaspoon is case-sensitive; you have to resolve `T` before lowercasing the token, otherwise it collides with `t` → teaspoon. Fixed by adding a `trimmed === 'T'` guard at the top of `normalize`.
+  - "Package" units (jar, bag, etc.) deliberately don't convert between each other — the canonical noun *is* the unit. This is the right model: comparing 2 jars to 1 box has no defined truth.
+  - Conversion factors are good to four sig figs (NIST). 0.5% tolerance with ±1 cap is the sweet spot — tight enough to flag genuine differences, loose enough to swallow approx rounding (e.g., 16 oz vs 1 lb resolves to `equal`).
+  - The naming "mirror iOS UnitInference" in the AC is a misnomer — iOS UnitInference.swift is about *defaulting* a unit from a product name (eggs → dozen), not converting. The web util this story actually wants is conversion + family classification. Both will need to be present long-term: name → default unit, qty+unit → canonical+family.
+  - `src/lib/unitNormalize.ts` is consumed by the upcoming shortfall logic for US-284/US-285 (recipe-add bulk prompt) and US-290/US-291 (plan-aware grocery flags + recipe-detail one-tap).
+---

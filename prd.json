@@ -2074,8 +2074,8 @@
         "npm run build succeeds"
       ],
       "priority": 107,
-      "passes": false,
-      "notes": "ProductShowcase3D.tsx references /screenshots/meal-plan.png, progress.png, grocery.png. These directories/files may not exist yet. og-recipe-default.png on tryeatpal.com should also be WebP."
+      "passes": true,
+      "notes": "ProductShowcase3D.tsx references /screenshots/meal-plan.png, progress.png, grocery.png. These directories/files may not exist yet. og-recipe-default.png on tryeatpal.com should also be WebP. | Completed 2026-05-06: WebP siblings generated for Icon_120/152/1024 via sharp@0.34 webp(quality:90); 79-94% size reduction. Favicon and apple-touch-icon stay PNG per spec."
     },
     {
       "id": "US-108",
@@ -2088,8 +2088,8 @@
         "npm run build succeeds"
       ],
       "priority": 108,
-      "passes": false,
-      "notes": "Phone mockup in ProductShowcase3D uses hardcoded colors to simulate a physical device. These may be intentional but should be reviewed for dark mode context."
+      "passes": true,
+      "notes": "Phone mockup in ProductShowcase3D uses hardcoded colors to simulate a physical device. These may be intentional but should be reviewed for dark mode context. | Completed 2026-05-06: ProductShowcase3D phone chassis bg-gray-900 dark:bg-neutral-800 + dark:ring-neutral-700; screen swapped to bg-card text-card-foreground; carousel gradient and side-button greys also have dark variants."
     },
     {
       "id": "US-109",
@@ -4292,8 +4292,8 @@
         "Vitest matrix: 50+ unit pairs; documents which conversions are exact vs. approximate"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "Pure utility. No UI. Lights up the rest of the loop."
+      "passes": true,
+      "notes": "Pure utility. No UI. Lights up the rest of the loop. | Completed 2026-05-06: src/lib/unitNormalize.ts with normalize/compare/convert/unitFamily; mass(g)/volume(ml)/count(piece)/package(noun) families; full alias table (kg, lb, oz, cup, tbsp/T, tsp/t, floz, gal, qt, pt, dozen, jar, bag, etc.); cross-family compare returns incomparable. 63 vitest cases covering canonical pairs, fuzzy aliases, package canonical-noun matching, cross-family safety."
     },
     {
       "id": "US-288",
