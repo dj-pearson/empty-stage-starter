@@ -2313,3 +2313,22 @@ Prime suspects to check, in order of likelihood:
   - Migrating a legacy boolean preference (US-122 `eatpal.profile.darkMode`) into a richer enum (US-129 `light|dark|system`) needs the **read-once migration** pattern: on hydration, if the new key is unset but the legacy key is set, derive the new value from the old, write the new key, and never read the legacy key again. That way the migration is idempotent and self-healing.
   - `useColorScheme` from RN re-renders on appearance changes automatically, but `Appearance.addChangeListener` is a safety net for environments where that's flaky (older RN, jest, certain custom renderers). Cheap insurance.
 ---
+
+## 2026-05-06 - Ralph loop session #2 summary
+- Stories completed this session: US-287, US-291, US-134, US-131, US-129 (5 stories), plus correction of two duplicate-ID entries (the second US-107 / US-108 in prd.json that shared IDs with completed Phase-1 stories).
+- Total over both sessions: 11 web/Expo stories landed (US-107, US-108, US-119, US-121, US-122, US-129, US-130, US-131, US-134, US-287, US-291).
+- PRD status: **220 passing / 265 total → 83% complete** (up from 80%).
+- Final `npm run build`: ✓ built in ~1m, chunk-size warnings only.
+- New shared infrastructure that future iterations can build on:
+  - `src/lib/unitNormalize.ts` — qty/unit normaliser + comparator for shortfall/scaling logic.
+  - `app/mobile/lib/sentryMobile.ts` — Sentry shim with one-file swap path to `@sentry/react-native`.
+  - `app/mobile/lib/a11y.ts` — `announceForAccessibility` + `TOUCH_TARGET=48` constant.
+  - `app/mobile/hooks/useReducedMotion.ts` — RN AccessibilityInfo wrapper.
+  - `app/mobile/contexts/ThemeContext.tsx` — three-mode theme provider with legacy-boolean migration.
+- Recommended next iterations on this branch (still verifiable by `npm run build`):
+  - US-288 (Web Pantry: insanely-fast quick-add UX) — builds on US-287 unitNormalize for parser hints.
+  - US-290 (Plan-aware grocery flags) — uses unitNormalize.compare for shortfall counts on plan entries.
+  - US-292 (Loop close-out: clear missing flags when groceries become pantry) — depends on US-290.
+  - Per-screen migration of static `colors` → `useTheme().colors` (US-129 follow-up).
+- iOS/Swift stories (US-285, US-286, US-262/265/266/267/268/269/270/271 etc.) and Android-native Kotlin stories (US-123–128/132/133/213/214/222) remain out of scope without an Xcode/Gradle pipeline.
+---
