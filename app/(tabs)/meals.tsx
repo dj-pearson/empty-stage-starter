@@ -15,6 +15,7 @@ import type { FoodCategory, MealResult, MealSlot } from '@/types';
 import { colors, spacing, fontSize, borderRadius } from '../../app/mobile/lib/theme';
 import { suggestCategory } from '../../app/mobile/lib/unit-suggestions';
 import { sanitizeTextInput } from '../../app/mobile/lib/validation';
+import { useNetworkStatus } from '../../app/mobile/hooks/useNetworkStatus';
 import {
   PlannerSearchSheet,
   type PlannerSelection,
@@ -112,6 +113,8 @@ export default function MealsScreen() {
 
   const [searchSlot, setSearchSlot] = useState<MealSlot | null>(null);
   const [actionEntry, setActionEntry] = useState<PlannerEntryGroup | null>(null);
+  const { isConnected, isInternetReachable } = useNetworkStatus();
+  const isOffline = !isConnected || !isInternetReachable;
 
   const dayStrip = useMemo(() => buildDayStrip(selectedDate, 14), [selectedDate]);
 
@@ -223,6 +226,44 @@ export default function MealsScreen() {
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  // Realtime sync: update plan when other devices/household members change plan_entries.
+  useEffect(() => {
+    let active = true;
+    let cleanup: (() => void) | undefined;
+
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || !active) return;
+
+      const channel = supabase
+        .channel(`mobile-plan-entries-${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'plan_entries',
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            void refresh();
+          }
+        )
+        .subscribe();
+
+      cleanup = () => {
+        void supabase.removeChannel(channel);
+      };
+    })();
+
+    return () => {
+      active = false;
+      if (cleanup) cleanup();
+    };
   }, [refresh]);
 
   const onRefresh = () => {
@@ -517,6 +558,21 @@ export default function MealsScreen() {
     await refresh();
   };
 
+  const confirmDeleteEntry = useCallback(
+    (entry: PlannerEntryGroup) => {
+      Alert.alert(
+        'Remove from plan?',
+        `Remove "${entry.foodName}" from ${SLOTS.find((s) => s.value === entry.slot)?.label ?? entry.slot}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Remove', style: 'destructive', onPress: () => void deleteEntry(entry) },
+        ]
+      );
+    },
+    // deleteEntry depends on supabase + refresh; both stable via closure.
+    [refresh]
+  );
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -613,6 +669,18 @@ export default function MealsScreen() {
         })}
       </ScrollView>
 
+      {isOffline && (
+        <View
+          style={styles.offlineBanner}
+          accessibilityRole="alert"
+          accessibilityLabel="Offline. Changes will sync when you reconnect."
+        >
+          <Text style={styles.offlineBannerText}>
+            ⚡️ Offline — changes will sync when you reconnect
+          </Text>
+        </View>
+      )}
+
       {flash && (
         <View style={styles.flash}>
           <Text style={styles.flashText}>{flash}</Text>
@@ -675,7 +743,9 @@ export default function MealsScreen() {
                       key={g.signature}
                       style={[styles.entryRow, g.result && styles[`row_${g.result}`]]}
                       onPress={() => setActionEntry(g)}
-                      accessibilityLabel={`${g.foodName}. Tap for actions.`}
+                      onLongPress={() => confirmDeleteEntry(g)}
+                      delayLongPress={400}
+                      accessibilityLabel={`${g.foodName}. Tap for actions, long-press to remove.`}
                       accessibilityHint="Open actions: move, duplicate, mark result, remove"
                     >
                       <View style={styles.entryBody}>
@@ -835,6 +905,16 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   flashText: { fontSize: fontSize.sm, color: colors.primaryDark, fontWeight: '600' },
+  offlineBanner: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  offlineBannerText: { fontSize: fontSize.sm, color: '#78350f', fontWeight: '600' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.xxl },
   slotCard: {

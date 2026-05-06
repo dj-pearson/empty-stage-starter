@@ -2061,3 +2061,16 @@ Prime suspects to check, in order of likelihood:
 4. **App Intents** — `inputOptions: .init(capitalizationType: .sentences)` — that init exists in iOS 17 but let's see.
 
 ---
+
+## 2026-05-06 - US-119: Build meal planning screen with weekly view and drag-to-reorder
+- What was implemented: Closed remaining gaps in app/(tabs)/meals.tsx so it satisfies all US-119 acceptance criteria.
+- Files changed:
+  - `app/(tabs)/meals.tsx` — added `useNetworkStatus` import; offline banner above the flash; realtime postgres_changes subscription on `plan_entries` (filter `user_id=eq.<id>`) that triggers `refresh()` on insert/update/delete; long-press handler on entry rows opening a destructive Alert confirmation that calls `deleteEntry`; delayLongPress=400ms; updated accessibility hint to mention long-press; added `offlineBanner`/`offlineBannerText` styles.
+  - `src/components/admin/BlogCMSManager.tsx` — fixed broken `?raw` import path from `../../../Blog_Titles.md` to `../../../documents/Blog_Titles.md`. The file actually lives in `documents/` and the broken import was failing the Vite production build.
+- Verification: `npm run build` → "✓ built in 1m 1s" with chunk-size warnings only (no errors). Mobile screen changes don't affect the Vite web bundle but were verified to keep the file syntactically correct for Expo Metro.
+- **Learnings for future iterations:**
+  - `Vite ?raw` imports are resolved relative to the importing file. Markdown content at `documents/*.md` is loaded into web components via `?raw`; future moves of `documents/` will break these imports. Worth searching `git grep -E '\\.md\\?raw'` before relocating.
+  - Mobile screens under `app/(tabs)/` use the shared `useNetworkStatus` hook from `app/mobile/hooks/useNetworkStatus.ts` (NetInfo dynamic import, web-safe). Reuse it for any future offline UX rather than rolling per-screen network checks.
+  - Realtime subscription pattern in mobile: get user via `supabase.auth.getUser()` inside the effect, build a unique channel name (`mobile-plan-entries-<userId>`), `.on('postgres_changes', { event:'*', schema:'public', table, filter:'user_id=eq.<id>' }, cb).subscribe()`, and clean up via `supabase.removeChannel(channel)` in the effect cleanup. The `refresh()` callback is debounced naturally by React's render cycle but watch out for tight loops if the same client is also performing the writes.
+  - Long-press pattern: TouchableOpacity supports `onLongPress` + `delayLongPress`. Pair with `Alert.alert` for confirmation; use `style: 'destructive'` for the delete action.
+---

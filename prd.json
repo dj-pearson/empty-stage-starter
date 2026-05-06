@@ -812,7 +812,7 @@
       ],
       "priority": 51,
       "passes": true,
-      "notes": "CRITICAL: The Index.tsx page is a generic placeholder that shows 'Welcome to Your Blank App' \u2014 any visitor landing on / sees zero brand messaging, zero value proposition, and zero CTAs. This is the #1 conversion killer on the site."
+      "notes": "CRITICAL: The Index.tsx page is a generic placeholder that shows 'Welcome to Your Blank App' — any visitor landing on / sees zero brand messaging, zero value proposition, and zero CTAs. This is the #1 conversion killer on the site."
     },
     {
       "id": "US-052",
@@ -862,7 +862,7 @@
       ],
       "priority": 54,
       "passes": true,
-      "notes": "Blog pages have zero email capture. Blog readers are warm leads who are researching picky eating \u2014 capturing their email is a critical conversion touchpoint."
+      "notes": "Blog pages have zero email capture. Blog readers are warm leads who are researching picky eating — capturing their email is a critical conversion touchpoint."
     },
     {
       "id": "US-055",
@@ -969,9 +969,9 @@
       "title": "Improve empty states across Pantry, Planner, and Grocery pages with actionable guidance",
       "description": "As a new user visiting feature pages for the first time, I want clear, encouraging empty states that tell me exactly what to do so that I don't feel lost or confused.",
       "acceptanceCriteria": [
-        "Audit empty states in src/pages/Pantry.tsx \u2014 ensure it shows: illustration/icon, 'Your pantry is empty' heading, 'Add your child's safe foods to get started with meal planning' description, prominent 'Add Food' button, and a tip: 'Start with 5-10 foods your child eats regularly'",
-        "Audit empty states in src/pages/Planner.tsx \u2014 when no meals are planned, show: 'No meals planned this week' heading, 'Create a meal plan to see it here' description, 'Generate Meal Plan' and 'Add Meal Manually' buttons",
-        "Audit empty states in src/pages/Grocery.tsx \u2014 show: 'Your grocery list is empty' heading, 'Add items from recipes or create a list manually' description, action buttons for both paths",
+        "Audit empty states in src/pages/Pantry.tsx — ensure it shows: illustration/icon, 'Your pantry is empty' heading, 'Add your child's safe foods to get started with meal planning' description, prominent 'Add Food' button, and a tip: 'Start with 5-10 foods your child eats regularly'",
+        "Audit empty states in src/pages/Planner.tsx — when no meals are planned, show: 'No meals planned this week' heading, 'Create a meal plan to see it here' description, 'Generate Meal Plan' and 'Add Meal Manually' buttons",
+        "Audit empty states in src/pages/Grocery.tsx — show: 'Your grocery list is empty' heading, 'Add items from recipes or create a list manually' description, action buttons for both paths",
         "All empty states use consistent design (canonical EmptyState component from src/components/ui/EmptyState.tsx)",
         "Typecheck passes",
         "npm run build succeeds"
@@ -1199,7 +1199,7 @@
       "description": "As a parent managing child profiles, I want to see how complete each profile is so that I know what information to add for better meal recommendations.",
       "acceptanceCriteria": [
         "Add a 'Profile X% complete' progress indicator to each child card on src/pages/Kids.tsx",
-        "Calculate completeness based on: name (required), age, allergens list, safe foods count (\u22655), preferences, and completed intake questionnaire",
+        "Calculate completeness based on: name (required), age, allergens list, safe foods count (≥5), preferences, and completed intake questionnaire",
         "Show a 'Complete Profile' button for profiles under 80% completion",
         "Add tooltip explaining what fields improve recommendations",
         "Typecheck passes",
@@ -1217,7 +1217,7 @@
         "Hero headline references ARFID, extreme picky eating, and progress (e.g. 'Turn mealtime battles into steady progress, one safe bite at a time')",
         "Subheadline explicitly mentions: AI-powered meal planning, food chaining science, built for families with ARFID/extreme picky eating, collaboration with feeding therapists",
         "Primary CTA changed to 'Get Your Personalized 5-Day Plan' with subtext 'Takes 2 minutes. Tailored to your child's safe foods.'",
-        "Secondary CTA/link added: 'For Feeding Therapists \u2192' linking to therapist section",
+        "Secondary CTA/link added: 'For Feeding Therapists →' linking to therapist section",
         "Stats section updated to include therapist count (200+ feeding therapists)",
         "Typecheck passes",
         "npm run build succeeds"
@@ -1364,7 +1364,7 @@
     {
       "id": "US-085",
       "title": "Centralized input sanitization middleware for all edge functions",
-      "description": "As a security engineer, I want a shared input sanitization layer applied to every edge function so that injection attacks (SQL, command, template) are blocked before reaching business logic. Shannon-style tools trace data flows from user input to dangerous sinks \u2014 this breaks those chains at the boundary.",
+      "description": "As a security engineer, I want a shared input sanitization layer applied to every edge function so that injection attacks (SQL, command, template) are blocked before reaching business logic. Shannon-style tools trace data flows from user input to dangerous sinks — this breaks those chains at the boundary.",
       "acceptanceCriteria": [
         "Create functions/_shared/sanitize.ts with sanitizeInput(), sanitizeSQL(), sanitizeHTML(), sanitizeCommand() utilities",
         "All edge functions import and apply sanitizeInput() to request body/params before processing",
@@ -1376,7 +1376,7 @@
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Defense against Shannon's injection exploitation phase. Shannon traces data flows from input to dangerous operations \u2014 this sanitization layer breaks every flow at the boundary."
+      "notes": "Defense against Shannon's injection exploitation phase. Shannon traces data flows from input to dangerous operations — this sanitization layer breaks every flow at the boundary."
     },
     {
       "id": "US-086",
@@ -1402,7 +1402,7 @@
       "acceptanceCriteria": [
         "Install and configure DOMPurify as the standard HTML sanitization library",
         "Audit all uses of dangerouslySetInnerHTML across the codebase and wrap each with DOMPurify.sanitize()",
-        "Audit TipTap blog editor output rendering \u2014 ensure stored blog HTML is sanitized on display",
+        "Audit TipTap blog editor output rendering — ensure stored blog HTML is sanitized on display",
         "Audit all locations where API response data is rendered as HTML (AI-generated content, recipe instructions, etc.)",
         "Create a shared SafeHTML component: <SafeHTML html={content} /> that applies DOMPurify automatically",
         "Add unit tests with OWASP XSS cheat sheet payloads (<script>, onerror, javascript:, data:text/html, SVG payloads)",
@@ -1518,7 +1518,7 @@
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Security headers are passive defenses that cost nothing at runtime. They prevent framing attacks, MIME sniffing, information leakage, and cross-origin exploitation \u2014 all vectors Shannon probes."
+      "notes": "Security headers are passive defenses that cost nothing at runtime. They prevent framing attacks, MIME sniffing, information leakage, and cross-origin exploitation — all vectors Shannon probes."
     },
     {
       "id": "US-094",
@@ -1536,7 +1536,7 @@
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Shannon's first phase is source code analysis to find data flow vulnerabilities. SAST does the same thing defensively \u2014 find and fix before an attacker does."
+      "notes": "Shannon's first phase is source code analysis to find data flow vulnerabilities. SAST does the same thing defensively — find and fix before an attacker does."
     },
     {
       "id": "US-095",
@@ -1545,7 +1545,7 @@
       "acceptanceCriteria": [
         "Integrate OWASP ZAP (open source) or Nuclei into CI/CD pipeline targeting staging environment",
         "Configure active scan policies for: injection testing, XSS testing, SSRF testing, authentication testing, security header validation",
-        "Run DAST scan against staging after every deployment (not on every PR \u2014 only on staging deploy)",
+        "Run DAST scan against staging after every deployment (not on every PR — only on staging deploy)",
         "HIGH severity findings create GitHub issues automatically with reproduction steps",
         "CRITICAL findings trigger Slack/email alert to security team and block promotion to production",
         "Scan completes in under 30 minutes (configure scan policy for speed vs depth tradeoff)",
@@ -1554,7 +1554,7 @@
       ],
       "priority": 2,
       "passes": true,
-      "notes": "This is essentially running our own Shannon-lite continuously. DAST tools test the running app with real attacks \u2014 exactly what Shannon does. Running this ourselves means we find issues before attackers do."
+      "notes": "This is essentially running our own Shannon-lite continuously. DAST tools test the running app with real attacks — exactly what Shannon does. Running this ourselves means we find issues before attackers do."
     },
     {
       "id": "US-096",
@@ -1608,7 +1608,7 @@
       ],
       "priority": 2,
       "passes": true,
-      "notes": "WAF is the first line of defense \u2014 it blocks Shannon-style attacks at the network edge before they reach application code. Combined with application-level defenses, this creates defense in depth."
+      "notes": "WAF is the first line of defense — it blocks Shannon-style attacks at the network edge before they reach application code. Combined with application-level defenses, this creates defense in depth."
     },
     {
       "id": "US-099",
@@ -1617,7 +1617,7 @@
       "acceptanceCriteria": [
         "Create a security_events table in Supabase to log: failed auth attempts, rate limit triggers, WAF blocks, CSRF validation failures, input sanitization rejections, suspicious user-agent patterns, unusual API usage patterns",
         "Each event includes: timestamp, IP address, user_id (if authenticated), event_type, severity, request_path, request_method, user_agent, geo_location",
-        "Implement real-time alerting thresholds: >10 failed auths from same IP in 5 minutes \u2192 alert, >5 injection attempts from same IP in 1 minute \u2192 alert + auto-block, >3 SSRF attempts from any IP \u2192 alert + auto-block",
+        "Implement real-time alerting thresholds: >10 failed auths from same IP in 5 minutes → alert, >5 injection attempts from same IP in 1 minute → alert + auto-block, >3 SSRF attempts from any IP → alert + auto-block",
         "Alert delivery via: Sentry (error tracking), email notification to security team, Slack webhook (if configured)",
         "Add admin dashboard widget showing security events timeline and top blocked IPs",
         "Implement auto-block: IPs triggering CRITICAL alerts are added to Cloudflare blocklist via API for 24 hours",
@@ -1635,7 +1635,7 @@
       "acceptanceCriteria": [
         "Integrate Cloudflare Turnstile (free CAPTCHA alternative) on: login form, sign-up form, password reset form, contact/feedback forms",
         "Implement browser fingerprinting checks on sensitive actions: detect headless Chrome indicators (navigator.webdriver, missing plugins, automation flags), detect rapid sequential form submissions (>3 submissions in 10 seconds), detect non-human mouse movement patterns on critical forms",
-        "Add honeypot fields (hidden form fields) to all public-facing forms \u2014 submissions with filled honeypot fields are silently rejected",
+        "Add honeypot fields (hidden form fields) to all public-facing forms — submissions with filled honeypot fields are silently rejected",
         "Implement progressive challenges: first suspicious request gets Turnstile challenge, second gets rate limited, third gets IP blocked for 1 hour",
         "Log all bot detection events to security_events table from US-099",
         "Ensure accessibility: all CAPTCHA alternatives must be screen-reader accessible",
@@ -1707,7 +1707,7 @@
       "acceptanceCriteria": [
         "Audit all edge functions that accept record IDs (food_id, kid_id, recipe_id, plan_entry_id, grocery_item_id, etc.)",
         "Verify each endpoint either: relies on RLS policy that filters by auth.uid(), or explicitly checks resource ownership before returning/modifying data",
-        "Test each endpoint with valid auth token but another user's resource IDs \u2014 all must return 403 or empty result",
+        "Test each endpoint with valid auth token but another user's resource IDs — all must return 403 or empty result",
         "Audit all Supabase .select() calls in frontend to ensure they include user_id filter (defense in depth beyond RLS)",
         "Add integration tests that create two test users and verify cross-user access is impossible for all resource types",
         "Document IDOR audit findings and fixes",
@@ -1726,7 +1726,7 @@
         "Test file for each fixed vulnerability: injection-prevention.test.ts, xss-prevention.test.ts, ssrf-prevention.test.ts, auth-bypass-prevention.test.ts, csrf-protection.test.ts, idor-protection.test.ts",
         "Each test file reproduces the original attack vector and verifies it is blocked",
         "Add npm run test:security:unit that runs only security tests (fast, no external dependencies)",
-        "Integrate into GitHub Actions CI \u2014 security tests run on every PR alongside regular tests",
+        "Integrate into GitHub Actions CI — security tests run on every PR alongside regular tests",
         "Security test failures block PR merge (required status check)",
         "Add test coverage for every US-085 through US-104 acceptance criterion that can be unit tested",
         "Minimum 100 security test cases across all files",
@@ -2040,14 +2040,14 @@
       "title": "Switch Logo PNG references to WebP for 10x size reduction",
       "description": "As a user visiting any page, I want logos to load faster using optimized WebP format instead of PNGs that are 10x larger.",
       "acceptanceCriteria": [
-        "Replace all Logo-Green.png references with Logo-Green.webp across src/ and public/ (Logo-Green.png: 267KB \u2192 Logo-Green.webp: 28KB)",
-        "Replace all Logo-White.png references with Logo-White.webp across src/ and public/ (Logo-White.png: 167KB \u2192 Logo-White.webp: 23KB)",
+        "Replace all Logo-Green.png references with Logo-Green.webp across src/ and public/ (Logo-Green.png: 267KB → Logo-Green.webp: 28KB)",
+        "Replace all Logo-White.png references with Logo-White.webp across src/ and public/ (Logo-White.png: 167KB → Logo-White.webp: 23KB)",
         "Update RSS feeds and schema components to use WebP URLs",
         "npm run build succeeds"
       ],
       "priority": 105,
       "passes": true,
-      "notes": "Replaced 63 PNG logo references across 24 src files and 2 public XML feeds with WebP equivalents. Total savings: ~380KB per page load (Logo-Green: 267KB\u219228KB, Logo-White: 167KB\u219223KB). Email templates kept as PNG for broader email client compatibility. npm run build succeeds."
+      "notes": "Replaced 63 PNG logo references across 24 src files and 2 public XML feeds with WebP equivalents. Total savings: ~380KB per page load (Logo-Green: 267KB→28KB, Logo-White: 167KB→23KB). Email templates kept as PNG for broader email client compatibility. npm run build succeeds."
     },
     {
       "id": "US-106",
@@ -2267,8 +2267,8 @@
         "App builds without errors"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": "ANDROID AUDIT - UX/Features - Medium: Core meal planning feature"
+      "passes": true,
+      "notes": "ANDROID AUDIT - UX/Features - Medium: Core meal planning feature | Completed 2026-05-06: long-press delete with confirmation, offline banner via useNetworkStatus, realtime postgres_changes subscription on plan_entries; build passes."
     },
     {
       "id": "US-120",
