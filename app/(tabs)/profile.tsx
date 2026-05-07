@@ -16,6 +16,7 @@ import { safeStorage } from '@/lib/platform';
 import { sanitizeTextInput, INPUT_LIMITS } from '../../app/mobile/lib/validation';
 import { colors, spacing, fontSize, borderRadius } from '../../app/mobile/lib/theme';
 import { useTheme, type ThemeMode } from '../../app/mobile/contexts/ThemeContext';
+import { clearMobileSecureStorage } from '../../app/mobile/lib/secureStorageReset';
 
 const PREF_KEYS = {
   notifications: 'eatpal.profile.notifications',
@@ -220,6 +221,11 @@ export default function ProfileScreen() {
           text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
+            // US-123: clear everything we own in expo-secure-store before
+            // wiping the supabase session. Order matters — supabase's signOut
+            // removes its own keys; ours must be removed in the same flow so
+            // the next session on this device starts clean.
+            await clearMobileSecureStorage();
             await supabase.auth.signOut();
             router.replace('/(auth)/login');
           },

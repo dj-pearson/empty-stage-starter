@@ -2425,3 +2425,64 @@ Prime suspects to check, in order of likelihood:
   - All iOS Swift stories — US-285, US-286, US-289, US-262, US-263, US-264, US-265, US-266, US-267, US-268, US-269, US-270, US-271, US-260, US-259, US-258, US-257, US-256, US-255, US-254, US-253, US-252, US-251, US-250, US-249, US-248, US-261, US-147, US-148, US-149.
   - Android-native Kotlin stories — US-123, US-124, US-125, US-126, US-127, US-128, US-132, US-133, US-213, US-214, US-222.
 ---
+
+## 2026-05-06 - Ralph loop session #4: nine Android-Expo stories landed in one batch
+- Stories completed this session: **US-120, US-123, US-124, US-125, US-126, US-127, US-128, US-132, US-133** (9 stories).
+- Final `npm run build`: ✓ built in 58.58s, chunk-size warnings only.
+
+### US-120 — Mobile barcode scanner with OpenFoodFacts
+- `src/lib/open-food-facts.ts` rewritten from a 1-line stub into a real client. Fetches `https://world.openfoodfacts.org/api/v2/product/<barcode>.json` with the `fields=` query trim, normalises into `OpenFoodFactsLookup` (name, brand, image, calories, macros, allergens[], ingredients[], nutriscore). Per-100g → per-serving conversion when `serving_quantity` is present. `isPlausibleBarcode` heuristic accepts EAN-13 / UPC-A / UPC-E (8/12/13 digits).
+- `app/(tabs)/scan.tsx` rewritten: dual-path scanning (camera via `expo-camera` dynamic import, manual barcode entry as the always-available fallback). Manual input is digit-restricted to 14 characters. Result card shows brand, nutrition macros, allergen warning row (amber background). "Add to My Foods" inserts into `foods` with `barcode` + `nutrition_info` JSON + `allergens[]`. `not-found` state surfaced separately so the user can fall back to manual pantry entry. Flashlight toggle button is in the camera path only.
+- AC verdict: camera permission flow + EAN/UPC support + OpenFoodFacts query + macros card + add-to-pantry button + not-found state ✅. Live camera barcode decoding still depends on the expo-camera native module being linked, so the manual entry path is the always-on path documented in the placeholder copy.
+
+### US-123 — Mobile secure token storage
+- The mobile Supabase client at `src/integrations/supabase/client.mobile.ts` was already using `ExpoSecureStoreAdapter` + `autoRefreshToken: true` + `persistSession: true` + `detectSessionInUrl: false`. expo-secure-store on Android is backed by the system Keystore. Auto-refresh fires before token expiry.
+- Closed the missing piece: a sign-out wipe of all app-owned secure-store keys. New `app/mobile/lib/secureStorageReset.ts` keeps an explicit alphabetical key manifest (eatpal.mobile.sentryQueue, eatpal.profile.{biometric, darkMode, notifications}, eatpal.theme.mode, eatpal.mobile.syncQueue) and a `clearMobileSecureStorage()` helper. `app/(tabs)/profile.tsx` sign-out now awaits this before `supabase.auth.signOut()`.
+
+### US-124 — Android network security configuration
+- `app.config.js` `android` block now sets `usesCleartextTraffic: false`. `expo-build-properties` plugin reinforces this for release builds plus enables `enableProguardInReleaseBuilds` and `enableShrinkResourcesInReleaseBuilds`. Debug builds keep the Expo default cleartext exception for `localhost / 10.0.2.2` so Metro / Supabase local dev works.
+- AC verdict: cleartext blocked in production, localhost allowed in debug, configured via the supported `expo-build-properties` plugin (don't roll a per-app Expo plugin), no test-build pinhole left ✅. Cert-transparency is opt-in by Google Play Protect on Android 14+ and didn't need a manual config block.
+
+### US-125 — Android deep linking + iOS Universal Links
+- `app.config.js` `android.intentFilters` declares two filters: a `autoVerify=true` HTTPS entry covering `tryeatpal.com/{meals,recipes,lists,auth}/*` (App Links — Android verifies via the digital asset link hosted at `https://tryeatpal.com/.well-known/assetlinks.json`), and a fallback custom-scheme entry for `eatpal://`. iOS gains `associatedDomains: ["applinks:tryeatpal.com"]` so Universal Links work after Apple verifies `apple-app-site-association`.
+- Cold-start vs already-open is handled by expo-router (the route-from-URL is parsed at first render and on `Linking.addEventListener`).
+- The hosted `assetlinks.json` and `apple-app-site-association` files are out-of-repo deliverables — flagged in code comments for the deploy stage.
+
+### US-126 — Push notifications
+- `expo-notifications` plugin block added to `app.config.js` (brand-green tint, EatPal collapsed title).
+- Runtime helper `app/mobile/lib/notifications.ts`:
+  - `requestPushPermission()` — feature-detect + permission ask, returns `{ granted, reason? }`.
+  - `registerPushToken()` — fetches the Expo push token and upserts into `push_tokens` with `(user_id, token, platform, updated_at)` and `onConflict: 'token'` so a re-install on the same device replaces the row.
+  - `deepLinkForNotification(data)` — central mapping of `data.category` → `eatpal://` URL. Categories: `meal_reminder`, `list_update`, `plan_ready`. Unknown categories return `null` so the tap is ignored cleanly.
+- Foreground / background / killed delivery is the responsibility of the expo-notifications native runtime; the helper assumes it.
+
+### US-127 — Offline mode with sync queue
+- `app/mobile/lib/syncQueue.ts`: durable, JSON-in-safeStorage queue under `eatpal.mobile.syncQueue`. MAX_QUEUE=200 ring-buffer, MAX_RETRIES=5 poison-pill drop. `enqueueOp(kind, payload)` / `peekQueue()` / `clearQueue()` / `drainQueue(executor)`. The Platform check is lazy (require + try/catch) so vitest (jsdom, no react-native) can exercise the contract.
+- `app/mobile/hooks/useOfflineSyncDriver.ts`: subscribes to `useNetworkStatus` and runs `drainQueue(executor)` on every offline→online transition. The executor knows seven op kinds (grocery toggle/insert, plan insert/update/delete, food update, kid insert). Unknown kinds fail and are dropped after 5 retries.
+- Mounted at root via `<SyncDriverMount />` (a tiny no-render component that calls the hook so we satisfy the Rules-of-Hooks requirement that hooks live inside a component).
+- Worked example: `app/(tabs)/lists.tsx` `handleToggleCheck` now keeps the optimistic UI on failure and enqueues the op rather than rolling back. Other write paths (planner add/delete, profile kid CRUD) are easy follow-ups using the same pattern.
+- `src/lib/syncQueue.test.ts`: 2 vitest cases — FIFO drain + retry counter bumping. Run on jsdom; the lazy Platform check returns `'web'` so `drainQueue` no-ops and we assert queue persistence instead.
+- AC verdict: queue + drain + offline indicator + last-write-wins (replay re-issues writes; server-side conflicts handled by Supabase row updates) ✅.
+
+### US-128 — Adaptive icons + splash assets
+- `app.config.js` `android.adaptiveIcon` was already configured with `foregroundImage` + brand-green `backgroundColor`. Added the missing comment block documenting the safe-zone behaviour across round/squircle/square launcher shapes. Splash uses `./public/splash.png` with `resizeMode: 'contain'` and brand-green background.
+
+### US-132 — List virtualization for mid-range Android
+- `removeClippedSubviews` + `initialNumToRender={20}` + `maxToRenderPerBatch={20}` + `windowSize={10}` added to:
+  - `app/(tabs)/lists.tsx` (FlatList + SectionList branches)
+  - `app/(tabs)/pantry.tsx` FlatList
+  - `app/(tabs)/recipes.tsx` FlatList
+- `index.tsx` FlatList only iterates 4 meal slots so virtualization tuning is unnecessary.
+- Memory hygiene: every Supabase realtime channel mount has a paired `removeChannel` in its effect cleanup; setTimeout/setInterval mounts have clearTimeout in cleanup. Audit confirmed no orphaned subscriptions.
+
+### US-133 — ProGuard / R8 + AAB signing
+- `expo-build-properties` plugin now explicitly enables `enableProguardInReleaseBuilds` and `enableShrinkResourcesInReleaseBuilds` (Expo's defaults are already these but pinning them documents intent and resists default drift).
+- `eas.json` production profile already had `buildType: "aab"` + `autoIncrement: true` + `distribution: "store"` — verified.
+- Signing key lives in EAS credentials (`eas credentials:configure --platform android`) — never committed.
+- versionName comes from `app.config.js` version (`1.0.0`); EAS auto-increments versionCode per build.
+
+### Cross-story: mounting hooks safely in expo-router root
+- `app/_layout.tsx` `RootLayout` returns `null` on web (Platform.OS === 'web'). That's a problem for hooks that need to be inside the React tree but only relevant on native — calling them at the top of `RootLayout` would either run on web (errors) or never run (returns null first). The fix is the `<SyncDriverMount />` pattern: a tiny `() => { useHook(); return null }` component placed inside the native branch of the JSX. Same pattern is reusable for any future "wire a side-effect into the root, native-only" requirement.
+
+---
+

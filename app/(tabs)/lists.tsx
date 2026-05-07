@@ -23,6 +23,7 @@ import { BulkAddSheet } from '../../app/mobile/components/BulkAddSheet';
 import { QuickCategoryPicker } from '../../app/mobile/components/QuickCategoryPicker';
 import { useNetworkStatus } from '../../app/mobile/hooks/useNetworkStatus';
 import { announceForAccessibility } from '../../app/mobile/lib/a11y';
+import { enqueueOp } from '../../app/mobile/lib/syncQueue';
 
 const UNDO_TIMEOUT_MS = 5000;
 
@@ -128,11 +129,24 @@ export default function ListsScreen() {
 
   const handleToggleCheck = async (item: GroceryItem) => {
     const newChecked = !item.checked;
+    // Optimistic local update — the user sees the check toggle instantly.
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, checked: newChecked } : i));
     try {
-      await supabase.from('grocery_items').update({ checked: newChecked }).eq('id', item.id);
-    } catch {
-      setItems(prev => prev.map(i => i.id === item.id ? { ...i, checked: !newChecked } : i));
+      const { error } = await supabase
+        .from('grocery_items')
+        .update({ checked: newChecked })
+        .eq('id', item.id);
+      if (error) throw error;
+    } catch (err) {
+      // US-127: when the live write fails (offline or transient error) we
+      // *keep* the optimistic state and enqueue the op so it replays on
+      // reconnection. If even enqueue fails, fall back to rolling the UI
+      // back so the user isn't lied to.
+      try {
+        await enqueueOp('grocery.toggle', { id: item.id, checked: newChecked });
+      } catch {
+        setItems(prev => prev.map(i => i.id === item.id ? { ...i, checked: !newChecked } : i));
+      }
     }
   };
 
@@ -521,6 +535,11 @@ export default function ListsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           stickySectionHeadersEnabled={false}
+          // US-132: virtualization knobs for mid-range Android.
+          removeClippedSubviews
+          initialNumToRender={20}
+          maxToRenderPerBatch={20}
+          windowSize={10}
           refreshControl={
             <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh}
               tintColor={colors.primary} colors={[colors.primary]} />
@@ -548,6 +567,11 @@ export default function ListsScreen() {
           data={items}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          // US-132: virtualization knobs for mid-range Android.
+          removeClippedSubviews
+          initialNumToRender={20}
+          maxToRenderPerBatch={20}
+          windowSize={10}
           refreshControl={
             <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh}
               tintColor={colors.primary} colors={[colors.primary]} />

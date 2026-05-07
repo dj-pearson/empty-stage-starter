@@ -8,6 +8,7 @@ import type { Session } from '@supabase/supabase-js';
 import { MobileErrorBoundary } from './mobile/components/MobileErrorBoundary';
 import { addBreadcrumb } from './mobile/lib/sentryMobile';
 import { ThemeProvider } from './mobile/contexts/ThemeContext';
+import { useOfflineSyncDriver } from './mobile/hooks/useOfflineSyncDriver';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -57,6 +58,17 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * US-127: thin component wrapper that mounts the offline-sync hook in a
+ * place where the ThemeProvider + AuthGate are already in scope. Hooks
+ * must be inside the React tree, so we can't call this from RootLayout
+ * directly when RootLayout returns `null` for the web branch.
+ */
+function SyncDriverMount() {
+  useOfflineSyncDriver();
+  return null;
+}
+
 export default function RootLayout() {
   if (Platform.OS === 'web') {
     return null;
@@ -67,6 +79,7 @@ export default function RootLayout() {
       <ThemeProvider>
         <SafeAreaProvider>
           <StatusBar style="auto" />
+          <SyncDriverMount />
           <AuthGate>
             <Slot />
           </AuthGate>

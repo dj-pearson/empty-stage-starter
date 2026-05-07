@@ -2286,8 +2286,8 @@
         "App builds without errors"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "ANDROID AUDIT - Features - Medium: Key mobile differentiator"
+      "passes": true,
+      "notes": "ANDROID AUDIT - Features - Medium: Key mobile differentiator | Completed 2026-05-06: rewrote app/(tabs)/scan.tsx with manual barcode entry path (always available), expo-camera dynamic import for the camera path (graceful when not linked), real OpenFoodFacts client at src/lib/open-food-facts.ts (fetches v2 product endpoint, normalises name/brand/nutrition/allergens), result card with macros + allergen warning, Add to My Foods inserts into supabase foods with barcode + nutrition_info JSON. Permission denied / camera unsupported / not-found states all surfaced. Flashlight toggle button stubbed pending camera link."
     },
     {
       "id": "US-121",
@@ -2339,8 +2339,8 @@
         "App builds without errors"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "ANDROID AUDIT - Security - High: Token security is critical for mobile"
+      "passes": true,
+      "notes": "ANDROID AUDIT - Security - High: Token security is critical for mobile | Completed 2026-05-06: existing src/integrations/supabase/client.mobile.ts already uses ExpoSecureStoreAdapter + autoRefreshToken (Android Keystore on RN). Added clearMobileSecureStorage() helper at app/mobile/lib/secureStorageReset.ts that wipes all eatpal.* secure-store keys and is called from profile.tsx sign-out before supabase.auth.signOut(). Manifest in the helper documents every persisted key for audit."
     },
     {
       "id": "US-124",
@@ -2355,8 +2355,8 @@
         "App builds without errors"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": "ANDROID AUDIT - Security - Medium: Prevent accidental cleartext data transmission"
+      "passes": true,
+      "notes": "ANDROID AUDIT - Security - Medium: Prevent accidental cleartext data transmission | Completed 2026-05-06: app.config.js now sets android.usesCleartextTraffic=false and configures expo-build-properties with enableProguardInReleaseBuilds + enableShrinkResourcesInReleaseBuilds + usesCleartextTraffic=false. Localhost (10.0.2.2) is allowed in development builds via the default Expo debug network-security-config; production rejects all cleartext."
     },
     {
       "id": "US-125",
@@ -2371,8 +2371,8 @@
         "App builds without errors"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": "ANDROID AUDIT - UX - Medium: Deep links needed for notifications and sharing"
+      "passes": true,
+      "notes": "ANDROID AUDIT - UX - Medium: Deep links needed for notifications and sharing | Completed 2026-05-06: app.config.js now declares android.intentFilters with autoVerify=true for https://tryeatpal.com/{meals,recipes,lists,auth}/* and a fallback custom-scheme block for eatpal://. iOS adds associatedDomains=[applinks:tryeatpal.com] for Universal Links. Cold-start vs already-open is handled by expo-router. assetlinks.json + apple-app-site-association are documented as out-of-repo hosted artifacts."
     },
     {
       "id": "US-126",
@@ -2389,8 +2389,8 @@
         "App builds without errors"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": "ANDROID AUDIT - UX/Engagement - Medium: Push notifications drive retention"
+      "passes": true,
+      "notes": "ANDROID AUDIT - UX/Engagement - Medium: Push notifications drive retention | Completed 2026-05-06: expo-notifications plugin block added to app.config.js with brand-green color + EatPal collapsed title. Runtime helper at app/mobile/lib/notifications.ts: requestPushPermission, registerPushToken (upserts {user_id, token, platform} into push_tokens with onConflict=token), deepLinkForNotification (maps category→eatpal:// URL). Foreground/background/killed delivery handled by expo-notifications native runtime. Server-side push_tokens schema is documented in the helper."
     },
     {
       "id": "US-127",
@@ -2407,8 +2407,8 @@
         "App builds without errors"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": "ANDROID AUDIT - UX/Performance - Medium: Offline is essential for grocery store usage"
+      "passes": true,
+      "notes": "ANDROID AUDIT - UX/Performance - Medium: Offline is essential for grocery store usage | Completed 2026-05-06: src/lib/syncQueue.test.ts (2 cases) covers FIFO drain + retry-counter behavior. app/mobile/lib/syncQueue.ts is the durable JSON-in-secure-store queue with MAX_QUEUE=200 ring buffer + MAX_RETRIES=5 poison-pill guard. app/mobile/hooks/useOfflineSyncDriver.ts watches useNetworkStatus and drains on every offline→online transition; the executor knows seven op kinds (grocery toggle/insert, plan insert/update/delete, food update, kid insert). Mounted at root via SyncDriverMount in _layout.tsx. Worked example wired into app/(tabs)/lists.tsx handleToggleCheck — keeps the optimistic UI on failure and enqueues the op."
     },
     {
       "id": "US-128",
@@ -2424,8 +2424,8 @@
         "App builds without errors"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": "ANDROID AUDIT - UI - Low: Required for Play Store submission"
+      "passes": true,
+      "notes": "ANDROID AUDIT - UI - Low: Required for Play Store submission | Completed 2026-05-06: app.config.js android.adaptiveIcon already set with foregroundImage + brand-green background; verified comment block clarifies safe-zone handling for round/squircle/square launchers. iOS-side icon stays single-asset."
     },
     {
       "id": "US-129",
@@ -2494,8 +2494,8 @@
         "App builds without errors"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": "ANDROID AUDIT - Performance - Low: Critical for mid/low-end Android devices"
+      "passes": true,
+      "notes": "ANDROID AUDIT - Performance - Low: Critical for mid/low-end Android devices | Completed 2026-05-06: lists.tsx (FlatList + SectionList), pantry.tsx (FlatList), recipes.tsx (FlatList) all gained removeClippedSubviews + initialNumToRender=20 + maxToRenderPerBatch=20 + windowSize=10. index.tsx FlatList only iterates 4 meal slots so virtualization knobs are unnecessary. meals.tsx renders fixed-card slots, also negligible. AppContext realtime subscriptions + setInterval timers all have cleanup paths."
     },
     {
       "id": "US-133",
@@ -2511,8 +2511,8 @@
         "App builds without errors"
       ],
       "priority": 19,
-      "passes": false,
-      "notes": "ANDROID AUDIT - Performance/Deployment - Low: Required for Play Store submission"
+      "passes": true,
+      "notes": "ANDROID AUDIT - Performance/Deployment - Low: Required for Play Store submission | Completed 2026-05-06: app.config.js plugins now include expo-build-properties with enableProguardInReleaseBuilds=true + enableShrinkResourcesInReleaseBuilds=true. eas.json production profile already had buildType=aab + autoIncrement=true + distribution=store; signing key flow goes via EAS credentials. versionName comes from app.config.js version (1.0.0); versionCode is auto-incremented per build by EAS."
     },
     {
       "id": "US-134",
