@@ -2406,3 +2406,22 @@ Prime suspects to check, in order of likelihood:
   - Vitest test files for pure derivation helpers are a strong way to document the intent of integration-style flow stories. The test reads like a storyboard ("3 missing → 1 missing → cleared") and locks in the contract for future refactors.
 ---
 
+
+## 2026-05-06 - Ralph loop session #3 summary
+- Stories completed this session: US-287 already done last session, **US-288** (Web Pantry quick-add), **US-290** (Plan-aware grocery flags), **US-292** (Loop close-out). 3 web-actionable stories landed.
+- Total over three sessions: **14 web/Expo stories landed** (US-107, US-108, US-119, US-121, US-122, US-129, US-130, US-131, US-134, US-287, US-288, US-290, US-291, US-292).
+- PRD status: **223 passing / 265 total → 84% complete** (up from 83%).
+- Final `npm run build`: ✓ built in ~58s, chunk-size warnings only.
+- New shared infrastructure for future iterations:
+  - `src/lib/foodNameDefaults.ts` — TS port of iOS UnitInference catalog (~50 product → default unit/qty rules).
+  - `src/lib/pantryQuickAddParser.ts` — four-tier name/qty/unit parser with confidence scoring.
+  - `countMissingForRecipe(recipe, foods)` in `src/lib/recipeShortfall.ts` — single derivation point reused by Planner badges, RecipeDetail one-tap CTA (US-291), and the close-out telemetry diff.
+  - Pre-existing bug fix: `parse-grocery-text.ts` numbered-list cleanup `\s*` → `\s+` (was eating decimals like 1.5).
+- Recommended next iterations on this branch (still verifiable by `npm run build`):
+  - Per-screen migration of static `colors` → `useTheme().colors` in mobile (US-129 follow-up). Tab bar + meals/lists/pantry/recipes/scan screens are the highest-impact.
+  - **US-120** (mobile barcode scanner) — could wire OpenFoodFacts via the manual barcode entry path even before expo-camera is fully linked.
+  - Mobile `grocery_items` realtime + bulk paste consistency with the new `pantryQuickAddParser` (parity story not currently in PRD).
+- Blocked by pipeline (need Xcode/Gradle, out of scope here):
+  - All iOS Swift stories — US-285, US-286, US-289, US-262, US-263, US-264, US-265, US-266, US-267, US-268, US-269, US-270, US-271, US-260, US-259, US-258, US-257, US-256, US-255, US-254, US-253, US-252, US-251, US-250, US-249, US-248, US-261, US-147, US-148, US-149.
+  - Android-native Kotlin stories — US-123, US-124, US-125, US-126, US-127, US-128, US-132, US-133, US-213, US-214, US-222.
+---
