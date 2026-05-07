@@ -2486,3 +2486,35 @@ Prime suspects to check, in order of likelihood:
 
 ---
 
+
+## 2026-05-06 - Session #4 wrap-up
+- Stories landed across all four sessions: **23 web/Expo stories** (full list below).
+- PRD status: **232 passing / 265 total → 87% complete** (was 84%).
+- Final `npm run build`: ✓ 58.58s, no errors.
+- Branch: `claude/ralph-loops-prd-progress-lNpGu`.
+
+### Cumulative landed (alphabetical by ID)
+US-107, US-108, US-119, US-120, US-121, US-122, US-123, US-124, US-125, US-126, US-127, US-128, US-129, US-130, US-131, US-132, US-133, US-134, US-287, US-288, US-290, US-291, US-292.
+
+### Remaining 33 incomplete — all blocked by pipeline
+- **27 iOS-Swift stories** that need Xcode + XCTest to verify: US-147, US-148, US-149, US-248, US-249, US-250, US-251, US-252, US-253, US-254, US-255, US-256, US-257, US-258, US-259, US-260, US-261, US-262, US-263, US-264, US-265, US-266, US-267, US-268, US-269, US-270, US-271, US-285, US-286, US-289.
+- **3 Android-native Kotlin stories** that need a Gradle pipeline: US-213, US-214, US-222.
+
+These are deliberately out of scope for this branch — `npm run build` (Vite) can't compile Swift or Kotlin, so a "passing" green light wouldn't be meaningful. The next iteration to make progress on them needs an Xcode-equipped runner (or someone who can run `eas build --platform ios` and `eas build --platform android` with a real signing toolchain).
+
+### Architecture / patterns added across the four sessions
+- **Mobile validation primitives**: `app/mobile/lib/validation.ts` (INPUT_LIMITS, validateNumericInput, sanitizeTextInput, password requirements).
+- **Mobile a11y primitives**: `app/mobile/lib/a11y.ts` + `useReducedMotion` hook.
+- **Mobile theme system**: `app/mobile/contexts/ThemeContext.tsx` with three modes (light/dark/system), legacy boolean migration, dual-export trick for backwards compatibility.
+- **Mobile crash reporting shim**: `app/mobile/lib/sentryMobile.ts` + `MobileErrorBoundary` (one-file swap path to @sentry/react-native).
+- **Mobile offline sync queue**: `app/mobile/lib/syncQueue.ts` + `useOfflineSyncDriver` (FIFO replay with poison-pill drop).
+- **Mobile push notifications**: `app/mobile/lib/notifications.ts` (permission, token registration, deep-link mapping).
+- **Mobile secure storage manifest**: `app/mobile/lib/secureStorageReset.ts` (explicit key list cleared on sign-out).
+- **Web shared utilities**: `src/lib/unitNormalize.ts` (cross-unit normalize/compare/convert), `src/lib/foodNameDefaults.ts` (TS port of iOS UnitInference catalog), `src/lib/pantryQuickAddParser.ts` (four-tier parser with confidence scoring), `countMissingForRecipe` in `src/lib/recipeShortfall.ts`.
+
+### Bug fixes incidentally caught
+- `src/lib/parse-grocery-text.ts`: numbered-list cleanup `\s*` → `\s+` so decimals like `1.5` no longer get stripped to `5`.
+- `src/components/admin/BlogCMSManager.tsx`: `?raw` import path repointed from root to `documents/`.
+- `prd.json`: two duplicate IDs (US-107 / US-108) — both occurrences now correctly tracked.
+
+---
