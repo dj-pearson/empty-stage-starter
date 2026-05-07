@@ -2332,3 +2332,31 @@ Prime suspects to check, in order of likelihood:
   - Per-screen migration of static `colors` → `useTheme().colors` (US-129 follow-up).
 - iOS/Swift stories (US-285, US-286, US-262/265/266/267/268/269/270/271 etc.) and Android-native Kotlin stories (US-123–128/132/133/213/214/222) remain out of scope without an Xcode/Gradle pipeline.
 ---
+
+## 2026-05-06 - US-288: Web Pantry insanely-fast quick-add UX
+- What was implemented:
+  - `src/lib/foodNameDefaults.ts` (new): ports the iOS UnitInference.swift catalog to TypeScript so a bare product name ("milk", "eggs", "rice") resolves to a sensible default unit + qty + category. ~50 rules; specific entries placed before generic ones (peanut butter before butter, ice cream before cream).
+  - `src/lib/pantryQuickAddParser.ts` (new): four-tier parser. Tier 1 reuses `parseGroceryText` for leading qty+unit; tier 2 handles trailing qty+unit ("chicken 2 lb"); tier 2b handles trailing bare unit ("milk gal"); tier 3 hits the UnitInference catalog; tier 4 falls back to qty=1, empty unit, low confidence. Returns `{ name, quantity, unit, category, confidence }`.
+  - `src/lib/pantryQuickAddParser.test.ts` (new): 36 vitest cases covering all tiers + edge cases (whitespace, mixed casing, number-only input, bullets, category inference).
+  - `src/components/pantry/PantryQuickAdd.tsx` (new): UI component. Single-line `<Input>` with placeholder "2 lb chicken — try voice or paste a list"; live preview chip below the input shows category + qty + unit (amber border + "guessing" copy when confidence < 0.85); `<Mic>` button opens Web Speech API recognition (feature-detected — falls back to a toast on unsupported browsers); `<ListPlus>` toggles a bulk-paste `<Textarea>` where each non-empty line becomes one pantry row; Enter saves, Cmd/Ctrl+Enter promotes the current value into the bulk textarea so the user doesn't retype.
+  - `src/pages/Pantry.tsx`: imports + renders `<PantryQuickAdd>` directly above the search bar; new `handleQuickAddOne(parse)` and `handleQuickAddMany(parses)` callbacks wired to the existing `addFood` / `addFoods` AppContext methods. Telemetry `pantry_quick_add_submitted` fires from inside the component with `parse_confidence` + `path: 'single' | 'bulk'`.
+  - **Pre-existing bug fix**: `src/lib/parse-grocery-text.ts` line 153 — the numbered-list cleanup regex `/^[\s]*\d+[\.\)]\s*/` had `\s*` (zero or more whitespace) which was greedily eating the integer part of decimals: "1.5 lb chicken" got stripped to "5 lb chicken" → qty=5. Changed to `\s+` so the regex requires at least one whitespace after the period, which means actual list prefixes like "1. " still strip but decimals are preserved.
+- Verification:
+  - `npx vitest run src/lib/pantryQuickAddParser.test.ts src/lib/unitNormalize.test.ts` → 99 / 99 passing.
+  - `npm run build` → built in 1m27s with chunk-size warnings only.
+- AC verdict (per AC line):
+  - "Quick-add input with placeholder '2 lb chicken — try voice or paste a list'" ✅
+  - "Parser handles leading / trailing / bare name (UnitInference port)" ✅ all four tiers covered + tested
+  - "Live preview chip shows '→ Pantry • Meat & Seafood • 2 lb' before submit" ✅ (category label rendered via `CATEGORY_CONFIG`)
+  - "Enter saves; Cmd/Ctrl+Enter triggers bulk-paste mode" ✅ (Cmd/Ctrl+Enter promotes the current input into the textarea so the typed line isn't lost)
+  - "Voice input button uses Web Speech API where available" ✅ feature-detected; mic button hidden on browsers without `SpeechRecognition`
+  - "Telemetry: pantryQuickAddSubmitted(parseConfidence)" ✅ fires from both single-line and bulk paths with `parse_confidence` + `path` properties
+  - "Vitest snapshot of parser on 30+ realistic strings" ✅ 36 cases, comfortably above the bar
+  - "App builds without errors" ✅
+- **Learnings:**
+  - When a parser has a "first-match-wins, substring-style" rule list, **specific rules must come before generic ones**. Caught the bug when "peanut butter" started returning `unit: 'lb'` (because the generic `butter` rule was placed first). Same logic explains why "ice cream" must come before any "cream" rule. Putting these inversions right at the catalog level beats trying to add negative-lookahead exclusions later.
+  - The four-tier parser approach keeps confidence honest: tier 1 (catalog-leading qty+unit) is 1.0; tier 2 (trailing custom regex) is 0.85; tier 3 (catalog inference) is 0.7; tier 4 (no match) is 0.5. The UI shows an amber border + "guessing" copy when confidence < 0.85, so the user knows when to confirm.
+  - The Web Speech API contract: `webkitSpeechRecognition` on Chromium/Edge, `SpeechRecognition` on Firefox/Safari nightly. Always feature-detect both globals AND wrap `r.start()` in try/catch — the browser throws if another tab is already using the mic.
+  - Fixed a 6-month-old latent bug in `parse-grocery-text.ts`: numbered-list cleanup `/^\s*\d+[\.\)]\s*/` should always have `\s+` (not `\s*`) at the end, because real list prefixes always have whitespace after the period. The `\s*` form silently corrupts decimals like "1.5". Worth a follow-up audit of any other `\s*` strip regex in the codebase.
+  - `analytics.trackEvent({ name, properties })` is the canonical shape; the alphabet of named events should stay snake_case to match the existing dataset.
+---

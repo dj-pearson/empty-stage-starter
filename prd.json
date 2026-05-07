@@ -4309,8 +4309,8 @@
         "Vitest snapshot of parser on 30+ realistic strings"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "Pairs with US-289 for parity."
+      "passes": true,
+      "notes": "Pairs with US-289 for parity. | Completed 2026-05-06: parser at src/lib/pantryQuickAddParser.ts handles leading qty+unit (parseGroceryText), trailing qty+unit (custom regex), trailing bare unit, bare-name UnitInference catalog hit (src/lib/foodNameDefaults.ts ports iOS catalog), or fallback (qty=1, unit=). 36 vitest cases cover all four tiers + edge cases. PantryQuickAdd component renders single-line input with live preview chip showing ingredient/category/qty+unit; Enter saves; Cmd/Ctrl+Enter expands bulk-paste textarea; Web Speech API (with feature-detect) wired to mic button. Telemetry pantry_quick_add_submitted with parse_confidence + path. Also fixed pre-existing parse-grocery-text bug where decimals like 1.5 were stripped to 5 by the numbered-list cleanup regex."
     },
     {
       "id": "US-289",
