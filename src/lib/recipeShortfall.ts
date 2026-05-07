@@ -134,3 +134,41 @@ function normalizeUnitTag(raw: string | null): string | null {
   const trimmed = raw.trim().toLowerCase();
   return trimmed.length === 0 ? null : trimmed;
 }
+
+/**
+ * US-290: cheap missing-ingredient count for a planner cell.
+ *
+ * Two paths:
+ *   1. If `recipe.recipe_ingredients` is populated (US-281), defer to
+ *      `computeRecipeShortfall`'s row count so the badge stays in sync
+ *      with the dialog.
+ *   2. Otherwise, fall back to `food_ids` and count entries that resolve
+ *      to a pantry food with quantity ≤ 0 (or that have no pantry match
+ *      at all). This keeps the badge useful for legacy recipes that
+ *      haven't been migrated to structured ingredients.
+ *
+ * Returns 0 when nothing is missing, including for recipes with no
+ * ingredient data at all (so the chip stays hidden).
+ */
+export function countMissingForRecipe(
+  recipe: Pick<Recipe, "food_ids" | "recipe_ingredients">,
+  foods: Food[]
+): number {
+  if (recipe.recipe_ingredients && recipe.recipe_ingredients.length > 0) {
+    return computeRecipeShortfall(recipe as Recipe, foods).length;
+  }
+
+  const foodIds = recipe.food_ids ?? [];
+  if (foodIds.length === 0) return 0;
+
+  let missing = 0;
+  for (const foodId of foodIds) {
+    const matched = foods.find((f) => f.id === foodId);
+    if (!matched) {
+      missing++;
+      continue;
+    }
+    if ((matched.quantity ?? 0) <= 0) missing++;
+  }
+  return missing;
+}

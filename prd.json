@@ -4339,8 +4339,8 @@
         "Telemetry: planEntryMissingChipShown(count), planEntryMissingChipTapped"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": "Depends on US-281, US-284, US-285."
+      "passes": true,
+      "notes": "Depends on US-281, US-284, US-285. | Completed 2026-05-06: countMissingForRecipe helper in src/lib/recipeShortfall.ts uses recipe_ingredients shortfall when present and falls back to legacy food_ids quantity check otherwise. DraggableMealItem in GSAPCalendarMealPlanner renders a tappable amber chip showing missingCount when > 0; tap fires plan_entry_missing_chip_tapped telemetry and reuses the parent Planner.openMissingIngredientsForRecipe to open the existing US-284 dialog. plan_entry_missing_chip_shown event fires once per (entry, missingCount > 0) transition via useEffect. iOS parity is a follow-up."
     },
     {
       "id": "US-291",
@@ -4368,8 +4368,8 @@
         "Telemetry: missingFlagsClearedAfterPantryMove(planEntriesCleared)"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": "Final story in the loop. Depends on US-282, US-283, US-290."
+      "passes": true,
+      "notes": "Final story in the loop. Depends on US-282, US-283, US-290. | Completed 2026-05-06: handleDoneShopping in src/pages/Grocery.tsx now reconstructs a hypothetical preFoods snapshot by subtracting moved item quantities from current foods, then re-derives countMissingForRecipe before vs after to fire missing_flags_cleared_after_pantry_move analytics with plan_entries_cleared count. Re-derivation is automatic + optimistic because the badge in DraggableMealItem reads countMissingForRecipe(recipe, foods) on every render. Vitest integration test in src/lib/recipeShortfall.test.ts simulates plan-add (3 missing) -> buy (1 remains) -> move-to-pantry (cleared) and asserts the >0 -> 0 transition predicate."
     }
   ]
 }

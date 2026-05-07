@@ -804,6 +804,7 @@ export default function Planner() {
                     onCopyToChild={handleCopyToChild}
                     onCopyWeek={handleCopyWeek}
                     onClearWeek={handleClearWeek}
+                    onOpenMissingForRecipe={openMissingIngredientsForRecipe}
                   />
                 </div>
               );
@@ -830,6 +831,7 @@ export default function Planner() {
               onCopyToChild={handleCopyToChild}
               onCopyWeek={handleCopyWeek}
               onClearWeek={handleClearWeek}
+              onOpenMissingForRecipe={openMissingIngredientsForRecipe}
             />
           </div>
         )}

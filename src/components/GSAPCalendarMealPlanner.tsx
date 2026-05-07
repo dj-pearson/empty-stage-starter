@@ -46,6 +46,8 @@ import { ApplyTemplateDialog } from "@/components/ApplyTemplateDialog";
 import { VoteResultsDisplay } from "@/components/VoteResultsDisplay";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
+import { countMissingForRecipe } from "@/lib/recipeShortfall";
+import { analytics } from "@/lib/analytics";
 
 // Register GSAP plugin
 gsap.registerPlugin(Draggable);
@@ -66,6 +68,12 @@ interface GSAPCalendarMealPlannerProps {
   onCopyToChild: (entry: PlanEntry, targetKidId: string) => void;
   onCopyWeek?: (toDate: string) => void;
   onClearWeek?: () => void;
+  /**
+   * US-290: open the missing-ingredients dialog for a recipe scheduled in
+   * a plan cell. Pass the recipeId so the parent can re-derive shortfall
+   * + open the existing US-284 dialog filtered to still-missing rows.
+   */
+  onOpenMissingForRecipe?: (recipeId: string) => void;
 }
 
 const MEAL_SLOTS: { slot: MealSlot; label: string; color: string; gradient: string }[] = [
@@ -115,6 +123,7 @@ function DraggableMealItem({
   food,
   recipe,
   kids,
+  foods,
   showAllKids,
   expandedRecipes,
   onToggleRecipeExpand,
@@ -123,11 +132,13 @@ function DraggableMealItem({
   cellRefs,
   onMoveEntry,
   getFood,
+  onOpenMissingForRecipe,
 }: {
   entry: PlanEntry;
   food: Food | undefined;
   recipe: Recipe | undefined;
   kids: Kid[];
+  foods: Food[];
   showAllKids: boolean;
   expandedRecipes: Set<string>;
   onToggleRecipeExpand: (recipeId: string, e: React.MouseEvent) => void;
@@ -136,11 +147,27 @@ function DraggableMealItem({
   cellRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
   onMoveEntry: (entryId: string, targetDate: string, targetSlot: MealSlot) => void;
   getFood: (foodId: string) => Food | undefined;
+  onOpenMissingForRecipe?: (recipeId: string) => void;
 }) {
   const mealRef = useRef<HTMLDivElement>(null);
   const draggableRef = useRef<Draggable[] | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const velocityTracker = useRef({ x: 0, y: 0, lastX: 0, lastY: 0, lastTime: 0 });
+
+  // US-290: compute missing-ingredient count up-front so we can render the
+  // badge in the recipe entry. Computed from current pantry state — re-runs
+  // automatically when `foods` changes (US-292 close-out path).
+  const missingCount = recipe ? countMissingForRecipe(recipe, foods) : 0;
+
+  // Fire a "chip shown" event once per (entry, missingCount > 0) transition.
+  useEffect(() => {
+    if (missingCount > 0 && entry.recipe_id) {
+      analytics.trackEvent({
+        name: "plan_entry_missing_chip_shown",
+        properties: { recipe_id: entry.recipe_id, missing_count: missingCount },
+      });
+    }
+  }, [missingCount, entry.recipe_id]);
 
   const entryKid = kids.find((k) => k.id === entry.kid_id);
   const otherKids = kids.filter((k) => k.id !== entry.kid_id);
@@ -333,6 +360,10 @@ function DraggableMealItem({
       .map((foodId) => getFood(foodId))
       .filter(Boolean) as Food[];
 
+    // missingCount + chip-shown telemetry are computed at the top of the
+    // component (US-290) so the hooks rule is satisfied for cells without a
+    // recipe.
+
     return (
       <div
         ref={mealRef}
@@ -409,6 +440,31 @@ function DraggableMealItem({
                             ))}
                           </DropdownMenuContent>
                         </DropdownMenu>
+                      )}
+                      {/* US-290: ⚠ N missing chip — taps open the
+                          MissingIngredientsDialog pre-filtered to still-missing
+                          rows. Hidden when shortfall = 0 so unchanged plans
+                          stay visually quiet. */}
+                      {missingCount > 0 && onOpenMissingForRecipe && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            analytics.trackEvent({
+                              name: "plan_entry_missing_chip_tapped",
+                              properties: {
+                                recipe_id: entry.recipe_id,
+                                missing_count: missingCount,
+                              },
+                            });
+                            onOpenMissingForRecipe(entry.recipe_id!);
+                          }}
+                          className="flex items-center gap-0.5 text-[9px] px-1 py-0 rounded-md bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200 font-medium shrink-0"
+                          aria-label={`${missingCount} missing ingredients — open list`}
+                          data-testid="plan-entry-missing-chip"
+                        >
+                          ⚠ {missingCount}
+                        </button>
                       )}
                       <button
                         onClick={(e) => onToggleRecipeExpand(entry.recipe_id!, e)}
@@ -571,6 +627,7 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
   onCopyToChild,
   onCopyWeek,
   onClearWeek,
+  onOpenMissingForRecipe,
 }: GSAPCalendarMealPlannerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cellRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -830,6 +887,7 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
                               food={getFood(entry.food_id)}
                               recipe={entry.recipe_id ? getRecipe(entry.recipe_id) : undefined}
                               kids={kids}
+                              foods={foods}
                               showAllKids={showAllKids}
                               expandedRecipes={expandedRecipes}
                               onToggleRecipeExpand={toggleRecipeExpand}
@@ -838,6 +896,7 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
                               cellRefs={cellRefs}
                               onMoveEntry={handleMoveEntry}
                               getFood={getFood}
+                              onOpenMissingForRecipe={onOpenMissingForRecipe}
                             />
                           ))}
 
@@ -968,6 +1027,7 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
                             food={getFood(entry.food_id)}
                             recipe={entry.recipe_id ? getRecipe(entry.recipe_id) : undefined}
                             kids={kids}
+                            foods={foods}
                             showAllKids={showAllKids}
                             expandedRecipes={expandedRecipes}
                             onToggleRecipeExpand={toggleRecipeExpand}
@@ -976,6 +1036,7 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
                             cellRefs={cellRefs}
                             onMoveEntry={handleMoveEntry}
                             getFood={getFood}
+                            onOpenMissingForRecipe={onOpenMissingForRecipe}
                           />
                         ))}
 

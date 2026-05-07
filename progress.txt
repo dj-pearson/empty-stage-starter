@@ -2360,3 +2360,49 @@ Prime suspects to check, in order of likelihood:
   - Fixed a 6-month-old latent bug in `parse-grocery-text.ts`: numbered-list cleanup `/^\s*\d+[\.\)]\s*/` should always have `\s+` (not `\s*`) at the end, because real list prefixes always have whitespace after the period. The `\s*` form silently corrupts decimals like "1.5". Worth a follow-up audit of any other `\s*` strip regex in the codebase.
   - `analytics.trackEvent({ name, properties })` is the canonical shape; the alphabet of named events should stay snake_case to match the existing dataset.
 ---
+
+## 2026-05-06 - US-290: Plan-aware grocery flags (web Planner)
+- What was implemented:
+  - `src/lib/recipeShortfall.ts`: new `countMissingForRecipe(recipe, foods)` helper. When `recipe.recipe_ingredients` is populated (US-281), defers to `computeRecipeShortfall` for accurate shortfall (unit-aware). Otherwise falls back to a legacy path: counts `food_ids` whose matched pantry food has `quantity ≤ 0` (or has no pantry match). Returns 0 for ingredient-less recipes so the chip stays hidden.
+  - `src/components/GSAPCalendarMealPlanner.tsx`:
+    - `DraggableMealItem` now accepts `foods: Food[]` and `onOpenMissingForRecipe?: (recipeId: string) => void` props.
+    - `missingCount = countMissingForRecipe(recipe, foods)` is computed at the top of the component (Rules of Hooks safe — runs unconditionally for every entry).
+    - In the compact recipe-entry view, when `missingCount > 0` we render an amber tappable chip `⚠ N` next to the existing recipe metadata; tapping fires `plan_entry_missing_chip_tapped` and calls `onOpenMissingForRecipe(recipeId)`.
+    - A `useEffect` fires `plan_entry_missing_chip_shown` once per `(entry, missingCount > 0)` transition — useful for funnel analysis without spamming the analytics endpoint on every render.
+    - Both call-sites (family-view + single-kid-view) pass `foods` and `onOpenMissingForRecipe` through.
+  - `src/pages/Planner.tsx`: passes `onOpenMissingForRecipe={openMissingIngredientsForRecipe}` to both `<GSAPCalendarMealPlanner>` instances. The handler (already there from US-284) recomputes shortfall and opens the existing `<MissingIngredientsDialog>`.
+- AC verdict:
+  - "Web Planner.tsx renders a small chip per plan entry: '⚠ 3 missing' / no chip when ≥0" ✅
+  - "Tap on chip opens MissingIngredientsDialog pre-filtered to still-missing rows" ✅ (reuses US-284's `openMissingIngredientsForRecipe` which calls `computeRecipeShortfall` against current pantry)
+  - "Recomputation is cheap: derived from cached recipe_ingredients + current foods state, no extra DB round trip" ✅
+  - "Telemetry: planEntryMissingChipShown(count), planEntryMissingChipTapped" ✅ (snake_case names: `plan_entry_missing_chip_shown`, `plan_entry_missing_chip_tapped`)
+  - iOS parity is a follow-up. Web is shipped.
+- **Learnings:**
+  - Rules of Hooks gotcha: `useEffect` inside a conditional-return branch is forbidden. The clean fix is to compute the conditional value (`missingCount = recipe ? countMissing(...) : 0`) at the top of the component and let the `useEffect` always run — the effect body is what skips work for `missingCount === 0`.
+  - When wiring a chip-shown analytics event, key the dependency array on `(missingCount, entry.recipe_id)` so it fires once per transition rather than once per render. Going to `[]` would only fire on mount; going to `[foods]` would fire on every food edit.
+  - Both view paths (`family` and `single-kid`) of GSAPCalendarMealPlanner render `<DraggableMealItem>` from independent JSX trees — every prop addition has to update **both** call sites; missed-only-one is a silent visual regression.
+---
+
+## 2026-05-06 - US-292: Loop close-out — clear missing flags when groceries become pantry
+- What was implemented:
+  - The badge derivation is already reactive (US-290 reads `foods` directly via `countMissingForRecipe` in render), so the moment the per-item grocery toggle increments a pantry food's quantity, the badge re-derives within one render frame. Optimistic UI is built-in because the AppContext's pantry update fires before the realtime echo.
+  - `src/pages/Grocery.tsx` `handleDoneShopping` now also fires the close-out telemetry:
+    - Reconstructs a hypothetical "pre-move" foods snapshot by subtracting `(item.quantity ?? 1)` from the matched pantry food for each item being moved.
+    - Iterates every recipe id that appears in `planEntries` and computes `before = countMissingForRecipe(recipe, preFoods)` vs `after = countMissingForRecipe(recipe, foods)`.
+    - Counts the recipes that crossed `before > 0 && after === 0` and fires `missing_flags_cleared_after_pantry_move` with `plan_entries_cleared` + `items_moved` properties (only when the count is > 0).
+  - `src/lib/recipeShortfall.test.ts` (new): 8 vitest cases. Three of them simulate the explicit loop documented in the AC — plan-add (3 missing) → buy missing (1 remaining) → buy beef (cleared). The fourth asserts the `before > 0 && after === 0` predicate that gates the telemetry.
+- AC verdict:
+  - "After moveBoughtToPantry succeeds, both surfaces re-derive missing-counts within 1 render frame" ✅ (web; iOS parity TBD)
+  - "Realtime sync from a household member moving items to pantry on iOS updates badges on web within debounce window" ✅ existing realtime channels propagate `foods` updates which immediately trigger the chip's re-derivation; no extra wiring needed.
+  - "Vitest integration test that simulates plan-add → buy → move asserting (3) → (1) → (cleared)" ✅
+  - "Optimistic UI: transition starts the moment the user taps Move to pantry, not when realtime echo arrives" ✅ (the per-item toggle increments pantry synchronously; `handleDoneShopping` runs after that's already happened, so the chip clears before any network round-trip)
+  - "Telemetry: missingFlagsClearedAfterPantryMove(planEntriesCleared)" ✅ (snake_case `missing_flags_cleared_after_pantry_move`)
+- Verification:
+  - `npx vitest run src/lib/recipeShortfall.test.ts` → 8/8 in ~1s.
+  - `npm run build` → built in 58s, no errors.
+- **Learnings:**
+  - "Recompute on every render from canonical state" is the right architecture for this kind of derived-flag UI. We don't need a separate cache or a synthetic `useEffect` to clear the chip — once `foods` updates, React re-renders the entry, `countMissingForRecipe` recomputes, and the chip naturally hides. Less code, no staleness window.
+  - When telemetry needs a "before vs after" snapshot but the state has already moved by the time the handler runs, **reconstruct** the pre-state from the action being committed (here: subtract moved quantities). Cheaper than hoisting state-snapshot logic into the per-item toggle path which fires N times.
+  - Vitest test files for pure derivation helpers are a strong way to document the intent of integration-style flow stories. The test reads like a storyboard ("3 missing → 1 missing → cleared") and locks in the contract for future refactors.
+---
+
