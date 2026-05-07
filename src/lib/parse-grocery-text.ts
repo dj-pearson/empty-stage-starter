@@ -150,7 +150,7 @@ function parseLine(line: string): ParsedGroceryItem | null {
   // Clean the line: remove leading bullets, numbers, checkboxes
   let cleaned = line
     .replace(/^[\s]*[-•*▪▸►◆☐☑✓✔✗✘\u2022\u2023\u25E6\u2043\u2219]+\s*/, '') // bullets
-    .replace(/^[\s]*\d+[\.\)]\s*/, '') // numbered: "1. " or "1) "
+    .replace(/^[\s]*\d+[\.\)]\s+/, '') // numbered: "1. " or "1) " — \s+ (not \s*) so we don't eat the integer part of decimals like "1.5 lb chicken"
     .replace(/^\[[ xX]?\]\s*/, '') // checkboxes: "[ ] " or "[x] "
     .trim();
 

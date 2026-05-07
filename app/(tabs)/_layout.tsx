@@ -12,8 +12,15 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
     Lists: '🛒',
     Profile: '👤',
   };
+  // The decorative emoji is announced redundantly on top of the
+  // tabBarAccessibilityLabel — hide it from the screen reader so TalkBack
+  // says "Pantry tab" once instead of "Pantry tab. Jar with lid emoji."
   return (
-    <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>
+    <Text
+      style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
       {icons[name] ?? '•'}
     </Text>
   );

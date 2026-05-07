@@ -38,6 +38,48 @@ export function sanitizeTextInput(input: string, maxLength: number = 200): strin
 }
 
 /**
+ * Standard length caps for the mobile forms (mirrors web validation).
+ * Use these constants instead of magic numbers so call sites stay consistent.
+ */
+export const INPUT_LIMITS = {
+  foodName: 200,
+  groceryName: 200,
+  recipeName: 200,
+  kidName: 100,
+  notes: 1000,
+} as const;
+
+/**
+ * Validate a numeric form input. Accepts strings (TextInput.text) and numbers,
+ * returns the clamped numeric value or `null` when the input is malformed.
+ *
+ * Sane ranges per kind:
+ *  - 'quantity': 0..99999 (e.g. servings, units in pantry/grocery)
+ *  - 'calories': 0..50000 (per serving — anything more is a data entry error)
+ *  - 'servings': 1..200 (recipe yield)
+ *  - 'percentage': 0..100
+ */
+export function validateNumericInput(
+  input: string | number | null | undefined,
+  kind: 'quantity' | 'calories' | 'servings' | 'percentage' = 'quantity'
+): number | null {
+  if (input == null) return null;
+  const raw = typeof input === 'number' ? input : parseFloat(String(input).trim());
+  if (!Number.isFinite(raw)) return null;
+
+  const ranges = {
+    quantity: { min: 0, max: 99_999 },
+    calories: { min: 0, max: 50_000 },
+    servings: { min: 1, max: 200 },
+    percentage: { min: 0, max: 100 },
+  } as const;
+
+  const { min, max } = ranges[kind];
+  if (raw < min || raw > max) return null;
+  return raw;
+}
+
+/**
  * Rate limiter for login attempts
  * Stores attempts in memory (resets on app restart - acceptable for mobile)
  */

@@ -2,6 +2,8 @@ import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Helmet } from "react-helmet-async";
 import { useApp } from "@/contexts/AppContext";
+import { countMissingForRecipe } from "@/lib/recipeShortfall";
+import { analytics } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -79,7 +81,7 @@ const categoryIcons: Record<FoodCategory, string> = {
 
 export default function Grocery() {
   const {
-    foods, kids, activeKidId, planEntries, groceryItems,
+    foods, kids, activeKidId, planEntries, groceryItems, recipes,
     setGroceryItems, addGroceryItem, toggleGroceryItem,
     updateGroceryItem, deleteGroceryItem, deleteGroceryItems,
     clearCheckedGroceryItems, addFood, updateFood
@@ -364,6 +366,53 @@ export default function Grocery() {
       source_recipe_id: item.source_recipe_id,
     }));
     if (moved.length === 0) return;
+
+    // US-292: snapshot missing-counts BEFORE the per-item toggle pantry sync
+    // has fully drained, then re-derive AFTER. Plan entries that had
+    // missingCount > 0 and now have 0 are the ones whose badges cleared.
+    // The per-item toggle (handleToggleItem) updates `foods` synchronously,
+    // so by the time `handleDoneShopping` is called the post-state is current.
+    // We still need the pre-state — derive from the foods snapshot at the
+    // moment the recipes / planEntries / foods closure was captured by this
+    // useCallback. AppContext re-creates this closure when foods change, so
+    // the "pre" state is what we have right now; we reconstruct a hypothetical
+    // pre-state by subtracting the moved items from each matched food.
+    const reconstructPreFoods = () => {
+      const lookup = new Map(foods.map(f => [f.name.toLowerCase(), f]));
+      const adjusted = foods.map(f => ({ ...f }));
+      for (const item of moved) {
+        const food = lookup.get(item.name.toLowerCase());
+        if (!food) continue;
+        const target = adjusted.find(f => f.id === food.id);
+        if (target) {
+          target.quantity = Math.max(0, (target.quantity ?? 0) - (item.quantity ?? 1));
+        }
+      }
+      return adjusted;
+    };
+    const preFoods = reconstructPreFoods();
+
+    const recipeIdsInPlan = new Set(
+      planEntries.filter(p => p.recipe_id).map(p => p.recipe_id!)
+    );
+    let plan_entries_cleared = 0;
+    for (const recipeId of recipeIdsInPlan) {
+      const recipe = recipes.find(r => r.id === recipeId);
+      if (!recipe) continue;
+      const before = countMissingForRecipe(recipe, preFoods);
+      const after = countMissingForRecipe(recipe, foods);
+      if (before > 0 && after === 0) plan_entries_cleared++;
+    }
+    if (plan_entries_cleared > 0) {
+      analytics.trackEvent({
+        name: "missing_flags_cleared_after_pantry_move",
+        properties: {
+          plan_entries_cleared,
+          items_moved: moved.length,
+        },
+      });
+    }
+
     clearCheckedGroceryItems();
     setPurchasedOpen(false);
 
@@ -399,7 +448,7 @@ export default function Grocery() {
         },
       },
     });
-  }, [purchasedItems, clearCheckedGroceryItems, addGroceryItem, foods, updateFood]);
+  }, [purchasedItems, clearCheckedGroceryItems, addGroceryItem, foods, updateFood, recipes, planEntries]);
 
   const handleSmartRestock = async () => {
     setIsGeneratingRestock(true);

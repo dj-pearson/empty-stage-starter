@@ -14,6 +14,8 @@ const BulkAddFoodDialog = lazy(() => import("@/components/BulkAddFoodDialog").th
 import { PantryStatsBar } from "@/components/pantry/PantryStatsBar";
 import { PantryCategorySection } from "@/components/pantry/PantryCategorySection";
 import { PantryListItem } from "@/components/pantry/PantryListItem";
+import { PantryQuickAdd } from "@/components/pantry/PantryQuickAdd";
+import type { PantryQuickAddParse } from "@/lib/pantryQuickAddParser";
 import {
   CATEGORY_CONFIG,
   CATEGORY_ORDER,
@@ -358,6 +360,42 @@ export default function Pantry() {
     // If blocked by plan limit, the upgrade modal handles messaging.
   };
 
+  // US-288: Quick-add (single line) — parser already infers qty/unit/category.
+  const handleQuickAddOne = useCallback(
+    async (parse: PantryQuickAddParse) => {
+      const added = await addFood({
+        name: parse.name,
+        category: parse.category,
+        quantity: parse.quantity,
+        unit: parse.unit || undefined,
+        is_safe: true,
+        is_try_bite: false,
+      });
+      if (added) {
+        toast.success(`Added ${parse.name} to pantry`);
+      }
+    },
+    [addFood]
+  );
+
+  // US-288: Quick-add bulk (textarea, one item per line).
+  const handleQuickAddMany = useCallback(
+    async (parses: PantryQuickAddParse[]) => {
+      if (!addFoods) return;
+      await addFoods(
+        parses.map((p) => ({
+          name: p.name,
+          category: p.category,
+          quantity: p.quantity,
+          unit: p.unit || undefined,
+          is_safe: true,
+          is_try_bite: false,
+        }))
+      );
+    },
+    [addFoods]
+  );
+
   const handleEdit = useCallback((food: Food) => {
     setEditFood(food);
     setDialogOpen(true);
@@ -667,6 +705,12 @@ export default function Pantry() {
               </DropdownMenu>
             </div>
           </div>
+
+          {/* === US-288: QUICK-ADD INPUT === */}
+          <PantryQuickAdd
+            onAddOne={handleQuickAddOne}
+            onAddMany={handleQuickAddMany}
+          />
 
           {/* === SEARCH BAR === */}
           <div className="relative">

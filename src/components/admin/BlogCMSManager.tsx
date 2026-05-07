@@ -38,7 +38,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import blogTitlesData from "../../../Blog_Titles.md?raw";
+import blogTitlesData from "../../../documents/Blog_Titles.md?raw";
 import { logger } from "@/lib/logger";
 
 // Lazy load the WYSIWYG editor to reduce bundle size

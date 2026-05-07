@@ -21,6 +21,11 @@ import { suggestCategory, CATEGORIES } from '../../app/mobile/lib/unit-suggestio
 import { ItemDetailModal, type EditableItem } from '../../app/mobile/components/ItemDetailModal';
 import { BulkAddSheet } from '../../app/mobile/components/BulkAddSheet';
 import { QuickCategoryPicker } from '../../app/mobile/components/QuickCategoryPicker';
+import { useNetworkStatus } from '../../app/mobile/hooks/useNetworkStatus';
+import { announceForAccessibility } from '../../app/mobile/lib/a11y';
+import { enqueueOp } from '../../app/mobile/lib/syncQueue';
+
+const UNDO_TIMEOUT_MS = 5000;
 
 interface GroceryItem {
   id: string;
@@ -30,6 +35,12 @@ interface GroceryItem {
   checked: boolean;
   category?: FoodCategory | null;
   notes?: string | null;
+}
+
+interface PendingDelete {
+  item: GroceryItem;
+  expiresAt: number;
+  timer: ReturnType<typeof setTimeout>;
 }
 
 export default function ListsScreen() {
@@ -44,6 +55,9 @@ export default function ListsScreen() {
   const [editingItem, setEditingItem] = useState<EditableItem | undefined>(undefined);
   const [groupByCategory, setGroupByCategory] = useState(true);
   const [pickerItem, setPickerItem] = useState<GroceryItem | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const { isConnected, isInternetReachable } = useNetworkStatus();
+  const isOffline = !isConnected || !isInternetReachable;
 
   const fetchItems = useCallback(async () => {
     try {
@@ -72,13 +86,67 @@ export default function ListsScreen() {
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
+  // Realtime sync: pick up grocery_items inserts/updates/deletes from other devices.
+  useEffect(() => {
+    let active = true;
+    let cleanup: (() => void) | undefined;
+
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !active) return;
+
+      const channel = supabase
+        .channel(`mobile-grocery-items-${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'grocery_items',
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            void fetchItems();
+          }
+        )
+        .subscribe();
+
+      cleanup = () => { void supabase.removeChannel(channel); };
+    })();
+
+    return () => {
+      active = false;
+      if (cleanup) cleanup();
+    };
+  }, [fetchItems]);
+
+  // Cancel any pending soft-delete timer when leaving the screen.
+  useEffect(() => {
+    return () => {
+      if (pendingDelete) clearTimeout(pendingDelete.timer);
+    };
+  }, [pendingDelete]);
+
   const handleToggleCheck = async (item: GroceryItem) => {
     const newChecked = !item.checked;
+    // Optimistic local update — the user sees the check toggle instantly.
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, checked: newChecked } : i));
     try {
-      await supabase.from('grocery_items').update({ checked: newChecked }).eq('id', item.id);
-    } catch {
-      setItems(prev => prev.map(i => i.id === item.id ? { ...i, checked: !newChecked } : i));
+      const { error } = await supabase
+        .from('grocery_items')
+        .update({ checked: newChecked })
+        .eq('id', item.id);
+      if (error) throw error;
+    } catch (err) {
+      // US-127: when the live write fails (offline or transient error) we
+      // *keep* the optimistic state and enqueue the op so it replays on
+      // reconnection. If even enqueue fails, fall back to rolling the UI
+      // back so the user isn't lied to.
+      try {
+        await enqueueOp('grocery.toggle', { id: item.id, checked: newChecked });
+      } catch {
+        setItems(prev => prev.map(i => i.id === item.id ? { ...i, checked: !newChecked } : i));
+      }
     }
   };
 
@@ -271,17 +339,36 @@ export default function ListsScreen() {
   }, [items]);
 
   const handleDeleteItem = (item: GroceryItem) => {
-    Alert.alert('Delete Item', `Remove "${item.name}" from list?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setItems(prev => prev.filter(i => i.id !== item.id));
-          await supabase.from('grocery_items').delete().eq('id', item.id);
-        },
-      },
-    ]);
+    // Soft-delete: hide locally, run a 5s undo window, then commit to Supabase.
+    // If the user taps Undo, the timer is cleared and the item stays visible.
+    if (pendingDelete) {
+      // A previous delete is still in its undo window — commit it now so the
+      // bottom-banner doesn't flicker between two items.
+      clearTimeout(pendingDelete.timer);
+      void supabase.from('grocery_items').delete().eq('id', pendingDelete.item.id);
+    }
+
+    setItems(prev => prev.filter(i => i.id !== item.id));
+    const timer = setTimeout(async () => {
+      try {
+        await supabase.from('grocery_items').delete().eq('id', item.id);
+      } catch (err) {
+        console.error('Delete commit failed:', err);
+        // Restore optimistically on failure so the user doesn't lose data silently.
+        setItems(prev => [item, ...prev]);
+      } finally {
+        setPendingDelete(null);
+      }
+    }, UNDO_TIMEOUT_MS);
+
+    setPendingDelete({ item, expiresAt: Date.now() + UNDO_TIMEOUT_MS, timer });
+  };
+
+  const undoDelete = () => {
+    if (!pendingDelete) return;
+    clearTimeout(pendingDelete.timer);
+    setItems(prev => [pendingDelete.item, ...prev]);
+    setPendingDelete(null);
   };
 
   const onRefresh = () => { setIsRefreshing(true); fetchItems(); };
@@ -340,10 +427,15 @@ export default function ListsScreen() {
   const totalCount = items.length;
 
   if (isLoading) {
+    announceForAccessibility('Loading grocery list');
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView
+        style={styles.container}
+        accessibilityRole="alert"
+        accessibilityLiveRegion="polite"
+      >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.primary} accessibilityLabel="Loading" />
         </View>
       </SafeAreaView>
     );
@@ -359,6 +451,18 @@ export default function ListsScreen() {
           </Text>
         )}
       </View>
+
+      {isOffline && (
+        <View
+          style={styles.offlineBanner}
+          accessibilityRole="alert"
+          accessibilityLabel="Offline. Changes will sync when you reconnect."
+        >
+          <Text style={styles.offlineBannerText}>
+            ⚡️ Offline — changes will sync when you reconnect
+          </Text>
+        </View>
+      )}
 
       {totalCount > 0 && (
         <View style={styles.progressBar}>
@@ -431,6 +535,11 @@ export default function ListsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           stickySectionHeadersEnabled={false}
+          // US-132: virtualization knobs for mid-range Android.
+          removeClippedSubviews
+          initialNumToRender={20}
+          maxToRenderPerBatch={20}
+          windowSize={10}
           refreshControl={
             <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh}
               tintColor={colors.primary} colors={[colors.primary]} />
@@ -458,6 +567,11 @@ export default function ListsScreen() {
           data={items}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          // US-132: virtualization knobs for mid-range Android.
+          removeClippedSubviews
+          initialNumToRender={20}
+          maxToRenderPerBatch={20}
+          windowSize={10}
           refreshControl={
             <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh}
               tintColor={colors.primary} colors={[colors.primary]} />
@@ -473,6 +587,22 @@ export default function ListsScreen() {
             </View>
           }
         />
+      )}
+
+      {pendingDelete && (
+        <View style={styles.undoBanner} accessibilityRole="alert">
+          <Text style={styles.undoText} numberOfLines={1}>
+            Removed “{pendingDelete.item.name}”
+          </Text>
+          <TouchableOpacity
+            onPress={undoDelete}
+            accessibilityLabel={`Undo remove ${pendingDelete.item.name}`}
+            accessibilityRole="button"
+            style={styles.undoBtn}
+          >
+            <Text style={styles.undoBtnText}>Undo</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       <BulkAddSheet
@@ -582,4 +712,36 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 48, marginBottom: spacing.md },
   emptyTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text },
   emptyText: { fontSize: fontSize.sm, color: colors.textSecondary, marginTop: spacing.sm, paddingHorizontal: spacing.lg, textAlign: 'center' },
+  offlineBanner: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  offlineBannerText: { fontSize: fontSize.sm, color: '#78350f', fontWeight: '600' },
+  undoBanner: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
+    bottom: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.text,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    minHeight: 48,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  undoText: { flex: 1, color: colors.background, fontSize: fontSize.sm, fontWeight: '500' },
+  undoBtn: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  undoBtnText: { color: colors.primary, fontSize: fontSize.sm, fontWeight: '700' },
 });

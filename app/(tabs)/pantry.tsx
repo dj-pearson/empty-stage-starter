@@ -284,6 +284,11 @@ export default function PantryScreen() {
         data={filtered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
+        // US-132: virtualization knobs for mid-range Android.
+        removeClippedSubviews
+        initialNumToRender={20}
+        maxToRenderPerBatch={20}
+        windowSize={10}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh}
             tintColor={colors.primary} colors={[colors.primary]} />

@@ -44,9 +44,10 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Recipe, RecipeCollection, MealSlot } from "@/types";
+import { Recipe, RecipeCollection, MealSlot, Food } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { assertUUID } from "@/lib/query-sanitize";
+import { analytics } from "@/lib/analytics";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -271,11 +272,42 @@ export default function Recipes() {
     toast.success("Recipe deleted");
   }, [deleteRecipe]);
 
-  // Smart grocery handler
+  // Smart grocery handler (existing — opens the SmartGroceryDialog with the
+  // full recipe ingredient list).
   const handleAddToGrocery = useCallback((recipe: Recipe) => {
     setGroceryRecipe(recipe);
     setGroceryDialogOpen(true);
   }, []);
+
+  // US-291: one-tap "add the missing ingredients" — bypasses the dialog and
+  // bulk-inserts only foods with no on-hand quantity. No plan entry.
+  const handleAddMissingToGrocery = useCallback(
+    (recipe: Recipe, missingFoods: Food[]) => {
+      if (missingFoods.length === 0) return;
+      missingFoods.forEach((food) => {
+        addGroceryItem({
+          name: food.name,
+          quantity: 1,
+          unit: food.unit ?? "",
+          category: food.category,
+          added_via: "recipe",
+        });
+      });
+      toast.success(
+        `Added ${missingFoods.length} ${missingFoods.length === 1 ? "item" : "items"} to grocery`,
+        { description: recipe.name }
+      );
+      analytics.trackEvent({
+        name: "recipe_add_missing_to_grocery",
+        properties: {
+          recipe_id: recipe.id,
+          missing_count: missingFoods.length,
+          total_ingredients: recipe.food_ids.length,
+        },
+      });
+    },
+    [addGroceryItem]
+  );
 
   const handleGroceryItemsAdd = useCallback((items: { name: string; quantity: number; unit: string; category: string; aisle?: string }[]) => {
     items.forEach((item) => {
@@ -614,6 +646,7 @@ export default function Recipes() {
           }}
           onEdit={handleEdit}
           onAddToGrocery={handleAddToGrocery}
+          onAddMissingToGrocery={handleAddMissingToGrocery}
           onAddToPlan={handleAddToPlan}
           onAddToCollections={handleAddToCollections}
         />

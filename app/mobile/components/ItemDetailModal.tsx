@@ -18,6 +18,11 @@ import {
   ALL_UNIT_OPTIONS,
   CATEGORIES,
 } from '../lib/unit-suggestions';
+import {
+  sanitizeTextInput,
+  validateNumericInput,
+  INPUT_LIMITS,
+} from '../lib/validation';
 
 export interface EditableItem {
   id?: string;
@@ -69,16 +74,17 @@ export function ItemDetailModal({ visible, mode, initial, onClose, onSave }: Pro
   };
 
   const handleSave = () => {
-    const trimmedName = name.trim();
-    if (!trimmedName) return;
-    const qty = parseFloat(quantity);
+    const cleanName = sanitizeTextInput(name, INPUT_LIMITS.foodName);
+    if (!cleanName) return;
+    // validateNumericInput returns null on out-of-range / malformed; fall back to 1.
+    const qty = validateNumericInput(quantity, 'quantity');
     onSave({
       id: initial?.id,
-      name: trimmedName,
-      quantity: isNaN(qty) || qty <= 0 ? 1 : qty,
-      unit: unit.trim() || undefined,
+      name: cleanName,
+      quantity: qty == null || qty <= 0 ? 1 : qty,
+      unit: unit.trim().slice(0, 32) || undefined,
       category: category ?? undefined,
-      notes: notes.trim() || undefined,
+      notes: sanitizeTextInput(notes, INPUT_LIMITS.notes) || undefined,
     });
   };
 
