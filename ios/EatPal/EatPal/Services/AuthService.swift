@@ -107,6 +107,63 @@ final class AuthService {
         try? await client.auth.signOut()
     }
 
+    // MARK: - Apple Relay Email Binding
+
+    /// Whether the current user has a password set. Reads
+    /// `auth.users.encrypted_password IS NOT NULL` via the
+    /// `current_user_has_password()` SECURITY DEFINER function. False on
+    /// any error (treat unknown as "not set" — the UI will offer to set one).
+    func hasPassword() async -> Bool {
+        do {
+            let result: Bool = try await client.rpc("current_user_has_password").execute().value
+            return result
+        } catch {
+            return false
+        }
+    }
+
+    /// Sends a 6-digit verification code to the requested email so the
+    /// user can swap their @privaterelay Apple address for a real one.
+    func bindEmailRequest(email: String) async throws {
+        struct Request: Encodable { let email: String }
+        struct Response: Decodable { let ok: Bool?; let error: String? }
+        let response: Response = try await EdgeFunctions.invoke(
+            "bind-email-request",
+            body: Request(email: email),
+            as: Response.self
+        )
+        if let error = response.error {
+            throw NSError(domain: "BindEmail", code: 1, userInfo: [NSLocalizedDescriptionKey: error])
+        }
+    }
+
+    /// Verifies the code emitted by bindEmailRequest. On success,
+    /// auth.users.email is rewritten to the bound address; the Apple
+    /// identity remains linked.
+    @discardableResult
+    func bindEmailVerify(code: String) async throws -> String {
+        struct Request: Encodable { let code: String }
+        struct Response: Decodable { let ok: Bool?; let email: String?; let error: String? }
+        let response: Response = try await EdgeFunctions.invoke(
+            "bind-email-verify",
+            body: Request(code: code),
+            as: Response.self
+        )
+        if let error = response.error {
+            throw NSError(domain: "BindEmail", code: 2, userInfo: [NSLocalizedDescriptionKey: error])
+        }
+        guard let email = response.email else {
+            throw NSError(domain: "BindEmail", code: 3, userInfo: [NSLocalizedDescriptionKey: "Server did not return the bound email"])
+        }
+        return email
+    }
+
+    /// Sets the password for the current session. Used by the post-bind
+    /// step so an Apple-only user can subsequently sign in with email.
+    func setPassword(_ password: String) async throws {
+        try await client.auth.update(user: .init(password: password))
+    }
+
     // MARK: - Auth State Listener
 
     func onAuthStateChange() -> AsyncStream<(AuthChangeEvent, Session?)> {

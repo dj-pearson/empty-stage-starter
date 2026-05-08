@@ -37,6 +37,15 @@ final class AuthViewModel: ObservableObject {
     /// which never populates the form field.
     @Published var sessionEmail: String?
 
+    /// Provider strings (e.g. "apple", "email") drawn from the session's
+    /// identities. Empty when unauthenticated.
+    @Published var sessionProviders: [String] = []
+
+    /// Whether the user has a password set. Updated on session change
+    /// and after the bind-email/set-password flow completes. Defaults to
+    /// false so we err on offering the prompt.
+    @Published var hasPassword: Bool = false
+
     // MARK: - Apple Sign-In
 
     /// The raw nonce for the current Apple Sign-In attempt.
