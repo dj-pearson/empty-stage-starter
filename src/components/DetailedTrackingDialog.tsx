@@ -23,6 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { PlanEntry, Food } from "@/types";
 import { logger } from "@/lib/logger";
+import { recordContributionsFromAttempt } from "@/lib/chainNetwork";
 
 interface DetailedTrackingDialogProps {
   open: boolean;
@@ -108,6 +109,16 @@ export function DetailedTrackingDialog({
         .single();
 
       if (attemptError) throw attemptError;
+
+      // Fire-and-forget anonymous chain-network contribution (US-296).
+      if (attemptData) {
+        void recordContributionsFromAttempt({
+          id: attemptData.id,
+          food_id: attemptData.food_id,
+          outcome: attemptData.outcome,
+          kid_id: attemptData.kid_id,
+        }).catch((err) => logger.warn("chainNetwork contribution failed", err));
+      }
 
       // Map outcome to plan result
       let planResult: "ate" | "tasted" | "refused";

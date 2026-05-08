@@ -63,6 +63,7 @@ const BudgetCalculator = lazy(() => import("./pages/BudgetCalculator"));
 const BudgetCalculatorResults = lazy(() => import("./pages/BudgetCalculatorResults"));
 const MealPlanGenerator = lazy(() => import("./pages/MealPlanGenerator"));
 const MealPlanGeneratorResults = lazy(() => import("./pages/MealPlanGeneratorResults"));
+const SiblingMealFinder = lazy(() => import("./pages/SiblingMealFinder"));
 const ProfessionalSettings = lazy(() => import("./pages/dashboard/ProfessionalSettings"));
 const Billing = lazy(() => import("./pages/dashboard/Billing"));
 const AccountSettings = lazy(() => import("./pages/dashboard/AccountSettings"));
@@ -175,6 +176,7 @@ const App = () => (
               <Route path="ai-coach" element={<RouteErrorBoundary><AICoach /></RouteErrorBoundary>} />
               <Route path="meal-builder" element={<RouteErrorBoundary><MealBuilder /></RouteErrorBoundary>} />
               <Route path="food-chaining" element={<RouteErrorBoundary><FoodChaining /></RouteErrorBoundary>} />
+              <Route path="sibling-meal-finder" element={<RouteErrorBoundary><SiblingMealFinder /></RouteErrorBoundary>} />
               <Route path="professional-settings" element={<RouteErrorBoundary><ProfessionalSettings /></RouteErrorBoundary>} />
               <Route path="billing" element={<RouteErrorBoundary><Billing /></RouteErrorBoundary>} />
               <Route path="settings" element={<RouteErrorBoundary><AccountSettings /></RouteErrorBoundary>} />
@@ -205,6 +207,9 @@ const App = () => (
             </Route>
             <Route path="/insights" element={<ProtectedRoute><RouteErrorBoundary><Dashboard /></RouteErrorBoundary></ProtectedRoute>}>
               <Route index element={<RouteErrorBoundary><InsightsDashboard /></RouteErrorBoundary>} />
+            </Route>
+            <Route path="/sibling-meal-finder" element={<ProtectedRoute><RouteErrorBoundary><Dashboard /></RouteErrorBoundary></ProtectedRoute>}>
+              <Route index element={<RouteErrorBoundary><SiblingMealFinder /></RouteErrorBoundary>} />
             </Route>
             {/* pSEO programmatic pages */}
             <Route path="/food-chaining/:safeFood" element={<RouteErrorBoundary><Suspense fallback={<LoadingFallback />}><PseoPage /></Suspense></RouteErrorBoundary>} />

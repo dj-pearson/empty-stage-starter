@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { WinNetworkPanel } from "@/components/WinNetworkPanel";
 
 interface FoodChainSuggestion {
   food_id: string;
@@ -451,6 +452,13 @@ export function FoodChainingRecommendations() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Cross-user anonymized network wins (US-296) */}
+      <WinNetworkPanel
+        sourceFoodName={selectedFood?.name ?? null}
+        pickinessLevel={activeKid?.pickiness_level ?? null}
+        limit={5}
+      />
 
       {/* Info Dialog */}
       <Dialog open={showDetails} onOpenChange={setShowDetails}>

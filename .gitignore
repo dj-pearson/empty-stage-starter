@@ -124,3 +124,5 @@ android-native/build/
 android-native/app/build/
 android-native/.gradle/
 
+user_profiles_rows.csv
+user_subscriptions_rows.csv

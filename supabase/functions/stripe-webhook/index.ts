@@ -90,7 +90,7 @@ export default async (req: Request) => {
     const errorMessage = err instanceof Error ? err.message : "Unknown error";
     return new Response(`Webhook Error: ${errorMessage}`, { status: 400 });
   }
-});
+};
 
 async function handleCheckoutCompleted(supabase: any, session: Stripe.Checkout.Session) {
   const customerId = session.customer as string;

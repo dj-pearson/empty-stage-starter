@@ -47,6 +47,7 @@ import { calculateAge } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { checkFeatureLimit } from "@/lib/featureLimits";
 import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
+import { recordContributionsFromAttempt } from "@/lib/chainNetwork";
 import { useNavigate } from "react-router-dom";
 
 interface FoodSuccessTrackerProps {
@@ -221,14 +222,25 @@ export function FoodSuccessTracker({ onAddChild }: FoodSuccessTrackerProps) {
         return;
       }
 
-      const { error } = await supabase.from("food_attempts").insert([
-        {
-          kid_id: activeKidId,
-          ...attemptForm,
-        },
-      ]);
+      const { data: insertedAttempts, error } = await supabase
+        .from("food_attempts")
+        .insert([
+          {
+            kid_id: activeKidId,
+            ...attemptForm,
+          },
+        ])
+        .select("id, food_id, outcome, kid_id");
 
       if (error) throw error;
+
+      // Fire-and-forget anonymous chain-network contribution (US-296).
+      const newAttempt = (insertedAttempts ?? [])[0];
+      if (newAttempt) {
+        void recordContributionsFromAttempt(newAttempt).catch((err) =>
+          logger.warn("chainNetwork contribution failed", err),
+        );
+      }
 
       // Bump monthly usage so the next check reflects this entry.
       const { data: { user } } = await supabase.auth.getUser();

@@ -71,7 +71,11 @@
       "Bash(echo \"---EXIT $?---\")",
       "Bash(supabase --version)",
       "Bash(supabase status *)",
-      "Bash(echo \"---tsc EXIT $?---\")"
+      "Bash(echo \"---tsc EXIT $?---\")",
+      "Bash(echo \"TSC=$?\")",
+      "Bash(echo \"VITEST=$?\")",
+      "Bash(echo \"LINT=$?\")",
+      "Bash(del *)"
     ],
     "deny": [],
     "ask": []
