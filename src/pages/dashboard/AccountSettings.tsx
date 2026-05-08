@@ -59,6 +59,8 @@ import {
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { EmailPreferences } from "@/components/EmailPreferences";
 import { DataImport } from "@/components/settings/DataImport";
+import { BindEmailFlow } from "@/components/auth/BindEmailFlow";
+import { useBindStatus } from "@/hooks/useBindStatus";
 
 export default function AccountSettings() {
   const [activeTab, setActiveTab] = useState("profile");
