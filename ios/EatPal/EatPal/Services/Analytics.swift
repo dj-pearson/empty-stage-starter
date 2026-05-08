@@ -183,6 +183,23 @@ enum AnalyticsEvent {
     case paywallShown(source: String)
     case purchaseCompleted(productId: String)
 
+    // US-293: Tonight Mode (5:47pm panic button) instrumentation.
+    case tonightModeCardShown(planEmpty: Bool)
+    case tonightModeOpened(via: String)
+    case tonightModeLoaded(resultCount: Int, durationMs: Int)
+    case tonightSuggestionChosen(rank: Int, prepMinutes: Int, missingCount: Int)
+    case tonightCookStarted(stepCount: Int)
+    case tonightCookCompleted(durationSeconds: Int, stepCount: Int, voiceEnabled: Bool)
+    case tonightDeliveryFallbackChosen
+    case tonightMissingAddedToGrocery(count: Int)
+
+    // US-294: Receipt scan instrumentation.
+    case receiptScanStarted(fileSizeKb: Int)
+    case receiptParseCompleted(avgConfidence: Double, lineCount: Int, durationMs: Int)
+    case receiptItemsAccepted(acceptedCount: Int, droppedCount: Int)
+    case receiptScanFailed(reason: String)
+    case receiptFirstScanCompleted(itemCount: Int)
+
     // Auth lifecycle — coarse signals only, never tied to email/name
     case signInStarted(method: String)
     case signInCompleted(method: String)
@@ -237,6 +254,19 @@ enum AnalyticsEvent {
         case .signInStarted:            return "sign_in_started"
         case .signInCompleted:          return "sign_in_completed"
         case .signOutCompleted:         return "sign_out_completed"
+        case .tonightModeCardShown:     return "tonight_mode_card_shown"
+        case .tonightModeOpened:        return "tonight_mode_opened"
+        case .tonightModeLoaded:        return "tonight_mode_loaded"
+        case .tonightSuggestionChosen:  return "tonight_suggestion_chosen"
+        case .tonightCookStarted:       return "tonight_cook_started"
+        case .tonightCookCompleted:     return "tonight_cook_completed"
+        case .tonightDeliveryFallbackChosen: return "tonight_delivery_fallback_chosen"
+        case .tonightMissingAddedToGrocery:  return "tonight_missing_added_to_grocery"
+        case .receiptScanStarted:       return "receipt_scan_started"
+        case .receiptParseCompleted:    return "receipt_parse_completed"
+        case .receiptItemsAccepted:     return "receipt_items_accepted"
+        case .receiptScanFailed:        return "receipt_scan_failed"
+        case .receiptFirstScanCompleted: return "receipt_first_scan_completed"
         }
     }
 
@@ -261,7 +291,12 @@ enum AnalyticsEvent {
              .quickAddResolveSource, .productPhotoIdentified,
              .householdPreferenceSyncToggled, .storeLayoutSelected,
              .restockSuggestionTapped, .expiringRestockTapped,
-             .quickAddVoiceUsed, .arShelfFinderOpened, .arShelfChipTapped:
+             .quickAddVoiceUsed, .arShelfFinderOpened, .arShelfChipTapped,
+             .tonightModeCardShown, .tonightModeOpened, .tonightModeLoaded,
+             .tonightSuggestionChosen, .tonightCookStarted, .tonightCookCompleted,
+             .tonightDeliveryFallbackChosen, .tonightMissingAddedToGrocery,
+             .receiptScanStarted, .receiptParseCompleted, .receiptItemsAccepted,
+             .receiptScanFailed, .receiptFirstScanCompleted:
             return "feature"
         case .paywallShown, .purchaseCompleted:
             return "monetization"
@@ -354,8 +389,47 @@ enum AnalyticsEvent {
             return ["days_until_expiry": String(days)]
         case .arShelfChipTapped(let action):
             return ["action": action]
-        case .quickAddVoiceUsed, .arShelfFinderOpened:
+        case .quickAddVoiceUsed, .arShelfFinderOpened, .tonightDeliveryFallbackChosen:
             return [:]
+        case .tonightModeCardShown(let planEmpty):
+            return ["plan_empty": planEmpty ? "true" : "false"]
+        case .tonightModeOpened(let via):
+            return ["via": via]
+        case .tonightModeLoaded(let count, let durationMs):
+            return ["result_count": String(count), "duration_ms": String(durationMs)]
+        case .tonightSuggestionChosen(let rank, let prepMinutes, let missingCount):
+            return [
+                "rank": String(rank),
+                "prep_minutes": String(prepMinutes),
+                "missing_count": String(missingCount)
+            ]
+        case .tonightCookStarted(let stepCount):
+            return ["step_count": String(stepCount)]
+        case .tonightCookCompleted(let durationSeconds, let stepCount, let voiceEnabled):
+            return [
+                "duration_seconds": String(durationSeconds),
+                "step_count": String(stepCount),
+                "voice_enabled": voiceEnabled ? "true" : "false"
+            ]
+        case .tonightMissingAddedToGrocery(let count):
+            return ["count": String(count)]
+        case .receiptScanStarted(let kb):
+            return ["file_size_kb": String(kb)]
+        case .receiptParseCompleted(let avgConfidence, let lineCount, let durationMs):
+            return [
+                "avg_confidence": String(format: "%.2f", avgConfidence),
+                "line_count": String(lineCount),
+                "duration_ms": String(durationMs)
+            ]
+        case .receiptItemsAccepted(let acceptedCount, let droppedCount):
+            return [
+                "accepted_count": String(acceptedCount),
+                "dropped_count": String(droppedCount)
+            ]
+        case .receiptScanFailed(let reason):
+            return ["reason": reason]
+        case .receiptFirstScanCompleted(let count):
+            return ["item_count": String(count)]
         }
     }
 }

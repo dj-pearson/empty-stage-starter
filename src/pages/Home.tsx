@@ -34,6 +34,7 @@ import { SubscriptionStatusBanner } from "@/components/SubscriptionStatusBanner"
 import { MotivationalMessage } from "@/components/MotivationalMessage";
 import { TodayMeals } from "@/components/TodayMeals";
 import { QuickLogModal } from "@/components/QuickLogModal";
+import { TonightModeCard } from "@/components/TonightModeCard";
 
 const OnboardingProgressBar = lazy(() =>
   import("@/components/OnboardingProgressBar").then(m => ({ default: m.OnboardingProgressBar }))
@@ -239,6 +240,13 @@ export default function Home() {
         {/* Motivational Message */}
         <AnimatedPanel>
           <MotivationalMessage type="greeting" className="mb-6" childName={activeKid?.name} />
+        </AnimatedPanel>
+
+        {/* Tonight Mode (US-293) - "Dinner in 20 minutes" panic button.
+            Shows the giant CTA only when it's late afternoon/evening AND no
+            dinner is planned; otherwise renders nothing or a small button. */}
+        <AnimatedPanel>
+          <TonightModeCard />
         </AnimatedPanel>
 
         {/* Getting Started Section - Shows for new users */}

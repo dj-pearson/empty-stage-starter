@@ -11,6 +11,7 @@ import { ImageFoodCapture } from "@/components/ImageFoodCapture";
 const AddFoodDialog = lazy(() => import("@/components/AddFoodDialog").then(m => ({ default: m.AddFoodDialog })));
 const BarcodeScannerDialog = lazy(() => import("@/components/admin/BarcodeScannerDialog").then(m => ({ default: m.BarcodeScannerDialog })));
 const BulkAddFoodDialog = lazy(() => import("@/components/BulkAddFoodDialog").then(m => ({ default: m.BulkAddFoodDialog })));
+const ScanReceiptDialog = lazy(() => import("@/components/ScanReceiptDialog").then(m => ({ default: m.ScanReceiptDialog })));
 import { PantryStatsBar } from "@/components/pantry/PantryStatsBar";
 import { PantryCategorySection } from "@/components/pantry/PantryCategorySection";
 import { PantryListItem } from "@/components/pantry/PantryListItem";
@@ -58,6 +59,7 @@ import {
   Download,
   ScanBarcode,
   Camera,
+  Receipt,
   MoreVertical,
   Upload,
   Utensils,
@@ -112,6 +114,7 @@ export default function Pantry() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [imageCaptureOpen, setImageCaptureOpen] = useState(false);
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
+  const [receiptScanOpen, setReceiptScanOpen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(50);
 
@@ -603,6 +606,10 @@ export default function Pantry() {
                       <ScanBarcode className="h-4 w-4 mr-2" />
                       Scan Barcode
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setReceiptScanOpen(true)}>
+                      <Receipt className="h-4 w-4 mr-2" />
+                      Scan Receipt
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel>Import</DropdownMenuLabel>
                     <DropdownMenuItem onClick={handleLoadStarterList}>
@@ -675,6 +682,13 @@ export default function Pantry() {
                   >
                     <ScanBarcode className="h-4 w-4 mr-2" />
                     Scan Barcode
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setReceiptScanOpen(true)}
+                    className="min-h-[44px]"
+                  >
+                    <Receipt className="h-4 w-4 mr-2" />
+                    Scan Receipt
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel>Import & AI</DropdownMenuLabel>
@@ -1178,6 +1192,11 @@ export default function Pantry() {
           open={bulkAddOpen}
           onOpenChange={setBulkAddOpen}
           onSave={handleBulkAdd}
+        />
+
+        <ScanReceiptDialog
+          open={receiptScanOpen}
+          onClose={() => setReceiptScanOpen(false)}
         />
         </Suspense>
       </div>
