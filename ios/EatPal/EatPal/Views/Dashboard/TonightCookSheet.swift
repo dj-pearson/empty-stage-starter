@@ -248,7 +248,9 @@ struct TonightCookSheet: View {
 
 /// Tiny wrapper around AVSpeechSynthesizer so the cook view can show
 /// step-by-step audio cues without depending on VoiceInputService's
-/// recognition pipeline.
+/// recognition pipeline. AVSpeechSynthesizer isn't Sendable, so we pin
+/// the wrapper to the main actor and access it only from there.
+@MainActor
 final class SpeechCue: ObservableObject {
     private let synth = AVSpeechSynthesizer()
 

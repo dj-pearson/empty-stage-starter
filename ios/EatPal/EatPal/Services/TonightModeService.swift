@@ -7,25 +7,32 @@ import Foundation
 /// history, and a max prep-time budget. Falls back to a pure-Swift
 /// computation against the in-memory `AppState` so the UI never strands the
 /// user staring at a spinner at 6pm.
+///
+/// All public surface is `@MainActor` because the service reads from
+/// `AppState` (which is `@MainActor`-isolated). The only piece that crosses
+/// the actor boundary is the network fetch — wrapped in `withTimeout` so a
+/// slow Kong/Coolify deploy can't leave the UI hanging.
 enum TonightModeService {
 
     enum ServiceError: Error, LocalizedError {
         case network(String)
         case decoding(String)
         case empty
+        case timeout
 
         var errorDescription: String? {
             switch self {
-            case .network(let s): return "Couldn't reach Tonight Mode: \(s)"
+            case .network(let s):  return "Couldn't reach Tonight Mode: \(s)"
             case .decoding(let s): return "Tonight Mode response was unreadable: \(s)"
-            case .empty: return "No dinner suggestions yet. Add a few recipes and try again."
+            case .empty:           return "No dinner suggestions yet. Add a few recipes and try again."
+            case .timeout:         return "Tonight Mode took too long; using local picks."
             }
         }
     }
 
     // MARK: - Public response types
 
-    struct KidFit: Codable, Equatable, Hashable, Identifiable {
+    struct KidFit: Codable, Equatable, Hashable, Identifiable, Sendable {
         let kidId: String
         let kidName: String
         let score: Double
@@ -40,23 +47,15 @@ enum TonightModeService {
             return .ok
         }
 
-        enum Status { case ok, warn, allergen }
-
-        enum CodingKeys: String, CodingKey {
-            case kidId = "kidId"
-            case kidName = "kidName"
-            case score
-            case blockingAversions
-            case allergenHits
-        }
+        enum Status: Sendable { case ok, warn, allergen }
     }
 
-    struct MissingIngredient: Codable, Equatable, Hashable, Identifiable {
+    struct MissingIngredient: Codable, Equatable, Hashable, Identifiable, Sendable {
         let id: String
         let name: String
     }
 
-    struct Suggestion: Codable, Equatable, Hashable, Identifiable {
+    struct Suggestion: Codable, Equatable, Hashable, Identifiable, Sendable {
         let recipeId: String
         let name: String
         let imageUrl: String?
@@ -71,11 +70,11 @@ enum TonightModeService {
         var id: String { recipeId }
     }
 
-    private struct Response: Decodable {
+    private struct Response: Decodable, Sendable {
         let suggestions: [Suggestion]
     }
 
-    private struct RequestBody: Encodable {
+    private struct RequestBody: Encodable, Sendable {
         let householdId: String?
         let kidIds: [String]
         let maxMinutes: Int
@@ -89,6 +88,7 @@ enum TonightModeService {
     /// Hits the edge function with a 1.5s soft timeout. On any failure or
     /// empty response, falls back to a deterministic in-memory rank against
     /// `AppState`, so the UI always has *something* to show.
+    @MainActor
     static func fetchSuggestions(
         appState: AppState,
         kidIds: [String]? = nil,
@@ -97,12 +97,10 @@ enum TonightModeService {
         lookbackDays: Int = 21,
         limit: Int = 3
     ) async -> [Suggestion] {
-        let resolvedKidIds = (kidIds?.isEmpty ?? true) ? appState.kids.map(\.id) : kidIds!
+        let resolvedKidIds = (kidIds?.isEmpty ?? true) ? appState.kids.map(\.id) : (kidIds ?? [])
 
-        // Capture all main-actor state before entering the @Sendable closure.
-        let householdId = appState.kids.first?.householdId
         let body = RequestBody(
-            householdId: householdId,
+            householdId: appState.kids.first?.householdId,
             kidIds: resolvedKidIds,
             maxMinutes: maxMinutes,
             pantryOnly: pantryOnly,
@@ -111,7 +109,7 @@ enum TonightModeService {
         )
 
         do {
-            let response: Response = try await withTimeout(seconds: 1.5) {
+            let response = try await withTimeout(seconds: 1.5) {
                 try await EdgeFunctions.invoke(
                     "tonight-mode",
                     body: body,
@@ -136,6 +134,7 @@ enum TonightModeService {
 
     // MARK: - Client-side fallback
 
+    @MainActor
     static func clientFallback(
         appState: AppState,
         kidIds: [String],
@@ -147,6 +146,7 @@ enum TonightModeService {
         let pantryIds = Set(pantry.map(\.id))
         let selectedKids = appState.kids.filter { kidIds.contains($0.id) }
         let recipes = appState.recipes
+        let planEntries = appState.planEntries
 
         let now = Date()
         let cal = Calendar(identifier: .gregorian)
@@ -165,7 +165,7 @@ enum TonightModeService {
         }
         func varietyScore(for recipeId: String) -> Double {
             var weighted = 0.0
-            for entry in appState.planEntries where entry.recipeId == recipeId {
+            for entry in planEntries where entry.recipeId == recipeId {
                 guard let date = isoFmt.date(from: entry.date) else { continue }
                 let days = cal.dateComponents([.day], from: date, to: now).day ?? Int.max
                 if days < 0 || days > 21 { continue }
@@ -274,11 +274,14 @@ enum TonightModeService {
         }
     }
 
+    /// Pulls the leading numeric run out of a free-form string like "20 min"
+    /// or "PT15M". Used to rescue a usable prep-time when the recipe row
+    /// lacks the structured `total_time_minutes` column.
     private static func parseLeadingNumber(_ raw: String?) -> Double? {
         guard let raw else { return nil }
-        let scanner = Scanner(string: raw)
-        var n: Double = 0
-        return scanner.scanDouble(&n) ? n : nil
+        let head = raw.drop(while: { !$0.isNumber })
+            .prefix { $0.isNumber || $0 == "." }
+        return head.isEmpty ? nil : Double(String(head))
     }
 }
 
@@ -286,18 +289,21 @@ enum TonightModeService {
 
 /// Wraps an async block in a soft timeout. The work runs to completion in
 /// the background but the awaiter unblocks at the deadline so a slow edge
-/// fn can't strand the user.
-private func withTimeout<T>(
+/// fn can't strand the user. Both branches must produce a `Sendable` value
+/// because the task group needs to safely deliver across executors.
+private func withTimeout<T: Sendable>(
     seconds: TimeInterval,
     operation: @escaping @Sendable () async throws -> T
 ) async throws -> T {
     try await withThrowingTaskGroup(of: T.self) { group in
         group.addTask { try await operation() }
         group.addTask {
-            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-            throw TonightModeService.ServiceError.network("timeout")
+            try await Task.sleep(for: .seconds(seconds))
+            throw TonightModeService.ServiceError.timeout
         }
-        let first = try await group.next()!
+        guard let first = try await group.next() else {
+            throw TonightModeService.ServiceError.network("empty task group")
+        }
         group.cancelAll()
         return first
     }
@@ -313,10 +319,9 @@ extension TonightModeService {
         let hour = comps.hour ?? 0
         guard hour >= 16 && hour < 20 else { return false }
         let today = todayIso(now)
-        let dinnerPlanned = planEntries.contains { entry in
+        return !planEntries.contains { entry in
             entry.date == today && entry.mealSlot.lowercased() == "dinner"
         }
-        return !dinnerPlanned
     }
 
     static func todayIso(_ now: Date = Date()) -> String {

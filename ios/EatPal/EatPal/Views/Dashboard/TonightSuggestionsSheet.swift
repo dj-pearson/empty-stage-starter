@@ -186,15 +186,15 @@ struct TonightSuggestionsSheet: View {
             appState: appState,
             kidIds: kidIds
         )
-        await MainActor.run {
-            suggestions = result
-            loading = false
-            let durationMs = Int((Date().timeIntervalSince(loadStartedAt ?? Date())) * 1000)
-            AnalyticsService.track(.tonightModeLoaded(
-                resultCount: result.count,
-                durationMs: durationMs
-            ))
-        }
+        // fetchSuggestions is @MainActor, so we're already back on the
+        // main actor — direct @State mutation is safe.
+        suggestions = result
+        loading = false
+        let durationMs = Int(Date().timeIntervalSince(loadStartedAt ?? Date()) * 1000)
+        AnalyticsService.track(.tonightModeLoaded(
+            resultCount: result.count,
+            durationMs: durationMs
+        ))
     }
 
     private func initSelection() {
@@ -319,18 +319,25 @@ private struct SuggestionCard: View {
     }
 
     private func kidChip(for fit: TonightModeService.KidFit) -> some View {
-        let (icon, color, reason): (String, Color, String) = {
-            switch fit.status {
-            case .ok:
-                return ("checkmark.circle.fill", .green, "Safe")
-            case .warn:
-                return ("exclamationmark.triangle.fill", .orange,
-                        fit.blockingAversions.isEmpty ? "Has soft-blocked food" : "Has \(fit.blockingAversions.joined(separator: ", "))")
-            case .allergen:
-                return ("xmark.octagon.fill", .red,
-                        "Contains allergen \(fit.allergenHits.joined(separator: ", "))")
-            }
-        }()
+        let icon: String
+        let color: Color
+        let reason: String
+        switch fit.status {
+        case .ok:
+            icon = "checkmark.circle.fill"
+            color = .green
+            reason = "Safe"
+        case .warn:
+            icon = "exclamationmark.triangle.fill"
+            color = .orange
+            reason = fit.blockingAversions.isEmpty
+                ? "Has soft-blocked food"
+                : "Has \(fit.blockingAversions.joined(separator: ", "))"
+        case .allergen:
+            icon = "xmark.octagon.fill"
+            color = .red
+            reason = "Contains allergen \(fit.allergenHits.joined(separator: ", "))"
+        }
         return HStack(spacing: 4) {
             Image(systemName: icon)
             Text(fit.kidName)

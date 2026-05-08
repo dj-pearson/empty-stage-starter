@@ -18,7 +18,6 @@ struct ScanReceiptSheet: View {
 
     @State private var stage: Stage = .picker
     @State private var pickerItem: PhotosPickerItem?
-    @State private var pickedImage: UIImage?
     @State private var receipt: ReceiptScanService.Receipt?
     @State private var rows: [ReviewRow] = []
     @State private var errorMessage: String?
@@ -184,7 +183,6 @@ struct ScanReceiptSheet: View {
                 errorMessage = "Couldn't load that photo."
                 return
             }
-            pickedImage = image
             AnalyticsService.track(.receiptScanStarted(fileSizeKb: Int(data.count / 1024)))
             stage = .parsing
             do {
@@ -200,8 +198,9 @@ struct ScanReceiptSheet: View {
                         )
                     )
                 }
-                let avgConfidence = r.lineItems.isEmpty ? 0 :
-                    r.lineItems.reduce(0.0) { $0 + $1.confidence } / Double(r.lineItems.count)
+                let avgConfidence: Double = r.lineItems.isEmpty
+                    ? 0.0
+                    : r.lineItems.reduce(0.0) { $0 + $1.confidence } / Double(r.lineItems.count)
                 let durationMs = Int(Date().timeIntervalSince(startedAt ?? Date()) * 1000)
                 AnalyticsService.track(.receiptParseCompleted(
                     avgConfidence: avgConfidence,
