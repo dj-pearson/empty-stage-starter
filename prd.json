@@ -4370,6 +4370,190 @@
       "priority": 12,
       "passes": true,
       "notes": "Final story in the loop. Depends on US-282, US-283, US-290. | Completed 2026-05-06: handleDoneShopping in src/pages/Grocery.tsx now reconstructs a hypothetical preFoods snapshot by subtracting moved item quantities from current foods, then re-derives countMissingForRecipe before vs after to fire missing_flags_cleared_after_pantry_move analytics with plan_entries_cleared count. Re-derivation is automatic + optimistic because the badge in DraggableMealItem reads countMissingForRecipe(recipe, foods) on every render. Vitest integration test in src/lib/recipeShortfall.test.ts simulates plan-add (3 missing) -> buy (1 remains) -> move-to-pantry (cleared) and asserts the >0 -> 0 transition predicate."
+    },
+    {
+      "id": "US-293",
+      "title": "Tonight Mode: the 5:47pm Panic Button",
+      "description": "As a parent staring down dinnertime with no plan, I want a single dashboard button that gives me 3 cookable dinner options in under 2 seconds — using what's already in my pantry, what my kids will actually eat, and what I haven't made recently — so the worst moment of my day stops being the moment this app fails me. This is the headline differentiator: every other meal app shines at planning ahead and goes dark when you most need it. We turn every existing input (foods, kids.aversions, plan_entries history, recipe_ingredients shortfall, variety fatigue from US-298) into a single dramatic 'help me NOW' moment.",
+      "acceptanceCriteria": [
+        "Dashboard.tsx shows a prominent 'Dinner in 20 minutes' CTA card when local time is between 16:00 and 20:00 AND tonight's plan_entries (date=today, meal_type='dinner') for the active household is empty or marked unmade",
+        "New edge function functions/tonight-mode/index.ts accepts { householdId, kidIds[], maxMinutes (default 30), pantryOnly (default true) } and returns { suggestions: [{ recipeId, prepMinutes, pantryCoveragePct, missingIngredients[], kidFit: { kidId, score, blockingAversions[] }[], varietyScore, rank }] } sorted by composite score",
+        "Composite ranking: pantryCoveragePct (40 weight) - sum(blockingAversionsPerKid * 15) - varietyScore (US-298) * 25 - prepTimeOverBudget * 5; ties broken by highest avg kid score",
+        "Each suggestion card shows: recipe hero, prep_minutes badge, pantry-coverage chip (e.g., '90% pantry'), per-kid avatar row with green/amber/red fit, missing-ingredients chip linking to US-291 'add to grocery' if needed, big 'Cook now' primary button",
+        "'Cook now' opens a hands-free cook view: large step text, persistent timer, screen wake-lock via navigator.wakeLock API, swipe or 'Next' to advance, optional Web Speech voice cue read-aloud (feature-flag gated)",
+        "Empty/edge case: if pantry coverage on top suggestion is <40%, surface a secondary 'No pantry match — get this in 30 min via delivery' tile that deep-links to Grocery.tsx delivery flow with the missing items pre-staged",
+        "Picky-mode toggle on the panel: 'All my kids', 'Only the ones home tonight' (multi-select kid chips); selection persists in localStorage",
+        "Performance budget: edge function p95 < 800ms; UI shows skeleton card during fetch; falls back to client-side cached recommendations if function errors",
+        "Telemetry: tonight_mode_card_shown (timeOfDay, planEmpty), tonight_mode_opened, tonight_suggestion_chosen (rank, prepMinutes, missingCount, varietyScore), tonight_cook_started, tonight_cook_completed (durationSeconds), tonight_delivery_fallback_chosen",
+        "Vitest: ranking algorithm unit tests with 20+ fixture households (good pantry, sparse pantry, single-kid, 4-kid, allergen-heavy, repetition-heavy) — assertions on rank order",
+        "iOS DashboardView parity is a follow-up story; web ships first"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "The marquee feature. Reuses suggest-recipes-from-pantry, recipe_ingredients (US-281), kids.aversions, plan_entries, foods. Depends on US-298 (variety score) for the variety penalty input — degrade gracefully if not yet built."
+    },
+    {
+      "id": "US-294",
+      "title": "Receipt-scan to pantry auto-populate",
+      "description": "As a new or returning user, I want to snap a photo of my grocery receipt and have every item land in my pantry with quantity and price in under 30 seconds, so cold-start friction (typing in everything I own) is replaced with a single magical onboarding moment. This is the demo that converts. We already run analyze-images and have smart_product_catalog + grocery_item_sources for matching and price tracking — this story turns OCR output into structured pantry inserts with a tight review step.",
+      "acceptanceCriteria": [
+        "New 'Scan receipt' button on Pantry.tsx header (next to quick-add from US-288) and on Grocery.tsx (post-shop flow); both open the same camera/upload sheet",
+        "New edge function functions/parse-receipt-image/index.ts accepts multipart image upload, calls vision LLM with structured prompt, returns { merchant, purchasedAt, currency, lineItems: [{ rawText, parsedName, qty, unit, unitPrice, lineTotal, category, confidence (0-1), matchedFoodId? }] }",
+        "Server-side matching: each parsedName runs through smart_product_catalog fuzzy search; if match score > 0.85, populate matchedFoodId; else leave null for manual mapping",
+        "Review screen lists every line as an editable row: name, qty, unit, price, suggested category, confidence dot (green/amber/red); bulk actions: 'Trust all', 'Skip confidence < 0.7', 'Map all to existing pantry items'",
+        "On confirm: bulk INSERT into foods (location='pantry', pricePerUnit derived from lineTotal/qty); INSERT corresponding rows into grocery_item_sources with source='receipt' and merchant tag for price-history tracking",
+        "Merchant detection (Whole Foods, Aldi, Walmart, Trader Joe's, Costco, Target, Kroger, Safeway, generic) sets store_layouts hint and primes household's default-store preference if first-time",
+        "Privacy: original image is deleted from edge storage immediately after parse; only structured JSON + thumbnail (optional, user opt-in) persisted",
+        "Free tier: 3 receipt scans/month; paid: unlimited (gated by useFeatureLimit, key 'receipt_scan')",
+        "Failure modes: blurry image returns confidence < 0.4 across the board → toast 'Couldn't read this clearly — try better light or use bulk paste' with link to US-288 quick-add",
+        "Telemetry: receipt_scan_started, receipt_parse_completed (avgConfidence, lineCount, merchant, durationMs), receipt_items_accepted (acceptedCount, editedCount, droppedCount), receipt_first_scan_completed (onboarding-funnel marker)",
+        "Vitest fixtures: 5 anonymized receipt JSON outputs (Whole Foods, Aldi, Walmart, Trader Joe's, generic corner store) with expected line-item counts; integration test asserts post-confirm foods rows exist"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Onboarding miracle. Depends on smart_product_catalog (20260505000000) and grocery_item_sources (20260430000002). Pairs with US-288 quick-add as the two cold-start fast paths."
+    },
+    {
+      "id": "US-295",
+      "title": "Sibling Constraint Solver: family meal finder",
+      "description": "As a parent of multiple kids with conflicting tastes and restrictions, I want to select all my kids and instantly see which recipes will satisfy every one of them, with a clear visual of why each meal works (or what one kid would have to swap), so I stop solving the dinner Venn diagram in my head every night. This is the feature that positions EatPal as the family meal app, not an individual tracker — no competitor treats multi-kid as a first-class concept.",
+      "acceptanceCriteria": [
+        "New page src/pages/FamilyFinder.tsx (route /family-finder) AND a 'Find a meal everyone will eat' affordance on Recipes.tsx and Kids.tsx",
+        "Top of page: multi-select kid chip bar (default = all kids in active household); shows live count 'Showing 47 recipes that work for 3 kids'",
+        "Constraint inputs per kid: kid.aversions[], kid.allergens[] (hard block), plan_entry_feedback rows where kid_rating <= 2 (soft block), kid.dietaryTags[]",
+        "Per-recipe scoring: for each selected kid, compute kidScore = +1 per safe known-good food, -100 per allergen hit (eliminates), -3 per aversion hit, -5 per soft-block hit; recipe rank = min(kidScore across selected kids) then sum as tiebreaker",
+        "Recipe card additions: per-kid badge row at the bottom (kid avatar + green check / amber warn / red ban); hover/tap reveals 'Mia is OK; Jake would need to skip onions; Ava: contains gluten'",
+        "Constraint relaxation panel: sliders/toggles for 'Allow N aversions per kid', 'Allow ingredient swaps (links to US-297)', 'Hide soft-blocks'; counts update live",
+        "Empty state: '0 perfect matches across 4 kids — here are 3 with one swap each' auto-suggests US-297 hidden-veggies rewrite or US-291 missing-ingredients add",
+        "Save-as-favorite: 'Family wins' collection auto-curated from recipes with min(kidScore) > 0 across all household kids",
+        "Telemetry: family_finder_opened (kidCount), family_finder_constraint_relaxed (whichConstraint), family_finder_recipe_selected (minKidScore, kidCount), family_finder_zero_results_shown",
+        "Performance: client-side filtering (<200ms for 500 recipes); ingredient lookups memoized via useMemo on foods array",
+        "iOS parity follow-up; web first"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "Anchors the family-app positioning. Depends on plan_entry_feedback (20260425000001), recipe_ingredients (US-281), and kids.aversions schema. Plays into US-297 (hide veggies) and US-296 (community wins) as escape hatches when no perfect match exists."
+    },
+    {
+      "id": "US-296",
+      "title": "Picky-Eater Win Network: anonymized food-chain success aggregation",
+      "description": "As a parent of a picky eater, I want to see what worked for thousands of other kids with similar aversions and ages — not generic tips — so I have evidence-based food chains to try, ranked by real success rates. This is our deepest moat: the food_chaining + plan_entry_feedback data we collect is unique to EatPal and impossible for general meal apps to replicate. We expose it as community wisdom while keeping every household private.",
+      "acceptanceCriteria": [
+        "New migration supabase/migrations/<ts>_aggregate_food_chains.sql creates view aggregate_food_chains_anon(target_food_id, aversion_tags TEXT[], age_bucket TEXT, chain_steps JSONB, success_rate NUMERIC, sample_size INT, last_updated TIMESTAMPTZ) with k-anonymity guard: only rows where sample_size >= 20 are exposed",
+        "New edge function functions/aggregate-food-chains/index.ts (daily cron via pg_cron or scheduled invoke) reads food_chaining + plan_entry_feedback (kid_rating >= 4 within 30 days of chain_completed_at = success), strips kid_id/household_id/user_id, buckets ages (0-2, 3-5, 6-8, 9-12, 13+), aggregates to the view",
+        "FoodChainingRecommendations.tsx gains a 'Community wins' tab beside existing 'Personal' tab; renders top 5 chains for { active kid's age bucket, kid's strongest aversion tags } with a 'X of Y kids succeeded (Z%)' badge",
+        "Each community-chain card: target food image, 'Step 1 → Step 2 → ... → Step N' breadcrumb of food thumbnails, success-rate bar, sample-size footnote, primary 'Try this chain for [kid]' CTA → seeds a personal food_chaining row owned by the household",
+        "Settings/Privacy adds an opt-in toggle: 'Share my food-chain outcomes anonymously to help other families' (default ON for new users; existing users get a one-time prompt). Toggle stores user_preferences.share_chain_outcomes BOOL; only shared chains contribute to the aggregate",
+        "Privacy/safety tests: integration test asserts aggregate_food_chains_anon contains zero kid_id/user_id/household_id columns and zero raw text fields; query plan inspection asserts the row-count guard is enforced server-side",
+        "Feature flag picky_win_network gates UI exposure (default off in production until aggregate has >= 1000 rows)",
+        "Empty state: 'Not enough community data yet for [aversion] in this age range — be the first to share an outcome' linked to personal chain creation",
+        "Telemetry: picky_win_tab_opened, picky_win_card_shown (targetFoodId, sampleSize, successRate), picky_win_chain_adopted (targetFoodId, ageBucket), picky_win_chain_step_completed (stepIndex), picky_win_outcome_shared (success: bool)",
+        "Vitest + edge-function integration: assert that a chain with sample_size=19 is NOT exposed and sample_size=20 IS exposed; that the daily aggregator deletes rows whose sample_size drops below threshold"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Network-effect moat. Builds on existing FoodChainingRecommendations.tsx. Privacy posture must be airtight — review with security before enabling the feature flag in prod."
+    },
+    {
+      "id": "US-297",
+      "title": "Hidden-Veggies auto-rewrite engine",
+      "description": "As a parent of a kid who refuses vegetables, I want to pick a recipe my kid already likes and have the app rewrite it to sneak in vegetables they tolerate — with technique notes (blend, grate, puree) and an honest nutrition delta — so I have a viral, screenshot-worthy moment that turns 'mac and cheese' into 'Jake's mac and cheese with hidden cauliflower'. Substitution must never cross an allergen, and the original recipe stays intact as a saved variant.",
+      "acceptanceCriteria": [
+        "New migration extends recipes table: parent_recipe_id UUID NULL REFERENCES recipes, variant_for_kid_id UUID NULL REFERENCES kids, variant_kind TEXT CHECK (variant_kind IN ('hidden_veggies','swap','allergen_safe','low_sugar') OR NULL); plus a new ingredient_substitutions table (id, recipe_id, original_food_id, sub_food_id, technique TEXT, ratio NUMERIC, notes TEXT)",
+        "New edge function functions/recipe-hide-veggies/index.ts accepts { recipeId, kidId, intensity ('mild'|'medium'|'heavy') } and returns { variantRecipe, substitutions, nutritionDelta, allergenWarnings[] }",
+        "Substitution selection: prefer veggies the kid tolerates (from foods.tags + plan_entry_feedback positives), avoid all kid.allergens (hard block), match technique to recipe context (sauces → blend; baked → grate; soup → puree)",
+        "Recipe view (Recipes.tsx detail) gains 'Hide veggies for [kid picker]' CTA when active household has at least one kid; tap opens a side-by-side diff modal: original ingredients vs modified, color-coded additions, technique notes inline, nutrition delta panel (added fiber/vitamins, calorie change)",
+        "Confirm → INSERT a new recipes row with parent_recipe_id, variant_for_kid_id, variant_kind='hidden_veggies', plus ingredient_substitutions rows; appears in user's library as 'Jake's [original title]' with a hidden-veggies badge",
+        "Allergen safety: any candidate sub that hits kid.allergens is filtered server-side and never returned; UI shows a red 'Cannot substitute X — allergy' note in the diff if user manually requests one",
+        "Free tier: 3 rewrites per household per month; paid: unlimited (useFeatureLimit, key 'hidden_veggies_rewrite')",
+        "Outcome tracking: when a plan_entry using a variant recipe gets feedback, plan_entry_feedback.variant_kind is recorded; we can later report 'kids accept hidden-veggie variants 73% of the time' as a public stat",
+        "Share affordance: 'Copy variant to share' produces a clean text/markdown export omitting the parent so the variant stands alone (drives screenshot virality)",
+        "Telemetry: hidden_veggies_modal_opened, hidden_veggies_generated (kidId, intensity, addedVeggieCount, allergensFiltered), hidden_veggies_saved, hidden_veggies_kid_accepted (linked through plan_entry_feedback), hidden_veggies_shared",
+        "Vitest: substitution selector unit tests asserting allergens are never returned, technique matches recipe category, ratios stay within sanity bounds (e.g., max 25% volume substitution to preserve flavor)"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Viral feature. Touches recipes schema and adds ingredient_substitutions. Pairs with US-295 as the 'one-swap' fallback when no recipe satisfies all kids."
+    },
+    {
+      "id": "US-298",
+      "title": "Variety Fatigue score and 'switch it up' nudges",
+      "description": "As a parent who didn't realize they made tacos six times in three weeks, I want the app to detect repetition before I notice it and gently suggest a similar-but-different twist, so meal-plan boredom never quietly tanks engagement. Most apps suggest more recipes; the differentiator is suggesting LESS of the same with a one-tap pivot.",
+      "acceptanceCriteria": [
+        "New utility src/lib/varietyFatigue.ts exports computeFatigueScore(planEntries: PlanEntry[], recipeId: string, lookbackDays = 21): number returning a 0..1 score where score = clamp((recencyWeightedCount / lookbackDays) * 3, 0, 1); weights: occurrences in last 7 days count 2x, 8-14 days 1x, 15-21 days 0.5x",
+        "GSAPCalendarMealPlanner DraggableMealItem renders an amber chip when score >= 0.4: 'Made 5x in 3 weeks — try a twist?'; threshold and copy live in src/lib/varietyFatigue.ts so they can be tuned",
+        "Tap chip → opens a sheet 'Twist this meal' showing 3 alternatives ranked by similarity-but-different: same cuisine OR same protein OR same prep_minutes ±5, but recipe_id != original AND fatigue_score < 0.2; prefers recipes the household has favorited or rated >= 4",
+        "Similarity backed by existing functions/calculate-food-similarity edge function where available; fallback to client-side metadata match (cuisine, protein category, effort, allergen profile)",
+        "Dashboard insight card 'Your top 3 most-repeated meals this month' with switch suggestions; hides when no recipe scores >= 0.4",
+        "Settings adds a toggle 'Variety nudges' (default ON) stored in user_preferences.nudge_variety; off → chips and dashboard card suppress",
+        "Vitest: 15+ fixture cases covering empty history, single repeat, heavy repeat, mixed scoring, exact threshold edges, and recency-weight boundary; assertions on returned score and on the twist-suggestion picker output",
+        "Performance: computeFatigueScore is O(n) over plan_entries; memoize per render via useMemo keyed on planEntries.length + recipeId",
+        "Telemetry: variety_chip_shown (recipeId, score), variety_twist_sheet_opened, variety_twist_chosen (originalRecipeId, twistRecipeId, similarityScore), variety_nudge_toggled (enabled: bool)"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Foundational utility — Tonight Mode (US-293) consumes the score in its ranking. Cheap to ship, big perceived intelligence. iOS parity follow-up."
+    },
+    {
+      "id": "US-299",
+      "title": "Predictive pantry depletion forecasting",
+      "description": "As a busy household, I want the app to forecast when each pantry staple will run out based on our actual consumption velocity — not a static threshold — and (optionally) auto-add to the next grocery list so we stop running out of milk on a Thursday morning. Upgrades SmartRestockSuggestions from threshold-based to velocity-based using restock_history.",
+      "acceptanceCriteria": [
+        "New utility src/lib/depletionForecast.ts exports forecastRunOutDate(foodId, restockHistory, currentPantryQty): { runOutDate: Date, daysToDepletion: number, confidence: 'high'|'medium'|'low'|'cold-start' }",
+        "Velocity model: dailyConsumption = median over last 5 restock cycles of (qtyAdded / daysBetweenRestocks); runOutDate = today + currentPantryQty / dailyConsumption; confidence='high' when stddev/median < 0.3 and >= 5 cycles, 'medium' for 3-4 cycles, 'low' for 2 cycles, 'cold-start' for <2 cycles",
+        "Cold-start fallback: use category-level dailyConsumption averaged across the household (or platform median if household has no category data)",
+        "SmartRestockSuggestions.tsx renders a per-item chip 'Runs out Thu' / 'Runs out in 3 days' / 'Runs out next week' color-coded by urgency (red <=2 days, amber 3-7, gray 8+); confidence shown via dot opacity",
+        "New household_preferences.auto_restock_enabled BOOL (default false); when true AND forecast.runOutDate <= today + auto_restock_lead_days (default 2), the item is auto-added to the active grocery_list with added_via='forecast' so it appears in the next shopping run",
+        "Auto-add safety: rate-limited (max 20 auto-adds per day per household), de-duplicates against current grocery_list contents, never adds items the user has explicitly removed in the last 7 days (negative-feedback memory in a small auto_restock_blocklist)",
+        "Seasonal sanity: foods.tags including 'seasonal' (e.g., watermelon) clamp confidence to 'low' outside their tag's active months; threshold-based fallback used instead",
+        "Admin dashboard metric: forecast_accuracy = mean absolute error in days, computed from forecast_at vs actual restock_at over a rolling 30 days; surface in AdminDashboard.tsx for monitoring",
+        "User control: each forecast chip has a 'Not quite' inline action that records a correction (foods.consumption_overrides JSONB) which the model favors on the next run",
+        "Telemetry: depletion_forecast_shown (confidence), depletion_auto_added (foodId, confidence, leadDays), depletion_correction_logged, depletion_forecast_dismissed",
+        "Vitest: forecast unit tests covering cold-start, steady-state, irregular cycles, seasonal clamp, and auto-add rate limit"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "Builds on restock_history (20260508000000) and SmartRestockSuggestions component. Pairs with US-294 receipt-scan to bootstrap restock_history quickly."
+    },
+    {
+      "id": "US-300",
+      "title": "Seasonal memory recall: 'what worked last year'",
+      "description": "As a household whose dinner needs change with the seasons (school start, summer break, holidays), I want the app to surface meal plans from this same week last year that my kids loved — and let me copy that week with one tap — so the app feels telepathic and the calendar accumulates compounding value over time. Nobody surfaces this; it directly increases retention past year one.",
+      "acceptanceCriteria": [
+        "New table insights_seasonal_recall (id, household_id, recipe_id, prior_week_start DATE, prior_rating NUMERIC, life_event_tag TEXT, generated_at TIMESTAMPTZ, dismissed_at TIMESTAMPTZ NULL); RLS: household members can SELECT/UPDATE own rows only",
+        "New edge function functions/generate-seasonal-recall/index.ts (daily cron) for each household with >= 9 months of plan history finds plan_entries from same ISO-week ±2 weeks one year ago with linked plan_entry_feedback.kid_rating >= 4; writes top 10 candidate recipes per household",
+        "Life-event tagging derived from week-of-year (US-locale defaults, configurable later): 'school_start' (week 36-37), 'summer_break' (week 24-26), 'thanksgiving_week' (week 47), 'holiday_break' (week 51-52), 'new_year' (week 1), 'spring_break' (week 11-13)",
+        "Dashboard.tsx insight card (rotates with other insights) shows e.g., 'Last September you nailed school-day breakfasts. Here are 5 grab-and-go meals your kids rated 4+ stars.' with thumbnail strip",
+        "Tap card → 'Copy this week' opens a preview of the prior week's plan with editable per-day swap; confirm seeds plan_entries rows for the upcoming week (skipping any days already planned), tagged added_via='seasonal_recall'",
+        "Empty state for accounts < 9 months old: 'Not enough history yet — your first seasonal callback unlocks in [N] months', counted from earliest plan_entry",
+        "Dismiss action sets dismissed_at; dismissed cards don't reappear that season; prior_rating decay weights newer feedback higher when the same recipe is recalled in subsequent years",
+        "Privacy: only household-scoped data; never cross-household; service role used only inside the cron",
+        "Telemetry: seasonal_recall_card_shown (lifeEventTag, candidateCount), seasonal_recall_card_dismissed, seasonal_recall_week_copied (planEntryCount, lifeEventTag), seasonal_recall_recipe_clicked",
+        "Vitest + edge integration: synthetic household with 14 months of history hits the cron, asserts insights_seasonal_recall is populated with expected life_event_tag and that the 'Copy this week' inserts the right plan_entries rows"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "Compounding-value feature — gets better with every year a user stays. Cheap on infra (one daily cron, small table). Surfaces via existing Dashboard insight rotation."
+    },
+    {
+      "id": "US-301",
+      "title": "Kid-grew-up auto-adapter: birthday-driven re-evaluation",
+      "description": "As a parent of a kid whose palate, portion sizes, and allergen profile shift every six months, I want the app to notice each birthday and proactively suggest the changes I'd otherwise forget — retry old aversions, scale portions, prompt an allergen reintroduction conversation with our pediatrician — so the app grows with my kid instead of going stale. No competitor handles aging gracefully; this drives 5-year retention.",
+      "acceptanceCriteria": [
+        "New table kid_growth_events (id, kid_id, occurred_on DATE, age_milestone INT, suggested_changes JSONB, dismissed_at TIMESTAMPTZ NULL, applied_changes JSONB NULL); RLS: household-scoped",
+        "New edge function functions/kid-birthday-adapter/index.ts (daily cron) finds kids where birthdate matches today (month + day) and creates a kid_growth_events row with suggested_changes built from rules: portion_scaler (DRI-based by age), retry_aversions (kid.aversions older than 180 days where last_attempt rating <= 2), allergen_reintro_prompts (peanut/tree-nut/egg/dairy per AAP guidance, only if kid.allergens contains the marker AND last_review_at > 12 months)",
+        "Dashboard non-dismissable celebration card on the kid's birthday: 'Mia turned 6 today!' with three action sub-cards: 'Update portion sizes' (one-tap, applies new scaler to upcoming plan_entries), 'Retry these foods' (links each old aversion to a new food_chaining row), 'Talk to your pediatrician about [allergen]' (informational, no medical advice — opens a guided conversation prep modal)",
+        "Allergen safety: the allergen reintro card is informational only — never auto-removes from kid.allergens; explicit confirmation required after pediatrician review, and audit log row written into kid.allergen_change_log on any update",
+        "Settings toggle: birthday_nudges (default ON) stored on kid record so different kids in the same household can have different settings",
+        "Edge case: kid records without a birthdate get a one-time prompt 'Add Mia's birthday to unlock yearly check-ins' — prompt suppressed after dismiss",
+        "Outcome tracking: 'Retry this food' creates a food_chaining row with seeded original_aversion_at = aversion's first-seen date; later success/fail feeds back into the parent's view 'Things Mia likes now that she didn't at 4'",
+        "Notification: opt-in push (existing register-push-token + process-notification-queue) on the morning of the birthday with title 'Happy birthday Mia! 3 small updates' deep-linking to the dashboard card",
+        "Telemetry: kid_birthday_card_shown (kidId, ageMilestone), kid_portion_scaler_applied, kid_aversion_retry_started (foodId), kid_allergen_reintro_prep_opened, kid_growth_event_dismissed",
+        "Vitest: rule unit tests on suggested_changes generator covering toddler→preschool, preschool→elementary, elementary→tween transitions; integration test asserts no allergen is ever auto-removed and audit log writes occur on confirmed updates"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "Long-horizon retention play. Touches kids schema (allergen_change_log, birthdate validation) and reuses food_chaining + push notifications. Allergen path needs a privacy/medical disclaimer review before launch."
     }
   ]
 }

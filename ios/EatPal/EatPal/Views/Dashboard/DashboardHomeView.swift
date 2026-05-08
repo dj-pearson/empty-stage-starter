@@ -42,6 +42,10 @@ struct DashboardHomeView: View {
                     TodayMealSummaryCard(kidId: kidId)
                 }
 
+                // US-293: Tonight Mode panic CTA. Auto-hides outside the
+                // 4pm-8pm window and when dinner is already planned.
+                TonightModeCard()
+
                 // US-240: Quiz nudge card for kids without a pickiness profile.
                 // Auto-hides once they've taken the quiz so it doesn't nag.
                 if let kid = kidNeedingQuiz {

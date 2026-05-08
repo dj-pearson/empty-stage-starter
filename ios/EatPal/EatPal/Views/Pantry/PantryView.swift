@@ -8,6 +8,7 @@ struct PantryView: View {
     @State private var filterMode: PantryFilter = .all
     @State private var showingAddFood = false
     @State private var showingBulkAdd = false
+    @State private var showingReceiptScan = false
     @State private var showingScanner = false
     @State private var scannedBarcode: ScannedBarcodeItem?
     @State private var selectedFood: Food?
@@ -372,6 +373,12 @@ struct PantryView: View {
                             } label: {
                                 Label("Bulk add (paste list)", systemImage: "doc.on.clipboard")
                             }
+                            // US-294: Receipt scan to pantry
+                            Button {
+                                showingReceiptScan = true
+                            } label: {
+                                Label("Scan receipt", systemImage: "doc.text.viewfinder")
+                            }
                         } label: {
                             Image(systemName: "plus")
                         }
@@ -433,6 +440,10 @@ struct PantryView: View {
         }
         .sheet(isPresented: $showingBulkAdd) {
             BulkAddFoodSheet()
+                .environmentObject(appState)
+        }
+        .sheet(isPresented: $showingReceiptScan) {
+            ScanReceiptSheet()
                 .environmentObject(appState)
         }
         .confirmationDialog(
