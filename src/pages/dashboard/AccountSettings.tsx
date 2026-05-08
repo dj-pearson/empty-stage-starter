@@ -92,6 +92,7 @@ export default function AccountSettings() {
     refetch,
   } = useSubscription();
   const navigate = useNavigate();
+  const bindStatus = useBindStatus();
 
   useEffect(() => {
     loadProfile();
@@ -457,6 +458,31 @@ export default function AccountSettings() {
 
           {/* ==================== PROFILE TAB ==================== */}
           <TabsContent value="profile" className="space-y-6">
+            {(bindStatus.needsEmailBind || bindStatus.needsPassword) && (
+              <Card className="border-primary/40">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Mail className="h-5 w-5 text-primary" />
+                    {bindStatus.needsEmailBind ? "Bind a real email" : "Set a password"}
+                  </CardTitle>
+                  <CardDescription>
+                    {bindStatus.needsEmailBind
+                      ? "Your account is signed in with Apple's private relay address. Verify a real email so you can sign in either with Apple or with email and password."
+                      : "You signed up with Apple. Add a password so you can sign in with email and password too."}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <BindEmailFlow
+                    mode={bindStatus.needsEmailBind ? "full" : "password-only"}
+                    onComplete={async () => {
+                      await bindStatus.refresh();
+                      await loadProfile();
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            )}
+
             <Card>
               <CardHeader>
                 <CardTitle>Personal Information</CardTitle>
