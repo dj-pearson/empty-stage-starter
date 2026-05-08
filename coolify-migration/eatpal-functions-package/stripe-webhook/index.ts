@@ -123,9 +123,23 @@ async function handleCheckoutCompleted(supabase: any, session: Stripe.Checkout.S
   }
 }
 
+// Convert a Unix-seconds timestamp to ISO, tolerating null/undefined (returns null).
+// Stripe API >= 2025-04-30 moved current_period_* from Subscription onto SubscriptionItem,
+// so callers must read either location and we must accept that they may be missing.
+function toIsoFromUnixSeconds(value: number | null | undefined): string | null {
+  if (value === null || value === undefined || Number.isNaN(value)) return null;
+  return new Date(value * 1000).toISOString();
+}
+
 async function handleSubscriptionChange(supabase: any, subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string;
-  const priceId = subscription.items.data[0]?.price.id;
+  const item = subscription.items.data[0];
+  const priceId = item?.price.id;
+  // Period fields may live on the Subscription (older API) or the SubscriptionItem (newer).
+  const periodStart =
+    (subscription as any).current_period_start ?? (item as any)?.current_period_start ?? null;
+  const periodEnd =
+    (subscription as any).current_period_end ?? (item as any)?.current_period_end ?? null;
 
   // Get plan by Stripe price ID (check both monthly and yearly fields)
   const { data: plans } = await supabase
@@ -156,10 +170,10 @@ async function handleSubscriptionChange(supabase: any, subscription: Stripe.Subs
         plan_id: plan.id,
         stripe_subscription_id: subscription.id,
         status: subscription.status,
-        current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-        current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+        current_period_start: toIsoFromUnixSeconds(periodStart),
+        current_period_end: toIsoFromUnixSeconds(periodEnd),
         cancel_at_period_end: subscription.cancel_at_period_end,
-        trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+        trial_end: toIsoFromUnixSeconds(subscription.trial_end),
         updated_at: new Date().toISOString(),
       })
       .eq("stripe_customer_id", customerId);
