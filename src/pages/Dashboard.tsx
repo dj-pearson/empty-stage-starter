@@ -15,6 +15,7 @@ import { Moon, Sun, LogOut, Menu, Trophy } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { useWhiteLabelTheme } from "@/hooks/useWhiteLabelTheme";
+import { BindEmailBanner } from "@/components/auth/BindEmailBanner";
 import {
   Sheet,
   SheetContent,
@@ -242,6 +243,7 @@ const Dashboard = () => {
 
               {/* Main Content */}
               <main id="main-content" className="flex-1 overflow-auto" role="main" aria-label="Dashboard content">
+                <BindEmailBanner />
                 <Outlet />
               </main>
             </div>
@@ -438,6 +440,7 @@ const Dashboard = () => {
 
         {/* Mobile Content with padding */}
         <main id="main-content-mobile" className="pt-14 pb-20" role="main" aria-label="Dashboard content">
+          <BindEmailBanner />
           <Outlet />
         </main>
 
