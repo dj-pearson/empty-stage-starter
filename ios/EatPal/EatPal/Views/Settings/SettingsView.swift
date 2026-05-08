@@ -49,6 +49,36 @@ struct SettingsView: View {
                 }
             }
 
+            // Bind email + set password CTA — only shown for Apple users
+            // who still have a privaterelay address or no password set.
+            if authViewModel.needsEmailBind || authViewModel.needsPassword {
+                Section {
+                    NavigationLink {
+                        BindEmailView(
+                            mode: authViewModel.needsEmailBind ? .full : .passwordOnly
+                        )
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "envelope.badge.shield.half.filled")
+                                .foregroundStyle(.blue)
+                                .frame(width: 28)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(authViewModel.needsEmailBind ? "Bind a real email" : "Set a password")
+                                    .font(.body)
+                                    .fontWeight(.medium)
+                                Text(authViewModel.needsEmailBind
+                                     ? "Swap your Apple relay address for a real one and set a password."
+                                     : "You signed up with Apple. Set a password to enable email sign-in too.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Email & Password")
+                }
+            }
+
             // App Info
             Section("App Info") {
                 LabeledContent("Version") {

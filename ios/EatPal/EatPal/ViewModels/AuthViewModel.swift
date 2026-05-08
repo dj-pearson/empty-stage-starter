@@ -77,27 +77,27 @@ final class AuthViewModel: ObservableObject {
             do {
                 let session = try await authService.currentSession()
                 self.authState = session != nil ? .authenticated : .unauthenticated
-                self.sessionEmail = session?.user.email
+                self.applySession(session)
                 if let userId = session?.user.id.uuidString {
                     SentryService.setUserId(userId)
                     SentryService.leaveBreadcrumb(category: "auth", message: "session restored")
                 }
             } catch {
                 self.authState = .unauthenticated
-                self.sessionEmail = nil
+                self.applySession(nil)
             }
 
             // Listen for changes
             for await (event, session) in authService.onAuthStateChange() {
                 switch event {
-                case .signedIn:
+                case .signedIn, .userUpdated, .tokenRefreshed:
                     self.authState = .authenticated
-                    self.sessionEmail = session?.user.email
+                    self.applySession(session)
                     SentryService.setUserId(session?.user.id.uuidString)
                     SentryService.leaveBreadcrumb(category: "auth", message: "signed in")
                 case .signedOut:
                     self.authState = .unauthenticated
-                    self.sessionEmail = nil
+                    self.applySession(nil)
                     self.clearForm()
                     SentryService.setUserId(nil)
                     SentryService.leaveBreadcrumb(category: "auth", message: "signed out")
@@ -107,6 +107,43 @@ final class AuthViewModel: ObservableObject {
             }
         }
     }
+
+    /// Refreshes session-derived state (email, providers, hasPassword).
+    /// Called after the bind-email / set-password flow so the UI can hide
+    /// the CTA without waiting for a token refresh.
+    func refreshBindStatus() async {
+        do {
+            let session = try await authService.currentSession()
+            applySession(session)
+        } catch {
+            // Leave state as-is; next auth event will sync.
+        }
+    }
+
+    private func applySession(_ session: Session?) {
+        sessionEmail = session?.user.email
+        sessionProviders = (session?.user.identities ?? []).map { $0.provider }
+        guard session != nil else {
+            hasPassword = false
+            return
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            self.hasPassword = await self.authService.hasPassword()
+        }
+    }
+
+    var isAppleAccount: Bool {
+        sessionProviders.contains("apple")
+    }
+
+    var isAppleRelayEmail: Bool {
+        guard let email = sessionEmail?.lowercased() else { return false }
+        return email.hasSuffix("@privaterelay.appleid.com")
+    }
+
+    var needsEmailBind: Bool { isAppleAccount && isAppleRelayEmail }
+    var needsPassword: Bool { isAppleAccount && !hasPassword }
 
     // MARK: - Validation
 

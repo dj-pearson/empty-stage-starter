@@ -65,7 +65,6 @@ export function useBindStatus(): BindStatus {
       void refresh();
     });
     return () => data.subscription.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isApple = isAppleAccount(user);
