@@ -59,6 +59,10 @@ export function normalizeRecipeFromDB(r: RecipeRow | RecipeRowWithIngredients): 
     is_favorite: r.is_favorite ?? false,
     created_at: r.created_at ?? undefined,
     nutrition_info: r.nutrition_info ?? undefined,
+    parent_recipe_id:
+      (r as RecipeRow & { parent_recipe_id?: string | null }).parent_recipe_id ?? undefined,
+    variant_kind:
+      (r as RecipeRow & { variant_kind?: string | null }).variant_kind ?? undefined,
     recipe_ingredients: ingredients,
   };
 }
@@ -102,6 +106,8 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
         nutrition_info: recipe.nutrition_info,
         tips: recipe.tips,
         additional_ingredients: recipe.additionalIngredients,
+        parent_recipe_id: recipe.parent_recipe_id,
+        variant_kind: recipe.variant_kind,
         user_id: userId,
         household_id: householdId || undefined,
       };

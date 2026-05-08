@@ -113,6 +113,9 @@ export interface Recipe {
   kid_friendly_score?: number;
   is_favorite?: boolean;
   created_at?: string;
+  // Variant linkage (US-297 hidden-veggies, future variant kinds reuse the column)
+  parent_recipe_id?: string;
+  variant_kind?: string;
   recipe_ingredients?: RecipeIngredient[];
   nutrition_info?: {
     calories?: number;

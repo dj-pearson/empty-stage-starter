@@ -30,6 +30,7 @@ import { calculateAge } from "@/lib/utils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { logger } from "@/lib/logger";
 import { lazy, Suspense } from "react";
+import { VarietyFatigueBanner } from "@/components/VarietyFatigueBanner";
 
 const SaveMealPlanTemplateDialog = lazy(() => import("@/components/SaveMealPlanTemplateDialog").then(m => ({ default: m.SaveMealPlanTemplateDialog })));
 const MealPlanTemplateGallery = lazy(() => import("@/components/MealPlanTemplateGallery").then(m => ({ default: m.MealPlanTemplateGallery })));
@@ -599,6 +600,7 @@ export default function Planner() {
       <div className="min-h-screen pb-20 bg-background">
         {plannerHelmet}
         <div className="px-3 pt-4 pb-2">
+          <VarietyFatigueBanner surface="planner-mobile" />
           {/* Compact mobile header */}
           <div className="flex items-center justify-between mb-1">
             <h1 className="text-xl font-bold text-foreground">
@@ -666,6 +668,7 @@ export default function Planner() {
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
       {plannerHelmet}
       <div className="container mx-auto px-4 py-8 max-w-7xl">
+        <VarietyFatigueBanner surface="planner-desktop" />
         {/* Header */}
         <div className="flex flex-col gap-4 mb-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">

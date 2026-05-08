@@ -34,6 +34,7 @@ import {
   Minus,
   Plus,
   AlertTriangle,
+  Salad,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Recipe, Food, Kid, MealSlot } from "@/types";
@@ -42,6 +43,7 @@ import { CookMode } from "./CookMode";
 import { AddToPlannerPopover } from "./AddToPlannerPopover";
 import { calculateRecipeNutrition, perServingNutrition } from "@/lib/nutritionCalculator";
 import { RecipeShareButton } from "./RecipeShareButton";
+import { HideVeggiesDialog } from "@/components/HideVeggiesDialog";
 import { Helmet } from "react-helmet-async";
 
 interface RecipeDetailViewProps {
@@ -117,6 +119,7 @@ export function RecipeDetailView({
   const [showCookMode, setShowCookMode] = useState(false);
   const [servingMultiplier, setServingMultiplier] = useState(1);
   const [checkedIngredients, setCheckedIngredients] = useState<Set<string>>(new Set());
+  const [showHideVeggies, setShowHideVeggies] = useState(false);
 
   if (!recipe) return null;
 
@@ -371,6 +374,10 @@ export function RecipeDetailView({
                         Add to Collection
                       </DropdownMenuItem>
                     )}
+                    <DropdownMenuItem onClick={() => setShowHideVeggies(true)}>
+                      <Salad className="h-4 w-4 mr-2" />
+                      Sneak veggies in
+                    </DropdownMenuItem>
                     {recipe.source_url && (
                       <DropdownMenuItem asChild>
                         <a href={recipe.source_url} target="_blank" rel="noopener noreferrer">
@@ -704,6 +711,11 @@ export function RecipeDetailView({
         </ScrollArea>
       </SheetContent>
     </Sheet>
+    <HideVeggiesDialog
+      open={showHideVeggies}
+      onOpenChange={setShowHideVeggies}
+      recipe={recipe}
+    />
     </>
   );
 }
