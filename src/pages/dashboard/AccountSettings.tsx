@@ -549,7 +549,9 @@ export default function AccountSettings() {
                         <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Contact support to change your email address.
+                        {bindStatus.needsEmailBind
+                          ? "Use the panel above to bind a real email address."
+                          : "Contact support to change your email address."}
                       </p>
                     </div>
 
@@ -954,15 +956,42 @@ export default function AccountSettings() {
 
           {/* ==================== SECURITY TAB ==================== */}
           <TabsContent value="security" className="space-y-6">
+            {!bindStatus.loading && bindStatus.needsPassword && (
+              <Card className="border-primary/40">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Key className="h-5 w-5 text-primary" />
+                    {bindStatus.needsEmailBind ? "Bind email and set password" : "Set a password"}
+                  </CardTitle>
+                  <CardDescription>
+                    {bindStatus.needsEmailBind
+                      ? "Your account is signed in with Apple's private relay address. Verify a real email so you can sign in either way."
+                      : "You signed up with Apple and don't have a password yet. Set one to enable email + password sign-in."}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <BindEmailFlow
+                    mode={bindStatus.needsEmailBind ? "full" : "password-only"}
+                    onComplete={async () => {
+                      await bindStatus.refresh();
+                      await loadProfile();
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            )}
+
             {/* Change Password */}
-            <Card>
+            <Card className={!bindStatus.loading && bindStatus.needsPassword ? "opacity-60" : undefined}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Key className="h-5 w-5" />
                   Change Password
                 </CardTitle>
                 <CardDescription>
-                  Update your account password. You&apos;ll stay logged in.
+                  {!bindStatus.loading && bindStatus.needsPassword
+                    ? "Available once you've set a password using the panel above."
+                    : "Update your account password. You'll stay logged in."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -974,7 +1003,7 @@ export default function AccountSettings() {
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder="Enter your current password"
-                    disabled={changingPassword}
+                    disabled={changingPassword || bindStatus.needsPassword}
                   />
                   <p className="text-xs text-muted-foreground">
                     For security, we require your current password to set a new one.
@@ -989,7 +1018,7 @@ export default function AccountSettings() {
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Enter new password"
                     minLength={8}
-                    disabled={changingPassword}
+                    disabled={changingPassword || bindStatus.needsPassword}
                   />
                 </div>
                 <div className="space-y-2">
@@ -1001,7 +1030,7 @@ export default function AccountSettings() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Confirm new password"
                     minLength={8}
-                    disabled={changingPassword}
+                    disabled={changingPassword || bindStatus.needsPassword}
                   />
                 </div>
               </CardContent>
@@ -1009,7 +1038,7 @@ export default function AccountSettings() {
                 <Button
                   onClick={handleChangePassword}
                   disabled={
-                    changingPassword || !currentPassword || !newPassword || !confirmPassword
+                    changingPassword || bindStatus.needsPassword || !currentPassword || !newPassword || !confirmPassword
                   }
                 >
                   {changingPassword && (
