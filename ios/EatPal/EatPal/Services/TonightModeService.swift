@@ -70,7 +70,7 @@ enum TonightModeService {
         var id: String { recipeId }
     }
 
-    private struct Response: Decodable, Sendable {
+    private struct EdgeResponse: Decodable, Sendable {
         let suggestions: [Suggestion]
     }
 
@@ -113,7 +113,7 @@ enum TonightModeService {
                 try await EdgeFunctions.invoke(
                     "tonight-mode",
                     body: body,
-                    as: Response.self
+                    as: EdgeResponse.self
                 )
             }
             if !response.suggestions.isEmpty {

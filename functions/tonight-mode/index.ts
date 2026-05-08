@@ -50,7 +50,7 @@ import {
   type KidContext,
   type PantryFood,
   type RecentPlanEntry,
-} from '../../src/lib/tonightModeRanking.ts';
+} from './scoring.ts';
 
 interface RequestBody {
   householdId?: string | null;
