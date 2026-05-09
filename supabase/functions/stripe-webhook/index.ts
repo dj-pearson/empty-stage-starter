@@ -132,6 +132,24 @@ function toIsoFromUnixSeconds(value: number | null | undefined): string | null {
 }
 
 async function handleSubscriptionChange(supabase: any, subscription: Stripe.Subscription) {
+  // Stripe webhook retries can arrive out of order: a stale retry of an older
+  // event (e.g. status="incomplete" right after signup) may land after a newer
+  // event ("active" once the first invoice paid) and silently downgrade the
+  // user. Re-fetch the live subscription before writing so we always apply
+  // current truth instead of whatever snapshot the event happened to carry.
+  // Costs one Stripe API call per event; cheap insurance.
+  try {
+    subscription = await stripe.subscriptions.retrieve(subscription.id, {
+      expand: ["items.data.price"],
+    });
+  } catch (err) {
+    console.error(
+      `Failed to re-fetch subscription ${subscription.id} from Stripe; ` +
+        `falling back to event payload:`,
+      err
+    );
+  }
+
   const customerId = subscription.customer as string;
   const item = subscription.items.data[0];
   const priceId = item?.price.id;
@@ -347,6 +365,17 @@ async function handlePaymentFailed(supabase: any, invoice: Stripe.Invoice) {
 }
 
 async function handleSubscriptionPaused(supabase: any, subscription: Stripe.Subscription) {
+  // Re-fetch live state to avoid stale-retry races (see handleSubscriptionChange).
+  try {
+    subscription = await stripe.subscriptions.retrieve(subscription.id);
+  } catch (err) {
+    console.error(
+      `Failed to re-fetch subscription ${subscription.id} from Stripe; ` +
+        `falling back to event payload:`,
+      err
+    );
+  }
+
   const customerId = subscription.customer as string;
 
   const { data: existingSub } = await supabase
@@ -359,7 +388,7 @@ async function handleSubscriptionPaused(supabase: any, subscription: Stripe.Subs
     const { error } = await supabase
       .from("user_subscriptions")
       .update({
-        status: "paused",
+        status: subscription.status,
         updated_at: new Date().toISOString(),
       })
       .eq("stripe_customer_id", customerId);
