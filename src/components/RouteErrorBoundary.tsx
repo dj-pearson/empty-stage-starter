@@ -15,6 +15,22 @@ interface RouteErrorBoundaryState {
   error: Error | null;
 }
 
+const CHUNK_RELOAD_KEY = "route-error-chunk-reload-at";
+const CHUNK_RELOAD_COOLDOWN_MS = 30_000;
+
+function isChunkLoadError(error: Error): boolean {
+  const message = error?.message ?? "";
+  const name = error?.name ?? "";
+  return (
+    name === "ChunkLoadError" ||
+    /Loading chunk \d+ failed/i.test(message) ||
+    /Failed to fetch dynamically imported module/i.test(message) ||
+    /Importing a module script failed/i.test(message) ||
+    /error loading dynamically imported module/i.test(message) ||
+    (name === "SyntaxError" && /Unexpected token '<'/i.test(message))
+  );
+}
+
 /**
  * Route-level error boundary that isolates crashes to individual pages.
  *
@@ -47,6 +63,22 @@ class RouteErrorBoundaryInner extends React.Component<
       componentStack: errorInfo.componentStack,
       boundary: "RouteErrorBoundary",
     });
+
+    // Stale code-split chunks after a redeploy will throw here when the
+    // browser receives index.html for a hashed chunk URL that no longer
+    // exists. Reload once to pick up the new asset manifest. Guarded by a
+    // cooldown timestamp so a genuinely broken build can't loop the user.
+    if (isChunkLoadError(error)) {
+      try {
+        const last = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) ?? 0);
+        if (Date.now() - last > CHUNK_RELOAD_COOLDOWN_MS) {
+          sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
+          window.location.reload();
+        }
+      } catch {
+        window.location.reload();
+      }
+    }
   }
 
   handleReset = () => {
