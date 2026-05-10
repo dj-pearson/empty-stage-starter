@@ -66,7 +66,7 @@ struct TonightSuggestionsSheet: View {
                 ScrollView {
                     VStack(spacing: 12) {
                         ForEach(Array(suggestions.enumerated()), id: \.element.id) { index, s in
-                            SuggestionCard(
+                            TonightSuggestionCard(
                                 suggestion: s,
                                 rank: index,
                                 kids: appState.kids,
@@ -237,7 +237,7 @@ struct TonightSuggestionsSheet: View {
 
 // MARK: - Suggestion row
 
-private struct SuggestionCard: View {
+private struct TonightSuggestionCard: View {
     let suggestion: TonightModeService.Suggestion
     let rank: Int
     let kids: [Kid]
@@ -393,7 +393,7 @@ private struct KidChipToggleStyle: ToggleStyle {
 
 // MARK: - Shimmer placeholder helper
 
-private struct ShimmerModifier: ViewModifier {
+private struct TonightShimmerModifier: ViewModifier {
     @State private var phase: CGFloat = 0
     func body(content: Content) -> some View {
         content
@@ -417,7 +417,7 @@ private struct ShimmerModifier: ViewModifier {
 }
 
 private extension View {
-    func shimmering() -> some View { modifier(ShimmerModifier()) }
+    func shimmering() -> some View { modifier(TonightShimmerModifier()) }
 }
 
 // MARK: - GroceryItem helper
