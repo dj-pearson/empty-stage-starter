@@ -71,10 +71,7 @@
       "Bash(echo \"---EXIT $?---\")",
       "Bash(supabase --version)",
       "Bash(supabase status *)",
-      "Bash(echo \"---tsc EXIT $?---\")",
-      "Bash(findstr /R \"develop release/ staging\")",
-      "Bash(git ls-remote *)",
-      "Bash(findstr /R \"develop release main staging\")"
+      "Bash(echo \"---tsc EXIT $?---\")"
     ],
     "deny": [],
     "ask": []
