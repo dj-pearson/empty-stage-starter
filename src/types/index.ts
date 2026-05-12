@@ -25,6 +25,12 @@ export interface Food {
     calcium_mg?: number;
     iron_mg?: number;
   };
+  /**
+   * US-302 / US-303: optional FK to public.ingredients catalog. Set by
+   * the resolver on create/update; NULL when no canonical match exists
+   * (raw name stays authoritative + queued for admin curation).
+   */
+  ingredient_id?: string | null;
 }
 
 export interface Kid {
@@ -85,6 +91,11 @@ export interface GroceryItem {
   added_by_user_id?: string;
   added_via?: string;
   priority?: 'low' | 'medium' | 'high';
+  /**
+   * US-302 / US-303: optional FK to public.ingredients catalog. Set by
+   * the resolver on create/update; NULL when no canonical match exists.
+   */
+  ingredient_id?: string | null;
 }
 
 export interface Recipe {

@@ -6,6 +6,7 @@ import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { useAuth } from "./AuthContext";
 import { inferFoodCategory } from "@/lib/foodCategoryMap";
+import { resolveIngredientId } from "@/lib/ingredientResolver";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -82,15 +83,31 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
       if (item.barcode) newItem.barcode = item.barcode;
       if (item.source_recipe_id) newItem.source_recipe_id = item.source_recipe_id;
 
-      supabase.from('grocery_items').insert(newItem).select().single()
-        .then(({ data, error }) => {
-          if (error) {
-            logger.error('Supabase addGroceryItem error:', error);
-            setGroceryItemsRaw(prev => [...prev, { ...item, id: generateId(), checked: false }]);
-          } else if (data) {
-            setGroceryItemsRaw(prev => [...prev, data as unknown as GroceryItem]);
-          }
-        });
+      // US-303: resolve canonical ingredient_id. Best-effort; null on miss.
+      // Caller-supplied ingredient_id wins if present (e.g. when adding from
+      // a recipe-shortfall row that already carries the id).
+      const ingredientPromise = item.ingredient_id !== undefined
+        ? Promise.resolve(item.ingredient_id)
+        : resolveIngredientId(item.name);
+
+      void ingredientPromise.then((ingredient_id) => {
+        newItem.ingredient_id = ingredient_id;
+        return supabase.from('grocery_items').insert(newItem).select().single();
+      }).then((result) => {
+        if (!result) return;
+        const { data, error } = result;
+        if (error) {
+          logger.error('Supabase addGroceryItem error:', error);
+          setGroceryItemsRaw(prev => [...prev, {
+            ...item,
+            ingredient_id: newItem.ingredient_id as string | null | undefined,
+            id: generateId(),
+            checked: false,
+          }]);
+        } else if (data) {
+          setGroceryItemsRaw(prev => [...prev, data as unknown as GroceryItem]);
+        }
+      });
     } else {
       setGroceryItemsRaw(prev => [...prev, { ...item, id: generateId(), checked: false }]);
     }
@@ -114,14 +131,28 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
   }, [userId]);
 
   const updateGroceryItem = useCallback((id: string, updates: Partial<GroceryItem>) => {
-    if (userId) {
-      supabase.from('grocery_items').update(updates).eq('id', id)
-        .then(({ error }) => {
-          if (error) logger.error('Supabase updateGroceryItem error:', error);
-          setGroceryItemsRaw(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
-        });
+    // US-303: when the name changes, re-resolve ingredient_id unless the
+    // caller passed one explicitly.
+    const applyUpdate = (finalUpdates: Partial<GroceryItem>) => {
+      if (userId) {
+        supabase.from('grocery_items').update(finalUpdates).eq('id', id)
+          .then(({ error }) => {
+            if (error) logger.error('Supabase updateGroceryItem error:', error);
+            setGroceryItemsRaw(prev => prev.map(item => item.id === id ? { ...item, ...finalUpdates } : item));
+          });
+      } else {
+        setGroceryItemsRaw(prev => prev.map(item => item.id === id ? { ...item, ...finalUpdates } : item));
+      }
+    };
+
+    // Only re-resolve when logged in - the local-only branch needs to stay
+    // synchronous so callers can assert on state immediately after the call.
+    if (userId && updates.name !== undefined && updates.ingredient_id === undefined) {
+      void resolveIngredientId(updates.name).then((ingredient_id) => {
+        applyUpdate({ ...updates, ingredient_id });
+      });
     } else {
-      setGroceryItemsRaw(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+      applyUpdate(updates);
     }
   }, [userId]);
 

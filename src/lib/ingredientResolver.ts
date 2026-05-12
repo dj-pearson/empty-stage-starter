@@ -298,6 +298,29 @@ export function resolveIngredient(
   return defaultIngredientResolver.resolve(name, opts);
 }
 
+/**
+ * Convenience for the AppContext / hook write paths that only care about
+ * the canonical id (not the source or confidence). Null-safe: empty input
+ * returns null without querying. Errors from the underlying resolver are
+ * swallowed - dual-write is best-effort, the legacy name field stays
+ * authoritative if resolution fails.
+ */
+export async function resolveIngredientId(
+  name: string | null | undefined,
+  opts?: ResolveOptions,
+): Promise<string | null> {
+  if (!name) return null;
+  try {
+    const result = await resolveIngredient(name, opts);
+    return result?.id ?? null;
+  } catch (err) {
+    if (import.meta.env.DEV) {
+      console.warn('[ingredientResolver] resolveIngredientId swallowed error:', err);
+    }
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // String helpers
 // ---------------------------------------------------------------------------

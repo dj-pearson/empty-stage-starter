@@ -5,6 +5,7 @@ import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { checkFeatureLimit } from "@/lib/featureLimits";
 import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
+import { resolveIngredientId } from "@/lib/ingredientResolver";
 import { useAuth } from "./AuthContext";
 
 interface FoodsContextType {
@@ -36,15 +37,18 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
+      // US-303: resolve canonical ingredient_id from the food name.
+      // Best-effort - null on miss, legacy name field stays authoritative.
+      const ingredient_id = await resolveIngredientId(food.name);
       const { data, error } = await supabase
         .from('foods')
-        .insert([{ ...food, user_id: userId, household_id: householdId }])
+        .insert([{ ...food, user_id: userId, household_id: householdId, ingredient_id }])
         .select()
         .single();
 
       if (error) {
         logger.error('Supabase addFood error:', error);
-        setFoods(prev => [...prev, { ...food, id: generateId() }]);
+        setFoods(prev => [...prev, { ...food, ingredient_id, id: generateId() }]);
       } else if (data) {
         setFoods(prev => [...prev, data as unknown as Food]);
       }
@@ -56,17 +60,32 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
   }, [userId, householdId, foods.length]);
 
   const updateFood = useCallback((id: string, updates: Partial<Food>) => {
-    if (userId) {
-      supabase
-        .from('foods')
-        .update(updates)
-        .eq('id', id)
-        .then(({ error }) => {
-          if (error) logger.error('Supabase updateFood error:', error);
-          setFoods(prev => prev.map(f => (f.id === id ? { ...f, ...updates } : f)));
-        });
+    // US-303: when the name changes, re-resolve ingredient_id. If the caller
+    // already supplied ingredient_id (e.g. from a picker UI), trust it.
+    const applyUpdate = (finalUpdates: Partial<Food>) => {
+      if (userId) {
+        supabase
+          .from('foods')
+          .update(finalUpdates)
+          .eq('id', id)
+          .then(({ error }) => {
+            if (error) logger.error('Supabase updateFood error:', error);
+            setFoods(prev => prev.map(f => (f.id === id ? { ...f, ...finalUpdates } : f)));
+          });
+      } else {
+        setFoods(prev => prev.map(f => (f.id === id ? { ...f, ...finalUpdates } : f)));
+      }
+    };
+
+    // Only re-resolve when logged in - the local-only branch has no DB to
+    // persist ingredient_id to, and keeping it synchronous matches the
+    // pre-US-303 behavior callers rely on.
+    if (userId && updates.name !== undefined && updates.ingredient_id === undefined) {
+      void resolveIngredientId(updates.name).then((ingredient_id) => {
+        applyUpdate({ ...updates, ingredient_id });
+      });
     } else {
-      setFoods(prev => prev.map(f => (f.id === id ? { ...f, ...updates } : f)));
+      applyUpdate(updates);
     }
   }, [userId]);
 
@@ -101,7 +120,16 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
-      const foodsWithUserData = foodsToAdd.map(f => ({ ...f, user_id: userId, household_id: householdId }));
+      // US-303: resolve ingredient_id per row in parallel before insert.
+      const resolvedIds = await Promise.all(
+        foodsToAdd.map(f => resolveIngredientId(f.name)),
+      );
+      const foodsWithUserData = foodsToAdd.map((f, i) => ({
+        ...f,
+        user_id: userId,
+        household_id: householdId,
+        ingredient_id: resolvedIds[i],
+      }));
       const { data, error } = await supabase
         .from('foods')
         .insert(foodsWithUserData)
@@ -123,8 +151,21 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
   }, [userId, householdId, foods.length]);
 
   const updateFoods = useCallback(async (updates: { id: string; updates: Partial<Food> }[]) => {
+    // US-303: re-resolve ingredient_id for name changes only when logged in.
+    const resolvedUpdates = userId
+      ? await Promise.all(
+          updates.map(async ({ id, updates: foodUpdates }) => {
+            if (foodUpdates.name !== undefined && foodUpdates.ingredient_id === undefined) {
+              const ingredient_id = await resolveIngredientId(foodUpdates.name);
+              return { id, updates: { ...foodUpdates, ingredient_id } };
+            }
+            return { id, updates: foodUpdates };
+          }),
+        )
+      : updates;
+
     if (userId) {
-      const promises = updates.map(({ id, updates: foodUpdates }) =>
+      const promises = resolvedUpdates.map(({ id, updates: foodUpdates }) =>
         supabase.from('foods').update(foodUpdates).eq('id', id)
       );
       const results = await Promise.all(promises);
@@ -134,7 +175,7 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
       }
     }
     setFoods(prev => prev.map(f => {
-      const update = updates.find(u => u.id === f.id);
+      const update = resolvedUpdates.find(u => u.id === f.id);
       return update ? { ...f, ...update.updates } : f;
     }));
   }, [userId]);
