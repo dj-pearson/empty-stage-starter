@@ -1,0 +1,1484 @@
+[
+  {
+    "slug": "baking-powder",
+    "name": "Baking Powder",
+    "category": "baking",
+    "default_unit": "container"
+  },
+  {
+    "slug": "baking-soda",
+    "name": "Baking Soda",
+    "category": "baking",
+    "default_unit": "box"
+  },
+  {
+    "slug": "chocolate-chips",
+    "name": "Chocolate Chips",
+    "category": "baking",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "cocoa-powder",
+    "name": "Cocoa Powder",
+    "category": "baking",
+    "default_unit": "container"
+  },
+  {
+    "slug": "cornstarch",
+    "name": "Cornstarch",
+    "category": "baking",
+    "default_unit": "box"
+  },
+  {
+    "slug": "flour-all-purpose",
+    "name": "All-Purpose Flour",
+    "category": "baking",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "flour-almond",
+    "name": "Almond Flour",
+    "category": "baking",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "flour-bread",
+    "name": "Bread Flour",
+    "category": "baking",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "flour-whole-wheat",
+    "name": "Whole Wheat Flour",
+    "category": "baking",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "milk-condensed",
+    "name": "Sweetened Condensed Milk",
+    "category": "baking",
+    "default_unit": "can"
+  },
+  {
+    "slug": "milk-evaporated",
+    "name": "Evaporated Milk",
+    "category": "baking",
+    "default_unit": "can"
+  },
+  {
+    "slug": "sugar-brown",
+    "name": "Brown Sugar",
+    "category": "baking",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "sugar-powdered",
+    "name": "Powdered Sugar",
+    "category": "baking",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "sugar-white",
+    "name": "White Sugar",
+    "category": "baking",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "yeast",
+    "name": "Active Dry Yeast",
+    "category": "baking",
+    "default_unit": "packet"
+  },
+  {
+    "slug": "coffee",
+    "name": "Coffee",
+    "category": "beverage",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "juice-apple",
+    "name": "Apple Juice",
+    "category": "beverage",
+    "default_unit": "carton"
+  },
+  {
+    "slug": "juice-orange",
+    "name": "Orange Juice",
+    "category": "beverage",
+    "default_unit": "carton"
+  },
+  {
+    "slug": "soda",
+    "name": "Soda",
+    "category": "beverage",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "sparkling-water",
+    "name": "Sparkling Water",
+    "category": "beverage",
+    "default_unit": "pack"
+  },
+  {
+    "slug": "tea",
+    "name": "Tea",
+    "category": "beverage",
+    "default_unit": "box"
+  },
+  {
+    "slug": "canned-chicken",
+    "name": "Canned Chicken",
+    "category": "canned",
+    "default_unit": "can"
+  },
+  {
+    "slug": "canned-coconut-milk",
+    "name": "Canned Coconut Milk",
+    "category": "canned",
+    "default_unit": "can"
+  },
+  {
+    "slug": "canned-corn",
+    "name": "Canned Corn",
+    "category": "canned",
+    "default_unit": "can"
+  },
+  {
+    "slug": "canned-green-beans",
+    "name": "Canned Green Beans",
+    "category": "canned",
+    "default_unit": "can"
+  },
+  {
+    "slug": "canned-pineapple",
+    "name": "Canned Pineapple",
+    "category": "canned",
+    "default_unit": "can"
+  },
+  {
+    "slug": "canned-pumpkin",
+    "name": "Canned Pumpkin",
+    "category": "canned",
+    "default_unit": "can"
+  },
+  {
+    "slug": "canned-soup",
+    "name": "Canned Soup",
+    "category": "canned",
+    "default_unit": "can"
+  },
+  {
+    "slug": "canned-tomatoes-crushed",
+    "name": "Canned Crushed Tomatoes",
+    "category": "canned",
+    "default_unit": "can"
+  },
+  {
+    "slug": "canned-tomatoes-diced",
+    "name": "Canned Diced Tomatoes",
+    "category": "canned",
+    "default_unit": "can"
+  },
+  {
+    "slug": "canned-tuna",
+    "name": "Canned Tuna",
+    "category": "canned",
+    "default_unit": "can"
+  },
+  {
+    "slug": "olives",
+    "name": "Olives",
+    "category": "canned",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "almond-milk",
+    "name": "Almond Milk",
+    "category": "dairy",
+    "default_unit": "carton"
+  },
+  {
+    "slug": "butter",
+    "name": "Butter",
+    "category": "dairy",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "cheese-cheddar",
+    "name": "Cheddar Cheese",
+    "category": "dairy",
+    "default_unit": "block"
+  },
+  {
+    "slug": "cheese-cream",
+    "name": "Cream Cheese",
+    "category": "dairy",
+    "default_unit": "block"
+  },
+  {
+    "slug": "cheese-feta",
+    "name": "Feta Cheese",
+    "category": "dairy",
+    "default_unit": "container"
+  },
+  {
+    "slug": "cheese-mozzarella",
+    "name": "Mozzarella Cheese",
+    "category": "dairy",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "cheese-parmesan",
+    "name": "Parmesan Cheese",
+    "category": "dairy",
+    "default_unit": "container"
+  },
+  {
+    "slug": "cottage-cheese",
+    "name": "Cottage Cheese",
+    "category": "dairy",
+    "default_unit": "container"
+  },
+  {
+    "slug": "greek-yogurt",
+    "name": "Greek Yogurt",
+    "category": "dairy",
+    "default_unit": "container"
+  },
+  {
+    "slug": "half-and-half",
+    "name": "Half and Half",
+    "category": "dairy",
+    "default_unit": "carton"
+  },
+  {
+    "slug": "heavy-cream",
+    "name": "Heavy Cream",
+    "category": "dairy",
+    "default_unit": "carton"
+  },
+  {
+    "slug": "milk",
+    "name": "Milk",
+    "category": "dairy",
+    "default_unit": "gallon"
+  },
+  {
+    "slug": "milk-skim",
+    "name": "Skim Milk",
+    "category": "dairy",
+    "default_unit": "gallon"
+  },
+  {
+    "slug": "milk-whole",
+    "name": "Whole Milk",
+    "category": "dairy",
+    "default_unit": "gallon"
+  },
+  {
+    "slug": "oat-milk",
+    "name": "Oat Milk",
+    "category": "dairy",
+    "default_unit": "carton"
+  },
+  {
+    "slug": "sour-cream",
+    "name": "Sour Cream",
+    "category": "dairy",
+    "default_unit": "container"
+  },
+  {
+    "slug": "soy-milk",
+    "name": "Soy Milk",
+    "category": "dairy",
+    "default_unit": "carton"
+  },
+  {
+    "slug": "yogurt",
+    "name": "Yogurt",
+    "category": "dairy",
+    "default_unit": "container"
+  },
+  {
+    "slug": "frozen-berries",
+    "name": "Frozen Berries",
+    "category": "frozen",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "frozen-broccoli",
+    "name": "Frozen Broccoli",
+    "category": "frozen",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "frozen-chicken-nuggets",
+    "name": "Frozen Chicken Nuggets",
+    "category": "frozen",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "frozen-corn",
+    "name": "Frozen Corn",
+    "category": "frozen",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "frozen-french-fries",
+    "name": "Frozen French Fries",
+    "category": "frozen",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "frozen-meatballs",
+    "name": "Frozen Meatballs",
+    "category": "frozen",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "frozen-mixed-vegetables",
+    "name": "Frozen Mixed Vegetables",
+    "category": "frozen",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "frozen-peas",
+    "name": "Frozen Peas",
+    "category": "frozen",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "frozen-pizza",
+    "name": "Frozen Pizza",
+    "category": "frozen",
+    "default_unit": "box"
+  },
+  {
+    "slug": "frozen-spinach",
+    "name": "Frozen Spinach",
+    "category": "frozen",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "frozen-waffles",
+    "name": "Frozen Waffles",
+    "category": "frozen",
+    "default_unit": "box"
+  },
+  {
+    "slug": "ice-cream",
+    "name": "Ice Cream",
+    "category": "frozen",
+    "default_unit": "container"
+  },
+  {
+    "slug": "bagel",
+    "name": "Bagels",
+    "category": "grain",
+    "default_unit": "pack"
+  },
+  {
+    "slug": "bread",
+    "name": "Bread",
+    "category": "grain",
+    "default_unit": "loaf"
+  },
+  {
+    "slug": "bread-whole-wheat",
+    "name": "Whole Wheat Bread",
+    "category": "grain",
+    "default_unit": "loaf"
+  },
+  {
+    "slug": "breadcrumbs",
+    "name": "Breadcrumbs",
+    "category": "grain",
+    "default_unit": "container"
+  },
+  {
+    "slug": "cereal",
+    "name": "Cereal",
+    "category": "grain",
+    "default_unit": "box"
+  },
+  {
+    "slug": "couscous",
+    "name": "Couscous",
+    "category": "grain",
+    "default_unit": "box"
+  },
+  {
+    "slug": "english-muffin",
+    "name": "English Muffins",
+    "category": "grain",
+    "default_unit": "pack"
+  },
+  {
+    "slug": "granola",
+    "name": "Granola",
+    "category": "grain",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "lasagna-noodles",
+    "name": "Lasagna Noodles",
+    "category": "grain",
+    "default_unit": "box"
+  },
+  {
+    "slug": "linguine",
+    "name": "Linguine",
+    "category": "grain",
+    "default_unit": "box"
+  },
+  {
+    "slug": "macaroni",
+    "name": "Macaroni",
+    "category": "grain",
+    "default_unit": "box"
+  },
+  {
+    "slug": "oats",
+    "name": "Oats",
+    "category": "grain",
+    "default_unit": "container"
+  },
+  {
+    "slug": "pasta",
+    "name": "Pasta",
+    "category": "grain",
+    "default_unit": "box"
+  },
+  {
+    "slug": "penne",
+    "name": "Penne",
+    "category": "grain",
+    "default_unit": "box"
+  },
+  {
+    "slug": "quinoa",
+    "name": "Quinoa",
+    "category": "grain",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "rice-basmati",
+    "name": "Basmati Rice",
+    "category": "grain",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "rice-brown",
+    "name": "Brown Rice",
+    "category": "grain",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "rice-jasmine",
+    "name": "Jasmine Rice",
+    "category": "grain",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "rice-white",
+    "name": "White Rice",
+    "category": "grain",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "spaghetti",
+    "name": "Spaghetti",
+    "category": "grain",
+    "default_unit": "box"
+  },
+  {
+    "slug": "tortilla-corn",
+    "name": "Corn Tortillas",
+    "category": "grain",
+    "default_unit": "pack"
+  },
+  {
+    "slug": "tortilla-flour",
+    "name": "Flour Tortillas",
+    "category": "grain",
+    "default_unit": "pack"
+  },
+  {
+    "slug": "almond-butter",
+    "name": "Almond Butter",
+    "category": "pantry",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "bbq-sauce",
+    "name": "BBQ Sauce",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "broth-beef",
+    "name": "Beef Broth",
+    "category": "pantry",
+    "default_unit": "carton"
+  },
+  {
+    "slug": "broth-chicken",
+    "name": "Chicken Broth",
+    "category": "pantry",
+    "default_unit": "carton"
+  },
+  {
+    "slug": "broth-vegetable",
+    "name": "Vegetable Broth",
+    "category": "pantry",
+    "default_unit": "carton"
+  },
+  {
+    "slug": "canola-oil",
+    "name": "Canola Oil",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "coconut-oil",
+    "name": "Coconut Oil",
+    "category": "pantry",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "fish-sauce",
+    "name": "Fish Sauce",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "honey",
+    "name": "Honey",
+    "category": "pantry",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "hot-sauce",
+    "name": "Hot Sauce",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "jam",
+    "name": "Jam",
+    "category": "pantry",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "ketchup",
+    "name": "Ketchup",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "maple-syrup",
+    "name": "Maple Syrup",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "marinara",
+    "name": "Marinara Sauce",
+    "category": "pantry",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "mayonnaise",
+    "name": "Mayonnaise",
+    "category": "pantry",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "mustard",
+    "name": "Mustard",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "mustard-dijon",
+    "name": "Dijon Mustard",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "olive-oil",
+    "name": "Olive Oil",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "peanut-butter",
+    "name": "Peanut Butter",
+    "category": "pantry",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "pesto",
+    "name": "Pesto",
+    "category": "pantry",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "ranch-dressing",
+    "name": "Ranch Dressing",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "salsa",
+    "name": "Salsa",
+    "category": "pantry",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "sesame-oil",
+    "name": "Sesame Oil",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "soy-sauce",
+    "name": "Soy Sauce",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "sriracha",
+    "name": "Sriracha",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "tomato-paste",
+    "name": "Tomato Paste",
+    "category": "pantry",
+    "default_unit": "can"
+  },
+  {
+    "slug": "tomato-sauce",
+    "name": "Tomato Sauce",
+    "category": "pantry",
+    "default_unit": "can"
+  },
+  {
+    "slug": "vegetable-oil",
+    "name": "Vegetable Oil",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "vinegar-apple-cider",
+    "name": "Apple Cider Vinegar",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "vinegar-balsamic",
+    "name": "Balsamic Vinegar",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "vinegar-rice",
+    "name": "Rice Vinegar",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "vinegar-white",
+    "name": "White Vinegar",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "worcestershire-sauce",
+    "name": "Worcestershire Sauce",
+    "category": "pantry",
+    "default_unit": "bottle"
+  },
+  {
+    "slug": "apple",
+    "name": "Apple",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "arugula",
+    "name": "Arugula",
+    "category": "produce",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "asparagus",
+    "name": "Asparagus",
+    "category": "produce",
+    "default_unit": "bunch"
+  },
+  {
+    "slug": "avocado",
+    "name": "Avocado",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "banana",
+    "name": "Banana",
+    "category": "produce",
+    "default_unit": "bunch"
+  },
+  {
+    "slug": "beet",
+    "name": "Beet",
+    "category": "produce",
+    "default_unit": "bunch"
+  },
+  {
+    "slug": "bell-pepper",
+    "name": "Bell Pepper",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "blackberry",
+    "name": "Blackberry",
+    "category": "produce",
+    "default_unit": "pint"
+  },
+  {
+    "slug": "blueberry",
+    "name": "Blueberry",
+    "category": "produce",
+    "default_unit": "pint"
+  },
+  {
+    "slug": "broccoli",
+    "name": "Broccoli",
+    "category": "produce",
+    "default_unit": "head"
+  },
+  {
+    "slug": "brussels-sprout",
+    "name": "Brussels Sprouts",
+    "category": "produce",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "butternut-squash",
+    "name": "Butternut Squash",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "cabbage",
+    "name": "Cabbage",
+    "category": "produce",
+    "default_unit": "head"
+  },
+  {
+    "slug": "cantaloupe",
+    "name": "Cantaloupe",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "carrot",
+    "name": "Carrot",
+    "category": "produce",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "cauliflower",
+    "name": "Cauliflower",
+    "category": "produce",
+    "default_unit": "head"
+  },
+  {
+    "slug": "celery",
+    "name": "Celery",
+    "category": "produce",
+    "default_unit": "bunch"
+  },
+  {
+    "slug": "cherry",
+    "name": "Cherry",
+    "category": "produce",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "cherry-tomato",
+    "name": "Cherry Tomato",
+    "category": "produce",
+    "default_unit": "pint"
+  },
+  {
+    "slug": "cucumber",
+    "name": "Cucumber",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "eggplant",
+    "name": "Eggplant",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "garlic",
+    "name": "Garlic",
+    "category": "produce",
+    "default_unit": "head"
+  },
+  {
+    "slug": "ginger",
+    "name": "Ginger",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "grape",
+    "name": "Grape",
+    "category": "produce",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "green-bean",
+    "name": "Green Beans",
+    "category": "produce",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "honeydew",
+    "name": "Honeydew",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "jalapeno",
+    "name": "Jalapeno",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "kale",
+    "name": "Kale",
+    "category": "produce",
+    "default_unit": "bunch"
+  },
+  {
+    "slug": "kiwi",
+    "name": "Kiwi",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "lemon",
+    "name": "Lemon",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "lettuce",
+    "name": "Lettuce",
+    "category": "produce",
+    "default_unit": "head"
+  },
+  {
+    "slug": "lime",
+    "name": "Lime",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "mango",
+    "name": "Mango",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "mushroom",
+    "name": "Mushroom",
+    "category": "produce",
+    "default_unit": "package"
+  },
+  {
+    "slug": "onion",
+    "name": "Onion",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "orange",
+    "name": "Orange",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "peach",
+    "name": "Peach",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "pear",
+    "name": "Pear",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "pineapple",
+    "name": "Pineapple",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "plum",
+    "name": "Plum",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "potato",
+    "name": "Potato",
+    "category": "produce",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "radish",
+    "name": "Radish",
+    "category": "produce",
+    "default_unit": "bunch"
+  },
+  {
+    "slug": "raspberry",
+    "name": "Raspberry",
+    "category": "produce",
+    "default_unit": "pint"
+  },
+  {
+    "slug": "red-onion",
+    "name": "Red Onion",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "roma-tomato",
+    "name": "Roma Tomato",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "romaine",
+    "name": "Romaine",
+    "category": "produce",
+    "default_unit": "head"
+  },
+  {
+    "slug": "shallot",
+    "name": "Shallot",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "snap-pea",
+    "name": "Snap Peas",
+    "category": "produce",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "spinach",
+    "name": "Spinach",
+    "category": "produce",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "strawberry",
+    "name": "Strawberry",
+    "category": "produce",
+    "default_unit": "pint"
+  },
+  {
+    "slug": "sweet-corn",
+    "name": "Sweet Corn",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "sweet-potato",
+    "name": "Sweet Potato",
+    "category": "produce",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "tomato",
+    "name": "Tomato",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "turnip",
+    "name": "Turnip",
+    "category": "produce",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "watermelon",
+    "name": "Watermelon",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "yellow-squash",
+    "name": "Yellow Squash",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "zucchini",
+    "name": "Zucchini",
+    "category": "produce",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "bacon",
+    "name": "Bacon",
+    "category": "protein",
+    "default_unit": "package"
+  },
+  {
+    "slug": "beans-black",
+    "name": "Black Beans",
+    "category": "protein",
+    "default_unit": "can"
+  },
+  {
+    "slug": "beans-kidney",
+    "name": "Kidney Beans",
+    "category": "protein",
+    "default_unit": "can"
+  },
+  {
+    "slug": "beans-pinto",
+    "name": "Pinto Beans",
+    "category": "protein",
+    "default_unit": "can"
+  },
+  {
+    "slug": "beef-steak",
+    "name": "Beef Steak",
+    "category": "protein",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "chicken-breast",
+    "name": "Chicken Breast",
+    "category": "protein",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "chicken-thigh",
+    "name": "Chicken Thigh",
+    "category": "protein",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "chickpea",
+    "name": "Chickpeas",
+    "category": "protein",
+    "default_unit": "can"
+  },
+  {
+    "slug": "cod",
+    "name": "Cod",
+    "category": "protein",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "crab",
+    "name": "Crab",
+    "category": "protein",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "egg",
+    "name": "Eggs",
+    "category": "protein",
+    "default_unit": "dozen"
+  },
+  {
+    "slug": "ground-beef",
+    "name": "Ground Beef",
+    "category": "protein",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "ground-turkey",
+    "name": "Ground Turkey",
+    "category": "protein",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "ham",
+    "name": "Ham",
+    "category": "protein",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "lentil",
+    "name": "Lentils",
+    "category": "protein",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "pork-chop",
+    "name": "Pork Chop",
+    "category": "protein",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "pork-loin",
+    "name": "Pork Loin",
+    "category": "protein",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "salmon",
+    "name": "Salmon",
+    "category": "protein",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "sausage",
+    "name": "Sausage",
+    "category": "protein",
+    "default_unit": "package"
+  },
+  {
+    "slug": "scallop",
+    "name": "Scallop",
+    "category": "protein",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "shrimp",
+    "name": "Shrimp",
+    "category": "protein",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "tempeh",
+    "name": "Tempeh",
+    "category": "protein",
+    "default_unit": "package"
+  },
+  {
+    "slug": "tilapia",
+    "name": "Tilapia",
+    "category": "protein",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "tofu",
+    "name": "Tofu",
+    "category": "protein",
+    "default_unit": "package"
+  },
+  {
+    "slug": "tuna",
+    "name": "Tuna",
+    "category": "protein",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "turkey-breast",
+    "name": "Turkey Breast",
+    "category": "protein",
+    "default_unit": "pound"
+  },
+  {
+    "slug": "whole-chicken",
+    "name": "Whole Chicken",
+    "category": "protein",
+    "default_unit": "piece"
+  },
+  {
+    "slug": "chips-potato",
+    "name": "Potato Chips",
+    "category": "snack",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "chips-tortilla",
+    "name": "Tortilla Chips",
+    "category": "snack",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "crackers",
+    "name": "Crackers",
+    "category": "snack",
+    "default_unit": "box"
+  },
+  {
+    "slug": "granola-bars",
+    "name": "Granola Bars",
+    "category": "snack",
+    "default_unit": "box"
+  },
+  {
+    "slug": "nuts-almond",
+    "name": "Almonds",
+    "category": "snack",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "nuts-cashew",
+    "name": "Cashews",
+    "category": "snack",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "nuts-peanut",
+    "name": "Peanuts",
+    "category": "snack",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "nuts-walnut",
+    "name": "Walnuts",
+    "category": "snack",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "popcorn",
+    "name": "Popcorn",
+    "category": "snack",
+    "default_unit": "box"
+  },
+  {
+    "slug": "pretzels",
+    "name": "Pretzels",
+    "category": "snack",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "raisin",
+    "name": "Raisins",
+    "category": "snack",
+    "default_unit": "container"
+  },
+  {
+    "slug": "trail-mix",
+    "name": "Trail Mix",
+    "category": "snack",
+    "default_unit": "bag"
+  },
+  {
+    "slug": "allspice",
+    "name": "Allspice",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "basil-dried",
+    "name": "Dried Basil",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "basil-fresh",
+    "name": "Fresh Basil",
+    "category": "spice",
+    "default_unit": "bunch"
+  },
+  {
+    "slug": "bay-leaf",
+    "name": "Bay Leaf",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "cardamom",
+    "name": "Cardamom",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "cayenne",
+    "name": "Cayenne",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "chili-powder",
+    "name": "Chili Powder",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "cilantro-fresh",
+    "name": "Fresh Cilantro",
+    "category": "spice",
+    "default_unit": "bunch"
+  },
+  {
+    "slug": "cinnamon",
+    "name": "Cinnamon",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "cloves",
+    "name": "Cloves",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "coriander",
+    "name": "Ground Coriander",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "cumin",
+    "name": "Cumin",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "dill",
+    "name": "Dill",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "garlic-powder",
+    "name": "Garlic Powder",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "ginger-ground",
+    "name": "Ground Ginger",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "italian-seasoning",
+    "name": "Italian Seasoning",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "mint-fresh",
+    "name": "Fresh Mint",
+    "category": "spice",
+    "default_unit": "bunch"
+  },
+  {
+    "slug": "nutmeg",
+    "name": "Nutmeg",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "onion-powder",
+    "name": "Onion Powder",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "oregano-dried",
+    "name": "Dried Oregano",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "paprika",
+    "name": "Paprika",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "paprika-smoked",
+    "name": "Smoked Paprika",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "parsley-dried",
+    "name": "Dried Parsley",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "parsley-fresh",
+    "name": "Fresh Parsley",
+    "category": "spice",
+    "default_unit": "bunch"
+  },
+  {
+    "slug": "pepper-black",
+    "name": "Black Pepper",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "ranch-seasoning",
+    "name": "Ranch Seasoning",
+    "category": "spice",
+    "default_unit": "packet"
+  },
+  {
+    "slug": "red-pepper-flakes",
+    "name": "Red Pepper Flakes",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "rosemary-dried",
+    "name": "Dried Rosemary",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "sage",
+    "name": "Sage",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "salt",
+    "name": "Salt",
+    "category": "spice",
+    "default_unit": "container"
+  },
+  {
+    "slug": "taco-seasoning",
+    "name": "Taco Seasoning",
+    "category": "spice",
+    "default_unit": "packet"
+  },
+  {
+    "slug": "thyme-dried",
+    "name": "Dried Thyme",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "turmeric",
+    "name": "Turmeric",
+    "category": "spice",
+    "default_unit": "jar"
+  },
+  {
+    "slug": "vanilla-extract",
+    "name": "Vanilla Extract",
+    "category": "spice",
+    "default_unit": "bottle"
+  }
+]
