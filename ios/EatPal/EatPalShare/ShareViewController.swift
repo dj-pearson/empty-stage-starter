@@ -2,58 +2,90 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-/// US-143: Share-extension entry point. The system instantiates this class
-/// (declared as NSExtensionPrincipalClass in Info.plist) when the user picks
-/// "EatPal" from the iOS share sheet. Extracts the shared URL/text and hands
-/// it to `ShareImportView` inside a UIHostingController.
+/// US-143 / US-295: Share-extension entry point. The system instantiates this
+/// class (declared as NSExtensionPrincipalClass in Info.plist) when the user
+/// picks "EatPal" from the iOS share sheet. Extracts whatever the source app
+/// shared (URL, plain text, or both) and hands it to `ShareImportView` inside
+/// a UIHostingController so the user can route it to a recipe import or a
+/// grocery list import.
 final class ShareViewController: UIViewController {
+    /// What the extension extracted from the host app's share payload.
+    /// - `url`: a concrete URL (Safari, recipe sites, etc.) — defaults to the
+    ///   recipe-import path but a chooser is still offered.
+    /// - `text`: plain text without a recognisable URL (Notes lists,
+    ///   Reminders, plain pastes) — defaults to the grocery-import path; the
+    ///   recipe option is shown but disabled because `parse-recipe` needs a URL.
+    /// - `urlInText`: the share carried text *and* an embedded URL we
+    ///   detected via NSDataDetector (Instagram captions, etc.). Both options
+    ///   are live; the recipe path uses the URL, the grocery path uses the
+    ///   full text minus the URL.
+    /// - `none`: nothing useful in the payload.
+    enum SharedContent {
+        case url(URL)
+        case text(String)
+        case urlInText(URL, text: String)
+        case none
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        // Extract the shared URL / text from the extension context on launch.
         Task { @MainActor in
-            let url = await extractSharedURL()
-            presentImportView(url: url)
+            let content = await extractSharedContent()
+            presentImportView(content: content)
         }
     }
 
     // MARK: - Item extraction
 
-    private func extractSharedURL() async -> URL? {
+    private func extractSharedContent() async -> SharedContent {
         guard let extensionContext,
               let inputItems = extensionContext.inputItems as? [NSExtensionItem] else {
-            return nil
+            return .none
         }
+
+        var directURL: URL?
+        var sharedText: String?
 
         for item in inputItems {
             guard let attachments = item.attachments else { continue }
 
             for provider in attachments {
-                // Prefer URL first — most browsers / Safari send this.
-                if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+                // Direct URL — Safari, most browsers, recipe sites.
+                if directURL == nil,
+                   provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
                     if let url = try? await provider.loadItem(
                         forTypeIdentifier: UTType.url.identifier,
                         options: nil
                     ) as? URL {
-                        return url
+                        directURL = url
                     }
                 }
 
-                // Fall back to plain text — some apps (Instagram, TikTok) send
-                // a caption with the URL embedded.
-                if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
+                // Plain text — Notes / Reminders / "Copy and Share" flows.
+                if sharedText == nil,
+                   provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
                     if let text = try? await provider.loadItem(
                         forTypeIdentifier: UTType.plainText.identifier,
                         options: nil
-                    ) as? String,
-                       let url = extractURLFromText(text) {
-                        return url
+                    ) as? String {
+                        sharedText = text
                     }
                 }
             }
         }
 
-        return nil
+        // Decide the routing.
+        if let directURL {
+            return .url(directURL)
+        }
+        if let sharedText, !sharedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let embedded = extractURLFromText(sharedText) {
+                return .urlInText(embedded, text: sharedText)
+            }
+            return .text(sharedText)
+        }
+        return .none
     }
 
     /// Best-effort URL extraction from free text. Uses NSDataDetector so
@@ -68,10 +100,10 @@ final class ShareViewController: UIViewController {
 
     // MARK: - Presentation
 
-    private func presentImportView(url: URL?) {
+    private func presentImportView(content: SharedContent) {
         let hosting = UIHostingController(
             rootView: ShareImportView(
-                sharedURL: url,
+                content: content,
                 onDone: { [weak self] in
                     self?.complete()
                 },
