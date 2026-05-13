@@ -193,6 +193,10 @@ enum AnalyticsEvent {
     case tonightDeliveryFallbackChosen
     case tonightMissingAddedToGrocery(count: Int)
 
+    // US-285: Missing-ingredient bulk prompt instrumentation.
+    case missingIngredientPromptShown(missingCount: Int, totalCount: Int)
+    case missingIngredientsAddedToGrocery(addedCount: Int)
+
     // US-294: Receipt scan instrumentation.
     case receiptScanStarted(fileSizeKb: Int)
     case receiptParseCompleted(avgConfidence: Double, lineCount: Int, durationMs: Int)
@@ -262,6 +266,8 @@ enum AnalyticsEvent {
         case .tonightCookCompleted:     return "tonight_cook_completed"
         case .tonightDeliveryFallbackChosen: return "tonight_delivery_fallback_chosen"
         case .tonightMissingAddedToGrocery:  return "tonight_missing_added_to_grocery"
+        case .missingIngredientPromptShown: return "missing_ingredient_prompt_shown"
+        case .missingIngredientsAddedToGrocery: return "missing_ingredients_added_to_grocery"
         case .receiptScanStarted:       return "receipt_scan_started"
         case .receiptParseCompleted:    return "receipt_parse_completed"
         case .receiptItemsAccepted:     return "receipt_items_accepted"
@@ -295,6 +301,7 @@ enum AnalyticsEvent {
              .tonightModeCardShown, .tonightModeOpened, .tonightModeLoaded,
              .tonightSuggestionChosen, .tonightCookStarted, .tonightCookCompleted,
              .tonightDeliveryFallbackChosen, .tonightMissingAddedToGrocery,
+             .missingIngredientPromptShown, .missingIngredientsAddedToGrocery,
              .receiptScanStarted, .receiptParseCompleted, .receiptItemsAccepted,
              .receiptScanFailed, .receiptFirstScanCompleted:
             return "feature"
@@ -413,6 +420,13 @@ enum AnalyticsEvent {
             ]
         case .tonightMissingAddedToGrocery(let count):
             return ["count": String(count)]
+        case .missingIngredientPromptShown(let missingCount, let totalCount):
+            return [
+                "missing_count": String(missingCount),
+                "total_count": String(totalCount)
+            ]
+        case .missingIngredientsAddedToGrocery(let addedCount):
+            return ["added_count": String(addedCount)]
         case .receiptScanStarted(let kb):
             return ["file_size_kb": String(kb)]
         case .receiptParseCompleted(let avgConfidence, let lineCount, let durationMs):

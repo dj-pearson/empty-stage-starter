@@ -10,6 +10,19 @@ private struct AddEntryContext: Identifiable, Equatable {
     let slot: MealSlot
 }
 
+/// US-285: Payload for the missing-ingredient sheet. The shortfall list is
+/// computed once on AddPlanEntryView dismissal and frozen here so the sheet
+/// renders against a stable snapshot.
+private struct ShortfallContext: Identifiable, Equatable {
+    let id = UUID()
+    let recipe: Recipe
+    let shortfalls: [ShortfallCalculator.Shortfall]
+
+    static func == (lhs: ShortfallContext, rhs: ShortfallContext) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
 struct MealPlanView: View {
     @EnvironmentObject var appState: AppState
     @State private var selectedDate = Date()
@@ -23,6 +36,12 @@ struct MealPlanView: View {
     @State private var templateName = ""
     @State private var copyTargetDate = Date()
     @State private var copyToKidId: String?
+    /// US-285: recipe queued from AddPlanEntryView for shortfall check.
+    /// Computed in `onDismiss` of the add sheet and lifted into
+    /// `shortfallContext` only when non-empty so the missing-ingredients
+    /// sheet doesn't briefly flash on full-pantry adds.
+    @State private var pendingRecipeForShortfall: Recipe?
+    @State private var shortfallContext: ShortfallContext?
 
     /// US-235: true when there's an active kid with no meals planned for this week.
     private var weekIsEmpty: Bool {
@@ -185,8 +204,26 @@ struct MealPlanView: View {
                 }
             }
         }
-        .sheet(item: $addEntryContext) { ctx in
-            AddPlanEntryView(date: ctx.date, mealSlot: ctx.slot)
+        .sheet(item: $addEntryContext, onDismiss: handleAddEntryDismiss) { ctx in
+            AddPlanEntryView(
+                date: ctx.date,
+                mealSlot: ctx.slot,
+                onRecipeAdded: { recipe in
+                    // US-285: queue the recipe; shortfall is computed on
+                    // dismiss so the user only ever sees one sheet at a time.
+                    pendingRecipeForShortfall = recipe
+                }
+            )
+        }
+        .sheet(item: $shortfallContext) { ctx in
+            MissingIngredientsSheet(
+                recipe: ctx.recipe,
+                shortfalls: ctx.shortfalls,
+                onFinish: { _ in
+                    shortfallContext = nil
+                }
+            )
+            .environmentObject(appState)
         }
         .sheet(isPresented: $showingAIMealPlan) {
             AIMealPlanView(date: selectedDate)
@@ -274,6 +311,30 @@ struct MealPlanView: View {
         .refreshable {
             await appState.loadAllData()
         }
+    }
+
+    /// US-285: run after AddPlanEntryView closes. If the user added a recipe
+    /// and that recipe has structured ingredients, compute the pantry
+    /// shortfall and lift it into `shortfallContext` so the missing-
+    /// ingredient sheet presents. Silent no-op when nothing is short.
+    private func handleAddEntryDismiss() {
+        guard let recipe = pendingRecipeForShortfall else { return }
+        pendingRecipeForShortfall = nil
+
+        // Legacy recipes with no structured ingredients (US-281) skip the
+        // prompt — there's nothing to compute against.
+        guard !recipe.ingredients.isEmpty else { return }
+
+        let shortfalls = ShortfallCalculator.compute(
+            recipe: recipe,
+            pantry: appState.foods
+        )
+        guard !shortfalls.isEmpty else { return }
+
+        shortfallContext = ShortfallContext(
+            recipe: recipe,
+            shortfalls: shortfalls
+        )
     }
 }
 
@@ -737,6 +798,11 @@ struct AddPlanEntryView: View {
 
     let date: Date
     let mealSlot: MealSlot
+    /// US-285: parent hook fired right before dismissal when the user
+    /// added a recipe-backed entry. The parent uses this to queue a
+    /// missing-ingredient shortfall sheet after this sheet closes (two
+    /// sheets in flight at once jitter in SwiftUI; queue → present).
+    var onRecipeAdded: ((Recipe) -> Void)? = nil
 
     @State private var entryType = 0 // 0 = Food, 1 = Recipe
     @State private var selectedFoodId: String?
@@ -926,6 +992,12 @@ struct AddPlanEntryView: View {
 
         do {
             try await appState.addPlanEntry(entry)
+            // US-285: fire the recipe-added hook before dismissing so the
+            // parent can queue the missing-ingredient shortfall sheet.
+            if let recipeId = selectedRecipeId,
+               let recipe = appState.recipes.first(where: { $0.id == recipeId }) {
+                onRecipeAdded?(recipe)
+            }
             dismiss()
         } catch {
             // AppState already surfaces a toast; stay on the sheet so the
