@@ -197,6 +197,11 @@ enum AnalyticsEvent {
     case missingIngredientPromptShown(missingCount: Int, totalCount: Int)
     case missingIngredientsAddedToGrocery(addedCount: Int)
 
+    // US-286: Mark-made event. Distinct from `mealMadeLogged` so the
+    // funnel can attribute the decrement to the planner mark-made path
+    // (as opposed to the receipt-import path or other future surfaces).
+    case mealMarkedMade(decrementedCount: Int, fallbackUsed: Bool)
+
     // US-294: Receipt scan instrumentation.
     case receiptScanStarted(fileSizeKb: Int)
     case receiptParseCompleted(avgConfidence: Double, lineCount: Int, durationMs: Int)
@@ -268,6 +273,7 @@ enum AnalyticsEvent {
         case .tonightMissingAddedToGrocery:  return "tonight_missing_added_to_grocery"
         case .missingIngredientPromptShown: return "missing_ingredient_prompt_shown"
         case .missingIngredientsAddedToGrocery: return "missing_ingredients_added_to_grocery"
+        case .mealMarkedMade:           return "meal_marked_made"
         case .receiptScanStarted:       return "receipt_scan_started"
         case .receiptParseCompleted:    return "receipt_parse_completed"
         case .receiptItemsAccepted:     return "receipt_items_accepted"
@@ -302,6 +308,7 @@ enum AnalyticsEvent {
              .tonightSuggestionChosen, .tonightCookStarted, .tonightCookCompleted,
              .tonightDeliveryFallbackChosen, .tonightMissingAddedToGrocery,
              .missingIngredientPromptShown, .missingIngredientsAddedToGrocery,
+             .mealMarkedMade,
              .receiptScanStarted, .receiptParseCompleted, .receiptItemsAccepted,
              .receiptScanFailed, .receiptFirstScanCompleted:
             return "feature"
@@ -427,6 +434,11 @@ enum AnalyticsEvent {
             ]
         case .missingIngredientsAddedToGrocery(let addedCount):
             return ["added_count": String(addedCount)]
+        case .mealMarkedMade(let decremented, let fallback):
+            return [
+                "decremented_count": String(decremented),
+                "fallback_used": fallback ? "true" : "false"
+            ]
         case .receiptScanStarted(let kb):
             return ["file_size_kb": String(kb)]
         case .receiptParseCompleted(let avgConfidence, let lineCount, let durationMs):

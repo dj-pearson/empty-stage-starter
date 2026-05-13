@@ -262,6 +262,26 @@ final class DataService {
         ).execute().value
     }
 
+    /// US-286: Legacy single-food decrement used as a fallback when a
+    /// recipe doesn't have structured ingredients (US-281) for the server
+    /// RPC to walk. The web planner has called this RPC for
+    /// `result == 'ate'` since the legacy planner; iOS needs the same
+    /// hook to keep parity for recipes that pre-date US-265.
+    func deductFoodQuantity(foodId: String, amount: Int = 1) async throws {
+        struct Args: Encodable {
+            let foodId: String
+            let amount: Int
+            enum CodingKeys: String, CodingKey {
+                case foodId = "_food_id"
+                case amount = "_amount"
+            }
+        }
+        try await client.rpc(
+            "deduct_food_quantity",
+            params: Args(foodId: foodId, amount: amount)
+        ).execute()
+    }
+
     // MARK: - Plan Entries
 
     func fetchPlanEntries() async throws -> [PlanEntry] {
