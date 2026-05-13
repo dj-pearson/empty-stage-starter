@@ -100,6 +100,65 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: - Pending grocery imports (US-295)
+
+    /// Drains the share-extension-fed grocery queue. Each pending import is
+    /// expanded into one `GroceryItem` per line for the signed-in user.
+    /// Items that fail to insert stay queued so a future launch can retry.
+    func drainPendingGroceryImports() async {
+        let queued = PendingGroceryImportQueue.load()
+        guard !queued.isEmpty else { return }
+
+        var processedIds: Set<String> = []
+        var totalAdded = 0
+
+        for pending in queued {
+            var addedFromThisBatch = 0
+            for line in pending.items {
+                let item = GroceryItem(
+                    id: UUID().uuidString,
+                    userId: "",
+                    name: line.name,
+                    category: line.category,
+                    quantity: line.quantity,
+                    unit: line.unit.isEmpty ? "count" : line.unit,
+                    checked: false,
+                    addedVia: pending.sourceLabel
+                )
+                do {
+                    try await addGroceryItem(item)
+                    addedFromThisBatch += 1
+                } catch {
+                    SentryService.capture(error, extras: [
+                        "context": "drainPendingGroceryImports",
+                        "name": line.name
+                    ])
+                }
+            }
+            // Drop the batch from the queue once every line has been
+            // attempted — addGroceryItem retries the network optimistically,
+            // so a row that didn't make it to Supabase will still be in the
+            // local list and reconcile on next online sync.
+            processedIds.insert(pending.id)
+            totalAdded += addedFromThisBatch
+            SentryService.leaveBreadcrumb(
+                category: "share-import",
+                message: "Imported \(addedFromThisBatch)/\(pending.items.count) grocery lines from \(pending.sourceLabel)"
+            )
+        }
+
+        for id in processedIds {
+            PendingGroceryImportQueue.remove(id: id)
+        }
+
+        if totalAdded > 0 {
+            toast.success(
+                "Added \(totalAdded) grocery item\(totalAdded == 1 ? "" : "s")",
+                message: "From your share sheet"
+            )
+        }
+    }
+
     private func setupWidgetSnapshotSync() {
         $planEntries
             .combineLatest($foods, $groceryItems, $recipes)
@@ -245,6 +304,9 @@ final class AppState: ObservableObject {
             // US-143: drain any recipes the share extension saved while the
             // user was signed out or the app was backgrounded.
             await drainPendingRecipeImports()
+
+            // US-295: same idea for grocery lines shared from Notes / Reminders.
+            await drainPendingGroceryImports()
 
             // US-274: cache the household id on SmartProductService so
             // the resolver can include the household tier without an
