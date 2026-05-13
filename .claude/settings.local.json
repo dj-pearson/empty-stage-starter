@@ -79,7 +79,12 @@
       "Bash(gh --version)",
       "Bash(gh auth *)",
       "Bash(npx supabase *)",
-      "Bash(findstr /i \"food recipe grocery\")"
+      "Bash(findstr /i \"food recipe grocery\")",
+      "Bash(git merge *)",
+      "Bash(git update-index *)",
+      "Bash(git reset *)",
+      "Bash(gh pr create --base develop --head claude/sync-develop-with-main --title 'sync: bring develop up to main \\(grocery share extension\\)' --body ' *)",
+      "Bash(sort -t- -k2n)"
     ],
     "deny": [],
     "ask": []
