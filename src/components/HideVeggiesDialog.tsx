@@ -7,7 +7,7 @@
  * via AppContext.addRecipe with parent_recipe_id set.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -19,11 +19,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Salad, Sparkles, Plus, Loader2, Eye } from 'lucide-react';
+import { Salad, Sparkles, Plus, Loader2, Eye, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { useApp } from '@/contexts/AppContext';
+import { useFeatureLimit } from '@/hooks/useFeatureLimit';
 import { analytics } from '@/lib/analytics';
 import {
   applyRewriteToRecipe,
@@ -77,9 +78,27 @@ function rowToTechnique(r: TechniqueRow): HiddenVeggieTechnique {
 
 export function HideVeggiesDialog({ open, onOpenChange, recipe, kidIds, onVariantSaved }: Props) {
   const { kids, foods, addRecipe } = useApp();
+  const { checkFeatureLimit, incrementUsage } = useFeatureLimit();
   const [techniques, setTechniques] = useState<HiddenVeggieTechnique[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+  /// US-297: track which (recipe, rewrite-set) we've already fired the
+  /// "generated" event for so re-opening the same dialog doesn't double-count.
+  const generatedReportedFor = useRef<string | null>(null);
+
+  // US-297: modal-open telemetry. Fires once per (recipe, open=true)
+  // transition so re-opening the same dialog after a save doesn't fire
+  // again until the recipe changes.
+  useEffect(() => {
+    if (open && recipe) {
+      analytics.trackEvent('hidden_veggies_modal_opened', {
+        recipe_id: recipe.id,
+        kid_count: kidIds?.length ?? kids.length,
+      });
+    }
+    // Reset the generated-reported marker so a new recipe gets a fresh fire.
+    if (!open) generatedReportedFor.current = null;
+  }, [open, recipe?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!open || techniques !== null) return;
@@ -120,6 +139,9 @@ export function HideVeggiesDialog({ open, onOpenChange, recipe, kidIds, onVarian
     const existingFoodNames = (recipe.food_ids ?? [])
       .map((id) => foods.find((f) => f.id === id)?.name)
       .filter((x): x is string => typeof x === 'string');
+    // Count how many candidate techniques the kid's allergens filtered
+    // out — useful telemetry signal for "is the catalog missing safe
+    // techniques for this allergen profile?"
     return generateHiddenVeggieRewrites(
       {
         recipe: {
@@ -142,8 +164,75 @@ export function HideVeggiesDialog({ open, onOpenChange, recipe, kidIds, onVarian
     );
   }, [recipe, techniques, foods, targetKids]);
 
+  // US-297: fire "generated" once per (recipe, technique-set) so the
+  // funnel can measure "how often does opening produce zero rewrites".
+  useEffect(() => {
+    if (!recipe || techniques === null) return;
+    const key = `${recipe.id}:${rewrites.length}`;
+    if (generatedReportedFor.current === key) return;
+    generatedReportedFor.current = key;
+    analytics.trackEvent('hidden_veggies_generated', {
+      recipe_id: recipe.id,
+      kid_count: targetKids.length,
+      rewrite_count: rewrites.length,
+      added_veggie_count: rewrites.length, // one veggie per rewrite in v1
+    });
+  }, [recipe, techniques, rewrites.length, targetKids.length]);
+
+  // US-297: produce a clean markdown export of the variant that omits
+  // the parent recipe link, so the user can paste it straight into iMessage
+  // or a parent Slack/group without leaking the original recipe relationship.
+  // Stays client-side; no DB write so no quota consumed.
+  const handleShare = async (rewrite: Rewrite) => {
+    if (!recipe) return;
+    const applied = applyRewriteToRecipe(
+      {
+        id: recipe.id,
+        name: recipe.name,
+        description: recipe.description ?? null,
+        category: recipe.category ?? null,
+        instructions: recipe.instructions ?? null,
+        additionalIngredients: recipe.additionalIngredients ?? null,
+        tips: recipe.tips ?? null,
+      },
+      rewrite
+    );
+
+    const md = [
+      `# ${applied.variantName}`,
+      '',
+      `**Add to ingredients:** ${rewrite.addedIngredient.amount} (${rewrite.addedIngredient.prepMethod.replace(/_/g, ' ')})`,
+      '',
+      `**Add this step:** ${rewrite.addedStep.text}`,
+      '',
+      `_Stealth tip: ${rewrite.stealthTip}_`,
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(md);
+      toast.success('Copied — paste it into your group chat');
+      analytics.trackEvent('hidden_veggies_shared', {
+        original_recipe_id: recipe.id,
+        veggie: rewrite.veggieName,
+        technique_id: rewrite.techniqueId,
+        method: 'clipboard_markdown',
+      });
+    } catch (err) {
+      logger.warn('hidden veggies share copy failed', err);
+      toast.error("Couldn't copy. Try long-pressing the variant card.");
+    }
+  };
+
   const handleSave = async (rewrite: Rewrite) => {
     if (!recipe) return;
+
+    // US-297: 3 rewrites/household/month on the free tier. The hook
+    // surfaces its own toast + upgrade CTA on denial, so we just bail.
+    const limit = await checkFeatureLimit('hidden_veggies_rewrite');
+    if (!limit.allowed) {
+      return;
+    }
+
     setSavingId(rewrite.techniqueId);
     try {
       const applied = applyRewriteToRecipe(
@@ -191,6 +280,8 @@ export function HideVeggiesDialog({ open, onOpenChange, recipe, kidIds, onVarian
         stealth_score: rewrite.stealthScore,
         kid_count: targetKids.length,
       });
+      // US-297: count toward the monthly free-tier quota.
+      await incrementUsage('hidden_veggies_rewrite');
       toast.success(`Saved as "${applied.variantName}"`);
       onVariantSaved?.(variant);
       onOpenChange(false);
@@ -283,7 +374,16 @@ export function HideVeggiesDialog({ open, onOpenChange, recipe, kidIds, onVarian
                   <p>{r.stealthTip}</p>
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleShare(r)}
+                    aria-label={`Copy ${r.variantName} as shareable text`}
+                  >
+                    <Share2 className="h-4 w-4 mr-1" aria-hidden="true" />
+                    Copy to share
+                  </Button>
                   <Button onClick={() => handleSave(r)} disabled={savingId !== null} size="sm">
                     {savingId === r.techniqueId ? (
                       <Loader2 className="h-4 w-4 mr-1 animate-spin" aria-hidden="true" />

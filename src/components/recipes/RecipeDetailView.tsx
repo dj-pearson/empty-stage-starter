@@ -374,10 +374,16 @@ export function RecipeDetailView({
                         Add to Collection
                       </DropdownMenuItem>
                     )}
-                    <DropdownMenuItem onClick={() => setShowHideVeggies(true)}>
-                      <Salad className="h-4 w-4 mr-2" />
-                      Sneak veggies in
-                    </DropdownMenuItem>
+                    {/* US-297: Only useful when there's at least one kid
+                        whose preferences/allergens guide the substitution.
+                        Hide it for solo / no-kid users so the menu stays
+                        focused. */}
+                    {kids.length > 0 && (
+                      <DropdownMenuItem onClick={() => setShowHideVeggies(true)}>
+                        <Salad className="h-4 w-4 mr-2" />
+                        Sneak veggies in
+                      </DropdownMenuItem>
+                    )}
                     {recipe.source_url && (
                       <DropdownMenuItem asChild>
                         <a href={recipe.source_url} target="_blank" rel="noopener noreferrer">
