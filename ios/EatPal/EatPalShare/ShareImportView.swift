@@ -477,7 +477,7 @@ private struct GroceryImportBranch: View {
                 ForEach(parsed) { item in
                     HStack {
                         Image(systemName: excluded.contains(item.id) ? "circle" : "checkmark.circle.fill")
-                            .foregroundStyle(excluded.contains(item.id) ? .secondary : .green)
+                            .foregroundStyle(excluded.contains(item.id) ? Color.secondary : Color.green)
                             .onTapGesture { toggle(item) }
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.name)
