@@ -1,26 +1,38 @@
 import Foundation
 
 /// Lightweight Swift port of `src/lib/parse-grocery-text.ts`.
-/// Optimised for spoken input (voice-to-grocery, US-140) and pasted free text
-/// (screenshot OCR, US-141). Outputs `ParsedGroceryItem` values ready to be
-/// materialised into `GroceryItem` rows.
+/// Optimised for spoken input (voice-to-grocery, US-140), pasted free text
+/// (screenshot OCR, US-141), and shared text from the iOS share sheet
+/// (Notes / Reminders import, US-295). Outputs `ParsedGroceryItem` values
+/// ready to be materialised into `GroceryItem` rows.
+///
+/// Lives under `Shared/` so both the main app and the share extension can
+/// link it without duplicating the dictionaries.
 ///
 /// Intentionally simpler than the TS original — regex-heavy quantity parsing
 /// isn't needed for the speech path because SFSpeechRecognizer already
 /// normalises numerals ("two pounds of chicken" → "2 pounds of chicken").
-struct ParsedGroceryItem: Equatable, Identifiable {
-    let id = UUID()
-    var name: String
-    var quantity: Double
-    var unit: String
-    var category: String  // FoodCategory.rawValue
+public struct ParsedGroceryItem: Equatable, Identifiable {
+    public let id = UUID()
+    public var name: String
+    public var quantity: Double
+    public var unit: String
+    public var category: String  // FoodCategory.rawValue
 
     /// Approximate confidence in the parse, 0.0–1.0. Low confidence items can
     /// be surfaced with a review prompt before insert.
-    var confidence: Double
+    public var confidence: Double
+
+    public init(name: String, quantity: Double, unit: String, category: String, confidence: Double) {
+        self.name = name
+        self.quantity = quantity
+        self.unit = unit
+        self.category = category
+        self.confidence = confidence
+    }
 }
 
-enum GroceryTextParser {
+public enum GroceryTextParser {
     // MARK: - Dictionaries
 
     private static let categoryKeywords: [(category: String, keywords: [String])] = [
@@ -100,7 +112,7 @@ enum GroceryTextParser {
 
     /// Parse freeform text into grocery items. Accepts comma-separated, newline-separated,
     /// or spoken phrases joined by " and " / " also ".
-    static func parse(_ text: String) -> [ParsedGroceryItem] {
+    public static func parse(_ text: String) -> [ParsedGroceryItem] {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
