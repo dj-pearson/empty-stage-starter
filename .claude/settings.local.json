@@ -75,7 +75,9 @@
       "Bash(echo \"TSC=$?\")",
       "Bash(echo \"VITEST=$?\")",
       "Bash(echo \"LINT=$?\")",
-      "Bash(del *)"
+      "Bash(del *)",
+      "Bash(gh --version)",
+      "Bash(gh auth *)"
     ],
     "deny": [],
     "ask": []
