@@ -803,11 +803,13 @@ final class AppState: ObservableObject {
 
         if !legacyDebits.isEmpty {
             // Legacy path — server didn't touch these, so iOS owns the
-            // optimistic update.
+            // optimistic update. `debit.amount` is the integer "1 per
+            // ingredient" cadence; Food.quantity is Double, so cast at
+            // the use site rather than narrowing the model.
             for debit in legacyDebits {
                 guard let idx = foods.firstIndex(where: { $0.id == debit.foodId }) else { continue }
                 let current = foods[idx].quantity ?? 0
-                foods[idx].quantity = max(0, current - debit.amount)
+                foods[idx].quantity = max(0, current - Double(debit.amount))
             }
         } else if let recipeId = entry.recipeId,
                   let recipe = recipes.first(where: { $0.id == recipeId }) {
