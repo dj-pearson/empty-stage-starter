@@ -2,7 +2,9 @@ import { Helmet } from "react-helmet-async";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { UserCircle, UserPlus } from "lucide-react";
+import { UserCircle, UserPlus, Users2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { analytics } from "@/lib/analytics";
 import { ManageKidsDialog, ManageKidsDialogRef } from "@/components/ManageKidsDialog";
 import { ChildIntakeQuestionnaire } from "@/components/ChildIntakeQuestionnaire";
 import { ChildProfileCard } from "@/components/ChildProfileCard";
@@ -49,10 +51,33 @@ export default function Kids() {
               Manage child profiles and food preferences
             </p>
           </div>
-          <Button onClick={() => manageKidsRef.current?.openForEdit('')} className="gap-2">
-            <UserPlus className="h-4 w-4" />
-            Add Child
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            {/* US-295: Multi-kid affordance — same target as the
+                Recipes-page CTA so parents can launch the solver from
+                wherever they are. Hide for single-kid households. */}
+            {kids.length >= 2 && (
+              <Button
+                asChild
+                variant="outline"
+                className="gap-2"
+                onClick={() =>
+                  analytics.trackEvent("family_finder_opened", {
+                    source: "kids_header",
+                    kid_count: kids.length,
+                  })
+                }
+              >
+                <Link to="/sibling-meal-finder">
+                  <Users2 className="h-4 w-4" />
+                  Find a meal everyone will eat
+                </Link>
+              </Button>
+            )}
+            <Button onClick={() => manageKidsRef.current?.openForEdit('')} className="gap-2">
+              <UserPlus className="h-4 w-4" />
+              Add Child
+            </Button>
+          </div>
         </div>
 
         {kids.length === 0 ? (

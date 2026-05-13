@@ -16,7 +16,10 @@ import {
   Loader2,
   Folder,
   Globe,
+  Users2,
 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { analytics } from "@/lib/analytics";
 import { ImportRecipeDialog } from "@/components/ImportRecipeDialog";
 import { EnhancedRecipeCard } from "@/components/EnhancedRecipeCard";
 import { RecipeCollectionsSelector } from "@/components/RecipeCollectionsSelector";
@@ -461,6 +464,27 @@ export default function Recipes() {
             )}
           </div>
           <div className="flex gap-2 flex-wrap">
+            {/* US-295: Multi-kid affordance. Only useful with 2+ kids — for
+                a single-kid household the regular recipe browser is the
+                same thing minus the constraint solver overhead. */}
+            {kids.length >= 2 && (
+              <Button
+                asChild
+                variant="outline"
+                size="lg"
+                onClick={() =>
+                  analytics.trackEvent("family_finder_opened", {
+                    source: "recipes_header",
+                    kid_count: kids.length,
+                  })
+                }
+              >
+                <Link to="/sibling-meal-finder">
+                  <Users2 className="h-5 w-5 mr-2" />
+                  Find a meal everyone will eat
+                </Link>
+              </Button>
+            )}
             <Button onClick={handleAISuggestions} variant="secondary" size="lg" disabled={isLoadingSuggestions}>
               <Sparkles className="h-5 w-5 mr-2" />
               AI Suggest
