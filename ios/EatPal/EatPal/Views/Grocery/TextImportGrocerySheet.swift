@@ -222,6 +222,8 @@ struct TextImportGrocerySheet: View {
         case "scan": return "Imported from scan"
         case "photo": return "Imported from photo"
         case "voice": return "Imported by voice"
+        // US-296 (Tier 1): smart-paste source.
+        case "paste": return "Imported from clipboard"
         default: return "Imported"
         }
     }

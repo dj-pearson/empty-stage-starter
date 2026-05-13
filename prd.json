@@ -4554,6 +4554,155 @@
       "priority": 21,
       "passes": false,
       "notes": "Long-horizon retention play. Touches kids schema (allergen_change_log, birthdate validation) and reuses food_chaining + push notifications. Allergen path needs a privacy/medical disclaimer review before launch."
+    },
+    {
+      "id": "US-302",
+      "title": "Tier 2 — Connect a Reminders list to EatPal grocery (EventKit two-way sync)",
+      "description": "As a family that already lives in Apple Reminders, I want to connect a specific Reminders list (e.g. 'Groceries') to my EatPal grocery list so items show up in both places automatically, without me having to share-sheet every change. The iOS share sheet emits only the list title from Reminders.app, so the existing Share Extension is unreliable for this use case — proper EKReminderStore integration is the fix.",
+      "acceptanceCriteria": [
+        "Settings → 'Connect Reminders list' section. First tap opens NSEventKitContactsUsageDescription-equivalent permission flow via EKEventStore.requestFullAccessToReminders().",
+        "Picker shows the user's Reminders calendars (lists). User selects one; the choice persists in UserDefaults under key reminders_synced_list_identifier (calendar.calendarIdentifier).",
+        "On app foreground + every 60s while in foreground, fetch incomplete reminders from the chosen list via EKReminderStore.predicateForReminders(in:). Diff against existing GroceryItem rows where addedVia == 'reminders' AND grocery_list_id == active list; insert new ones, mark completed/removed ones as checked.",
+        "Reverse direction: when a GroceryItem with addedVia == 'reminders' is checked off in EatPal, mark the corresponding EKReminder as completed via reminder.isCompleted = true; eventStore.save(...). Use NSUbiquitousKeyValueStore mapping {reminder.calendarItemIdentifier ↔ grocery_item.id} to keep the relationship across launches.",
+        "Conflict resolution: last-write-wins on the title; quantity/unit/aisle stay on EatPal-only fields (Reminders doesn't model them). Edits to those in EatPal don't write back to Reminders.",
+        "Settings toggle 'Auto-add new Reminders to EatPal' (default ON). When OFF, only the explicit 'Sync now' button pulls.",
+        "Privacy: NSRemindersFullAccessUsageDescription Info.plist string explaining we only read the one list the user picks. Permission can be revoked at Settings → Privacy → Reminders → EatPal.",
+        "Telemetry: reminders_list_connected (calendarTitle hash), reminders_synced (added, completed, totalScanned), reminders_permission_denied",
+        "Edge case: user deletes/renames the connected Reminders list → fall back to a 'Reconnect' prompt on next sync attempt; never crash on stale calendarIdentifier.",
+        "iOS 17+ uses requestFullAccessToReminders(); deployment target already at 17.0 so no fallback needed.",
+        "Migration-safety: add columns ONLY if needed (e.g. external_reminder_id NULL on grocery_items). Per CLAUDE.md migration rules, this is additive — old clients ignore the new column. No DROP/RENAME."
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": "Tier 2 import path. Bypasses the share-sheet limitation we hit in US-295 by going through EKReminderStore directly. Requires Info.plist usage description and a new Settings sub-screen. Use the same enqueue → drain pattern as the Share Extension to keep one source of truth for grocery imports."
+    },
+    {
+      "id": "US-303",
+      "title": "Tier 2 — Email-to-pantry: forward Instacart/Whole Foods/Amazon Fresh confirmations to auto-fill pantry",
+      "description": "As an online-grocery household, I want to forward my order confirmation email to a magic EatPal address and have the items I just bought land in my pantry automatically, so I don't manually re-enter the 25 things I just ordered. This is the single biggest 'wow' moment for users who shop online.",
+      "acceptanceCriteria": [
+        "Per-user magic address: scheme `user-<short_hash>@in.tryeatpal.com` where short_hash is the first 12 chars of HMAC-SHA256(user_id, server-side secret). Users see + copy this from Settings → Email-to-Pantry.",
+        "Inbound email handler: Cloudflare Email Workers (or Resend inbound) routes *@in.tryeatpal.com to a Worker that POSTs the raw message to functions/parse-receipt-email (new edge function).",
+        "Edge function functions/parse-receipt-email/index.ts validates the recipient short_hash → user_id mapping, extracts the merchant from the From header (Instacart / Whole Foods / Amazon Fresh / Walmart Grocery / Kroger Press), then runs merchant-specific parsers (HTML or text) to produce [{name, qty, unit, category}]. Falls back to gpt-4o-mini structured-output prompt if no parser matches.",
+        "New table pending_email_imports (id UUID, user_id UUID, merchant TEXT, raw_subject TEXT, parsed_items JSONB, received_at TIMESTAMPTZ, status TEXT CHECK (status IN ('pending','applied','rejected','failed')), error_message TEXT NULL). RLS: user-scoped.",
+        "iOS shows a non-modal banner on next app open: 'You forwarded a [merchant] receipt — review 12 items?' opens a sheet identical to TextImportGrocerySheet's pattern with toggle/edit per row. On 'Apply', items insert into foods/pantry with addedVia = 'email:[merchant]'.",
+        "Spam / abuse: rate-limit per user_id (max 20 emails/day) and per source domain. Reject emails > 1 MB or with > 200 line items. SPF/DKIM checks via the inbound provider before our edge function sees the body.",
+        "Privacy: emails are NOT stored after parse; pending_email_imports stores only the subject and parsed items, never the body. Add a privacy disclosure to Settings → Email-to-Pantry: 'We read the order block; the rest is discarded.'",
+        "Settings: 'Regenerate address' button (invalidates the old short_hash); 'Disable email-to-pantry' (sets a flag so the inbound worker rejects with a polite bounce).",
+        "Telemetry: email_import_received (merchant), email_import_parsed (merchant, lineCount), email_import_applied (user-confirmed line count), email_import_failed (merchant, reason)",
+        "Migration: new table + column on foods (added_via support for 'email:[merchant]') — additive only per CLAUDE.md rules. No NOT NULL on existing tables.",
+        "Vitest: unit tests for each merchant parser against fixture HTML emails; integration test asserts pending_email_imports row creation + idempotent 'Apply' (re-applying doesn't duplicate)."
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": "Tier 2 import path. Highest-leverage user-perceived feature in this batch — collapses 'I just ordered 25 things, now I have to re-enter them' to zero work. Needs inbound email infra (Cloudflare Email Workers free tier covers up to 10K msgs/mo) and one new table. Merchant parsers can ship incrementally: Instacart + Whole Foods first, others as user telemetry shows demand."
+    },
+    {
+      "id": "US-304",
+      "title": "Tier 2 — Donate AddGroceryItemIntent to Spotlight for system-wide quick-add",
+      "description": "As a user typing 'milk' into Spotlight from the home screen, I want 'Add to EatPal grocery' to appear as a system-level action so I can capture items without opening the app. Pairs with the Tier 1 BulkAddGroceryItemsIntent and the existing single-item AddGroceryItemIntent.",
+      "acceptanceCriteria": [
+        "Call IntentDonationManager.shared.donate(intent:) for AddGroceryItemIntent and BulkAddGroceryItemsIntent every time the user adds a grocery item via the app (manual add, quick add, voice, scan, paste, deep-link). Donate with the actual item name so Spotlight ranks frequently-added items higher.",
+        "Donations include relevantShortcut: AppIntent with the item name parameter pre-bound. Tapping the Spotlight result executes the intent in background without opening EatPal.",
+        "Donate WhatsForDinnerIntent and TodaysPlanIntent once per app launch so Siri suggestions and Spotlight surface 'What's for dinner?' as a contextual action.",
+        "Donate MarkFoodSafeIntent and MarkFoodTryBiteIntent with the food entity bound after every safe/try-bite toggle, so the per-food Spotlight panel offers the matching action.",
+        "Acceptance test: with EatPal installed, typing a previously-added item name (e.g. 'eggs') into Spotlight surfaces 'Add to EatPal grocery: eggs' within the top 5 results. Validated manually on a real device — Spotlight ranking can't be reliably unit-tested.",
+        "No new permissions or Info.plist additions required — donation is silent and free.",
+        "Telemetry: intent_donated (intentType, parameterCount)",
+        "Edge case: donations are best-effort; if IntentDonationManager throws (rare), log + swallow. Never block the user-facing action on donation success."
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": "Tier 2 polish. Almost no code — sprinkle .donate() calls at the existing add/log sites. Big discovery win for power users. Should ship after Tier 1's BulkAddGroceryItemsIntent so both intents get donated together."
+    },
+    {
+      "id": "US-305",
+      "title": "Tier 3 — iMessage extension: share recipe cards and shopping lists to family chats",
+      "description": "As a parent coordinating dinner with my partner, I want to send 'tonight's recipe' or 'here's the grocery list' directly inside an iMessage thread without screenshots or copy-paste, so the family coordinates faster and the recipient sees a tappable EatPal preview that opens the same recipe in their app.",
+      "acceptanceCriteria": [
+        "New iMessage app extension target EatPalMessages (com.eatpal.app.imessage) added to ios/EatPal/project.yml; shares the App Group group.com.eatpal.app with the main app + share extension.",
+        "Compact view: tabs for 'Recipe' (browse user's recipes, pick one, tap Send) and 'Grocery' (snapshot of the current default grocery list — items checked/unchecked).",
+        "Expanded view: per-tab detail (full ingredient list on Recipe tab; per-aisle grouping on Grocery tab). 'Send' inserts an MSMessage with a layoutImage rendering of the recipe card or list snapshot.",
+        "Recipient experience: MSMessageURL set to eatpal://recipes/<recipe-id> (universal link variant: https://tryeatpal.com/app/recipes/<recipe-id>) — tapping opens the recipe in EatPal if installed, otherwise the iOS Messages app shows the layoutImage preview and the recipient can copy ingredients out.",
+        "Layout image generator: SwiftUI view → UIImage via ImageRenderer (iOS 16+). Light + dark variants. 1024×1024 hero with title, image thumbnail, prep time, kid-fit chip badges.",
+        "Privacy: extension only reads from the App Group's read-only snapshot file (already maintained by WidgetSnapshot for the home-screen widget); never makes Supabase calls itself, so no auth in the extension.",
+        "Telemetry: imessage_recipe_sent (recipeId), imessage_grocery_sent (itemCount), imessage_link_tapped (recipeId, didOpenApp)",
+        "Edge case: if the snapshot is empty (cold install) show 'Open EatPal to start a list first' empty state — never crash.",
+        "Build: new target in project.yml under sources EatPalMessages; entitlements identical to the share extension; provisioning profile 'EatPal Messages App Store' added to ExportOptions.plist + ios-app-store-deploy.yml secrets."
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "Tier 3 — biggest scope of this batch (new extension target, layout image renderer, CI provisioning). High emotional value for family-coordination households. Defer until Tier 1 + Tier 2 ship and we have telemetry on import-path adoption."
+    },
+    {
+      "id": "US-306",
+      "title": "Tier 3 — Document handler: open .txt and .csv grocery lists in EatPal via Files / AirDrop",
+      "description": "As a user who exported a grocery list from another app (or received one via AirDrop), I want to tap 'Open in EatPal' from the Files app or AirDrop receive flow so the list parses into my grocery without copy-paste.",
+      "acceptanceCriteria": [
+        "Info.plist CFBundleDocumentTypes: 'EatPal Grocery List' for UTIs public.plain-text and public.comma-separated-values. LSHandlerRank = Alternate (we open them but don't claim ownership).",
+        "Universal type identifier in Exported Type Declarations: com.eatpal.grocery-list with conformingTo: public.plain-text — gives us a custom type for round-tripping our own exports later (US-307 export path).",
+        "Files / AirDrop / 'Open With' invokes onOpenURL with a file:// URL. New handler in DeepLinkHandler.handleFileURL(_:) reads the file contents, splits CSV on commas (one item per row, first column is name; second optional column is quantity), or text on newlines, parses each line through GroceryTextParser, enqueues via PendingGroceryImportQueue.",
+        "Hard size cap: 50 KB / 500 lines max — anything bigger shows a 'Too large, please trim' alert and aborts.",
+        "AirDrop receive: when iOS hands us the file before launch (cold start), the file URL persists in the app's Inbox folder; we move it to a temp location, parse, delete the original to keep Inbox clean.",
+        "Telemetry: file_import_received (uti, lineCount, sizeBytes), file_import_failed (uti, reason)",
+        "Vitest-equivalent: XCTest for the parser on fixture files (plain text bullet list, RFC-4180 CSV, Apple Notes plain text export)."
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": "Tier 3 — long tail. Less than a day of work once Tier 1's queue infra is in place (mostly Info.plist + a thin file handler reusing GroceryTextParser). Mostly serves power users with their own pipelines."
+    },
+    {
+      "id": "US-307",
+      "title": "Tier 3 — Photos library scan: auto-suggest receipt imports from camera roll",
+      "description": "As a user who already photographed a grocery receipt without thinking to import it, I want EatPal to surface those receipts to me (with my permission) so I don't lose those captures. Privacy-first: limited photo library access, on-device detection only.",
+      "acceptanceCriteria": [
+        "Settings → 'Auto-detect receipts in Photos' opt-in toggle (default OFF). On enable, request PHPickerConfiguration / PHAuthorizationStatus.limited with a clear NSPhotoLibraryUsageDescription explainer.",
+        "Background scan via PHPhotoLibrary.requestAuthorization(for: .readWrite) — limited access only, never .authorized. User picks a date range and an album (default: last 30 days, Recents).",
+        "On-device receipt detection: VNRecognizeTextRequest + VNRecognizeDocumentsRequest (iOS 17+) classifies each candidate image. Score ≥ 0.6 OR keyword match ['TOTAL', 'SUBTOTAL', 'GROCERY', 'WALMART', 'KROGER', 'TRADER JOE'] qualifies as 'likely receipt'.",
+        "Dashboard insight card: 'We found 3 receipts in your Photos from this week — import them?' opens a chooser. Each receipt tile shows thumbnail + detected merchant + estimated line count. Tap → routes through existing functions/parse-receipt-image (US-294) flow.",
+        "Privacy guarantees: all detection runs on-device (no image upload until the user explicitly hits 'Import this'); detection results are stored in a UserDefaults cache keyed by PHAsset.localIdentifier so we don't re-process the same image; cache TTL 30 days.",
+        "Performance: scan throttled to 20 images per app launch; user can tap 'Scan more' for the next batch. Background scan uses BGAppRefreshTask with a 7-day cadence so the dashboard stays fresh without battery drain.",
+        "Opt-out: disabling the toggle clears the cache and revokes the permission via Settings link.",
+        "Telemetry: photos_scan_started (mode: 'foreground' | 'background'), photos_scan_candidate (score), photos_scan_imported (sourceAssetId hash)"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": "Tier 3 — privacy-sensitive. Requires careful disclosure copy + App Privacy Manifest update (NSPrivacyAccessedAPIType for UserDefaults + photos access). Don't ship without a privacy review. Pairs well with US-303 (email-to-pantry) for users who do both online + in-store shopping."
+    },
+    {
+      "id": "US-308",
+      "title": "Tier 3 — App Clip for in-store / partner retail flows",
+      "description": "As a user encountering an EatPal-branded QR code at a partner grocery store or in marketing collateral, I want a slim App Clip to launch immediately so I can preview the planner / scan a barcode and get a 'this fits my picky eater' verdict without installing the full app. Drives top-of-funnel conversion for retail partnerships and ARFID-focused marketing.",
+      "acceptanceCriteria": [
+        "New target EatPalClip (com.eatpal.app.Clip) in ios/EatPal/project.yml. Strict 15 MB binary limit — pulls only the modules it needs: barcode scanner, BarcodeService, Recipe model, AppTheme.",
+        "Two App Clip experiences: (1) 'Scan a product, see if it's a try-bite candidate for picky eaters' — uses an associated domain URL like https://tryeatpal.com/clip/scan; (2) 'See tonight's family meal plan idea' — pulls a curated daily recipe via a public CDN URL, no auth required.",
+        "App Clip experience metadata configured in App Store Connect: separate scan-payload URL pattern per experience; each experience has its own header image + title in App Clip Card.",
+        "Smart App Banner on tryeatpal.com/blog/* automatically presents the App Clip Card on iOS Safari. Tapping the clip opens instantly via the App Clip system action.",
+        "Upgrade path: 'Get the full app' CTA inside the clip uses SKOverlay or .appStoreOverlay to surface the full-app install without leaving the clip context. Pre-fills onboarding state via App Group shared with the main app.",
+        "Auth-free: clip never asks the user to sign in; all interactions are read-only or session-local. Any data the user generates inside the clip migrates to the main app on install via SKOverlay + appClipCodeURL.",
+        "Telemetry: clip_launched (source: 'qr' | 'safari' | 'maps'), clip_scan_completed (barcode), clip_upgrade_tapped, clip_upgraded (became a full-app user within 24h)"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": "Tier 3 — heaviest lift. Only justified if there's a concrete retail partnership lined up OR data shows organic Safari/Maps discovery is meaningful. Don't build speculatively. Defer until US-302 + US-303 ship and adoption data justifies the marketing-funnel investment."
+    },
+    {
+      "id": "US-309",
+      "title": "Tier 1 follow-up — eatpal://recipe/import?url=... deep link for Shortcuts recipe URL import",
+      "description": "As a Shortcuts power user, I want to pipe a recipe URL into EatPal via the eatpal:// URL scheme so I can build automations like 'every URL I save to a Reading List tag → import to EatPal recipes' without going through the share sheet manually each time. The companion grocery deep link was scoped into Tier 1 (US-296); this story closes the recipe side that was deferred to avoid expanding that PR's surface.",
+      "acceptanceCriteria": [
+        "Move ios/EatPal/EatPalShare/ShareExtensionAPI.swift to ios/EatPal/Shared/RecipeParseAPI.swift so both the share extension and the main app target can call parse-recipe without code duplication. Update both targets' source lists in project.yml accordingly.",
+        "Add destination .recipeImport(url: URL) to DeepLinkHandler.Destination.",
+        "Parse eatpal://recipe/import?url=<url-encoded> in handleCustomScheme: extract the URL query parameter, validate it's a HTTPS URL, call RecipeParseAPI.parseRecipe(url:) inline (background Task), then enqueue a PendingRecipeImport just like the share extension does.",
+        "On success, set activeDestination = .recipeImport and surface a toast in the main app: 'Imported [recipe name]'. On failure, surface 'Couldn't parse recipe — open the link in Safari?' with a fallback action that opens the URL in Safari.",
+        "Add a new RecipeAppIntent (ImportRecipeFromURLIntent) that wraps the same flow for Shortcuts users who want a typed action rather than the URL scheme. Returns a dialog with the parsed recipe name.",
+        "Register the new intent in EatPalAppShortcuts.swift with phrases 'Import recipe in EatPal from [URL]' and similar.",
+        "Telemetry: deeplink_recipe_import_received, deeplink_recipe_import_succeeded (timeMs), deeplink_recipe_import_failed (reason)",
+        "No DB migration — reuses the existing pending_recipe_imports App Group queue and the existing drainPendingRecipeImports() drain on launch."
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": "Closes the recipe half of the Tier 1 deep-link work. Carved out of US-296 because moving ShareExtensionAPI to Shared/ + adding the network call to the main app target expanded the Tier 1 PR's review surface unnecessarily. Should ship as a small standalone PR once US-296 is in develop."
     }
   ]
 }

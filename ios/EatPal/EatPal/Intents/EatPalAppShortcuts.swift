@@ -16,6 +16,20 @@ struct EatPalAppShortcuts: AppShortcutsProvider {
             systemImageName: "cart.fill.badge.plus"
         )
 
+        // US-296 (Tier 1): the bulk variant — accepts a multi-line text blob
+        // so users can wire `Get All Reminders → Combine Text → EatPal` in a
+        // single Shortcut and bypass the share-sheet quirks Reminders has.
+        AppShortcut(
+            intent: BulkAddGroceryItemsIntent(),
+            phrases: [
+                "Add list to \(.applicationName) grocery",
+                "Add these to my \(.applicationName) list",
+                "Bulk add to \(.applicationName) grocery"
+            ],
+            shortTitle: "Bulk-add to grocery",
+            systemImageName: "cart.fill"
+        )
+
         AppShortcut(
             intent: WhatsForDinnerIntent(),
             phrases: [
