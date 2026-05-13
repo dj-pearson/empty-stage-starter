@@ -48,6 +48,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 import { countMissingForRecipe } from "@/lib/recipeShortfall";
 import { computeVarietyScore } from "@/lib/tonightModeRanking";
+import { TwistMealSheet } from "@/components/TwistMealSheet";
 import { analytics } from "@/lib/analytics";
 
 /// US-298: threshold for surfacing the amber "try a twist?" chip. Tuned
@@ -142,6 +143,7 @@ function DraggableMealItem({
   getFood,
   onOpenMissingForRecipe,
   fatigue,
+  onOpenTwist,
 }: {
   entry: PlanEntry;
   food: Food | undefined;
@@ -161,6 +163,9 @@ function DraggableMealItem({
    *  Undefined for non-recipe entries or when the recipe hasn't been
    *  repeated in the lookback window. Score is 0..1. */
   fatigue?: { score: number; count: number };
+  /** US-298: tap-handler for the variety chip. Receives the entry so
+   *  the parent's swap path can target the right plan_entry. */
+  onOpenTwist?: (entry: PlanEntry) => void;
 }) {
   const mealRef = useRef<HTMLDivElement>(null);
   const draggableRef = useRef<Draggable[] | null>(null);
@@ -494,16 +499,32 @@ function DraggableMealItem({
                           ⚠ {missingCount}
                         </button>
                       )}
-                      {/* US-298: variety-fatigue chip. Mild visual — same
-                          amber palette as the missing-ingredients chip
-                          since both signal "consider doing something
-                          different here". The "Twist this meal" sheet is
-                          a follow-up; for now this is a read-only nudge. */}
-                      {fatigueChipVisible && (
+                      {/* US-298: variety-fatigue chip. Tappable when
+                          a Twist handler is wired (chip click → sheet
+                          with similar-but-different alternatives).
+                          Falls back to a read-only span when there's no
+                          handler, so embeds that don't ship the sheet
+                          still get the visual signal. */}
+                      {fatigueChipVisible && onOpenTwist && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenTwist(entry);
+                          }}
+                          className="flex items-center gap-0.5 text-[9px] px-1 py-0 rounded-md bg-orange-100 text-orange-800 hover:bg-orange-200 dark:bg-orange-900/40 dark:text-orange-200 font-medium shrink-0"
+                          title={`Made ${fatigue!.count}x in the last 3 weeks — try a twist?`}
+                          aria-label={`Made ${fatigue!.count} times — pick a twist`}
+                          data-testid="plan-entry-variety-chip"
+                        >
+                          🔁 {fatigue!.count}x
+                        </button>
+                      )}
+                      {fatigueChipVisible && !onOpenTwist && (
                         <span
                           className="flex items-center gap-0.5 text-[9px] px-1 py-0 rounded-md bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200 font-medium shrink-0"
-                          title={`Made ${fatigue!.count}x in the last 3 weeks — try a twist?`}
-                          aria-label={`Made ${fatigue!.count} times in the last 3 weeks — consider a twist`}
+                          title={`Made ${fatigue!.count}x in the last 3 weeks`}
+                          aria-label={`Made ${fatigue!.count} times`}
                           data-testid="plan-entry-variety-chip"
                         >
                           🔁 {fatigue!.count}x
@@ -684,6 +705,15 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
   const [showTemplateGallery, setShowTemplateGallery] = useState(false);
   const [showApplyTemplateDialog, setShowApplyTemplateDialog] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+
+  // US-298: "Twist this meal" sheet state. `twistContext` holds the plan
+  // entry the user tapped from so the swap handler can target it; lift
+  // to the parent so the sheet renders once per planner, not once per
+  // entry card.
+  const [twistContext, setTwistContext] = useState<{
+    entryId: string;
+    recipeId: string;
+  } | null>(null);
 
   // Load nutrition data
   useEffect(() => {
@@ -971,6 +1001,9 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
                               getFood={getFood}
                               onOpenMissingForRecipe={onOpenMissingForRecipe}
                               fatigue={entry.recipe_id ? fatigueByRecipeId.get(entry.recipe_id) : undefined}
+                              onOpenTwist={(e) => {
+                                if (e.recipe_id) setTwistContext({ entryId: e.id, recipeId: e.recipe_id });
+                              }}
                             />
                           ))}
 
@@ -1112,6 +1145,9 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
                             getFood={getFood}
                             onOpenMissingForRecipe={onOpenMissingForRecipe}
                             fatigue={entry.recipe_id ? fatigueByRecipeId.get(entry.recipe_id) : undefined}
+                            onOpenTwist={(e) => {
+                              if (e.recipe_id) setTwistContext({ entryId: e.id, recipeId: e.recipe_id });
+                            }}
                           />
                         ))}
 
@@ -1168,6 +1204,24 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
         template={selectedTemplate}
         kids={kids}
         onTemplateApplied={() => logger.info("Template applied successfully")}
+      />
+
+      {/* US-298: "Twist this meal" sheet. The variety-fatigue chip on
+          any plan entry opens this; choosing a candidate swaps the
+          entry's recipe_id via onUpdateEntry. */}
+      <TwistMealSheet
+        open={twistContext !== null}
+        onOpenChange={(next) => {
+          if (!next) setTwistContext(null);
+        }}
+        original={twistContext ? recipes.find((r) => r.id === twistContext.recipeId) ?? null : null}
+        recipes={recipes}
+        foods={foods}
+        fatigueScoreFor={(id) => fatigueByRecipeId.get(id)?.score ?? 0}
+        onSwap={(newRecipeId) => {
+          if (!twistContext) return;
+          onUpdateEntry(twistContext.entryId, { recipe_id: newRecipeId });
+        }}
       />
     </div>
   );
