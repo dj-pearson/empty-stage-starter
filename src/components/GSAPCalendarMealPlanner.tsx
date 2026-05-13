@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, memo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import gsap from "gsap";
 import { Draggable } from "gsap/Draggable";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -47,7 +47,15 @@ import { VoteResultsDisplay } from "@/components/VoteResultsDisplay";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 import { countMissingForRecipe } from "@/lib/recipeShortfall";
+import { computeVarietyScore } from "@/lib/tonightModeRanking";
 import { analytics } from "@/lib/analytics";
+
+/// US-298: threshold for surfacing the amber "try a twist?" chip. Tuned
+/// to match the AC: a recipe scoring >= 0.4 is far enough above the
+/// median repeat rate that the nudge is warranted without being too
+/// aggressive. Lives at module scope so future tuning is a one-line edit.
+const FATIGUE_CHIP_THRESHOLD = 0.4;
+const FATIGUE_LOOKBACK_DAYS = 21;
 
 // Register GSAP plugin
 gsap.registerPlugin(Draggable);
@@ -133,6 +141,7 @@ function DraggableMealItem({
   onMoveEntry,
   getFood,
   onOpenMissingForRecipe,
+  fatigue,
 }: {
   entry: PlanEntry;
   food: Food | undefined;
@@ -148,6 +157,10 @@ function DraggableMealItem({
   onMoveEntry: (entryId: string, targetDate: string, targetSlot: MealSlot) => void;
   getFood: (foodId: string) => Food | undefined;
   onOpenMissingForRecipe?: (recipeId: string) => void;
+  /** US-298: precomputed variety fatigue for this entry's recipe.
+   *  Undefined for non-recipe entries or when the recipe hasn't been
+   *  repeated in the lookback window. Score is 0..1. */
+  fatigue?: { score: number; count: number };
 }) {
   const mealRef = useRef<HTMLDivElement>(null);
   const draggableRef = useRef<Draggable[] | null>(null);
@@ -168,6 +181,21 @@ function DraggableMealItem({
       });
     }
   }, [missingCount, entry.recipe_id]);
+
+  // US-298: surface the variety-fatigue chip only when the recipe has
+  // repeated enough to cross the threshold. Telemetry fires once per
+  // (entry, score-above-threshold) transition — matches the
+  // missing-chip-shown pattern above.
+  const fatigueChipVisible = !!fatigue && fatigue.score >= FATIGUE_CHIP_THRESHOLD;
+  useEffect(() => {
+    if (fatigueChipVisible && entry.recipe_id) {
+      analytics.trackEvent("variety_chip_shown", {
+        recipe_id: entry.recipe_id,
+        score: fatigue?.score,
+        count: fatigue?.count,
+      });
+    }
+  }, [fatigueChipVisible, entry.recipe_id, fatigue?.score, fatigue?.count]);
 
   const entryKid = kids.find((k) => k.id === entry.kid_id);
   const otherKids = kids.filter((k) => k.id !== entry.kid_id);
@@ -466,6 +494,21 @@ function DraggableMealItem({
                           ⚠ {missingCount}
                         </button>
                       )}
+                      {/* US-298: variety-fatigue chip. Mild visual — same
+                          amber palette as the missing-ingredients chip
+                          since both signal "consider doing something
+                          different here". The "Twist this meal" sheet is
+                          a follow-up; for now this is a read-only nudge. */}
+                      {fatigueChipVisible && (
+                        <span
+                          className="flex items-center gap-0.5 text-[9px] px-1 py-0 rounded-md bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200 font-medium shrink-0"
+                          title={`Made ${fatigue!.count}x in the last 3 weeks — try a twist?`}
+                          aria-label={`Made ${fatigue!.count} times in the last 3 weeks — consider a twist`}
+                          data-testid="plan-entry-variety-chip"
+                        >
+                          🔁 {fatigue!.count}x
+                        </span>
+                      )}
                       <button
                         onClick={(e) => onToggleRecipeExpand(entry.recipe_id!, e)}
                         className="p-0.5 hover:bg-accent rounded-md transition-colors shrink-0 ml-auto"
@@ -656,6 +699,36 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
 
   const getFood = useCallback((foodId: string) => foods.find((f) => f.id === foodId), [foods]);
   const getRecipe = useCallback((recipeId: string) => recipes.find((r) => r.id === recipeId), [recipes]);
+
+  /// US-298: precompute variety fatigue per recipe so every card render
+  /// can read from a Map<recipeId, {score, count}> in O(1). Memoized on
+  /// planEntries.length so we don't re-walk the array on unrelated re-renders.
+  const fatigueByRecipeId = useMemo(() => {
+    const now = Date.now();
+    const oneDay = 1000 * 60 * 60 * 24;
+    // Build recent entries with daysAgo precomputed (matches the shape
+    // computeVarietyScore expects).
+    const recent = planEntries
+      .filter((e) => !!e.recipe_id)
+      .map((e) => {
+        const ageMs = now - new Date(e.date).getTime();
+        const daysAgo = Math.max(0, Math.floor(ageMs / oneDay));
+        return { recipeId: e.recipe_id as string, daysAgo };
+      })
+      .filter((r) => r.daysAgo <= FATIGUE_LOOKBACK_DAYS);
+
+    // Per-recipe repeat counts feed the chip copy ("Made 5x in 3 weeks").
+    const counts = new Map<string, number>();
+    for (const r of recent) counts.set(r.recipeId, (counts.get(r.recipeId) ?? 0) + 1);
+
+    const out = new Map<string, { score: number; count: number }>();
+    for (const [rid, count] of counts.entries()) {
+      const score = computeVarietyScore(rid, recent, FATIGUE_LOOKBACK_DAYS);
+      out.set(rid, { score, count });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planEntries.length]);
 
   const getEntriesForSlot = useCallback((date: string, slot: MealSlot) => {
     const kidFilter = showAllKids ? kids.map((k) => k.id) : [kidId];
@@ -897,6 +970,7 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
                               onMoveEntry={handleMoveEntry}
                               getFood={getFood}
                               onOpenMissingForRecipe={onOpenMissingForRecipe}
+                              fatigue={entry.recipe_id ? fatigueByRecipeId.get(entry.recipe_id) : undefined}
                             />
                           ))}
 
@@ -1037,6 +1111,7 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
                             onMoveEntry={handleMoveEntry}
                             getFood={getFood}
                             onOpenMissingForRecipe={onOpenMissingForRecipe}
+                            fatigue={entry.recipe_id ? fatigueByRecipeId.get(entry.recipe_id) : undefined}
                           />
                         ))}
 
