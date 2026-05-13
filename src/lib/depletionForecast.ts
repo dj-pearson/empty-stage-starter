@@ -71,12 +71,16 @@ const DEFAULTS = {
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 /** Public helper: coerce a string|number|Date into a Date, or return
- *  null when the input is unparseable. Used by the forecasting path and
- *  by tests that want to assert input hygiene. */
-export function toDate(input: string | number | Date): Date | null {
+ *  null when the input is unparseable. Reject null/undefined explicitly
+ *  because `new Date(null)` silently returns the Unix epoch — that
+ *  would poison the cadence median when a JSONB column contains a
+ *  null entry. */
+export function toDate(input: string | number | Date | null | undefined): Date | null {
+  if (input == null) return null;
   if (input instanceof Date) {
     return isNaN(input.getTime()) ? null : input;
   }
+  if (typeof input === 'number' && !Number.isFinite(input)) return null;
   const d = new Date(input);
   return isNaN(d.getTime()) ? null : d;
 }
