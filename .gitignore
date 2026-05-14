@@ -124,5 +124,12 @@ android-native/build/
 android-native/app/build/
 android-native/.gradle/
 
+# Android signing — never commit. See android-native/RELEASE_GUIDE.md.
+keystore.properties
+*.jks
+*.keystore
+google-services.json
+play-publisher-service-account*.json
+
 user_profiles_rows.csv
 user_subscriptions_rows.csv

@@ -2,7 +2,7 @@ name: android-native-ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'android-native/**'
       - '.github/workflows/android-native-ci.yml'

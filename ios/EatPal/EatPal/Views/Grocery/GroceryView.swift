@@ -37,6 +37,12 @@ struct GroceryView: View {
     @State private var showingListScanner = false
     @State private var scannedListLines: [String] = []
     @State private var showingScanReview = false
+    // US-296 (Tier 1): smart-paste flow. The Add menu's "Paste from Clipboard"
+    // button captures clipboard text via the system PasteButton (no consent
+    // prompt because the tap is the consent), then opens the review sheet so
+    // the user can tweak parsed items before saving.
+    @State private var pasteImportLines: [String] = []
+    @State private var showingPasteReview = false
     @State private var showingClearAlert = false
     @State private var isGenerating = false
     @State private var editingItem: GroceryItem?
@@ -790,6 +796,24 @@ struct GroceryView: View {
                             Label("Import from photo", systemImage: "photo.on.rectangle.angled")
                         }
 
+                        // US-296 (Tier 1): one-tap paste. SwiftUI's PasteButton
+                        // is a privileged system control that bypasses the
+                        // iOS-16+ paste consent banner because the user's tap
+                        // is the consent — no "Allow Paste?" dialog.
+                        PasteButton(payloadType: String.self) { strings in
+                            let joined = strings.joined(separator: "\n")
+                            let lines = joined
+                                .split(whereSeparator: { $0.isNewline })
+                                .map { String($0) }
+                                .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                            guard !lines.isEmpty else { return }
+                            Task { @MainActor in
+                                pasteImportLines = lines
+                                showingPasteReview = true
+                            }
+                        }
+                        .labelStyle(.titleAndIcon)
+
                         Divider()
 
                         Button {
@@ -984,6 +1008,15 @@ struct GroceryView: View {
                 recognisedLines: scannedListLines,
                 sourceTag: "scan",
                 title: "Review Scanned List"
+            )
+        }
+        // US-296 (Tier 1): smart-paste review. Reuses the same sheet the
+        // OCR / scan flow uses so users get one consistent review pattern.
+        .sheet(isPresented: $showingPasteReview) {
+            TextImportGrocerySheet(
+                recognisedLines: pasteImportLines,
+                sourceTag: "paste",
+                title: "Review Pasted Items"
             )
         }
         .sheet(item: $editingItem) { item in

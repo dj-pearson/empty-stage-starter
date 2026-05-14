@@ -30,6 +30,15 @@ struct EatPalApp: App {
                 .onOpenURL { url in
                     deepLinkHandler.handle(url: url)
                 }
+                // US-296 (Tier 1): when a `eatpal://grocery/import?text=…` URL
+                // lands, DeepLinkHandler has already enqueued the parsed lines.
+                // Kick the drain immediately so the user sees their items
+                // without waiting for the next loadAllData() tick.
+                .onReceive(deepLinkHandler.$activeDestination) { destination in
+                    if case .groceryImport = destination {
+                        Task { await appState.drainPendingGroceryImports() }
+                    }
+                }
                 .task {
                     // US-237: hand AppState to the WatchConnectivity service
                     // once it's ready. Idempotent — re-activation is cheap.

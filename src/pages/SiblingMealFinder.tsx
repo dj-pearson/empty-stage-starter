@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Users2, RefreshCw, Sparkles, ChefHat, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -170,6 +170,30 @@ export default function SiblingMealFinder() {
 
   const visibleResults = useMemo(() => (results ?? []).filter((r) => !r.excluded), [results]);
   const excludedCount = useMemo(() => (results ?? []).filter((r) => r.excluded).length, [results]);
+
+  // US-295 AC: family_finder_opened on every entry to the page (direct
+  // URL or via the new Recipes/Kids CTAs). Distinct from the per-CTA
+  // event so the funnel can attribute organic visits separately.
+  useEffect(() => {
+    analytics.trackEvent('family_finder_opened', {
+      source: 'page',
+      kid_count: kids.length,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // US-295 AC: family_finder_zero_results_shown — fires once per solver
+  // run that returns no usable matches. Helps spot pantries / kid
+  // profiles that never satisfy the solver so we can tune the engine.
+  useEffect(() => {
+    if (results !== null && visibleResults.length === 0) {
+      analytics.trackEvent('family_finder_zero_results_shown', {
+        kid_count: effectiveKidIds.length,
+        excluded_count: excludedCount,
+        recipe_count: recipes.length,
+      });
+    }
+  }, [results, visibleResults.length, excludedCount, effectiveKidIds.length, recipes.length]);
 
   return (
     <div className="container mx-auto p-4 md:p-6 max-w-5xl space-y-6">

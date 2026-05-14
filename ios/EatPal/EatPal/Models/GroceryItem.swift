@@ -28,6 +28,14 @@ struct GroceryItem: Identifiable, Codable, Equatable {
     /// Independent of `category` — `category` stays as a `FoodCategory`
     /// for nutrition coloring, while `aisleSection` is the 32-value list.
     var aisleSection: String?
+    /// US-285: Recipe this item was generated from (e.g. missing-ingredient
+    /// bulk add). Lets the cross-module flows link a grocery item back to
+    /// the recipe that triggered it — and lets "Mark made" auto-check the
+    /// recipe-sourced grocery rows (US-262).
+    /// Backed by `grocery_items.source_recipe_id` (migration 20251014…).
+    /// Default of nil keeps the 17 existing memberwise-init call sites
+    /// source-compatible without a sweeping rename.
+    var sourceRecipeId: String? = nil
     var createdAt: String?
     var updatedAt: String?
 
@@ -44,6 +52,7 @@ struct GroceryItem: Identifiable, Codable, Equatable {
         case pricePerUnit = "price_per_unit"
         case currency
         case aisleSection = "aisle_section"
+        case sourceRecipeId = "source_recipe_id"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

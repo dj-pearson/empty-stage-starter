@@ -193,6 +193,20 @@ enum AnalyticsEvent {
     case tonightDeliveryFallbackChosen
     case tonightMissingAddedToGrocery(count: Int)
 
+    // US-285: Missing-ingredient bulk prompt instrumentation.
+    case missingIngredientPromptShown(missingCount: Int, totalCount: Int)
+    case missingIngredientsAddedToGrocery(addedCount: Int)
+
+    // US-286: Mark-made event. Distinct from `mealMadeLogged` so the
+    // funnel can attribute the decrement to the planner mark-made path
+    // (as opposed to the receipt-import path or other future surfaces).
+    case mealMarkedMade(decrementedCount: Int, fallbackUsed: Bool)
+
+    // US-289: Pantry quick-add submission. parseConfidence is bucketed
+    // server-side ("exact" >=0.9, "auto" >=0.6, else "guess") so we can
+    // measure how often the bare-name fallback kicks in.
+    case pantryQuickAddSubmitted(parseConfidence: Double)
+
     // US-294: Receipt scan instrumentation.
     case receiptScanStarted(fileSizeKb: Int)
     case receiptParseCompleted(avgConfidence: Double, lineCount: Int, durationMs: Int)
@@ -262,6 +276,10 @@ enum AnalyticsEvent {
         case .tonightCookCompleted:     return "tonight_cook_completed"
         case .tonightDeliveryFallbackChosen: return "tonight_delivery_fallback_chosen"
         case .tonightMissingAddedToGrocery:  return "tonight_missing_added_to_grocery"
+        case .missingIngredientPromptShown: return "missing_ingredient_prompt_shown"
+        case .missingIngredientsAddedToGrocery: return "missing_ingredients_added_to_grocery"
+        case .mealMarkedMade:           return "meal_marked_made"
+        case .pantryQuickAddSubmitted:  return "pantry_quick_add_submitted"
         case .receiptScanStarted:       return "receipt_scan_started"
         case .receiptParseCompleted:    return "receipt_parse_completed"
         case .receiptItemsAccepted:     return "receipt_items_accepted"
@@ -295,6 +313,8 @@ enum AnalyticsEvent {
              .tonightModeCardShown, .tonightModeOpened, .tonightModeLoaded,
              .tonightSuggestionChosen, .tonightCookStarted, .tonightCookCompleted,
              .tonightDeliveryFallbackChosen, .tonightMissingAddedToGrocery,
+             .missingIngredientPromptShown, .missingIngredientsAddedToGrocery,
+             .mealMarkedMade, .pantryQuickAddSubmitted,
              .receiptScanStarted, .receiptParseCompleted, .receiptItemsAccepted,
              .receiptScanFailed, .receiptFirstScanCompleted:
             return "feature"
@@ -413,6 +433,27 @@ enum AnalyticsEvent {
             ]
         case .tonightMissingAddedToGrocery(let count):
             return ["count": String(count)]
+        case .missingIngredientPromptShown(let missingCount, let totalCount):
+            return [
+                "missing_count": String(missingCount),
+                "total_count": String(totalCount)
+            ]
+        case .missingIngredientsAddedToGrocery(let addedCount):
+            return ["added_count": String(addedCount)]
+        case .mealMarkedMade(let decremented, let fallback):
+            return [
+                "decremented_count": String(decremented),
+                "fallback_used": fallback ? "true" : "false"
+            ]
+        case .pantryQuickAddSubmitted(let confidence):
+            let bucket: String
+            if confidence >= 0.9 { bucket = "exact" }
+            else if confidence >= 0.6 { bucket = "auto" }
+            else { bucket = "guess" }
+            return [
+                "parse_confidence": String(format: "%.2f", confidence),
+                "parse_bucket": bucket
+            ]
         case .receiptScanStarted(let kb):
             return ["file_size_kb": String(kb)]
         case .receiptParseCompleted(let avgConfidence, let lineCount, let durationMs):

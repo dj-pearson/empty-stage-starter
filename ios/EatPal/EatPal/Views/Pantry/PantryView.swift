@@ -86,6 +86,18 @@ struct PantryView: View {
 
     var body: some View {
         List {
+            // US-289: insanely-fast quick-add bar. Lives above category
+            // chips so it's the first input target on the screen. Hidden
+            // during bulk-select mode so it doesn't compete with the
+            // selection toolbar.
+            if !isSelecting {
+                Section {
+                    PantryQuickAddBar(onAdded: {})
+                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                        .listRowBackground(Color.clear)
+                }
+            }
+
             // Category Chips
             Section {
                 ScrollView(.horizontal, showsIndicators: false) {
