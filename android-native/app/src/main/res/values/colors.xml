@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="iconBackground">#10b981</color>
+    <!--
+      Background color for the adaptive launcher icon. Sits behind the
+      masked foreground (the iOS icon scaled to its 66% safe zone). Set
+      to match the iOS icon's baked-in black bezel so the transition
+      between masked area and adaptive padding is invisible.
+
+      Source of truth: corner pixels of the master 1024px icon at
+      ios/EatPal/EatPal/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png.
+      Re-run scripts/generate_android_icons.py after a rebrand to
+      re-sample.
+    -->
+    <color name="iconBackground">#000000</color>
 </resources>
