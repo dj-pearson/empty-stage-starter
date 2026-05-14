@@ -134,3 +134,4 @@ play-publisher-service-account*.json
 
 user_profiles_rows.csv
 user_subscriptions_rows.csv
+android-native/app/release/app-release.aab
