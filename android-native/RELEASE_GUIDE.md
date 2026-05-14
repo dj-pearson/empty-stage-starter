@@ -56,17 +56,7 @@ A keystore is a single `.jks` file containing the cryptographic key Google uses 
 
 From any terminal, replace `CHANGE_ME` and the `dname` fields with your own:
 
-```bash
-keytool -genkey -v \
-  -keystore eatpal-release.jks \
-  -keyalg RSA \
-  -keysize 2048 \
-  -validity 10950 \
-  -alias eatpal-upload \
-  -storepass 'CHANGE_ME' \
-  -keypass 'CHANGE_ME' \
-  -dname "CN=EatPal, O=Your Name LLC, L=Your City, ST=Your State, C=US"
-```
+
 
 The `-validity 10950` is 30 years — Play requires at least 25 years on the upload key.
 

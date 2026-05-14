@@ -16,3 +16,8 @@
 # Supabase-kt / Ktor
 -keep class io.ktor.** { *; }
 -keep class io.github.jan.supabase.** { *; }
+
+# Ktor's IntellijIdeaDebugDetector references JVM-only java.lang.management.*,
+# which doesn't exist on Android. Safe to ignore — only used for IDE debugging.
+-dontwarn java.lang.management.ManagementFactory
+-dontwarn java.lang.management.RuntimeMXBean
