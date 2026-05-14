@@ -18,6 +18,29 @@ val envProps: Properties = Properties().apply {
 fun env(key: String, fallback: String = ""): String =
     System.getenv(key) ?: envProps.getProperty(key) ?: fallback
 
+// Release signing config — read from `../keystore.properties` (gitignored)
+// for local Android Studio builds, with env-var fallback for CI. The file
+// MUST live alongside env.local.properties at the repo root so the same
+// `keytool`-generated .jks can be referenced from anywhere in the tree.
+//
+// Required keys (see RELEASE_GUIDE.md):
+//   storeFile=path/to/eatpal-release.jks
+//   storePassword=...
+//   keyAlias=...
+//   keyPassword=...
+//
+// CI equivalents (in .github/workflows/android-release.yml):
+//   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+//   ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+val keystoreProps: Properties = Properties().apply {
+    val f = rootProject.file("../keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val ciKeystorePath: String? = System.getenv("ANDROID_KEYSTORE_PATH")
+val haveReleaseSigning =
+    (keystoreProps.getProperty("storeFile") != null && keystoreProps.getProperty("keyAlias") != null) ||
+    (ciKeystorePath != null && System.getenv("ANDROID_KEY_ALIAS") != null)
+
 android {
     namespace = "com.eatpal.app"
     compileSdk = 35
@@ -59,6 +82,29 @@ android {
         )
     }
 
+    signingConfigs {
+        // Created on demand so a developer who hasn't set up signing can
+        // still build the debug variant. Release builds fail loudly via
+        // `haveReleaseSigning` below if the keystore is missing.
+        if (haveReleaseSigning) {
+            create("release") {
+                storeFile = file(
+                    System.getenv("ANDROID_KEYSTORE_PATH")
+                        ?: keystoreProps.getProperty("storeFile")
+                )
+                storePassword =
+                    System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                        ?: keystoreProps.getProperty("storePassword")
+                keyAlias =
+                    System.getenv("ANDROID_KEY_ALIAS")
+                        ?: keystoreProps.getProperty("keyAlias")
+                keyPassword =
+                    System.getenv("ANDROID_KEY_PASSWORD")
+                        ?: keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
@@ -71,6 +117,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Only attach the signing config when it's actually configured;
+            // unsigned release builds still compile (useful for local sanity
+            // checks before generating the keystore for the first time).
+            if (haveReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
