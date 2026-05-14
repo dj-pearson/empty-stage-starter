@@ -43,6 +43,7 @@ ios/EatPal/EatPalWidget/Info.plist
 web-build/
 
 # claude-flow / swarm tooling state (machine-local, not source)
+.claude/settings.local.json
 .claude-flow/
 .swarm/
 ruvector.db
