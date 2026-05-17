@@ -49,6 +49,7 @@ import { logger } from "@/lib/logger";
 import { countMissingForRecipe } from "@/lib/recipeShortfall";
 import { computeVarietyScore } from "@/lib/tonightModeRanking";
 import { TwistMealSheet } from "@/components/TwistMealSheet";
+import { useVarietyNudgePref } from "@/hooks/useVarietyNudgePref";
 import { analytics } from "@/lib/analytics";
 
 /// US-298: threshold for surfacing the amber "try a twist?" chip. Tuned
@@ -715,6 +716,11 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
     recipeId: string;
   } | null>(null);
 
+  // US-298: respect the user's "Variety nudges" preference. When off,
+  // the fatigue map is emptied so chips never render and the twist
+  // sheet never opens.
+  const { enabled: varietyNudgesEnabled } = useVarietyNudgePref();
+
   // Load nutrition data
   useEffect(() => {
     const loadNutritionData = async () => {
@@ -734,6 +740,7 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
   /// can read from a Map<recipeId, {score, count}> in O(1). Memoized on
   /// planEntries.length so we don't re-walk the array on unrelated re-renders.
   const fatigueByRecipeId = useMemo(() => {
+    if (!varietyNudgesEnabled) return new Map<string, { score: number; count: number }>();
     const now = Date.now();
     const oneDay = 1000 * 60 * 60 * 24;
     // Build recent entries with daysAgo precomputed (matches the shape
@@ -758,7 +765,7 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planEntries.length]);
+  }, [planEntries.length, varietyNudgesEnabled]);
 
   const getEntriesForSlot = useCallback((date: string, slot: MealSlot) => {
     const kidFilter = showAllKids ? kids.map((k) => k.id) : [kidId];

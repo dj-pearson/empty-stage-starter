@@ -2518,3 +2518,36 @@ These are deliberately out of scope for this branch — `npm run build` (Vite) c
 - `prd.json`: two duplicate IDs (US-107 / US-108) — both occurrences now correctly tracked.
 
 ---
+
+
+## 2026-05-17 - US-298: Variety Fatigue score & "switch it up" nudges (DONE)
+- What was implemented: completed the remaining US-298 surface on top of the prior session's `varietyFatigue.ts` + `varietyTwistPicker.ts` foundation (libs + 22 vitest already green). Added the user-facing preference, the Dashboard insight card, and wired suppression everywhere.
+- Files changed:
+  - `src/hooks/useVarietyNudgePref.ts` (new) - localStorage-backed pref (default ON) + `variety_nudge_toggled` telemetry on change.
+  - `src/hooks/useVarietyNudgePref.test.ts` (new) - 4 tests: default ON, loads persisted false, persists+telemetry on toggle, toggles back.
+  - `src/components/MostRepeatedMealsCard.tsx` (new) - Dashboard insight card "Your top 3 most-repeated meals this month"; hides when nudges off or nothing >= mild tier; `variety_most_repeated_card_shown` / `_switch_clicked` telemetry; Switch CTA routes to the meal finder.
+  - `src/components/VarietyFatigueBanner.tsx` - early-return null when nudges disabled.
+  - `src/components/GSAPCalendarMealPlanner.tsx` - `fatigueByRecipeId` returns an empty Map when nudges disabled, so chips never render and the Twist sheet never opens; added the pref to the memo deps.
+  - `src/pages/Home.tsx` - render `<MostRepeatedMealsCard />` under the fatigue banner.
+  - `src/pages/dashboard/AccountSettings.tsx` - "Meal insights → Variety nudges" Switch in the Notifications tab.
+  - `supabase/migrations/20260516000000_user_preferences.sql` (new) - additive generic per-user key/value table with full RLS; forward-compat server home for cross-device pref sync.
+- **Learnings for future iterations:**
+  - The codebase has **no** `user_preferences` table and no generic preference hook; client toggles persist via `useLocalStorage` / `safeStorage`. AC asked for `user_preferences.nudge_variety`; implemented client-first (the source of truth for UI gating, zero-latency) and shipped the table as a **safe additive migration** so a later session can wire best-effort server sync without a schema change (generic `key`/`value jsonb`). No local Supabase here means types can't be regenerated, so don't reach for the typed client for this table yet.
+  - The prior session deliberately named the public scorer `computeVarietyFatigue(inputs, options)` instead of the AC's `computeFatigueScore(planEntries, recipeId, lookbackDays)`. Tests track the real API. Kept the deviation; it's functionally a superset (recipe + ingredient buckets, tiering).
+  - To gate a planner chip cleanly, empty the upstream memo (`fatigueByRecipeId`) rather than threading a boolean through every `DraggableMealItem` — one choke point, no prop drilling.
+  - `localStorage` is a vitest mock in setup; `localStorage.getItem.mockReturnValueOnce(...)` is the established way to simulate persisted hook state (see `useLocalStorage.test.ts`).
+
+## 2026-05-17 - US-293: Tonight Mode — the 5:47pm Panic Button (VERIFIED DONE, web)
+- What was implemented: no code change required — audited the prior session's Tonight Mode build against every web acceptance criterion and confirmed full coverage; flipped `passes` to true.
+- Coverage confirmed:
+  - `src/components/TonightModeCard.tsx` wired into `src/pages/Home.tsx`; `shouldShowPanicCta` enforces the 16:00-20:00 + empty-dinner gate.
+  - `functions/tonight-mode/index.ts` + `functions/tonight-mode/scoring.ts` edge function; `src/lib/tonightModeRanking.ts` composite scorer with **20** vitest fixtures (sparse/4-kid/allergen-heavy/repetition-heavy) — green.
+  - `TonightSuggestionsDialog` renders pantry-coverage chip, per-kid fit, missing-ingredients link; `< 0.4` coverage surfaces the delivery-fallback tile with `tonight_delivery_fallback_chosen`.
+  - `TonightCookDialog` hands-free view: `navigator.wakeLock` screen lock, `SpeechSynthesis` read-aloud, persistent step timer + Next.
+  - Picky-mode kid chips persisted to localStorage (`tonightMode.selectedKidIds`); `clientFallbackSuggestions` covers edge-function failure; full `tonight_*` telemetry surface.
+- **Learnings for future iterations:**
+  - US-293's only remaining work is the explicit iOS `DashboardView` parity follow-up; the AC states "web ships first", so web completion is the deliverable for this story.
+  - US-293 consumes US-298's variety score for its repetition penalty — now that US-298 is fully done the variety input is no longer a degrade-gracefully path.
+- Branch: `claude/ralph-ai-stories-improvements-v2HkM`. PRD: 234/282 passing.
+
+---

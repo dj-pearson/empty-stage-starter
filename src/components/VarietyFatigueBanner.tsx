@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Shuffle, X, Zap } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useVarietyNudgePref } from '@/hooks/useVarietyNudgePref';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { analytics } from '@/lib/analytics';
@@ -54,6 +55,7 @@ function tierTone(tier: FatigueTier) {
 
 export function VarietyFatigueBanner({ surface = 'unknown' }: Props) {
   const { planEntries, recipes, foods } = useApp();
+  const { enabled: nudgesEnabled } = useVarietyNudgePref();
   const navigate = useNavigate();
   const [dismissal, setDismissal] = useLocalStorage<DismissalState | null>(DISMISS_KEY, null);
 
@@ -140,7 +142,7 @@ export function VarietyFatigueBanner({ surface = 'unknown' }: Props) {
     return fresh.slice(0, 3);
   }, [result, dismissal]);
 
-  if (result.worstTier === 'none' || visibleItems.length === 0) return null;
+  if (!nudgesEnabled || result.worstTier === 'none' || visibleItems.length === 0) return null;
 
   const top = visibleItems[0];
   const tone = tierTone(top.tier);

@@ -57,6 +57,8 @@ import {
   Bell,
 } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
+import { Switch } from "@/components/ui/switch";
+import { useVarietyNudgePref } from "@/hooks/useVarietyNudgePref";
 import { EmailPreferences } from "@/components/EmailPreferences";
 import { DataImport } from "@/components/settings/DataImport";
 import { BindEmailFlow } from "@/components/auth/BindEmailFlow";
@@ -64,6 +66,8 @@ import { useBindStatus } from "@/hooks/useBindStatus";
 
 export default function AccountSettings() {
   const [activeTab, setActiveTab] = useState("profile");
+  const { enabled: varietyNudgesEnabled, setEnabled: setVarietyNudgesEnabled } =
+    useVarietyNudgePref();
   const [portalLoading, setPortalLoading] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -952,6 +956,39 @@ export default function AccountSettings() {
           {/* ==================== NOTIFICATIONS TAB ==================== */}
           <TabsContent value="notifications" className="space-y-6">
             <EmailPreferences />
+
+            {/* US-298: Variety nudges toggle. Off → fatigue banner,
+                planner repeat chips, and the Dashboard "most-repeated
+                meals" card are all suppressed. */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bell className="h-5 w-5" />
+                  Meal insights
+                </CardTitle>
+                <CardDescription>
+                  Gentle nudges that help you keep dinners varied.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="variety-nudges" className="text-sm font-medium">
+                      Variety nudges
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      Spot when a meal is repeating too often and suggest a twist.
+                    </p>
+                  </div>
+                  <Switch
+                    id="variety-nudges"
+                    checked={varietyNudgesEnabled}
+                    onCheckedChange={setVarietyNudgesEnabled}
+                    aria-label="Toggle variety nudges"
+                  />
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* ==================== SECURITY TAB ==================== */}
