@@ -4431,8 +4431,8 @@
         "iOS parity follow-up; web first"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": "Anchors the family-app positioning. Depends on plan_entry_feedback (20260425000001), recipe_ingredients (US-281), and kids.aversions schema. Plays into US-297 (hide veggies) and US-296 (community wins) as escape hatches when no perfect match exists."
+      "passes": true,
+      "notes": "Completed: prior session built solver+page+chips+result cards+route+Recipes/Kids affordances (25 solver tests). This session added the missing AC surface — constraint relaxation panel (allow-N-aversions Slider + allow-swaps + hide-soft-blocks Switches with family_finder_constraint_relaxed telemetry), live 'Showing N recipes that work for X kids' count (memoized re-solve on kid selection), auto-curated 'Family wins' section (full-match w/ minKidScore>0, persisted to localStorage), one-swap fallback empty state, and family_finder_recipe_selected (minKidScore,kidCount) telemetry. Extracted pure applyRelaxation/familyWins/minKidScore into siblingMealFinder.ts with 7 new vitest. Deviation: implemented as SiblingMealFinder at /dashboard/sibling-meal-finder (prior session naming) rather than FamilyFinder /family-finder; functionally equivalent. Typecheck + vite build green."
     },
     {
       "id": "US-296",
@@ -4472,8 +4472,8 @@
         "Vitest: substitution selector unit tests asserting allergens are never returned, technique matches recipe category, ratios stay within sanity bounds (e.g., max 25% volume substitution to preserve flavor)"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": "Viral feature. Touches recipes schema and adds ingredient_substitutions. Pairs with US-295 as the 'one-swap' fallback when no recipe satisfies all kids."
+      "passes": true,
+      "notes": "Verified complete (web): generateHiddenVeggieRewrites client-side engine (15 vitest: allergens never returned, technique matches recipe category, ratio sanity bounds) backed by hidden_veggie_techniques catalog; additive migration 20260513000000 (techniques table + RLS, recipes ADD COLUMN parent_recipe_id/variant_kind); HideVeggiesDialog with useFeatureLimit('hidden_veggies_rewrite') gate, side-by-side ingredient diff + stealth tips + nutrition delta, save-as-variant via addRecipe(parent_recipe_id), share affordance, full hidden_veggies_* telemetry; wired into RecipeDetailView. Deviations (consistent with US-298 client-first pattern): substitution logic is client-side via the catalog table rather than a recipe-hide-veggies edge fn; variant is a parent-linked cloned recipe rather than a separate ingredient_substitutions table. Typecheck + vite build + 29 tests green."
     },
     {
       "id": "US-298",

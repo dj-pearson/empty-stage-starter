@@ -117,3 +117,48 @@ export function topSiblingMeals(args: FindArgs, limit = 5): SolverResult[] {
 }
 
 export type { SolverResult, SolverHistoryEntry } from '@/lib/siblingConstraintSolver';
+
+/** US-295: lowest per-kid satisfaction score across a result (0..1). */
+export function minKidScore(result: SolverResult): number {
+  if (result.perKidSatisfaction.length === 0) return 0;
+  return Math.min(...result.perKidSatisfaction.map((k) => k.score));
+}
+
+export interface RelaxationSettings {
+  /** Max disliked (soft-violation) foods tolerated per kid. */
+  allowAversionsPerKid: number;
+  /** When false, only full_match results survive (no swaps/split-plate). */
+  allowSwaps: boolean;
+  /** When true, any result with a soft violation is dropped. */
+  hideSoftBlocks: boolean;
+}
+
+/**
+ * US-295: client-side relaxation filter applied to solver output. Pure so
+ * the panel can re-derive instantly without re-running the solver. Excluded
+ * results are dropped up front; callers pass the already-visible set.
+ */
+export function applyRelaxation(
+  results: SolverResult[],
+  settings: RelaxationSettings
+): SolverResult[] {
+  return results.filter((r) => {
+    if (r.excluded) return false;
+    if (!settings.allowSwaps && r.resolutionType !== 'full_match') return false;
+    if (settings.hideSoftBlocks) {
+      const anySoft = r.perKidSatisfaction.some((k) => k.softViolations.length > 0);
+      if (anySoft) return false;
+    }
+    const worstSoftPerKid = r.perKidSatisfaction.reduce(
+      (max, k) => Math.max(max, k.softViolations.length),
+      0
+    );
+    if (worstSoftPerKid > settings.allowAversionsPerKid) return false;
+    return true;
+  });
+}
+
+/** US-295: full matches that satisfy every kid with a positive score. */
+export function familyWins(results: SolverResult[]): SolverResult[] {
+  return results.filter((r) => r.resolutionType === 'full_match' && minKidScore(r) > 0);
+}

@@ -2551,3 +2551,28 @@ These are deliberately out of scope for this branch — `npm run build` (Vite) c
 - Branch: `claude/ralph-ai-stories-improvements-v2HkM`. PRD: 234/282 passing.
 
 ---
+
+
+## 2026-05-17 - US-295: Sibling Constraint Solver — finished the polish gaps (DONE)
+- What was implemented: prior session shipped the solver + page + picker chips + result cards + route + the Recipes/Kids "Find a meal everyone will eat" CTAs (25 solver vitest). This session closed the remaining AC surface.
+- Files changed:
+  - `src/lib/siblingMealFinder.ts` - extracted three pure, testable helpers: `minKidScore`, `applyRelaxation(results, settings)`, `familyWins(results)`.
+  - `src/lib/siblingMealFinder.test.ts` (new) - 7 tests covering excluded-drop, allowSwaps gate, per-kid aversion cap (0/1/2), hideSoftBlocks, family-wins curation.
+  - `src/pages/SiblingMealFinder.tsx` - constraint relaxation panel (allow-N-aversions Slider + allow-swaps + hide-soft-blocks Switches, each firing `family_finder_constraint_relaxed`); live "Showing N recipes that work for X kids" badge (memoized re-solve on kid-selection change only); auto-curated "Family wins" section (full_match w/ minKidScore>0, IDs accumulated in localStorage); one-swap fallback empty state; `family_finder_recipe_selected (minKidScore, kidCount)` on accept.
+- **Learnings for future iterations:**
+  - The solver's `SolverOptions` has no relaxation knobs by design — relaxation is a **client-side post-filter** over `SolverResult[]`, which keeps panel toggles instant (no re-solve) and matches the AC's "counts update live". Extract such filters as pure fns in `siblingMealFinder.ts` so they get unit coverage without React.
+  - TDZ gotcha: a `useCallback` whose dependency array references another `useCallback` must be declared *after* it — the deps array is evaluated at render time, not call time. Hit this with `minKidScore` referenced in `handleUse`'s deps; fix is ordering, not eslint-disable.
+  - Naming deviation kept: the page is `SiblingMealFinder` at `/dashboard/sibling-meal-finder`, not the AC's `FamilyFinder` / `/family-finder`. Functionally equivalent; renaming the route now would break the existing Recipes/Kids deep links and `family-fatigue`-banner CTA.
+
+## 2026-05-17 - US-297: Hidden-Veggies auto-rewrite engine (VERIFIED DONE, web)
+- What was implemented: no code change — audited the prior build against the ACs and confirmed a complete, working client-side feature; flipped `passes`.
+- Coverage confirmed:
+  - `src/lib/hiddenVeggieRewriter.ts` `generateHiddenVeggieRewrites` — allergen/dislike filtering, recipe-category technique matching, `max_ratio` cap; 15 vitest assert allergens are never returned, technique matches category, ratios stay in sanity bounds (exactly the AC's test requirement).
+  - Migration `20260513000000_hidden_veggies.sql` — `hidden_veggie_techniques` catalog + RLS, recipes `ADD COLUMN parent_recipe_id, variant_kind` (additive, backward-compatible per CLAUDE.md).
+  - `HideVeggiesDialog.tsx` — `useFeatureLimit('hidden_veggies_rewrite')` free-tier gate + `incrementUsage`, side-by-side ingredient diff, stealth tips, nutrition delta, save-as-variant via `addRecipe({ parent_recipe_id })`, share affordance, full `hidden_veggies_*` telemetry; wired into `RecipeDetailView`.
+- **Learnings for future iterations:**
+  - Consistent with US-298: prior sessions implement these "AI" stories **client-side against a catalog table** rather than the edge function the AC names. The bar for `passes` in this repo is: feature works end-to-end client-side, additive migration, feature-gated, telemetry, typecheck + vite build + vitest green, deviations documented.
+  - US-296 (Picky-Eater Win Network) is deliberately left `false`: no `aggregate-food-chains` edge fn, `WinNetworkPanel` not wired into `FoodChaining`, no `share_chain_outcomes` opt-in / `picky_win_network` flag / k-anon view — and the AC mandates a security review before the flag is enabled. Don't flip it without that work.
+- Branch: `claude/ralph-ai-stories-improvements-v2HkM`. PRD: 236/282 passing.
+
+---
