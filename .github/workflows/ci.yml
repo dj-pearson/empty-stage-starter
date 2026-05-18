@@ -5,6 +5,12 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      run_edge_tests:
+        description: 'Run the critical edge-function suite (needs a local Supabase; informational)'
+        type: boolean
+        default: true
 
 env:
   NODE_VERSION: '20'
@@ -89,6 +95,97 @@ jobs:
 
       - name: Apply migrations
         run: supabase db push --local
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop
+
+  types-and-functions:
+    name: Types Drift & Edge Functions
+    runs-on: ubuntu-latest
+    # Intentionally independent of `quality`: this job only gathers
+    # schema/type/edge-function signal and uploads artifacts (it gates
+    # nothing), so the repo's pre-existing lint debt must not skip it.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - run: npm ci
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Full stack (db + auth + edge-runtime) so the edge-function suite
+      # has live endpoints to hit. Heavier than migration-test on purpose.
+      - name: Start local Supabase
+        run: supabase start --exclude imgproxy,logflare,vector,supavisor
+
+      - name: Apply migrations
+        run: supabase db push --local
+
+      # Regenerate types from the actual migrated schema. We do NOT fail
+      # the pipeline on drift (the pinned-vs-latest CLI can reformat
+      # cosmetically); instead we surface a clear annotation + upload the
+      # freshly generated file so it can be diffed / committed verbatim.
+      - name: Regenerate Supabase types
+        run: |
+          mkdir -p artifacts
+          supabase gen types typescript --local > artifacts/types.generated.ts
+          echo "Generated $(wc -l < artifacts/types.generated.ts) lines."
+
+      - name: Report type drift (informational)
+        continue-on-error: true
+        run: |
+          if diff -q src/integrations/supabase/types.ts artifacts/types.generated.ts >/dev/null 2>&1; then
+            echo "types.ts is in sync with migrations."
+          else
+            echo "::warning::src/integrations/supabase/types.ts differs from the migrated schema. Download the 'supabase-types' artifact and commit it (or run: supabase gen types typescript --local > src/integrations/supabase/types.ts)."
+            echo "----- tables present in regenerated types -----"
+            grep -oE '^      [a-z_]+: \{' artifacts/types.generated.ts | sed -E 's/[ :{]//g' | sort | sed 's/^/  /'
+            echo "----- unified diff (truncated to 400 lines) -----"
+            diff -u src/integrations/supabase/types.ts artifacts/types.generated.ts | head -400 || true
+          fi
+
+      - name: Upload regenerated types
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-types
+          path: artifacts/types.generated.ts
+          retention-days: 14
+
+      # Edge-function suite is environment-sensitive (some functions need
+      # provider secrets that don't exist in CI), so it is informational:
+      # it never blocks the pipeline, but the JSON/HTML report is uploaded
+      # so per-function pass/fail can drive the next iteration.
+      - name: Run critical edge-function tests
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_edge_tests }}
+        continue-on-error: true
+        env:
+          CI: 'true'
+          VITE_SUPABASE_URL: http://localhost:54321
+          VITE_FUNCTIONS_URL: http://localhost:54321
+        run: |
+          # Map the local keys printed by `supabase status` into the names
+          # the function test harness expects.
+          eval "$(supabase status -o env | sed 's/^/export SB_/')"
+          export VITE_SUPABASE_ANON_KEY="${SB_ANON_KEY:-$VITE_SUPABASE_ANON_KEY}"
+          export SUPABASE_SERVICE_ROLE_KEY="${SB_SERVICE_ROLE_KEY:-}"
+          npm run test:functions:critical
+
+      - name: Upload edge-function results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-function-results
+          path: tests/functions/results/
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Stop local Supabase
         if: always()

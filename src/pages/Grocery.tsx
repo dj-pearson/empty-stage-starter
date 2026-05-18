@@ -23,6 +23,7 @@ import { ManageStoreLayoutsDialog } from "@/components/ManageStoreLayoutsDialog"
 import { ManageStoreAislesDialog } from "@/components/ManageStoreAislesDialog";
 import { AisleContributionDialog } from "@/components/AisleContributionDialog";
 import { ImportRecipeToGroceryDialog } from "@/components/ImportRecipeToGroceryDialog";
+import { ScanReceiptDialog } from "@/components/ScanReceiptDialog";
 import { generateGroceryList } from "@/lib/mealPlanner";
 import {
   ShoppingCart, Trash2, Printer, Download, Plus, Share2, FileText,
@@ -89,6 +90,7 @@ export default function Grocery() {
 
   const [groupBy, setGroupBy] = useState<"category" | "aisle">("aisle");
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showScanReceipt, setShowScanReceipt] = useState(false);
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
   const [isGeneratingRestock, setIsGeneratingRestock] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -755,6 +757,10 @@ export default function Grocery() {
             <FileText className="h-4 w-4 mr-1.5" />
             From Recipe
           </Button>
+          <Button onClick={() => setShowScanReceipt(true)} variant="secondary" size="sm">
+            <Barcode className="h-4 w-4 mr-1.5" />
+            Scan Receipt
+          </Button>
           <Button
             onClick={handleSmartRestock}
             variant="secondary"
@@ -1277,6 +1283,11 @@ export default function Grocery() {
           />
         </>
       )}
+
+      <ScanReceiptDialog
+        open={showScanReceipt}
+        onClose={() => setShowScanReceipt(false)}
+      />
     </div>
   );
 }

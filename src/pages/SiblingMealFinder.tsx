@@ -13,11 +13,21 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Switch } from '@/components/ui/switch';
+import { Slider } from '@/components/ui/slider';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApp } from '@/contexts/AppContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSiblingResolutions } from '@/hooks/useSiblingResolutions';
-import { findSiblingMeals } from '@/lib/siblingMealFinder';
+import {
+  findSiblingMeals,
+  applyRelaxation,
+  familyWins as curateFamilyWins,
+  minKidScore as computeMinKidScore,
+} from '@/lib/siblingMealFinder';
 import type { SolverResult } from '@/lib/siblingConstraintSolver';
 import { analytics } from '@/lib/analytics';
 import { logger } from '@/lib/logger';
@@ -51,6 +61,20 @@ export default function SiblingMealFinder() {
   const [acceptedRecipeId, setAcceptedRecipeId] = useState<string | null>(null);
   const [cookingRecipeId, setCookingRecipeId] = useState<string | null>(null);
 
+  // US-295: constraint relaxation panel. All client-side post-filters
+  // over the solver output so toggling is instant and the live count
+  // updates without re-running the solver.
+  const [allowAversionsPerKid, setAllowAversionsPerKid] = useState<number>(0);
+  const [allowSwaps, setAllowSwaps] = useState<boolean>(true);
+  const [hideSoftBlocks, setHideSoftBlocks] = useState<boolean>(false);
+
+  // US-295: "Family wins" — auto-curated collection of recipes that were
+  // a full match for every selected kid. Accumulates across sessions.
+  const [familyWins, setFamilyWins] = useLocalStorage<string[]>(
+    'siblingMealFinder.familyWins',
+    []
+  );
+
   const effectiveKidIds = useMemo(() => {
     const known = new Set(kids.map((k) => k.id));
     const filtered = selectedKidIds.filter((id) => known.has(id));
@@ -65,6 +89,11 @@ export default function SiblingMealFinder() {
   const selectedKidsObj = useMemo(
     () => kids.filter((k) => effectiveKidIds.includes(k.id)),
     [kids, effectiveKidIds]
+  );
+
+  const minKidScore = useCallback(
+    (r: SolverResult): number => computeMinKidScore(r),
+    []
   );
 
   const runSolver = useCallback(() => {
@@ -148,6 +177,13 @@ export default function SiblingMealFinder() {
           meal_slot: mealSlot,
         });
 
+        analytics.trackEvent('family_finder_recipe_selected', {
+          recipe_id: result.recipeId,
+          min_kid_score: minKidScore(result),
+          kid_count: effectiveKidIds.length,
+          resolution_type: result.resolutionType,
+        });
+
         setAcceptedRecipeId(result.recipeId);
         toast.success(
           `${result.recipeName} added to ${MEAL_SLOTS.find((m) => m.value === mealSlot)?.label.toLowerCase() ?? mealSlot} for ${effectiveKidIds.length} ${effectiveKidIds.length === 1 ? 'kid' : 'kids'}.`
@@ -157,7 +193,7 @@ export default function SiblingMealFinder() {
         toast.error("Couldn't add the meal to the planner.");
       }
     },
-    [addPlanEntry, effectiveKidIds, mealDate, mealSlot, recordResolution]
+    [addPlanEntry, effectiveKidIds, mealDate, mealSlot, recordResolution, minKidScore]
   );
 
   const handleCook = useCallback((result: SolverResult) => {
@@ -170,6 +206,83 @@ export default function SiblingMealFinder() {
 
   const visibleResults = useMemo(() => (results ?? []).filter((r) => !r.excluded), [results]);
   const excludedCount = useMemo(() => (results ?? []).filter((r) => r.excluded).length, [results]);
+
+  // US-295: apply the relaxation panel to the solver output.
+  const filteredResults = useMemo(
+    () =>
+      applyRelaxation(visibleResults, {
+        allowAversionsPerKid,
+        allowSwaps,
+        hideSoftBlocks,
+      }),
+    [visibleResults, allowSwaps, hideSoftBlocks, allowAversionsPerKid]
+  );
+
+  // US-295: one-swap fallback surfaced when nothing is a clean match but
+  // some recipes work with a single per-kid swap.
+  const oneSwapFallback = useMemo(
+    () =>
+      visibleResults
+        .filter((r) => r.resolutionType === 'with_swaps' && r.swaps.length > 0)
+        .slice(0, 3),
+    [visibleResults]
+  );
+
+  // US-295: "Family wins" — full matches for every selected kid with a
+  // positive minimum score. Persisted set accumulates the recipe IDs.
+  const familyWinResults = useMemo(
+    () => curateFamilyWins(filteredResults),
+    [filteredResults]
+  );
+
+  useEffect(() => {
+    if (familyWinResults.length === 0) return;
+    setFamilyWins((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const r of familyWinResults) {
+        if (!next.has(r.recipeId)) {
+          next.add(r.recipeId);
+          changed = true;
+        }
+      }
+      return changed ? Array.from(next) : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [familyWinResults]);
+
+  // US-295: live count — re-solves only when the selected kids / library
+  // change, so the header reflects the current selection before the user
+  // hits "Find a meal". Memoized; O(recipes*kids), well under the 200ms
+  // budget for typical libraries.
+  const liveMatchCount = useMemo(() => {
+    if (kids.length === 0 || recipes.length === 0) return null;
+    try {
+      const r = findSiblingMeals({
+        recipes,
+        foods,
+        kids,
+        selectedKidIds: effectiveKidIds,
+        history,
+        options: { maxMinutes: 240, limit: 999 },
+      });
+      return r.filter((x) => !x.excluded).length;
+    } catch {
+      return null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipes.length, foods.length, effectiveKidIds, kids.length]);
+
+  const relaxConstraint = useCallback(
+    (which: string, value: number | boolean) => {
+      analytics.trackEvent('family_finder_constraint_relaxed', {
+        which_constraint: which,
+        value,
+        kid_count: effectiveKidIds.length,
+      });
+    },
+    [effectiveKidIds.length]
+  );
 
   // US-295 AC: family_finder_opened on every entry to the page (direct
   // URL or via the new Recipes/Kids CTAs). Distinct from the per-CTA
@@ -215,6 +328,12 @@ export default function SiblingMealFinder() {
           dietary restrictions) against soft ones (dislikes, favorites) and surface swaps or
           split-plate ideas when no single recipe fits all.
         </p>
+        {liveMatchCount !== null && (
+          <Badge variant="secondary" className="w-fit" data-testid="live-match-count">
+            Showing {liveMatchCount} {liveMatchCount === 1 ? 'recipe' : 'recipes'} that work for{' '}
+            {effectiveKidIds.length} {effectiveKidIds.length === 1 ? 'kid' : 'kids'}
+          </Badge>
+        )}
       </header>
 
       <FairnessIndicator kids={selectedKidsObj} history={history} />
@@ -288,6 +407,63 @@ export default function SiblingMealFinder() {
             </div>
           </div>
 
+          <Separator />
+
+          {/* US-295: constraint relaxation panel — instant client-side
+              filtering of the solver output. */}
+          <div className="space-y-4" aria-label="Constraint relaxation">
+            <p className="text-sm font-medium">Loosen the rules</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="allow-aversions" className="text-sm">
+                  Allow up to {allowAversionsPerKid} disliked food
+                  {allowAversionsPerKid === 1 ? '' : 's'} per kid
+                </Label>
+              </div>
+              <Slider
+                id="allow-aversions"
+                min={0}
+                max={3}
+                step={1}
+                value={[allowAversionsPerKid]}
+                onValueChange={(v) => {
+                  const next = v[0] ?? 0;
+                  setAllowAversionsPerKid(next);
+                  relaxConstraint('allow_aversions_per_kid', next);
+                }}
+                className="max-w-xs"
+              />
+            </div>
+            <div className="flex items-start justify-between gap-4">
+              <Label htmlFor="allow-swaps" className="text-sm">
+                Allow ingredient swaps & split plates
+              </Label>
+              <Switch
+                id="allow-swaps"
+                checked={allowSwaps}
+                onCheckedChange={(c) => {
+                  setAllowSwaps(c);
+                  relaxConstraint('allow_swaps', c);
+                }}
+              />
+            </div>
+            <div className="flex items-start justify-between gap-4">
+              <Label htmlFor="hide-soft" className="text-sm">
+                Hide anything with a disliked food
+              </Label>
+              <Switch
+                id="hide-soft"
+                checked={hideSoftBlocks}
+                onCheckedChange={(c) => {
+                  setHideSoftBlocks(c);
+                  relaxConstraint('hide_soft_blocks', c);
+                }}
+              />
+            </div>
+          </div>
+
+          <Separator />
+
           <div className="flex flex-wrap gap-2 pt-1">
             <Button
               onClick={runSolver}
@@ -311,24 +487,27 @@ export default function SiblingMealFinder() {
         </CardContent>
       </Card>
 
-      {results !== null && visibleResults.length === 0 && (
+      {results !== null && filteredResults.length === 0 && (
         <Alert>
           <ChefHat className="h-4 w-4" aria-hidden="true" />
-          <AlertTitle>No recipe satisfies everyone</AlertTitle>
+          <AlertTitle>
+            0 perfect matches across {effectiveKidIds.length}{' '}
+            {effectiveKidIds.length === 1 ? 'kid' : 'kids'}
+          </AlertTitle>
           <AlertDescription>
-            {excludedCount > 0
-              ? `${excludedCount} recipes were ruled out by hard constraints (allergens or dietary restrictions). Try widening your recipe library or adjusting kid profiles.`
-              : 'Add more recipes or relax the prep time.'}
+            {oneSwapFallback.length > 0
+              ? `Here ${oneSwapFallback.length === 1 ? 'is' : 'are'} ${oneSwapFallback.length} that work with one small swap each — see below.`
+              : excludedCount > 0
+                ? `${excludedCount} recipes were ruled out by hard constraints (allergens or dietary restrictions). Try widening your recipe library, loosening the rules above, or adjusting kid profiles.`
+                : 'Add more recipes, loosen the rules above, or relax the prep time.'}
           </AlertDescription>
         </Alert>
       )}
 
-      {visibleResults.length > 0 && (
-        <section className="space-y-3" aria-label="Sibling meal solver results">
-          <h2 className="text-lg font-semibold">
-            {visibleResults.length} {visibleResults.length === 1 ? 'match' : 'matches'}
-          </h2>
-          {visibleResults.map((r) => (
+      {results !== null && filteredResults.length === 0 && oneSwapFallback.length > 0 && (
+        <section className="space-y-3" aria-label="One-swap suggestions">
+          <h2 className="text-lg font-semibold">Close — one swap each</h2>
+          {oneSwapFallback.map((r) => (
             <SiblingMealResultCard
               key={r.recipeId}
               result={r}
@@ -337,6 +516,47 @@ export default function SiblingMealFinder() {
               isAccepted={acceptedRecipeId === r.recipeId}
             />
           ))}
+        </section>
+      )}
+
+      {familyWinResults.length > 0 && (
+        <section className="space-y-3" aria-label="Family wins">
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <Star className="h-5 w-5 text-amber-500" aria-hidden="true" />
+            Family wins
+            <Badge variant="secondary">{familyWins.length} saved</Badge>
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Recipes that worked for every selected kid — auto-saved so you can come back to them.
+          </p>
+          {familyWinResults.map((r) => (
+            <SiblingMealResultCard
+              key={`win-${r.recipeId}`}
+              result={r}
+              onUse={handleUse}
+              onCook={handleCook}
+              isAccepted={acceptedRecipeId === r.recipeId}
+            />
+          ))}
+        </section>
+      )}
+
+      {filteredResults.length > 0 && (
+        <section className="space-y-3" aria-label="Sibling meal solver results">
+          <h2 className="text-lg font-semibold">
+            {filteredResults.length} {filteredResults.length === 1 ? 'match' : 'matches'}
+          </h2>
+          {filteredResults
+            .filter((r) => !familyWinResults.some((w) => w.recipeId === r.recipeId))
+            .map((r) => (
+              <SiblingMealResultCard
+                key={r.recipeId}
+                result={r}
+                onUse={handleUse}
+                onCook={handleCook}
+                isAccepted={acceptedRecipeId === r.recipeId}
+              />
+            ))}
         </section>
       )}
 
