@@ -103,7 +103,9 @@ jobs:
   types-and-functions:
     name: Types Drift & Edge Functions
     runs-on: ubuntu-latest
-    needs: quality
+    # Intentionally independent of `quality`: this job only gathers
+    # schema/type/edge-function signal and uploads artifacts (it gates
+    # nothing), so the repo's pre-existing lint debt must not skip it.
     steps:
       - uses: actions/checkout@v4
 
