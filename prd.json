@@ -4389,8 +4389,8 @@
         "iOS DashboardView parity is a follow-up story; web ships first"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": "The marquee feature. Reuses suggest-recipes-from-pantry, recipe_ingredients (US-281), kids.aversions, plan_entries, foods. Depends on US-298 (variety score) for the variety penalty input — degrade gracefully if not yet built."
+      "passes": true,
+      "notes": "Verified complete (web): TonightModeCard time-gated CTA on Home, functions/tonight-mode (index.ts+scoring.ts), tonightModeRanking composite scorer (20 vitest fixtures), TonightSuggestionsDialog with pantry/kid-fit/missing chips, TonightCookDialog hands-free view (navigator.wakeLock + SpeechSynthesis voice cue + step timer/Next), <40% pantry delivery-fallback tile, picky-mode kid chips persisted to localStorage, client fallback on edge error, full tonight_* telemetry. Consumes US-298 variety score (now done). iOS parity is an explicit follow-up. Typecheck + vite build green."
     },
     {
       "id": "US-294",
@@ -4431,8 +4431,8 @@
         "iOS parity follow-up; web first"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": "Anchors the family-app positioning. Depends on plan_entry_feedback (20260425000001), recipe_ingredients (US-281), and kids.aversions schema. Plays into US-297 (hide veggies) and US-296 (community wins) as escape hatches when no perfect match exists."
+      "passes": true,
+      "notes": "Completed: prior session built solver+page+chips+result cards+route+Recipes/Kids affordances (25 solver tests). This session added the missing AC surface — constraint relaxation panel (allow-N-aversions Slider + allow-swaps + hide-soft-blocks Switches with family_finder_constraint_relaxed telemetry), live 'Showing N recipes that work for X kids' count (memoized re-solve on kid selection), auto-curated 'Family wins' section (full-match w/ minKidScore>0, persisted to localStorage), one-swap fallback empty state, and family_finder_recipe_selected (minKidScore,kidCount) telemetry. Extracted pure applyRelaxation/familyWins/minKidScore into siblingMealFinder.ts with 7 new vitest. Deviation: implemented as SiblingMealFinder at /dashboard/sibling-meal-finder (prior session naming) rather than FamilyFinder /family-finder; functionally equivalent. Typecheck + vite build green."
     },
     {
       "id": "US-296",
@@ -4472,8 +4472,8 @@
         "Vitest: substitution selector unit tests asserting allergens are never returned, technique matches recipe category, ratios stay within sanity bounds (e.g., max 25% volume substitution to preserve flavor)"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": "Viral feature. Touches recipes schema and adds ingredient_substitutions. Pairs with US-295 as the 'one-swap' fallback when no recipe satisfies all kids."
+      "passes": true,
+      "notes": "Verified complete (web): generateHiddenVeggieRewrites client-side engine (15 vitest: allergens never returned, technique matches recipe category, ratio sanity bounds) backed by hidden_veggie_techniques catalog; additive migration 20260513000000 (techniques table + RLS, recipes ADD COLUMN parent_recipe_id/variant_kind); HideVeggiesDialog with useFeatureLimit('hidden_veggies_rewrite') gate, side-by-side ingredient diff + stealth tips + nutrition delta, save-as-variant via addRecipe(parent_recipe_id), share affordance, full hidden_veggies_* telemetry; wired into RecipeDetailView. Deviations (consistent with US-298 client-first pattern): substitution logic is client-side via the catalog table rather than a recipe-hide-veggies edge fn; variant is a parent-linked cloned recipe rather than a separate ingredient_substitutions table. Typecheck + vite build + 29 tests green."
     },
     {
       "id": "US-298",
@@ -4491,8 +4491,8 @@
         "Telemetry: variety_chip_shown (recipeId, score), variety_twist_sheet_opened, variety_twist_chosen (originalRecipeId, twistRecipeId, similarityScore), variety_nudge_toggled (enabled: bool)"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": "Foundational utility — Tonight Mode (US-293) consumes the score in its ranking. Cheap to ship, big perceived intelligence. iOS parity follow-up."
+      "passes": true,
+      "notes": "Completed: varietyFatigue util + varietyTwistPicker (26 vitest), planner chip + TwistMealSheet, MostRepeatedMealsCard Dashboard insight, AccountSettings 'Variety nudges' toggle (useVarietyNudgePref) gating banner/chip/card with variety_nudge_toggled telemetry. Pref persisted client-side (localStorage) with additive user_preferences table (20260516000000) as forward-compat server home. Typecheck + vite build green."
     },
     {
       "id": "US-299",

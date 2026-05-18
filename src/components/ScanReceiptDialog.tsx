@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { analytics } from "@/lib/analytics";
+import { useFeatureLimit } from "@/hooks/useFeatureLimit";
 import { logger } from "@/lib/logger";
 import type { Food, FoodCategory } from "@/types";
 
@@ -101,6 +102,7 @@ function fuzzyMatchFood(name: string, foods: Food[]): Food | null {
 
 export function ScanReceiptDialog({ open, onClose }: Props) {
   const { foods, addFoods } = useApp();
+  const { checkFeatureLimit, incrementUsage } = useFeatureLimit();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stage, setStage] = useState<"upload" | "parsing" | "review" | "saving">("upload");
   const [merchant, setMerchant] = useState<string | null>(null);
@@ -134,6 +136,16 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
       }
       if (file.size > 10 * 1024 * 1024) {
         toast.error("Image too large — max 10 MB");
+        return;
+      }
+
+      // US-294: free tier = 3 receipt scans/month; paid = unlimited.
+      const limit = await checkFeatureLimit("receipt_scan");
+      if (!limit.allowed) {
+        analytics.trackEvent("receipt_scan_limit_reached", {
+          current: limit.current ?? null,
+          limit: limit.limit ?? null,
+        });
         return;
       }
 
@@ -201,6 +213,9 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
         setCurrency(data.currency);
         setRows(parsedRows);
         setStage("review");
+        // Count the scan against the monthly quota only once the parse
+        // actually produced a reviewable result.
+        void incrementUsage("receipt_scan");
       } catch (err) {
         logger.error("receipt scan failed", err);
         toast.error("Receipt scan failed. Try again or use bulk add.");
@@ -208,7 +223,7 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
         setStage("upload");
       }
     },
-    [foods],
+    [foods, checkFeatureLimit, incrementUsage],
   );
 
   const updateRow = useCallback(
