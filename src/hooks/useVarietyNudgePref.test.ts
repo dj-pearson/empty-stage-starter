@@ -20,7 +20,7 @@ describe('useVarietyNudgePref', () => {
   });
 
   it('loads a persisted false value', () => {
-    // @ts-ignore - localStorage is a vitest mock in setup
+    // @ts-expect-error - localStorage is a vitest mock in setup
     localStorage.getItem.mockReturnValueOnce(JSON.stringify(false));
     const { result } = renderHook(() => useVarietyNudgePref());
     expect(result.current.enabled).toBe(false);
