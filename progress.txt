@@ -2576,3 +2576,20 @@ These are deliberately out of scope for this branch — `npm run build` (Vite) c
 - Branch: `claude/ralph-ai-stories-improvements-v2HkM`. PRD: 236/282 passing.
 
 ---
+
+
+## 2026-05-17 - US-294: Receipt-scan — closed two client gaps (PARTIAL, still false)
+- What was implemented: prior session shipped `functions/parse-receipt-image`, `ScanReceiptDialog` (upload→parse→review→save via `addFoods`, confidence rows, "Skip <0.7" bulk action, full `receipt_*` telemetry) wired into `Pantry.tsx`. This session closed two clear, verifiable AC gaps.
+- Files changed:
+  - `src/components/ScanReceiptDialog.tsx` - `useFeatureLimit('receipt_scan')` gate before the parse call (free tier 3/month; `receipt_scan_limit_reached` telemetry); `incrementUsage('receipt_scan')` once a parse yields a reviewable result.
+  - `src/pages/Grocery.tsx` - "Scan Receipt" quick action + `ScanReceiptDialog` mount (the AC's post-shop flow); reuses the same dialog as Pantry.
+- **Why still `passes: false` (honest):** the remaining ACs need Supabase + a types regen, which this environment can't verify:
+  - `grocery_item_sources` INSERT on confirm for price-history (`source='receipt'`, merchant tag) — the table is NOT in `src/integrations/supabase/types.ts`, so a typed write won't compile and an untyped cast would be a fragile, unverifiable shortcut. Deferred.
+  - Vitest fixtures (5 anonymized receipt JSON outputs) + an integration test asserting post-confirm `foods` rows — needs the edge fn + DB.
+  - Server-side `smart_product_catalog` fuzzy match (>0.85 → `matchedFoodId`): the client currently does `fuzzyMatchFood` against local `foods` instead. Functional, but not the AC's server path.
+- **Learnings for future iterations:**
+  - When a target table is absent from `types.ts` and no local Supabase exists to regen, do NOT reach for an untyped `supabase.from(...)` cast just to tick an AC — leave the story honest and document the seam. The bar is "verifiable here", not "looks done".
+  - `useFeatureLimit().checkFeatureLimit(key)` takes an arbitrary string (server RPC owns the key list); mirror the `HideVeggiesDialog` pattern: gate before the expensive call, `incrementUsage` only on real success.
+- Branch: `claude/ralph-ai-stories-improvements-v2HkM`. PRD: 236/282 passing (unchanged — US-294 stays false).
+
+---
