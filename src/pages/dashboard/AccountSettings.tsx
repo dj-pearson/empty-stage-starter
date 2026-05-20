@@ -60,6 +60,7 @@ import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { Switch } from "@/components/ui/switch";
 import { useVarietyNudgePref } from "@/hooks/useVarietyNudgePref";
 import { useAutoRestockPref } from "@/hooks/useAutoRestockPref";
+import { usePickyWinSharePref } from "@/hooks/usePickyWinSharePref";
 import { EmailPreferences } from "@/components/EmailPreferences";
 import { DataImport } from "@/components/settings/DataImport";
 import { BindEmailFlow } from "@/components/auth/BindEmailFlow";
@@ -75,6 +76,10 @@ export default function AccountSettings() {
     setEnabled: setAutoRestockEnabled,
     setLeadDays: setAutoRestockLeadDays,
   } = useAutoRestockPref();
+  const {
+    enabled: shareChainOutcomesEnabled,
+    setEnabled: setShareChainOutcomesEnabled,
+  } = usePickyWinSharePref();
   const [portalLoading, setPortalLoading] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -993,6 +998,31 @@ export default function AccountSettings() {
                     onCheckedChange={setVarietyNudgesEnabled}
                     aria-label="Toggle variety nudges"
                   />
+                </div>
+
+                {/* US-296: Share food-chain outcomes anonymously to the
+                    Picky-Eater Win Network. Default ON; opt-out stops
+                    contributions but doesn't disable reading other
+                    families' wins (that's gated by the picky_win_network
+                    feature flag, default OFF in prod until privacy/
+                    security review approves the surface). */}
+                <div className="border-t pt-4 space-y-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="share-chain-outcomes" className="text-sm font-medium">
+                        Share food-chain outcomes anonymously
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Help other families with picky eaters by contributing your try-bite outcomes. No kid names, ages, or identifiers are shared.
+                      </p>
+                    </div>
+                    <Switch
+                      id="share-chain-outcomes"
+                      checked={shareChainOutcomesEnabled}
+                      onCheckedChange={setShareChainOutcomesEnabled}
+                      aria-label="Toggle anonymous food-chain outcome sharing"
+                    />
+                  </div>
                 </div>
 
                 {/* US-299: Auto-restock forecast toggle. When on, items
