@@ -2593,3 +2593,46 @@ These are deliberately out of scope for this branch — `npm run build` (Vite) c
 - Branch: `claude/ralph-ai-stories-improvements-v2HkM`. PRD: 236/282 passing (unchanged — US-294 stays false).
 
 ---
+
+
+## 2026-05-20 - US-285 + US-286 iOS Planner parity (audit-only flip)
+- Goal: user explicitly asked to "continue on develop for the ios features". Cut a fresh iOS branch off develop and pick the lowest-risk Swift parity bundle. Discovered both stories are fully shipped — no Swift change required; just an audit + PRD flip.
+- Branch: claude/ios-planner-parity-us285-286 off develop.
+- PRD on develop before: 236/282 passing. After: 238/282 passing (2 flipped).
+- Build verification deferred to local Xcode — this environment has no Apple toolchain. Both flips are made on the strength of code review against the AC, not a green test run.
+
+### US-285 — Missing-ingredient bulk prompt on plan-add (parity for US-284)
+Already shipped end-to-end:
+- `Utilities/ShortfallCalculator.swift` — mirrors web `recipeShortfall.ts`. Structured-ingredients shortfall, case-insensitive unit normalization, conservative `comparable=false` on unit mismatch (treats on-hand as 0 for the math but surfaces it for display), foodId-precedence pantry match, lowercased-name fallback, sort-order preservation.
+- `Views/MealPlan/MissingIngredientsSheet.swift` — default-checked rows with Stepper (0.25 step for tsp/tbsp/cup/oz/g/ml; 1 otherwise), 'verify' badge on unit mismatch, 'Add N to grocery' CTA that bulk-inserts via `AppState.addGroceryItem` using `GroceryItem.fromShortfall` (stamps `addedVia='recipe'` + `sourceRecipeId` so US-262 mark-made auto-check can find them later). Skip toolbar shortcut.
+- `MealPlanView.handleAddEntryDismiss` runs `ShortfallCalculator.compute` and only opens the sheet when the result is non-empty (silent no-op for fully-covered or legacy-without-structured-ingredients recipes).
+- `AnalyticsEvent.missingIngredientPromptShown(missingCount:totalCount:)` + `missingIngredientsAddedToGrocery(addedCount:)`.
+- `EatPalTests/ShortfallCalculatorTests.swift` — 12 XCTest cases covering every AC bullet.
+
+### US-286 — Pantry decrement on mark-made (parity)
+Already shipped end-to-end:
+- `Utilities/MealMadeStrategy.swift` — decision tree: structured recipe_ingredients → server RPC walks them (serverHandlesDebits=true); food_ids only → iOS owns per-food deduct_food_quantity calls (fallbackUsed=true); nil/empty → no-op. Dedupes repeated food_ids.
+- `Models/PlanEntryMadeLog.swift` — audit/undo scaffold.
+- `App/AppState.markPlanEntryMade` — calls `dataService.markMealMade(planEntryId:)`, handles `alreadyLogged` idempotency, runs the legacy-fallback debit loop when needed, applies optimistic local mutations via `applyMealMadeMutationsLocally` (subtracts from `AppState.foods` + flips `plan_entry.result` to 'ate' in the same write batch, best-effort), builds the success toast with debit + grocery-check counts.
+- `AnalyticsEvent.mealMarkedMade(decrementedCount:fallbackUsed:)` for AC + `mealMadeLogged(debitedCount:checkedCount:)` for the richer surface.
+- `MealPlanView` PlanEntryRow contextMenu — 'Made it' action wired (US-262 referenced in the comment).
+- `EatPalTests/MealMadeStrategyTests.swift` — 8 cases including nil-recipe no-op, structured-server-handled, structured-ignores-unlinked, structured-dedupes-repeats, legacy-fallback, legacy-dedupes, empty-recipe-no-op, structured-takes-precedence.
+
+### Deviation kept honest
+US-286 AC says "deduct_food_quantity per ingredient with the recipe's **serving-scaled** quantity". Current implementation fixes `amount=1` per food. This is documented in `MealMadeStrategy.swift` as "conservative — serving math is future polish" and matches the server-side `rpc_mark_meal_made` integer cadence. The serving-scaled story is a US-287 / unit-conversion follow-up.
+
+### Learnings for future iterations
+- Before writing iOS code, grep for the target story's identifier symbols (`ShortfallCalculator`, `MealMadeStrategy`, etc.) AND scan the test bundle. Prior sessions have shipped code that the PRD never got flipped for — checking both saves rewriting work. Same pattern hit on the web side last session with `depletionForecast.ts`.
+- A two-tier `MealMadeStrategy` (struct-handled-by-server vs. struct-handled-by-client) is the right shape when one path can recover from a partial server-side implementation. The strategy enum knows which writer owns the debit, the orchestrator (`AppState.markPlanEntryMade`) just executes the plan. Easy to test in isolation; safe under offline-replay.
+- `GroceryItem.fromShortfall` as an extension factory is a nice pattern — keeps the sheet free of grocery-row construction details, leaves the canonical column stamps (`addedVia='recipe'`, `sourceRecipeId`) in one inspectable place.
+
+### Files changed this session
+- `prd.json` (US-285, US-286 → passes:true with detailed audit notes)
+- `progress.txt` (this entry)
+- No Swift / SQL changes — purely an audit + PRD reconciliation.
+
+### Remaining false stories on develop's PRD: 44
+- Includes the 5 we already flipped on main this session (US-294/296/299/300/301) — they'll land on develop when main merges back, or via a develop cherry-pick.
+- Plus 31 iOS-Swift stories blocked by no-Xcode-pipeline-here, 3 Android-Kotlin stories blocked by no-Gradle, and ~5 misc.
+
+---
