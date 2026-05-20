@@ -49,6 +49,14 @@ struct FridgePhotoSheet: View {
                     if !detected.isEmpty || !manualItems.isEmpty {
                         ToolbarItem(placement: .confirmationAction) {
                             Button("Use \(confirmedNames.count)") {
+                                // US-260: funnel step 3 — user finalised the
+                                // ingredient list. Split kept vs manual so we
+                                // can see how often manual edits dominate.
+                                let detectedKept = detected.filter { keptIds.contains($0.id) }.count
+                                AnalyticsService.track(.fridgePhotoConfirmed(
+                                    keptCount: detectedKept,
+                                    manualCount: manualItems.count
+                                ))
                                 onConfirm(confirmedNames)
                                 dismiss()
                             }
@@ -205,6 +213,10 @@ struct FridgePhotoSheet: View {
 
     private func handlePicked(_ item: PhotosPickerItem) async {
         recognitionError = nil
+        // US-260: funnel step 1 — user committed to a photo (camera roll
+        // selection or capture). Fires before recognition so we can measure
+        // drop-off between "took a photo" and "got results back".
+        AnalyticsService.track(.fridgePhotoTaken)
         do {
             guard let data = try await item.loadTransferable(type: Data.self),
                   let image = UIImage(data: data) else {
@@ -222,7 +234,10 @@ struct FridgePhotoSheet: View {
                 keptIds = Set(items.filter { $0.confidence >= 0.6 }.map(\.id))
                 isRecognizing = false
 
-                AnalyticsService.track(.aiPlanGenerated(promptType: "fridge_photo_recognized"))
+                // US-260: funnel step 2 — recognition returned. Counts only,
+                // no detected food names (privacy contract documented on
+                // the AnalyticsEvent case).
+                AnalyticsService.track(.fridgePhotoRecognized(detectedCount: items.count))
             }
         } catch {
             await MainActor.run {

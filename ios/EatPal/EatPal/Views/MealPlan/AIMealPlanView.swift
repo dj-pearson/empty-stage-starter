@@ -206,6 +206,17 @@ struct AIMealPlanView: View {
             // signal about what's already on hand.
             availableIngredients: fridgeIngredients.isEmpty ? nil : fridgeIngredients
         )
+
+        // US-260: funnel step 4 — only fires when the user came through
+        // the fridge sheet. usedCount is the ingredient list the LLM was
+        // given; missingCount is the suggestions that didn't match any
+        // of those ingredients (i.e. what the user would still need to buy).
+        if !fridgeIngredients.isEmpty {
+            AnalyticsService.track(.fridgePlanGenerated(
+                usedCount: fridgeIngredients.count,
+                missingCount: missingFromFridge.count
+            ))
+        }
     }
 
     private func addSuggestionToPlan(_ suggestion: AIMealService.MealSuggestion) async {
