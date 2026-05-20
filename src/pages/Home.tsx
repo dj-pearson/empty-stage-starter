@@ -37,6 +37,8 @@ import { QuickLogModal } from "@/components/QuickLogModal";
 import { TonightModeCard } from "@/components/TonightModeCard";
 import { VarietyFatigueBanner } from "@/components/VarietyFatigueBanner";
 import { MostRepeatedMealsCard } from "@/components/MostRepeatedMealsCard";
+import { SeasonalRecallCard } from "@/components/SeasonalRecallCard";
+import { KidBirthdayCard } from "@/components/KidBirthdayCard";
 
 const OnboardingProgressBar = lazy(() =>
   import("@/components/OnboardingProgressBar").then(m => ({ default: m.OnboardingProgressBar }))
@@ -249,6 +251,12 @@ export default function Home() {
 
         {/* Variety Fatigue insight: top repeated meals this month (US-298) */}
         <MostRepeatedMealsCard />
+
+        {/* Kid birthday-driven re-evaluation (US-301) — shows only on a kid's birthday */}
+        <KidBirthdayCard />
+
+        {/* Seasonal recall (US-300) — "what worked last year" */}
+        <SeasonalRecallCard />
 
         {/* Tonight Mode (US-293) - "Dinner in 20 minutes" panic button.
             Shows the giant CTA only when it's late afternoon/evening AND no

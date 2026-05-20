@@ -25,51 +25,18 @@ import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { analytics } from "@/lib/analytics";
 import { useFeatureLimit } from "@/hooks/useFeatureLimit";
 import { logger } from "@/lib/logger";
-import type { Food, FoodCategory } from "@/types";
+import type { Food } from "@/types";
+import {
+  acceptedRowsToFoods,
+  averageConfidence,
+  parseResponseToReviewRows,
+  type ParseResponse,
+  type ReviewRow,
+} from "@/lib/receiptParse";
 
 interface Props {
   open: boolean;
   onClose: () => void;
-}
-
-interface ParsedLineItem {
-  rawText: string;
-  parsedName: string;
-  qty: number;
-  unit: string;
-  unitPrice: number;
-  lineTotal: number;
-  category: string;
-  confidence: number;
-}
-
-interface ParseResponse {
-  merchant: string | null;
-  purchasedAt: string | null;
-  currency: string;
-  lineItems: ParsedLineItem[];
-}
-
-interface ReviewRow extends ParsedLineItem {
-  uid: string;
-  accept: boolean;
-  matchedFoodId: string | null;
-}
-
-const VALID_CATEGORIES: FoodCategory[] = [
-  "protein",
-  "carb",
-  "dairy",
-  "fruit",
-  "vegetable",
-  "snack",
-];
-
-function categoryFromString(raw: string): FoodCategory {
-  const lower = raw.toLowerCase();
-  if (VALID_CATEGORIES.includes(lower as FoodCategory)) return lower as FoodCategory;
-  if (lower === "beverage" || lower === "frozen" || lower === "pantry") return "snack";
-  return "snack";
 }
 
 async function fileToBase64(file: File): Promise<string> {
@@ -87,17 +54,6 @@ async function fileToBase64(file: File): Promise<string> {
     };
     reader.readAsDataURL(file);
   });
-}
-
-function fuzzyMatchFood(name: string, foods: Food[]): Food | null {
-  const target = name.trim().toLowerCase();
-  if (!target) return null;
-  const exact = foods.find((f) => f.name.trim().toLowerCase() === target);
-  if (exact) return exact;
-  const startsWith = foods.find((f) => f.name.trim().toLowerCase().startsWith(target));
-  if (startsWith) return startsWith;
-  const contains = foods.find((f) => f.name.trim().toLowerCase().includes(target));
-  return contains ?? null;
 }
 
 export function ScanReceiptDialog({ open, onClose }: Props) {
@@ -165,25 +121,8 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
         if (invokeError) throw invokeError;
         if (!data) throw new Error("Empty response from receipt parser");
 
-        const seen = new Set<string>();
-        const parsedRows: ReviewRow[] = data.lineItems.map((it, idx) => {
-          let uid = `${it.parsedName}-${idx}`;
-          while (seen.has(uid)) uid = `${uid}-x`;
-          seen.add(uid);
-          const matched = fuzzyMatchFood(it.parsedName, foods);
-          return {
-            ...it,
-            uid,
-            accept: it.confidence >= 0.5,
-            matchedFoodId: matched?.id ?? null,
-          };
-        });
-
-        const avgConfidence =
-          parsedRows.length === 0
-            ? 0
-            : parsedRows.reduce((acc, r) => acc + r.confidence, 0) /
-              parsedRows.length;
+        const parsedRows: ReviewRow[] = parseResponseToReviewRows(data, foods);
+        const avgConfidence = averageConfidence(parsedRows);
 
         const durationMs = startRef.current
           ? Math.round(performance.now() - startRef.current)
@@ -255,14 +194,7 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
     }
     setStage("saving");
     try {
-      const newFoods: Omit<Food, "id">[] = acceptedRows.map((r) => ({
-        name: r.parsedName,
-        category: categoryFromString(r.category),
-        is_safe: true,
-        is_try_bite: false,
-        quantity: r.qty,
-        unit: r.unit || undefined,
-      }));
+      const newFoods: Omit<Food, "id">[] = acceptedRowsToFoods(acceptedRows);
       const ok = await addFoods(newFoods);
       if (!ok) throw new Error("addFoods returned false");
 

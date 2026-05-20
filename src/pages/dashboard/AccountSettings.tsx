@@ -59,6 +59,7 @@ import {
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { Switch } from "@/components/ui/switch";
 import { useVarietyNudgePref } from "@/hooks/useVarietyNudgePref";
+import { useAutoRestockPref } from "@/hooks/useAutoRestockPref";
 import { EmailPreferences } from "@/components/EmailPreferences";
 import { DataImport } from "@/components/settings/DataImport";
 import { BindEmailFlow } from "@/components/auth/BindEmailFlow";
@@ -68,6 +69,12 @@ export default function AccountSettings() {
   const [activeTab, setActiveTab] = useState("profile");
   const { enabled: varietyNudgesEnabled, setEnabled: setVarietyNudgesEnabled } =
     useVarietyNudgePref();
+  const {
+    enabled: autoRestockEnabled,
+    leadDays: autoRestockLeadDays,
+    setEnabled: setAutoRestockEnabled,
+    setLeadDays: setAutoRestockLeadDays,
+  } = useAutoRestockPref();
   const [portalLoading, setPortalLoading] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -970,7 +977,7 @@ export default function AccountSettings() {
                   Gentle nudges that help you keep dinners varied.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
                     <Label htmlFor="variety-nudges" className="text-sm font-medium">
@@ -986,6 +993,48 @@ export default function AccountSettings() {
                     onCheckedChange={setVarietyNudgesEnabled}
                     aria-label="Toggle variety nudges"
                   />
+                </div>
+
+                {/* US-299: Auto-restock forecast toggle. When on, items
+                    predicted to run out within `leadDays` are added to
+                    the active grocery list automatically. Off by default. */}
+                <div className="border-t pt-4 space-y-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="auto-restock" className="text-sm font-medium">
+                        Auto-add predicted run-outs
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Items forecast to run out soon get added to your grocery list automatically.
+                      </p>
+                    </div>
+                    <Switch
+                      id="auto-restock"
+                      checked={autoRestockEnabled}
+                      onCheckedChange={setAutoRestockEnabled}
+                      aria-label="Toggle auto-restock"
+                    />
+                  </div>
+                  {autoRestockEnabled && (
+                    <div className="flex items-center justify-between gap-4 pl-1">
+                      <Label htmlFor="auto-restock-lead" className="text-sm text-muted-foreground">
+                        Add when due within
+                      </Label>
+                      <select
+                        id="auto-restock-lead"
+                        value={autoRestockLeadDays}
+                        onChange={(e) => setAutoRestockLeadDays(Number(e.target.value))}
+                        className="rounded-md border bg-background px-2 py-1 text-sm"
+                        aria-label="Auto-restock lead days"
+                      >
+                        <option value={1}>1 day</option>
+                        <option value={2}>2 days</option>
+                        <option value={3}>3 days</option>
+                        <option value={5}>5 days</option>
+                        <option value={7}>1 week</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
