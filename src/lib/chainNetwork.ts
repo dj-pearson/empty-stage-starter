@@ -190,16 +190,38 @@ interface FoodAttemptForContribution {
 }
 
 /**
+ * Single source of truth for the "Share my food-chain outcomes anonymously"
+ * preference key. Mirrors `usePickyWinSharePref`. Default behaviour: ON.
+ * The pref is read lazily so server-render / native paths without
+ * localStorage get the default-ON behaviour and the existing aggregate
+ * keeps growing.
+ */
+const SHARE_PREF_KEY = 'eatpal.share_chain_outcomes';
+
+function isShareOptedIn(): boolean {
+  try {
+    if (typeof localStorage === 'undefined') return true;
+    const raw = localStorage.getItem(SHARE_PREF_KEY);
+    if (raw === null) return true; // default ON
+    return raw === 'true';
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Idempotently contribute every chain-suggestion source -> target where the
  * just-saved attempt's food_id matches a target. Best-effort: errors are
  * swallowed. Pickiness is read from the kid record if available.
  *
- * Returns the number of contributions accepted.
+ * Returns the number of contributions accepted. Returns 0 when the user
+ * has opted out of sharing (US-296 privacy contract).
  */
 export async function recordContributionsFromAttempt(
   attempt: FoodAttemptForContribution
 ): Promise<number> {
   if (!attempt?.id || !attempt?.food_id) return 0;
+  if (!isShareOptedIn()) return 0;
   // Server only counts success/partial/refused; map common variants.
   const rawOutcome = String(attempt.outcome ?? '').toLowerCase();
   let outcome: ChainOutcome | null = null;

@@ -85,6 +85,11 @@ export interface GroceryItem {
   added_by_user_id?: string;
   added_via?: string;
   priority?: 'low' | 'medium' | 'high';
+  // Surfaced for client-side velocity-based forecasting (US-299). The DB
+  // column has always been populated; we only just started reading it.
+  created_at?: string;
+  restock_reason?: string;
+  auto_generated?: boolean;
 }
 
 export interface Recipe {
