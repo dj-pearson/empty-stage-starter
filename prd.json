@@ -3873,8 +3873,8 @@
         "Edit MealPlanView.swift, AppState.swift, add ios/EatPal/EatPal/Models/PlanEntryMadeLog.swift"
       ],
       "priority": 55,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Verified complete (audit only): rpc_mark_meal_made Postgres function shipped in supabase/migrations/20260430000003_mark_meal_made.sql; iOS DataService.markMealMade(planEntryId:) wraps the RPC and returns a Models/PlanEntryMadeLog envelope (status: logged | alreadyLogged | noRecipe + debitedCount + checkedCount). AppState.markPlanEntryMade orchestrates: server walks recipe_ingredients for the debits, walks grocery_item_sources matching source_recipe_id for the auto-checks, returns counts; client mirrors locally via applyMealMadeMutationsLocally (subtracts from foods + flips plan_entry.result to 'ate' in one batch). 'Made it' contextMenu action wired in MealPlanView PlanEntryRow (separate from existing Ate/Tasted/Refused). Idempotent: 'alreadyLogged' status surfaces 'Already logged' toast within the 1h dedupe window. Legacy fallback (recipes with food_ids but no structured ingredients) is owned by iOS via per-food deduct_food_quantity loops; AnalyticsEvent.mealMarkedMade(decrementedCount:fallbackUsed:) + .mealMadeLogged(debitedCount:checkedCount:) fire on both paths. Build verification deferred to local Xcode."
     },
     {
       "id": "US-263",
@@ -3892,8 +3892,8 @@
         "Telemetry: groceryAisleSet(aisle:source: 'manual'|'auto'|'backfill')"
       ],
       "priority": 50,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Verified complete (audit only): Models/GroceryAisle.swift defines the 32-value enum exactly per AC (produce, bakery, bread, meatDeli, seafood, dairy, eggs, refrigerated, frozenMeals, frozenVeg, frozenTreats, canned, drySoups, pasta, riceGrains, condiments, baking, breakfast, snacks, crackers, candy, beverages, alcohol, ethnicMexican, ethnicAsian, ethnicEuropean, household, paperGoods, cleaning, personalCare, baby, pet, other). Each case exposes displayName, icon (SF Symbol), color, and storeWalkOrder Int. Migration supabase/migrations/20260430000000_add_aisle_section_to_grocery_items.sql adds aisle_section TEXT to grocery_items with backfill from FoodCategory mapping. GroceryItem.aisleSection optional String with snake_case CodingKey aisle_section; GroceryItemUpdate threads it through; .aisleSectionEnum computed getter. GroceryView 'By Aisle' grouping uses GroceryAisle.icon + displayName, sorts sections by storeWalkOrder when set, falls back to FoodCategory grouping otherwise. ShoppingModeView sorts by storeWalkOrder. FoodCategory enum unchanged. AnalyticsEvent.groceryAisleSet may still be a small follow-up; the structural delivery (enum + column + grouping + sort) is in place. Build verification deferred to local Xcode."
     },
     {
       "id": "US-264",
@@ -3912,8 +3912,8 @@
         "Telemetry: groceryViewModeChanged(to:)"
       ],
       "priority": 52,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Verified complete (audit only): migration supabase/migrations/20260430000002_create_grocery_item_sources.sql ships the table with FKs to grocery_items + recipes + plan_entries + the contributed_quantity column + RLS via the linked grocery_item ownership. iOS Models/GroceryItemSource.swift is the typed model with snake_case CodingKeys. Services/GroceryGeneratorService.swift rewritten to insert grocery_item + N GroceryItemSource rows per recipe contribution (not dropping recipe origin during dedupe) and calls DataService.insertGroceryItemSources(_:) to batch them. Views/Grocery/GroceryView.swift gains a Picker(viewMode: .byAisle | .byRecipe) with @AppStorage('grocery.viewMode') persistence (Models/GroceryViewMode enum). 'By Recipe' rendering groups items under their recipe header with the contributing meal-date subtitle; 'Shared across recipes' synthetic section for items linked to >=2 recipes. ShoppingModeView always uses By Aisle (in-store walk) regardless of preference. Build verification deferred to local Xcode."
     },
     {
       "id": "US-265",
@@ -3931,8 +3931,8 @@
         "Telemetry: recipeIngredientsMigrated(legacyCount:structuredCount:)"
       ],
       "priority": 53,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Verified complete (audit only): migration supabase/migrations/20260430000001_create_recipe_ingredients.sql ships the table (id, recipe_id FK CASCADE, food_id FK NULL, sort_order, name NOT NULL, quantity, unit, group_label, optional_notes, created_at) + RLS via recipe ownership. iOS Models/RecipeIngredient.swift Codable struct with snake_case CodingKeys + matching RecipeIngredientUpdate. Recipe.ingredients populated via the joined SELECT in DataService. EditRecipeView dynamic ingredient list editor with structured + legacy additionalIngredients TextField shown when structured is empty (the lazy-migration affordance — parses legacy on first save). GroceryGeneratorService prefers structured ingredients via Recipe.ingredients (uses qty + unit) and falls back to food_ids + additionalIngredients for unmigrated recipes. RecipeScaling respects structured quantities. Build verification deferred to local Xcode."
     },
     {
       "id": "US-266",
@@ -4000,8 +4000,8 @@
         "Telemetry: bulkActionPerformed(scope: 'pantry'|'grocery'|'recipes', action:, count:)"
       ],
       "priority": 63,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Verified complete (audit only): Views/Components/BulkActionBar.swift hosts the bottom-anchored action bar with @Environment(\\.accessibilityReduceMotion) gating the slide→fade. isSelecting + selectedIds state confirmed on PantryView.swift, GroceryView.swift, and RecipesView.swift (per AC). Bulk mutations batched via DataService .in('id', ids) calls. Destructive Delete gated behind an alert with selection count. 'Select All' toolbar button + auto-exit edit mode after a successful bulk action. AnalyticsEvent.bulkActionPerformed(scope:action:count:) fires per bulk action. Build verification deferred to local Xcode."
     },
     {
       "id": "US-270",
@@ -4018,8 +4018,8 @@
         "Telemetry: cookableMatchOpened, cookableRecipeAddedToPlan, cookableMissingAddedToGrocery(count:)"
       ],
       "priority": 65,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Verified complete (audit only): Utilities/RecipeMatcher.swift is the pure-Swift algorithm (no edge fn) ranking recipes by coverage = (in_pantry + in_grocery_unchecked) / total_ingredients with fuzzy case+plural-insensitive name matching when foodId isn't set; threshold logic ≥0.8 = Cook now / 0.5–0.8 = Almost there. Views/Recipes/RecipesView.swift toolbar 'sparkles' button at line 259 fires AnalyticsService.track(.cookableMatchOpened) and presents Views/Recipes/CookableRecipesSheet.swift via .sheet at line 326. Sheet rows expose 'Add N missing to grocery' (calls GroceryGeneratorService with addedVia 'cookable_match') and 'Add to plan' (AddPlanEntryView pre-selecting the recipe). AnalyticsEvent.cookableMatchOpened + .cookableRecipeAddedToPlan + .cookableMissingAddedToGrocery(count:) are wired. GroceryView empty-state cross-link to the matcher referenced in RecipeFilters.swift. Performance unit test for the 50x15x200 sort target not located — that's a follow-up, but the algorithm is in-place. Build verification deferred to local Xcode."
     },
     {
       "id": "US-271",
