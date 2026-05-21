@@ -182,6 +182,14 @@ final class RealtimeService {
             }
         case .update(let action):
             if let item: GroceryItem = try? action.decodeRecord(decoder: JSONDecoder.supabase) {
+                // US-255: detect simultaneous local edit on the same row.
+                // Last-write-wins applies (we still take the realtime item),
+                // but the toast warns the user another member edited too.
+                await detectAndAnnounceConflict(
+                    table: .groceryItems,
+                    rowId: item.id,
+                    displayName: item.name
+                )
                 if let index = appState.groceryItems.firstIndex(where: { $0.id == item.id }) {
                     appState.groceryItems[index] = item
                 }
@@ -203,6 +211,14 @@ final class RealtimeService {
             }
         case .update(let action):
             if let entry: PlanEntry = try? action.decodeRecord(decoder: JSONDecoder.supabase) {
+                // US-255: resolve a display name from the linked recipe or
+                // food; plan entries don't have a self-describing field.
+                let title = resolvePlanEntryTitle(entry, appState: appState)
+                await detectAndAnnounceConflict(
+                    table: .planEntries,
+                    rowId: entry.id,
+                    displayName: title
+                )
                 if let index = appState.planEntries.firstIndex(where: { $0.id == entry.id }) {
                     appState.planEntries[index] = entry
                 }
@@ -212,6 +228,65 @@ final class RealtimeService {
                 appState.planEntries.removeAll { $0.id == id }
             }
         }
+    }
+
+    /// US-255: if a remote UPDATE on `(table, rowId)` lands inside the
+    /// 5s conflict window of a local edit on that same row, surface a
+    /// one-time "kept your version" toast and fire telemetry. Best-effort
+    /// — failures are swallowed so the row still updates cleanly.
+    private func detectAndAnnounceConflict(
+        table: ConflictDetector.Table,
+        rowId: String,
+        displayName: String
+    ) async {
+        // The realtime UPDATE we just received could be our own write's
+        // echo. consumeEcho returns true (and decrements the counter)
+        // when there's a pending echo within the 2s echo window — in
+        // that case we skip the conflict check entirely. A real
+        // household-mate write arrives without a pending echo OR after
+        // the echo window has passed; both bypass this guard.
+        let isOwnEcho = await ConflictDetector.shared.consumeEcho(table, rowId: rowId)
+        if isOwnEcho { return }
+
+        let (recent, ageMs) = await ConflictDetector.shared.wasRecentLocalEdit(
+            table,
+            rowId: rowId
+        )
+        guard recent else { return }
+        let shouldFire = await ConflictDetector.shared.shouldFireToast(table, rowId: rowId)
+        guard shouldFire else { return }
+
+        let kindNoun: String
+        switch table {
+        case .groceryItems: kindNoun = displayName
+        case .planEntries:  kindNoun = displayName
+        }
+        // Honest message: we don't have a `last_modified_by_user_id`
+        // column today (follow-up migration), so we can't safely name
+        // the conflicting member. "Your household" gives the parent the
+        // actionable signal without misattributing the edit.
+        ToastManager.shared.info(
+            "Kept your version",
+            message: "Your household also edited \(kindNoun) just now."
+        )
+        AnalyticsService.track(.householdConflictResolved(
+            table: table.rawValue,
+            conflictAgeMs: ageMs ?? 0
+        ))
+    }
+
+    /// US-255: try to surface something human-readable for the toast.
+    /// Resolves a plan entry to its recipe name, falling back to food
+    /// name, then a generic label.
+    private func resolvePlanEntryTitle(_ entry: PlanEntry, appState: AppState) -> String {
+        if let rid = entry.recipeId,
+           let recipe = appState.recipes.first(where: { $0.id == rid }) {
+            return recipe.name
+        }
+        if let food = appState.foods.first(where: { $0.id == entry.foodId }) {
+            return food.name
+        }
+        return "a planned meal"
     }
 
     private func handleRecipesChange(_ change: AnyAction, appState: AppState) async {

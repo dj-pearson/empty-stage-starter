@@ -223,6 +223,11 @@ enum AnalyticsEvent {
     case fridgePhotoConfirmed(keptCount: Int, manualCount: Int)
     case fridgePlanGenerated(usedCount: Int, missingCount: Int)
 
+    // US-255: Household 5s last-write-wins conflict toast. Fires when
+    // a household-mate's UPDATE arrives within the conflict window of a
+    // local edit on the same row.
+    case householdConflictResolved(table: String, conflictAgeMs: Int)
+
     // Auth lifecycle — coarse signals only, never tied to email/name
     case signInStarted(method: String)
     case signInCompleted(method: String)
@@ -298,6 +303,7 @@ enum AnalyticsEvent {
         case .fridgePhotoRecognized:    return "fridge_photo_recognized"
         case .fridgePhotoConfirmed:     return "fridge_photo_confirmed"
         case .fridgePlanGenerated:      return "fridge_plan_generated"
+        case .householdConflictResolved: return "household_conflict_resolved"
         }
     }
 
@@ -331,7 +337,8 @@ enum AnalyticsEvent {
              .receiptScanStarted, .receiptParseCompleted, .receiptItemsAccepted,
              .receiptScanFailed, .receiptFirstScanCompleted,
              .fridgePhotoTaken, .fridgePhotoRecognized,
-             .fridgePhotoConfirmed, .fridgePlanGenerated:
+             .fridgePhotoConfirmed, .fridgePlanGenerated,
+             .householdConflictResolved:
             return "feature"
         case .paywallShown, .purchaseCompleted:
             return "monetization"
@@ -500,6 +507,11 @@ enum AnalyticsEvent {
             return [
                 "used_count": String(usedCount),
                 "missing_count": String(missingCount)
+            ]
+        case .householdConflictResolved(let table, let conflictAgeMs):
+            return [
+                "table": table,
+                "conflict_age_ms": String(conflictAgeMs)
             ]
         }
     }

@@ -34,14 +34,35 @@ struct Toast: Identifiable, Equatable {
     let title: String
     let message: String?
     let duration: TimeInterval
+    /// US-257: Optional retry closure. When present, the toast renders a
+    /// "Retry" button alongside the dismiss control. Running the closure
+    /// also dismisses the toast (caller can re-toast on the next failure).
+    /// Stored as `@MainActor (Sendable)?` so it lives inside an Equatable
+    /// struct without breaking the `id`-based equality below.
+    let retry: (@MainActor () async -> Void)?
 
-    init(type: ToastType, title: String, message: String? = nil, duration: TimeInterval = 3.0) {
+    init(
+        type: ToastType,
+        title: String,
+        message: String? = nil,
+        duration: TimeInterval = 3.0,
+        retry: (@MainActor () async -> Void)? = nil
+    ) {
         self.type = type
         self.title = title
         self.message = message
-        self.duration = duration
+        // Error toasts with retry stay on screen a bit longer — the user
+        // needs time to read the title + decide whether to tap Retry.
+        if retry != nil && duration < 5 {
+            self.duration = 5
+        } else {
+            self.duration = duration
+        }
+        self.retry = retry
     }
 
+    /// Equality is identity-based — closures aren't Equatable, and toast
+    /// rows are keyed by `id` in the manager queue anyway.
     static func == (lhs: Toast, rhs: Toast) -> Bool {
         lhs.id == rhs.id
     }
@@ -70,19 +91,21 @@ final class ToastManager: ObservableObject {
         show(Toast(type: .success, title: title, message: message))
     }
 
-    func error(_ title: String, message: String? = nil) {
-        show(Toast(type: .error, title: title, message: message, duration: 4.0))
+    func error(_ title: String, message: String? = nil, retry: (@MainActor () async -> Void)? = nil) {
+        show(Toast(type: .error, title: title, message: message, duration: 4.0, retry: retry))
     }
 
     /// US-247: Show a toast for an `AppError` with consistent title + recovery
     /// hint, and forward the underlying system error to Sentry so we still get
     /// breadcrumbs without leaking the raw description to the user.
-    func show(_ appError: AppError) {
+    /// US-257: Optional `retry` closure renders a "Retry" button on the toast.
+    func show(_ appError: AppError, retry: (@MainActor () async -> Void)? = nil) {
         show(Toast(
             type: appError.telemetryCategory == "offline" ? .warning : .error,
             title: appError.title,
             message: appError.recoveryHint,
-            duration: 4.0
+            duration: 4.0,
+            retry: retry
         ))
         if let underlying = appError.underlying {
             SentryService.capture(underlying, extras: [
@@ -96,8 +119,14 @@ final class ToastManager: ObservableObject {
     /// `error.localizedDescription` into a toast body again.
     ///
     ///     catch { toast.show(error, as: { .save(entity: "food", underlying: $0) }) }
-    func show(_ error: Error, as context: (Error) -> AppError) {
-        show(AppError.wrap(error, as: context))
+    /// US-257: pass `retry:` to attach a one-tap re-run for transient failures.
+    ///
+    ///     catch {
+    ///         toast.show(error, as: { .save(entity: "food", underlying: $0) },
+    ///                    retry: { try? await appState.addFood(food) })
+    ///     }
+    func show(_ error: Error, as context: (Error) -> AppError, retry: (@MainActor () async -> Void)? = nil) {
+        show(AppError.wrap(error, as: context), retry: retry)
     }
 
     func warning(_ title: String, message: String? = nil) {
@@ -153,6 +182,8 @@ struct ToastView: View {
     let toast: Toast
     let onDismiss: () -> Void
 
+    @State private var isRetrying = false
+
     var body: some View {
         HStack(spacing: AppTheme.Spacing.md) {
             Image(systemName: toast.type.icon)
@@ -173,6 +204,33 @@ struct ToastView: View {
             }
 
             Spacer()
+
+            // US-257: Retry button — only renders when the toast was
+            // built with a retry closure. Running it also dismisses the
+            // toast so the user gets visual feedback.
+            if let retry = toast.retry {
+                Button {
+                    guard !isRetrying else { return }
+                    isRetrying = true
+                    Task { @MainActor in
+                        await retry()
+                        onDismiss()
+                    }
+                } label: {
+                    if isRetrying {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(width: 14, height: 14)
+                    } else {
+                        Text("Retry")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(toast.type.color)
+                    }
+                }
+                .disabled(isRetrying)
+                .accessibilityLabel("Retry")
+                .accessibilityHint("Re-runs the action that just failed.")
+            }
 
             Button {
                 onDismiss()
