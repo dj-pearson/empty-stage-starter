@@ -14,7 +14,7 @@
  * Production: Set ALLOWED_ORIGINS environment variable with your domain
  * Example: ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
  */
-const getAllowedOrigin = (requestOrigin: string | null): string => {
+const getAllowedOrigin = (requestOrigin: string | null | undefined): string => {
   // Get allowed origins from environment variable (comma-separated)
   const allowedOrigins = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').map(o => o.trim());
 

@@ -68,9 +68,14 @@ export class AIServiceV2 {
   private supabase: any;
 
   constructor() {
-    // Load configuration from environment variables (Coolify Team Shared)
+    // Load configuration from environment variables (Coolify Team Shared).
+    // The team var historically used "anthropic", but the internal provider
+    // enum is "claude" — normalize so a non-prefixed DEFAULT_AI_MODEL doesn't
+    // fall through detectProvider() to an unhandled "anthropic" and throw
+    // "Unsupported provider".
+    const rawProvider = Deno.env.get('AI_DEFAULT_PROVIDER') || 'claude';
     this.config = {
-      defaultProvider: (Deno.env.get('AI_DEFAULT_PROVIDER') || 'anthropic') as AIProvider,
+      defaultProvider: (rawProvider === 'anthropic' ? 'claude' : rawProvider) as AIProvider,
       defaultModel: Deno.env.get('DEFAULT_AI_MODEL') || 'claude-sonnet-4-5-20250929',
       lightweightModel: Deno.env.get('LIGHTWEIGHT_AI_MODEL') || 'claude-haiku-4-5-20251001',
       claudeApiKey: Deno.env.get('CLAUDE_API_KEY'),
@@ -344,7 +349,7 @@ export class AIServiceV2 {
     const testResults: any = {};
 
     // Check required environment variables
-    if (!this.config.claudeApiKey && this.config.defaultProvider === 'anthropic') {
+    if (!this.config.claudeApiKey && this.config.defaultProvider === 'claude') {
       errors.push('CLAUDE_API_KEY not configured');
     }
 
