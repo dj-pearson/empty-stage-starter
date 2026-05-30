@@ -16,7 +16,12 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: s } }) => setSession(s ?? null));
+    supabase.auth
+      .getSession()
+      .then(({ data: { session: s } }) => setSession(s ?? null))
+      // Fail open: a network error must not leave session === undefined, which
+      // would hang the app on the loading spinner forever (esp. on bad networks).
+      .catch(() => setSession(null));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s ?? null);

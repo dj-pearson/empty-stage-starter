@@ -6,17 +6,28 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const FUNCTIONS_URL = import.meta.env.VITE_FUNCTIONS_URL;
 
-// Flag to track if Supabase is properly configured
-export const isSupabaseConfigured = !!(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
+// A real Supabase anon key is a JWT and always starts with "eyJ". Our CI
+// injects the literal "placeholder-for-ci-build" so PR builds don't need the
+// secret — but if that placeholder (or an empty value) ever reaches a deployed
+// bundle, the client is created with a bogus apikey and EVERY request, sign-in
+// included, fails with 401 "Invalid API key". Treat that as "not configured"
+// so we fall back to the mock client instead of silently 401-ing forever.
+const hasValidAnonKey = !!SUPABASE_PUBLISHABLE_KEY && SUPABASE_PUBLISHABLE_KEY.startsWith('eyJ');
 
-// Log warning in development if Supabase is not configured
-if (!isSupabaseConfigured && import.meta.env.DEV) {
-  console.warn(
-    '[EatPal] Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.\n' +
-    'Create a .env file in the project root with:\n' +
-    '  VITE_SUPABASE_URL=https://api.tryeatpal.com\n' +
-    '  VITE_SUPABASE_ANON_KEY=<your-anon-key>\n' +
-    'The app will run in limited mode without database functionality.'
+// Flag to track if Supabase is properly configured
+export const isSupabaseConfigured = !!SUPABASE_URL && hasValidAnonKey;
+
+// Surface misconfiguration LOUDLY, in production too. A silent failure here is
+// indistinguishable from "sign-in is broken" with nothing in the console — the
+// exact symptom behind the desktop sign-in reports.
+if (!isSupabaseConfigured) {
+  const detail = !SUPABASE_URL
+    ? 'VITE_SUPABASE_URL is missing'
+    : 'VITE_SUPABASE_ANON_KEY is missing or a placeholder (expected a JWT starting with "eyJ")';
+  console.error(
+    `[EatPal] Supabase is not properly configured: ${detail}. ` +
+    'Authentication and database access are disabled. ' +
+    'Check the deploy build environment (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).'
   );
 }
 
@@ -43,13 +54,16 @@ const mockChannel = {
   unsubscribe: () => {},
 };
 
-// Create mock auth object for when Supabase is not configured
+// Create mock auth object for when Supabase is not configured.
+// Mirror every auth method the app actually calls — a missing method here
+// turns a config problem into a `TypeError: ... is not a function` crash.
 const mockAuth = {
   getSession: () => Promise.resolve({ data: { session: null }, error: null }),
   getUser: () => Promise.resolve({ data: { user: null }, error: null }),
   signIn: () => Promise.resolve(mockResponse),
   signInWithPassword: () => Promise.resolve(mockResponse),
   signInWithOAuth: () => Promise.resolve(mockResponse),
+  signInWithIdToken: () => Promise.resolve(mockResponse),
   signUp: () => Promise.resolve(mockResponse),
   signOut: () => Promise.resolve({ error: null }),
   onAuthStateChange: (_callback: unknown) => ({
@@ -57,6 +71,11 @@ const mockAuth = {
   }),
   resetPasswordForEmail: () => Promise.resolve(mockResponse),
   updateUser: () => Promise.resolve(mockResponse),
+  verifyOtp: () => Promise.resolve(mockResponse),
+  resend: () => Promise.resolve(mockResponse),
+  refreshSession: () => Promise.resolve({ data: { session: null, user: null }, error: null }),
+  setSession: () => Promise.resolve(mockResponse),
+  exchangeCodeForSession: () => Promise.resolve(mockResponse),
 };
 
 // Create mock query builder
@@ -134,8 +153,9 @@ function createSupabaseClient(): SupabaseClient<Database> {
         flowType: 'pkce',
         // Detect session from URL for OAuth callbacks
         detectSessionInUrl: true,
-        // Use cookies for cross-subdomain session sharing
-        // Works with GOTRUE_COOKIE_DOMAIN=.tryeatpal.com
+        // Session lives in localStorage (above), so it is NOT shared across
+        // subdomains — each origin has its own. (The old comment here claimed
+        // cookie-based cross-subdomain sharing, which this config never did.)
         storageKey: 'sb-auth-token',
       },
       global: {

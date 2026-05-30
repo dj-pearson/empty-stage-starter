@@ -22,15 +22,18 @@ final class AuthService {
 
     // MARK: - Sign Up
 
-    func signUp(email: String, password: String) async throws -> Session {
+    /// Signs up a new user. When email confirmation is enabled (our default),
+    /// Supabase returns NO session — the user must verify their email first.
+    /// That's the success path, so we return an optional session rather than
+    /// throwing: the previous `throw AuthError.noSession` surfaced a red
+    /// "No session was returned" error on a perfectly successful signup.
+    @discardableResult
+    func signUp(email: String, password: String) async throws -> Session? {
         let response = try await client.auth.signUp(
             email: email,
             password: password
         )
-        guard let session = response.session else {
-            throw AuthError.noSession
-        }
-        return session
+        return response.session
     }
 
     // MARK: - Sign In
