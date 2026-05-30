@@ -84,7 +84,13 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   const { planEntries, setPlanEntries, setPlanEntriesState, addPlanEntry, addPlanEntries, updatePlanEntry, copyWeekPlan, deleteWeekPlan } = usePlan();
   const { groceryItems, setGroceryItems, setGroceryItemsState, addGroceryItem, toggleGroceryItem, updateGroceryItem, deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems } = useGrocery();
 
-  const loadingRef = useRef(false);
+  // Tracks which (userId:householdId) scope has been loaded so the Supabase
+  // sync runs once per scope, reloads when the household resolves/changes, and
+  // can retry after a failure. A plain boolean here used to wedge: the effect
+  // fires first with householdId=null (userId resolves before the household
+  // RPC), and the second, correctly-scoped fire was skipped because the first
+  // load was still in flight. Keying by scope fixes that.
+  const loadedScopeRef = useRef<string | null>(null);
 
   // Load from storage on mount (platform-aware)
   useEffect(() => {
@@ -136,11 +142,17 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     debouncedSaveRef.current({ foods, kids, recipes, activeKidId, planEntries, groceryItems });
   }, [foods, kids, recipes, activeKidId, planEntries, groceryItems]);
 
-  // Sync with Supabase when authenticated
+  // Sync with Supabase when authenticated.
+  // Gate on householdId: `ensure_user_household` guarantees every signed-in
+  // user resolves to a household, so a null here is only the brief window
+  // before that RPC returns. Waiting for it avoids running the unscoped
+  // queries (which can pull the wrong/no rows) and prevents that first load
+  // from clobbering the correctly-scoped one.
   useEffect(() => {
-    if (!userId) return;
-    if (loadingRef.current) return;
-    loadingRef.current = true;
+    if (!userId || !householdId) return;
+    const scope = `${userId}:${householdId}`;
+    if (loadedScopeRef.current === scope) return;
+    loadedScopeRef.current = scope;
 
     const loadUserData = async () => {
       try {
@@ -174,14 +186,25 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         ]);
 
         if (kidsRes.data) {
-          setKids(kidsRes.data as unknown as Kid[]);
-          setActiveKidId(null);
+          const loadedKids = kidsRes.data as unknown as Kid[];
+          setKids(loadedKids);
+          // Preserve a still-valid selection; otherwise default to the first
+          // kid. Hard-resetting to null left the app with no child selected
+          // after every sign-in, so calendar/dashboard/coach rendered empty.
+          setActiveKidId((prev) =>
+            prev && loadedKids.some((k) => k.id === prev)
+              ? prev
+              : (loadedKids[0]?.id ?? null)
+          );
         }
         if (foodsRes.data) setFoods(foodsRes.data as unknown as Food[]);
         if (recipesRes.data) {
           const dbRecipes = (recipesRes.data as unknown[]).map((r) => normalizeRecipeFromDB(r as Parameters<typeof normalizeRecipeFromDB>[0]));
-          // Check for local recipes and migrate them
-          const localData = localStorage.getItem(STORAGE_KEY);
+          // Check for local recipes and migrate them. Use the platform-aware
+          // storage (not raw localStorage, which is undefined on React Native
+          // and would throw here, aborting the whole sync).
+          const migrationStorage = await getStorage();
+          const localData = await migrationStorage.getItem(STORAGE_KEY);
           if (localData) {
             try {
               const parsed = JSON.parse(localData);
@@ -225,14 +248,39 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         }
         if (planRes.data) setPlanEntriesState(planRes.data as unknown as PlanEntry[]);
         if (groceryRes.data) setGroceryItemsState(groceryRes.data as unknown as GroceryItem[]);
-      } finally {
-        loadingRef.current = false;
+      } catch (error) {
+        // Don't leave the scope marked as loaded if it failed — clear it so
+        // the next render retries instead of showing a permanently empty app.
+        loadedScopeRef.current = null;
+        logger.error('Error loading user data from Supabase:', error);
       }
     };
 
     loadUserData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, householdId]);
+
+  // Clear all app data on sign-out so the next user on this device (or the
+  // same browser) never inherits the previous user's children, foods, or
+  // meal plans. Without this, the persisted blob and in-memory state survive
+  // sign-out and flash in / re-hydrate for whoever signs in next.
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event !== 'SIGNED_OUT') return;
+      loadedScopeRef.current = null;
+      setFoods([]);
+      setKids([]);
+      setRecipes([]);
+      setActiveKidId(null);
+      setPlanEntriesState([]);
+      setGroceryItemsState([]);
+      getStorage()
+        .then((storage) => storage.removeItem(STORAGE_KEY))
+        .catch((error) => logger.error('Error clearing storage on sign-out:', error));
+    });
+    return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const exportData = useCallback(() => {
     return JSON.stringify({ foods, kids, recipes, activeKidId, planEntries, groceryItems }, null, 2);
