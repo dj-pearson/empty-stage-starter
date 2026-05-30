@@ -49,5 +49,5 @@ export default async (req: Request) => {
       },
     )
   }
-})
+};
 
