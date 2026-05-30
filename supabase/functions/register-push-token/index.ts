@@ -25,7 +25,7 @@ export default async (req: Request) => {
     if (authError || !user) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
       );
     }
 
@@ -34,7 +34,7 @@ export default async (req: Request) => {
     if (!token || !platform) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields: token, platform' }),
-        { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
       );
     }
 
@@ -43,7 +43,7 @@ export default async (req: Request) => {
     if (!validPlatforms.includes(platform)) {
       return new Response(
         JSON.stringify({ error: `Invalid platform. Must be one of: ${validPlatforms.join(', ')}` }),
-        { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
       );
     }
 
@@ -79,7 +79,7 @@ export default async (req: Request) => {
           message: 'Push token updated',
           token: updatedToken
         }),
-        { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
       );
     }
 
@@ -107,14 +107,14 @@ export default async (req: Request) => {
         message: 'Push token registered successfully',
         token: newToken
       }),
-      { status: 201, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 201, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('Error in register-push-token:', error);
     return new Response(
       JSON.stringify({ error: error.message || 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
 }

@@ -60,7 +60,7 @@ export default async (req: Request) => {
     if (!planEntries || planEntries.length === 0) {
       return new Response(
         JSON.stringify({ message: 'No planned meals to remind about', scheduled: 0 }),
-        { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
       );
     }
 
@@ -172,17 +172,17 @@ export default async (req: Request) => {
         message: 'Meal reminders scheduled',
         scheduled: scheduledCount
       }),
-      { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('Error in schedule-meal-reminders:', error);
     return new Response(
       JSON.stringify({ error: error.message || 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
-});
+};
 
 // Get typical meal time based on meal slot
 function getMealTime(mealSlot: string, dateStr: string): Date | null {

@@ -96,7 +96,7 @@ export default async (req: Request) => {
       status: 400,
     });
   }
-});
+};
 
 async function handleUpgradeOrChange(
   supabase: any,

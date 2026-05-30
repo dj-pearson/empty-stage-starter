@@ -58,10 +58,14 @@ export function VoteResultsDisplay({
   useEffect(() => {
     loadVotes();
 
-    // Subscribe to real-time updates
-    logger.debug('Subscribing to vote-updates', { planEntryId });
+    // Subscribe to real-time updates. The channel name MUST be unique per
+    // subscription — this component renders once per meal cell, and Supabase
+    // keys channels by topic name, so a shared static name made every cell
+    // collide (only one updated live, and unmounting one tore down another).
+    const channelName = `vote-updates-${planEntryId ?? `${recipeId ?? ''}-${mealDate ?? ''}-${mealSlot ?? ''}`}`;
+    logger.debug('Subscribing to vote updates', { channelName, planEntryId });
     const channel = supabase
-      .channel('vote-updates')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {

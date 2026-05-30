@@ -52,7 +52,7 @@ export default async (req: Request) => {
     if (!pendingNotifications || pendingNotifications.length === 0) {
       return new Response(
         JSON.stringify({ message: 'No pending notifications', processed: 0 }),
-        { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
       );
     }
 
@@ -189,17 +189,17 @@ export default async (req: Request) => {
         failed,
         throttled
       }),
-      { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('Error in process-notification-queue:', error);
     return new Response(
       JSON.stringify({ error: error.message || 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
-});
+};
 
 // Send push notification via Expo Push API
 async function sendPushNotification(supabaseAdmin: any, notification: any) {

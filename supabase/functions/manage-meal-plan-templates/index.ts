@@ -25,7 +25,7 @@ export default async (req: Request) => {
     if (authError || !user) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
       );
     }
 
@@ -50,17 +50,17 @@ export default async (req: Request) => {
       default:
         return new Response(
           JSON.stringify({ error: 'Invalid action' }),
-          { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+          { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
         );
     }
   } catch (error) {
     console.error('Error in manage-meal-plan-templates:', error);
     return new Response(
       JSON.stringify({ error: error.message || 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
-});
+};
 
 // Create a new template
 async function createTemplate(supabaseClient: any, userId: string, templateData: any, corsHeaders: any) {
@@ -73,7 +73,7 @@ async function createTemplate(supabaseClient: any, userId: string, templateData:
   if (profileError || !profile) {
     return new Response(
       JSON.stringify({ error: 'Profile not found' }),
-      { status: 404, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 404, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
 
@@ -96,7 +96,7 @@ async function createTemplate(supabaseClient: any, userId: string, templateData:
   if (templateError) {
     return new Response(
       JSON.stringify({ error: templateError.message }),
-      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
 
@@ -121,14 +121,14 @@ async function createTemplate(supabaseClient: any, userId: string, templateData:
       await supabaseClient.from('meal_plan_templates').delete().eq('id', template.id);
       return new Response(
         JSON.stringify({ error: entriesError.message }),
-        { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
       );
     }
   }
 
   return new Response(
     JSON.stringify({ template, message: 'Template created successfully' }),
-    { status: 201, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+    { status: 201, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
   );
 }
 
@@ -143,7 +143,7 @@ async function listTemplates(supabaseClient: any, userId: string, filters: any, 
   if (profileError || !profile) {
     return new Response(
       JSON.stringify({ error: 'Profile not found' }),
-      { status: 404, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 404, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
 
@@ -188,13 +188,13 @@ async function listTemplates(supabaseClient: any, userId: string, filters: any, 
   if (error) {
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
 
   return new Response(
     JSON.stringify({ templates }),
-    { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+    { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
   );
 }
 
@@ -229,13 +229,13 @@ async function getTemplate(supabaseClient: any, templateId: string, corsHeaders:
   if (error) {
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 404, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 404, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
 
   return new Response(
     JSON.stringify({ template }),
-    { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+    { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
   );
 }
 
@@ -258,13 +258,13 @@ async function updateTemplate(supabaseClient: any, templateId: string, templateD
   if (error) {
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
 
   return new Response(
     JSON.stringify({ template, message: 'Template updated successfully' }),
-    { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+    { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
   );
 }
 
@@ -278,13 +278,13 @@ async function deleteTemplate(supabaseClient: any, templateId: string, corsHeade
   if (error) {
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
 
   return new Response(
     JSON.stringify({ message: 'Template deleted successfully' }),
-    { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+    { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
   );
 }
 
@@ -310,7 +310,7 @@ async function applyTemplate(
   if (templateError || !template) {
     return new Response(
       JSON.stringify({ error: 'Template not found' }),
-      { status: 404, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 404, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
 
@@ -323,7 +323,7 @@ async function applyTemplate(
   if (kidsError) {
     return new Response(
       JSON.stringify({ error: kidsError.message }),
-      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
 
@@ -378,7 +378,7 @@ async function applyTemplate(
   if (insertError) {
     return new Response(
       JSON.stringify({ error: insertError.message }),
-      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
 
@@ -394,7 +394,7 @@ async function applyTemplate(
       entriesCreated: insertedEntries.length,
       entries: insertedEntries,
     }),
-    { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+    { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
   );
 }
 
@@ -412,7 +412,7 @@ async function saveFromWeek(supabaseClient: any, userId: string, templateData: a
   if (profileError || !profile) {
     return new Response(
       JSON.stringify({ error: 'Profile not found' }),
-      { status: 404, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 404, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
 
@@ -437,7 +437,7 @@ async function saveFromWeek(supabaseClient: any, userId: string, templateData: a
   if (planError || !planEntries || planEntries.length === 0) {
     return new Response(
       JSON.stringify({ error: 'No plan entries found for the specified week' }),
-      { status: 404, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 404, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
 
@@ -458,7 +458,7 @@ async function saveFromWeek(supabaseClient: any, userId: string, templateData: a
   if (templateError) {
     return new Response(
       JSON.stringify({ error: templateError.message }),
-      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
 
@@ -488,7 +488,7 @@ async function saveFromWeek(supabaseClient: any, userId: string, templateData: a
     await supabaseClient.from('meal_plan_templates').delete().eq('id', template.id);
     return new Response(
       JSON.stringify({ error: entriesError.message }),
-      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
 
@@ -498,6 +498,6 @@ async function saveFromWeek(supabaseClient: any, userId: string, templateData: a
       template,
       entriesCount: templateEntries.length,
     }),
-    { status: 201, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } }
+    { status: 201, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
   );
 }

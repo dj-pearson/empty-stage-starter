@@ -54,10 +54,15 @@ export function QuickSuggestionsPanel({
   const [count, setCount] = useState(5);
 
   useEffect(() => {
+    // Don't query/generate before the household has resolved — an empty
+    // householdId makes the backend reject the call with "householdId is
+    // required" and surfaces a spurious error toast on first paint.
+    if (!householdId) return;
     loadSuggestions();
   }, [householdId]);
 
   const loadSuggestions = async () => {
+    if (!householdId) return;
     try {
       setIsLoading(true);
       const { data, error } = await supabase
@@ -79,6 +84,10 @@ export function QuickSuggestionsPanel({
   };
 
   const generateSuggestions = async () => {
+    if (!householdId) {
+      toast.error('Still loading your household — try again in a moment.');
+      return;
+    }
     try {
       setIsGenerating(true);
 
