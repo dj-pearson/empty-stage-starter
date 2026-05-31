@@ -183,15 +183,6 @@ export function SmartRestockSuggestions({
     setSuggestions(prev => prev.filter(s => s.food_id !== suggestion.food_id));
   };
 
-  if (loading) {
-    return (
-      <Card className="p-6 bg-gradient-to-br from-accent/10 to-accent/5 border-accent/20">
-        <Skeleton className="h-6 w-48 mb-4" />
-        <Skeleton className="h-16 w-full" />
-      </Card>
-    );
-  }
-
   // US-299 — Per-suggestion forecast. Foods + groceryItems come from the
   // existing AppContext load (no extra DB round trips). When the food
   // can't be matched or has no quantity, we just skip the chip rather
@@ -321,6 +312,19 @@ export function SmartRestockSuggestions({
     setSuggestions((prev) => prev.filter((s) => s.food_id !== suggestion.food_id));
     toast("Got it — we'll skip this for a week.");
   };
+
+  // Early returns must come AFTER all hooks above. Previously the `loading`
+  // skeleton returned before useMemo/useEffect ran, so the hook count changed
+  // when loading flipped and React threw "rendered fewer hooks than expected"
+  // (#310), crashing the whole grocery route via the error boundary.
+  if (loading) {
+    return (
+      <Card className="p-6 bg-gradient-to-br from-accent/10 to-accent/5 border-accent/20">
+        <Skeleton className="h-6 w-48 mb-4" />
+        <Skeleton className="h-16 w-full" />
+      </Card>
+    );
+  }
 
   if (suggestions.length === 0 || dismissed) return null;
 

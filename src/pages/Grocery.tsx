@@ -80,6 +80,18 @@ const categoryIcons: Record<FoodCategory, string> = {
   snack: "🍿",
 };
 
+// Grocery item categories are now free-text (grocery_items.category was
+// relaxed to allow values like "other" / aisle-derived labels), so a direct
+// categoryLabels[item.category] lookup can be undefined and crash the render.
+// Resolve to the friendly label when known, otherwise fall back to "Other".
+const OTHER_CATEGORY_LABEL = "Other";
+function categoryLabel(category: string | null | undefined): string {
+  if (category && category in categoryLabels) {
+    return categoryLabels[category as FoodCategory];
+  }
+  return OTHER_CATEGORY_LABEL;
+}
+
 export default function Grocery() {
   const {
     foods, kids, activeKidId, planEntries, groceryItems, recipes,
@@ -500,7 +512,7 @@ export default function Grocery() {
     const csv = [
       "Category,Item,Quantity,Unit,Aisle,Status",
       ...activeItems.map(item =>
-        `${categoryLabels[item.category]},"${item.name}",${item.quantity},${item.unit},"${item.aisle || ""}","To Buy"`
+        `${categoryLabel(item.category)},"${item.name}",${item.quantity},${item.unit},"${item.aisle || ""}","To Buy"`
       )
     ].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -533,7 +545,7 @@ export default function Grocery() {
 
   const handleExportAnyList = () => {
     const csv = activeItems
-      .map(item => `"${item.name}","${item.quantity} ${item.unit}","${item.aisle || categoryLabels[item.category]}"`)
+      .map(item => `"${item.name}","${item.quantity} ${item.unit}","${item.aisle || categoryLabel(item.category)}"`)
       .join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -580,16 +592,12 @@ export default function Grocery() {
     const groups: Record<string, GroceryItem[]> = {};
 
     if (groupBy === "category") {
-      const categoryGroups: Record<FoodCategory, GroceryItem[]> = {
-        protein: [], carb: [], dairy: [], fruit: [], vegetable: [], snack: [],
-      };
+      // Bucket by friendly label so unknown/free-text categories land in
+      // "Other" instead of throwing on an undefined fixed-key array.
       activeItems.forEach(item => {
-        categoryGroups[item.category].push(item);
-      });
-      Object.entries(categoryGroups).forEach(([category, items]) => {
-        if (items.length > 0) {
-          groups[categoryLabels[category as FoodCategory]] = items;
-        }
+        const label = categoryLabel(item.category);
+        if (!groups[label]) groups[label] = [];
+        groups[label].push(item);
       });
     } else {
       activeItems.forEach(item => {
