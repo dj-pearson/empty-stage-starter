@@ -45,7 +45,7 @@ RETURNS BOOLEAN
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-AS $$
+AS $check_rate_limit$
 DECLARE
   v_window_start TIMESTAMPTZ;
   v_count INTEGER;
@@ -75,4 +75,4 @@ BEGIN
 
   RETURN TRUE;
 END;
-$$;
+$check_rate_limit$;
