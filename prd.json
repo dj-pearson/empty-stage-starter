@@ -4703,6 +4703,182 @@
       "priority": 29,
       "passes": false,
       "notes": "Closes the recipe half of the Tier 1 deep-link work. Carved out of US-296 because moving ShareExtensionAPI to Shared/ + adding the network call to the main app target expanded the Tier 1 PR's review surface unnecessarily. Should ship as a small standalone PR once US-296 is in develop."
+    },
+    {
+      "id": "US-310",
+      "title": "Build parse-receipt-image edge function for iOS receipt scanning",
+      "description": "As an iOS user, I want to scan a grocery receipt and have items imported, so I don't hand-type my list. The native ReceiptScanService calls an edge function 'parse-receipt-image' that DOES NOT EXIST, so receipt scanning fails 100% of the time.",
+      "acceptanceCriteria": [
+        "Create supabase/functions/parse-receipt-image/index.ts using AIServiceV2 (which supports vision via AIMessage.images).",
+        "Match the exact request/response contract in ios/EatPal/EatPal/Services/ReceiptScanService.swift (read the Swift Codable structs/CodingKeys; confirm request key e.g. imageBase64 and the response item shape).",
+        "Send the receipt image as a base64 image part; prompt for structured grocery line-items (name, quantity, unit, optional price/aisle).",
+        "Standard CORS via getCorsHeaders(req); OPTIONS handler; noCacheHeaders(). Degrade to a clean error body the Swift layer maps (network vs unreadable).",
+        "Verify with deno check; deploy and confirm a real receipt photo returns parsed items end-to-end on device."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Discovered 2026-05-30 bug-hunt. ReceiptScanService.swift:60 calls non-existent 'parse-receipt-image'. AIServiceV2 already supports images, so this is buildable. Backend can be written/verified on Windows; no Swift change needed IF the backend matches the existing contract exactly. Confirm the contract before coding."
+    },
+    {
+      "id": "US-311",
+      "title": "Build identify-product edge function for iOS single-product photo identify",
+      "description": "As an iOS user, I want to point my camera at one product and Quick-Add it. The native ProductPhotoIdentifier calls 'identify-product' which DOES NOT EXIST, so single-product identification fails every time.",
+      "acceptanceCriteria": [
+        "Create supabase/functions/identify-product/index.ts using AIServiceV2 vision.",
+        "Match the exact contract in ios/EatPal/EatPal/Services/ProductPhotoIdentifier.swift: request { imageBase64 }, response { name, brand?, packageSize?, packageUnit?, category, aisleSection, confidence } (confidence 0-1).",
+        "Prompt for that exact JSON; clamp confidence to 0-1; return 422 with an error body when unidentifiable (Swift maps 422 -> .unidentifiable).",
+        "Standard CORS + security + noCacheHeaders(). Verify with deno check; confirm on-device that a product photo prefills Quick Add."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Discovered 2026-05-30 bug-hunt. ProductPhotoIdentifier.swift:69 calls non-existent 'identify-product' (deployed 'identify-food-image' has a different shape AND currently ignores the image). Build identify-product to the Swift contract rather than changing Swift."
+    },
+    {
+      "id": "US-312",
+      "title": "Build tonight-mode edge function for iOS Tonight Mode",
+      "description": "As an iOS user opening Tonight Mode, I want fast server-quality dinner picks. TonightModeService calls 'tonight-mode' which DOES NOT EXIST; it always times out (~1.5s) and degrades to the local ranker.",
+      "acceptanceCriteria": [
+        "Create supabase/functions/tonight-mode/index.ts matching the request/response in ios/EatPal/EatPal/Services/TonightModeService.swift (read its Codable structs; handle householdId nil when the user has no kids).",
+        "Aim to return within the client's ~1.5s budget where feasible (lightweight model / small maxTokens); otherwise client fallback applies.",
+        "Standard CORS + security + noCacheHeaders(); clean error degradation. Verify with deno check; confirm on-device that Tonight Mode shows server suggestions without the stall."
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Discovered 2026-05-30 bug-hunt. Lower urgency than US-310/311 because the 1.5s timeout + clientFallback masks the failure, but it wastes the timeout window on every open and never delivers server-quality picks."
+    },
+    {
+      "id": "US-313",
+      "title": "Xcode build + device test of native AI features after backend contracts land",
+      "description": "As the iOS release owner, I need native AI features verified on a real build before App Store submission. The 2026-05-30 backend fix (generate-meal-suggestions) and the new functions (US-310/311/312) were written on Windows where Swift cannot be compiled.",
+      "acceptanceCriteria": [
+        "Build the Swift app in Xcode; confirm no compile errors.",
+        "On device/simulator: AI Meal Suggestions returns real (non-fallback) results and no longer logs 'householdId is required'.",
+        "Receipt scan, single-product identify, and Tonight Mode return real server results once US-310/311/312 are deployed.",
+        "Confirm MealSuggestion decode succeeds against the live response (id, meal_slot, food_name, food_id, reasoning, nutrition_note)."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Backend-side of the iOS AI fix is done + deno-checked on branch hotfix/critical-edge-fns (generate-meal-suggestions). This story tracks the Xcode/device verification that cannot be done in the current Windows environment. Gate App Store submission on this."
+    },
+    {
+      "id": "US-314",
+      "title": "Remove deprecated Expo / React Native app",
+      "description": "As the team, we decided the Swift native app is the canonical iOS app and the Expo/React Native app should no longer exist. The Expo app (app/, app/mobile/) and its config still ship in the repo and carry their own bugs.",
+      "acceptanceCriteria": [
+        "Remove the Expo Router tree (app/, app/mobile/) and Expo entry/config (app.config.js, eas.json, expo:* and eas:* scripts in package.json) once confirmed nothing web/desktop depends on them.",
+        "Remove Expo-only deps (expo-*, react-native, expo-secure-store, expo-router, etc.); confirm vite web build and tests still pass.",
+        "Keep src/integrations/supabase/client.mobile.ts only if still referenced; otherwise remove. Audit shared src/ imports for app/-only modules.",
+        "Confirm no CI/EAS pipeline references remain."
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Per owner decision 2026-05-30. SUPERSEDES the Expo mobile data bugs found in the bug-hunt (offline syncQueue data loss in SecureStore, session-size forced logouts, sync-queue not cleared on sign-out, isInternetReachable defaulting true) — do not fix those; the code is being deleted. DESTRUCTIVE: confirm scope with owner; do on its own branch."
+    },
+    {
+      "id": "US-315",
+      "title": "Secure generate-weekly-report (auth + household authorization)",
+      "description": "As a user, my household's weekly report (meals, nutrition, kids' voting) must not be readable by others. The function uses the service-role key with NO auth check and trusts householdId from the body, so any caller can read another household's report.",
+      "acceptanceCriteria": [
+        "Forward the caller's Authorization header; call auth.getUser(); reject unauthenticated with 401.",
+        "Verify the user belongs to the requested householdId before using the service-role client; reject mismatches with 403.",
+        "Confirm the legitimate caller sends the auth header; update it if not. Verify with deno check."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Discovered 2026-05-30 bug-hunt (generate-weekly-report/index.ts ~line 67). Data-leak / IDOR. Not bundled into the hotfix because it changes the call contract (requires caller auth) and needs the caller verified first."
+    },
+    {
+      "id": "US-316",
+      "title": "Global JWT-expired / 401 handling on web",
+      "description": "As a user who left a tab open, when my token can't refresh the app should prompt re-auth instead of silently showing empty data. Today expired-JWT/PGRST301 errors are ignored and the app renders empty foods/kids/plans.",
+      "acceptanceCriteria": [
+        "Centralize a Supabase error check (context load paths or fetch wrapper) detecting 401 / 'JWT expired' / PGRST301.",
+        "On detection attempt supabase.auth.refreshSession() once; on failure redirect to /auth.",
+        "Wire AppContext.loadUserData's new catch to a user-visible auth-error path. Add a test for the expired-token path."
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Discovered 2026-05-30 bug-hunt. CLAUDE.md already prescribes 'JWT expired -> refresh or redirect to /auth' but nothing implements it globally."
+    },
+    {
+      "id": "US-317",
+      "title": "Fix SessionTimeoutWarning false 'session expiring' popups on desktop",
+      "description": "As a desktop user, I get confusing 'Session Expiring Soon' dialogs at odd times. The component polls session.expires_at against a fixed window while the SDK auto-refreshes the token.",
+      "acceptanceCriteria": [
+        "Drive the warning off onAuthStateChange (TOKEN_REFRESHED / SIGNED_OUT) instead of polling expires_at.",
+        "Only warn when a refresh actually fails (refresh token expired).",
+        "Remove or make meaningful the manual refreshSession() on 'Extend'. tsc clean; adjust a test."
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Discovered 2026-05-30 bug-hunt (src/components/SessionTimeoutWarning.tsx). Desktop polish; client has autoRefreshToken: true."
+    },
+    {
+      "id": "US-318",
+      "title": "Add missing RLS DELETE/INSERT policies on recent tables",
+      "description": "As a user, deleting/creating my own rows in newer tables silently no-ops because RLS is enabled without the matching policy. CLAUDE.md requires SELECT/INSERT/UPDATE/DELETE coverage.",
+      "acceptanceCriteria": [
+        "Add household/owner-scoped DELETE policies to household_preferences, kid_growth_events, insights_seasonal_recall (or document as append-only).",
+        "Add an INSERT policy to insights_seasonal_recall if any client writes to it (else document service-role-only).",
+        "Add WITH CHECK (auth.uid() = user_id) to picky_win_preferences UPDATE policy for parity with user_preferences.",
+        "Additive, backward-compatible migrations only."
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Discovered 2026-05-30 bug-hunt (migrations 20260520000000/2/3, insights_seasonal_recall). Latent until clients write/delete these tables; surfaces as silent failures."
+    },
+    {
+      "id": "US-319",
+      "title": "Verify backward-compat of handle_new_user re-raise + user_profiles drop ordering",
+      "description": "As the DB owner, I need to confirm the recent signup-path migrations cannot break production signups. handle_new_user re-raises on ANY error inside the auth.users insert transaction and inserts a household with no ON CONFLICT; the user_profiles scaffold drop runs the day after the restore with no verification gate.",
+      "acceptanceCriteria": [
+        "On the live DB, confirm handle_new_user no longer references user_profiles before relying on 20260513000000_drop_user_profiles_scaffold.sql.",
+        "Make household/household_members inserts in restore_handle_new_user idempotent (ON CONFLICT DO NOTHING / existence check).",
+        "Consider not re-raising for non-critical secondary inserts so the auth user is still created.",
+        "Verify a fresh signup succeeds end-to-end (web + iOS) after any change."
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Discovered 2026-05-30 bug-hunt. Risk: 'Database error saving new user' on all new signups if the trigger still writes to a dropped table, or duplicate-household errors on retried signups."
+    },
+    {
+      "id": "US-320",
+      "title": "Web: optimistic-update rollback + error toasts on entity mutations",
+      "description": "As a desktop user, when an edit fails server-side it still appears to succeed then silently reverts. update* mutations apply local state inside the .then regardless of error and give no feedback.",
+      "acceptanceCriteria": [
+        "Apply optimistic state immediately (before the await) and roll back on error.",
+        "On error, toast.error and restore prior state; at minimum guard the setState with if (!error).",
+        "Cover KidsContext, GroceryContext, RecipesContext, FoodsContext, PlanContext. tsc clean; failure-path tests."
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Discovered 2026-05-30 bug-hunt. Causes 'my edit reverted' confusion and laggy-feeling edits on desktop."
+    },
+    {
+      "id": "US-321",
+      "title": "Wire actual vision into identify-food-image",
+      "description": "As a user of in-app food-photo identification, identify-food-image currently ignores the image (comment: 'vision not yet supported') and sends only a text prompt, so results are guesses. AIServiceV2 now supports image messages.",
+      "acceptanceCriteria": [
+        "Pass imageBase64 to AIServiceV2 as an AIMessage.images part instead of the placeholder text.",
+        "Keep the existing { success, foodData } response shape and fields.",
+        "Verify with deno check and a real image. Keep its shape distinct from identify-product (US-311)."
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Discovered 2026-05-30 bug-hunt (identify-food-image/index.ts ~line 26). AIServiceV2 vision support exists; function never wired it."
+    },
+    {
+      "id": "US-322",
+      "title": "Swift hardening: remove crash-prone force-unwrap and add weak self",
+      "description": "As an iOS user, I shouldn't hit avoidable crashes. The bug-hunt found a force-unwrap and a missing weak capture in the Swift app.",
+      "acceptanceCriteria": [
+        "GroceryView.swift:687 — replace droppedFoods.first!.name with droppedFoods.first?.name ?? \"1 item\".",
+        "StoreKitService.swift:181-192 — add [weak self] to the detached transaction-listener Task (singleton, so defensive/parity).",
+        "Build in Xcode; no regressions."
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Discovered 2026-05-30 bug-hunt. Low severity; bundle with the next Swift change (e.g. US-313 verification pass)."
     }
   ]
 }
