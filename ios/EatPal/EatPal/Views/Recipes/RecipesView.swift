@@ -572,6 +572,12 @@ struct RecipeDetailView: View {
         abs(servingScale - 1.0) > 0.001
     }
 
+    /// Always render the count with the word, pluralized: "1 serving" /
+    /// "4 servings". Used so the number never reads as a bare, unlabeled value.
+    private func servingsLabel(_ count: Int) -> String {
+        "\(count) serving\(count == 1 ? "" : "s")"
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -635,11 +641,11 @@ struct RecipeDetailView: View {
                             in: 1...20
                         ) {
                             HStack(spacing: 6) {
-                                Text("\(effectiveServings)")
+                                Text(servingsLabel(effectiveServings))
                                     .font(.headline)
                                     .monospacedDigit()
                                 if isScaled {
-                                    Text("(from \(originalServings))")
+                                    Text("(from \(servingsLabel(originalServings)))")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -664,8 +670,13 @@ struct RecipeDetailView: View {
 
                     // Ingredients
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Ingredients")
-                            .font(.headline)
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text("Ingredients")
+                                .font(.headline)
+                            Text("· makes \(servingsLabel(effectiveServings))")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
 
                         ForEach(currentRecipe.foodIds, id: \.self) { foodId in
                             if let food = appState.foods.first(where: { $0.id == foodId }) {

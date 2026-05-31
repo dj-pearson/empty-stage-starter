@@ -4879,6 +4879,21 @@
       "priority": 7,
       "passes": false,
       "notes": "Discovered 2026-05-30 bug-hunt. Low severity; bundle with the next Swift change (e.g. US-313 verification pass)."
+    },
+    {
+      "id": "US-323",
+      "title": "Deploy pending migrations to production (recipes 400 + 404s)",
+      "description": "As a desktop/iOS user, several features 4xx because recent migrations exist in the repo but were never pushed to the production DB (api.tryeatpal.com). Confirmed in console: recipes embed 400, variety_fatigue_snapshots 404, rpc/check_rate_limit 404.",
+      "acceptanceCriteria": [
+        "Run the migration deploy (supabase db push / Coolify equivalent) so prod has: recipe_ingredients (20260430000001) — the recipes?select=*,recipe_ingredients(...) embed 400s because PostgREST can't find the relationship; variety_fatigue_snapshots (20260515000000) — upserts 404; the rate-limiting RPC check_rate_limit (20260223000000 / 20251010230000).",
+        "Reload the PostgREST schema cache after the table lands (NOTIFY pgrst, 'reload schema') so the recipe_ingredients embed resolves.",
+        "Also deploy the new 20260530000000_relax_foods_category_check.sql (US grocery->pantry fix).",
+        "Verify on prod: recipes load with ingredients, the variety-fatigue banner stops 404ing, and Auth rate-limit checks resolve.",
+        "Audit for any other recent migrations not yet applied to prod (compare migrations/ against the deployed schema)."
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Discovered 2026-05-30 from desktop console. These are NOT code bugs — the recipe_ingredients schema exactly matches RECIPE_WITH_INGREDIENTS_SELECT, and the missing tables/RPC all have migration files. Root cause is a prod deploy gap. OPTIONAL resilience follow-up: have the recipes loader retry with a plain select('*') if the embed 400s, so recipes still load (minus structured ingredients) if recipe_ingredients is ever unavailable. Ask before building — primary fix is the deploy."
     }
   ]
 }

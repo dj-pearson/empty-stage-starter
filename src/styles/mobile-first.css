@@ -510,12 +510,19 @@ html {
   scroll-behavior: smooth;
 }
 
-/* iOS momentum scrolling */
-.scroll-smooth,
-.overflow-auto,
-.overflow-y-auto {
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
+/* iOS momentum scrolling.
+   Scoped to touch devices: on desktop, applying `overscroll-behavior-y: contain`
+   to every `.overflow-auto` / `.overflow-y-auto` element (Tailwind makes these
+   scroll containers regardless of whether their content actually overflows)
+   swallowed mouse-wheel and trackpad events before they reached the document,
+   so the page could only be scrolled via the right-side scrollbar. */
+@media (hover: none) and (pointer: coarse) {
+  .scroll-smooth,
+  .overflow-auto,
+  .overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
 }
 
 /* Hide scrollbars but keep functionality */
