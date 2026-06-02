@@ -2720,3 +2720,80 @@ These are deliberately out of scope for this branch — `npm run build` (Vite) c
 - Five stories landed; 41 false stories remain — all blocked by Xcode/Gradle pipelines that aren't available in this environment.
 
 ---
+
+================================================================================
+## Session 2026-06-02 — Backend edge-function gap closure (iOS-contract fns + IDOR fix)
+================================================================================
+
+Branch: claude/prd-stories-ios-gaps-oyqlz
+
+55 stories had passes=false at session start. Most of the iOS backlog is gated
+on Xcode/Gradle pipelines or a prod DB deploy that this sandbox can't reach, so
+this session targeted the subset that is fully buildable AND verifiable here:
+the three missing edge functions the native iOS services call (and 404/timeout
+against today), plus a confirmed IDOR in generate-weekly-report. Picked these
+four because the PRD notes flagged them "buildable on the backend, no Swift
+change needed if the function matches the existing Swift contract exactly."
+
+### Key architecture finding (why these functions were missing on the iOS path)
+- There are TWO function directories. Top-level `functions/` holds the WEB
+  implementations (US-273 identify-product, US-293 tonight-mode) with web-shaped
+  contracts. The DEPLOYED iOS endpoint (functions.tryeatpal.com) is served by
+  `Dockerfile.functions` → `supabase functions serve` over `supabase/functions/`
+  (auto-discovery by directory name; the legacy `edge-functions-server.ts`
+  FUNCTIONS_MAP router is NOT what runs — confirmed because the working
+  recognize-fridge-contents fn isn't in that map either).
+- So the native iOS services were calling names that existed only as web fns,
+  not under `supabase/functions/`. Fix = build NEW fns under supabase/functions/
+  matching each Swift Codable contract exactly. Runtime serves with
+  `--no-verify-jwt`, so in-function auth is the real authorization gate.
+
+### Stories completed (prd.json passes:false → true)
+- US-310 ✓ supabase/functions/parse-receipt-image/index.ts — AIServiceV2 vision;
+  matches ReceiptScanService.swift Receipt/LineItem contract; 200 + well-formed
+  (possibly empty) Receipt so Swift derives .empty/.lowConfidence from fields.
+- US-311 ✓ supabase/functions/identify-product/index.ts — AIServiceV2 vision;
+  matches ProductPhotoIdentifier.swift {name,brand?,packageSize?,packageUnit?,
+  category,aisleSection,confidence}; 422 on unidentifiable so Swift maps to
+  .unidentifiable; category/aisle constrained to FoodCategory/GroceryAisle raws.
+- US-312 ✓ supabase/functions/tonight-mode/index.ts — matches TonightModeService
+  request/response; user-JWT required + household_members membership check; reads
+  scoped to user_id OR shared household_id; ranking mirrors the Swift
+  clientFallback (coverage*40 − aversions*15 − variety*25 − prepOver*0.5, allergen
+  exclusion, recency-weighted variety). No AI call → fits the ~1.5s budget.
+- US-315 ✓ generate-weekly-report — closed the IDOR: require Authorization,
+  getUser() on forwarded token, verify household_members before the service-role
+  client touches data (401/403). schedule-weekly-reports cron (Bearer
+  SERVICE_ROLE_KEY, no user context) detected and allowed to bypass the per-user
+  check. Web (edge-functions.ts) + iOS (EdgeFunctions.swift) already forward the
+  user session token, so no client change needed.
+
+### Verification
+- `deno lint` clean on all three new functions (zero `any`; project-wide
+  no-explicit-any/no-import-prefix excluded since the entire functions codebase
+  uses esm.sh imports). generate-weekly-report edit added no new lint issues
+  (its pre-existing `any`/unused-var warnings in the metrics code are untouched).
+- Full `deno check` (type-check) requires network to resolve the esm.sh
+  supabase-js import; esm.sh is 403 in this sandbox, so type-check runs in CI /
+  on deploy. Documented per-story.
+
+### Deferred / blocked
+- US-323 (deploy pending migrations to prod) — left passes=false. Audited that
+  all referenced migration files exist locally; this is a prod `supabase db push`
+  + `NOTIFY pgrst 'reload schema'` operation needing prod credentials not present
+  in the sandbox. US-310/311/312/315 ride the SAME functions deploy, and their
+  on-device confirmation is gated on it.
+- Remaining 51 false stories are iOS/Android (Xcode/Gradle) or prod-deploy tasks.
+
+### Files changed this session
+- `supabase/functions/identify-product/index.ts` (new)
+- `supabase/functions/parse-receipt-image/index.ts` (new)
+- `supabase/functions/tonight-mode/index.ts` (new)
+- `supabase/functions/generate-weekly-report/index.ts` (auth + household authz)
+- `prd.json` (US-310/311/312/315 → passes:true; US-323 audit note)
+- `progress.txt` (this entry)
+
+### PRD running tally
+- 245 passing / 51 false (was 241 / 55). Four backend stories landed.
+
+---

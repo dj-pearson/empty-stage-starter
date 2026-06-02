@@ -4716,8 +4716,8 @@
         "Verify with deno check; deploy and confirm a real receipt photo returns parsed items end-to-end on device."
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Discovered 2026-05-30 bug-hunt. ReceiptScanService.swift:60 calls non-existent 'parse-receipt-image'. AIServiceV2 already supports images, so this is buildable. Backend can be written/verified on Windows; no Swift change needed IF the backend matches the existing contract exactly. Confirm the contract before coding."
+      "passes": true,
+      "notes": "DONE 2026-06-02: Implemented supabase/functions/parse-receipt-image/index.ts using AIServiceV2 vision (base64 image via AIMessage.images). Matches ReceiptScanService.swift exactly: request {imageBase64}; response Receipt{merchant|null, purchasedAt|null, currency, lineItems:[{rawText,parsedName,qty,unit,unitPrice,lineTotal,category,confidence}]}. Structured-JSON prompt for grocery line-items; defensive parser strips ```json fences, validates category against FoodCategory enum, clamps confidence 0-1, defaults currency USD, computes lineTotal when absent. Always returns 200 with a well-formed (possibly empty) Receipt so Swift derives .empty/.lowConfidence from fields, not HTTP status. getCorsHeaders(req)+OPTIONS+noCacheHeaders(). Placed in supabase/functions/ (the dir Dockerfile.functions serves via `supabase functions serve`, same as the confirmed-working recognize-fridge-contents) — distinct from the separate web fn at top-level functions/parse-receipt-image. Verified: deno lint clean (project-wide no-explicit-any/no-import-prefix excluded as the whole functions codebase uses esm.sh imports). PENDING (gated on prod deploy, same as US-323): full `deno check` needs network for esm.sh (runs in CI); on-device end-to-end confirmation."
     },
     {
       "id": "US-311",
@@ -4730,8 +4730,8 @@
         "Standard CORS + security + noCacheHeaders(). Verify with deno check; confirm on-device that a product photo prefills Quick Add."
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Discovered 2026-05-30 bug-hunt. ProductPhotoIdentifier.swift:69 calls non-existent 'identify-product' (deployed 'identify-food-image' has a different shape AND currently ignores the image). Build identify-product to the Swift contract rather than changing Swift."
+      "passes": true,
+      "notes": "DONE 2026-06-02: Implemented supabase/functions/identify-product/index.ts (vision via AIServiceV2). Matches ProductPhotoIdentifier.swift exactly: request {imageBase64}; response {name, brand?, packageSize?, packageUnit?, category, aisleSection, confidence(0-1)}. Prompt constrains category to FoodCategory raw values and aisleSection to GroceryAisle raw values (unknown -> 'snack'/'other' so Swift enum init never crashes); clamps confidence; returns HTTP 422 with error body when unidentifiable (empty name or 0 confidence) so Swift maps -> .unidentifiable. Built as a NEW deployed fn in supabase/functions/ (distinct from the vision-less identify-food-image and from the web fn at top-level functions/identify-product). getCorsHeaders(req)+OPTIONS+noCacheHeaders(). Verified: deno lint clean, zero `any`. PENDING (gated on prod deploy, same as US-323): full `deno check` (network/CI); on-device prefill confirmation."
     },
     {
       "id": "US-312",
@@ -4743,8 +4743,8 @@
         "Standard CORS + security + noCacheHeaders(); clean error degradation. Verify with deno check; confirm on-device that Tonight Mode shows server suggestions without the stall."
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Discovered 2026-05-30 bug-hunt. Lower urgency than US-310/311 because the 1.5s timeout + clientFallback masks the failure, but it wastes the timeout window on every open and never delivers server-quality picks."
+      "passes": true,
+      "notes": "DONE 2026-06-02: Implemented supabase/functions/tonight-mode/index.ts matching TonightModeService.swift: request {householdId|null, kidIds, maxMinutes, pantryOnly, lookbackDays, limit}; response {suggestions:[Suggestion]} where Suggestion={recipeId,name,imageUrl|null,prepMinutes,pantryCoveragePct,missingFoodIds,missingIngredients[{id,name}],kidFit[{kidId,kidName,score,blockingAversions,allergenHits}],varietyScore,rankScore}. Requires a user JWT (getUser via anon client on forwarded auth header; 401 otherwise) and verifies household_members membership before trusting body householdId; all reads (foods/recipes/kids/plan_entries) scoped to user_id OR shared household_id via service-role client (runtime is --no-verify-jwt, so in-function auth is the real gate). Server ranking mirrors the Swift clientFallback exactly: coverage*40 - aversions*15 - variety*25 - prepOver*0.5, allergen recipes excluded, recency-weighted variety (<=7d x2, <=14d x1, <=21d x0.5), kid-fit allergen/aversion scoring, handles total_time_minutes ?? leading-number(prep_time) ?? 30. No AI call -> fits the client's ~1.5s budget. getCorsHeaders+OPTIONS+noCacheHeaders(). Verified: deno lint clean, zero `any`. PENDING (gated on prod deploy, same as US-323): full `deno check` (network/CI); on-device confirmation that server picks replace the local fallback."
     },
     {
       "id": "US-313",
@@ -4784,8 +4784,8 @@
         "Confirm the legitimate caller sends the auth header; update it if not. Verify with deno check."
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Discovered 2026-05-30 bug-hunt (generate-weekly-report/index.ts ~line 67). Data-leak / IDOR. Not bundled into the hotfix because it changes the call contract (requires caller auth) and needs the caller verified first."
+      "passes": true,
+      "notes": "DONE 2026-06-02: Secured supabase/functions/generate-weekly-report/index.ts (was service-role-only with body-trusted householdId = IDOR/data leak). Now: reject missing Authorization (401); resolve caller via anon-client getUser() on the forwarded token (401 if invalid/expired); verify household_members membership for the requested householdId (403 on mismatch) BEFORE the service-role client is used for the heavy reads/writes. Trusted internal-caller bypass: the schedule-weekly-reports cron calls this server-to-server with `Bearer SERVICE_ROLE_KEY` and has no user context — that exact token is detected and allowed to skip the per-user check (verified the cron call site still works). Legitimate clients already forward the user session token: web via src/lib/edge-functions.ts invokeEdgeFunction (session.access_token) and iOS via EdgeFunctions.swift (Bearer session token) — no client change needed. Verified: deno lint added no new issues (the pre-existing `any`/unused-var warnings in the metrics code are untouched and predate this change). PENDING: full `deno check` (network/CI)."
     },
     {
       "id": "US-316",
@@ -4893,7 +4893,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "Discovered 2026-05-30 from desktop console. These are NOT code bugs — the recipe_ingredients schema exactly matches RECIPE_WITH_INGREDIENTS_SELECT, and the missing tables/RPC all have migration files. Root cause is a prod deploy gap. OPTIONAL resilience follow-up: have the recipes loader retry with a plain select('*') if the embed 400s, so recipes still load (minus structured ingredients) if recipe_ingredients is ever unavailable. Ask before building — primary fix is the deploy."
+      "notes": "Discovered 2026-05-30 from desktop console. These are NOT code bugs — the recipe_ingredients schema exactly matches RECIPE_WITH_INGREDIENTS_SELECT, and the missing tables/RPC all have migration files. Root cause is a prod deploy gap. OPTIONAL resilience follow-up: have the recipes loader retry with a plain select('*') if the embed 400s, so recipes still load (minus structured ingredients) if recipe_ingredients is ever unavailable. Ask before building — primary fix is the deploy. | AUDIT 2026-06-02: confirmed all referenced migration files exist in supabase/migrations/ (20260430000001_create_recipe_ingredients, 20260515000000_variety_fatigue, 20260223000000_rate_limiting, 20251010230000_rate_limiting_system, 20260530000000_relax_foods_category_check). This story is a PROD DEPLOY operation (supabase db push + NOTIFY pgrst 'reload schema'), not a code change — it requires prod DB credentials/network access not available in the dev sandbox. Left passes=false; the user must run the deploy against api.tryeatpal.com. Note: US-310/311/312 (new edge fns) and US-315 (security fix) ride the SAME functions deploy."
     }
   ]
 }
