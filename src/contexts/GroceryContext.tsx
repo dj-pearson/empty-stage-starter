@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateId, debounce } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
+import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
 import { inferFoodCategory } from "@/lib/foodCategoryMap";
 
@@ -97,29 +98,34 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
   }, [userId, householdId]);
 
   const toggleGroceryItem = useCallback((id: string) => {
-    setGroceryItemsRaw(prev => {
-      const item = prev.find(i => i.id === id);
-      if (!item) return prev;
-      const newChecked = !item.checked;
+    // Read current state from the closure (groceryItems is in deps) — not via
+    // a setState updater, whose run is deferred to render and so wouldn't be
+    // available for the synchronous branch below.
+    const item = groceryItems.find(i => i.id === id);
+    if (!item) return;
+    const newChecked = !item.checked;
 
-      if (userId) {
-        supabase.from('grocery_items').update({ checked: newChecked }).eq('id', id)
-          .then(({ error }) => {
-            if (error) logger.error('Supabase toggleGroceryItem error:', error);
-          });
-      }
-
-      return prev.map(i => i.id === id ? { ...i, checked: newChecked } : i);
-    });
-  }, [userId]);
+    if (userId) {
+      // US-320: optimistic toggle with rollback on server rejection.
+      void runOptimisticMutation<GroceryItem>(
+        setGroceryItemsRaw,
+        prev => prev.map(i => i.id === id ? { ...i, checked: newChecked } : i),
+        () => supabase.from('grocery_items').update({ checked: newChecked }).eq('id', id),
+        { logLabel: 'Supabase toggleGroceryItem error:' }
+      );
+    } else {
+      setGroceryItemsRaw(prev => prev.map(i => i.id === id ? { ...i, checked: newChecked } : i));
+    }
+  }, [userId, groceryItems]);
 
   const updateGroceryItem = useCallback((id: string, updates: Partial<GroceryItem>) => {
     if (userId) {
-      supabase.from('grocery_items').update(updates).eq('id', id)
-        .then(({ error }) => {
-          if (error) logger.error('Supabase updateGroceryItem error:', error);
-          setGroceryItemsRaw(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
-        });
+      void runOptimisticMutation<GroceryItem>(
+        setGroceryItemsRaw,
+        prev => prev.map(item => item.id === id ? { ...item, ...updates } : item),
+        () => supabase.from('grocery_items').update(updates).eq('id', id),
+        { logLabel: 'Supabase updateGroceryItem error:' }
+      );
     } else {
       setGroceryItemsRaw(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
     }
@@ -127,11 +133,12 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
 
   const deleteGroceryItem = useCallback((id: string) => {
     if (userId) {
-      supabase.from('grocery_items').delete().eq('id', id)
-        .then(({ error }) => {
-          if (error) logger.error('Supabase deleteGroceryItem error:', error);
-          setGroceryItemsRaw(prev => prev.filter(item => item.id !== id));
-        });
+      void runOptimisticMutation<GroceryItem>(
+        setGroceryItemsRaw,
+        prev => prev.filter(item => item.id !== id),
+        () => supabase.from('grocery_items').delete().eq('id', id),
+        { logLabel: 'Supabase deleteGroceryItem error:', toastMessage: "Couldn't delete that item — restored. Please try again." }
+      );
     } else {
       setGroceryItemsRaw(prev => prev.filter(item => item.id !== id));
     }
@@ -139,31 +146,39 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
 
   const deleteGroceryItems = useCallback((ids: string[]) => {
     if (ids.length === 0) return;
+    const idSet = new Set(ids);
     if (userId) {
-      supabase.from('grocery_items').delete().in('id', ids)
-        .then(({ error }) => {
-          if (error) logger.error('Supabase deleteGroceryItems error:', error);
-          const idSet = new Set(ids);
-          setGroceryItemsRaw(prev => prev.filter(item => !idSet.has(item.id)));
-        });
+      void runOptimisticMutation<GroceryItem>(
+        setGroceryItemsRaw,
+        prev => prev.filter(item => !idSet.has(item.id)),
+        () => supabase.from('grocery_items').delete().in('id', ids),
+        { logLabel: 'Supabase deleteGroceryItems error:', toastMessage: "Couldn't delete those items — restored." }
+      );
     } else {
-      const idSet = new Set(ids);
       setGroceryItemsRaw(prev => prev.filter(item => !idSet.has(item.id)));
     }
   }, [userId]);
 
   const clearCheckedGroceryItems = useCallback(() => {
-    setGroceryItemsRaw(prev => {
-      const checkedIds = prev.filter(item => item.checked).map(item => item.id);
-      if (userId && checkedIds.length > 0) {
-        supabase.from('grocery_items').delete().in('id', checkedIds)
-          .then(({ error }) => {
-            if (error) logger.error('Supabase clearCheckedGroceryItems error:', error);
-          });
-      }
-      return prev.filter(item => !item.checked);
-    });
-  }, [userId]);
+    // Read from the closure (groceryItems is in deps) rather than firing the
+    // network call inside a setState updater (a side-effect anti-pattern that
+    // can double-fire under StrictMode).
+    const checkedIds = groceryItems.filter(item => item.checked).map(item => item.id);
+    if (checkedIds.length === 0) return;
+    const idSet = new Set(checkedIds);
+
+    if (userId) {
+      // US-320: optimistic clear with rollback on server rejection.
+      void runOptimisticMutation<GroceryItem>(
+        setGroceryItemsRaw,
+        prev => prev.filter(item => !idSet.has(item.id)),
+        () => supabase.from('grocery_items').delete().in('id', checkedIds),
+        { logLabel: 'Supabase clearCheckedGroceryItems error:', toastMessage: "Couldn't clear checked items — restored." }
+      );
+    } else {
+      setGroceryItemsRaw(prev => prev.filter(item => !idSet.has(item.id)));
+    }
+  }, [userId, groceryItems]);
 
   const value = useMemo(() => ({
     groceryItems, setGroceryItems, setGroceryItemsState: setGroceryItemsRaw,

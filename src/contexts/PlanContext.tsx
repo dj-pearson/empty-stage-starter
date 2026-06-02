@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateId, debounce } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
+import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
 
 interface RealtimePayload<T> {
@@ -107,11 +108,13 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
 
   const updatePlanEntry = useCallback((id: string, updates: Partial<PlanEntry>) => {
     if (userId) {
-      supabase.from('plan_entries').update(updates).eq('id', id)
-        .then(({ error }) => {
-          if (error) logger.error('Supabase updatePlanEntry error:', error);
-          setPlanEntriesRaw(prev => prev.map(e => (e.id === id ? { ...e, ...updates } : e)));
-        });
+      // US-320: optimistic update with rollback + toast on server rejection.
+      void runOptimisticMutation<PlanEntry>(
+        setPlanEntriesRaw,
+        prev => prev.map(e => (e.id === id ? { ...e, ...updates } : e)),
+        () => supabase.from('plan_entries').update(updates).eq('id', id),
+        { logLabel: 'Supabase updatePlanEntry error:' }
+      );
     } else {
       setPlanEntriesRaw(prev => prev.map(e => (e.id === id ? { ...e, ...updates } : e)));
     }
@@ -143,15 +146,15 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
         recipe_id: entry.recipe_id,
         meal_slot: entry.meal_slot,
         date: newDate.toISOString().split('T')[0],
-        // @ts-ignore - outcome field type mismatch
+        // @ts-expect-error - outcome field type mismatch
         outcome: undefined,
         notes: entry.notes,
-        // @ts-ignore - result field type mismatch
+        // @ts-expect-error - result field type mismatch
         result: undefined,
       };
     });
 
-    // @ts-ignore - Type mismatch with PlanEntry
+    // @ts-expect-error - Type mismatch with PlanEntry
     await addPlanEntries(newEntries);
   }, [addPlanEntries]);
 
@@ -168,13 +171,19 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
     });
 
     const idsToDelete = entriesToDelete.map(e => e.id);
+    if (idsToDelete.length === 0) return;
 
-    if (userId && idsToDelete.length > 0) {
-      const { error } = await supabase.from('plan_entries').delete().in('id', idsToDelete);
-      if (error) logger.error('Supabase deleteWeekPlan error:', error);
+    if (userId) {
+      // US-320: optimistic week clear; roll back (restore) on server rejection.
+      await runOptimisticMutation<PlanEntry>(
+        setPlanEntriesRaw,
+        prev => prev.filter(e => !idsToDelete.includes(e.id)),
+        () => supabase.from('plan_entries').delete().in('id', idsToDelete),
+        { logLabel: 'Supabase deleteWeekPlan error:', toastMessage: "Couldn't clear that week — restored. Please try again." }
+      );
+    } else {
+      setPlanEntriesRaw(prev => prev.filter(e => !idsToDelete.includes(e.id)));
     }
-
-    setPlanEntriesRaw(prev => prev.filter(e => !idsToDelete.includes(e.id)));
   }, [userId]);
 
   const value = useMemo(() => ({

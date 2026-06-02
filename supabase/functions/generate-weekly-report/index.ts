@@ -62,15 +62,80 @@ export default async (req: Request) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    // US-315: authenticate the caller and authorize against the requested
+    // household BEFORE touching the service-role client. Previously this
+    // function ran entirely under the service-role key and trusted
+    // householdId from the body, so any caller could read any household's
+    // report (IDOR / data leak).
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const bearer = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+    // Trusted internal caller: the scheduled `schedule-weekly-reports` cron
+    // invokes us server-to-server with the service-role key and no user
+    // context. That token is already maximally privileged, so we skip the
+    // per-user membership check for it. Every other caller (web + iOS
+    // clients) sends a user JWT and must pass authorization below.
+    const isInternalCaller = serviceRoleKey.length > 0 && bearer === serviceRoleKey;
 
     const { householdId, weekStartDate } = await req.json();
 
     if (!householdId) {
-      throw new Error('householdId is required');
+      return new Response(JSON.stringify({ error: 'householdId is required' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Service-role client for the heavy cross-table reads/writes. Only used
+    // after authorization passes.
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      serviceRoleKey
+    );
+
+    if (!isInternalCaller) {
+      // User-scoped client (anon key + caller's JWT) so getUser() resolves
+      // the authenticated identity from the forwarded token.
+      const authClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: authHeader } } }
+      );
+
+      const { data: userData, error: userError } = await authClient.auth.getUser();
+      if (userError || !userData?.user) {
+        return new Response(JSON.stringify({ error: 'Invalid or expired session' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const userId = userData.user.id;
+
+      // Authorize: the caller must belong to the requested household.
+      const { data: membership, error: membershipError } = await supabaseClient
+        .from('household_members')
+        .select('household_id')
+        .eq('household_id', householdId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (membershipError) {
+        throw membershipError;
+      }
+      if (!membership) {
+        return new Response(
+          JSON.stringify({ error: 'You do not have access to this household' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Calculate week dates
