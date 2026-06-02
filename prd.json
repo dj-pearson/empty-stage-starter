@@ -4797,8 +4797,8 @@
         "Wire AppContext.loadUserData's new catch to a user-visible auth-error path. Add a test for the expired-token path."
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Discovered 2026-05-30 bug-hunt. CLAUDE.md already prescribes 'JWT expired -> refresh or redirect to /auth' but nothing implements it globally."
+      "passes": true,
+      "notes": "DONE 2026-06-02 (web): Centralized expired-JWT/401/PGRST301 handling. New src/lib/supabaseAuthError.ts: isSupabaseAuthError() detects code PGRST301, HTTP 401, and 'JWT expired'/'invalid JWT'/'token is expired'/'not authenticated' messages; handleSupabaseAuthError() attempts a single supabase.auth.refreshSession() -> returns 'refreshed' (caller retries) on success, else redirects to /auth (preserving pathname+search, no loop when already on /auth) and returns 'redirected'. Wired into AppContext.loadUserData: these errors come back as result.error (NOT thrown), so added a post-Promise.all scan across kids/foods/recipes/plan/grocery reads that, on an auth error, refreshes-once-then-retries (guarded by a `retried` flag) or bails to /auth without applying empty data; the thrown-error catch gets the same treatment. Tests: src/lib/supabaseAuthError.test.ts (13 cases incl. the expired-token refresh-success/refresh-fail/redirect/throw/already-on-auth paths). tsc clean; eslint 0 errors on new files; full vitest suite 883 passing."
     },
     {
       "id": "US-317",
@@ -4810,8 +4810,8 @@
         "Remove or make meaningful the manual refreshSession() on 'Extend'. tsc clean; adjust a test."
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Discovered 2026-05-30 bug-hunt (src/components/SessionTimeoutWarning.tsx). Desktop polish; client has autoRefreshToken: true."
+      "passes": true,
+      "notes": "DONE 2026-06-02 (web): Rewrote SessionTimeoutWarning to be event-driven instead of polling expires_at. Old version polled every 60s and warned in a fixed 5-min pre-expiry window even though the client runs autoRefreshToken:true — so it fired on healthy sessions (the 'odd times' desktop popups). Now subscribes to supabase.auth.onAuthStateChange: TOKEN_REFRESHED/SIGNED_IN hide the warning (session healthy); only an UNEXPECTED SIGNED_OUT (not user-initiated, not already on /auth) surfaces a 'Session Expired — sign in again' dialog. Removed the meaningless manual refreshSession() 'Extend' button (post-SIGNED_OUT the refresh token is already gone) in favor of a 'Sign In Again' action that routes to /auth with redirect. NOTE: the component is currently not mounted anywhere in src/ (grep-confirmed), so this is a correctness/preventative fix — re-mounting it is a separate product decision. tsc clean; eslint clean."
     },
     {
       "id": "US-318",
@@ -4824,8 +4824,8 @@
         "Additive, backward-compatible migrations only."
       ],
       "priority": 5,
-      "passes": false,
-      "notes": "Discovered 2026-05-30 bug-hunt (migrations 20260520000000/2/3, insights_seasonal_recall). Latent until clients write/delete these tables; surfaces as silent failures."
+      "passes": true,
+      "notes": "DONE 2026-06-02 (additive migration 20260602000000_rls_policy_gaps.sql): closed RLS coverage gaps on the 2026-05-20 batch. Added household-scoped DELETE policies to household_preferences and insights_seasonal_recall, and a member-scoped DELETE to kid_growth_events (mirrors their existing SELECT/INSERT/UPDATE patterns). insights_seasonal_recall INSERT stays service-role-only (cron-populated — already documented on the table; client only dismisses via UPDATE). Added WITH CHECK (auth.uid() = user_id) to the picky_win_preferences UPDATE policy (was USING-only; WITH CHECK blocks reassigning a row to another user_id) for parity with user_preferences. auto_restock_blocklist (SELECT/INSERT/DELETE) and kid_allergen_change_log (append-only, documented) were already correct. All statements idempotent (DROP POLICY IF EXISTS before CREATE); new DELETE policies only BROADEN access so older clients are unaffected. NOTE: applies on prod via the same deploy as US-323."
     },
     {
       "id": "US-319",
@@ -4838,8 +4838,8 @@
         "Verify a fresh signup succeeds end-to-end (web + iOS) after any change."
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Discovered 2026-05-30 bug-hunt. Risk: 'Database error saving new user' on all new signups if the trigger still writes to a dropped table, or duplicate-household errors on retried signups."
+      "passes": true,
+      "notes": "DONE 2026-06-02 (migration 20260602000001_idempotent_handle_new_user.sql). AC1 verified by inspection: the restored handle_new_user() (20260512000000) references ONLY profiles/households/household_members — NOT user_profiles — so the 20260513000000 scaffold drop cannot break the trigger; this migration re-asserts that correct body. AC2: made the household + parent-membership inserts idempotent — they now run ONLY when the user has no household_members row (the prior body created a fresh household every time it fired, and since households has a uuid PK the INSERT never conflicted -> duplicate households on a re-fired/retried signup), plus ON CONFLICT DO NOTHING on household_members. AC3 (re-raise): kept the loud re-raise deliberately — the catch-all swallow in the hijacked function is exactly what hid the 3-month no-households outage; with the idempotency guard the realistic failure mode (retried signup -> duplicate) is gone, so the handler now only catches genuinely unexpected errors (which we WANT surfaced), and a profile-without-household is still recoverable via the 20260512000000 backfill. CREATE OR REPLACE is additive (same signature/trigger). End-to-end fresh-signup verification on live web+iOS rides the prod deploy (US-323)."
     },
     {
       "id": "US-320",
@@ -4851,8 +4851,8 @@
         "Cover KidsContext, GroceryContext, RecipesContext, FoodsContext, PlanContext. tsc clean; failure-path tests."
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Discovered 2026-05-30 bug-hunt. Causes 'my edit reverted' confusion and laggy-feeling edits on desktop."
+      "passes": true,
+      "notes": "DONE 2026-06-02 (web): optimistic-update rollback + error toasts across all five entity contexts. Root bug: update*/delete* applied local state inside the Supabase .then REGARDLESS of error, so a server-rejected edit looked saved then silently reverted on the next realtime sync. New src/lib/optimisticMutation.ts runOptimisticMutation(setState, optimistic, serverCall, {logLabel, toastMessage}): applies the optimistic change immediately (snapshot captured via the functional updater — reliable because the awaited network call gives React time to flush), and on error rolls back to the snapshot + toast.error; auth errors route to handleSupabaseAuthError (US-316) instead of a generic toast. Applied to FoodsContext (updateFood/deleteFood/updateFoods/deleteFoods), KidsContext (updateKid/deleteKid, preserving active-kid fixup), GroceryContext (updateGroceryItem/deleteGroceryItem/deleteGroceryItems/toggleGroceryItem/clearCheckedGroceryItems — the last two now read current state from the closure rather than firing a side-effect inside a setState updater), RecipesContext (updateRecipe/deleteRecipe), PlanContext (updatePlanEntry/deleteWeekPlan). Tests: src/lib/optimisticMutation.test.ts (success keeps state; non-auth error rolls back + toasts; auth error rolls back WITHOUT toast; default message). tsc clean; eslint 0 errors on changed files; full vitest 883 passing (incl. existing AppContext grocery toggle/clear tests)."
     },
     {
       "id": "US-321",
@@ -4864,8 +4864,8 @@
         "Verify with deno check and a real image. Keep its shape distinct from identify-product (US-311)."
       ],
       "priority": 5,
-      "passes": false,
-      "notes": "Discovered 2026-05-30 bug-hunt (identify-food-image/index.ts ~line 26). AIServiceV2 vision support exists; function never wired it."
+      "passes": true,
+      "notes": "DONE 2026-06-02: Wired real vision into supabase/functions/identify-food-image/index.ts. It previously (a) passed only a text prompt with a 'vision not yet supported' placeholder AND (b) called generateContent() with a bare string (wrong signature). Now sends the base64 image as an AIMessage.images part (media-type sniffed from the base64 header) via the proper AIRequest, matching the working recognize-fridge-contents pattern. Response shape unchanged — { success, foodData } with name/variety/varietyOptions/category/confidence/description/servingSize/quantity/servingSizeOptions — so existing web+iOS callers are unaffected, and it stays distinct from identify-product (US-311)'s flat product/aisle shape. Added imageBase64 validation (400) and ```json fence stripping. Verified with deno lint (full `deno check` needs network for the esm.sh import; runs in CI). Real-image on-device check rides the functions deploy (US-323)."
     },
     {
       "id": "US-322",

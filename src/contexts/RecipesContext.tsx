@@ -3,6 +3,7 @@ import { Recipe, RecipeIngredient } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
+import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -180,11 +181,14 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
       if (updates.tips !== undefined) dbUpdates.tips = updates.tips;
       if (updates.additionalIngredients !== undefined) dbUpdates.additional_ingredients = updates.additionalIngredients;
 
-      supabase.from('recipes').update(dbUpdates).eq('id', id)
-        .then(({ error }) => {
-          if (error) logger.error('Supabase updateRecipe error:', error);
-          setRecipes(prev => prev.map(r => (r.id === id ? { ...r, ...updates } : r)));
-        });
+      // US-320: optimistic update (camelCase `updates` to local state) with
+      // rollback + toast if the snake_case `dbUpdates` write is rejected.
+      void runOptimisticMutation<Recipe>(
+        setRecipes,
+        prev => prev.map(r => (r.id === id ? { ...r, ...updates } : r)),
+        () => supabase.from('recipes').update(dbUpdates).eq('id', id),
+        { logLabel: 'Supabase updateRecipe error:' }
+      );
     } else {
       setRecipes(prev => prev.map(r => (r.id === id ? { ...r, ...updates } : r)));
     }
@@ -192,11 +196,12 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
 
   const deleteRecipe = useCallback((id: string) => {
     if (userId) {
-      supabase.from('recipes').delete().eq('id', id)
-        .then(({ error }) => {
-          if (error) logger.error('Supabase deleteRecipe error:', error);
-          setRecipes(prev => prev.filter(r => r.id !== id));
-        });
+      void runOptimisticMutation<Recipe>(
+        setRecipes,
+        prev => prev.filter(r => r.id !== id),
+        () => supabase.from('recipes').delete().eq('id', id),
+        { logLabel: 'Supabase deleteRecipe error:', toastMessage: "Couldn't delete that recipe — restored. Please try again." }
+      );
     } else {
       setRecipes(prev => prev.filter(r => r.id !== id));
     }

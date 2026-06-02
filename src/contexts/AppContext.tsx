@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateId, debounce } from "@/lib/utils";
 import { getStorage } from "@/lib/platform";
 import { logger } from "@/lib/logger";
+import { handleSupabaseAuthError } from "@/lib/supabaseAuthError";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { FoodsProvider, useFoods } from "./FoodsContext";
 import { KidsProvider, useKids } from "./KidsContext";
@@ -154,7 +155,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     if (loadedScopeRef.current === scope) return;
     loadedScopeRef.current = scope;
 
-    const loadUserData = async () => {
+    const loadUserData = async (retried = false): Promise<void> => {
       try {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -184,6 +185,29 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
             ? supabase.from('grocery_items').select('*').eq('household_id', householdId).order('created_at', { ascending: true }).limit(500)
             : supabase.from('grocery_items').select('*').order('created_at', { ascending: true }).limit(500)
         ]);
+
+        // US-316: expired-JWT / 401 / PGRST301 come back as result.error (not
+        // thrown), so without this an expired token silently renders an empty
+        // app. Detect it on any read, refresh once, then retry or redirect.
+        const firstError = [kidsRes, foodsRes, recipesRes, planRes, groceryRes]
+          .find(r => r.error)?.error;
+        if (firstError) {
+          const outcome = await handleSupabaseAuthError(firstError);
+          if (outcome === 'refreshed' && !retried) {
+            loadedScopeRef.current = scope;
+            return loadUserData(true);
+          }
+          if (outcome !== 'not-auth-error') {
+            // 'redirected' (or retry exhausted) — heading to /auth. Don't apply
+            // the empty/partial data; leave the scope clear so a fresh session
+            // reloads cleanly.
+            loadedScopeRef.current = null;
+            return;
+          }
+          // A non-auth error on one read — log it and still apply whatever
+          // other reads succeeded (best-effort, matches prior behaviour).
+          logger.error('Error loading user data from Supabase:', firstError);
+        }
 
         if (kidsRes.data) {
           const loadedKids = kidsRes.data as unknown as Kid[];
@@ -252,7 +276,16 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         // Don't leave the scope marked as loaded if it failed — clear it so
         // the next render retries instead of showing a permanently empty app.
         loadedScopeRef.current = null;
-        logger.error('Error loading user data from Supabase:', error);
+        // US-316: a thrown auth error (e.g. from the recipe-migration writes)
+        // gets the same refresh-once-then-retry/redirect treatment.
+        const outcome = await handleSupabaseAuthError(error);
+        if (outcome === 'refreshed' && !retried) {
+          loadedScopeRef.current = scope;
+          return loadUserData(true);
+        }
+        if (outcome === 'not-auth-error') {
+          logger.error('Error loading user data from Supabase:', error);
+        }
       }
     };
 
@@ -295,7 +328,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
       if (data.activeKidId) setActiveKidId(data.activeKidId);
       if (data.planEntries) setPlanEntriesState(data.planEntries);
       if (data.groceryItems) setGroceryItemsState(data.groceryItems);
-    } catch (error) {
+    } catch {
       throw new Error("Invalid JSON data");
     }
   }, [setFoods, setKids, setRecipes, setActiveKidId, setPlanEntriesState, setGroceryItemsState]);

@@ -2797,3 +2797,73 @@ change needed if the function matches the existing Swift contract exactly."
 - 245 passing / 51 false (was 241 / 55). Four backend stories landed.
 
 ---
+
+================================================================================
+## Session 2026-06-02 (cont.) — Web auth/UX hardening + RLS/signup migrations + vision
+================================================================================
+
+Branch: claude/prd-stories-ios-gaps-oyqlz
+
+Continued the false-story backlog. 51 remained; most need Xcode/Gradle or a prod
+deploy. Targeted the 6 that are fully implementable AND verifiable here (web TS +
+SQL + one edge fn): US-316, US-317, US-318, US-319, US-320, US-321.
+
+### Stories completed (prd.json false -> true)
+- US-321 ✓ identify-food-image: wired real vision (AIMessage.images) + fixed the
+  malformed bare-string generateContent() call; response shape unchanged.
+- US-316 ✓ Global expired-JWT/401/PGRST301 handling: new src/lib/supabaseAuthError.ts
+  (detect + refresh-once + redirect-to-/auth), wired into AppContext.loadUserData
+  (errors arrive as result.error, not thrown — added a results scan + retry/bail).
+- US-320 ✓ Optimistic-update rollback + toasts: new src/lib/optimisticMutation.ts,
+  applied to update*/delete* across Foods/Kids/Grocery/Recipes/Plan contexts.
+  Auth errors route to the US-316 handler instead of a generic toast.
+- US-317 ✓ SessionTimeoutWarning: event-driven (onAuthStateChange) instead of
+  expires_at polling, so it only warns on a genuine failed refresh. (Component is
+  currently unmounted — fix is preventative/correctness; re-mount is a product call.)
+- US-318 ✓ RLS gaps (migration 20260602000000): household/member-scoped DELETE on
+  household_preferences, insights_seasonal_recall, kid_growth_events; WITH CHECK on
+  picky_win_preferences UPDATE. Additive + idempotent.
+- US-319 ✓ Signup path (migration 20260602000001): idempotent household/membership
+  inserts in handle_new_user (guard + ON CONFLICT) to kill duplicate-household-on-
+  retry; kept the deliberate re-raise (swallowing caused the 3-month outage);
+  verified by inspection the trigger no longer references the dropped user_profiles.
+
+### Key findings
+- The deployed iOS/web functions runtime is `supabase functions serve` over
+  supabase/functions/ (Dockerfile.functions), confirmed last session.
+- SessionTimeoutWarning is orphaned (grep-confirmed not imported anywhere).
+- The contexts' `setState(prev => {capture; return prev})` "no-op read" does NOT
+  populate synchronously (React defers the updater) — fine when followed by an
+  `await` (the helper's snapshot capture), but it broke toggle/clearChecked which
+  branched synchronously right after. Fixed those to read state from the closure.
+
+### Verification (deps were not installed in the fresh clone; ran `npm ci` first)
+- Full vitest suite: 883 passing / 3 pre-existing skips (incl. 17 new tests across
+  supabaseAuthError.test.ts + optimisticMutation.test.ts).
+- tsc -p tsconfig.app.json: only the 15 PRE-EXISTING errors in ProductSafetyChecker
+  (untouched); my changes are type-clean.
+- eslint on all changed files: 0 errors (only pre-existing react-refresh warnings).
+  Also fixed 4 pre-existing lint errors in files I was editing (importData optional
+  catch binding; copyWeekPlan @ts-ignore -> @ts-expect-error, tsc-verified still needed).
+- deno lint clean on identify-food-image. Full `deno check` needs network (esm.sh) -> CI.
+
+### Deferred / blocked
+- US-318/US-319/US-321 effects land on prod via the SAME deploy as US-323 (no prod
+  DB/credentials in sandbox). Remaining 45 false stories are iOS/Android/watchOS/
+  App-Clip (Xcode/Gradle) or prod-deploy tasks.
+
+### Files changed this session
+- supabase/functions/identify-food-image/index.ts (vision)
+- supabase/migrations/20260602000000_rls_policy_gaps.sql (new)
+- supabase/migrations/20260602000001_idempotent_handle_new_user.sql (new)
+- src/lib/supabaseAuthError.ts (+ .test.ts) (new)
+- src/lib/optimisticMutation.ts (+ .test.ts) (new)
+- src/contexts/{AppContext,FoodsContext,KidsContext,GroceryContext,RecipesContext,PlanContext}.tsx
+- src/components/SessionTimeoutWarning.tsx
+- prd.json (US-316/317/318/319/320/321 -> passes:true)
+- progress.txt (this entry)
+
+### PRD running tally
+- 251 passing / 45 false (was 245 / 51). Six stories landed.
+
+---
