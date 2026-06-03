@@ -2867,3 +2867,77 @@ SQL + one edge fn): US-316, US-317, US-318, US-319, US-320, US-321.
 - 251 passing / 45 false (was 245 / 51). Six stories landed.
 
 ---
+
+## Session 2026-06-03 — iOS parity story flips + cross-module data-flow deep dive
+
+### Stories completed (prd.json false -> true)
+- US-322 ✓ Swift hardening (authored this session): GroceryView.swift:687
+  droppedFoods.first!.name -> droppedFoods.first?.name ?? "1 item";
+  StoreKitService.swift:181 transaction-listener Task.detached now [weak self]
+  + guard let self. Two-line defensive change, no new behavior.
+- US-285 ✓ iOS Planner missing-ingredient bulk prompt (prior commit ff2848a).
+  Verified by inspection: recipe-add -> ShortfallCalculator.compute on dismiss ->
+  MissingIngredientsSheet (default-checked rows, per-row Stepper, addedVia:"recipe"
+  + sourceRecipeId), silent when nothing missing; telemetry present; 217-line
+  ShortfallCalculatorTests. US-281 dependency is passing.
+- US-286 ✓ iOS Planner mark-made pantry decrement (prior commit fb09a28).
+  AppState.markPlanEntryMade: structured-ingredient debit + legacy
+  deduct_food_quantity fallback, optimistic update + rollback, result->"ate",
+  mealMarkedMade telemetry; 136-line MealMadeStrategyTests.
+- US-289 ✓ iOS Pantry quick-add (PantryQuickAddBar wired into PantryView,
+  parseConfidence telemetry; 109-line PantryQuickAddTests).
+
+### IMPORTANT verification caveat on the four flips
+No Swift toolchain in this Linux sandbox (SwiftUI/StoreKit/EventKit are macOS-only),
+so the XCTest suite + Xcode build could NOT be run. passes=true reflects
+code-completion verified against every AC by inspection, NOT a green build. Confirm
+the Xcode build + XCTests on the owner's Mac (same gate US-313 tracks for AI fns).
+Flip decision made with user (2026-06-03): "mark all 4 true + caveat".
+
+### Remaining queue is environment-blocked
+The other 41 false stories are all iOS/Android/watchOS/App-Clip (Xcode/Gradle) or
+prod-deploy (US-323 et al.) — none are completable or verifiable in this sandbox.
+US-323's effects (and US-318/319/321 from the prior session) all ride the SAME prod
+deploy against api.tryeatpal.com, which needs prod DB creds not present here.
+
+### Holistic cross-module data-flow deep dive (user-requested)
+Full writeup: docs/cross-module-data-flow-review-2026-06-03.md. Mapped how data moves
+between Pantry/Recipes/Plan/Grocery/Household on web + iOS. Verified findings:
+- The cross-module "joins" are reimplemented, not shared: "what's missing for this
+  recipe" has 3 divergent impls (recipeShortfall.ts:50 qty+unit; RecipeDetailView.tsx:138
+  presence-only; mealPlanner.ts:131 count-vs-stock) that can show DIFFERENT numbers for
+  the same recipe. "Do I have X" matches 3 different ways; category inference defaults 3
+  ways.
+- VERIFIED: src/lib/unitNormalize.ts (the tested US-287 mass/volume/count converter) is
+  NOT wired into the canonical Planner shortfall — recipeShortfall.ts uses a primitive
+  exact-string normalizeUnitTag and treats unit-mismatch on-hand as ZERO -> tells the user
+  to buy flour they already have. Single call-site fix.
+- VERIFIED: source_recipe_id / added_via='recipe' are stamped on every recipe-driven
+  grocery add (Planner.tsx:138) but NEVER read by any consumer. US-262's "auto-check
+  grocery on mark-made" is only half-built — the data link exists, the consumer doesn't.
+- "I made it" is inconsistent: Planner "ate" debits pantry (Planner.tsx:476-499);
+  RecipeDetailView "I made it" (:175) only bumps times_made, no pantry/grocery effect.
+- Web<->iOS parity is uneven in BOTH directions (iOS has RecipeMatcher / RestockPredictor /
+  moveCheckedToPantry; web has structured shortfall / depletionForecast). Root cause of the
+  recurring "iOS parity" story churn: cross-module semantics live in per-client code.
+
+### Recommended next work (all web/TS — doable in-sandbox, unlike the 41 blocked)
+- R1 wire unitNormalize into recipeShortfall (small, high impact)
+- R2 one shared resolvePantryFood + computeShortfall used by all 3 sites
+- R3 auto-check grocery on mark-made via source_recipe_id (finishes US-262)
+- R4 unify markMade across Planner + RecipeDetail
+- R5 carry computed qty on recipe-detail add (Recipes.tsx:293 hardcodes quantity:1)
+- R6 write the cross-module contract down once, mirror to both clients
+Suggested as new stories US-NEW-A..D in the review doc.
+
+### Files changed this session
+- ios/EatPal/EatPal/Views/Grocery/GroceryView.swift (US-322)
+- ios/EatPal/EatPal/Services/StoreKitService.swift (US-322)
+- prd.json (US-285/286/289/322 -> passes:true + caveat notes)
+- docs/cross-module-data-flow-review-2026-06-03.md (new — deep dive)
+- progress.txt (this entry)
+
+### PRD running tally
+- 255 passing / 41 false (was 251 / 45). Four stories flipped.
+
+---
