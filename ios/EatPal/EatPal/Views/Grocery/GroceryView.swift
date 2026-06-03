@@ -684,7 +684,7 @@ struct GroceryView: View {
                     ToastManager.shared.success(
                         "Added to grocery",
                         message: addedCount == 1
-                            ? droppedFoods.first!.name
+                            ? (droppedFoods.first?.name ?? "1 item")
                             : "\(addedCount) items"
                     )
                 }

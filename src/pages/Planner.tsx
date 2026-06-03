@@ -49,8 +49,7 @@ export default function Planner() {
     updateFood,
     copyWeekPlan,
     deleteWeekPlan,
-    addGroceryItem,
-    groceryItems,
+    addGroceryItemsMerged,
   } = useApp();
 
   const isMobile = useMediaQuery("(max-width: 1023px)");
@@ -115,41 +114,23 @@ export default function Planner() {
    * a second recipe asking for the same thing won't double-add.
    */
   const handleConfirmMissingIngredients = useCallback((selected: Shortfall[]) => {
-    if (!pendingRecipeForMissing) return;
-    const existingNames = new Set(
-      groceryItems
-        .filter((g) => !g.checked)
-        .map((g) => g.name.trim().toLowerCase())
-    );
-    let added = 0;
-    let skipped = 0;
-    for (const s of selected) {
-      const name = s.ingredient.name.trim();
-      if (existingNames.has(name.toLowerCase())) {
-        skipped += 1;
-        continue;
-      }
-      addGroceryItem({
-        name,
+    if (!pendingRecipeForMissing || selected.length === 0) return;
+    // Stack rather than skip: a second recipe asking for "ground beef" now
+    // bumps the existing line's quantity (unit-aware) instead of being dropped.
+    const touched = addGroceryItemsMerged(
+      selected.map((s) => ({
+        name: s.ingredient.name.trim(),
         quantity: s.needed > 0 ? s.needed : 1,
         unit: s.neededUnit ?? s.ingredient.unit ?? "",
         category: s.matchedFood?.category ?? "snack",
         added_via: "recipe",
         source_recipe_id: pendingRecipeForMissing.id,
-      });
-      added += 1;
+      }))
+    );
+    if (touched > 0) {
+      toast.success(`Added ${touched} item${touched === 1 ? "" : "s"} to grocery`);
     }
-    if (added > 0) {
-      toast.success(
-        `Added ${added} item${added === 1 ? "" : "s"} to grocery`,
-        { description: skipped > 0 ? `${skipped} already on your list` : undefined }
-      );
-    } else if (skipped > 0) {
-      toast.info("Already on your list", {
-        description: `All ${skipped} item${skipped === 1 ? "" : "s"} were already pending.`,
-      });
-    }
-  }, [addGroceryItem, groceryItems, pendingRecipeForMissing]);
+  }, [addGroceryItemsMerged, pendingRecipeForMissing]);
 
   // --- Shared handlers (used by both mobile and desktop) ---
 

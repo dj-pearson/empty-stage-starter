@@ -85,7 +85,7 @@ export default function Recipes() {
     kids,
     activeKidId,
     setActiveKid,
-    addGroceryItem,
+    addGroceryItemsMerged,
     groceryItems,
     addPlanEntries,
   } = useApp();
@@ -287,17 +287,20 @@ export default function Recipes() {
   const handleAddMissingToGrocery = useCallback(
     (recipe: Recipe, missingFoods: Food[]) => {
       if (missingFoods.length === 0) return;
-      missingFoods.forEach((food) => {
-        addGroceryItem({
+      // Route through the merging add so duplicates stack with existing lines
+      // and provenance is stamped for the mark-made auto-check (US-262).
+      const touched = addGroceryItemsMerged(
+        missingFoods.map((food) => ({
           name: food.name,
           quantity: 1,
           unit: food.unit ?? "",
           category: food.category,
           added_via: "recipe",
-        });
-      });
+          source_recipe_id: recipe.id,
+        }))
+      );
       toast.success(
-        `Added ${missingFoods.length} ${missingFoods.length === 1 ? "item" : "items"} to grocery`,
+        `Added ${touched} ${touched === 1 ? "item" : "items"} to grocery`,
         { description: recipe.name }
       );
       analytics.trackEvent({
@@ -309,20 +312,30 @@ export default function Recipes() {
         },
       });
     },
-    [addGroceryItem]
+    [addGroceryItemsMerged]
   );
 
   const handleGroceryItemsAdd = useCallback((items: { name: string; quantity: number; unit: string; category: string; aisle?: string }[]) => {
-    items.forEach((item) => {
-      addGroceryItem({
+    // Merge duplicates ("ground beef" + "ground beef 80/20" → one stacked line)
+    // and fold into existing unchecked rows instead of piling up new ones.
+    const touched = addGroceryItemsMerged(
+      items.map((item) => ({
         name: item.name,
         quantity: item.quantity,
         unit: item.unit,
-        category: item.category as Recipe['category'],
+        category: item.category,
         aisle: item.aisle,
-      });
-    });
-  }, [addGroceryItem]);
+        added_via: "recipe",
+        source_recipe_id: groceryRecipe?.id,
+      }))
+    );
+    if (touched > 0) {
+      toast.success(
+        `Added ${touched} ${touched === 1 ? "item" : "items"} to grocery list`,
+        groceryRecipe ? { description: `For: ${groceryRecipe.name}` } : undefined
+      );
+    }
+  }, [addGroceryItemsMerged, groceryRecipe]);
 
   // Add to planner handler
   const handleAddToPlan = useCallback((entries: { kid_id: string; date: string; meal_slot: MealSlot; food_id: string; result: null }[]) => {

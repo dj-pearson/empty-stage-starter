@@ -178,8 +178,9 @@ final class StoreKitService: ObservableObject {
     // MARK: - Transaction Listener
 
     private func listenForTransactions() -> Task<Void, Never> {
-        Task.detached {
+        Task.detached { [weak self] in
             for await result in StoreKit.Transaction.updates {
+                guard let self else { continue }
                 do {
                     let transaction = try await self.checkVerified(result)
                     await self.updateCustomerProductStatus()

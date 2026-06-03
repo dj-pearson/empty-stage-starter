@@ -11,6 +11,7 @@ import { KidsProvider, useKids } from "./KidsContext";
 import { RecipesProvider, useRecipes, normalizeRecipeFromDB, RECIPE_WITH_INGREDIENTS_SELECT } from "./RecipesContext";
 import { PlanProvider, usePlan } from "./PlanContext";
 import { GroceryProvider, useGrocery } from "./GroceryContext";
+import type { GroceryAddInput } from "@/lib/groceryMerge";
 
 interface AppContextType {
   foods: Food[];
@@ -36,6 +37,7 @@ interface AppContextType {
   updatePlanEntry: (id: string, updates: Partial<PlanEntry>) => void;
   setGroceryItems: (items: GroceryItem[]) => void;
   addGroceryItem: (item: Omit<GroceryItem, "id" | "checked">) => void;
+  addGroceryItemsMerged: (items: GroceryAddInput[]) => number;
   toggleGroceryItem: (id: string) => void;
   updateGroceryItem: (id: string, updates: Partial<GroceryItem>) => void;
   deleteGroceryItem: (id: string) => void;
@@ -83,7 +85,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   const { kids, setKids, activeKidId, setActiveKidId, addKid, updateKid, deleteKid, setActiveKid, refreshKids } = useKids();
   const { recipes, setRecipes, addRecipe, updateRecipe, deleteRecipe, refreshRecipes } = useRecipes();
   const { planEntries, setPlanEntries, setPlanEntriesState, addPlanEntry, addPlanEntries, updatePlanEntry, copyWeekPlan, deleteWeekPlan } = usePlan();
-  const { groceryItems, setGroceryItems, setGroceryItemsState, addGroceryItem, toggleGroceryItem, updateGroceryItem, deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems } = useGrocery();
+  const { groceryItems, setGroceryItems, setGroceryItemsState, addGroceryItem, addGroceryItemsMerged, toggleGroceryItem, updateGroceryItem, deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems } = useGrocery();
 
   // Tracks which (userId:householdId) scope has been loaded so the Supabase
   // sync runs once per scope, reloads when the household resolves/changes, and
@@ -349,7 +351,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     addKid, updateKid, deleteKid, setActiveKid, setActiveKidId,
     addRecipe, updateRecipe, deleteRecipe,
     setPlanEntries, addPlanEntry, addPlanEntries, updatePlanEntry,
-    setGroceryItems, addGroceryItem, toggleGroceryItem,
+    setGroceryItems, addGroceryItem, addGroceryItemsMerged, toggleGroceryItem,
     updateGroceryItem, deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems,
     exportData, importData, resetAllData,
     addFoods, updateFoods, deleteFoods,
@@ -361,7 +363,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     addKid, updateKid, deleteKid, setActiveKid, setActiveKidId,
     addRecipe, updateRecipe, deleteRecipe,
     setPlanEntries, addPlanEntry, addPlanEntries, updatePlanEntry,
-    setGroceryItems, addGroceryItem, toggleGroceryItem,
+    setGroceryItems, addGroceryItem, addGroceryItemsMerged, toggleGroceryItem,
     updateGroceryItem, deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems,
     exportData, importData, resetAllData,
     addFoods, updateFoods, deleteFoods,
