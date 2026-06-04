@@ -4894,6 +4894,377 @@
       "priority": 1,
       "passes": false,
       "notes": "Discovered 2026-05-30 from desktop console. These are NOT code bugs — the recipe_ingredients schema exactly matches RECIPE_WITH_INGREDIENTS_SELECT, and the missing tables/RPC all have migration files. Root cause is a prod deploy gap. OPTIONAL resilience follow-up: have the recipes loader retry with a plain select('*') if the embed 400s, so recipes still load (minus structured ingredients) if recipe_ingredients is ever unavailable. Ask before building — primary fix is the deploy. | AUDIT 2026-06-02: confirmed all referenced migration files exist in supabase/migrations/ (20260430000001_create_recipe_ingredients, 20260515000000_variety_fatigue, 20260223000000_rate_limiting, 20251010230000_rate_limiting_system, 20260530000000_relax_foods_category_check). This story is a PROD DEPLOY operation (supabase db push + NOTIFY pgrst 'reload schema'), not a code change — it requires prod DB credentials/network access not available in the dev sandbox. Left passes=false; the user must run the deploy against api.tryeatpal.com. Note: US-310/311/312 (new edge fns) and US-315 (security fix) ride the SAME functions deploy."
+    },
+    {
+      "id": "US-324",
+      "title": "Enforce server-side household membership on edge functions that accept householdId/kidIds from the request body",
+      "description": "As a security engineer, I want edge functions to verify the authenticated user actually belongs to the household they pass in the body so that a user cannot read another household's kids, foods, recipes, or plan data by guessing a householdId (IDOR / broken object-level authorization beyond RLS reliance).",
+      "acceptanceCriteria": [
+        "In functions/tonight-mode/index.ts, after authenticateRequest, verify the JWT user is a member of body.householdId (query household_members) before using it; reject with 403 if not",
+        "Apply the same membership check (or scope strictly to user.id) in ai-meal-plan, suggest-foods, suggest-recipe, parse-grocery-image, parse-receipt-image, identify-product, and tonight-mode wherever a client-supplied householdId or kidIds is used",
+        "Ensure foods/recipes/plan_entries/recipe_ingredients queries are scoped by the verified household_id, not left to RLS alone (defense in depth)",
+        "Add a shared helper in functions/_shared (e.g. assertHouseholdMember(user, householdId)) and reuse it",
+        "Add edge-function tests asserting a cross-household householdId returns 403 / empty, not another household's data",
+        "Existing critical edge-function tests still pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Verified: tonight-mode/index.ts:136-139 filters kids by body.householdId with no membership check; relies solely on forwarded-JWT RLS."
+    },
+    {
+      "id": "US-325",
+      "title": "Add rate limiting and payload/image size validation to all AI/LLM edge functions to prevent cost-abuse and DoS",
+      "description": "As a platform owner, I want every expensive AI call gated by per-user rate limits and input-size caps so that a single authenticated user cannot run up unbounded OpenAI/Anthropic spend or exhaust quota.",
+      "acceptanceCriteria": [
+        "Add per-user (and per-IP) rate limiting to: ai-meal-plan, suggest-foods, suggest-recipe, parse-grocery-image, parse-receipt-image, identify-product, tonight-mode, generate-social-content (reuse existing server-side rate_limiting infra)",
+        "Validate request body / base64 image size before forwarding to the vision API (reject images over a sane max, e.g. 5MB decoded) in parse-grocery-image, parse-receipt-image, identify-product",
+        "Cap free-text fields (content_summary, prompts, OCR text) to a max length before embedding into LLM prompts",
+        "Return 429 with Retry-After when the limit is exceeded; log the event to the security/cost monitoring path",
+        "Document the per-function limits in functions/_shared or SECURITY.md",
+        "Add tests for rate-limit enforcement and oversize-payload rejection on at least the three vision functions"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Verified via audit: vision functions call OpenAI at detail:'high' with no size validation and no rate limit."
+    },
+    {
+      "id": "US-326",
+      "title": "Validate Stripe price_id against a server-side allowlist in create-checkout",
+      "description": "As a billing engineer, I want create-checkout to map the requested plan to a server-controlled Stripe price so that a client cannot pass an arbitrary or cheaper price_id and provision a paid tier at the wrong price (price/tier tampering).",
+      "acceptanceCriteria": [
+        "In functions/create-checkout/index.ts, replace direct pass-through of body.price_id into line_items with a lookup against a server-side allowlist/map of valid price IDs (or accept a plan/tier key and resolve the price server-side)",
+        "Reject any price_id not in the allowlist with 400 before calling Stripe",
+        "Keep the existing JWT-derived user_id behavior (do not regress US-005)",
+        "Source the allowlist from environment/config, not hardcoded secrets",
+        "Add a test asserting an unknown price_id is rejected and a known one succeeds",
+        "Typecheck passes; critical edge-function tests pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Verified: create-checkout/index.ts:68-89 accepts client price_id with only a typeof string check, no allowlist."
+    },
+    {
+      "id": "US-327",
+      "title": "Verify JWT signature/expiry (not just presence) and add admin gating to content-generation edge functions",
+      "description": "As a security engineer, I want every protected edge function to validate the JWT (signature + expiry) rather than merely checking the header is present, and I want marketing/content tools restricted to admins, so that expired/forged tokens are rejected and non-admins cannot trigger content generation.",
+      "acceptanceCriteria": [
+        "Audit functions/* for endpoints that only check Authorization header presence (e.g. suggest-foods) and switch them to the shared authenticateRequest path that calls auth.getUser()",
+        "Add an admin-role check to generate-social-content and generate-blog-content (verify user_roles server-side) so only admins can invoke them",
+        "Treat user-supplied content_summary/prompt text as untrusted: cap length (covered by US-325) and add a brief prompt-injection mitigation note/system-prompt boundary",
+        "Return 401 on invalid/expired token and 403 on insufficient role",
+        "Add tests for expired-token rejection and non-admin rejection on generate-social-content",
+        "Critical edge-function tests pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit: suggest-foods checks token presence only; generate-social-content has no admin gating (index.ts:125 embeds user content_summary into the prompt)."
+    },
+    {
+      "id": "US-328",
+      "title": "Close RLS and privilege gaps: user_roles recursion, permissive WITH CHECK(true) tables, and health-check service-role exposure",
+      "description": "As a security engineer, I want to eliminate self-referential RLS recursion, lock down overly-permissive insert policies, and avoid exposing the service-role key on unauthenticated endpoints so that admin checks are reliable and low-trust tables can't be spoofed.",
+      "acceptanceCriteria": [
+        "Refactor the user_roles admin SELECT policy so it does not query user_roles within its own USING clause (use a SECURITY DEFINER helper like has_role() / is_admin() to avoid infinite-recursion risk)",
+        "Tighten WITH CHECK(true) INSERT policies on low-trust tables (e.g. ai_cost / cost-tracking) so users cannot insert arbitrary rows attributed to others; scope to auth.uid()",
+        "Review functions/health-check: avoid using SUPABASE_SERVICE_ROLE_KEY for an unauthenticated endpoint, or restrict what it returns (no version/latency internals) — use anon/limited access",
+        "Add a migration (backward-compatible, additive/policy-only) implementing the policy fixes with RLS still enabled",
+        "Verify older shipped iOS clients are unaffected by the tightened policies (read paths unchanged)",
+        "Migration test job passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Audit flagged: user_roles admin SELECT self-reference; ai_cost WITH CHECK(true); health-check uses service-role key unauthenticated."
+    },
+    {
+      "id": "US-329",
+      "title": "Fix the CI typecheck step so it actually type-checks the app (currently a no-op)",
+      "description": "As a maintainer, I want CI to fail on TypeScript errors so that broken or mistyped code cannot merge — today the typecheck step passes vacuously and broken files ship.",
+      "acceptanceCriteria": [
+        "Replace `npx tsc --noEmit` in .github/workflows/ci.yml with a command that checks the referenced projects, e.g. `npx tsc -b --noEmit` (or `tsc -p tsconfig.app.json --noEmit` and `tsc -p tsconfig.node.json --noEmit`)",
+        "Confirm the new command exits non-zero against a deliberately broken file (e.g. the current ProductSafetyChecker.tsx error) before that file is fixed",
+        "Add an npm script `typecheck` so it can be run locally and in CI consistently",
+        "Document `npm run typecheck` in CLAUDE.md commands section",
+        "CI run is green only after real type errors are resolved (coordinate with US-330/US-334 type fixes)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Verified: root tsconfig.json has files:[] + references only; `npx tsc --noEmit` checks zero files and exits 0, so ProductSafetyChecker.tsx's syntax error was never caught by CI."
+    },
+    {
+      "id": "US-330",
+      "title": "Remove dead and broken web components (ProductSafetyChecker, unused 3D scenes, unused AdminControlPanel import)",
+      "description": "As a maintainer, I want orphaned/broken components removed so that the app type-checks cleanly, the entry bundle shrinks, and contributors aren't misled by dead code.",
+      "acceptanceCriteria": [
+        "Fix or delete src/components/ProductSafetyChecker.tsx — it has a malformed template literal at line ~110 (`...join(' });`) that breaks the allergen-warning toast and fails typecheck; the component has zero importers",
+        "Remove the unused static `import { AdminControlPanel }` from src/App.tsx (line ~16) — it is never rendered but eagerly pulls ~15 heavy admin dashboards into the main entry chunk",
+        "Delete (or lazy-route) the dead 3D components with zero source importers: BallPit3D.tsx, FoodOrbit3D.tsx, ProductShowcase3D.tsx (verify only docs reference them; ThreeDHeroScene via LazyFoodOrbit stays)",
+        "Verify no remaining import references to anything deleted (grep clean)",
+        "Bundle: confirm the main entry chunk shrinks after removing the AdminControlPanel import (record before/after gzip size in notes)",
+        "Typecheck passes; npm run build succeeds; existing tests pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Verified: ProductSafetyChecker.tsx:110 unterminated template literal, 0 importers; App.tsx:16 imports AdminControlPanel unused; BallPit3D/FoodOrbit3D/ProductShowcase3D have 0 source importers."
+    },
+    {
+      "id": "US-331",
+      "title": "Make the domain-context split deliver real re-render isolation instead of routing everything through useApp()",
+      "description": "As a performance engineer, I want components to subscribe only to the data they use so that a single grocery toggle or food edit does not re-render all 43 useApp() consumers, completing the value the AppContext split was supposed to provide.",
+      "acceptanceCriteria": [
+        "Audit the ~43 components/pages using useApp(); migrate each to the narrowest domain hook(s) it needs (useFoods/useKids/useRecipes/usePlan/useGrocery) where practical",
+        "Split the merged context value so unrelated domains don't share one ~40-key memoized object that rebuilds on every change (AppContext.tsx ~:348-372 / AppContextComposer ~:82-88)",
+        "Memoize per-domain context values and stabilize callback identities (e.g. exportData at ~:320 should not get a new reference on every data change)",
+        "Add a lightweight render-count test or React Profiler note demonstrating that toggling a grocery item no longer re-renders foods-only components",
+        "No behavior regressions in Pantry/Grocery/Planner/Recipes/Dashboard",
+        "Typecheck passes; tests pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit: 43 components consume the merged useApp(); domain hooks are only used inside the contexts, so the US-012 split currently yields zero isolation. Follows up US-012."
+    },
+    {
+      "id": "US-332",
+      "title": "Manage realtime subscription lifecycle and use household-scoped channel names",
+      "description": "As a performance/correctness engineer, I want realtime channels opened only when needed and namespaced per household so that we don't hold 3+ always-on subscriptions for the app's lifetime and don't leak or collide subscriptions when a user switches household or opens multiple tabs.",
+      "acceptanceCriteria": [
+        "Give Grocery/Plan/Kids realtime channels household-scoped unique names (e.g. `grocery:${householdId}`) instead of static names",
+        "Tear down and recreate subscriptions when householdId changes (verify the effect dependency includes householdId and cleanup runs)",
+        "Consider gating non-critical subscriptions (e.g. activity feeds) to the routes that need them rather than mounting app-wide",
+        "Confirm no duplicate channels remain after a household switch (log/inspect channel count)",
+        "No missed updates after switching household and back",
+        "Tests/typecheck pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Audit: GroceryContext.tsx:61, PlanContext.tsx:51, KidsContext.tsx:55 open static-named channels as soon as userId+householdId resolve; not household-scoped."
+    },
+    {
+      "id": "US-333",
+      "title": "Normalize realtime payloads (snake_case -> camelCase) before merging into context state",
+      "description": "As a developer, I want realtime INSERT/UPDATE payloads run through the same normalizer used for fetched rows so that realtime-applied items don't momentarily render with the wrong shape or missing client-side defaults (data shape drift).",
+      "acceptanceCriteria": [
+        "In GroceryContext (~:50-57), PlanContext (~:38-47), and KidsContext (~:42-51), pass payload.new through the existing normalize* helper(s) instead of writing the raw DB row into state",
+        "Ensure derived/camelCase fields and client defaults are present after a realtime apply (parity with .select() insert path)",
+        "Guard against optimistic-update + realtime double-apply producing duplicate rows (dedupe by id)",
+        "Add a unit test that feeds a raw snake_case payload through the handler and asserts normalized output",
+        "No visual flicker/shape drift on a second device receiving an update",
+        "Typecheck passes; tests pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Audit: realtime handlers push payload.new (raw snake_case) directly into state in Grocery/Plan/Kids contexts."
+    },
+    {
+      "id": "US-334",
+      "title": "Batch grocery-merge writes to remove the N+1 network/render pattern",
+      "description": "As a performance engineer, I want addGroceryItemsMerged to apply its updates in a single batched operation so that adding a recipe whose ingredients overlap many existing items doesn't fire N separate update requests and N optimistic re-renders.",
+      "acceptanceCriteria": [
+        "Refactor GroceryContext.addGroceryItemsMerged (~:165-167) to batch updates (single upsert/bulk update) instead of looping updateGroceryItem per item",
+        "Apply optimistic state in one set call (one re-render) rather than per-item",
+        "Preserve merge semantics (quantity merge / dedupe) and optimistic rollback on error (do not regress US-320)",
+        "Add a test verifying one bulk request is issued for an N-item merge",
+        "Typecheck passes; tests pass"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Audit: addGroceryItemsMerged loops updateGroceryItem (each a separate supabase update round trip) -> N+1 writes + N re-renders."
+    },
+    {
+      "id": "US-335",
+      "title": "Eliminate admin-dashboard double-polling and per-second re-renders",
+      "description": "As a performance engineer, I want admin dashboards to stop redundant polling and cosmetic per-second state updates so that they don't refetch and re-render charts continuously while open.",
+      "acceptanceCriteria": [
+        "LiveActivityFeed (~:306-310): drop the 30s setInterval fallback when the realtime channel subscribes successfully (only poll if realtime fails to connect)",
+        "SystemHealthDashboard (~:312-319): stop the 1s countdown setState that re-renders the whole dashboard/charts every second — derive the countdown display without re-rendering charts (e.g. CSS, ref, or isolated child), keep the 30s data refetch",
+        "Verify charts are not remounted on each tick (React Profiler spot check)",
+        "No loss of data freshness (still updates on realtime + 30s)",
+        "Typecheck passes; tests pass"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Audit: LiveActivityFeed.tsx:306-310 polls every 30s even when realtime is live; SystemHealthDashboard.tsx:318-319 setState every 1000ms re-renders charts."
+    },
+    {
+      "id": "US-336",
+      "title": "Fix pwa.ts service-worker update loop, blocking confirm(), and leaked online/offline listeners",
+      "description": "As a performance engineer, I want the PWA helper to stop blocking the main thread and to clean up its listeners so that INP isn't harmed by a synchronous confirm() and event handlers don't accumulate.",
+      "acceptanceCriteria": [
+        "src/lib/pwa.ts:22 — replace the synchronous confirm() on SW update with a non-blocking toast/prompt (Sonner) offering reload",
+        "Reconsider the 1-hour registration.update() setInterval (~:11-13): clear it on visibilitychange/unmount or rely on the browser's update cycle",
+        "Fix onOnlineStatusChange (~:48-55): the cleanup uses freshly-created function references in removeEventListener, so listeners are never removed — capture and remove the same references",
+        "Add/adjust a test for the online/offline subscribe-then-cleanup removing its listeners",
+        "Typecheck passes; tests pass"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Audit: pwa.ts blocking confirm(), perpetual update interval, and broken removeEventListener cleanup (listener leak)."
+    },
+    {
+      "id": "US-337",
+      "title": "Build the web household invite acceptance flow (second caregiver currently cannot join from the web)",
+      "description": "As a parent, I want to invite my partner and have them accept and join our household from the web so that we actually share kids, meal plans, and grocery lists — today there is no web acceptance path at all.",
+      "acceptanceCriteria": [
+        "Add a web UI to generate an invite (call create_household_invite RPC) from ManageHouseholdDialog, showing a shareable code/link",
+        "Add a web accept flow: a route/page (e.g. /join or /household/accept?code=...) that calls accept_household_invite for the signed-in user and adds them to household_members",
+        "Make the existing email-invite path in ManageHouseholdDialog functional end-to-end (send invite -> recipient accepts -> household_members row created), or consolidate onto invite codes; remove the current dead-end insert into household_invitations",
+        "Handle edge cases: invalid/expired/already-used code, user already in a household, self-invite",
+        "After acceptance, the new member sees shared kids/plans/grocery via existing RLS and realtime",
+        "Add tests for create + accept (happy path and invalid code); typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Audit: accept_household_invite/create_household_invite RPCs exist (iOS-only); web has no caller. ManageHouseholdDialog only inserts household_invitations rows with no acceptance flow -> dead end on web."
+    },
+    {
+      "id": "US-338",
+      "title": "Fix meal-vote upserts: add an explicit conflict target and prevent double-voting",
+      "description": "As a developer, I want kid meal votes to upsert against a well-defined unique constraint so that votes don't error or duplicate, and a kid/user can't double-vote on the same item.",
+      "acceptanceCriteria": [
+        "Align KidMealVoting/MealVotingCard writes with the meal_votes table: provide an explicit onConflict target matching the table's unique constraint",
+        "Resolve the UNIQUE(kid_id, plan_entry_id) vs nullable plan_entry_id mismatch (NULLs don't dedupe) — use a stable conflict key or a partial/expression index, or a non-null surrogate",
+        "Guarantee one effective vote per (voter, item): re-voting updates the prior vote rather than inserting a duplicate",
+        "Add a migration if a constraint/index change is needed (backward-compatible, additive)",
+        "Add a test asserting a repeated vote updates (not duplicates) and the upsert succeeds without an onConflict error",
+        "Migration test + unit tests pass"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Audit: KidMealVoting writes to meal_votes; upsert lacks an onConflict target and UNIQUE(kid_id, plan_entry_id) has nullable plan_entry_id."
+    },
+    {
+      "id": "US-339",
+      "title": "Implement real shopping presence or remove the dead activeShoppers feature",
+      "description": "As a shopper, I want to see who else is actively shopping a shared list (or not be shown a fake/empty indicator) so that collaborative shopping mode reflects reality.",
+      "acceptanceCriteria": [
+        "Decide: implement presence via Supabase Realtime Presence on the shopping session channel, OR remove the unused activeShoppers UI",
+        "If implementing: track join/leave on CollaborativeShoppingMode, populate activeShoppers from presence state, and show live avatars/count",
+        "If removing: delete the dead activeShoppers state/UI and any references so no misleading empty indicator renders",
+        "Ensure presence is scoped to the household/shopping session and torn down on unmount",
+        "Add a test or manual-verification note for the chosen path; typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Audit: activeShoppers is declared but never populated (dead presence feature) in collaborative shopping."
+    },
+    {
+      "id": "US-340",
+      "title": "Add a recipes realtime subscription so recipe edits sync live across caregivers",
+      "description": "As a co-parent, I want recipe additions/edits made by my partner to appear on my device without a manual refresh so that shared recipes stay consistent — there is currently no recipes realtime channel.",
+      "acceptanceCriteria": [
+        "Add a household-scoped realtime subscription for the recipes table in RecipesContext (parity with Grocery/Plan/Kids)",
+        "Normalize incoming payloads with the existing recipe normalizer (normalizeRecipeFromDB) so image_url and structured fields aren't lost (coordinate with US-333)",
+        "Debounce and dedupe to avoid double-apply with optimistic updates",
+        "Ensure cleanup/teardown on unmount and household switch",
+        "Add a test feeding a raw recipe payload through the handler asserting normalized state; typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Audit: no recipes realtime subscription exists; recipe changes don't propagate live to other household members."
+    },
+    {
+      "id": "US-341",
+      "title": "Define and document localStorage vs Supabase precedence and conflict handling on load",
+      "description": "As an engineer, I want a clear, tested rule for which source wins when the localStorage backup diverges from Supabase so that cross-device edits don't silently resurrect stale data.",
+      "acceptanceCriteria": [
+        "Document the intended precedence (server-authoritative on load, localStorage only as offline fallback) in CLAUDE.md / code comments",
+        "Audit AppContext load logic: ensure a successful Supabase fetch overwrites (not merges-stale) the local cache, using updated_at where available for conflict resolution",
+        "Ensure offline edits queued locally are reconciled against server state on reconnect without clobbering newer server rows (coordinate with syncQueue)",
+        "Add tests for: server-newer wins on load; local offline edit survives reconnect; stale local does not overwrite newer server data",
+        "Typecheck passes; tests pass"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Audit: localStorage vs Supabase precedence on load is unclear; divergence/conflict handling not explicitly defined."
+    },
+    {
+      "id": "US-342",
+      "title": "Eliminate `any` usage and ban it via lint to restore type safety",
+      "description": "As a maintainer, I want the ~307 `any` usages removed and the rule enforced so that the 'no any' rule in CLAUDE.md is actually upheld and type errors surface at build time.",
+      "acceptanceCriteria": [
+        "Inventory all `: any`, `<any>`, and `as any` occurrences in src (~307) and replace with precise types (use Database['public']['Tables'][...] Row/Insert types where applicable)",
+        "Reduce remaining @ts-ignore/@ts-expect-error (~30) by fixing the underlying types; keep only justified, commented suppressions",
+        "Enable @typescript-eslint/no-explicit-any (error) and no-non-null-assertion guidance in eslint.config.js",
+        "Land incrementally if needed (per-directory) so each PR stays reviewable; CI typecheck (US-329) must be real first",
+        "npm run lint passes with the new rule; typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Verified counts: 307 any-style usages, 30 ts-ignore/expect-error in src."
+    },
+    {
+      "id": "US-343",
+      "title": "Replace stray console.* calls with the logger and enforce no-console in lint",
+      "description": "As an engineer, I want production code to route through src/lib/logger.ts instead of console.* so that we avoid noisy/PII logs in production and keep observability consistent (~267 stray calls today).",
+      "acceptanceCriteria": [
+        "Replace console.log/warn/debug/error in src (~267, excluding tests) with the logger abstraction; ensure errors still reach Sentry where appropriate",
+        "Audit replaced sites for PII (emails, tokens, user data) and stop logging sensitive values",
+        "Enable eslint no-console (allow only console.error if logger wraps it, or disallow entirely) in eslint.config.js",
+        "npm run lint passes; no behavioral regressions",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Verified: 267 console.* in src (non-test); logger.ts exists but is bypassed."
+    },
+    {
+      "id": "US-344",
+      "title": "Replace remaining select('*') over-fetches on hot paths with column-specific selects",
+      "description": "As a performance engineer, I want hot-path Supabase reads to select only needed columns so that we cut payload size and avoid pulling unused/large fields, finishing the work started in US-014 (~182 select('*') remain).",
+      "acceptanceCriteria": [
+        "Inventory the ~182 remaining .select('*') calls; prioritize high-frequency/large-table reads (foods, recipes, grocery_items, plan_entries, kids, admin dashboards)",
+        "Replace with explicit column lists for the prioritized reads; leave low-traffic/admin one-offs documented if intentionally left",
+        "Verify no code depends on a column that was dropped from the select (typecheck + runtime spot check)",
+        "Confirm RLS-relevant columns (user_id/household_id) remain selected where filtering/normalization needs them",
+        "Typecheck passes; tests pass"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Verified: 182 select('*') occurrences remain after US-014."
+    },
+    {
+      "id": "US-345",
+      "title": "Dark-mode regression sweep: replace remaining hardcoded colors with theme tokens",
+      "description": "As a designer/engineer, I want the ~112 remaining hardcoded color utilities (bg-gray-*, text-gray-*, bg-white, text-black, hex) outside src/components/ui replaced with semantic tokens so that dark mode stays consistent in components added since US-022/US-098..108.",
+      "acceptanceCriteria": [
+        "Inventory hardcoded colors in src/pages and src/components (excluding src/components/ui shadcn) — ~112 occurrences",
+        "Replace with semantic Tailwind tokens (bg-background, text-foreground, bg-muted, border-border, etc.) per the existing convention",
+        "Manually verify the touched screens in both light and dark mode (note any intentionally-fixed colors, e.g. brand logos, and exclude them)",
+        "No use of raw hex where a token exists",
+        "Typecheck passes; npm run build succeeds"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Verified: ~112 hardcoded-color utilities remain outside ui/ despite prior dark-mode fixes."
+    },
+    {
+      "id": "US-346",
+      "title": "Finish or clearly disable non-functional admin features (MultiRegionBackup, SearchTrafficDashboard export)",
+      "description": "As an admin, I want admin tools to either work or be visibly marked as unavailable so that I'm not misled by an empty 'degraded' backup dashboard or an export button that does nothing.",
+      "acceptanceCriteria": [
+        "MultiRegionBackup (src/components/admin/MultiRegionBackup.tsx): either wire it to real backup_regions/backup_policies/backup_jobs data, or replace the silent empty/degraded state with an explicit 'Backups not configured' empty state and hide the metrics",
+        "SearchTrafficDashboard (src/pages/SearchTrafficDashboard.tsx:132): implement the CSV/PDF export, or hide/disable the export control with a 'coming soon' affordance instead of a no-op",
+        "Audit other admin TODO stubs for the same pattern and apply the same rule (work or visibly disabled)",
+        "No dead buttons that silently do nothing remain on the touched screens",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "Verified TODOs: MultiRegionBackup.tsx:193 (mock/empty until infra), SearchTrafficDashboard.tsx:132 (export not implemented)."
+    },
+    {
+      "id": "US-347",
+      "title": "Add internationalization (i18n) scaffolding for the web app",
+      "description": "As a product owner, I want a localization framework in place so that the web UI can support languages beyond English in the future — there is currently zero i18n.",
+      "acceptanceCriteria": [
+        "Adopt an i18n library (e.g. i18next + react-i18next) and wire a provider at the app root",
+        "Extract a pilot set of user-facing strings (e.g. navigation, auth, onboarding) into a default en locale resource",
+        "Provide a useTranslation-based pattern and document it in CLAUDE.md for future strings",
+        "Ensure SSR/Helmet meta and date/number formatting paths are i18n-aware where relevant",
+        "No visual regression in English; typecheck passes; build succeeds"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": "Verified: 0 i18n usage in src (no i18next/react-intl/useTranslation). Lower priority / future-facing."
     }
   ]
 }
