@@ -1,6 +1,6 @@
 # EatPal iOS — Accessibility Baseline
 
-> Last audit pass: 2026-04-25 (US-246).
+> Last audit pass: 2026-05-20 (US-256 follow-up).
 
 This file is the known-good baseline for VoiceOver, Dynamic Type, Reduce
 Motion, and contrast on the iOS app. Anyone touching the views below should
@@ -31,6 +31,8 @@ re-verify the relevant section before merging.
 | `MealPlanView.WeekNavigationView` | Day-chip switch | `accessibleWithAnimation` helper. |
 | `DashboardHomeView.KidSelectorView` | Active-kid switch | `accessibleWithAnimation` helper. |
 | `ToastManager` | Toast slide-in | Already gated on `UIAccessibility.isReduceMotionEnabled`. |
+| `ShoppingModeView` | Undo banner spring + row tap-confirm spring | `@Environment(\.accessibilityReduceMotion)` reads on both the parent and `ShoppingRow`; spring → instant state flip when on. |
+| `OnboardingView.TabView` | Page index dots + scroll-to-page | `.accessibleAnimation(AppTheme.Animation.standard, value: currentPage)` on TabView + dots — the helper returns `nil` animation under Reduce Motion. |
 
 Anything else in `Views/` using bare `withAnimation(...)` should be migrated
 to `accessibleWithAnimation` (helper in `Utilities/Accessibility.swift`).
@@ -116,14 +118,22 @@ follow-up.
 
 ## Known follow-ups
 
-- A couple of older `withAnimation` call sites in `ShoppingModeView`
-  (`spring(response: 0.3)` for the undo banner) and the row tap-confirm
-  spring don't yet read the Reduce Motion env. Both are short
-  (≤ 0.4s) so the impact is minimal — sweep next pass.
-- `RecipeDetailView` photo carousel, `OnboardingView` page transitions,
-  and `PaywallView` hero animation all use `withAnimation` without
-  gating — review with a designer before changing since they're brand
-  moments.
+- ~~Older `withAnimation` call sites in `ShoppingModeView`~~ — **closed
+  2026-05-20 (US-256)**. Undo-banner + ShoppingRow press-down springs
+  now branch on `@Environment(\.accessibilityReduceMotion)`.
+- `RecipeDetailView` photo carousel and `PaywallView` hero — verified
+  no offending animations are currently in place (no `repeatForever`,
+  no cross-fade carousel today). If a brand moment lands here later,
+  gate it from the start.
+- `OnboardingView.TabView` swipe gesture itself is user-driven (not
+  programmatic motion) — page transitions triggered by the **Next**
+  button now route through `.accessibleAnimation` so they instant-flip
+  under Reduce Motion. The intrinsic swipe-during-drag animation is
+  considered user-intent motion and not gated.
+- `Colors.primary` → `Colors.primaryDark` substitution on body-text
+  combos remains a manual sweep — known follow-up. Touched cards
+  this pass kept their existing tokens; the `primaryDark` AA-pass token
+  is documented in the contrast table above as the preferred swap.
 - CI snapshot suite for VoiceOver smoke tests is **not yet wired**;
   baseline screenshots were captured manually for this audit pass.
 

@@ -12,6 +12,9 @@ struct ShoppingModeView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject private var storeLayouts = StoreLayoutService.shared
     @Environment(\.dismiss) var dismiss
+    /// US-256: gate the undo-banner spring animations. Reduce-motion users
+    /// get an instant state flip instead of the bouncy reveal.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// `lastCheckedItemId` powers the inline Undo button shown for ~5s after
     /// a check. Resets on the next tap or on dismiss.
@@ -286,8 +289,12 @@ struct ShoppingModeView: View {
         Task {
             try? await appState.toggleGroceryItem(item.id)
             await MainActor.run {
-                withAnimation(.spring(response: 0.3)) {
+                if reduceMotion {
                     lastCheckedItemId = item.id
+                } else {
+                    withAnimation(.spring(response: 0.3)) {
+                        lastCheckedItemId = item.id
+                    }
                 }
             }
         }
@@ -296,7 +303,11 @@ struct ShoppingModeView: View {
             try? await Task.sleep(for: .seconds(5))
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                withAnimation { lastCheckedItemId = nil }
+                if reduceMotion {
+                    lastCheckedItemId = nil
+                } else {
+                    withAnimation { lastCheckedItemId = nil }
+                }
             }
         }
     }
@@ -307,7 +318,11 @@ struct ShoppingModeView: View {
         Task {
             try? await appState.toggleGroceryItem(item.id)
             await MainActor.run {
-                withAnimation { lastCheckedItemId = nil }
+                if reduceMotion {
+                    lastCheckedItemId = nil
+                } else {
+                    withAnimation { lastCheckedItemId = nil }
+                }
             }
         }
     }
@@ -325,6 +340,9 @@ private struct ShoppingRow: View {
     let onTap: () -> Void
 
     @State private var pressedDown = false
+    /// US-256: spring scale → instant when reduce-motion is on. Row still
+    /// flips the checkmark + colour, just without the bounce.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: onTap) {
@@ -333,7 +351,7 @@ private struct ShoppingRow: View {
                     .font(.title)
                     .foregroundStyle(pressedDown ? .green : .secondary)
                     .scaleEffect(pressedDown ? 1.2 : 1.0)
-                    .animation(.spring(response: 0.25), value: pressedDown)
+                    .animation(reduceMotion ? nil : .spring(response: 0.25), value: pressedDown)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.name)
@@ -368,7 +386,11 @@ private struct ShoppingRow: View {
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in
                     if !pressedDown {
-                        withAnimation { pressedDown = true }
+                        if reduceMotion {
+                            pressedDown = true
+                        } else {
+                            withAnimation { pressedDown = true }
+                        }
                     }
                 }
                 .onEnded { _ in

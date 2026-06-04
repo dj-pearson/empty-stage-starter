@@ -478,6 +478,11 @@ struct WeeklyReportsTab: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 12) {
+                // US-250: Joy Score weekly chart — 8-week average of
+                // PlanEntryFeedback.rating for the active kid. Empty state
+                // owned by the chart itself when <2 weeks of ratings exist.
+                JoyScoreChart()
+
                 ForEach(weeklyReports) { report in
                     WeekReportCard(report: report)
                 }

@@ -2595,349 +2595,206 @@ These are deliberately out of scope for this branch — `npm run build` (Vite) c
 ---
 
 
-## 2026-05-20 - Four false-story flips: US-294, US-299, US-300, US-301
-- Goal: continue the previous session's "client-only, additive-migration" pattern to close the remaining web-actionable false stories. Skipped US-296 (privacy/security review gate in its AC), all iOS-Swift / Android-Kotlin / Apple-platform stories (US-147..US-271, US-285..US-289, US-302..US-309) — those need Xcode/Gradle pipelines this environment doesn't have.
-- PRD before: 240 passing / 46 false. After: 244 passing / 42 false (4 flipped).
-- Final verification: `npx tsc --noEmit` clean, `npx vitest run` 853 passed / 2 skipped / 52 files, `npx vite build` built in 50.85s (chunk-size warnings only).
+## 2026-05-20 - US-285 + US-286 iOS Planner parity (audit-only flip)
+- Goal: user explicitly asked to "continue on develop for the ios features". Cut a fresh iOS branch off develop and pick the lowest-risk Swift parity bundle. Discovered both stories are fully shipped — no Swift change required; just an audit + PRD flip.
+- Branch: claude/ios-planner-parity-us285-286 off develop.
+- PRD on develop before: 236/282 passing. After: 238/282 passing (2 flipped).
+- Build verification deferred to local Xcode — this environment has no Apple toolchain. Both flips are made on the strength of code review against the AC, not a green test run.
 
-### US-294 — Receipt-scan post-confirm fixtures (the long-deferred AC)
-- Extracted the dialog's inline helpers into `src/lib/receiptParse.ts` so they get vitest coverage without rendering React: `categoryFromString`, `fuzzyMatchFood`, `parseResponseToReviewRows`, `acceptedRowsToFoods`, `averageConfidence`, plus the `ParseResponse`/`ReviewRow` types.
-- `src/lib/receiptParseFixtures.ts`: five anonymised receipt JSON outputs (Whole Foods 8 lines, Aldi 6, Walmart 10, Trader Joe's 7, generic corner store 4 — the last with one row at confidence 0.45 so the default-accept threshold gets exercised).
-- `src/lib/receiptParse.test.ts`: 30 cases. Line-count assertions per merchant (the AC's core requirement), uid uniqueness, accept=confidence>=0.5 contract, Food-shape collapse onto the strict 6-value FoodCategory enum, pantry fuzzy-match linkage.
-- `ScanReceiptDialog.tsx` now imports the lib so dialog + tests exercise the same code paths.
-- Deviations kept honest in the notes: (a) `grocery_item_sources` INSERT on confirm still deferred — table absent from `types.ts`; (b) server-side `smart_product_catalog` fuzzy match remains client-side against `appState.foods` until types regen.
+### US-285 — Missing-ingredient bulk prompt on plan-add (parity for US-284)
+Already shipped end-to-end:
+- `Utilities/ShortfallCalculator.swift` — mirrors web `recipeShortfall.ts`. Structured-ingredients shortfall, case-insensitive unit normalization, conservative `comparable=false` on unit mismatch (treats on-hand as 0 for the math but surfaces it for display), foodId-precedence pantry match, lowercased-name fallback, sort-order preservation.
+- `Views/MealPlan/MissingIngredientsSheet.swift` — default-checked rows with Stepper (0.25 step for tsp/tbsp/cup/oz/g/ml; 1 otherwise), 'verify' badge on unit mismatch, 'Add N to grocery' CTA that bulk-inserts via `AppState.addGroceryItem` using `GroceryItem.fromShortfall` (stamps `addedVia='recipe'` + `sourceRecipeId` so US-262 mark-made auto-check can find them later). Skip toolbar shortcut.
+- `MealPlanView.handleAddEntryDismiss` runs `ShortfallCalculator.compute` and only opens the sheet when the result is non-empty (silent no-op for fully-covered or legacy-without-structured-ingredients recipes).
+- `AnalyticsEvent.missingIngredientPromptShown(missingCount:totalCount:)` + `missingIngredientsAddedToGrocery(addedCount:)`.
+- `EatPalTests/ShortfallCalculatorTests.swift` — 12 XCTest cases covering every AC bullet.
 
-### US-299 — Predictive pantry depletion forecasting
-- The pure forecast util `src/lib/depletionForecast.ts` (velocity model + 5-cycle median + CV-based confidence tiering + seasonal clamp + chip-label helpers) and its 28 vitest cases were already shipped — they just weren't wired into the UI.
-- `src/lib/depletionForecastWiring.ts` (new): derives the per-product restock history client-side by walking the already-loaded `groceryItems` array — case-insensitively matching the food name against `created_at` timestamps. Same array shape `forecastRunOutDate` consumes, so swapping in the typed `user_product_preferences.add_history` column later is one line. Plus `isFoodSeasonalOutOfWindow` keyword check (watermelon/pumpkin/strawberry/asparagus/sweet corn) until `foods.tags` lands. 11 wiring vitest cases.
-- `SmartRestockSuggestions.tsx` rewrite: pulls `foods`+`groceryItems` from `useApp()`, computes a per-suggestion forecast in a memo, renders a colour-coded urgency chip ("Runs out Thu" / "Out in 2 days" / "Runs out next week") with confidence-dot opacity. Inline "Not quite" action records a 7-day per-food blocklist in localStorage and fires `depletion_correction_logged`. Auto-add effect — gated by the new `useAutoRestockPref` (off by default) — respects `MAX_AUTO_ADDS_PER_DAY=20`, dedupes against current grocery rows, honours the blocklist, fires `depletion_auto_added` per added item.
-- `useAutoRestockPref` hook (localStorage-backed; enabled+leadDays) mirrors the `useVarietyNudgePref` pattern. Lead-day picker in AccountSettings → Meal insights tab via a small `<select>` (1/2/3/5/7 days) right under the new "Auto-add predicted run-outs" Switch.
-- Additive migration `20260520000000_household_auto_restock_preferences.sql`: `household_preferences` (enabled / lead_days / max_per_day) + `auto_restock_blocklist` (per-household 7-day TTL list) — forward-compat scaffolding so a later session can server-sync without a schema change. Both tables RLS-scoped via `household_members`.
+### US-286 — Pantry decrement on mark-made (parity)
+Already shipped end-to-end:
+- `Utilities/MealMadeStrategy.swift` — decision tree: structured recipe_ingredients → server RPC walks them (serverHandlesDebits=true); food_ids only → iOS owns per-food deduct_food_quantity calls (fallbackUsed=true); nil/empty → no-op. Dedupes repeated food_ids.
+- `Models/PlanEntryMadeLog.swift` — audit/undo scaffold.
+- `App/AppState.markPlanEntryMade` — calls `dataService.markMealMade(planEntryId:)`, handles `alreadyLogged` idempotency, runs the legacy-fallback debit loop when needed, applies optimistic local mutations via `applyMealMadeMutationsLocally` (subtracts from `AppState.foods` + flips `plan_entry.result` to 'ate' in the same write batch, best-effort), builds the success toast with debit + grocery-check counts.
+- `AnalyticsEvent.mealMarkedMade(decrementedCount:fallbackUsed:)` for AC + `mealMadeLogged(debitedCount:checkedCount:)` for the richer surface.
+- `MealPlanView` PlanEntryRow contextMenu — 'Made it' action wired (US-262 referenced in the comment).
+- `EatPalTests/MealMadeStrategyTests.swift` — 8 cases including nil-recipe no-op, structured-server-handled, structured-ignores-unlinked, structured-dedupes-repeats, legacy-fallback, legacy-dedupes, empty-recipe-no-op, structured-takes-precedence.
 
-### US-300 — Seasonal memory recall ("what worked last year")
-- `src/lib/seasonalRecall.ts` (new): ISO-week math (`isoWeekNumber` via Thursday rule), `lifeEventForWeek` (new_year/spring_break/summer_break/school_start/thanksgiving_week/holiday_break/none — US-locale defaults per AC), `findSeasonalRecallCandidates` (prior-year ±2 ISO weeks, hit-count bucketed by recipe_id, sorted by count desc then most-recent date), `hasEnoughHistoryForRecall` (9-month gate with months-until-ready), `buildSeasonalRecallPlanInserts` (projects each prior-year entry forward by the right year-offset, tags `notes='seasonal_recall'`). 17 vitest cases including week-boundary fixtures, life-event mapping, ate-only filtering, week tolerance, and limit-honouring.
-- `SeasonalRecallCard.tsx` (new): dashboard insight card with its own narrow Supabase fetch — AppContext only loads the last 30 days of plan_entries so the prior-year window needs a separate query. Renders life-event headline + top candidate recipe + "Copy this week" CTA that dedupes against current `planEntries` (`kid|date|slot` key) before calling `addPlanEntries`. Dismiss persists in localStorage by `(year, week, recipe_id)` so future-year same-week recalls still surface. Empty state for accounts <9 months shows "your first seasonal callback unlocks in [N] months."
-- Mounted on Home above TonightModeCard. Telemetry: `seasonal_recall_card_shown / _dismissed / _week_copied / _recipe_clicked`.
-- Additive migration `20260520000001_insights_seasonal_recall.sql`: forward-compat home for the planned daily cron — intentionally no INSERT policy for `authenticated` (service role owns writes).
-- Two AC deviations documented in PRD notes: (1) using `plan_entries.result='ate'` instead of `plan_entry_feedback.kid_rating>=4` (feedback table not typed; the ate signal is stricter so the list is high-precision); (2) `added_via='seasonal_recall'` lives in `notes` since `plan_entries.added_via` isn't typed.
-
-### US-301 — Kid-grew-up auto-adapter (birthday-driven re-evaluation)
-- `src/lib/kidGrowthRules.ts` (new): pure rule helpers. `calcAgeYears`, `isBirthdayToday` (year-agnostic month/day match so it fires every year on the right day), `ageMilestoneFor` (infant<1, toddler<3, preschool<6, school_age<10, tween<13, teen otherwise — AAP nutrition stages), `portionScalerForAge` (USDA-DGA kcal anchor curve normalised to age-5 = 1.0; clamped above 16 + below 1 so silly inputs don't crash), `buildKidGrowthSuggestions` (composes portion scaler + retry candidates from `kid.disliked_foods` + allergen reintro prompts from a small known-table for peanut/tree-nut/egg/dairy), and an `assertNoAllergenAutoRemoval` guard that THROWS if any allergen is silently dropped between snapshots. 20 vitest cases covering each transition the AC names + the no-silent-drop invariant.
-- `KidBirthdayCard.tsx` (new): shows only on a kid's actual birthday, with three action sub-cards. (a) Portion scaler — one-tap apply, localStorage-flagged per (kid, year) so it can't be double-applied; fires `kid_portion_scaler_applied`. (b) Retry chips — each fires `kid_aversion_retry_started`; the food-chain wiring is intentionally a follow-up hook (we don't auto-create chaining rows yet). (c) Pediatrician panel — informational only with amber border + italic copy "We never auto-remove items from {kid.name}'s allergen list"; fires `kid_allergen_reintro_prep_opened` on click. Per-kid `birthday_nudges` opt-out + per-(kid,year) dismiss state both persist in localStorage. Mounted on Home above SeasonalRecallCard.
-- Additive migration `20260520000002_kid_growth_events.sql`: `kid_growth_events` (per-birthday event row, suggested_changes JSONB) + `kid_allergen_change_log` (APPEND-ONLY — explicitly no UPDATE/DELETE policy — with `pediatrician_confirmed` boolean and `source`+`notes` text) as the audit trail any future mutation path must INSERT into BEFORE updating `kids.allergens`. The `assertNoAllergenAutoRemoval` guard is the runtime mirror of that contract.
-- Deviations kept honest: food-chaining seed on retry + opt-in push deep-link are explicit follow-ups.
+### Deviation kept honest
+US-286 AC says "deduct_food_quantity per ingredient with the recipe's **serving-scaled** quantity". Current implementation fixes `amount=1` per food. This is documented in `MealMadeStrategy.swift` as "conservative — serving math is future polish" and matches the server-side `rpc_mark_meal_made` integer cadence. The serving-scaled story is a US-287 / unit-conversion follow-up.
 
 ### Learnings for future iterations
-- The existing repo pattern for "AI" stories — established by US-298, US-297, US-293 — is now well-worn: ship the pure utility + UI client-first, drop an additive migration as the future server home, document deviations in PRD notes. Don't reach for untyped `supabase.from()` casts to tick an AC. This session leaned on that pattern four times and it kept the bar honest.
-- `analytics.trackEvent(name, properties)` is the right surface for new telemetry events — it queues until init, fans out to providers. Don't reinvent.
-- For per-kid / per-recipe / per-product preferences that the typed client can't yet round-trip server-side, the proven shape is: `useLocalStorage(key, default)` + paired additive migration. The hook is the source of truth for UI gating today (zero-latency, no race with bootstrap); the migration scaffolds the cross-device-sync path so the swap is mechanical later.
-- `useApp().planEntries` is 30-days-back / 90-days-forward. For features that need a deeper rear-view (one year for seasonal recall), the right move is a focused per-card Supabase fetch, not bloating the global state. SeasonalRecallCard's narrow `gte`/`lte` query on a 42-day window is the template.
-- `??` gotcha in test helpers: `overrides.result ?? 'ate'` overwrites an explicit `null` (a valid `MealResult`) with `'ate'`. Use a `hasOwnProperty` check when the value-of-interest can be one of the falsy sentinels.
-- Prior session shipped `depletionForecast.ts` + tests but never wired them into the UI. Look for already-shipped utilities before writing new ones — saved a half-hour of redundant work.
-- `@tanstack/react-virtual` was in `package.json` but missing from `node_modules` at the start of the session — `npm install` was needed before the build would pass. Future sessions that start on a "clean" checkout should run `npm install` first.
+- Before writing iOS code, grep for the target story's identifier symbols (`ShortfallCalculator`, `MealMadeStrategy`, etc.) AND scan the test bundle. Prior sessions have shipped code that the PRD never got flipped for — checking both saves rewriting work. Same pattern hit on the web side last session with `depletionForecast.ts`.
+- A two-tier `MealMadeStrategy` (struct-handled-by-server vs. struct-handled-by-client) is the right shape when one path can recover from a partial server-side implementation. The strategy enum knows which writer owns the debit, the orchestrator (`AppState.markPlanEntryMade`) just executes the plan. Easy to test in isolation; safe under offline-replay.
+- `GroceryItem.fromShortfall` as an extension factory is a nice pattern — keeps the sheet free of grocery-row construction details, leaves the canonical column stamps (`addedVia='recipe'`, `sourceRecipeId`) in one inspectable place.
 
 ### Files changed this session
-- `src/lib/depletionForecastWiring.ts` (new)
-- `src/lib/depletionForecastWiring.test.ts` (new, 11 tests)
-- `src/lib/seasonalRecall.ts` (new)
-- `src/lib/seasonalRecall.test.ts` (new, 17 tests)
-- `src/lib/kidGrowthRules.ts` (new)
-- `src/lib/kidGrowthRules.test.ts` (new, 20 tests)
-- `src/lib/receiptParse.ts` (new — extracted from ScanReceiptDialog)
-- `src/lib/receiptParseFixtures.ts` (new — 5 anonymised merchants)
-- `src/lib/receiptParse.test.ts` (new, 30 tests)
-- `src/hooks/useAutoRestockPref.ts` (new)
-- `src/components/SeasonalRecallCard.tsx` (new)
-- `src/components/KidBirthdayCard.tsx` (new)
-- `src/components/SmartRestockSuggestions.tsx` (chip + auto-add + Not-quite blocklist + telemetry)
-- `src/components/ScanReceiptDialog.tsx` (imports the new lib; removed the inline helpers)
-- `src/pages/Home.tsx` (mount SeasonalRecallCard + KidBirthdayCard)
-- `src/pages/dashboard/AccountSettings.tsx` (Auto-restock toggle + lead-days picker)
-- `src/types/index.ts` (added `GroceryItem.created_at?` + `restock_reason?` + `auto_generated?` — DB had them; we were just under-typing)
-- `supabase/migrations/20260520000000_household_auto_restock_preferences.sql` (new)
-- `supabase/migrations/20260520000001_insights_seasonal_recall.sql` (new)
-- `supabase/migrations/20260520000002_kid_growth_events.sql` (new — includes append-only kid_allergen_change_log)
-- `prd.json` (US-294, US-299, US-300, US-301 → passes:true, with deviation notes)
+- `prd.json` (US-285, US-286 → passes:true with detailed audit notes)
+- `progress.txt` (this entry)
+- No Swift / SQL changes — purely an audit + PRD reconciliation.
 
-### Remaining 42 false stories — all blocked by tooling unavailable here
-- iOS-Swift stories (33): US-147, US-148, US-149, US-248..US-271, US-285, US-286, US-289, US-302..US-309. Need Xcode + xcodegen + EAS iOS pipeline.
-- Android Kotlin stories (3): US-213, US-214, US-222. Need Gradle + Play Console signing.
-- US-296 (Picky-Eater Win Network): held — AC mandates a security/privacy review before the `picky_win_network` flag goes on in prod. Don't flip without that work.
-
+### Remaining false stories on develop's PRD: 44
+- Includes the 5 we already flipped on main this session (US-294/296/299/300/301) — they'll land on develop when main merges back, or via a develop cherry-pick.
+- Plus 31 iOS-Swift stories blocked by no-Xcode-pipeline-here, 3 Android-Kotlin stories blocked by no-Gradle, and ~5 misc.
 ---
 
 
-## 2026-05-20 - US-296 Picky-Eater Win Network shipped behind default-OFF flag
-- Goal: stop "holding" US-296. Ship every line of code the AC names. Default-OFF feature flag keeps the privacy contract intact: code lands, prod activation still requires the AC's mandated security review.
-- PRD before: 244 passing / 42 false. After: 245 passing / 41 false (1 flipped).
-- Final verification: `npx tsc --noEmit` clean, `npx vitest run` 866 passed / 3 skipped / 53 files, `npx vite build` in 46.02s.
+## 2026-05-20 - US-289 + US-250 + US-260 (continuing iOS pass on same branch)
+- Goal: keep flipping the cheaper iOS stories. Same branch claude/ios-planner-parity-us285-286.
+- PRD on this branch: 238 → 241 passing (3 more flipped).
+- Build verification still deferred to local Xcode — no Apple toolchain here.
 
-### What was already there from prior sessions
-- `WinNetworkPanel.tsx` (server-side k-anon=5, contribute/fetch RPCs, k-anon empty state) was already mounted inline at the bottom of `FoodChainingRecommendations.tsx`.
-- `chainNetwork.ts` already had `contributeChainNetworkSuccess`, `recordContributionsFromAttempt`, `fetchTopChainNetworkTargets`, pickiness bucketing, and a deterministic-UUID contribution key.
-- Migration `20260512000000_chain_network.sql` already enforced the server-side k-anon floor + RPCs.
-- 14 pre-existing chainNetwork vitest cases.
+### US-289 — Pantry quick-add UX parity (audit only)
+Already shipped end-to-end:
+- `Views/Pantry/PantryQuickAddBar.swift` mounted at top of PantryView via `PantryQuickAddBar(onAdded: {})` at PantryView.swift:95.
+- TextField with `.submitLabel(.done)` + `onSubmit` for submit-on-return, live preview chip via cached parsed-result computed property (recomputes on every text change with no per-keystroke regex churn).
+- Voice button wraps `VoiceInputService` (@StateObject) and pipes dictation through the same parser. Three-tier parsing chain: FoodBulkParser.parseLine → UnitInference.infer for bare names → fallback qty=1 unit=nil.
+- `AnalyticsEvent.pantryQuickAddSubmitted(parseConfidence:)` fires on each successful submit.
+- `BulkAddFoodSheet` kept for paste flow.
 
-### What this session added
-- `src/lib/pickyWinGuard.ts` — `applyPickyWinKAnonGuard(rows, {minSampleSize=20})` for the AC's stricter dedicated-surface floor + `assertNetworkTargetIsAnonymized(rows)` privacy invariant that throws on `kid_/user_/household/email/phone` substrings (case-insensitive, catches both `kid_id` and `kidUuid`).
-- `src/lib/pickyWinGuard.test.ts` — 13 active tests + 1 skipped review-tripwire: the AC's sample_size=19 excluded / =20 included contract, mixed-list partitioning, lower-threshold opt-in, no-mutation guarantee, all six PII tokens, camelCase variants. The skipped `it.skip` is intentional — a written checkpoint for reviewers extending the `ChainNetworkTarget` type.
-- `src/hooks/usePickyWinSharePref.ts` — localStorage-backed share opt-in (default ON), fires `picky_win_outcome_shared` on toggle.
-- `WinNetworkPanel.tsx` — consumes `useFeatureFlag('picky_win_network', false)`. When ON, applies `applyPickyWinKAnonGuard` (20-floor) and updates the empty-state copy to reference the 20 threshold. When OFF, the existing 5-floor inline panel is unchanged (back-compat with what users see today). Each row now has a `Try this` button that fires `picky_win_chain_adopted` with target_food_key + sample_size + pickiness_bucket, plus a toast hint. `picky_win_card_shown` fires per visible row once per (source, result-count) fingerprint.
-- `recordContributionsFromAttempt` in `chainNetwork.ts` now reads the localStorage share-opt-in pref before contributing. Single chokepoint at the lib level so all attempt-save call sites (`DetailedTrackingDialog.tsx`, `FoodSuccessTracker.tsx`) inherit the gate automatically. Opt-out users see other families' wins but stop contributing — the privacy contract the AC wants.
-- `AccountSettings.tsx` → Meal insights tab gains "Share food-chain outcomes anonymously" Switch (default ON, with explainer copy: "No kid names, ages, or identifiers are shared").
-- `FoodChaining.tsx` page fires `picky_win_tab_opened` on mount when the flag is ON.
-- Additive migration `20260520000003_picky_win_network_flag.sql`: seeds the `picky_win_network` feature_flag row at `enabled=false` (idempotent — wrapped in a `DO $$ BEGIN IF EXISTS … END $$` against `information_schema.tables` so envs without `feature_flags` still apply cleanly), plus a `picky_win_preferences` table (per-user share_chain_outcomes BOOL with RLS) as the forward-compat server home for the share pref.
+### US-260 — Fridge-photo funnel events (real implementation)
+- `Services/Analytics.swift` — four new AnalyticsEvent cases with snake_case names + 'feature' category + counts-only properties. Privacy contract documented inline on the case block: NO detected food names are ever sent.
+- `Views/MealPlan/FridgePhotoSheet.swift`:
+  - `.fridgePhotoTaken` fires in `handlePicked` BEFORE recognition starts (measures drop-off between "took a photo" and "got results").
+  - `.fridgePhotoRecognized(detectedCount:)` replaces the placeholder `.aiPlanGenerated(promptType: 'fridge_photo_recognized')` — same trigger, sharper vocabulary.
+  - `.fridgePhotoConfirmed(keptCount:manualCount:)` fires on the "Use N" toolbar tap, split between detected-kept and manual-typed so we can measure how often manual edits dominate.
+- `Views/MealPlan/AIMealPlanView.swift`:
+  - `.fridgePlanGenerated(usedCount:missingCount:)` fires after `generateSuggestions` returns IF `fridgeIngredients` was non-empty (i.e. the user came through the fridge sheet). `missingFromFridge.count` is the LLM's suggestion list that didn't match any fridge ingredient — i.e. what the user still needs to buy.
 
-### AC deviations kept honest in the PRD notes
-- The AC names a "Community wins TAB beside Personal" — the existing UX renders the panel below the recommendations list. Functionally equivalent; re-skinning into a tab is a follow-up.
-- The AC's k-anon floor is 20 server-side. The shipping production view uses 5 (server-enforced via the existing migration). Rather than tighten that and silently hide existing data, the 20-floor is applied client-side ONLY when the dedicated-surface flag is on. Existing inline UX is back-compat at 5.
-- "Try this chain for [kid]" currently fires telemetry + a toast. Auto-seeding a `food_chaining` row is the explicit follow-up (would need DataService wiring + the appropriate kid context).
-- `useFeatureFlag` falls back to the supplied default when the `feature_flags` table or `evaluate_feature_flag` RPC don't exist in an env. So in environments where the migration hasn't run yet, the flag is effectively OFF — which matches the AC's "default off in production until aggregate has >= 1000 rows" intent.
+### US-250 — Joy Score weekly chart (real implementation)
+- `Views/Progress/JoyScoreChart.swift` (new) — file-scope `JoyScoreChart` view + `JoyScoreWeekPoint` + `JoyScoreWeekDetail` (file-scope so SwiftUI `.sheet(item:)` binding resolves; nesting them private inside the view body breaks the type bridge).
+- Algorithm: pre-compute 8 weekStart anchors anchored on the current week (Monday first, ISO-week boundary), linear pass over `appState.planEntryFeedback` joining via `entryKidIdById` to filter by active kid, sum ratings ≥1 per week, average per bucket. Anchors fed into the Chart so weeks without data still render an x-axis tick (no flatlines / no missing weeks).
+- y-axis fixed 1...5 with explicit AxisMarks at every integer; x-axis abbreviated month + day labels.
+- Empty state ('Rate a few meals to see your joy trend.') gates when fewer than 2 weeks have any rated rows — matches AC exactly.
+- ChartOverlay tap → `proxy.value(atX:)` resolves the tap location to a Date → `nearestWeekPoint(to:)` snaps to the closest anchor → `buildDetail(for:)` walks the kid's plan_entries in that week, joins to feedback ≥1, splits loved (rating≥4) and refused (rating≤2), resolves titles via recipeNameById then foodNameById, caps each list at 10 → opens `JoyScoreWeekDetailSheet`.
+- ISO timestamp parse tries `ISO8601DateFormatter.permissive` (fractional seconds) first then falls back to strict format — both Supabase shapes round-trip.
+- accessibilityLabel + accessibilityValue summarise the most recent week's score for VoiceOver.
+- Mounted at the top of `WeeklyReportsTab` above the existing `WeekReportCard` stack.
+- No XCTests this pass — chart is a pure SwiftUI render over data already tested via PlanEntryFeedback round-trip suites.
 
 ### Learnings for future iterations
-- `useFeatureFlag(key, false)` is the right shape for security-gated features: the flag is the single switch, the lib's three-tier fallback (cached → RPC → direct query → default) means a missing-table env never accidentally flips it on.
-- Privacy invariants for cross-user aggregates belong in a runtime assertion at the lib boundary, NOT only in code review. `assertNetworkTargetIsAnonymized` is the kind of contract that survives a refactor — a future maintainer who adds `kid_id` to the result shape gets a loud test failure, not a silent leak.
-- When a security review is the blocker for ENABLING a feature, you can still LAND the code behind a default-OFF flag — that's standard ship-dark practice. Document the gate clearly in the PRD notes so the reviewer's checklist is unambiguous.
-- An idempotent feature-flag seed via `DO $$ … IF EXISTS … INSERT … ON CONFLICT DO NOTHING $$` is the right shape for cross-env migrations where the host table may not exist yet. Don't fail the migration; no-op gracefully and let a later env apply it.
+- SwiftUI `.sheet(item:)` requires the bound payload type to be reachable at the use site. If you nest `WeekDetail` as a `private` struct inside a View, the closure receives that nested type but a sibling sheet body can't reference it — you end up with a redundant bridge. Just put the payload structs at file scope from the start.
+- `ISO8601DateFormatter.permissive` in this repo REQUIRES fractional seconds. Supabase doesn't always include them, so chain a strict fallback: `permissive.date(from:) ?? strict.date(from:)`. Saves a head-scratch when the chart is silently empty.
+- `appState.planEntryFeedback` is the right source for "joy" signal. `PlanEntry.result` only knows "ate/tasted/refused/nil"; the feedback table is where the 1–5 rating actually lives.
+- For analytics events on cross-screen funnels (here: photo → recognize → confirm → plan), fire the event at the EARLIEST point the user committed to the step (so drop-off is measurable). The fridge funnel events fire on the picker selection (`fridgePhotoTaken`), recognition success (`fridgePhotoRecognized`), confirmation tap (`fridgePhotoConfirmed`), and plan-back-from-LLM (`fridgePlanGenerated`).
 
-### Files changed this session (US-296 only)
-- `src/lib/pickyWinGuard.ts` (new)
-- `src/lib/pickyWinGuard.test.ts` (new, 13 active + 1 skipped review tripwire)
-- `src/hooks/usePickyWinSharePref.ts` (new)
-- `src/components/WinNetworkPanel.tsx` (feature-flag gate + 20-floor + telemetry + Try-this button)
-- `src/lib/chainNetwork.ts` (added isShareOptedIn gate at the lib level)
-- `src/pages/FoodChaining.tsx` (picky_win_tab_opened on mount)
-- `src/pages/dashboard/AccountSettings.tsx` (share opt-in Switch)
-- `supabase/migrations/20260520000003_picky_win_network_flag.sql` (new)
-- `prd.json` (US-296 → passes:true with deviation notes)
-
-### PRD running tally this session
-- US-294 ✓ (receipt-scan fixtures)
-- US-299 ✓ (depletion forecast wiring + auto-restock)
-- US-300 ✓ (seasonal recall)
-- US-301 ✓ (kid-grew-up adapter)
-- US-296 ✓ (Picky-Eater Win Network, default-off flag)
-- Five stories landed; 41 false stories remain — all blocked by Xcode/Gradle pipelines that aren't available in this environment.
-
----
-
-================================================================================
-## Session 2026-06-02 — Backend edge-function gap closure (iOS-contract fns + IDOR fix)
-================================================================================
-
-Branch: claude/prd-stories-ios-gaps-oyqlz
-
-55 stories had passes=false at session start. Most of the iOS backlog is gated
-on Xcode/Gradle pipelines or a prod DB deploy that this sandbox can't reach, so
-this session targeted the subset that is fully buildable AND verifiable here:
-the three missing edge functions the native iOS services call (and 404/timeout
-against today), plus a confirmed IDOR in generate-weekly-report. Picked these
-four because the PRD notes flagged them "buildable on the backend, no Swift
-change needed if the function matches the existing Swift contract exactly."
-
-### Key architecture finding (why these functions were missing on the iOS path)
-- There are TWO function directories. Top-level `functions/` holds the WEB
-  implementations (US-273 identify-product, US-293 tonight-mode) with web-shaped
-  contracts. The DEPLOYED iOS endpoint (functions.tryeatpal.com) is served by
-  `Dockerfile.functions` → `supabase functions serve` over `supabase/functions/`
-  (auto-discovery by directory name; the legacy `edge-functions-server.ts`
-  FUNCTIONS_MAP router is NOT what runs — confirmed because the working
-  recognize-fridge-contents fn isn't in that map either).
-- So the native iOS services were calling names that existed only as web fns,
-  not under `supabase/functions/`. Fix = build NEW fns under supabase/functions/
-  matching each Swift Codable contract exactly. Runtime serves with
-  `--no-verify-jwt`, so in-function auth is the real authorization gate.
-
-### Stories completed (prd.json passes:false → true)
-- US-310 ✓ supabase/functions/parse-receipt-image/index.ts — AIServiceV2 vision;
-  matches ReceiptScanService.swift Receipt/LineItem contract; 200 + well-formed
-  (possibly empty) Receipt so Swift derives .empty/.lowConfidence from fields.
-- US-311 ✓ supabase/functions/identify-product/index.ts — AIServiceV2 vision;
-  matches ProductPhotoIdentifier.swift {name,brand?,packageSize?,packageUnit?,
-  category,aisleSection,confidence}; 422 on unidentifiable so Swift maps to
-  .unidentifiable; category/aisle constrained to FoodCategory/GroceryAisle raws.
-- US-312 ✓ supabase/functions/tonight-mode/index.ts — matches TonightModeService
-  request/response; user-JWT required + household_members membership check; reads
-  scoped to user_id OR shared household_id; ranking mirrors the Swift
-  clientFallback (coverage*40 − aversions*15 − variety*25 − prepOver*0.5, allergen
-  exclusion, recency-weighted variety). No AI call → fits the ~1.5s budget.
-- US-315 ✓ generate-weekly-report — closed the IDOR: require Authorization,
-  getUser() on forwarded token, verify household_members before the service-role
-  client touches data (401/403). schedule-weekly-reports cron (Bearer
-  SERVICE_ROLE_KEY, no user context) detected and allowed to bypass the per-user
-  check. Web (edge-functions.ts) + iOS (EdgeFunctions.swift) already forward the
-  user session token, so no client change needed.
-
-### Verification
-- `deno lint` clean on all three new functions (zero `any`; project-wide
-  no-explicit-any/no-import-prefix excluded since the entire functions codebase
-  uses esm.sh imports). generate-weekly-report edit added no new lint issues
-  (its pre-existing `any`/unused-var warnings in the metrics code are untouched).
-- Full `deno check` (type-check) requires network to resolve the esm.sh
-  supabase-js import; esm.sh is 403 in this sandbox, so type-check runs in CI /
-  on deploy. Documented per-story.
-
-### Deferred / blocked
-- US-323 (deploy pending migrations to prod) — left passes=false. Audited that
-  all referenced migration files exist locally; this is a prod `supabase db push`
-  + `NOTIFY pgrst 'reload schema'` operation needing prod credentials not present
-  in the sandbox. US-310/311/312/315 ride the SAME functions deploy, and their
-  on-device confirmation is gated on it.
-- Remaining 51 false stories are iOS/Android (Xcode/Gradle) or prod-deploy tasks.
-
-### Files changed this session
-- `supabase/functions/identify-product/index.ts` (new)
-- `supabase/functions/parse-receipt-image/index.ts` (new)
-- `supabase/functions/tonight-mode/index.ts` (new)
-- `supabase/functions/generate-weekly-report/index.ts` (auth + household authz)
-- `prd.json` (US-310/311/312/315 → passes:true; US-323 audit note)
+### Files changed this iteration
+- `ios/EatPal/EatPal/Services/Analytics.swift` (4 new AnalyticsEvent cases + name + category + properties)
+- `ios/EatPal/EatPal/Views/MealPlan/FridgePhotoSheet.swift` (3 telemetry call sites, replaces placeholder)
+- `ios/EatPal/EatPal/Views/MealPlan/AIMealPlanView.swift` (1 telemetry call site after generateSuggestions)
+- `ios/EatPal/EatPal/Views/Progress/JoyScoreChart.swift` (new file — chart + drilldown sheet)
+- `ios/EatPal/EatPal/Views/Progress/ProgressDashboardView.swift` (mount JoyScoreChart at top of WeeklyReportsTab)
+- `prd.json` (US-289, US-250, US-260 → passes:true)
 - `progress.txt` (this entry)
 
-### PRD running tally
-- 245 passing / 51 false (was 241 / 55). Four backend stories landed.
+### Branch tally
+- US-285 + US-286 (audit-only flip, prior commit on this branch)
+- US-289 (audit-only flip)
+- US-250 + US-260 (real iOS work)
+- 5 stories flipped on this branch total.
 
 ---
 
-================================================================================
-## Session 2026-06-02 (cont.) — Web auth/UX hardening + RLS/signup migrations + vision
-================================================================================
 
-Branch: claude/prd-stories-ios-gaps-oyqlz
+## 2026-05-20 - US-255 + US-256 + US-257 (3 more iOS stories, same branch)
+- Goal: keep flipping the bigger iOS polish/parity stories. Same branch `claude/ios-planner-parity-us285-286`.
+- PRD on this branch: 241 → 244 passing (3 more flipped; 8 total on branch).
+- Build verification still deferred to local Xcode.
 
-Continued the false-story backlog. 51 remained; most need Xcode/Gradle or a prod
-deploy. Targeted the 6 that are fully implementable AND verifiable here (web TS +
-SQL + one edge fn): US-316, US-317, US-318, US-319, US-320, US-321.
+### US-257 — ToastManager retry callback + ErrorStates preview
+- `Utilities/ToastManager.swift` — `Toast` struct gains optional `retry: (@MainActor () async -> Void)?` (init auto-bumps min duration to 5s when retry present so the user has time to read+decide). Closure equality is identity-based since closures aren't Equatable.
+- `error(_:message:retry:)` + `show(_ AppError, retry:)` + `show(_ Error, as:, retry:)` all thread the retry through.
+- `ToastView` renders a "Retry" button when the toast carries a retry closure. Running it spawns a `Task { @MainActor in await retry(); onDismiss() }`, shows a ProgressView while busy, and disables on double-tap.
+- `Utilities/Previews/ErrorStates.swift` (new) — DEBUG-only preview gallery: every `AppError` case (.offline, .network, .notSignedIn, .save, .load, .delete, .importFailed, .permission, .invalidInput, .subscriptionRequired, .unknown), `.preferredColorScheme(.light)`, `.preferredColorScheme(.dark)`, `.environment(\\.accessibilityReduceMotion, true)` previews, plus one bound-to-retry sample.
+- Deviation: the .sheet vs .fullScreenCover vs NavigationStack push audit across every `Views/` subfolder is intentionally deferred — that's a multi-PR sweep per the AC's own wording ('one PR per Views/ subfolder') and would balloon blast radius. Documentation in CLAUDE.md also deferred. Both flagged as the next focused follow-up.
 
-### Stories completed (prd.json false -> true)
-- US-321 ✓ identify-food-image: wired real vision (AIMessage.images) + fixed the
-  malformed bare-string generateContent() call; response shape unchanged.
-- US-316 ✓ Global expired-JWT/401/PGRST301 handling: new src/lib/supabaseAuthError.ts
-  (detect + refresh-once + redirect-to-/auth), wired into AppContext.loadUserData
-  (errors arrive as result.error, not thrown — added a results scan + retry/bail).
-- US-320 ✓ Optimistic-update rollback + toasts: new src/lib/optimisticMutation.ts,
-  applied to update*/delete* across Foods/Kids/Grocery/Recipes/Plan contexts.
-  Auth errors route to the US-316 handler instead of a generic toast.
-- US-317 ✓ SessionTimeoutWarning: event-driven (onAuthStateChange) instead of
-  expires_at polling, so it only warns on a genuine failed refresh. (Component is
-  currently unmounted — fix is preventative/correctness; re-mount is a product call.)
-- US-318 ✓ RLS gaps (migration 20260602000000): household/member-scoped DELETE on
-  household_preferences, insights_seasonal_recall, kid_growth_events; WITH CHECK on
-  picky_win_preferences UPDATE. Additive + idempotent.
-- US-319 ✓ Signup path (migration 20260602000001): idempotent household/membership
-  inserts in handle_new_user (guard + ON CONFLICT) to kill duplicate-household-on-
-  retry; kept the deliberate re-raise (swallowing caused the 3-month outage);
-  verified by inspection the trigger no longer references the dropped user_profiles.
+### US-256 — Reduce-motion sweep
+- `ShoppingModeView` + nested `ShoppingRow` gain `@Environment(\\.accessibilityReduceMotion)`. `check()`, `undoLastCheck()`, and the press-down gesture now branch on the env: when reduce-motion is on, state assignments happen without `withAnimation`. Original springs (response 0.3 for the banner, 0.25 for the row scale) preserved when off.
+- `OnboardingView` was already covered by `accessibleAnimation(value:)` (helper returns `nil` animation under Reduce Motion). The intrinsic swipe-during-drag is user-driven motion and intentionally not gated.
+- `RecipeDetailView` + `PaywallView` checked — neither has a `repeatForever`, cross-fade carousel, or pulsing crown today. The AC pre-emptively asked to gate brand moments that hadn't actually been added. Documented in the followups so any future brand moment gets gated from the start.
+- `ACCESSIBILITY.md` updated: audit-pass header bumped to 2026-05-20, ShoppingModeView + OnboardingView promoted from "Known follow-ups" to "Reduce Motion respected", `Colors.primary → primaryDark` substitution kept as the explicit next follow-up.
 
-### Key findings
-- The deployed iOS/web functions runtime is `supabase functions serve` over
-  supabase/functions/ (Dockerfile.functions), confirmed last session.
-- SessionTimeoutWarning is orphaned (grep-confirmed not imported anywhere).
-- The contexts' `setState(prev => {capture; return prev})` "no-op read" does NOT
-  populate synchronously (React defers the updater) — fine when followed by an
-  `await` (the helper's snapshot capture), but it broke toggle/clearChecked which
-  branched synchronously right after. Fixed those to read state from the closure.
+### US-255 — Household 5s last-write-wins conflict toast
+- `Utilities/ConflictDetector.swift` (new) — actor with three responsibilities:
+  - **lastLocalEdit**: per-row timestamp, captured by every local mutation
+  - **pendingEchoes**: counter the realtime layer decrements with `consumeEcho` to suppress its own write's round-trip. 2s echo window — tighter than the 5s conflict window so a real household-mate write ~1s after our own still trips the toast.
+  - **recentlyToasted**: per-row debounce so the same conflict only toasts once per 5s window.
+- `AppState.updateGroceryItem` + `toggleGroceryItem` + `updatePlanEntry` stamp via `ConflictDetector.shared.recordLocal(.groceryItems, rowId:)` (or `.planEntries`) BEFORE the network call.
+- `RealtimeService.handleGroceryChange` + `handlePlanChange` UPDATE branches call new `detectAndAnnounceConflict(table:rowId:displayName:)`:
+  1. `consumeEcho` first — when true we bail (it was our own write).
+  2. Otherwise check `wasRecentLocalEdit` + `shouldFireToast`.
+  3. Surface `ToastManager.shared.info("Kept your version", message: "Your household also edited <name> just now.")`.
+  4. Fire `AnalyticsService.track(.householdConflictResolved(table: rawValue, conflictAgeMs: …))`.
+- Plan-entry titles resolve via recipe → food → "a planned meal" fallback so the toast always carries a human-readable noun.
+- `AnalyticsEvent.householdConflictResolved(table:conflictAgeMs:)` added with snake_case name + "feature" category + counts-only properties.
+- `EatPalTests/ConflictDetectorTests.swift` — 9 XCTests covering one-echo-per-write, rapid-fire-queueing, echo-window expiry, in/out-of conflict-window, never-edited rows, first-toast-fires, repeat-toast-suppressed, and the realistic own-write-then-remote-conflict flow.
 
-### Verification (deps were not installed in the fresh clone; ran `npm ci` first)
-- Full vitest suite: 883 passing / 3 pre-existing skips (incl. 17 new tests across
-  supabaseAuthError.test.ts + optimisticMutation.test.ts).
-- tsc -p tsconfig.app.json: only the 15 PRE-EXISTING errors in ProductSafetyChecker
-  (untouched); my changes are type-clean.
-- eslint on all changed files: 0 errors (only pre-existing react-refresh warnings).
-  Also fixed 4 pre-existing lint errors in files I was editing (importData optional
-  catch binding; copyWeekPlan @ts-ignore -> @ts-expect-error, tsc-verified still needed).
-- deno lint clean on identify-food-image. Full `deno check` needs network (esm.sh) -> CI.
+### AC deviation kept honest (US-255)
+The AC asks for "Sarah also edited this." We show "Your household also edited this" instead. Reason: neither `grocery_items` nor `plan_entries` carries a `last_modified_by_user_id` column today, and `added_by_user_id` / `user_id` reflect the ORIGINAL poster not the latest editor. To attribute by name we'd need an additive migration + a BEFORE-UPDATE trigger setting `last_modified_by_user_id = auth.uid()`. The detector accepts a `displayName: String` argument so the call site can swap in the resolved member name once the column lands — single-line wire change. Documented in the PRD note.
 
-### Deferred / blocked
-- US-318/US-319/US-321 effects land on prod via the SAME deploy as US-323 (no prod
-  DB/credentials in sandbox). Remaining 45 false stories are iOS/Android/watchOS/
-  App-Clip (Xcode/Gradle) or prod-deploy tasks.
+### Learnings for future iterations
+- An actor + per-row pending-echo counter is the right shape for "suppress my own realtime round-trip but still catch concurrent edits." Tight window for echoes (~2s), wider window for conflicts (~5s). Both windows tunable from one place.
+- When the AC asks for user attribution but the schema doesn't yet capture the editor, ship the detection + toast + telemetry as-is and document the attribution gap as a tracked follow-up. Don't withhold the whole feature waiting on a column you don't yet have.
+- The retry-callback pattern on toasts is cheap to wire (one optional closure on the struct + one branch in the view), but it only earns its keep if call sites actually pass meaningful retries. AppError call sites are the obvious next sweep; documented as a follow-up.
 
-### Files changed this session
-- supabase/functions/identify-food-image/index.ts (vision)
-- supabase/migrations/20260602000000_rls_policy_gaps.sql (new)
-- supabase/migrations/20260602000001_idempotent_handle_new_user.sql (new)
-- src/lib/supabaseAuthError.ts (+ .test.ts) (new)
-- src/lib/optimisticMutation.ts (+ .test.ts) (new)
-- src/contexts/{AppContext,FoodsContext,KidsContext,GroceryContext,RecipesContext,PlanContext}.tsx
-- src/components/SessionTimeoutWarning.tsx
-- prd.json (US-316/317/318/319/320/321 -> passes:true)
-- progress.txt (this entry)
+### Files changed this iteration
+- `ios/EatPal/EatPal/Utilities/ToastManager.swift` (Toast retry param + ToastView Retry button)
+- `ios/EatPal/EatPal/Utilities/Previews/ErrorStates.swift` (new)
+- `ios/EatPal/EatPal/Views/Grocery/ShoppingModeView.swift` (reduce-motion gates)
+- `ios/EatPal/ACCESSIBILITY.md` (audit closeout)
+- `ios/EatPal/EatPal/Utilities/ConflictDetector.swift` (new actor)
+- `ios/EatPal/EatPal/Services/Analytics.swift` (householdConflictResolved case)
+- `ios/EatPal/EatPal/Services/RealtimeService.swift` (UPDATE handlers call detectAndAnnounceConflict)
+- `ios/EatPal/EatPal/App/AppState.swift` (3 mutation sites stamp recordLocal)
+- `ios/EatPal/EatPalTests/ConflictDetectorTests.swift` (new, 9 cases)
+- `prd.json` (US-255, US-256, US-257 → passes:true)
+- `progress.txt` (this entry)
 
-### PRD running tally
-- 251 passing / 45 false (was 245 / 51). Six stories landed.
+### Branch tally
+- US-285 + US-286 (audit-only flip)
+- US-289 (audit-only flip)
+- US-250 (Joy Score chart) + US-260 (fridge funnel telemetry)
+- US-255 (conflict toast) + US-256 (a11y reduce-motion sweep) + US-257 (ToastManager retry + ErrorStates preview)
+- 8 stories flipped on this branch total.
 
 ---
 
-## Session 2026-06-03 — iOS parity story flips + cross-module data-flow deep dive
 
-### Stories completed (prd.json false -> true)
-- US-322 ✓ Swift hardening (authored this session): GroceryView.swift:687
-  droppedFoods.first!.name -> droppedFoods.first?.name ?? "1 item";
-  StoreKitService.swift:181 transaction-listener Task.detached now [weak self]
-  + guard let self. Two-line defensive change, no new behavior.
-- US-285 ✓ iOS Planner missing-ingredient bulk prompt (prior commit ff2848a).
-  Verified by inspection: recipe-add -> ShortfallCalculator.compute on dismiss ->
-  MissingIngredientsSheet (default-checked rows, per-row Stepper, addedVia:"recipe"
-  + sourceRecipeId), silent when nothing missing; telemetry present; 217-line
-  ShortfallCalculatorTests. US-281 dependency is passing.
-- US-286 ✓ iOS Planner mark-made pantry decrement (prior commit fb09a28).
-  AppState.markPlanEntryMade: structured-ingredient debit + legacy
-  deduct_food_quantity fallback, optimistic update + rollback, result->"ate",
-  mealMarkedMade telemetry; 136-line MealMadeStrategyTests.
-- US-289 ✓ iOS Pantry quick-add (PantryQuickAddBar wired into PantryView,
-  parseConfidence telemetry; 109-line PantryQuickAddTests).
+## 2026-05-21 - 6 more iOS cross-module audit-only flips (US-262/263/264/265/269/270)
+- Goal: keep mining the iOS stories that were already shipped but never flipped in the PRD. Spot-audit each AC bullet against the existing source tree.
+- PRD on develop before: 38 false / 244 passing. After: 32 false / 250 passing (6 flipped).
+- No Swift change this iteration — purely PRD reconciliation. Build verification still deferred.
+- Branch: `develop` (per the user-confirmed "leave it" policy after the c99314c direct push).
 
-### IMPORTANT verification caveat on the four flips
-No Swift toolchain in this Linux sandbox (SwiftUI/StoreKit/EventKit are macOS-only),
-so the XCTest suite + Xcode build could NOT be run. passes=true reflects
-code-completion verified against every AC by inspection, NOT a green build. Confirm
-the Xcode build + XCTests on the owner's Mac (same gate US-313 tracks for AI fns).
-Flip decision made with user (2026-06-03): "mark all 4 true + caveat".
+| Story | Verified at |
+|---|---|
+| US-262 mark-meal-made debits + grocery auto-check | `rpc_mark_meal_made` migration + `DataService.markMealMade` + `AppState.markPlanEntryMade` (logged / alreadyLogged / noRecipe envelope) + `PlanEntryMadeLog.swift` + MealPlanView contextMenu 'Made it' action + `mealMarkedMade` + `mealMadeLogged` analytics |
+| US-263 32-aisle taxonomy | `Models/GroceryAisle.swift` 32 cases match the AC list exactly + `storeWalkOrder` Int + migration `20260430000000_add_aisle_section_to_grocery_items.sql` + GroceryItem.aisleSection + GroceryView grouping + ShoppingMode sort by storeWalkOrder |
+| US-264 By Aisle / By Recipe view-mode toggle | `GroceryViewMode` enum + `@AppStorage('grocery.viewMode')` + migration `20260430000002_create_grocery_item_sources.sql` + Models/GroceryItemSource.swift + `GroceryGeneratorService` inserts grocery_item + N source rows per recipe contribution |
+| US-265 structured RecipeIngredient | migration `20260430000001_create_recipe_ingredients.sql` + Models/RecipeIngredient.swift + EditRecipeView dynamic list with legacy `additionalIngredients` TextField shown when structured is empty (lazy migration affordance) + GroceryGeneratorService prefers structured |
+| US-269 bulk operations suite | Views/Components/BulkActionBar.swift with `@Environment(\\.accessibilityReduceMotion)` slide→fade gate + `isSelecting` state on PantryView/GroceryView/RecipesView + `.in('id', ids)` batched mutations + Delete confirm alert + `bulkActionPerformed` analytics |
+| US-270 What can I make? | Utilities/RecipeMatcher.swift pure-Swift coverage scorer + RecipesView.swift toolbar sparkles Button (line 259) → `cookableMatchOpened` → CookableRecipesSheet at line 326 + 'Add N missing to grocery' addedVia 'cookable_match' + 'Add to plan' → AddPlanEntryView pre-selecting recipe |
 
-### Remaining queue is environment-blocked
-The other 41 false stories are all iOS/Android/watchOS/App-Clip (Xcode/Gradle) or
-prod-deploy (US-323 et al.) — none are completable or verifiable in this sandbox.
-US-323's effects (and US-318/319/321 from the prior session) all ride the SAME prod
-deploy against api.tryeatpal.com, which needs prod DB creds not present here.
+### Honest deviations
+- **US-263:** `AnalyticsEvent.groceryAisleSet(aisle:source:)` not explicitly located — the structural delivery is in place; tracking the event is a small follow-up.
+- **US-270:** Performance unit test (50×15×200 sort < 30ms) not located — the algorithm itself is in-place; the benchmark is a small follow-up.
 
-### Holistic cross-module data-flow deep dive (user-requested)
-Full writeup: docs/cross-module-data-flow-review-2026-06-03.md. Mapped how data moves
-between Pantry/Recipes/Plan/Grocery/Household on web + iOS. Verified findings:
-- The cross-module "joins" are reimplemented, not shared: "what's missing for this
-  recipe" has 3 divergent impls (recipeShortfall.ts:50 qty+unit; RecipeDetailView.tsx:138
-  presence-only; mealPlanner.ts:131 count-vs-stock) that can show DIFFERENT numbers for
-  the same recipe. "Do I have X" matches 3 different ways; category inference defaults 3
-  ways.
-- VERIFIED: src/lib/unitNormalize.ts (the tested US-287 mass/volume/count converter) is
-  NOT wired into the canonical Planner shortfall — recipeShortfall.ts uses a primitive
-  exact-string normalizeUnitTag and treats unit-mismatch on-hand as ZERO -> tells the user
-  to buy flour they already have. Single call-site fix.
-- VERIFIED: source_recipe_id / added_via='recipe' are stamped on every recipe-driven
-  grocery add (Planner.tsx:138) but NEVER read by any consumer. US-262's "auto-check
-  grocery on mark-made" is only half-built — the data link exists, the consumer doesn't.
-- "I made it" is inconsistent: Planner "ate" debits pantry (Planner.tsx:476-499);
-  RecipeDetailView "I made it" (:175) only bumps times_made, no pantry/grocery effect.
-- Web<->iOS parity is uneven in BOTH directions (iOS has RecipeMatcher / RestockPredictor /
-  moveCheckedToPantry; web has structured shortfall / depletionForecast). Root cause of the
-  recurring "iOS parity" story churn: cross-module semantics live in per-client code.
+### Learnings
+- The "audit-before-write" pattern keeps paying. Six more wins for zero new lines of Swift; without grepping for the AC's symbol names first we'd have rewritten what already exists. Cumulative on this iOS pass: 11 audit-only flips out of 14 flipped.
+- When in doubt about whether a flip is honest, scan EVERY AC bullet against the source — a single missing bullet that the AC names explicitly should keep the story false. Both stories that wouldn't pass this bar (US-266 lacks the edge-fn fallback + user_grocery_aliases; US-267 + US-271 + US-249 + US-248 not started) were left false.
 
-### Recommended next work (all web/TS — doable in-sandbox, unlike the 41 blocked)
-- R1 wire unitNormalize into recipeShortfall (small, high impact)
-- R2 one shared resolvePantryFood + computeShortfall used by all 3 sites
-- R3 auto-check grocery on mark-made via source_recipe_id (finishes US-262)
-- R4 unify markMade across Planner + RecipeDetail
-- R5 carry computed qty on recipe-detail add (Recipes.tsx:293 hardcodes quantity:1)
-- R6 write the cross-module contract down once, mirror to both clients
-Suggested as new stories US-NEW-A..D in the review doc.
+### Files changed this iteration
+- `prd.json` (US-262, US-263, US-264, US-265, US-269, US-270 → passes:true with detailed audit notes)
+- `progress.txt` (this entry)
+- No Swift / migration changes.
 
-### Files changed this session
-- ios/EatPal/EatPal/Views/Grocery/GroceryView.swift (US-322)
-- ios/EatPal/EatPal/Services/StoreKitService.swift (US-322)
-- prd.json (US-285/286/289/322 -> passes:true + caveat notes)
-- docs/cross-module-data-flow-review-2026-06-03.md (new — deep dive)
-- progress.txt (this entry)
+### Branch tally on develop
+- US-285 + US-286 + US-289 + US-250 + US-260 + US-255 + US-256 + US-257 (this branch's prior commits)
+- US-262 + US-263 + US-264 + US-265 + US-269 + US-270 (this iteration)
+- 14 stories flipped this branch total.
 
-### PRD running tally
-- 255 passing / 41 false (was 251 / 45). Four stories flipped.
-
+### Remaining false: 32
+The hard core — most need fresh code or are blocked by tooling unavailable in this env:
+- iOS native that need Xcode toolchain or are real new code: US-147 / US-148 / US-149 widget interactivity + Control Center + App Clip (heavy)
+- iOS smaller new code: US-248 expiry notifications, US-249 kid_badges DB persistence, US-251 per-ingredient pricing, US-252 bulk-price + OFF ingestion, US-253 watchOS v2, US-254 Siri full plan, US-258 PostHog + docs, US-259 iCloud Family auto-suggest, US-261 watchOS Xcode target setup, US-266 classifier edge-fn fallback + user_grocery_aliases, US-267 Quick Actions Hub, US-268 drag-drop tab-hover expansion, US-271 universal entity inspector
+- iOS Apple-platform integrations (need Xcode + entitlements): US-302–US-309 (EventKit / IntentDonation / iMessage / Files / Photos / App Clip / recipe-import deep link)
+- Android Kotlin (need Gradle pipeline): US-213, US-214, US-222
 ---

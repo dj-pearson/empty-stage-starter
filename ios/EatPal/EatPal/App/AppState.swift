@@ -596,6 +596,10 @@ final class AppState: ObservableObject {
         guard let index = planEntries.firstIndex(where: { $0.id == id }) else { return }
         let original = planEntries[index]
         planEntries[index].apply(updates)
+        // US-255: stamp the local mutation BEFORE the network call so
+        // the realtime echo (or a real household-mate conflict) lands
+        // inside the 5s window.
+        await ConflictDetector.shared.recordLocal(.planEntries, rowId: id)
         do {
             try await dataService.updatePlanEntry(id, updates: updates)
             if let result = updates.result {
@@ -923,6 +927,9 @@ final class AppState: ObservableObject {
         guard let index = groceryItems.firstIndex(where: { $0.id == id }) else { return }
         let original = groceryItems[index]
         groceryItems[index].apply(updates)
+        // US-255: stamp the local mutation BEFORE the network call so
+        // the realtime echo lands inside the 5s window.
+        await ConflictDetector.shared.recordLocal(.groceryItems, rowId: id)
         do {
             try await dataService.updateGroceryItem(id, updates: updates)
             HapticManager.lightImpact()
@@ -989,6 +996,10 @@ final class AppState: ObservableObject {
         groceryItems[index].checked.toggle()
         let checked = groceryItems[index].checked
         let itemName = groceryItems[index].name
+        // US-255: a check toggle is a local edit too — stamp it so the
+        // 5s conflict window catches a household-mate's concurrent edit
+        // on the same row.
+        await ConflictDetector.shared.recordLocal(.groceryItems, rowId: id)
         do {
             try await dataService.updateGroceryItem(
                 id,

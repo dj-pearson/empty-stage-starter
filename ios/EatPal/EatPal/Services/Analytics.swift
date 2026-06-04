@@ -214,6 +214,20 @@ enum AnalyticsEvent {
     case receiptScanFailed(reason: String)
     case receiptFirstScanCompleted(itemCount: Int)
 
+    // US-260: Fridge-photo funnel. Replaces the placeholder
+    // .aiPlanGenerated(promptType: "fridge_photo_recognized") so we can
+    // measure the full funnel: picker -> recognition -> confirm -> plan.
+    // Privacy: NO detected food names are ever sent — only counts.
+    case fridgePhotoTaken
+    case fridgePhotoRecognized(detectedCount: Int)
+    case fridgePhotoConfirmed(keptCount: Int, manualCount: Int)
+    case fridgePlanGenerated(usedCount: Int, missingCount: Int)
+
+    // US-255: Household 5s last-write-wins conflict toast. Fires when
+    // a household-mate's UPDATE arrives within the conflict window of a
+    // local edit on the same row.
+    case householdConflictResolved(table: String, conflictAgeMs: Int)
+
     // Auth lifecycle — coarse signals only, never tied to email/name
     case signInStarted(method: String)
     case signInCompleted(method: String)
@@ -285,6 +299,11 @@ enum AnalyticsEvent {
         case .receiptItemsAccepted:     return "receipt_items_accepted"
         case .receiptScanFailed:        return "receipt_scan_failed"
         case .receiptFirstScanCompleted: return "receipt_first_scan_completed"
+        case .fridgePhotoTaken:         return "fridge_photo_taken"
+        case .fridgePhotoRecognized:    return "fridge_photo_recognized"
+        case .fridgePhotoConfirmed:     return "fridge_photo_confirmed"
+        case .fridgePlanGenerated:      return "fridge_plan_generated"
+        case .householdConflictResolved: return "household_conflict_resolved"
         }
     }
 
@@ -316,7 +335,10 @@ enum AnalyticsEvent {
              .missingIngredientPromptShown, .missingIngredientsAddedToGrocery,
              .mealMarkedMade, .pantryQuickAddSubmitted,
              .receiptScanStarted, .receiptParseCompleted, .receiptItemsAccepted,
-             .receiptScanFailed, .receiptFirstScanCompleted:
+             .receiptScanFailed, .receiptFirstScanCompleted,
+             .fridgePhotoTaken, .fridgePhotoRecognized,
+             .fridgePhotoConfirmed, .fridgePlanGenerated,
+             .householdConflictResolved:
             return "feature"
         case .paywallShown, .purchaseCompleted:
             return "monetization"
@@ -471,6 +493,26 @@ enum AnalyticsEvent {
             return ["reason": reason]
         case .receiptFirstScanCompleted(let count):
             return ["item_count": String(count)]
+        // US-260: Privacy contract — counts only, never names.
+        case .fridgePhotoTaken:
+            return [:]
+        case .fridgePhotoRecognized(let detectedCount):
+            return ["detected_count": String(detectedCount)]
+        case .fridgePhotoConfirmed(let keptCount, let manualCount):
+            return [
+                "kept_count": String(keptCount),
+                "manual_count": String(manualCount)
+            ]
+        case .fridgePlanGenerated(let usedCount, let missingCount):
+            return [
+                "used_count": String(usedCount),
+                "missing_count": String(missingCount)
+            ]
+        case .householdConflictResolved(let table, let conflictAgeMs):
+            return [
+                "table": table,
+                "conflict_age_ms": String(conflictAgeMs)
+            ]
         }
     }
 }
