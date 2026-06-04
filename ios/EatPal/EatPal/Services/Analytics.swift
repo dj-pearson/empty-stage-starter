@@ -228,6 +228,15 @@ enum AnalyticsEvent {
     // local edit on the same row.
     case householdConflictResolved(table: String, conflictAgeMs: Int)
 
+    // US-309: eatpal://recipe/import?url=<url-encoded> deep link instrumentation.
+    // Lets us measure the Shortcuts-power-user funnel: received -> succeeded -> failed.
+    case deeplinkRecipeImportReceived
+    case deeplinkRecipeImportSucceeded(timeMs: Int)
+    case deeplinkRecipeImportFailed(reason: String)
+
+    // US-248: Pantry expiry-notification scheduler firing. Counts only.
+    case expiryNotificationFired(foodsCount: Int)
+
     // Auth lifecycle — coarse signals only, never tied to email/name
     case signInStarted(method: String)
     case signInCompleted(method: String)
@@ -304,6 +313,10 @@ enum AnalyticsEvent {
         case .fridgePhotoConfirmed:     return "fridge_photo_confirmed"
         case .fridgePlanGenerated:      return "fridge_plan_generated"
         case .householdConflictResolved: return "household_conflict_resolved"
+        case .deeplinkRecipeImportReceived:  return "deeplink_recipe_import_received"
+        case .deeplinkRecipeImportSucceeded: return "deeplink_recipe_import_succeeded"
+        case .deeplinkRecipeImportFailed:    return "deeplink_recipe_import_failed"
+        case .expiryNotificationFired:       return "expiry_notification_fired"
         }
     }
 
@@ -338,7 +351,11 @@ enum AnalyticsEvent {
              .receiptScanFailed, .receiptFirstScanCompleted,
              .fridgePhotoTaken, .fridgePhotoRecognized,
              .fridgePhotoConfirmed, .fridgePlanGenerated,
-             .householdConflictResolved:
+             .householdConflictResolved,
+             .deeplinkRecipeImportReceived,
+             .deeplinkRecipeImportSucceeded,
+             .deeplinkRecipeImportFailed,
+             .expiryNotificationFired:
             return "feature"
         case .paywallShown, .purchaseCompleted:
             return "monetization"
@@ -513,6 +530,14 @@ enum AnalyticsEvent {
                 "table": table,
                 "conflict_age_ms": String(conflictAgeMs)
             ]
+        case .deeplinkRecipeImportReceived:
+            return [:]
+        case .deeplinkRecipeImportSucceeded(let timeMs):
+            return ["time_ms": String(timeMs)]
+        case .deeplinkRecipeImportFailed(let reason):
+            return ["reason": reason]
+        case .expiryNotificationFired(let count):
+            return ["foods_count": String(count)]
         }
     }
 }

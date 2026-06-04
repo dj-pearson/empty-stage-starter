@@ -368,7 +368,7 @@ private struct RecipeImportBranch: View {
         defer { isLoading = false }
 
         do {
-            let result = try await ShareExtensionAPI.parseRecipe(url: url)
+            let result = try await RecipeParseAPI.parseRecipe(url: url)
             self.parsed = result
         } catch {
             self.error = error.localizedDescription

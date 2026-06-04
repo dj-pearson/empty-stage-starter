@@ -25,6 +25,13 @@ final class DeepLinkHandler: ObservableObject {
         /// and asks the app to switch to the grocery tab so the user sees the
         /// drained items appear with the standard toast.
         case groceryImport(itemCount: Int)
+        /// US-309: parsed recipe import via `eatpal://recipe/import?url=...`.
+        /// The handler calls `RecipeParseAPI.parseRecipe(url:)` inline, enqueues
+        /// the result into `PendingRecipeImportQueue`, and asks the app to
+        /// switch to the recipes tab so the drain-on-launch toast lands in the
+        /// right place. `recipeName` is the parsed name (best-effort) so the
+        /// router can surface "Imported <name>" without re-reading the queue.
+        case recipeImport(recipeName: String)
     }
 
     private init() {}
@@ -69,6 +76,19 @@ final class DeepLinkHandler: ObservableObject {
                 enqueueGroceryImport(text: raw, source: "deeplink:grocery")
             } else {
                 activeDestination = .grocery
+            }
+        case "recipe":
+            // US-309: `eatpal://recipe/import?url=<url-encoded>` parses a
+            // recipe URL via the public parse-recipe edge function and
+            // enqueues it onto the share-extension's drain path. Runs in a
+            // background Task so the URL-open call returns immediately.
+            if url.pathComponents.contains("import"),
+               let raw = url.queryValue(for: "url"),
+               let sourceURL = URL(string: raw),
+               (sourceURL.scheme == "https" || sourceURL.scheme == "http") {
+                Task { await handleRecipeImport(sourceURL: sourceURL) }
+            } else {
+                activeDestination = .recipes
             }
         case "kid":
             if let id = url.queryValue(for: "id") {
@@ -117,6 +137,69 @@ final class DeepLinkHandler: ObservableObject {
         )
         PendingGroceryImportQueue.enqueue(pending)
         activeDestination = .groceryImport(itemCount: parsed.count)
+    }
+
+    // MARK: - Recipe import (US-309)
+
+    /// Calls the public `parse-recipe` edge function against the supplied URL,
+    /// enqueues the result onto `PendingRecipeImportQueue`, and surfaces a
+    /// toast. Failure case offers an "open in Safari" fallback so the user
+    /// can still get to the page — the parser falling over on a particular
+    /// site shouldn't dead-end the workflow.
+    private func handleRecipeImport(sourceURL: URL) async {
+        AnalyticsService.track(.deeplinkRecipeImportReceived)
+        let started = Date()
+        do {
+            let parsed = try await RecipeParseAPI.parseRecipe(url: sourceURL)
+            let pending = PendingRecipeImport(
+                sourceUrl: sourceURL.absoluteString,
+                name: parsed.name,
+                description: parsed.description,
+                imageUrl: parsed.imageUrl,
+                instructions: parsed.instructions,
+                prepTime: parsed.prepTime,
+                cookTime: parsed.cookTime,
+                servings: parsed.servings,
+                additionalIngredients: parsed.ingredients.isEmpty
+                    ? nil
+                    : parsed.ingredients.joined(separator: "\n")
+            )
+            PendingRecipeImportQueue.enqueue(pending)
+
+            let elapsedMs = Int(Date().timeIntervalSince(started) * 1000)
+            AnalyticsService.track(.deeplinkRecipeImportSucceeded(timeMs: elapsedMs))
+
+            ToastManager.shared.success(
+                "Imported \(parsed.name)",
+                message: "Open Recipes to see it"
+            )
+            activeDestination = .recipeImport(recipeName: parsed.name)
+        } catch {
+            AnalyticsService.track(
+                .deeplinkRecipeImportFailed(reason: shortFailureReason(for: error))
+            )
+            ToastManager.shared.error(
+                "Couldn't parse recipe",
+                message: "Open in Safari?",
+                retry: { @MainActor in
+                    UIApplication.shared.open(sourceURL)
+                }
+            )
+        }
+    }
+
+    /// Bucket the error into a small set of stable reason codes so the
+    /// dashboard can group failures without leaking URLs or PII.
+    private func shortFailureReason(for error: Error) -> String {
+        if let importError = error as? RecipeParseAPI.ImportError {
+            switch importError {
+            case .missingConfig:      return "missing_config"
+            case .badResponse:        return "bad_response"
+            case .network:            return "network"
+            case .decode:             return "decode"
+            }
+        }
+        return "unknown"
     }
 
     private func handleUniversalLink(_ url: URL) {
