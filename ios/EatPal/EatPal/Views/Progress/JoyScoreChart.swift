@@ -355,7 +355,7 @@ private struct JoyScoreWeekDetailSheet: View {
                     }
                 }
             }
-            .navigationTitle(detail.weekStart, format: .dateTime.month().day())
+            .navigationTitle(detail.weekStart.formatted(.dateTime.month().day()))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
