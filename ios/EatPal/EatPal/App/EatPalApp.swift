@@ -38,6 +38,13 @@ struct EatPalApp: App {
                     if case .groceryImport = destination {
                         Task { await appState.drainPendingGroceryImports() }
                     }
+                    // US-309: eatpal://recipe/import lands with the parsed
+                    // recipe already enqueued by DeepLinkHandler. Kick the
+                    // drain immediately so the recipe appears in /recipes
+                    // without waiting for the next loadAllData() tick.
+                    if case .recipeImport = destination {
+                        Task { await appState.drainPendingRecipeImports() }
+                    }
                 }
                 .task {
                     // US-237: hand AppState to the WatchConnectivity service

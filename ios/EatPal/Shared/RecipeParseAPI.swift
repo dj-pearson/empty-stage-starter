@@ -1,18 +1,47 @@
 import Foundation
 
-/// US-143: Minimal HTTP client the share extension uses to call the public
-/// `functions/parse-recipe` Supabase edge function. No Supabase SDK — the
-/// extension memory budget is tight and the edge function doesn't require
-/// an authenticated session (no JWT).
-struct ParsedRecipe: Codable, Equatable {
-    let name: String
-    let description: String?
-    let imageUrl: String?
-    let instructions: String?
-    let prepTime: String?
-    let cookTime: String?
-    let servings: String?
-    let ingredients: [String]
+/// US-143 / US-309: Minimal HTTP client for `functions/parse-recipe`.
+///
+/// Originally lived in the share extension (`EatPalShare/ShareExtensionAPI.swift`)
+/// where it only needed to round-trip a URL → parsed recipe. US-309 promoted
+/// the file into `Shared/` so the MAIN app target can also call it from the
+/// `eatpal://recipe/import?url=...` deep-link handler and from the
+/// `ImportRecipeFromURLIntent` AppIntent — same code path, two callers, no
+/// duplication.
+///
+/// The edge function is public (no JWT) per US-014, so this client only needs
+/// the anon key surfaced from each target's Info.plist. The share extension's
+/// tight memory budget rules out pulling in supabase-swift — pure URLSession is
+/// the right tool for both call sites.
+public struct ParsedRecipe: Codable, Equatable {
+    public let name: String
+    public let description: String?
+    public let imageUrl: String?
+    public let instructions: String?
+    public let prepTime: String?
+    public let cookTime: String?
+    public let servings: String?
+    public let ingredients: [String]
+
+    public init(
+        name: String,
+        description: String? = nil,
+        imageUrl: String? = nil,
+        instructions: String? = nil,
+        prepTime: String? = nil,
+        cookTime: String? = nil,
+        servings: String? = nil,
+        ingredients: [String] = []
+    ) {
+        self.name = name
+        self.description = description
+        self.imageUrl = imageUrl
+        self.instructions = instructions
+        self.prepTime = prepTime
+        self.cookTime = cookTime
+        self.servings = servings
+        self.ingredients = ingredients
+    }
 
     enum CodingKeys: String, CodingKey {
         case name, description, ingredients, instructions, servings
@@ -22,17 +51,17 @@ struct ParsedRecipe: Codable, Equatable {
     }
 }
 
-enum ShareExtensionAPI {
-    enum ImportError: Error, LocalizedError {
+public enum RecipeParseAPI {
+    public enum ImportError: Error, LocalizedError {
         case missingConfig
         case badResponse(Int)
         case network(String)
         case decode(String)
 
-        var errorDescription: String? {
+        public var errorDescription: String? {
             switch self {
             case .missingConfig:
-                return "Share extension isn't configured yet. Reinstall EatPal."
+                return "Recipe import isn't configured yet. Reinstall EatPal."
             case .badResponse(let status):
                 return "The recipe service returned an error (\(status))."
             case .network(let detail):
@@ -43,11 +72,15 @@ enum ShareExtensionAPI {
         }
     }
 
-    /// Calls the Supabase edge function `parse-recipe` with the shared URL.
+    /// Calls the Supabase edge function `parse-recipe` with the URL the user
+    /// wants to import. Returns the parsed recipe payload; the caller is
+    /// responsible for enqueuing it into `PendingRecipeImportQueue` (so the
+    /// main app + share extension share the same drain path).
+    ///
     /// Hits `functions.tryeatpal.com/<name>` directly — Kong's `/functions/v1/*`
     /// upstream is broken on this Coolify Supabase deployment, see
     /// `EdgeFunctions.swift` in the main app for context.
-    static func parseRecipe(url: URL) async throws -> ParsedRecipe {
+    public static func parseRecipe(url: URL) async throws -> ParsedRecipe {
         guard let functionsUrl = functionsBaseUrl(),
               let anonKey = supabaseAnonKey() else {
             throw ImportError.missingConfig

@@ -87,5 +87,19 @@ struct EatPalAppShortcuts: AppShortcutsProvider {
             shortTitle: "Today's plan",
             systemImageName: "calendar"
         )
+
+        // US-309: typed Shortcuts action for the eatpal://recipe/import URL
+        // path. Power users can wire `Get URLs from Input → Import Recipe in
+        // EatPal` so a "Saved URLs → EatPal" automation Just Works.
+        AppShortcut(
+            intent: ImportRecipeFromURLIntent(),
+            phrases: [
+                "Import recipe in \(.applicationName) from \(\.$sourceURL)",
+                "Save recipe to \(.applicationName) from \(\.$sourceURL)",
+                "Add \(\.$sourceURL) to \(.applicationName) recipes"
+            ],
+            shortTitle: "Import recipe from URL",
+            systemImageName: "book.closed.fill"
+        )
     }
 }
