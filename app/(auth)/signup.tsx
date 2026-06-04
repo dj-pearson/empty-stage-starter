@@ -22,7 +22,9 @@ import {
 import { colors, spacing, fontSize, borderRadius } from '../../app/mobile/lib/theme';
 
 export default function SignupScreen() {
-  const router = useRouter();
+  // This screen navigates via the <Link> in its success state, so it doesn't
+  // need useRouter(). The previous `const router = useRouter()` crashed the
+  // screen on mount because useRouter was never imported from expo-router.
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');

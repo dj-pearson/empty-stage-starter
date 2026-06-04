@@ -69,8 +69,16 @@ jobs:
       - name: Build
         run: npx vite build
         env:
-          VITE_SUPABASE_URL: https://api.tryeatpal.com
-          VITE_SUPABASE_ANON_KEY: placeholder-for-ci-build
+          # Vite INLINES these into the bundle at build time, and the same
+          # dist/ artifact is what deploy-production/-staging ship. So the
+          # build must use the REAL anon key — otherwise production serves a
+          # client whose apikey is a placeholder and every request (including
+          # sign-in) fails with 401 "Invalid API key". The anon key is public
+          # by design. PR/fork builds (no secret access) fall back to the
+          # placeholder; they never deploy.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://api.tryeatpal.com' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-for-ci-build' }}
+          VITE_FUNCTIONS_URL: ${{ secrets.VITE_FUNCTIONS_URL }}
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

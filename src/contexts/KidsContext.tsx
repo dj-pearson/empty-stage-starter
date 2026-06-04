@@ -6,6 +6,7 @@ import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { checkFeatureLimit } from "@/lib/featureLimits";
 import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
+import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
 
 interface RealtimePayload<T> {
@@ -99,38 +100,44 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
 
   const updateKid = useCallback((id: string, updates: Partial<Kid>) => {
     if (userId) {
-      supabase.from('kids').update(updates).eq('id', id)
-        .then(({ error }) => {
-          if (error) logger.error('Supabase updateKid error:', error);
-          setKids(prev => prev.map(k => (k.id === id ? { ...k, ...updates } : k)));
-        });
+      // US-320: optimistic update with rollback + toast on server rejection.
+      void runOptimisticMutation<Kid>(
+        setKids,
+        prev => prev.map(k => (k.id === id ? { ...k, ...updates } : k)),
+        () => supabase.from('kids').update(updates).eq('id', id),
+        { logLabel: 'Supabase updateKid error:' }
+      );
     } else {
       setKids(prev => prev.map(k => (k.id === id ? { ...k, ...updates } : k)));
     }
   }, [userId]);
 
   const deleteKid = useCallback((id: string) => {
-    const afterDelete = () => {
-      setKids(prev => {
-        const remaining = prev.filter(k => k.id !== id);
-        setActiveKidId(currentActive => {
-          if (currentActive === id) {
-            return remaining[0]?.id ?? null;
-          }
-          return currentActive;
-        });
-        return remaining;
-      });
+    // Keep the active-kid fixup whether the delete is local or server-backed.
+    const fixActiveKid = (remaining: Kid[]) => {
+      setActiveKidId(currentActive =>
+        currentActive === id ? (remaining[0]?.id ?? null) : currentActive
+      );
     };
 
     if (userId) {
-      supabase.from('kids').delete().eq('id', id)
-        .then(({ error }) => {
-          if (error) logger.error('Supabase deleteKid error:', error);
-          afterDelete();
-        });
+      // US-320: optimistic delete; roll back (re-add) on server rejection.
+      void runOptimisticMutation<Kid>(
+        setKids,
+        prev => {
+          const remaining = prev.filter(k => k.id !== id);
+          fixActiveKid(remaining);
+          return remaining;
+        },
+        () => supabase.from('kids').delete().eq('id', id),
+        { logLabel: 'Supabase deleteKid error:', toastMessage: "Couldn't delete that child — restored. Please try again." }
+      );
     } else {
-      afterDelete();
+      setKids(prev => {
+        const remaining = prev.filter(k => k.id !== id);
+        fixActiveKid(remaining);
+        return remaining;
+      });
     }
   }, [userId]);
 

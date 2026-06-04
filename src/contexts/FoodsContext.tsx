@@ -5,6 +5,7 @@ import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { checkFeatureLimit } from "@/lib/featureLimits";
 import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
+import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
 
 interface FoodsContextType {
@@ -57,14 +58,13 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
 
   const updateFood = useCallback((id: string, updates: Partial<Food>) => {
     if (userId) {
-      supabase
-        .from('foods')
-        .update(updates)
-        .eq('id', id)
-        .then(({ error }) => {
-          if (error) logger.error('Supabase updateFood error:', error);
-          setFoods(prev => prev.map(f => (f.id === id ? { ...f, ...updates } : f)));
-        });
+      // US-320: optimistic update with rollback + toast on server rejection.
+      void runOptimisticMutation<Food>(
+        setFoods,
+        prev => prev.map(f => (f.id === id ? { ...f, ...updates } : f)),
+        () => supabase.from('foods').update(updates).eq('id', id),
+        { logLabel: 'Supabase updateFood error:' }
+      );
     } else {
       setFoods(prev => prev.map(f => (f.id === id ? { ...f, ...updates } : f)));
     }
@@ -72,14 +72,12 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
 
   const deleteFood = useCallback((id: string) => {
     if (userId) {
-      supabase
-        .from('foods')
-        .delete()
-        .eq('id', id)
-        .then(({ error }) => {
-          if (error) logger.error('Supabase deleteFood error:', error);
-          setFoods(prev => prev.filter(f => f.id !== id));
-        });
+      void runOptimisticMutation<Food>(
+        setFoods,
+        prev => prev.filter(f => f.id !== id),
+        () => supabase.from('foods').delete().eq('id', id),
+        { logLabel: 'Supabase deleteFood error:', toastMessage: "Couldn't delete that food — it's back. Please try again." }
+      );
     } else {
       setFoods(prev => prev.filter(f => f.id !== id));
     }
@@ -123,28 +121,41 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
   }, [userId, householdId, foods.length]);
 
   const updateFoods = useCallback(async (updates: { id: string; updates: Partial<Food> }[]) => {
-    if (userId) {
-      const promises = updates.map(({ id, updates: foodUpdates }) =>
-        supabase.from('foods').update(foodUpdates).eq('id', id)
-      );
-      const results = await Promise.all(promises);
-      const errors = results.filter(r => r.error);
-      if (errors.length > 0) {
-        logger.error('Supabase updateFoods errors:', errors);
-      }
+    if (!userId) {
+      setFoods(prev => prev.map(f => {
+        const update = updates.find(u => u.id === f.id);
+        return update ? { ...f, ...update.updates } : f;
+      }));
+      return;
     }
-    setFoods(prev => prev.map(f => {
-      const update = updates.find(u => u.id === f.id);
-      return update ? { ...f, ...update.updates } : f;
-    }));
+    // US-320: optimistic bulk update; roll back all if any row fails.
+    await runOptimisticMutation<Food>(
+      setFoods,
+      prev => prev.map(f => {
+        const update = updates.find(u => u.id === f.id);
+        return update ? { ...f, ...update.updates } : f;
+      }),
+      () =>
+        Promise.all(
+          updates.map(({ id, updates: foodUpdates }) =>
+            supabase.from('foods').update(foodUpdates).eq('id', id)
+          )
+        ).then(results => ({ error: results.find(r => r.error)?.error ?? null })),
+      { logLabel: 'Supabase updateFoods errors:', toastMessage: "Couldn't save all changes — reverted." }
+    );
   }, [userId]);
 
   const deleteFoods = useCallback(async (ids: string[]) => {
-    if (userId) {
-      const { error } = await supabase.from('foods').delete().in('id', ids);
-      if (error) logger.error('Supabase deleteFoods error:', error);
+    if (!userId) {
+      setFoods(prev => prev.filter(f => !ids.includes(f.id)));
+      return;
     }
-    setFoods(prev => prev.filter(f => !ids.includes(f.id)));
+    await runOptimisticMutation<Food>(
+      setFoods,
+      prev => prev.filter(f => !ids.includes(f.id)),
+      () => supabase.from('foods').delete().in('id', ids),
+      { logLabel: 'Supabase deleteFoods error:', toastMessage: "Couldn't delete those foods — restored." }
+    );
   }, [userId]);
 
   const refreshFoods = useCallback(async () => {

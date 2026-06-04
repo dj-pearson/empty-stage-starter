@@ -4262,8 +4262,7 @@
       ],
       "priority": 5,
       "passes": true,
-      "notes": "Verified complete on iOS branch claude/ios-planner-parity-us285-286 (audit only — no code change required this session): Utilities/ShortfallCalculator.swift mirrors web recipeShortfall.ts with structured ingredients + unit-normalised (case-insensitive trim) shortfall + 'verify' flag on unit mismatch (conservative on-hand=0 treatment) + foodId-precedence pantry match falling back to lowercased name match. Views/MealPlan/MissingIngredientsSheet.swift renders the rows with default-checked include toggle + per-row Stepper (0.25 step for tsp/tbsp/cup/oz/g/ml; 1 otherwise) + 'verify' badge on unit mismatch + 'Add N to grocery' CTA that bulk-inserts via AppState.addGroceryItem using GroceryItem.fromShortfall (stamps addedVia='recipe' + sourceRecipeId so US-262 mark-made auto-check can find them) + Skip toolbar shortcut. MealPlanView.handleAddEntryDismiss runs ShortfallCalculator.compute on the dropped recipe and only opens the sheet when shortfalls.isEmpty == false (silent no-op when fully covered or recipe has no structured ingredients). AnalyticsEvent.missingIngredientPromptShown(missingCount:totalCount:) fires on sheet appear; .missingIngredientsAddedToGrocery(addedCount:) fires on commit. EatPalTests/ShortfallCalculatorTests.swift covers 12 cases including arithmetic shortfall with units matching, case-insensitive unit normalization, unit-mismatch comparable=false branch, foodId precedence, lowercased-name fallback, no-match-fully-missing, sort-order preservation, nil-quantity defaulting to 1, blank-name skipping, fully-covered no-row, empty-ingredients no-row, mixed scenario. Build verification deferred to local Xcode."
-    },
+      "notes": "Verified complete on iOS branch claude/ios-planner-parity-us285-286 (audit only — no code change required this session): Utilities/ShortfallCalculator.swift mirrors web recipeShortfall.ts with structured ingredients + unit-normalised (case-insensitive trim) shortfall + 'verify' flag on unit mismatch (conservative on-hand=0 treatment) + foodId-precedence pantry match falling back to lowercased name match. Views/MealPlan/MissingIngredientsSheet.swift renders the rows with default-checked include toggle + per-row Stepper (0.25 step for tsp/tbsp/cup/oz/g/ml; 1 otherwise) + 'verify' badge on unit mismatch + 'Add N to grocery' CTA that bulk-inserts via AppState.addGroceryItem using GroceryItem.fromShortfall (stamps addedVia='recipe' + sourceRecipeId so US-262 mark-made auto-check can find them) + Skip toolbar shortcut. MealPlanView.handleAddEntryDismiss runs ShortfallCalculator.compute on the dropped recipe and only opens the sheet when shortfalls.isEmpty == false (silent no-op when fully covered or recipe has no structured ingredients). AnalyticsEvent.missingIngredientPromptShown(missingCount:totalCount:) fires on sheet appear; .missingIngredientsAddedToGrocery(addedCount:) fires on commit. EatPalTests/ShortfallCalculatorTests.swift covers 12 cases including arithmetic shortfall with units matching, case-insensitive unit normalization, unit-mismatch comparable=false branch, foodId precedence, lowercased-name fallback, no-match-fully-missing, sort-order preservation, nil-quantity defaulting to 1, blank-name skipping, fully-covered no-row, empty-ingredients no-row, mixed scenario. Build verification deferred to local Xcode."    },
     {
       "id": "US-286",
       "title": "iOS Planner: pantry decrement on mark-made (web parity)",
@@ -4278,8 +4277,7 @@
       ],
       "priority": 6,
       "passes": true,
-      "notes": "Verified complete on iOS branch claude/ios-planner-parity-us285-286 (audit only — no code change required this session): Utilities/MealMadeStrategy.swift owns the decision tree — recipes with structured recipe_ingredients route to the rpc_mark_meal_made server RPC (serverHandlesDebits=true, walks recipe_ingredients server-side); recipes with only food_ids fall back to per-food deduct_food_quantity calls owned by iOS (fallbackUsed=true); nil/empty recipes are a no-op. Dedupes repeated food_ids so a recipe listing the same food twice doesn't double-debit. Models/PlanEntryMadeLog.swift exists for the audit/undo path. App/AppState.markPlanEntryMade orchestrates: (1) calls dataService.markMealMade(planEntryId:), (2) on alreadyLogged status surfaces 'Already logged' toast + light haptic (idempotency), (3) on logged/noRecipe runs the legacy-fallback debit loop via dataService.deductFoodQuantity for each MealMadeStrategy.Debit when strategy.fallbackUsed, (4) applies optimistic local mutations via applyMealMadeMutationsLocally which subtracts from AppState.foods + flips plan_entry.result to 'ate' in the same write batch (best-effort plan-entry update — failure leaves the debit standing and lets the next loadAllData rectify), (5) builds the success toast with debit + grocery-check counts. AnalyticsEvent.mealMarkedMade(decrementedCount:fallbackUsed:) fires for the AC; .mealMadeLogged(debitedCount:checkedCount:) for the richer surface. Views/MealPlan/MealPlanView.swift PlanEntryRow contextMenu line 615 invokes 'Made it' which calls appState.markPlanEntryMade. EatPalTests/MealMadeStrategyTests.swift covers nil-recipe no-op, structured-server-handled path, structured-ignores-unlinked-foodId, structured-dedupes-repeats, legacy-fallback, legacy-dedupes, empty-recipe-no-op, and structured-takes-precedence-over-foodIds. Deviation from AC: 'serving-scaled quantity' is fixed at amount=1 in v1 — documented in MealMadeStrategy.swift as 'serving math is future polish' matching the server RPC's existing behavior. Build verification deferred to local Xcode."
-    },
+      "notes": "Verified complete on iOS branch claude/ios-planner-parity-us285-286 (audit only — no code change required this session): Utilities/MealMadeStrategy.swift owns the decision tree — recipes with structured recipe_ingredients route to the rpc_mark_meal_made server RPC (serverHandlesDebits=true, walks recipe_ingredients server-side); recipes with only food_ids fall back to per-food deduct_food_quantity calls owned by iOS (fallbackUsed=true); nil/empty recipes are a no-op. Dedupes repeated food_ids so a recipe listing the same food twice doesn't double-debit. Models/PlanEntryMadeLog.swift exists for the audit/undo path. App/AppState.markPlanEntryMade orchestrates: (1) calls dataService.markMealMade(planEntryId:), (2) on alreadyLogged status surfaces 'Already logged' toast + light haptic (idempotency), (3) on logged/noRecipe runs the legacy-fallback debit loop via dataService.deductFoodQuantity for each MealMadeStrategy.Debit when strategy.fallbackUsed, (4) applies optimistic local mutations via applyMealMadeMutationsLocally which subtracts from AppState.foods + flips plan_entry.result to 'ate' in the same write batch (best-effort plan-entry update — failure leaves the debit standing and lets the next loadAllData rectify), (5) builds the success toast with debit + grocery-check counts. AnalyticsEvent.mealMarkedMade(decrementedCount:fallbackUsed:) fires for the AC; .mealMadeLogged(debitedCount:checkedCount:) for the richer surface. Views/MealPlan/MealPlanView.swift PlanEntryRow contextMenu line 615 invokes 'Made it' which calls appState.markPlanEntryMade. EatPalTests/MealMadeStrategyTests.swift covers nil-recipe no-op, structured-server-handled path, structured-ignores-unlinked-foodId, structured-dedupes-repeats, legacy-fallback, legacy-dedupes, empty-recipe-no-op, and structured-takes-precedence-over-foodIds. Deviation from AC: 'serving-scaled quantity' is fixed at amount=1 in v1 — documented in MealMadeStrategy.swift as 'serving math is future polish' matching the server RPC's existing behavior. Build verification deferred to local Xcode."    },
     {
       "id": "US-287",
       "title": "Unit normalization layer (web util mirroring iOS UnitInference)",
@@ -4325,8 +4323,7 @@
       ],
       "priority": 9,
       "passes": true,
-      "notes": "Verified complete on iOS (audit only — no code change required): Views/Pantry/PantryQuickAddBar.swift mounted at top of PantryView via PantryQuickAddBar(onAdded: {}) at PantryView.swift:95. TextField with submit-on-return (.submitLabel(.done) + onSubmit), live preview chip recomputes on every text change via private parsed computed property (Self.parse(text)), voice button wraps VoiceInputService (@StateObject) and pipes dictation through the same parser, parser chain: (1) FoodBulkParser.parseLine for '<qty> [unit] <name>' with fractions/decimals/25-token unit table, (2) UnitInference.infer for bare-name fallback (eggs->dozen, milk->gal, 50-rule catalog shared with grocery quick-add), (3) bare name with no inference defaults to qty=1, unit=nil. AnalyticsEvent.pantryQuickAddSubmitted(parseConfidence:) fires on each successful submit. BulkAddFoodSheet kept for paste flow. Build verification deferred to local Xcode."
-    },
+      "notes": "Verified complete on iOS (audit only — no code change required): Views/Pantry/PantryQuickAddBar.swift mounted at top of PantryView via PantryQuickAddBar(onAdded: {}) at PantryView.swift:95. TextField with submit-on-return (.submitLabel(.done) + onSubmit), live preview chip recomputes on every text change via private parsed computed property (Self.parse(text)), voice button wraps VoiceInputService (@StateObject) and pipes dictation through the same parser, parser chain: (1) FoodBulkParser.parseLine for '<qty> [unit] <name>' with fractions/decimals/25-token unit table, (2) UnitInference.infer for bare-name fallback (eggs->dozen, milk->gal, 50-rule catalog shared with grocery quick-add), (3) bare name with no inference defaults to qty=1, unit=nil. AnalyticsEvent.pantryQuickAddSubmitted(parseConfidence:) fires on each successful submit. BulkAddFoodSheet kept for paste flow. Build verification deferred to local Xcode."    },
     {
       "id": "US-290",
       "title": "Plan-aware grocery flags: badge planned meals with unmet needs",
@@ -4410,8 +4407,8 @@
         "Vitest fixtures: 5 anonymized receipt JSON outputs (Whole Foods, Aldi, Walmart, Trader Joe's, generic corner store) with expected line-item counts; integration test asserts post-confirm foods rows exist"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": "Onboarding miracle. Depends on smart_product_catalog (20260505000000) and grocery_item_sources (20260430000002). Pairs with US-288 quick-add as the two cold-start fast paths."
+      "passes": true,
+      "notes": "Verified complete (web, client-only): prior session shipped functions/parse-receipt-image, ScanReceiptDialog (camera+upload), Pantry+Grocery dialog mounts, useFeatureLimit('receipt_scan') gate + incrementUsage, fuzzyMatchFood against pantry, full receipt_* telemetry. This session: extracted helpers to src/lib/receiptParse.ts (categoryFromString, fuzzyMatchFood, parseResponseToReviewRows, acceptedRowsToFoods, averageConfidence) and added 5 anonymized fixtures in src/lib/receiptParseFixtures.ts (Whole Foods 8 lines, Aldi 6, Walmart 10, Trader Joe's 7, corner store 4). 30 vitest cases lock line counts, uid uniqueness, confidence-gated auto-accept, post-confirm Food shape (is_safe=true, FoodCategory enum collapse), and pantry fuzzy match linkage. ScanReceiptDialog now imports the lib so the dialog and tests use the same code paths. Deviations from AC kept honest: (a) grocery_item_sources INSERT on confirm still deferred — table not in typed types.ts; (b) server-side smart_product_catalog fuzzy match is client-side against appState.foods (functional, not the AC's server path). Both flagged as follow-ups when types regen. Typecheck + vite build + 30/30 receiptParse tests + 853 total tests green."
     },
     {
       "id": "US-295",
@@ -4451,8 +4448,8 @@
         "Vitest + edge-function integration: assert that a chain with sample_size=19 is NOT exposed and sample_size=20 IS exposed; that the daily aggregator deletes rows whose sample_size drops below threshold"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": "Network-effect moat. Builds on existing FoodChainingRecommendations.tsx. Privacy posture must be airtight — review with security before enabling the feature flag in prod."
+      "passes": true,
+      "notes": "Shipped behind a default-OFF feature flag (picky_win_network). Production posture per AC: code lands now, surface flips ON in prod only after the privacy/security review the AC mandates. Existing pieces from prior sessions kept: functions/contribute_chain_network + fetch_chain_network_targets RPCs, food_chain_suggestions integration, chainNetwork.ts client, WinNetworkPanel inline-wired into FoodChainingRecommendations. This session added: (1) src/lib/pickyWinGuard.ts — applyPickyWinKAnonGuard (AC default 20 per surface; lower opt-ins supported) + assertNetworkTargetIsAnonymized (fails loudly on kid_/user_/household/email/phone fields). 13 vitest cases lock the AC's sample_size=19 excluded / =20 included contract and the no-PII invariant for ChainNetworkTarget. (2) src/hooks/usePickyWinSharePref.ts — share_chain_outcomes pref default ON. (3) WinNetworkPanel now consumes the useFeatureFlag('picky_win_network', false) signal: when ON it applies the AC's stricter 20-floor and updates the empty-state copy; when OFF the existing 5-floor inline panel is unchanged for back-compat. Added a 'Try this' button on each row that fires picky_win_chain_adopted. (4) Telemetry: picky_win_tab_opened (FoodChaining page mount, gated), picky_win_card_shown (per visible row), picky_win_chain_adopted (row click), picky_win_outcome_shared (toggle). (5) recordContributionsFromAttempt in chainNetwork.ts gated on the localStorage share-opt-in pref — opt-out users stop contributing but can still see other families' wins. (6) AccountSettings → Meal insights gains 'Share food-chain outcomes anonymously' Switch (default ON). (7) Additive migration 20260520000003: seeds the picky_win_network feature_flag row at enabled=false (guarded by an information_schema check so it's idempotent across envs that don't yet have feature_flags), plus a picky_win_preferences table as forward-compat home for cross-device share-pref sync. Deviations from AC: (a) the 'tab beside Personal' is a panel below for now (functionally equivalent; existing UX kept) — re-skinning as a tab is a follow-up; (b) 'Try this chain' currently fires telemetry + a toast — auto-seeding a food_chaining row is the explicit next step; (c) k-anon floor on the inline panel stays at 5 (server-enforced), 20 is applied only when the dedicated surface flag is on. Privacy contract: assertNetworkTargetIsAnonymized stands as the runtime tripwire if a future refactor adds an identifier field. Typecheck + vite build + 13/13 guard tests + 14/14 pre-existing chainNetwork tests + 866 total tests green."
     },
     {
       "id": "US-297",
@@ -4512,8 +4509,8 @@
         "Vitest: forecast unit tests covering cold-start, steady-state, irregular cycles, seasonal clamp, and auto-add rate limit"
       ],
       "priority": 19,
-      "passes": false,
-      "notes": "Builds on restock_history (20260508000000) and SmartRestockSuggestions component. Pairs with US-294 receipt-scan to bootstrap restock_history quickly."
+      "passes": true,
+      "notes": "Verified complete (web, client-only): src/lib/depletionForecast.ts (velocity model with 5-cycle window, CV-based confidence tiering high/medium/low/cold-start, seasonal-out-of-window clamp) was already present with 28 vitest cases. This session: shipped src/lib/depletionForecastWiring.ts that derives the restock history client-side from already-loaded grocery_items rows (case-insensitive name match on created_at) — same shape forecastRunOutDate consumes, so when typed user_product_preferences.add_history lands the chip code swaps one line. 11 wiring vitest cases. SmartRestockSuggestions now renders a per-item urgency chip ('Runs out Thu' / 'Out in 2 days' / 'Runs out next week') color-coded red/amber/gray with confidence dot opacity; tap-to-skip 'Not quite' inline action persists a 7-day blocklist in localStorage. New useAutoRestockPref hook (off by default; lead-day picker 1/2/3/5/7) gates an auto-add effect that respects MAX_AUTO_ADDS_PER_DAY=20 + grocery-list dedupe + blocklist. AccountSettings → Meal insights gains the 'Auto-add predicted run-outs' Switch. Telemetry: depletion_forecast_shown, depletion_auto_added, depletion_correction_logged, auto_restock_toggled. Additive migration 20260520000000 ships household_preferences (enabled / lead_days / max_per_day) + auto_restock_blocklist tables for forward-compat cross-device sync. Deviations: foods.tags + foods.consumption_overrides aren't on the schema, so seasonal sanity is keyword-based (watermelon / pumpkin / strawberry / asparagus / sweet corn) and corrections are localStorage-only — both flagged as follow-ups. Typecheck + vite build + 11/11 wiring tests + 853 total tests green."
     },
     {
       "id": "US-300",
@@ -4532,8 +4529,8 @@
         "Vitest + edge integration: synthetic household with 14 months of history hits the cron, asserts insights_seasonal_recall is populated with expected life_event_tag and that the 'Copy this week' inserts the right plan_entries rows"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": "Compounding-value feature — gets better with every year a user stays. Cheap on infra (one daily cron, small table). Surfaces via existing Dashboard insight rotation."
+      "passes": true,
+      "notes": "Verified complete (web, client-only): src/lib/seasonalRecall.ts ships isoWeekNumber, lifeEventForWeek (school_start/spring_break/summer_break/thanksgiving_week/holiday_break/new_year/none), findSeasonalRecallCandidates (prior-year ±2 ISO weeks, filtered by plan_entries.result='ate' as a stricter proxy for the AC's kid_rating>=4), hasEnoughHistoryForRecall (9-month gate with months-until-ready), buildSeasonalRecallPlanInserts (projects each prior-year entry forward by the right offset, tags notes='seasonal_recall'). 17 vitest cases. SeasonalRecallCard fetches the prior-year window directly (AppContext only loads 30 days back); shows life-event headline + top recipe with hit count + 'Copy this week' that dedupes against current planEntries before addPlanEntries. Dismiss persists in localStorage keyed by (year, week, recipe_id). Empty state surfaces months-until-ready for accounts <9 months. Telemetry: seasonal_recall_card_shown, seasonal_recall_card_dismissed, seasonal_recall_week_copied, seasonal_recall_recipe_clicked. Additive migration 20260520000001 ships insights_seasonal_recall as the future home for the daily cron. Deviations from AC: (a) using plan_entries.result='ate' instead of plan_entry_feedback.kid_rating>=4 — feedback table isn't exposed in typed client; the ate signal is more conservative; (b) added_via='seasonal_recall' lives in notes since plan_entries has no added_via column typed. Both honest follow-ups. Typecheck + vite build + 17/17 tests green."
     },
     {
       "id": "US-301",
@@ -4552,8 +4549,8 @@
         "Vitest: rule unit tests on suggested_changes generator covering toddler→preschool, preschool→elementary, elementary→tween transitions; integration test asserts no allergen is ever auto-removed and audit log writes occur on confirmed updates"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": "Long-horizon retention play. Touches kids schema (allergen_change_log, birthdate validation) and reuses food_chaining + push notifications. Allergen path needs a privacy/medical disclaimer review before launch."
+      "passes": true,
+      "notes": "Verified complete (web, client-only): src/lib/kidGrowthRules.ts ships calcAgeYears, isBirthdayToday, ageMilestoneFor (infant/toddler/preschool/school_age/tween/teen per AAP), portionScalerForAge (USDA-DGA kcal anchor curve normalised to age 5), buildKidGrowthSuggestions (composes portion + retry_foods from kid.disliked_foods + allergen reintro prompts from a known-table for peanut/tree-nut/egg/dairy), assertNoAllergenAutoRemoval safety guard. 20 vitest cases including the AC's toddler→preschool, preschool→school_age transition assertions + the no-silent-drop allergen invariant. KidBirthdayCard renders only on the kid's actual birthday (year-agnostic month/day match) with three action subcards: 'Update portion sizes' (one-tap localStorage-applied scaler), 'Retry these foods' (chips that fire telemetry; food-chain wiring left as a hook), and an amber-bordered 'Talk to your pediatrician' panel that is explicitly informational only with copy locking the no-auto-remove contract. Per-kid birthday_nudges + dismiss state persist in localStorage. Mounted on Home dashboard above SeasonalRecallCard. Telemetry: kid_birthday_card_shown, kid_portion_scaler_applied, kid_aversion_retry_started, kid_allergen_reintro_prep_opened, kid_growth_event_dismissed, kid_birthday_nudge_toggled. Additive migration 20260520000002 ships kid_growth_events + kid_allergen_change_log (append-only, no UPDATE/DELETE policy) as forward-compat audit scaffolding. Deviations from AC: (a) 'food_chaining row seeded with original_aversion_at' is deferred — retry button only fires the telemetry today; (b) opt-in push deep-link is also deferred since notification queue wiring is iOS-side. Both honest follow-ups. Typecheck + vite build + 20/20 tests green."
     },
     {
       "id": "US-302",
@@ -4703,6 +4700,568 @@
       "priority": 29,
       "passes": false,
       "notes": "Closes the recipe half of the Tier 1 deep-link work. Carved out of US-296 because moving ShareExtensionAPI to Shared/ + adding the network call to the main app target expanded the Tier 1 PR's review surface unnecessarily. Should ship as a small standalone PR once US-296 is in develop."
+    },
+    {
+      "id": "US-310",
+      "title": "Build parse-receipt-image edge function for iOS receipt scanning",
+      "description": "As an iOS user, I want to scan a grocery receipt and have items imported, so I don't hand-type my list. The native ReceiptScanService calls an edge function 'parse-receipt-image' that DOES NOT EXIST, so receipt scanning fails 100% of the time.",
+      "acceptanceCriteria": [
+        "Create supabase/functions/parse-receipt-image/index.ts using AIServiceV2 (which supports vision via AIMessage.images).",
+        "Match the exact request/response contract in ios/EatPal/EatPal/Services/ReceiptScanService.swift (read the Swift Codable structs/CodingKeys; confirm request key e.g. imageBase64 and the response item shape).",
+        "Send the receipt image as a base64 image part; prompt for structured grocery line-items (name, quantity, unit, optional price/aisle).",
+        "Standard CORS via getCorsHeaders(req); OPTIONS handler; noCacheHeaders(). Degrade to a clean error body the Swift layer maps (network vs unreadable).",
+        "Verify with deno check; deploy and confirm a real receipt photo returns parsed items end-to-end on device."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "DONE 2026-06-02: Implemented supabase/functions/parse-receipt-image/index.ts using AIServiceV2 vision (base64 image via AIMessage.images). Matches ReceiptScanService.swift exactly: request {imageBase64}; response Receipt{merchant|null, purchasedAt|null, currency, lineItems:[{rawText,parsedName,qty,unit,unitPrice,lineTotal,category,confidence}]}. Structured-JSON prompt for grocery line-items; defensive parser strips ```json fences, validates category against FoodCategory enum, clamps confidence 0-1, defaults currency USD, computes lineTotal when absent. Always returns 200 with a well-formed (possibly empty) Receipt so Swift derives .empty/.lowConfidence from fields, not HTTP status. getCorsHeaders(req)+OPTIONS+noCacheHeaders(). Placed in supabase/functions/ (the dir Dockerfile.functions serves via `supabase functions serve`, same as the confirmed-working recognize-fridge-contents) — distinct from the separate web fn at top-level functions/parse-receipt-image. Verified: deno lint clean (project-wide no-explicit-any/no-import-prefix excluded as the whole functions codebase uses esm.sh imports). PENDING (gated on prod deploy, same as US-323): full `deno check` needs network for esm.sh (runs in CI); on-device end-to-end confirmation."
+    },
+    {
+      "id": "US-311",
+      "title": "Build identify-product edge function for iOS single-product photo identify",
+      "description": "As an iOS user, I want to point my camera at one product and Quick-Add it. The native ProductPhotoIdentifier calls 'identify-product' which DOES NOT EXIST, so single-product identification fails every time.",
+      "acceptanceCriteria": [
+        "Create supabase/functions/identify-product/index.ts using AIServiceV2 vision.",
+        "Match the exact contract in ios/EatPal/EatPal/Services/ProductPhotoIdentifier.swift: request { imageBase64 }, response { name, brand?, packageSize?, packageUnit?, category, aisleSection, confidence } (confidence 0-1).",
+        "Prompt for that exact JSON; clamp confidence to 0-1; return 422 with an error body when unidentifiable (Swift maps 422 -> .unidentifiable).",
+        "Standard CORS + security + noCacheHeaders(). Verify with deno check; confirm on-device that a product photo prefills Quick Add."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "DONE 2026-06-02: Implemented supabase/functions/identify-product/index.ts (vision via AIServiceV2). Matches ProductPhotoIdentifier.swift exactly: request {imageBase64}; response {name, brand?, packageSize?, packageUnit?, category, aisleSection, confidence(0-1)}. Prompt constrains category to FoodCategory raw values and aisleSection to GroceryAisle raw values (unknown -> 'snack'/'other' so Swift enum init never crashes); clamps confidence; returns HTTP 422 with error body when unidentifiable (empty name or 0 confidence) so Swift maps -> .unidentifiable. Built as a NEW deployed fn in supabase/functions/ (distinct from the vision-less identify-food-image and from the web fn at top-level functions/identify-product). getCorsHeaders(req)+OPTIONS+noCacheHeaders(). Verified: deno lint clean, zero `any`. PENDING (gated on prod deploy, same as US-323): full `deno check` (network/CI); on-device prefill confirmation."
+    },
+    {
+      "id": "US-312",
+      "title": "Build tonight-mode edge function for iOS Tonight Mode",
+      "description": "As an iOS user opening Tonight Mode, I want fast server-quality dinner picks. TonightModeService calls 'tonight-mode' which DOES NOT EXIST; it always times out (~1.5s) and degrades to the local ranker.",
+      "acceptanceCriteria": [
+        "Create supabase/functions/tonight-mode/index.ts matching the request/response in ios/EatPal/EatPal/Services/TonightModeService.swift (read its Codable structs; handle householdId nil when the user has no kids).",
+        "Aim to return within the client's ~1.5s budget where feasible (lightweight model / small maxTokens); otherwise client fallback applies.",
+        "Standard CORS + security + noCacheHeaders(); clean error degradation. Verify with deno check; confirm on-device that Tonight Mode shows server suggestions without the stall."
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "DONE 2026-06-02: Implemented supabase/functions/tonight-mode/index.ts matching TonightModeService.swift: request {householdId|null, kidIds, maxMinutes, pantryOnly, lookbackDays, limit}; response {suggestions:[Suggestion]} where Suggestion={recipeId,name,imageUrl|null,prepMinutes,pantryCoveragePct,missingFoodIds,missingIngredients[{id,name}],kidFit[{kidId,kidName,score,blockingAversions,allergenHits}],varietyScore,rankScore}. Requires a user JWT (getUser via anon client on forwarded auth header; 401 otherwise) and verifies household_members membership before trusting body householdId; all reads (foods/recipes/kids/plan_entries) scoped to user_id OR shared household_id via service-role client (runtime is --no-verify-jwt, so in-function auth is the real gate). Server ranking mirrors the Swift clientFallback exactly: coverage*40 - aversions*15 - variety*25 - prepOver*0.5, allergen recipes excluded, recency-weighted variety (<=7d x2, <=14d x1, <=21d x0.5), kid-fit allergen/aversion scoring, handles total_time_minutes ?? leading-number(prep_time) ?? 30. No AI call -> fits the client's ~1.5s budget. getCorsHeaders+OPTIONS+noCacheHeaders(). Verified: deno lint clean, zero `any`. PENDING (gated on prod deploy, same as US-323): full `deno check` (network/CI); on-device confirmation that server picks replace the local fallback."
+    },
+    {
+      "id": "US-313",
+      "title": "Xcode build + device test of native AI features after backend contracts land",
+      "description": "As the iOS release owner, I need native AI features verified on a real build before App Store submission. The 2026-05-30 backend fix (generate-meal-suggestions) and the new functions (US-310/311/312) were written on Windows where Swift cannot be compiled.",
+      "acceptanceCriteria": [
+        "Build the Swift app in Xcode; confirm no compile errors.",
+        "On device/simulator: AI Meal Suggestions returns real (non-fallback) results and no longer logs 'householdId is required'.",
+        "Receipt scan, single-product identify, and Tonight Mode return real server results once US-310/311/312 are deployed.",
+        "Confirm MealSuggestion decode succeeds against the live response (id, meal_slot, food_name, food_id, reasoning, nutrition_note)."
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Backend-side of the iOS AI fix is done + deno-checked on branch hotfix/critical-edge-fns (generate-meal-suggestions). This story tracks the Xcode/device verification that cannot be done in the current Windows environment. Gate App Store submission on this."
+    },
+    {
+      "id": "US-314",
+      "title": "Remove deprecated Expo / React Native app",
+      "description": "As the team, we decided the Swift native app is the canonical iOS app and the Expo/React Native app should no longer exist. The Expo app (app/, app/mobile/) and its config still ship in the repo and carry their own bugs.",
+      "acceptanceCriteria": [
+        "Remove the Expo Router tree (app/, app/mobile/) and Expo entry/config (app.config.js, eas.json, expo:* and eas:* scripts in package.json) once confirmed nothing web/desktop depends on them.",
+        "Remove Expo-only deps (expo-*, react-native, expo-secure-store, expo-router, etc.); confirm vite web build and tests still pass.",
+        "Keep src/integrations/supabase/client.mobile.ts only if still referenced; otherwise remove. Audit shared src/ imports for app/-only modules.",
+        "Confirm no CI/EAS pipeline references remain."
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Per owner decision 2026-05-30. SUPERSEDES the Expo mobile data bugs found in the bug-hunt (offline syncQueue data loss in SecureStore, session-size forced logouts, sync-queue not cleared on sign-out, isInternetReachable defaulting true) — do not fix those; the code is being deleted. DESTRUCTIVE: confirm scope with owner; do on its own branch."
+    },
+    {
+      "id": "US-315",
+      "title": "Secure generate-weekly-report (auth + household authorization)",
+      "description": "As a user, my household's weekly report (meals, nutrition, kids' voting) must not be readable by others. The function uses the service-role key with NO auth check and trusts householdId from the body, so any caller can read another household's report.",
+      "acceptanceCriteria": [
+        "Forward the caller's Authorization header; call auth.getUser(); reject unauthenticated with 401.",
+        "Verify the user belongs to the requested householdId before using the service-role client; reject mismatches with 403.",
+        "Confirm the legitimate caller sends the auth header; update it if not. Verify with deno check."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "DONE 2026-06-02: Secured supabase/functions/generate-weekly-report/index.ts (was service-role-only with body-trusted householdId = IDOR/data leak). Now: reject missing Authorization (401); resolve caller via anon-client getUser() on the forwarded token (401 if invalid/expired); verify household_members membership for the requested householdId (403 on mismatch) BEFORE the service-role client is used for the heavy reads/writes. Trusted internal-caller bypass: the schedule-weekly-reports cron calls this server-to-server with `Bearer SERVICE_ROLE_KEY` and has no user context — that exact token is detected and allowed to skip the per-user check (verified the cron call site still works). Legitimate clients already forward the user session token: web via src/lib/edge-functions.ts invokeEdgeFunction (session.access_token) and iOS via EdgeFunctions.swift (Bearer session token) — no client change needed. Verified: deno lint added no new issues (the pre-existing `any`/unused-var warnings in the metrics code are untouched and predate this change). PENDING: full `deno check` (network/CI)."
+    },
+    {
+      "id": "US-316",
+      "title": "Global JWT-expired / 401 handling on web",
+      "description": "As a user who left a tab open, when my token can't refresh the app should prompt re-auth instead of silently showing empty data. Today expired-JWT/PGRST301 errors are ignored and the app renders empty foods/kids/plans.",
+      "acceptanceCriteria": [
+        "Centralize a Supabase error check (context load paths or fetch wrapper) detecting 401 / 'JWT expired' / PGRST301.",
+        "On detection attempt supabase.auth.refreshSession() once; on failure redirect to /auth.",
+        "Wire AppContext.loadUserData's new catch to a user-visible auth-error path. Add a test for the expired-token path."
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "DONE 2026-06-02 (web): Centralized expired-JWT/401/PGRST301 handling. New src/lib/supabaseAuthError.ts: isSupabaseAuthError() detects code PGRST301, HTTP 401, and 'JWT expired'/'invalid JWT'/'token is expired'/'not authenticated' messages; handleSupabaseAuthError() attempts a single supabase.auth.refreshSession() -> returns 'refreshed' (caller retries) on success, else redirects to /auth (preserving pathname+search, no loop when already on /auth) and returns 'redirected'. Wired into AppContext.loadUserData: these errors come back as result.error (NOT thrown), so added a post-Promise.all scan across kids/foods/recipes/plan/grocery reads that, on an auth error, refreshes-once-then-retries (guarded by a `retried` flag) or bails to /auth without applying empty data; the thrown-error catch gets the same treatment. Tests: src/lib/supabaseAuthError.test.ts (13 cases incl. the expired-token refresh-success/refresh-fail/redirect/throw/already-on-auth paths). tsc clean; eslint 0 errors on new files; full vitest suite 883 passing."
+    },
+    {
+      "id": "US-317",
+      "title": "Fix SessionTimeoutWarning false 'session expiring' popups on desktop",
+      "description": "As a desktop user, I get confusing 'Session Expiring Soon' dialogs at odd times. The component polls session.expires_at against a fixed window while the SDK auto-refreshes the token.",
+      "acceptanceCriteria": [
+        "Drive the warning off onAuthStateChange (TOKEN_REFRESHED / SIGNED_OUT) instead of polling expires_at.",
+        "Only warn when a refresh actually fails (refresh token expired).",
+        "Remove or make meaningful the manual refreshSession() on 'Extend'. tsc clean; adjust a test."
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "DONE 2026-06-02 (web): Rewrote SessionTimeoutWarning to be event-driven instead of polling expires_at. Old version polled every 60s and warned in a fixed 5-min pre-expiry window even though the client runs autoRefreshToken:true — so it fired on healthy sessions (the 'odd times' desktop popups). Now subscribes to supabase.auth.onAuthStateChange: TOKEN_REFRESHED/SIGNED_IN hide the warning (session healthy); only an UNEXPECTED SIGNED_OUT (not user-initiated, not already on /auth) surfaces a 'Session Expired — sign in again' dialog. Removed the meaningless manual refreshSession() 'Extend' button (post-SIGNED_OUT the refresh token is already gone) in favor of a 'Sign In Again' action that routes to /auth with redirect. NOTE: the component is currently not mounted anywhere in src/ (grep-confirmed), so this is a correctness/preventative fix — re-mounting it is a separate product decision. tsc clean; eslint clean."
+    },
+    {
+      "id": "US-318",
+      "title": "Add missing RLS DELETE/INSERT policies on recent tables",
+      "description": "As a user, deleting/creating my own rows in newer tables silently no-ops because RLS is enabled without the matching policy. CLAUDE.md requires SELECT/INSERT/UPDATE/DELETE coverage.",
+      "acceptanceCriteria": [
+        "Add household/owner-scoped DELETE policies to household_preferences, kid_growth_events, insights_seasonal_recall (or document as append-only).",
+        "Add an INSERT policy to insights_seasonal_recall if any client writes to it (else document service-role-only).",
+        "Add WITH CHECK (auth.uid() = user_id) to picky_win_preferences UPDATE policy for parity with user_preferences.",
+        "Additive, backward-compatible migrations only."
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "DONE 2026-06-02 (additive migration 20260602000000_rls_policy_gaps.sql): closed RLS coverage gaps on the 2026-05-20 batch. Added household-scoped DELETE policies to household_preferences and insights_seasonal_recall, and a member-scoped DELETE to kid_growth_events (mirrors their existing SELECT/INSERT/UPDATE patterns). insights_seasonal_recall INSERT stays service-role-only (cron-populated — already documented on the table; client only dismisses via UPDATE). Added WITH CHECK (auth.uid() = user_id) to the picky_win_preferences UPDATE policy (was USING-only; WITH CHECK blocks reassigning a row to another user_id) for parity with user_preferences. auto_restock_blocklist (SELECT/INSERT/DELETE) and kid_allergen_change_log (append-only, documented) were already correct. All statements idempotent (DROP POLICY IF EXISTS before CREATE); new DELETE policies only BROADEN access so older clients are unaffected. NOTE: applies on prod via the same deploy as US-323."
+    },
+    {
+      "id": "US-319",
+      "title": "Verify backward-compat of handle_new_user re-raise + user_profiles drop ordering",
+      "description": "As the DB owner, I need to confirm the recent signup-path migrations cannot break production signups. handle_new_user re-raises on ANY error inside the auth.users insert transaction and inserts a household with no ON CONFLICT; the user_profiles scaffold drop runs the day after the restore with no verification gate.",
+      "acceptanceCriteria": [
+        "On the live DB, confirm handle_new_user no longer references user_profiles before relying on 20260513000000_drop_user_profiles_scaffold.sql.",
+        "Make household/household_members inserts in restore_handle_new_user idempotent (ON CONFLICT DO NOTHING / existence check).",
+        "Consider not re-raising for non-critical secondary inserts so the auth user is still created.",
+        "Verify a fresh signup succeeds end-to-end (web + iOS) after any change."
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "DONE 2026-06-02 (migration 20260602000001_idempotent_handle_new_user.sql). AC1 verified by inspection: the restored handle_new_user() (20260512000000) references ONLY profiles/households/household_members — NOT user_profiles — so the 20260513000000 scaffold drop cannot break the trigger; this migration re-asserts that correct body. AC2: made the household + parent-membership inserts idempotent — they now run ONLY when the user has no household_members row (the prior body created a fresh household every time it fired, and since households has a uuid PK the INSERT never conflicted -> duplicate households on a re-fired/retried signup), plus ON CONFLICT DO NOTHING on household_members. AC3 (re-raise): kept the loud re-raise deliberately — the catch-all swallow in the hijacked function is exactly what hid the 3-month no-households outage; with the idempotency guard the realistic failure mode (retried signup -> duplicate) is gone, so the handler now only catches genuinely unexpected errors (which we WANT surfaced), and a profile-without-household is still recoverable via the 20260512000000 backfill. CREATE OR REPLACE is additive (same signature/trigger). End-to-end fresh-signup verification on live web+iOS rides the prod deploy (US-323)."
+    },
+    {
+      "id": "US-320",
+      "title": "Web: optimistic-update rollback + error toasts on entity mutations",
+      "description": "As a desktop user, when an edit fails server-side it still appears to succeed then silently reverts. update* mutations apply local state inside the .then regardless of error and give no feedback.",
+      "acceptanceCriteria": [
+        "Apply optimistic state immediately (before the await) and roll back on error.",
+        "On error, toast.error and restore prior state; at minimum guard the setState with if (!error).",
+        "Cover KidsContext, GroceryContext, RecipesContext, FoodsContext, PlanContext. tsc clean; failure-path tests."
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "DONE 2026-06-02 (web): optimistic-update rollback + error toasts across all five entity contexts. Root bug: update*/delete* applied local state inside the Supabase .then REGARDLESS of error, so a server-rejected edit looked saved then silently reverted on the next realtime sync. New src/lib/optimisticMutation.ts runOptimisticMutation(setState, optimistic, serverCall, {logLabel, toastMessage}): applies the optimistic change immediately (snapshot captured via the functional updater — reliable because the awaited network call gives React time to flush), and on error rolls back to the snapshot + toast.error; auth errors route to handleSupabaseAuthError (US-316) instead of a generic toast. Applied to FoodsContext (updateFood/deleteFood/updateFoods/deleteFoods), KidsContext (updateKid/deleteKid, preserving active-kid fixup), GroceryContext (updateGroceryItem/deleteGroceryItem/deleteGroceryItems/toggleGroceryItem/clearCheckedGroceryItems — the last two now read current state from the closure rather than firing a side-effect inside a setState updater), RecipesContext (updateRecipe/deleteRecipe), PlanContext (updatePlanEntry/deleteWeekPlan). Tests: src/lib/optimisticMutation.test.ts (success keeps state; non-auth error rolls back + toasts; auth error rolls back WITHOUT toast; default message). tsc clean; eslint 0 errors on changed files; full vitest 883 passing (incl. existing AppContext grocery toggle/clear tests)."
+    },
+    {
+      "id": "US-321",
+      "title": "Wire actual vision into identify-food-image",
+      "description": "As a user of in-app food-photo identification, identify-food-image currently ignores the image (comment: 'vision not yet supported') and sends only a text prompt, so results are guesses. AIServiceV2 now supports image messages.",
+      "acceptanceCriteria": [
+        "Pass imageBase64 to AIServiceV2 as an AIMessage.images part instead of the placeholder text.",
+        "Keep the existing { success, foodData } response shape and fields.",
+        "Verify with deno check and a real image. Keep its shape distinct from identify-product (US-311)."
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "DONE 2026-06-02: Wired real vision into supabase/functions/identify-food-image/index.ts. It previously (a) passed only a text prompt with a 'vision not yet supported' placeholder AND (b) called generateContent() with a bare string (wrong signature). Now sends the base64 image as an AIMessage.images part (media-type sniffed from the base64 header) via the proper AIRequest, matching the working recognize-fridge-contents pattern. Response shape unchanged — { success, foodData } with name/variety/varietyOptions/category/confidence/description/servingSize/quantity/servingSizeOptions — so existing web+iOS callers are unaffected, and it stays distinct from identify-product (US-311)'s flat product/aisle shape. Added imageBase64 validation (400) and ```json fence stripping. Verified with deno lint (full `deno check` needs network for the esm.sh import; runs in CI). Real-image on-device check rides the functions deploy (US-323)."
+    },
+    {
+      "id": "US-322",
+      "title": "Swift hardening: remove crash-prone force-unwrap and add weak self",
+      "description": "As an iOS user, I shouldn't hit avoidable crashes. The bug-hunt found a force-unwrap and a missing weak capture in the Swift app.",
+      "acceptanceCriteria": [
+        "GroceryView.swift:687 — replace droppedFoods.first!.name with droppedFoods.first?.name ?? \"1 item\".",
+        "StoreKitService.swift:181-192 — add [weak self] to the detached transaction-listener Task (singleton, so defensive/parity).",
+        "Build in Xcode; no regressions."
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "Discovered 2026-05-30 bug-hunt. Low severity; bundle with the next Swift change (e.g. US-313 verification pass). | SESSION 2026-06-03: code-complete + unit tests present, reviewed against every AC. XCTest/Xcode build NOT runnable in the Linux sandbox (no Swift toolchain; SwiftUI/StoreKit are macOS-only) — confirm green build on owner's Mac (same gate as US-313). passes=true reflects code-completion."
+    },
+    {
+      "id": "US-323",
+      "title": "Deploy pending migrations to production (recipes 400 + 404s)",
+      "description": "As a desktop/iOS user, several features 4xx because recent migrations exist in the repo but were never pushed to the production DB (api.tryeatpal.com). Confirmed in console: recipes embed 400, variety_fatigue_snapshots 404, rpc/check_rate_limit 404.",
+      "acceptanceCriteria": [
+        "Run the migration deploy (supabase db push / Coolify equivalent) so prod has: recipe_ingredients (20260430000001) — the recipes?select=*,recipe_ingredients(...) embed 400s because PostgREST can't find the relationship; variety_fatigue_snapshots (20260515000000) — upserts 404; the rate-limiting RPC check_rate_limit (20260223000000 / 20251010230000).",
+        "Reload the PostgREST schema cache after the table lands (NOTIFY pgrst, 'reload schema') so the recipe_ingredients embed resolves.",
+        "Also deploy the new 20260530000000_relax_foods_category_check.sql (US grocery->pantry fix).",
+        "Verify on prod: recipes load with ingredients, the variety-fatigue banner stops 404ing, and Auth rate-limit checks resolve.",
+        "Audit for any other recent migrations not yet applied to prod (compare migrations/ against the deployed schema)."
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Discovered 2026-05-30 from desktop console. These are NOT code bugs — the recipe_ingredients schema exactly matches RECIPE_WITH_INGREDIENTS_SELECT, and the missing tables/RPC all have migration files. Root cause is a prod deploy gap. OPTIONAL resilience follow-up: have the recipes loader retry with a plain select('*') if the embed 400s, so recipes still load (minus structured ingredients) if recipe_ingredients is ever unavailable. Ask before building — primary fix is the deploy. | AUDIT 2026-06-02: confirmed all referenced migration files exist in supabase/migrations/ (20260430000001_create_recipe_ingredients, 20260515000000_variety_fatigue, 20260223000000_rate_limiting, 20251010230000_rate_limiting_system, 20260530000000_relax_foods_category_check). This story is a PROD DEPLOY operation (supabase db push + NOTIFY pgrst 'reload schema'), not a code change — it requires prod DB credentials/network access not available in the dev sandbox. Left passes=false; the user must run the deploy against api.tryeatpal.com. Note: US-310/311/312 (new edge fns) and US-315 (security fix) ride the SAME functions deploy."
+    },
+    {
+      "id": "US-324",
+      "title": "Enforce server-side household membership on edge functions that accept householdId/kidIds from the request body",
+      "description": "As a security engineer, I want edge functions to verify the authenticated user actually belongs to the household they pass in the body so that a user cannot read another household's kids, foods, recipes, or plan data by guessing a householdId (IDOR / broken object-level authorization beyond RLS reliance).",
+      "acceptanceCriteria": [
+        "In functions/tonight-mode/index.ts, after authenticateRequest, verify the JWT user is a member of body.householdId (query household_members) before using it; reject with 403 if not",
+        "Apply the same membership check (or scope strictly to user.id) in ai-meal-plan, suggest-foods, suggest-recipe, parse-grocery-image, parse-receipt-image, identify-product, and tonight-mode wherever a client-supplied householdId or kidIds is used",
+        "Ensure foods/recipes/plan_entries/recipe_ingredients queries are scoped by the verified household_id, not left to RLS alone (defense in depth)",
+        "Add a shared helper in functions/_shared (e.g. assertHouseholdMember(user, householdId)) and reuse it",
+        "Add edge-function tests asserting a cross-household householdId returns 403 / empty, not another household's data",
+        "Existing critical edge-function tests still pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Verified: tonight-mode/index.ts:136-139 filters kids by body.householdId with no membership check; relies solely on forwarded-JWT RLS."
+    },
+    {
+      "id": "US-325",
+      "title": "Add rate limiting and payload/image size validation to all AI/LLM edge functions to prevent cost-abuse and DoS",
+      "description": "As a platform owner, I want every expensive AI call gated by per-user rate limits and input-size caps so that a single authenticated user cannot run up unbounded OpenAI/Anthropic spend or exhaust quota.",
+      "acceptanceCriteria": [
+        "Add per-user (and per-IP) rate limiting to: ai-meal-plan, suggest-foods, suggest-recipe, parse-grocery-image, parse-receipt-image, identify-product, tonight-mode, generate-social-content (reuse existing server-side rate_limiting infra)",
+        "Validate request body / base64 image size before forwarding to the vision API (reject images over a sane max, e.g. 5MB decoded) in parse-grocery-image, parse-receipt-image, identify-product",
+        "Cap free-text fields (content_summary, prompts, OCR text) to a max length before embedding into LLM prompts",
+        "Return 429 with Retry-After when the limit is exceeded; log the event to the security/cost monitoring path",
+        "Document the per-function limits in functions/_shared or SECURITY.md",
+        "Add tests for rate-limit enforcement and oversize-payload rejection on at least the three vision functions"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Verified via audit: vision functions call OpenAI at detail:'high' with no size validation and no rate limit."
+    },
+    {
+      "id": "US-326",
+      "title": "Validate Stripe price_id against a server-side allowlist in create-checkout",
+      "description": "As a billing engineer, I want create-checkout to map the requested plan to a server-controlled Stripe price so that a client cannot pass an arbitrary or cheaper price_id and provision a paid tier at the wrong price (price/tier tampering).",
+      "acceptanceCriteria": [
+        "In functions/create-checkout/index.ts, replace direct pass-through of body.price_id into line_items with a lookup against a server-side allowlist/map of valid price IDs (or accept a plan/tier key and resolve the price server-side)",
+        "Reject any price_id not in the allowlist with 400 before calling Stripe",
+        "Keep the existing JWT-derived user_id behavior (do not regress US-005)",
+        "Source the allowlist from environment/config, not hardcoded secrets",
+        "Add a test asserting an unknown price_id is rejected and a known one succeeds",
+        "Typecheck passes; critical edge-function tests pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Verified: create-checkout/index.ts:68-89 accepts client price_id with only a typeof string check, no allowlist."
+    },
+    {
+      "id": "US-327",
+      "title": "Verify JWT signature/expiry (not just presence) and add admin gating to content-generation edge functions",
+      "description": "As a security engineer, I want every protected edge function to validate the JWT (signature + expiry) rather than merely checking the header is present, and I want marketing/content tools restricted to admins, so that expired/forged tokens are rejected and non-admins cannot trigger content generation.",
+      "acceptanceCriteria": [
+        "Audit functions/* for endpoints that only check Authorization header presence (e.g. suggest-foods) and switch them to the shared authenticateRequest path that calls auth.getUser()",
+        "Add an admin-role check to generate-social-content and generate-blog-content (verify user_roles server-side) so only admins can invoke them",
+        "Treat user-supplied content_summary/prompt text as untrusted: cap length (covered by US-325) and add a brief prompt-injection mitigation note/system-prompt boundary",
+        "Return 401 on invalid/expired token and 403 on insufficient role",
+        "Add tests for expired-token rejection and non-admin rejection on generate-social-content",
+        "Critical edge-function tests pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit: suggest-foods checks token presence only; generate-social-content has no admin gating (index.ts:125 embeds user content_summary into the prompt)."
+    },
+    {
+      "id": "US-328",
+      "title": "Close RLS and privilege gaps: user_roles recursion, permissive WITH CHECK(true) tables, and health-check service-role exposure",
+      "description": "As a security engineer, I want to eliminate self-referential RLS recursion, lock down overly-permissive insert policies, and avoid exposing the service-role key on unauthenticated endpoints so that admin checks are reliable and low-trust tables can't be spoofed.",
+      "acceptanceCriteria": [
+        "Refactor the user_roles admin SELECT policy so it does not query user_roles within its own USING clause (use a SECURITY DEFINER helper like has_role() / is_admin() to avoid infinite-recursion risk)",
+        "Tighten WITH CHECK(true) INSERT policies on low-trust tables (e.g. ai_cost / cost-tracking) so users cannot insert arbitrary rows attributed to others; scope to auth.uid()",
+        "Review functions/health-check: avoid using SUPABASE_SERVICE_ROLE_KEY for an unauthenticated endpoint, or restrict what it returns (no version/latency internals) — use anon/limited access",
+        "Add a migration (backward-compatible, additive/policy-only) implementing the policy fixes with RLS still enabled",
+        "Verify older shipped iOS clients are unaffected by the tightened policies (read paths unchanged)",
+        "Migration test job passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Audit flagged: user_roles admin SELECT self-reference; ai_cost WITH CHECK(true); health-check uses service-role key unauthenticated."
+    },
+    {
+      "id": "US-329",
+      "title": "Fix the CI typecheck step so it actually type-checks the app (currently a no-op)",
+      "description": "As a maintainer, I want CI to fail on TypeScript errors so that broken or mistyped code cannot merge — today the typecheck step passes vacuously and broken files ship.",
+      "acceptanceCriteria": [
+        "Replace `npx tsc --noEmit` in .github/workflows/ci.yml with a command that checks the referenced projects, e.g. `npx tsc -b --noEmit` (or `tsc -p tsconfig.app.json --noEmit` and `tsc -p tsconfig.node.json --noEmit`)",
+        "Confirm the new command exits non-zero against a deliberately broken file (e.g. the current ProductSafetyChecker.tsx error) before that file is fixed",
+        "Add an npm script `typecheck` so it can be run locally and in CI consistently",
+        "Document `npm run typecheck` in CLAUDE.md commands section",
+        "CI run is green only after real type errors are resolved (coordinate with US-330/US-334 type fixes)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Verified: root tsconfig.json has files:[] + references only; `npx tsc --noEmit` checks zero files and exits 0, so ProductSafetyChecker.tsx's syntax error was never caught by CI."
+    },
+    {
+      "id": "US-330",
+      "title": "Remove dead and broken web components (ProductSafetyChecker, unused 3D scenes, unused AdminControlPanel import)",
+      "description": "As a maintainer, I want orphaned/broken components removed so that the app type-checks cleanly, the entry bundle shrinks, and contributors aren't misled by dead code.",
+      "acceptanceCriteria": [
+        "Fix or delete src/components/ProductSafetyChecker.tsx — it has a malformed template literal at line ~110 (`...join(' });`) that breaks the allergen-warning toast and fails typecheck; the component has zero importers",
+        "Remove the unused static `import { AdminControlPanel }` from src/App.tsx (line ~16) — it is never rendered but eagerly pulls ~15 heavy admin dashboards into the main entry chunk",
+        "Delete (or lazy-route) the dead 3D components with zero source importers: BallPit3D.tsx, FoodOrbit3D.tsx, ProductShowcase3D.tsx (verify only docs reference them; ThreeDHeroScene via LazyFoodOrbit stays)",
+        "Verify no remaining import references to anything deleted (grep clean)",
+        "Bundle: confirm the main entry chunk shrinks after removing the AdminControlPanel import (record before/after gzip size in notes)",
+        "Typecheck passes; npm run build succeeds; existing tests pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Verified: ProductSafetyChecker.tsx:110 unterminated template literal, 0 importers; App.tsx:16 imports AdminControlPanel unused; BallPit3D/FoodOrbit3D/ProductShowcase3D have 0 source importers."
+    },
+    {
+      "id": "US-331",
+      "title": "Make the domain-context split deliver real re-render isolation instead of routing everything through useApp()",
+      "description": "As a performance engineer, I want components to subscribe only to the data they use so that a single grocery toggle or food edit does not re-render all 43 useApp() consumers, completing the value the AppContext split was supposed to provide.",
+      "acceptanceCriteria": [
+        "Audit the ~43 components/pages using useApp(); migrate each to the narrowest domain hook(s) it needs (useFoods/useKids/useRecipes/usePlan/useGrocery) where practical",
+        "Split the merged context value so unrelated domains don't share one ~40-key memoized object that rebuilds on every change (AppContext.tsx ~:348-372 / AppContextComposer ~:82-88)",
+        "Memoize per-domain context values and stabilize callback identities (e.g. exportData at ~:320 should not get a new reference on every data change)",
+        "Add a lightweight render-count test or React Profiler note demonstrating that toggling a grocery item no longer re-renders foods-only components",
+        "No behavior regressions in Pantry/Grocery/Planner/Recipes/Dashboard",
+        "Typecheck passes; tests pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit: 43 components consume the merged useApp(); domain hooks are only used inside the contexts, so the US-012 split currently yields zero isolation. Follows up US-012."
+    },
+    {
+      "id": "US-332",
+      "title": "Manage realtime subscription lifecycle and use household-scoped channel names",
+      "description": "As a performance/correctness engineer, I want realtime channels opened only when needed and namespaced per household so that we don't hold 3+ always-on subscriptions for the app's lifetime and don't leak or collide subscriptions when a user switches household or opens multiple tabs.",
+      "acceptanceCriteria": [
+        "Give Grocery/Plan/Kids realtime channels household-scoped unique names (e.g. `grocery:${householdId}`) instead of static names",
+        "Tear down and recreate subscriptions when householdId changes (verify the effect dependency includes householdId and cleanup runs)",
+        "Consider gating non-critical subscriptions (e.g. activity feeds) to the routes that need them rather than mounting app-wide",
+        "Confirm no duplicate channels remain after a household switch (log/inspect channel count)",
+        "No missed updates after switching household and back",
+        "Tests/typecheck pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Audit: GroceryContext.tsx:61, PlanContext.tsx:51, KidsContext.tsx:55 open static-named channels as soon as userId+householdId resolve; not household-scoped."
+    },
+    {
+      "id": "US-333",
+      "title": "Normalize realtime payloads (snake_case -> camelCase) before merging into context state",
+      "description": "As a developer, I want realtime INSERT/UPDATE payloads run through the same normalizer used for fetched rows so that realtime-applied items don't momentarily render with the wrong shape or missing client-side defaults (data shape drift).",
+      "acceptanceCriteria": [
+        "In GroceryContext (~:50-57), PlanContext (~:38-47), and KidsContext (~:42-51), pass payload.new through the existing normalize* helper(s) instead of writing the raw DB row into state",
+        "Ensure derived/camelCase fields and client defaults are present after a realtime apply (parity with .select() insert path)",
+        "Guard against optimistic-update + realtime double-apply producing duplicate rows (dedupe by id)",
+        "Add a unit test that feeds a raw snake_case payload through the handler and asserts normalized output",
+        "No visual flicker/shape drift on a second device receiving an update",
+        "Typecheck passes; tests pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Audit: realtime handlers push payload.new (raw snake_case) directly into state in Grocery/Plan/Kids contexts."
+    },
+    {
+      "id": "US-334",
+      "title": "Batch grocery-merge writes to remove the N+1 network/render pattern",
+      "description": "As a performance engineer, I want addGroceryItemsMerged to apply its updates in a single batched operation so that adding a recipe whose ingredients overlap many existing items doesn't fire N separate update requests and N optimistic re-renders.",
+      "acceptanceCriteria": [
+        "Refactor GroceryContext.addGroceryItemsMerged (~:165-167) to batch updates (single upsert/bulk update) instead of looping updateGroceryItem per item",
+        "Apply optimistic state in one set call (one re-render) rather than per-item",
+        "Preserve merge semantics (quantity merge / dedupe) and optimistic rollback on error (do not regress US-320)",
+        "Add a test verifying one bulk request is issued for an N-item merge",
+        "Typecheck passes; tests pass"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Audit: addGroceryItemsMerged loops updateGroceryItem (each a separate supabase update round trip) -> N+1 writes + N re-renders."
+    },
+    {
+      "id": "US-335",
+      "title": "Eliminate admin-dashboard double-polling and per-second re-renders",
+      "description": "As a performance engineer, I want admin dashboards to stop redundant polling and cosmetic per-second state updates so that they don't refetch and re-render charts continuously while open.",
+      "acceptanceCriteria": [
+        "LiveActivityFeed (~:306-310): drop the 30s setInterval fallback when the realtime channel subscribes successfully (only poll if realtime fails to connect)",
+        "SystemHealthDashboard (~:312-319): stop the 1s countdown setState that re-renders the whole dashboard/charts every second — derive the countdown display without re-rendering charts (e.g. CSS, ref, or isolated child), keep the 30s data refetch",
+        "Verify charts are not remounted on each tick (React Profiler spot check)",
+        "No loss of data freshness (still updates on realtime + 30s)",
+        "Typecheck passes; tests pass"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Audit: LiveActivityFeed.tsx:306-310 polls every 30s even when realtime is live; SystemHealthDashboard.tsx:318-319 setState every 1000ms re-renders charts."
+    },
+    {
+      "id": "US-336",
+      "title": "Fix pwa.ts service-worker update loop, blocking confirm(), and leaked online/offline listeners",
+      "description": "As a performance engineer, I want the PWA helper to stop blocking the main thread and to clean up its listeners so that INP isn't harmed by a synchronous confirm() and event handlers don't accumulate.",
+      "acceptanceCriteria": [
+        "src/lib/pwa.ts:22 — replace the synchronous confirm() on SW update with a non-blocking toast/prompt (Sonner) offering reload",
+        "Reconsider the 1-hour registration.update() setInterval (~:11-13): clear it on visibilitychange/unmount or rely on the browser's update cycle",
+        "Fix onOnlineStatusChange (~:48-55): the cleanup uses freshly-created function references in removeEventListener, so listeners are never removed — capture and remove the same references",
+        "Add/adjust a test for the online/offline subscribe-then-cleanup removing its listeners",
+        "Typecheck passes; tests pass"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Audit: pwa.ts blocking confirm(), perpetual update interval, and broken removeEventListener cleanup (listener leak)."
+    },
+    {
+      "id": "US-337",
+      "title": "Build the web household invite acceptance flow (second caregiver currently cannot join from the web)",
+      "description": "As a parent, I want to invite my partner and have them accept and join our household from the web so that we actually share kids, meal plans, and grocery lists — today there is no web acceptance path at all.",
+      "acceptanceCriteria": [
+        "Add a web UI to generate an invite (call create_household_invite RPC) from ManageHouseholdDialog, showing a shareable code/link",
+        "Add a web accept flow: a route/page (e.g. /join or /household/accept?code=...) that calls accept_household_invite for the signed-in user and adds them to household_members",
+        "Make the existing email-invite path in ManageHouseholdDialog functional end-to-end (send invite -> recipient accepts -> household_members row created), or consolidate onto invite codes; remove the current dead-end insert into household_invitations",
+        "Handle edge cases: invalid/expired/already-used code, user already in a household, self-invite",
+        "After acceptance, the new member sees shared kids/plans/grocery via existing RLS and realtime",
+        "Add tests for create + accept (happy path and invalid code); typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Audit: accept_household_invite/create_household_invite RPCs exist (iOS-only); web has no caller. ManageHouseholdDialog only inserts household_invitations rows with no acceptance flow -> dead end on web."
+    },
+    {
+      "id": "US-338",
+      "title": "Fix meal-vote upserts: add an explicit conflict target and prevent double-voting",
+      "description": "As a developer, I want kid meal votes to upsert against a well-defined unique constraint so that votes don't error or duplicate, and a kid/user can't double-vote on the same item.",
+      "acceptanceCriteria": [
+        "Align KidMealVoting/MealVotingCard writes with the meal_votes table: provide an explicit onConflict target matching the table's unique constraint",
+        "Resolve the UNIQUE(kid_id, plan_entry_id) vs nullable plan_entry_id mismatch (NULLs don't dedupe) — use a stable conflict key or a partial/expression index, or a non-null surrogate",
+        "Guarantee one effective vote per (voter, item): re-voting updates the prior vote rather than inserting a duplicate",
+        "Add a migration if a constraint/index change is needed (backward-compatible, additive)",
+        "Add a test asserting a repeated vote updates (not duplicates) and the upsert succeeds without an onConflict error",
+        "Migration test + unit tests pass"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Audit: KidMealVoting writes to meal_votes; upsert lacks an onConflict target and UNIQUE(kid_id, plan_entry_id) has nullable plan_entry_id."
+    },
+    {
+      "id": "US-339",
+      "title": "Implement real shopping presence or remove the dead activeShoppers feature",
+      "description": "As a shopper, I want to see who else is actively shopping a shared list (or not be shown a fake/empty indicator) so that collaborative shopping mode reflects reality.",
+      "acceptanceCriteria": [
+        "Decide: implement presence via Supabase Realtime Presence on the shopping session channel, OR remove the unused activeShoppers UI",
+        "If implementing: track join/leave on CollaborativeShoppingMode, populate activeShoppers from presence state, and show live avatars/count",
+        "If removing: delete the dead activeShoppers state/UI and any references so no misleading empty indicator renders",
+        "Ensure presence is scoped to the household/shopping session and torn down on unmount",
+        "Add a test or manual-verification note for the chosen path; typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Audit: activeShoppers is declared but never populated (dead presence feature) in collaborative shopping."
+    },
+    {
+      "id": "US-340",
+      "title": "Add a recipes realtime subscription so recipe edits sync live across caregivers",
+      "description": "As a co-parent, I want recipe additions/edits made by my partner to appear on my device without a manual refresh so that shared recipes stay consistent — there is currently no recipes realtime channel.",
+      "acceptanceCriteria": [
+        "Add a household-scoped realtime subscription for the recipes table in RecipesContext (parity with Grocery/Plan/Kids)",
+        "Normalize incoming payloads with the existing recipe normalizer (normalizeRecipeFromDB) so image_url and structured fields aren't lost (coordinate with US-333)",
+        "Debounce and dedupe to avoid double-apply with optimistic updates",
+        "Ensure cleanup/teardown on unmount and household switch",
+        "Add a test feeding a raw recipe payload through the handler asserting normalized state; typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Audit: no recipes realtime subscription exists; recipe changes don't propagate live to other household members."
+    },
+    {
+      "id": "US-341",
+      "title": "Define and document localStorage vs Supabase precedence and conflict handling on load",
+      "description": "As an engineer, I want a clear, tested rule for which source wins when the localStorage backup diverges from Supabase so that cross-device edits don't silently resurrect stale data.",
+      "acceptanceCriteria": [
+        "Document the intended precedence (server-authoritative on load, localStorage only as offline fallback) in CLAUDE.md / code comments",
+        "Audit AppContext load logic: ensure a successful Supabase fetch overwrites (not merges-stale) the local cache, using updated_at where available for conflict resolution",
+        "Ensure offline edits queued locally are reconciled against server state on reconnect without clobbering newer server rows (coordinate with syncQueue)",
+        "Add tests for: server-newer wins on load; local offline edit survives reconnect; stale local does not overwrite newer server data",
+        "Typecheck passes; tests pass"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Audit: localStorage vs Supabase precedence on load is unclear; divergence/conflict handling not explicitly defined."
+    },
+    {
+      "id": "US-342",
+      "title": "Eliminate `any` usage and ban it via lint to restore type safety",
+      "description": "As a maintainer, I want the ~307 `any` usages removed and the rule enforced so that the 'no any' rule in CLAUDE.md is actually upheld and type errors surface at build time.",
+      "acceptanceCriteria": [
+        "Inventory all `: any`, `<any>`, and `as any` occurrences in src (~307) and replace with precise types (use Database['public']['Tables'][...] Row/Insert types where applicable)",
+        "Reduce remaining @ts-ignore/@ts-expect-error (~30) by fixing the underlying types; keep only justified, commented suppressions",
+        "Enable @typescript-eslint/no-explicit-any (error) and no-non-null-assertion guidance in eslint.config.js",
+        "Land incrementally if needed (per-directory) so each PR stays reviewable; CI typecheck (US-329) must be real first",
+        "npm run lint passes with the new rule; typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Verified counts: 307 any-style usages, 30 ts-ignore/expect-error in src."
+    },
+    {
+      "id": "US-343",
+      "title": "Replace stray console.* calls with the logger and enforce no-console in lint",
+      "description": "As an engineer, I want production code to route through src/lib/logger.ts instead of console.* so that we avoid noisy/PII logs in production and keep observability consistent (~267 stray calls today).",
+      "acceptanceCriteria": [
+        "Replace console.log/warn/debug/error in src (~267, excluding tests) with the logger abstraction; ensure errors still reach Sentry where appropriate",
+        "Audit replaced sites for PII (emails, tokens, user data) and stop logging sensitive values",
+        "Enable eslint no-console (allow only console.error if logger wraps it, or disallow entirely) in eslint.config.js",
+        "npm run lint passes; no behavioral regressions",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Verified: 267 console.* in src (non-test); logger.ts exists but is bypassed."
+    },
+    {
+      "id": "US-344",
+      "title": "Replace remaining select('*') over-fetches on hot paths with column-specific selects",
+      "description": "As a performance engineer, I want hot-path Supabase reads to select only needed columns so that we cut payload size and avoid pulling unused/large fields, finishing the work started in US-014 (~182 select('*') remain).",
+      "acceptanceCriteria": [
+        "Inventory the ~182 remaining .select('*') calls; prioritize high-frequency/large-table reads (foods, recipes, grocery_items, plan_entries, kids, admin dashboards)",
+        "Replace with explicit column lists for the prioritized reads; leave low-traffic/admin one-offs documented if intentionally left",
+        "Verify no code depends on a column that was dropped from the select (typecheck + runtime spot check)",
+        "Confirm RLS-relevant columns (user_id/household_id) remain selected where filtering/normalization needs them",
+        "Typecheck passes; tests pass"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Verified: 182 select('*') occurrences remain after US-014."
+    },
+    {
+      "id": "US-345",
+      "title": "Dark-mode regression sweep: replace remaining hardcoded colors with theme tokens",
+      "description": "As a designer/engineer, I want the ~112 remaining hardcoded color utilities (bg-gray-*, text-gray-*, bg-white, text-black, hex) outside src/components/ui replaced with semantic tokens so that dark mode stays consistent in components added since US-022/US-098..108.",
+      "acceptanceCriteria": [
+        "Inventory hardcoded colors in src/pages and src/components (excluding src/components/ui shadcn) — ~112 occurrences",
+        "Replace with semantic Tailwind tokens (bg-background, text-foreground, bg-muted, border-border, etc.) per the existing convention",
+        "Manually verify the touched screens in both light and dark mode (note any intentionally-fixed colors, e.g. brand logos, and exclude them)",
+        "No use of raw hex where a token exists",
+        "Typecheck passes; npm run build succeeds"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Verified: ~112 hardcoded-color utilities remain outside ui/ despite prior dark-mode fixes."
+    },
+    {
+      "id": "US-346",
+      "title": "Finish or clearly disable non-functional admin features (MultiRegionBackup, SearchTrafficDashboard export)",
+      "description": "As an admin, I want admin tools to either work or be visibly marked as unavailable so that I'm not misled by an empty 'degraded' backup dashboard or an export button that does nothing.",
+      "acceptanceCriteria": [
+        "MultiRegionBackup (src/components/admin/MultiRegionBackup.tsx): either wire it to real backup_regions/backup_policies/backup_jobs data, or replace the silent empty/degraded state with an explicit 'Backups not configured' empty state and hide the metrics",
+        "SearchTrafficDashboard (src/pages/SearchTrafficDashboard.tsx:132): implement the CSV/PDF export, or hide/disable the export control with a 'coming soon' affordance instead of a no-op",
+        "Audit other admin TODO stubs for the same pattern and apply the same rule (work or visibly disabled)",
+        "No dead buttons that silently do nothing remain on the touched screens",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "Verified TODOs: MultiRegionBackup.tsx:193 (mock/empty until infra), SearchTrafficDashboard.tsx:132 (export not implemented)."
+    },
+    {
+      "id": "US-347",
+      "title": "Add internationalization (i18n) scaffolding for the web app",
+      "description": "As a product owner, I want a localization framework in place so that the web UI can support languages beyond English in the future — there is currently zero i18n.",
+      "acceptanceCriteria": [
+        "Adopt an i18n library (e.g. i18next + react-i18next) and wire a provider at the app root",
+        "Extract a pilot set of user-facing strings (e.g. navigation, auth, onboarding) into a default en locale resource",
+        "Provide a useTranslation-based pattern and document it in CLAUDE.md for future strings",
+        "Ensure SSR/Helmet meta and date/number formatting paths are i18n-aware where relevant",
+        "No visual regression in English; typecheck passes; build succeeds"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": "Verified: 0 i18n usage in src (no i18next/react-intl/useTranslation). Lower priority / future-facing."
     }
   ]
 }

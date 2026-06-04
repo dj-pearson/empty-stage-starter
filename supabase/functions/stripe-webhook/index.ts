@@ -77,6 +77,21 @@ export default async (req: Request) => {
         break;
       }
 
+      // A refund (full) must revoke access. Stripe does NOT cancel the
+      // subscription when you refund a charge, so without this the user keeps
+      // premium after being refunded. We also handle chargebacks the same way.
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge;
+        await handleChargeRefunded(supabase, charge);
+        break;
+      }
+
+      case "charge.dispute.created": {
+        const dispute = event.data.object as Stripe.Dispute;
+        await handleChargeDisputed(supabase, dispute);
+        break;
+      }
+
       default:
         console.log(`Unhandled event type: ${event.type}`);
     }
@@ -263,6 +278,134 @@ async function handleSubscriptionDeleted(supabase: any, subscription: Stripe.Sub
   } else {
     console.warn(`No subscription record found for Stripe subscription ${subscription.id} on deletion`);
   }
+}
+
+// Downgrade the user behind a Stripe customer to the Free plan immediately,
+// cancel their live subscription so billing stops, and log the reason. Shared
+// by the refund and dispute handlers. Idempotent.
+async function downgradeCustomerToFree(
+  supabase: any,
+  customerId: string,
+  reason: string,
+  metadata: Record<string, unknown>
+) {
+  const { data: sub } = await supabase
+    .from("user_subscriptions")
+    .select("user_id, plan_id, stripe_subscription_id")
+    .eq("stripe_customer_id", customerId)
+    .single();
+
+  if (!sub) {
+    console.warn(`No subscription record for customer ${customerId} on ${reason}`);
+    return;
+  }
+
+  // Stop billing: cancel the live Stripe subscription (best-effort — it may
+  // already be gone). Cancelling also emits customer.subscription.deleted,
+  // which downgrades again; that's fine (idempotent).
+  if (sub.stripe_subscription_id) {
+    try {
+      await stripe.subscriptions.cancel(sub.stripe_subscription_id);
+    } catch (err) {
+      console.error(`Failed to cancel subscription ${sub.stripe_subscription_id} on ${reason}:`, err);
+    }
+  }
+
+  const { data: freePlan } = await supabase
+    .from("subscription_plans")
+    .select("id")
+    .eq("name", "Free")
+    .single();
+
+  const { error: updateError } = await supabase
+    .from("user_subscriptions")
+    .update({
+      status: "canceled",
+      plan_id: freePlan?.id || sub.plan_id,
+      stripe_subscription_id: null,
+      cancel_at_period_end: false,
+      current_period_start: null,
+      current_period_end: null,
+      trial_end: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("stripe_customer_id", customerId);
+
+  if (updateError) {
+    console.error(`Error downgrading customer ${customerId} on ${reason}:`, updateError);
+  } else {
+    console.log(`Customer ${customerId} (user ${sub.user_id}) downgraded to Free — ${reason}`);
+  }
+
+  await supabase.from("subscription_events").insert({
+    user_id: sub.user_id,
+    event_type: "refunded",
+    old_plan_id: sub.plan_id,
+    new_plan_id: freePlan?.id || null,
+    metadata: { reason, ...metadata },
+  });
+
+  return sub.user_id as string;
+}
+
+async function handleChargeRefunded(supabase: any, charge: Stripe.Charge) {
+  // Partial refunds keep access (the user paid for part of the period). Only a
+  // full refund revokes premium.
+  if ((charge.amount_refunded ?? 0) < charge.amount) {
+    console.log(
+      `Partial refund on charge ${charge.id} ($${(charge.amount_refunded ?? 0) / 100} of $${charge.amount / 100}) — access retained`
+    );
+    return;
+  }
+
+  const customerId = charge.customer as string | null;
+  if (!customerId) {
+    console.warn(`Refunded charge ${charge.id} has no customer — cannot downgrade`);
+    return;
+  }
+
+  const userId = await downgradeCustomerToFree(supabase, customerId, "refund", {
+    stripe_charge_id: charge.id,
+    amount_refunded: (charge.amount_refunded ?? 0) / 100,
+    currency: charge.currency,
+  });
+
+  // Mark the matching payment as refunded (best-effort).
+  if (userId && charge.payment_intent) {
+    await supabase
+      .from("payment_history")
+      .update({ status: "refunded" })
+      .eq("user_id", userId)
+      .eq("stripe_payment_intent_id", charge.payment_intent as string);
+  }
+}
+
+async function handleChargeDisputed(supabase: any, dispute: Stripe.Dispute) {
+  const customerId = (dispute.charge && typeof dispute.charge === "object"
+    ? (dispute.charge as Stripe.Charge).customer
+    : null) as string | null;
+
+  // The dispute object carries the charge id; fetch the charge to get the customer.
+  let resolvedCustomerId = customerId;
+  if (!resolvedCustomerId && typeof dispute.charge === "string") {
+    try {
+      const charge = await stripe.charges.retrieve(dispute.charge);
+      resolvedCustomerId = charge.customer as string | null;
+    } catch (err) {
+      console.error(`Failed to retrieve charge ${dispute.charge} for dispute:`, err);
+    }
+  }
+
+  if (!resolvedCustomerId) {
+    console.warn(`Dispute ${dispute.id} has no resolvable customer — cannot downgrade`);
+    return;
+  }
+
+  await downgradeCustomerToFree(supabase, resolvedCustomerId, "chargeback", {
+    stripe_dispute_id: dispute.id,
+    amount: dispute.amount / 100,
+    currency: dispute.currency,
+  });
 }
 
 async function handlePaymentSucceeded(supabase: any, invoice: Stripe.Invoice) {

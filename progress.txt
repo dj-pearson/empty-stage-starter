@@ -2634,7 +2634,6 @@ US-286 AC says "deduct_food_quantity per ingredient with the recipe's **serving-
 ### Remaining false stories on develop's PRD: 44
 - Includes the 5 we already flipped on main this session (US-294/296/299/300/301) — they'll land on develop when main merges back, or via a develop cherry-pick.
 - Plus 31 iOS-Swift stories blocked by no-Xcode-pipeline-here, 3 Android-Kotlin stories blocked by no-Gradle, and ~5 misc.
-
 ---
 
 
@@ -2798,5 +2797,4 @@ The hard core — most need fresh code or are blocked by tooling unavailable in 
 - iOS smaller new code: US-248 expiry notifications, US-249 kid_badges DB persistence, US-251 per-ingredient pricing, US-252 bulk-price + OFF ingestion, US-253 watchOS v2, US-254 Siri full plan, US-258 PostHog + docs, US-259 iCloud Family auto-suggest, US-261 watchOS Xcode target setup, US-266 classifier edge-fn fallback + user_grocery_aliases, US-267 Quick Actions Hub, US-268 drag-drop tab-hover expansion, US-271 universal entity inspector
 - iOS Apple-platform integrations (need Xcode + entitlements): US-302–US-309 (EventKit / IntentDonation / iMessage / Files / Photos / App Clip / recipe-import deep link)
 - Android Kotlin (need Gradle pipeline): US-213, US-214, US-222
-
 ---

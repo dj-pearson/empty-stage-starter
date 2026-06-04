@@ -178,8 +178,9 @@ final class StoreKitService: ObservableObject {
     // MARK: - Transaction Listener
 
     private func listenForTransactions() -> Task<Void, Never> {
-        Task.detached {
+        Task.detached { [weak self] in
             for await result in StoreKit.Transaction.updates {
+                guard let self else { continue }
                 do {
                     let transaction = try await self.checkVerified(result)
                     await self.updateCustomerProductStatus()
@@ -230,32 +231,45 @@ final class StoreKitService: ObservableObject {
         }
     }
 
-    /// Syncs the active subscription status to Supabase for server-side entitlement checks.
+    /// Syncs the StoreKit subscription to Supabase (`apple_subscriptions`),
+    /// keyed by originalTransactionId so App Store Server Notifications can map
+    /// a refund/revocation back to this user. iOS entitlement gating itself
+    /// stays client-side (StoreKit currentEntitlements); this is the durable
+    /// server-side record + the lookup the refund handler uses.
+    ///
+    /// Previously this upserted into `user_subscriptions` with no `user_id`
+    /// (a NOT NULL column) and against columns that don't exist — so it
+    /// silently failed and never recorded anything.
     private func syncSubscriptionToSupabase(transaction: StoreKit.Transaction) async {
         struct SubscriptionPayload: Encodable {
-            let storeProductId: String
+            let userId: String
+            let originalTransactionId: String
             let storeTransactionId: String
+            let productId: String
             let status: String
-            let platform: String
-            let expiresAt: String
+            let expiresAt: String?
 
             enum CodingKeys: String, CodingKey {
-                case storeProductId = "store_product_id"
+                case userId = "user_id"
+                case originalTransactionId = "original_transaction_id"
                 case storeTransactionId = "store_transaction_id"
-                case status, platform
+                case productId = "product_id"
+                case status
                 case expiresAt = "expires_at"
             }
         }
-        let payload = SubscriptionPayload(
-            storeProductId: transaction.productID,
-            storeTransactionId: String(transaction.id),
-            status: transaction.revocationDate == nil ? "active" : "revoked",
-            platform: "ios",
-            expiresAt: transaction.expirationDate?.ISO8601Format() ?? ""
-        )
         do {
-            try await SupabaseManager.client.from("user_subscriptions")
-                .upsert(payload)
+            let session = try await SupabaseManager.client.auth.session
+            let payload = SubscriptionPayload(
+                userId: session.user.id.uuidString.lowercased(),
+                originalTransactionId: String(transaction.originalID),
+                storeTransactionId: String(transaction.id),
+                productId: transaction.productID,
+                status: transaction.revocationDate == nil ? "active" : "revoked",
+                expiresAt: transaction.expirationDate?.ISO8601Format()
+            )
+            try await SupabaseManager.client.from("apple_subscriptions")
+                .upsert(payload, onConflict: "original_transaction_id")
                 .execute()
         } catch {
             print("Failed to sync subscription to Supabase: \(error)")

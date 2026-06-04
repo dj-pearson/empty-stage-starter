@@ -9,9 +9,16 @@
  * - Session auto-refresh handled by Supabase client config
  */
 
+import { SECURE_STORAGE_KEY } from '@/integrations/supabase/client.mobile';
+
 const SECURE_KEYS = [
+  // The actual key the Supabase client persists the session under. Previously
+  // this list used 'supabase.auth.token' / 'supabase-auth-token', which never
+  // matched the client's storageKey, so sign-out cleared nothing.
+  SECURE_STORAGE_KEY,
+  // Legacy keys from older builds — cleared best-effort.
   'supabase.auth.token',
-  'supabase-auth-token', 
+  'supabase-auth-token',
   'biometric_enabled',
   'theme_preference',
 ] as const;
