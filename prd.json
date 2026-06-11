@@ -4940,8 +4940,8 @@
         "Typecheck passes; critical edge-function tests pass"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Verified: create-checkout/index.ts:68-89 accepts client price_id with only a typeof string check, no allowlist."
+      "passes": true,
+      "notes": "Verified: create-checkout/index.ts:68-89 accepts client price_id with only a typeof string check, no allowlist. | DONE 2026-06-11: added functions/_shared/stripe-pricing.ts (resolveCheckoutPrice + allowlist helpers, URL-import-free, env-injected) and wired into create-checkout/index.ts — direct price_id validated against allowlist, planId+billingCycle resolved server-side via STRIPE_PRICE_MAP, 400 on invalid, 503 fail-closed when unconfigured. Test: src/test/security/stripe-price-allowlist.test.ts (17 cases). tsc clean, 931 vitest pass, new files eslint-clean. JWT-derived user_id unchanged (US-005 preserved). OPS: STRIPE_PRICE_MAP/STRIPE_PRICE_ALLOWLIST secrets must be set in prod (keyed by subscription_plans.id) or checkout 503s."
     },
     {
       "id": "US-327",

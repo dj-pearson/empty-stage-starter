@@ -663,3 +663,20 @@ Implemented top 4 highest-priority items to increase visibility and MRR through 
   - The supabase-js query builder is both chainable AND thenable; to type a structural mock, model the builder as `extends PromiseLike<ListResult>` with a `then`, plus `.maybeSingle()` returning the single-row result. Mocks need a `then` to be awaitable for list queries.
   - Edge functions in this repo scope by `body.householdId` when present else `user.id` (see the kids query pattern in tonight-mode) — mirror that for foods/recipes once membership is verified.
 ---
+
+## 2026-06-11 - US-326 (Validate Stripe price_id against a server-side allowlist in create-checkout)
+- Created `functions/_shared/stripe-pricing.ts` (URL-import-free, env injected via a getter):
+  - `getPriceMap` / `getPriceAllowlist` / `isAllowedPriceId` — parse config from env.
+  - `resolveCheckoutPrice({priceId, planKey, billingCycle}, getEnv)` → `{ok:true, priceId}` or `{ok:false, status, error}`.
+    Direct `price_id` accepted only if in allowlist; `planKey`(+cycle) resolved server-side via STRIPE_PRICE_MAP (tries `<key>_<cycle>` then `<key>`); 400 on invalid/unknown/missing; fail-closed 503 when no pricing configured.
+- Wired into `functions/create-checkout/index.ts`: replaced the bare `typeof price_id === 'string'` pass-through with `resolveCheckoutPrice` over `body.price_id` and `body.planId ?? body.plan ?? body.tier` + `body.billingCycle`. JWT-derived `user_id` untouched (US-005 preserved). The web app sends `{planId, billingCycle}`; native/other clients can still send `price_id` directly (now validated).
+- Test: `src/test/security/stripe-price-allowlist.test.ts` (17 vitest cases) — map parsing, allowlist union/splitting, known/unknown price, plan+cycle resolution, bare-key fallback, unknown plan, missing input, non-string price_id fallthrough, fail-closed 503.
+- Allowlist sourced from env (`STRIPE_PRICE_MAP` JSON + optional `STRIPE_PRICE_ALLOWLIST` CSV), NOT hardcoded.
+- Files changed: functions/_shared/stripe-pricing.ts (new), functions/create-checkout/index.ts, functions/_shared/CLAUDE.md, src/test/security/stripe-price-allowlist.test.ts, prd.json, scripts/ralph/progress.txt
+- Quality: `npx tsc --noEmit` clean; `npx vitest run` 931 passed / 3 skipped (incl. 17 new); new files + create-checkout eslint-clean.
+- **Learnings for future iterations:**
+  - Same shared-helper pattern as US-324 (household.ts): keep edge logic URL-import-free + inject deps (here the env getter `(k)=>Deno.env.get(k)`) so it typechecks/tests under tsc+vitest from `src/test/**`.
+  - The web Pricing.tsx ALREADY sends `{planId: plan.id, billingCycle}` (NOT price_id) to create-checkout, but the function only read `price_id` → web checkout was effectively returning 400 "price_id is required". This fix also makes the planId path actually work IF STRIPE_PRICE_MAP is keyed by `subscription_plans.id`.
+  - Secure-by-default tradeoff: with no STRIPE_PRICE_MAP/STRIPE_PRICE_ALLOWLIST env set, checkout now 503s ("Stripe pricing is not configured") instead of forwarding an unvalidated price. Setting those secrets in prod is an OPS prerequisite (rides the same functions deploy gap as US-323/US-325).
+  - US-325 (rate limiting on AI/LLM edge fns) is the other priority-1 still open. US-323 is a prod-deploy op (no sandbox creds) — not code-completable here.
+---
