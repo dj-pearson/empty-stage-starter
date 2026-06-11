@@ -23,6 +23,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
+import { assertKidsAccessible } from '../_shared/household.ts';
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -66,6 +67,11 @@ serve(async (req) => {
     // Fetch allergens for all specified kids
     const kidAllergens: string[] = [];
     if (kid_ids.length > 0) {
+      // Authorization (US-324): reject if any requested kid is not the user's,
+      // rather than trusting RLS to silently filter the cross-household subset.
+      const kidsAuthError = await assertKidsAccessible(supabaseClient, kid_ids, corsHeaders);
+      if (kidsAuthError) return kidsAuthError;
+
       const { data: kids, error: kidsError } = await supabaseClient
         .from('kids')
         .select('id, allergens')

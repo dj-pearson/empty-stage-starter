@@ -8,6 +8,9 @@
 - Error boundaries: `ErrorBoundary` (component-level, card UI) and `ErrorBoundary fullPage` (top-level, full-page UI) in `src/components/ErrorBoundary.tsx`; `RouteErrorBoundary` (per-route) in `src/components/RouteErrorBoundary.tsx`. All report to Sentry via `logError()`.
 - Use `logError(error, context)` from `src/lib/sentry.tsx` for Sentry reporting - it's safe to call regardless of Sentry configuration
 - Use `withRetry()` from `src/lib/apiRetry.ts` for generic async retry, `withSupabaseRetry()` for Supabase queries that return `{ data, error }` - only retries network/5xx errors
+- Edge functions (`functions/`) are Deno and NOT typechecked by tsc (tsconfig.app include `["src"]`) nor run by vitest (`src/**`). To make edge logic unit-testable, write shared helpers in `functions/_shared/*.ts` WITHOUT `https://esm.sh` URL imports (inject the supabase client as a param), then import them from a `src/test/**` vitest file via relative path. See `functions/_shared/household.ts` + `src/test/security/household-authorization.test.ts`.
+- Household membership = a row in `household_members` (`household_id`,`user_id`); `households` has no owner column. Edge functions accepting a client `householdId` must verify membership via `assertHouseholdMember()` (functions/_shared/household.ts) before scoping data to it — don't trust forwarded-JWT RLS alone (US-324 IDOR defense).
+- `npm run lint` (`eslint .`) is already red repo-wide on pre-existing `any`/unused-vars in `functions/` and admin code (US-329/US-342 track this). Gate new work on: tsc clean + vitest green + NEW files eslint-clean + zero new errors — not a globally-green `eslint .`.
 
 # Ralph Progress Log
 Started: Thu Feb 12 10:21:37 CST 2026
@@ -641,4 +644,22 @@ Implemented top 4 highest-priority items to increase visibility and MRR through 
   - Named exports require `.then(m => ({ default: m.Name }))` transform with React.lazy()
   - ImportCsvDialog is self-contained with its own dialog trigger, cannot be lazy loaded like open-state dialogs
   - US-110 logo alt text was already complete from prior work - always verify before implementing
+---
+
+## 2026-06-11 - US-324 (Enforce server-side household membership on edge functions)
+- Created `functions/_shared/household.ts` with three reusable, Deno-URL-import-free authz helpers:
+  - `isHouseholdMember(supabase, userId, householdId)` → boolean (fails closed on query error)
+  - `assertHouseholdMember(supabase, user, householdId, headers)` → 403 Response | null (null when no householdId, so caller falls back to user-scoped queries)
+  - `assertKidsAccessible(supabase, kidIds, headers)` → 403 Response | null (rejects if any requested kid is not RLS-accessible; 500 on query error; dedupes ids)
+- tonight-mode/index.ts: added `assertHouseholdMember` gate immediately after auth + body parse (the VERIFIED IDOR: it filtered kids by body.householdId with no membership check). Also scoped foods + recipes queries to the verified household_id (or user.id) instead of relying on RLS alone (defense in depth, criterion 3). plan_entries left RLS-scoped (no reliable household_id column; used only for the user's own variety scoring).
+- ai-meal-plan, suggest-recipe, suggest-foods: added `assertKidsAccessible` before the kids fetch so a cross-household kid_id returns 403 instead of silently planning over the RLS-filtered subset.
+- parse-grocery-image / parse-receipt-image / identify-product: audited — they do NOT accept a client-supplied householdId or kidIds ('household' there is a food *category* string), so no membership gate applies. Left unchanged.
+- Tests: `src/test/security/household-authorization.test.ts` (12 vitest cases) covering member/non-member/cross-household 403, fail-closed on error, kid-ownership 403/500, dedupe, and CORS header propagation. Imports the Deno helper directly via relative path (helper is intentionally URL-import-free so it compiles under tsc/vitest).
+- Files changed: functions/_shared/household.ts (new), functions/tonight-mode/index.ts, functions/ai-meal-plan/index.ts, functions/suggest-recipe/index.ts, functions/suggest-foods/index.ts, src/test/security/household-authorization.test.ts, prd.json
+- Quality: `npx tsc --noEmit` clean; `npx vitest run` 914 passed / 3 skipped (incl. 12 new); new files `eslint`-clean. NOTE: `npm run lint` (`eslint .`) is already red repo-wide on pre-existing `any`/unused-var in functions/ (see US-329 CI-typecheck-noop, US-342 ban-any) — my changes add ZERO new lint errors.
+- **Learnings for future iterations:**
+  - `functions/` (Deno edge functions) is NOT in tsconfig.app `include` (`["src"]`) nor vitest `include` (`src/**`). To unit-test edge-function logic under vitest, write the shared module WITHOUT `https://esm.sh/...` URL imports (use dependency injection: pass the supabase client in), then import it from a `src/test/**` test via relative path — tsc pulls it into the program and typechecks it too.
+  - Household membership has a single source of truth: the `household_members` table (`household_id`, `user_id`). The `households` table has NO owner/created_by column; the `handle_new_user` trigger inserts the creator as a `'parent'` member. So membership = a household_members row.
+  - The supabase-js query builder is both chainable AND thenable; to type a structural mock, model the builder as `extends PromiseLike<ListResult>` with a `then`, plus `.maybeSingle()` returning the single-row result. Mocks need a `then` to be awaitable for list queries.
+  - Edge functions in this repo scope by `body.householdId` when present else `user.id` (see the kids query pattern in tonight-mode) — mirror that for foods/recipes once membership is verified.
 ---

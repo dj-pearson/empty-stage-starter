@@ -26,6 +26,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
+import { assertKidsAccessible } from '../_shared/household.ts';
 
 const MEAL_SLOTS = ['breakfast', 'lunch', 'dinner', 'snacks'] as const;
 
@@ -96,6 +97,12 @@ serve(async (req) => {
         { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }
+
+    // Authorization (US-324): reject if any requested kid does not belong to the
+    // authenticated user, instead of silently planning over the RLS-filtered
+    // subset (broken object-level authorization / IDOR defense in depth).
+    const kidsAuthError = await assertKidsAccessible(supabaseClient, kid_ids, corsHeaders);
+    if (kidsAuthError) return kidsAuthError;
 
     // Fetch kids profiles
     const { data: kids, error: kidsError } = await supabaseClient

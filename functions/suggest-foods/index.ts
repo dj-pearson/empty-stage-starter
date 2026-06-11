@@ -20,6 +20,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
+import { assertKidsAccessible } from '../_shared/household.ts';
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -59,6 +60,11 @@ serve(async (req) => {
         { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }
+
+    // Authorization (US-324): verify the kid belongs to the authenticated user
+    // before reading its profile (broken object-level authorization defense).
+    const kidAuthError = await assertKidsAccessible(supabaseClient, [kid_id], corsHeaders);
+    if (kidAuthError) return kidAuthError;
 
     // Fetch kid profile
     const { data: kid, error: kidError } = await supabaseClient
