@@ -79,6 +79,11 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
     maxRequests: 20,
     windowMinutes: 60,
   },
+  'generate-blog-content': {
+    endpoint: 'generate-blog-content',
+    maxRequests: 20,
+    windowMinutes: 60,
+  },
 };
 
 /**

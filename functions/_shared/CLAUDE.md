@@ -8,6 +8,7 @@ both Deno (functions) and, where logic is pure, from vitest (`src/test/**`).
 - `auth.ts` — `authenticateRequest(req)` verifies the JWT and returns `{ user }` or `{ error: Response }` (401). Call first in every authed function.
 - `cors.ts` — `getCorsHeaders(req)` / `handleCorsPreFlight(req)`. Spread `corsHeaders` into every Response.
 - `household.ts` — household/kid authorization (see below).
+- `admin.ts` — admin-role gating for content/marketing fns (see below).
 - `stripe-pricing.ts` — Stripe price allowlist / server-side resolution (see below).
 - `rate-limit.ts` — per-user/per-IP rate limiting + image-size + text caps for AI/LLM fns (see below).
 - `sanitize.ts`, `url-validator.ts` — input sanitization / SSRF-safe URL checks.
@@ -31,6 +32,27 @@ if (kidErr) return kidErr;           // 403 if any kid isn't RLS-accessible
 
 Membership is defined solely by a `household_members` row (`household_id`,`user_id`);
 `households` has no owner column. Helpers fail closed on query error.
+
+## admin.ts — admin-only content generation (US-327)
+
+`generate-social-content` and `generate-blog-content` drive paid LLM calls and
+publish brand copy, so they must be admin-only. After `authenticateRequest`
+(which verifies JWT signature + expiry via `auth.getUser()`), gate on the
+`admin` role:
+
+```ts
+import { assertAdmin } from '../_shared/admin.ts';
+
+const adminError = await assertAdmin(auth.supabase, auth.user, corsHeaders);
+if (adminError) return adminError;   // 403 if not admin; null if admin
+```
+
+- Role source of truth: an `admin` row in `user_roles` (`user_id`,`role`), the
+  same table the web `useAdminCheck` hook reads.
+- **Fails CLOSED** (deny → 403) on any query error — opposite of rate-limit.ts.
+  A privilege check must never let someone through on an infra blip.
+- Pair with `capText()` + a system-prompt SECURITY BOUNDARY note when embedding
+  untrusted free text (topic/content_summary) into an LLM prompt.
 
 ## stripe-pricing.ts — price/tier tampering defense (US-326)
 

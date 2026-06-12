@@ -4956,7 +4956,7 @@
         "Critical edge-function tests pass"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Audit: suggest-foods checks token presence only; generate-social-content has no admin gating (index.ts:125 embeds user content_summary into the prompt)."
     },
     {
