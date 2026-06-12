@@ -44,6 +44,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
 import { authenticateRequest } from '../_shared/auth.ts';
 import { assertHouseholdMember } from '../_shared/household.ts';
+import { enforceRateLimit, getClientIp, RATE_LIMITS } from '../_shared/rate-limit.ts';
 import {
   topSuggestions,
   type RecipeContext,
@@ -129,6 +130,15 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } },
     );
+
+    // US-325: rate-limit per user / per IP before the DB-heavy scoring work.
+    const limitError = await enforceRateLimit(
+      supabase,
+      { userId: user.id, clientIp: getClientIp(req) },
+      RATE_LIMITS['tonight-mode'],
+      corsHeaders,
+    );
+    if (limitError) return limitError;
 
     // Authorization (US-324): never trust a client-supplied householdId. Verify
     // the authenticated user actually belongs to it before scoping any data to

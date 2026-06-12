@@ -21,6 +21,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
 import { assertKidsAccessible } from '../_shared/household.ts';
+import { enforceRateLimit, getClientIp, RATE_LIMITS } from '../_shared/rate-limit.ts';
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -60,6 +61,23 @@ serve(async (req) => {
         { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }
+
+    // US-325: resolve the authenticated user (validates the JWT) and rate-limit
+    // per user / per IP before any DB-heavy work.
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid or expired token' }),
+        { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
+      );
+    }
+    const limitError = await enforceRateLimit(
+      supabaseClient,
+      { userId: user.id, clientIp: getClientIp(req) },
+      RATE_LIMITS['suggest-foods'],
+      corsHeaders,
+    );
+    if (limitError) return limitError;
 
     // Authorization (US-324): verify the kid belongs to the authenticated user
     // before reading its profile (broken object-level authorization defense).

@@ -298,6 +298,42 @@ Implementation: `/src/components/ProtectedRoute.tsx`
 - Remembers intended destination
 - Loading state handling
 
+### Rate Limiting & Cost-Abuse Protection (AI/LLM edge functions)
+
+Every expensive AI/LLM edge function is gated by per-user (and best-effort
+per-IP) rate limits plus input-size caps so a single authenticated user cannot
+run up unbounded OpenAI/Anthropic spend or DoS the vision endpoints (US-325).
+
+Implementation: `functions/_shared/rate-limit.ts` (`enforceRateLimit`,
+`assertImageWithinLimit`, `capText`). Reuses the server-side limiter infra
+(`check_rate_limit` RPC + `rate_limits` / `auth_rate_limits` tables). On a
+limit breach the function returns **`429` with a `Retry-After` header** and
+logs the event to the Supabase log / Sentry path. The limiter **fails open** if
+the RPC is unavailable (e.g. migrations not yet deployed) so a missing RPC never
+hard-blocks AI features.
+
+**Per-user free-tier limits (per 60-minute window):**
+
+| Endpoint                  | Limit / hr | Notes                              |
+| ------------------------- | ---------- | ---------------------------------- |
+| `ai-meal-plan`            | 20         |                                    |
+| `suggest-foods`           | 30         |                                    |
+| `suggest-recipe`          | 30         |                                    |
+| `tonight-mode`            | 30         |                                    |
+| `parse-grocery-image`     | 20         | vision (OpenAI `detail:'high'`)    |
+| `parse-receipt-image`     | 20         | vision                             |
+| `identify-product`        | 30         | vision (single product)            |
+| `generate-social-content` | 20         | LLM text generation                |
+
+Per-IP cap = 4× the per-user limit (looser, to tolerate shared NAT/carrier IPs).
+
+**Input-size caps:**
+- Vision endpoints reject a decoded image over **5 MB** with `413` *before*
+  forwarding to the model.
+- Untrusted free-text (e.g. `content_summary`) is truncated to **4000 chars**
+  before being embedded into a prompt (bounds token spend + shrinks the
+  prompt-injection surface).
+
 ---
 
 ## Data Protection

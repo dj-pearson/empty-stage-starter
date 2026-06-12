@@ -9,6 +9,7 @@ both Deno (functions) and, where logic is pure, from vitest (`src/test/**`).
 - `cors.ts` — `getCorsHeaders(req)` / `handleCorsPreFlight(req)`. Spread `corsHeaders` into every Response.
 - `household.ts` — household/kid authorization (see below).
 - `stripe-pricing.ts` — Stripe price allowlist / server-side resolution (see below).
+- `rate-limit.ts` — per-user/per-IP rate limiting + image-size + text caps for AI/LLM fns (see below).
 - `sanitize.ts`, `url-validator.ts` — input sanitization / SSRF-safe URL checks.
 
 ## household.ts — authorization (US-324)
@@ -60,6 +61,39 @@ Config (edge-function secrets, never hardcoded):
 Fails **closed**: if neither env is set the resolver returns 503 "not configured"
 so checkout can't run against an unvalidated price. So this env MUST be set in
 prod for checkout to work — it is a deploy/ops prerequisite, not just code.
+
+## rate-limit.ts — AI cost-abuse / DoS defense (US-325)
+
+Every expensive AI/LLM function must gate the spend. After resolving the user:
+
+```ts
+import { enforceRateLimit, getClientIp, assertImageWithinLimit, capText, RATE_LIMITS } from '../_shared/rate-limit.ts';
+
+// vision fns: reject oversize images BEFORE paying for vision
+const sizeErr = assertImageWithinLimit(imageBase64, corsHeaders);  // 413 | null
+if (sizeErr) return sizeErr;
+
+// all AI fns: per-user + per-IP limit -> 429 with Retry-After, or null
+const limitErr = await enforceRateLimit(
+  supabase,                                   // any JWT-scoped client; calls the check_rate_limit RPC
+  { userId: user.id, clientIp: getClientIp(req) },
+  RATE_LIMITS['parse-receipt-image'],         // per-endpoint config (single source of truth)
+  corsHeaders,
+);
+if (limitErr) return limitErr;
+
+// before embedding untrusted text into a prompt:
+const safe = capText(body.content_summary);   // truncates to 4000 chars
+```
+
+- **Fails open** on RPC/infra error (the `check_rate_limit` RPC may not be
+  deployed yet — US-323 prod-deploy gap). A *definitive* "limit exceeded" still
+  returns 429. So this is NOT a hard dependency on the migration being applied.
+- Limits live in `RATE_LIMITS` (documented in SECURITY.md). `authenticateRequest`
+  now also returns the JWT-scoped `supabase` client so you don't build a second
+  one. Functions that only check the auth-header presence (ai-meal-plan,
+  suggest-foods, suggest-recipe) resolve the user via `supabase.auth.getUser()`
+  to get the per-user key.
 
 ## Gotchas
 

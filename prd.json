@@ -4924,8 +4924,8 @@
         "Add tests for rate-limit enforcement and oversize-payload rejection on at least the three vision functions"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Verified via audit: vision functions call OpenAI at detail:'high' with no size validation and no rate limit."
+      "passes": true,
+      "notes": "Verified via audit: vision functions call OpenAI at detail:'high' with no size validation and no rate limit. | DONE 2026-06-11: added functions/_shared/rate-limit.ts (URL-import-free, structurally-typed, vitest-tested) with enforceRateLimit (per-user check_rate_limit RPC + best-effort per-IP via the TEXT-identifier overload; 429 + Retry-After; fails OPEN on RPC-missing so the US-323 prod-deploy gap can't hard-block AI), assertImageWithinLimit (413 over 5MB decoded, BEFORE the vision call), capText (4000-char cap), getClientIp, and RATE_LIMITS (per-endpoint limits, single source of truth). Wired into all 8 listed fns: ai-meal-plan, suggest-foods, suggest-recipe, tonight-mode, parse-grocery-image, parse-receipt-image, identify-product, generate-social-content. Size validation on the 3 vision fns; content_summary capped in generate-social-content. authenticateRequest now also returns the JWT-scoped client; the 3 auth-header-presence fns resolve the user via getUser() for the per-user key. Limits documented in SECURITY.md + functions/_shared/CLAUDE.md. Test: src/test/security/ai-rate-limit.test.ts (31 cases). tsc clean; vitest 962 pass / 3 skip (+31); new files eslint-clean (only the pre-existing user:any in auth.ts remains). NOTE: enforcement goes live once US-323 deploys the rate_limits table + check_rate_limit RPC to prod; until then it fails open by design."
     },
     {
       "id": "US-326",

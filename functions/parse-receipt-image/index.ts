@@ -31,6 +31,12 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
 import { authenticateRequest } from '../_shared/auth.ts';
+import {
+  assertImageWithinLimit,
+  enforceRateLimit,
+  getClientIp,
+  RATE_LIMITS,
+} from '../_shared/rate-limit.ts';
 
 const VALID_CATEGORIES = [
   'protein',
@@ -164,6 +170,19 @@ serve(async (req) => {
         },
       );
     }
+
+    // US-325: reject oversize images before paying for vision, and rate-limit the
+    // expensive AI call per user / per IP.
+    const sizeError = assertImageWithinLimit(imageBase64, corsHeaders);
+    if (sizeError) return sizeError;
+
+    const limitError = await enforceRateLimit(
+      auth.supabase,
+      { userId: auth.user.id, clientIp: getClientIp(req) },
+      RATE_LIMITS['parse-receipt-image'],
+      corsHeaders,
+    );
+    if (limitError) return limitError;
 
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiApiKey) {

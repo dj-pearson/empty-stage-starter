@@ -26,6 +26,12 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
 import { authenticateRequest } from '../_shared/auth.ts';
+import {
+  capText,
+  enforceRateLimit,
+  getClientIp,
+  RATE_LIMITS,
+} from '../_shared/rate-limit.ts';
 
 const PLATFORM_LIMITS: Record<string, number> = {
   twitter: 280,
@@ -115,6 +121,19 @@ serve(async (req) => {
       );
     }
 
+    // US-325: rate-limit the LLM call per user / per IP before spending tokens.
+    const limitError = await enforceRateLimit(
+      auth.supabase,
+      { userId: auth.user.id, clientIp: getClientIp(req) },
+      RATE_LIMITS['generate-social-content'],
+      corsHeaders,
+    );
+    if (limitError) return limitError;
+
+    // US-325: cap the untrusted free-text summary before embedding it into the
+    // prompt (bounds token spend + shrinks the prompt-injection surface).
+    const summary = capText(content_summary);
+
     const claudeApiKey = Deno.env.get('CLAUDE_API_KEY');
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     let generationCost = { tokens: 0, cost_cents: 0, method: 'template' };
@@ -122,7 +141,7 @@ serve(async (req) => {
     const posts: Record<string, unknown> = {};
 
     const userPrompt = `Generate social media posts for these platforms: ${target_platforms.join(', ')}.
-Content summary: "${content_summary}"
+Content summary: "${summary}"
 For each platform, return JSON with platform name as key, containing "text" (or "caption" for Instagram) and "hashtags" array.
 Respect character limits: Twitter (280), Instagram (2200), Facebook (63206).
 Include hashtags relevant to ARFID, food chaining, and feeding therapy. Always include #EatPal.
@@ -215,16 +234,16 @@ Frame content around evidence-based feeding strategies, not generic parenting ad
 
       switch (platform) {
         case 'twitter':
-          posts.twitter = generateTwitterPost(content_summary);
+          posts.twitter = generateTwitterPost(summary);
           break;
         case 'instagram':
-          posts.instagram = generateInstagramPost(content_summary);
+          posts.instagram = generateInstagramPost(summary);
           break;
         case 'facebook':
-          posts.facebook = generateFacebookPost(content_summary);
+          posts.facebook = generateFacebookPost(summary);
           break;
         default:
-          posts[platform] = { text: content_summary, hashtags: ['#EatPal', '#ARFID', '#FoodChaining'] };
+          posts[platform] = { text: summary, hashtags: ['#EatPal', '#ARFID', '#FoodChaining'] };
       }
     }
 
