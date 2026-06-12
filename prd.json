@@ -5003,8 +5003,8 @@
         "Typecheck passes; npm run build succeeds; existing tests pass"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Verified: ProductSafetyChecker.tsx:110 unterminated template literal, 0 importers; App.tsx:16 imports AdminControlPanel unused; BallPit3D/FoodOrbit3D/ProductShowcase3D have 0 source importers."
+      "passes": true,
+      "notes": "Done 2026-06-11: deleted ProductSafetyChecker.tsx (the broken template literal that failed `tsc -b`), BallPit3D.tsx, FoodOrbit3D.tsx, ProductShowcase3D.tsx (all 0 importers, only docs referenced them); removed the unused `import { AdminControlPanel }` from App.tsx. grep clean. Bundle: entry chunk UNCHANGED (213.48 kB raw / 70.18 kB gzip before AND after; total JS 7550.41 kB both) — Rollup tree-shaking already eliminated the never-rendered AdminControlPanel import and the 0-importer dead files, so build output was already optimal. The real fix is typecheck: `tsc -b --noEmit` went from exit 2 (15 syntax errors in ProductSafetyChecker) to exit 0. (Vite build stayed green throughout because 0-importer files are never in its module graph — exactly why a real CI typecheck, US-329, is needed to catch them.) typecheck exit 0; vite build exit 0 (55s); vitest 970 passed/3 skipped."
     },
     {
       "id": "US-331",

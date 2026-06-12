@@ -13,7 +13,6 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
 import { RouteAnnouncer } from "@/components/RouteAnnouncer";
 import { LoadingFallback } from "@/components/LoadingFallback";
-import { AdminControlPanel } from '@/components/admin/AdminControlPanel';
 import { UpgradePromptHost } from "@/components/UpgradePromptHost";
 
 // Lazy load non-critical components to improve initial bundle size and LCP
