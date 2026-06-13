@@ -2862,3 +2862,11 @@ Web candidates still open (buildable here): US-328 (RLS gaps migration), US-331 
 ### Session total so far: 17 stories (80 -> 63 false)
 ### Remaining false: 63
 Still-open web: US-331 (re-render isolation), US-337 (web invite accept), US-341 (localStorage/Supabase precedence — needs a real offline sync queue, deferred), US-342 (ban any), US-343 (console->logger, 255 calls/89 files — CI-lint-gating, large), US-344 (select(*) trims), US-345 (dark-mode tokens — visual verification needed). Plus iOS Swift (US-348+), native Android/integration, US-323 prod deploy.
+
+## 2026-06-13 (cont. 3) - Web household invite flow (US-337)
+- US-337 web invite create+accept (prio 3): built on the existing iOS-only RPCs create_household_invite / accept_household_invite (migration 20260426000001).
+  - ManageHouseholdDialog: "Create invite link" -> create_household_invite -> shows code + copyable /join?code= link; REMOVED the dead-end household_invitations INSERT.
+  - New /join route + src/pages/Join.tsx behind ProtectedRoute (so ?code survives the /auth round-trip) -> accept_household_invite; handles success / invalid-or-expired / missing-code; RPC idempotent for already-member; success -> full reload to /dashboard so household re-resolves and shared data appears via existing RLS+realtime.
+  - src/lib/householdInvite.ts (buildInviteLink/parseInviteCode/inviteErrorMessage). Tests: householdInvite.test.ts (3) + Join.test.tsx (3). vitest 931 passed; build exit 0.
+- Session total: 18 stories (80 -> 62 false).
+- Remaining web (larger/risky): US-331 (re-render isolation refactor), US-341 (needs offline sync queue), US-342 (ban any), US-343 (console->logger, CI-lint-gating), US-344 (select(*) trims), US-345 (dark-mode, visual verify). Plus iOS Swift (US-348+, unbuildable here), native, US-323 prod deploy.
