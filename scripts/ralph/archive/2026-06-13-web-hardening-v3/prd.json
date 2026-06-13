@@ -1,0 +1,67 @@
+{
+  "project": "EatPal",
+  "branchName": "ralph/web-hardening-v4",
+  "description": "Web hardening v4 — build/typecheck/test-verifiable web stories only. iOS-native + prod-deploy stories excluded. Runs under multi-agent host safety (build lock + affinity + sweep).",
+  "userStories": [
+    {
+      "id": "US-341",
+      "title": "Define and document localStorage vs Supabase precedence and conflict handling on load",
+      "description": "As an engineer, I want a clear, tested rule for which source wins when the localStorage backup diverges from Supabase so that cross-device edits don't silently resurrect stale data.",
+      "acceptanceCriteria": [
+        "Document the intended precedence (server-authoritative on load, localStorage only as offline fallback) in CLAUDE.md / code comments",
+        "Audit AppContext load logic: ensure a successful Supabase fetch overwrites (not merges-stale) the local cache, using updated_at where available for conflict resolution",
+        "Ensure offline edits queued locally are reconciled against server state on reconnect without clobbering newer server rows (coordinate with syncQueue)",
+        "Add tests for: server-newer wins on load; local offline edit survives reconnect; stale local does not overwrite newer server data",
+        "Typecheck passes; tests pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Audit: localStorage vs Supabase precedence on load is unclear; divergence/conflict handling not explicitly defined."
+    },
+    {
+      "id": "US-344",
+      "title": "Replace remaining select('*') over-fetches on hot paths with column-specific selects",
+      "description": "As a performance engineer, I want hot-path Supabase reads to select only needed columns so that we cut payload size and avoid pulling unused/large fields, finishing the work started in US-014 (~182 select('*') remain).",
+      "acceptanceCriteria": [
+        "Inventory the ~182 remaining .select('*') calls; prioritize high-frequency/large-table reads (foods, recipes, grocery_items, plan_entries, kids, admin dashboards)",
+        "Replace with explicit column lists for the prioritized reads; leave low-traffic/admin one-offs documented if intentionally left",
+        "Verify no code depends on a column that was dropped from the select (typecheck + runtime spot check)",
+        "Confirm RLS-relevant columns (user_id/household_id) remain selected where filtering/normalization needs them",
+        "Typecheck passes; tests pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Verified: 182 select('*') occurrences remain after US-014."
+    },
+    {
+      "id": "US-345",
+      "title": "Dark-mode regression sweep: replace remaining hardcoded colors with theme tokens",
+      "description": "As a designer/engineer, I want the ~112 remaining hardcoded color utilities (bg-gray-*, text-gray-*, bg-white, text-black, hex) outside src/components/ui replaced with semantic tokens so that dark mode stays consistent in components added since US-022/US-098..108.",
+      "acceptanceCriteria": [
+        "Inventory hardcoded colors in src/pages and src/components (excluding src/components/ui shadcn) — ~112 occurrences",
+        "Replace with semantic Tailwind tokens (bg-background, text-foreground, bg-muted, border-border, etc.) per the existing convention",
+        "Manually verify the touched screens in both light and dark mode (note any intentionally-fixed colors, e.g. brand logos, and exclude them)",
+        "No use of raw hex where a token exists",
+        "Typecheck passes; npm run build succeeds"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Verified: ~112 hardcoded-color utilities remain outside ui/ despite prior dark-mode fixes."
+    },
+    {
+      "id": "US-342",
+      "title": "Eliminate `any` usage and ban it via lint to restore type safety",
+      "description": "As a maintainer, I want the ~307 `any` usages removed and the rule enforced so that the 'no any' rule in CLAUDE.md is actually upheld and type errors surface at build time.",
+      "acceptanceCriteria": [
+        "Inventory all `: any`, `<any>`, and `as any` occurrences in src (~307) and replace with precise types (use Database['public']['Tables'][...] Row/Insert types where applicable)",
+        "Reduce remaining @ts-ignore/@ts-expect-error (~30) by fixing the underlying types; keep only justified, commented suppressions",
+        "Enable @typescript-eslint/no-explicit-any (error) and no-non-null-assertion guidance in eslint.config.js",
+        "Land incrementally if needed (per-directory) so each PR stays reviewable; CI typecheck (US-329) must be real first",
+        "npm run lint passes with the new rule; typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Verified counts: 307 any-style usages, 30 ts-ignore/expect-error in src."
+    }
+  ]
+}

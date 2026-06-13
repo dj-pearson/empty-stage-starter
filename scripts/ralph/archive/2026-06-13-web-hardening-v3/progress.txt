@@ -1,0 +1,9 @@
+# Ralph Progress Log — Web Hardening v4
+
+## Codebase Patterns
+- Run ALL builds through the host lock: `node scripts/build-lock.mjs npm run typecheck` / `... npm run test:run`. Never call build/typecheck/vitest directly (shared box, another agent builds too).
+- NEVER `git push`. NEVER touch main/develop/release. Commit only, on this branch.
+- `npm run typecheck` = `tsc -b --noEmit`. Large pre-existing type/lint backlog (US-342) is non-blocking; only ensure YOUR story adds no new errors.
+- Web only here. Do NOT edit ios/ Swift or attempt prod deploys.
+
+---
