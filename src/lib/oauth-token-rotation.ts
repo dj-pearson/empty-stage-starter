@@ -21,7 +21,6 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import { logger } from "@/lib/logger";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { logger } from './logger';
 

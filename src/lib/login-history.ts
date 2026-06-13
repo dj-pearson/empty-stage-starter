@@ -7,7 +7,6 @@
  * - Session tracking
  * - Suspicious activity detection
  */
-import { logger } from "@/lib/logger";
 
 import { supabase } from '@/integrations/supabase/client';
 import { parseUserAgent, generateDeviceFingerprint, type ParsedUserAgent } from './user-agent-parser';
