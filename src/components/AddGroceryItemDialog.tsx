@@ -12,7 +12,7 @@ import { FoodCategory } from "@/types";
 import { Plus, Camera, Barcode, Package, Sparkles, ShoppingCart, Edit3, ListPlus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods } from "@/contexts/AppContext";
 import { BarcodeScannerDialog } from "@/components/admin/BarcodeScannerDialog";
 import { ImageFoodCapture } from "@/components/ImageFoodCapture";
 import { GroceryImportTab } from "@/components/grocery/GroceryImportTab";
@@ -52,7 +52,7 @@ const categoryLabels: Record<FoodCategory, string> = {
 };
 
 export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryItemDialogProps) {
-  const { foods } = useApp();
+  const { foods } = useFoods();
   const [activeTab, setActiveTab] = useState<"manual" | "barcode" | "camera" | "import">("manual");
   
   // Form states
