@@ -421,38 +421,19 @@ struct RecipesView: View {
         }
     }
 
+    /// US-358: unified through GroceryGeneratorService (same path as the detail
+    /// view) — structured-first, pantry+list deduped, recipe-source tagged.
     private func addRecipeIngredientsToGrocery(_ recipe: Recipe) async {
-        var addedCount = 0
-        for foodId in recipe.foodIds {
-            guard let food = appState.foods.first(where: { $0.id == foodId }) else { continue }
-            let item = GroceryItem(
-                id: UUID().uuidString,
-                userId: "",
-                name: food.name,
-                category: food.category,
-                quantity: 1,
-                unit: food.unit ?? "count",
-                checked: false,
-                addedVia: "recipe"
-            )
-            do {
-                try await appState.addGroceryItem(item)
-                addedCount += 1
-            } catch {
-                continue
-            }
-        }
-        if addedCount > 0 {
-            ToastManager.shared.success(
-                "Added to grocery",
-                message: "\(addedCount) ingredient\(addedCount == 1 ? "" : "s") from \(recipe.name)"
-            )
-        } else {
-            ToastManager.shared.info(
-                "No ingredients linked",
-                message: "This recipe has no foods linked yet."
-            )
-        }
+        let result = GroceryGeneratorService.generateFromRecipes(
+            [recipe], appState: appState, skipPantryStocked: true
+        )
+        let n = result.items.count
+        try? await GroceryGeneratorService.addGeneratedItemsBatched(
+            result,
+            appState: appState,
+            successMessage: "Added \(n) missing ingredient\(n == 1 ? "" : "s") from \(recipe.name).",
+            emptyMessage: "You already have everything for \(recipe.name)."
+        )
     }
 }
 
@@ -553,6 +534,9 @@ struct RecipeDetailView: View {
     @State private var showingAddToPlan = false
     @State private var pendingShortfallRecipe: Recipe?
     @State private var detailShortfall: DetailShortfallContext?
+
+    // US-358: guard the grocery-add button against double-taps.
+    @State private var isAddingToGrocery = false
 
     // US-224: live serving scaler. 0 == "show original".
     @State private var displayServings: Int = 0
@@ -765,12 +749,18 @@ struct RecipeDetailView: View {
                         Button {
                             Task { await addIngredientsToGrocery() }
                         } label: {
-                            Label("Add Ingredients to Grocery List", systemImage: "cart.badge.plus")
-                                .font(.subheadline)
-                                .frame(maxWidth: .infinity)
+                            HStack {
+                                if isAddingToGrocery {
+                                    ProgressView().controlSize(.small)
+                                }
+                                Label("Add Missing to Grocery List", systemImage: "cart.badge.plus")
+                                    .font(.subheadline)
+                            }
+                            .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.bordered)
                         .tint(.green)
+                        .disabled(isAddingToGrocery)
                         .padding(.top, 4)
                     }
 
@@ -877,63 +867,30 @@ struct RecipeDetailView: View {
         detailShortfall = DetailShortfallContext(recipe: planned, shortfalls: shortfalls)
     }
 
+    /// US-358: unified through GroceryGeneratorService — prefers structured
+    /// ingredients, falls back to foodIds/legacy text, dedupes against BOTH the
+    /// pantry and the existing grocery list (so only the *missing* items are
+    /// added), and stamps recipe source rows so the items appear under this
+    /// recipe in the grocery "By Recipe" view.
     private func addIngredientsToGrocery() async {
-        let existingNames = Set(appState.groceryItems.map { $0.name.lowercased() })
-        let scale = servingScale
-        var added = 0
+        guard !isAddingToGrocery else { return }
+        isAddingToGrocery = true
+        defer { isAddingToGrocery = false }
 
-        for foodId in currentRecipe.foodIds {
-            guard let food = appState.foods.first(where: { $0.id == foodId }) else { continue }
-            if existingNames.contains(food.name.lowercased()) { continue }
-
-            let item = GroceryItem(
-                id: UUID().uuidString,
-                userId: "",
-                name: food.name,
-                category: food.category,
-                quantity: max(1.0, (1.0 * scale).rounded()),
-                unit: food.unit ?? "count",
-                checked: false,
-                addedVia: "recipe"
-            )
-            try? await appState.addGroceryItem(item)
-            added += 1
-        }
-
-        if let additional = currentRecipe.additionalIngredients, !additional.isEmpty {
-            let ingredients = additional
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-
-            for ingredient in ingredients {
-                let scaledLine = isScaled
-                    ? RecipeScaling.scaleIngredientLine(ingredient, scale: scale)
-                    : ingredient
-                guard !existingNames.contains(scaledLine.lowercased()) else { continue }
-
-                let item = GroceryItem(
-                    id: UUID().uuidString,
-                    userId: "",
-                    name: scaledLine,
-                    category: "other",
-                    quantity: 1,
-                    unit: "",
-                    checked: false,
-                    addedVia: "recipe"
-                )
-                try? await appState.addGroceryItem(item)
-                added += 1
-            }
-        }
-
-        let toast = ToastManager.shared
-        let scaleNote = isScaled ? " (scaled for \(effectiveServings) servings)" : ""
-        toast.success(
-            "Added to grocery list",
-            message: "\(added) ingredients added\(scaleNote)."
+        let result = GroceryGeneratorService.generateFromRecipes(
+            [currentRecipe], appState: appState, skipPantryStocked: true
         )
-        HapticManager.success()
+        let n = result.items.count
+        do {
+            try await GroceryGeneratorService.addGeneratedItemsBatched(
+                result,
+                appState: appState,
+                successMessage: "Added \(n) missing ingredient\(n == 1 ? "" : "s") from \(currentRecipe.name).",
+                emptyMessage: "You already have everything for \(currentRecipe.name)."
+            )
+        } catch {
+            // addGeneratedItemsBatched surfaces its own error toast.
+        }
     }
 }
 

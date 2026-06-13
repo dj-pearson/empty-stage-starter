@@ -1467,82 +1467,25 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Add every linked food + structured ingredient from a batch of
-    /// recipes onto the grocery list. Dedupes against existing grocery
-    /// items by lowercased name. One bulk insert at the end.
+    /// Add the missing ingredients from a batch of recipes onto the grocery
+    /// list. US-358: routed through GroceryGeneratorService so it shares the
+    /// structured-first preference order, the candidate-map dedupe (which
+    /// inherently fixes the prior per-branch seen-set handling), pantry-aware
+    /// "add missing only", and recipe source-row tagging for the By-Recipe view.
     func bulkAddRecipesToGrocery(_ recipeIds: Set<String>) async throws {
-        let existing = Set(groceryItems.map { $0.name.lowercased() })
-        var seen = existing
-        var newItems: [GroceryItem] = []
         let selected = recipes.filter { recipeIds.contains($0.id) }
-        for recipe in selected {
-            if !recipe.ingredients.isEmpty {
-                for ing in recipe.ingredients {
-                    // Defensive reparse — recipes imported before the
-                    // qty/unit split landed the whole "4 tablespoons
-                    // vegetable oil" line in `name`. Cleaning here gives
-                    // a presentable grocery item without requiring users
-                    // to re-edit every imported recipe.
-                    let parsed = IngredientTextParser.parse(ing.name)
-                    let displayName = parsed.name
-                    let key = displayName.lowercased()
-                    guard !seen.contains(key) else { continue }
-                    seen.insert(key)
-                    let linkedFood = ing.foodId.flatMap { fid in foods.first(where: { $0.id == fid }) }
-                    let category = linkedFood?.category ?? "other"
-                    // Linked food → use its FoodCategory→Aisle mapping;
-                    // otherwise lean on the keyword classifier so unlinked
-                    // ingredients land in a real aisle, not "Other".
-                    let aisle: GroceryAisle = linkedFood != nil
-                        ? GroceryAisle.fromLegacyCategory(category)
-                        : GroceryAisle.classify(displayName)
-                    newItems.append(GroceryItem(
-                        id: UUID().uuidString,
-                        userId: "",
-                        name: displayName,
-                        category: category,
-                        quantity: ing.quantity ?? parsed.quantity ?? 1,
-                        unit: ing.unit ?? parsed.unit ?? "",
-                        checked: false,
-                        addedVia: "bulk_recipe",
-                        aisleSection: aisle.rawValue
-                    ))
-                }
-                continue
-            }
-            for foodId in recipe.foodIds {
-                guard let food = foods.first(where: { $0.id == foodId }) else { continue }
-                let key = food.name.lowercased()
-                guard !seen.contains(key) else { continue }
-                seen.insert(key)
-                newItems.append(GroceryItem(
-                    id: UUID().uuidString,
-                    userId: "",
-                    name: food.name,
-                    category: food.category,
-                    quantity: 1,
-                    unit: food.unit ?? "count",
-                    checked: false,
-                    addedVia: "bulk_recipe",
-                    aisleSection: GroceryAisle.fromLegacyCategory(food.category).rawValue
-                ))
-            }
-        }
-        guard !newItems.isEmpty else {
-            toast.info("Already on list", message: "All ingredients are already on your grocery list.")
-            return
-        }
-        groceryItems.append(contentsOf: newItems)
-        do {
-            try await dataService.bulkInsertGroceryItems(newItems)
-            toast.success("Added \(newItems.count) ingredients")
-            HapticManager.success()
-        } catch {
-            let newIds = Set(newItems.map(\.id))
-            groceryItems.removeAll { newIds.contains($0.id) }
-            toast.show(error, as: { .save(entity: "grocery items", underlying: $0) })
-            HapticManager.error()
-            throw error
-        }
+        guard !selected.isEmpty else { return }
+
+        let result = GroceryGeneratorService.generateFromRecipes(
+            selected, appState: self, skipPantryStocked: true
+        )
+        let n = result.items.count
+        let recipeWord = selected.count == 1 ? "recipe" : "recipes"
+        try await GroceryGeneratorService.addGeneratedItemsBatched(
+            result,
+            appState: self,
+            successMessage: "Added \(n) missing ingredient\(n == 1 ? "" : "s") from \(selected.count) \(recipeWord).",
+            emptyMessage: "You already have everything for the selected \(recipeWord)."
+        )
     }
 }

@@ -53,29 +53,59 @@ enum GroceryGeneratorService {
             }
         }
 
-        // Convert candidates to grocery items + source rows. Skip
-        // candidates whose name already exists on the list — but DO emit
-        // source rows for those existing items so the "By Recipe" view
-        // can show them under the right recipe sections.
+        // US-358: shared candidate → Result conversion (also used by the
+        // recipe-direct path). Meal-plan generation never skips pantry-stocked
+        // items, preserving prior behavior.
+        return buildResult(from: candidates, appState: appState, skipPantryStocked: false)
+    }
+
+    /// US-358: build grocery items + per-recipe source rows directly from a set
+    /// of recipes (no plan-entry context). Same ingredient-source preference
+    /// order as the meal-plan path; by default skips ingredients already
+    /// stocked in the pantry so callers get only the *missing* ones.
+    static func generateFromRecipes(
+        _ recipes: [Recipe],
+        appState: AppState,
+        skipPantryStocked: Bool = true
+    ) -> Result {
+        var candidates: [String: Candidate] = [:]
+        for recipe in recipes {
+            accumulateRecipe(recipe, appState: appState, into: &candidates)
+        }
+        return buildResult(from: candidates, appState: appState, skipPantryStocked: skipPantryStocked)
+    }
+
+    /// Shared candidate → Result conversion. When `skipPantryStocked` is true,
+    /// candidates whose name matches a pantry food are dropped entirely (the
+    /// "add missing only" behavior, US-291/US-358). Items already on the
+    /// grocery list are not re-created, but still get source rows so the
+    /// "By Recipe" view can attribute them.
+    private static func buildResult(
+        from candidates: [String: Candidate],
+        appState: AppState,
+        skipPantryStocked: Bool
+    ) -> Result {
         let existingByName = Dictionary(
             uniqueKeysWithValues: appState.groceryItems.map {
                 ($0.name.lowercased(), $0.id)
             }
         )
+        let pantryNames = skipPantryStocked
+            ? Set(appState.foods.map { $0.name.lowercased() })
+            : Set<String>()
 
         var items: [GroceryItem] = []
         var sources: [GroceryItemSource] = []
 
         for (nameKey, candidate) in candidates {
+            if skipPantryStocked && pantryNames.contains(nameKey) { continue }
+
             let groceryItemId: String
-            let isNew: Bool
             if let existingId = existingByName[nameKey] {
                 groceryItemId = existingId
-                isNew = false
             } else {
                 let newId = UUID().uuidString
                 groceryItemId = newId
-                isNew = true
                 items.append(GroceryItem(
                     id: newId,
                     userId: "",
@@ -100,13 +130,88 @@ enum GroceryGeneratorService {
                     contributedQuantity: contribution.quantity
                 ))
             }
-            _ = isNew
         }
 
         return Result(
             items: items.sorted { $0.category < $1.category },
             sources: sources
         )
+    }
+
+    /// Walk a single recipe (no plan-entry context) into the candidates map,
+    /// using the same structured → foodIds → legacy preference order as the
+    /// meal-plan accumulator.
+    private static func accumulateRecipe(
+        _ recipe: Recipe,
+        appState: AppState,
+        into candidates: inout [String: Candidate]
+    ) {
+        if !recipe.ingredients.isEmpty {
+            for ing in recipe.ingredients {
+                addStructuredIngredient(
+                    ing, recipe: recipe, entry: nil, dateString: nil,
+                    appState: appState, into: &candidates
+                )
+            }
+        } else {
+            for foodId in recipe.foodIds {
+                addFoodContribution(
+                    foodId: foodId, recipe: recipe, entry: nil, dateString: nil,
+                    appState: appState, into: &candidates
+                )
+            }
+            if let extras = recipe.additionalIngredients, !extras.isEmpty {
+                for name in splitLegacyIngredients(extras) {
+                    addLegacyName(name, recipe: recipe, entry: nil, dateString: nil, into: &candidates)
+                }
+            }
+        }
+    }
+
+    /// US-355: imports join ingredients with newlines, legacy blobs with
+    /// commas. Split on whichever is present so a "salt, to taste" line stays
+    /// whole.
+    private static func splitLegacyIngredients(_ blob: String) -> [String] {
+        let chunks: [Substring] = blob.contains(where: \.isNewline)
+            ? blob.split(whereSeparator: \.isNewline)
+            : blob.split(separator: ",")
+        return chunks
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    /// US-358: batched insert for recipe-direct grocery adds. Unlike
+    /// `addGeneratedItems` (which loops `addGroceryItem` and is fine for the
+    /// few items a meal-plan run yields), this bulk-inserts items + sources in
+    /// one shot and shows a single summary toast — no per-item toast spam.
+    static func addGeneratedItemsBatched(
+        _ result: Result,
+        appState: AppState,
+        successMessage: String,
+        emptyMessage: String
+    ) async throws {
+        let toast = ToastManager.shared
+
+        guard !result.items.isEmpty || !result.sources.isEmpty else {
+            toast.info("Nothing to add", message: emptyMessage)
+            return
+        }
+
+        if !result.items.isEmpty {
+            try await DataService.shared.bulkInsertGroceryItems(result.items)
+            appState.groceryItems.append(contentsOf: result.items)
+        }
+        if !result.sources.isEmpty {
+            try await DataService.shared.insertGroceryItemSources(result.sources)
+            appState.groceryItemSources.append(contentsOf: result.sources)
+        }
+
+        if result.items.isEmpty {
+            toast.info("Already on your list", message: "Linked these items to the recipe.")
+        } else {
+            toast.success("Grocery list updated", message: successMessage)
+        }
+        HapticManager.success()
     }
 
     /// Persist the generation Result. Items go in first so the source
@@ -208,10 +313,7 @@ enum GroceryGeneratorService {
                     )
                 }
                 if let extras = recipe.additionalIngredients, !extras.isEmpty {
-                    let names = extras.split(separator: ",").map {
-                        $0.trimmingCharacters(in: .whitespaces)
-                    }
-                    for name in names where !name.isEmpty {
+                    for name in splitLegacyIngredients(extras) {
                         addLegacyName(
                             name,
                             recipe: recipe,
@@ -238,8 +340,8 @@ enum GroceryGeneratorService {
     private static func addStructuredIngredient(
         _ ing: RecipeIngredient,
         recipe: Recipe,
-        entry: PlanEntry,
-        dateString: String,
+        entry: PlanEntry?,
+        dateString: String?,
         appState: AppState,
         into candidates: inout [String: Candidate]
     ) {
@@ -285,9 +387,9 @@ enum GroceryGeneratorService {
         if existing.unit.isEmpty, let unit = resolvedUnit { existing.unit = unit }
         existing.contributions.append(Contribution(
             recipeId: recipe.id,
-            planEntryId: entry.id,
+            planEntryId: entry?.id,
             mealDate: dateString,
-            mealSlot: entry.mealSlot,
+            mealSlot: entry?.mealSlot,
             quantity: resolvedQty
         ))
         candidates[key] = existing
@@ -296,8 +398,8 @@ enum GroceryGeneratorService {
     private static func addFoodContribution(
         foodId: String,
         recipe: Recipe?,
-        entry: PlanEntry,
-        dateString: String,
+        entry: PlanEntry?,
+        dateString: String?,
         appState: AppState,
         into candidates: inout [String: Candidate]
     ) {
@@ -316,9 +418,9 @@ enum GroceryGeneratorService {
         existing.totalQuantity += 1
         existing.contributions.append(Contribution(
             recipeId: recipe?.id,
-            planEntryId: entry.id,
+            planEntryId: entry?.id,
             mealDate: dateString,
-            mealSlot: entry.mealSlot,
+            mealSlot: entry?.mealSlot,
             quantity: 1
         ))
         candidates[key] = existing
@@ -327,8 +429,8 @@ enum GroceryGeneratorService {
     private static func addLegacyName(
         _ name: String,
         recipe: Recipe,
-        entry: PlanEntry,
-        dateString: String,
+        entry: PlanEntry?,
+        dateString: String?,
         into candidates: inout [String: Candidate]
     ) {
         // Same parse + classify path as the structured side so legacy
@@ -350,9 +452,9 @@ enum GroceryGeneratorService {
         existing.totalQuantity += parsed.quantity ?? 1
         existing.contributions.append(Contribution(
             recipeId: recipe.id,
-            planEntryId: entry.id,
+            planEntryId: entry?.id,
             mealDate: dateString,
-            mealSlot: entry.mealSlot,
+            mealSlot: entry?.mealSlot,
             quantity: parsed.quantity
         ))
         candidates[key] = existing
