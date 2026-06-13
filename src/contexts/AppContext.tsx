@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from "./AuthContext";
 import { FoodsProvider, useFoods } from "./FoodsContext";
 import { KidsProvider, useKids } from "./KidsContext";
 import { RecipesProvider, useRecipes, normalizeRecipeFromDB, RECIPE_WITH_INGREDIENTS_SELECT } from "./RecipesContext";
+import { normalizeKidFromDB, normalizePlanEntryFromDB, normalizeGroceryItemFromDB } from "@/lib/normalizeEntities";
 import { PlanProvider, usePlan } from "./PlanContext";
 import { GroceryProvider, useGrocery } from "./GroceryContext";
 import type { GroceryAddInput } from "@/lib/groceryMerge";
@@ -212,7 +213,8 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         }
 
         if (kidsRes.data) {
-          const loadedKids = kidsRes.data as unknown as Kid[];
+          // US-333: normalize on load so the shape matches the realtime path.
+          const loadedKids = (kidsRes.data as unknown[]).map((k) => normalizeKidFromDB(k as Record<string, unknown>));
           setKids(loadedKids);
           // Preserve a still-valid selection; otherwise default to the first
           // kid. Hard-resetting to null left the app with no child selected
@@ -272,8 +274,8 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
             setRecipes(dbRecipes);
           }
         }
-        if (planRes.data) setPlanEntriesState(planRes.data as unknown as PlanEntry[]);
-        if (groceryRes.data) setGroceryItemsState(groceryRes.data as unknown as GroceryItem[]);
+        if (planRes.data) setPlanEntriesState((planRes.data as unknown[]).map((p) => normalizePlanEntryFromDB(p as Record<string, unknown>)));
+        if (groceryRes.data) setGroceryItemsState((groceryRes.data as unknown[]).map((g) => normalizeGroceryItemFromDB(g as Record<string, unknown>)));
       } catch (error) {
         // Don't leave the scope marked as loaded if it failed — clear it so
         // the next render retries instead of showing a permanently empty app.

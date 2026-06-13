@@ -8,11 +8,34 @@ import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
 import { inferFoodCategory } from "@/lib/foodCategoryMap";
 import { planGroceryMerge, splitIngredientBlock, type GroceryAddInput } from "@/lib/groceryMerge";
+import { normalizeGroceryItemFromDB } from "@/lib/normalizeEntities";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
   new: T;
   old: T;
+}
+
+/**
+ * Merge a realtime grocery payload into prior state (US-333). Normalizes the
+ * raw snake_case row to a consistent client shape and dedupes by id (an INSERT
+ * for an id we already hold — e.g. our own optimistic row — updates in place
+ * rather than appending a duplicate).
+ */
+export function applyGroceryItemRealtime(
+  prev: GroceryItem[],
+  payload: RealtimePayload<Record<string, unknown>>,
+): GroceryItem[] {
+  if (payload.eventType === 'DELETE') {
+    const id = (payload.old as { id?: string })?.id;
+    return id ? prev.filter((i) => i.id !== id) : prev;
+  }
+  const item = normalizeGroceryItemFromDB(payload.new);
+  const idx = prev.findIndex((i) => i.id === item.id);
+  if (idx === -1) return [...prev, item];
+  const next = prev.slice();
+  next[idx] = item;
+  return next;
 }
 
 interface GroceryContextType {
@@ -44,18 +67,8 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId || !householdId) return;
 
-    const debouncedUpdate = debounce((payload: RealtimePayload<GroceryItem>) => {
-      if (payload.eventType === 'INSERT') {
-        setGroceryItemsRaw(prev => {
-          const exists = prev.some(item => item.id === payload.new.id);
-          if (exists) return prev;
-          return [...prev, payload.new];
-        });
-      } else if (payload.eventType === 'UPDATE') {
-        setGroceryItemsRaw(prev => prev.map(item => item.id === payload.new.id ? payload.new : item));
-      } else if (payload.eventType === 'DELETE') {
-        setGroceryItemsRaw(prev => prev.filter(item => item.id !== payload.old.id));
-      }
+    const debouncedUpdate = debounce((payload: RealtimePayload<Record<string, unknown>>) => {
+      setGroceryItemsRaw((prev) => applyGroceryItemRealtime(prev, payload));
     }, 300);
 
     // Household-scoped channel name so switching households tears down the old

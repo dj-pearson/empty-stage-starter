@@ -5051,8 +5051,8 @@
         "Typecheck passes; tests pass"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": "Audit: realtime handlers push payload.new (raw snake_case) directly into state in Grocery/Plan/Kids contexts."
+      "passes": true,
+      "notes": "Audit: realtime handlers push payload.new (raw snake_case) directly into state in Grocery/Plan/Kids contexts. | DONE 2026-06-13: created src/lib/normalizeEntities.ts (normalizeGroceryItemFromDB/normalizePlanEntryFromDB/normalizeKidFromDB) — coerces array fields to arrays + applies client defaults (checked boolean, positive quantity, unit '') for a consistent shape across load/insert/realtime. Extracted pure applyGroceryItemRealtime/applyPlanEntryRealtime/applyKidRealtime handlers in the three contexts that normalize payload.new and DEDUPE by id (INSERT for an id already held updates in place, not a duplicate). Applied the SAME normalizers on the LOAD paths (AppContext kids/plan/grocery + KidsContext.refreshKids) for true parity — no shape drift on a second device. Tests: src/contexts/realtimeApply.test.ts (6) feed raw snake_case payloads and assert normalized+deduped output. Full vitest 916 passed."
     },
     {
       "id": "US-334",

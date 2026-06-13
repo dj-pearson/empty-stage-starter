@@ -6,11 +6,32 @@ import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
+import { normalizePlanEntryFromDB } from "@/lib/normalizeEntities";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
   new: T;
   old: T;
+}
+
+/**
+ * Merge a realtime plan_entries payload into prior state (US-333): normalize
+ * the raw row and dedupe by id.
+ */
+export function applyPlanEntryRealtime(
+  prev: PlanEntry[],
+  payload: RealtimePayload<Record<string, unknown>>,
+): PlanEntry[] {
+  if (payload.eventType === 'DELETE') {
+    const id = (payload.old as { id?: string })?.id;
+    return id ? prev.filter((e) => e.id !== id) : prev;
+  }
+  const entry = normalizePlanEntryFromDB(payload.new);
+  const idx = prev.findIndex((e) => e.id === entry.id);
+  if (idx === -1) return [...prev, entry];
+  const next = prev.slice();
+  next[idx] = entry;
+  return next;
 }
 
 interface PlanContextType {
@@ -34,18 +55,8 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId || !householdId) return;
 
-    const debouncedUpdate = debounce((payload: RealtimePayload<PlanEntry>) => {
-      if (payload.eventType === 'INSERT') {
-        setPlanEntriesRaw(prev => {
-          const exists = prev.some(entry => entry.id === payload.new.id);
-          if (exists) return prev;
-          return [...prev, payload.new];
-        });
-      } else if (payload.eventType === 'UPDATE') {
-        setPlanEntriesRaw(prev => prev.map(entry => entry.id === payload.new.id ? payload.new : entry));
-      } else if (payload.eventType === 'DELETE') {
-        setPlanEntriesRaw(prev => prev.filter(entry => entry.id !== payload.old.id));
-      }
+    const debouncedUpdate = debounce((payload: RealtimePayload<Record<string, unknown>>) => {
+      setPlanEntriesRaw((prev) => applyPlanEntryRealtime(prev, payload));
     }, 300);
 
     // Household-scoped channel name so switching households tears down the old
