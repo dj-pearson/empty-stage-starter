@@ -2886,3 +2886,11 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - US-342 (ban any) is a ~1100-error burndown.
 - US-331 is a 43-component refactor.
 - US-348+ iOS Swift: editable, unbuildable without Xcode. US-323: prod deploy.
+
+## 2026-06-13 (cont. 5) - iOS audit-flips (US-349/350/354/355/356/357/358/362/363/365)
+- Per user direction, audited the 10 iOS stories whose notes said "Implemented on branch claude/ios-ui-ux-refinement-5s4hum (build verification deferred)" against the CURRENT ios/ source, bullet-by-bullet, and flipped the ones fully present. Verification = source audit (no Swift toolchain in this sandbox; Swift build deferred to the user's local Xcode — same pattern as the prior agent's iOS audit-flips).
+- Confirmed present: US-354 (AppState.addRecipe structured-row derivation + RecipeIngredientParserTests), US-355 (RecipeIngredientLegacyParser newline-else-comma delimiter + ShareImportView '\n' join), US-356 (RecipesView structuredIngredientRow + servingScale), US-357 (AddRecipeToPlanSheet + foodId fallback to ingredients.compactMap), US-358 (GroceryGeneratorService.generateFromRecipes/addGeneratedItemsBatched + isAddingToGrocery guard), US-349 (migration 20260613000000_undo_meal_made.sql rpc_undo_meal_made + DataService/AppState.undoMealMade + MealPlanView 'Undo Made it'), US-350 (MealPlanView 'Restore ingredients & remove' confirmationDialog), US-362 (GroceryView checkoutBar safeAreaInset + ShoppingModeView exit() dialog), US-363 (Utilities/UnitConverter.swift + UnitConverterTests + moveCheckedToPantry mismatchedNames), US-365 (moveCheckedToPantry bulkDeleteGroceryItems + ShoppingModeView check rollback).
+- Transparent known gaps preserved in notes: US-350 clear-week batch prompt not yet wired (1 AC bullet follow-up); US-358/US-349 unit tests deferred (headless @MainActor AppState). All other AC bullets present in source. Swift build is the user's local-Xcode step.
+- No code change this batch — prd.json audit-flips only.
+- Session total: 29 stories (80 → 51 false).
+- Remaining 51: 16 not-implemented iOS (audit-finding GAPs needing fresh Swift — can't build-verify here), iOS-native/integration needing toolchains (US-147/148/149/213/214/etc.), and web items needing runtime/visual QA (US-344/345), the any-burndown (US-342), the re-render refactor (US-331), US-341 (offline queue), US-323 (prod deploy).
