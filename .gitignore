@@ -138,4 +138,3 @@ android-native/app/release/app-release.aab
 
 # TypeScript incremental build cache (tsc -b) — machine-local
 *.tsbuildinfo
-scripts/ralph/.last-branch
