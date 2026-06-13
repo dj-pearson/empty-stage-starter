@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useFoods } from "@/contexts/AppContext";
+import { useApp } from "@/contexts/AppContext";
 
 interface NutritionSummary {
   calories: number;
