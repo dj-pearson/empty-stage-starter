@@ -1,0 +1,75 @@
+name: Lighthouse SEO Audit
+
+# Audits the public, SEO-relevant pages with Google Lighthouse (SEO, performance,
+# accessibility, best-practices) and surfaces a per-page report you can act on —
+# in the run summary, as a downloadable artifact, and as temporary public report
+# links. Non-blocking: it informs SEO work, it does not gate merges.
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'src/**'
+      - 'index.html'
+      - 'public/**'
+      - 'vite.config.*'
+      - 'package.json'
+      - 'lighthouserc.json'
+      - '.github/workflows/lighthouse.yml'
+  workflow_dispatch:
+  schedule:
+    # Weekly trend check (Mondays 06:00 UTC) so SEO regressions surface even
+    # without a frontend PR.
+    - cron: '0 6 * * 1'
+
+concurrency:
+  group: lighthouse-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  lighthouse:
+    name: Lighthouse audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Build
+        run: npx vite build
+        env:
+          # Mirror the deploy build (see ci.yml): the anon key is public by design;
+          # PR/fork builds without secrets fall back to placeholders and never deploy.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://api.tryeatpal.com' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-for-ci-build' }}
+          VITE_FUNCTIONS_URL: ${{ secrets.VITE_FUNCTIONS_URL }}
+
+      # Lighthouse drives a real Chrome (preinstalled on ubuntu-latest), so it
+      # audits the client-rendered DOM — including react-helmet meta tags.
+      - name: Run Lighthouse CI
+        continue-on-error: true
+        run: npx --yes @lhci/cli@0.14.0 autorun
+
+      - name: Write SEO report to job summary
+        if: always()
+        run: node scripts/lighthouse-summary.mjs >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: .lighthouseci/
+          retention-days: 30
+          if-no-files-found: warn
