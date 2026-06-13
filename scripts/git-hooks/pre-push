@@ -1,0 +1,24 @@
+#!/bin/bash
+# pre-push backstop — refuse to push protected branches.
+#
+# Defense-in-depth after an autonomous agent pushed straight to main. Install:
+#   git config core.hooksPath scripts/git-hooks
+# (run once per clone; or copy this file to .git/hooks/pre-push).
+#
+# Override for a deliberate human push:  ALLOW_PROTECTED_PUSH=1 git push ...
+
+protected='^refs/heads/(main|develop|release/.*)$'
+
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  if [[ "$remote_ref" =~ $protected ]]; then
+    if [ "${ALLOW_PROTECTED_PUSH:-0}" = "1" ]; then
+      echo "pre-push: protected ref $remote_ref — allowed via ALLOW_PROTECTED_PUSH=1." >&2
+    else
+      echo "pre-push: BLOCKED push to protected branch '$remote_ref'." >&2
+      echo "          Protected branches merge via PR only. To override a deliberate" >&2
+      echo "          human push: ALLOW_PROTECTED_PUSH=1 git push ..." >&2
+      exit 1
+    fi
+  fi
+done
+exit 0

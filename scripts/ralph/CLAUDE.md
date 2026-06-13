@@ -2,16 +2,32 @@
 
 You are an autonomous coding agent working on a software project.
 
+## NON-NEGOTIABLE GUARDRAILS (read first)
+
+- **NEVER run `git push`.** Commit only. A human pushes after review. (An earlier
+  autonomous run pushed straight to `main` and bypassed the PR ruleset — never again.)
+- **NEVER touch `main`/`develop`/`release/*`.** Work only on the branch named in the
+  PRD `branchName`. Do not checkout, reset, merge, or commit onto a protected branch.
+- **Run every build/typecheck/test through the host build lock** so you don't fight
+  the other agent on this shared box:
+  `node scripts/build-lock.mjs npm run typecheck`
+  `node scripts/build-lock.mjs npm run test:run`
+  `node scripts/build-lock.mjs npm run build`
+  Only one build runs on the host at a time; the wrapper waits its turn and always
+  releases the lock. Do NOT call `npm run build`/`typecheck`/`vitest` directly.
+- **Leave no process running.** Anything you start (a dev server, a watcher) must be
+  stopped before you finish the iteration — never leave a `vite`/`tsc --watch` alive.
+
 ## Your Task
 
-1. Read the PRD at `prd.json` (in the same directory as this file)
-2. Read the progress log at `progress.txt` (check Codebase Patterns section first)
-3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
+1. Read the PRD at `prd.json` (in the **repo root** — your working directory)
+2. Read the progress log at `progress.txt` (repo root; check Codebase Patterns section first)
+3. Confirm you are on the branch named in PRD `branchName`. If not, check it out (do NOT create or modify a protected branch). Never work on `main`/`develop`/`release/*`.
 4. Pick the **highest priority** user story where `passes: false`
 5. Implement that single user story
-6. Run quality checks (e.g., typecheck, lint, test - use whatever your project requires)
+6. Run quality checks **through the build lock** (see guardrails): `node scripts/build-lock.mjs npm run typecheck`, then lint, then `node scripts/build-lock.mjs npm run test:run`
 7. Update CLAUDE.md files if you discover reusable patterns (see below)
-8. If checks pass, commit ALL changes with message: `feat: [Story ID] - [Story Title]`
+8. If checks pass, **commit** (never push) ALL changes with message: `feat: [Story ID] - [Story Title]`
 9. Update the PRD to set `passes: true` for the completed story
 10. Append your progress to `progress.txt`
 

@@ -86,12 +86,7 @@
       {
         "hooks": [
           {
-            "type": "command",
-            "command": "npx @claude-flow/cli@latest daemon start --quiet",
-            "timeout": 5000,
-            "continueOnError": true
-          },
-          {
+            "_comment": "RULE 1 (never leak a process): the claude-flow daemon is intentionally NOT started here. SessionStart fires once per `claude` invocation, and a Ralph loop spawns one claude per iteration — starting the daemon here leaked one process per iteration (this is the documented daemon-spawn violation). Start it ONCE, detached, in scripts/ralph/run-ralph.cmd and reuse it across iterations.",
             "type": "command",
             "command": "npx @claude-flow/cli@latest hooks session-restore --session-id \"$SESSION_ID\"",
             "timeout": 10000,

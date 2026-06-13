@@ -1,0 +1,4 @@
+# Shell scripts and git hooks MUST stay LF — a CRLF shebang line makes bash fail
+# with "bad interpreter: /bin/bash^M" on Git Bash/WSL.
+*.sh text eol=lf
+scripts/git-hooks/* text eol=lf
