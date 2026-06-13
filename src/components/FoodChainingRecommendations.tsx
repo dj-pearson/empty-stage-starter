@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sparkles, TrendingUp, CheckCircle, ChevronRight, Info, Plus, Calendar } from "lucide-react";
 import { logger } from "@/lib/logger";
 import { toast } from "sonner";
-import { useApp } from "@/contexts/AppContext";
+import { useKids, useFoods } from "@/contexts/AppContext";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +32,8 @@ interface FoodWithSuccess {
 }
 
 export function FoodChainingRecommendations() {
-  const { activeKidId, kids, foods, addFood, setActiveKidId } = useApp();
+  const { activeKidId, kids, setActiveKidId } = useKids();
+  const { foods, addFood } = useFoods();
   const [successfulFoods, setSuccessfulFoods] = useState<FoodWithSuccess[]>([]);
   const [selectedFood, setSelectedFood] = useState<FoodWithSuccess | null>(null);
   const [chainSuggestions, setChainSuggestions] = useState<FoodChainSuggestion[]>([]);
