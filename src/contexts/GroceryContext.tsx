@@ -164,9 +164,36 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
     // piling up as separate rows.
     const plan = planGroceryMerge(expanded, groceryItems);
 
-    // 1) Bump existing unchecked rows.
-    for (const u of plan.updates) {
-      updateGroceryItem(u.id, { quantity: u.quantity, unit: u.unit, name: u.name });
+    // 1) Bump existing unchecked rows — ONE optimistic re-render + ONE request
+    // (US-334), instead of looping updateGroceryItem (N writes + N re-renders).
+    if (plan.updates.length > 0) {
+      const byId = new Map(plan.updates.map((u) => [u.id, u]));
+      const applyBumps = (prev: GroceryItem[]) =>
+        prev.map((item) => {
+          const u = byId.get(item.id);
+          return u ? { ...item, quantity: u.quantity, unit: u.unit, name: u.name } : item;
+        });
+      if (userId) {
+        // Single RPC bulk-update + rollback on error (reuses the US-320 helper).
+        void runOptimisticMutation<GroceryItem>(
+          setGroceryItemsRaw,
+          applyBumps,
+          () =>
+            // types.ts is regenerated in CI and doesn't yet list this RPC.
+            (
+              supabase.rpc as unknown as (
+                fn: string,
+                args: Record<string, unknown>,
+              ) => PromiseLike<{ error: unknown }>
+            )('bump_grocery_item_quantities', { p_updates: plan.updates }),
+          {
+            logLabel: 'Supabase bump_grocery_item_quantities error:',
+            toastMessage: "Couldn't merge those items — restored. Please try again.",
+          },
+        );
+      } else {
+        setGroceryItemsRaw(applyBumps);
+      }
     }
 
     // 2) Insert the genuinely-new rows.
@@ -209,7 +236,7 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
     }
 
     return plan.inserts.length + plan.updates.length;
-  }, [userId, householdId, groceryItems, updateGroceryItem]);
+  }, [userId, householdId, groceryItems]);
 
   const deleteGroceryItem = useCallback((id: string) => {
     if (userId) {

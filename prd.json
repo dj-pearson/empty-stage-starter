@@ -5066,8 +5066,8 @@
         "Typecheck passes; tests pass"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Audit: addGroceryItemsMerged loops updateGroceryItem (each a separate supabase update round trip) -> N+1 writes + N re-renders."
+      "passes": true,
+      "notes": "Audit: addGroceryItemsMerged loops updateGroceryItem (each a separate supabase update round trip) -> N+1 writes + N re-renders. | DONE 2026-06-13: addGroceryItemsMerged no longer loops updateGroceryItem (was N round-trips + N re-renders). Existing-row bumps now apply in ONE optimistic setState + ONE server request via new RPC bump_grocery_item_quantities(p_updates jsonb) (migration 20260613000002, SECURITY INVOKER so RLS still applies; only quantity/unit/name touched, no destructive full-row upsert). Rollback reuses runOptimisticMutation (US-320 preserved). Merge/dedupe unchanged. New test GroceryContext.merge.test.tsx asserts exactly ONE rpc for a 3-item merge + correct 2lb optimistic merge — green."
     },
     {
       "id": "US-335",
