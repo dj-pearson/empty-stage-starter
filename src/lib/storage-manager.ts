@@ -26,7 +26,6 @@
  * const files = await storageManager.listFiles('profile-pictures', 'avatars');
  * ```
  */
-import { logger } from "@/lib/logger";
 
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from './logger';
