@@ -6,6 +6,7 @@
 
 // Import React first to ensure it's available before any components load
 import React from "react";
+import { logger } from "@/lib/logger";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 
@@ -44,7 +45,7 @@ if (import.meta.env.DEV) {
 // Debug logging helper - only logs in development
 const debugLog = (message: string, ...args: unknown[]) => {
   if (import.meta.env.DEV) {
-    console.log(`[EatPal] ${message}`, ...args);
+    logger.info(`[EatPal] ${message}`, ...args);
   }
 };
 
@@ -68,7 +69,7 @@ const initSentryDeferred = () => {
     initializeSentry();
     debugLog('Sentry initialized successfully');
   } catch (error) {
-    console.warn('[EatPal] Sentry initialization failed:', error);
+    logger.warn('[EatPal] Sentry initialization failed:', error);
   }
 };
 
@@ -99,7 +100,7 @@ try {
   });
 } catch (error) {
   // Always log render errors - critical for production debugging
-  console.error('[EatPal] Failed to render app:', error);
+  logger.error('[EatPal] Failed to render app:', error);
   // Show a basic error message - use safe DOM methods to prevent XSS
   const container = document.createElement('div');
   container.style.cssText = 'display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; font-family: system-ui, -apple-system, sans-serif;';

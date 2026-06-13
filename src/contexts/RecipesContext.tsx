@@ -1,11 +1,41 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { Recipe, RecipeIngredient } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
-import { generateId } from "@/lib/utils";
+import { generateId, debounce } from "@/lib/utils";
 import { logger } from "@/lib/logger";
+import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
 import type { Database } from "@/integrations/supabase/types";
+
+interface RealtimeRecipePayload {
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
+  new: RecipeRow;
+  old: { id: string };
+}
+
+/**
+ * Merge a realtime recipe row into prior state (US-340).
+ *
+ * Exported for testing: feeds a raw snake_case payload through
+ * normalizeRecipeFromDB and dedupes by id. Postgres `postgres_changes` events
+ * do NOT carry the joined `recipe_ingredients`, so on UPDATE we preserve the
+ * already-loaded structured ingredients rather than clobbering them to [].
+ */
+export function applyRecipeRealtime(prev: Recipe[], payload: RealtimeRecipePayload): Recipe[] {
+  if (payload.eventType === 'DELETE') {
+    return prev.filter((r) => r.id !== payload.old.id);
+  }
+  const incoming = normalizeRecipeFromDB(payload.new);
+  const existing = prev.find((r) => r.id === incoming.id);
+  if (existing && (!incoming.recipe_ingredients || incoming.recipe_ingredients.length === 0)) {
+    incoming.recipe_ingredients = existing.recipe_ingredients;
+  }
+  if (existing) {
+    return prev.map((r) => (r.id === incoming.id ? incoming : r));
+  }
+  return [...prev, incoming];
+}
 
 type RecipeRow = Database['public']['Tables']['recipes']['Row'];
 
@@ -82,6 +112,32 @@ const RecipesContext = createContext<RecipesContextType | undefined>(undefined);
 export function RecipesProvider({ children }: { children: React.ReactNode }) {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const { userId, householdId } = useAuth();
+
+  // Real-time subscription for recipes so edits sync live across caregivers
+  // (US-340) — parity with Grocery/Plan/Kids, household-scoped channel name.
+  useEffect(() => {
+    if (!userId || !householdId) return;
+
+    const debouncedUpdate = debounce((payload: RealtimeRecipePayload) => {
+      setRecipes((prev) => applyRecipeRealtime(prev, payload));
+    }, 300);
+
+    const channelName = `recipes:${householdId}`;
+    const channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'recipes',
+        filter: `household_id=eq.${householdId}`,
+      }, debouncedUpdate)
+      .subscribe();
+
+    registerSubscription(channelName, 'recipes');
+
+    return () => {
+      unregisterSubscription(channelName);
+      supabase.removeChannel(channel);
+    };
+  }, [userId, householdId]);
 
   const addRecipe = useCallback(async (recipe: Omit<Recipe, "id">): Promise<Recipe> => {
     if (userId) {

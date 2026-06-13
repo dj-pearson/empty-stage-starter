@@ -86,7 +86,7 @@ export function PromotionalCampaignManager() {
       setPlans(plansRes.data || []);
     } catch (error: unknown) {
       toast.error("Failed to load campaigns");
-      logger.error(error);
+      logger.error('PromotionalCampaignManager error', error);
     } finally {
       setIsLoading(false);
     }
@@ -134,7 +134,7 @@ export function PromotionalCampaignManager() {
       fetchData();
     } catch (error: unknown) {
       toast.error(editingCampaign ? "Failed to update campaign" : "Failed to create campaign");
-      logger.error(error);
+      logger.error('PromotionalCampaignManager error', error);
     }
   };
 
@@ -176,7 +176,7 @@ export function PromotionalCampaignManager() {
       fetchData();
     } catch (error: unknown) {
       toast.error("Failed to delete campaign");
-      logger.error(error);
+      logger.error('PromotionalCampaignManager error', error);
     }
   };
 
@@ -192,7 +192,7 @@ export function PromotionalCampaignManager() {
       fetchData();
     } catch (error: unknown) {
       toast.error("Failed to update campaign status");
-      logger.error(error);
+      logger.error('PromotionalCampaignManager error', error);
     }
   };
 

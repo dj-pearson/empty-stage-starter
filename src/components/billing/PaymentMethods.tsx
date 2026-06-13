@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,7 +59,7 @@ export function PaymentMethods() {
 
       setPaymentMethods(data.paymentMethods || []);
     } catch (err) {
-      console.error("Error fetching payment methods:", err);
+      logger.error("Error fetching payment methods:", err);
       toast.error("Failed to load payment methods");
     } finally {
       setLoading(false);
@@ -78,7 +79,7 @@ export function PaymentMethods() {
       toast.success("Default payment method updated");
       await fetchPaymentMethods();
     } catch (err) {
-      console.error("Error setting default payment method:", err);
+      logger.error("Error setting default payment method:", err);
       toast.error("Failed to update default payment method");
     } finally {
       setActionLoading(null);
@@ -99,7 +100,7 @@ export function PaymentMethods() {
       setDeleteConfirm(null);
       await fetchPaymentMethods();
     } catch (err) {
-      console.error("Error removing payment method:", err);
+      logger.error("Error removing payment method:", err);
       toast.error("Failed to remove payment method");
     } finally {
       setActionLoading(null);
@@ -120,7 +121,7 @@ export function PaymentMethods() {
         window.open(data.url, "_blank");
       }
     } catch (err) {
-      console.error("Error opening customer portal:", err);
+      logger.error("Error opening customer portal:", err);
       toast.error(err instanceof Error ? err.message : "Failed to open customer portal");
     } finally {
       setActionLoading(null);

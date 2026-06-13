@@ -8,11 +8,32 @@ import { checkFeatureLimit } from "@/lib/featureLimits";
 import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
+import { normalizeKidFromDB } from "@/lib/normalizeEntities";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
   new: T;
   old: T;
+}
+
+/**
+ * Merge a realtime kids payload into prior state (US-333): normalize the raw
+ * row (array fields coerced to arrays) and dedupe by id.
+ */
+export function applyKidRealtime(
+  prev: Kid[],
+  payload: RealtimePayload<Record<string, unknown>>,
+): Kid[] {
+  if (payload.eventType === 'DELETE') {
+    const id = (payload.old as { id?: string })?.id;
+    return id ? prev.filter((k) => k.id !== id) : prev;
+  }
+  const kid = normalizeKidFromDB(payload.new);
+  const idx = prev.findIndex((k) => k.id === kid.id);
+  if (idx === -1) return [...prev, kid];
+  const next = prev.slice();
+  next[idx] = kid;
+  return next;
 }
 
 interface KidsContextType {
@@ -38,32 +59,25 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId || !householdId) return;
 
-    const debouncedUpdate = debounce((payload: RealtimePayload<Kid>) => {
-      if (payload.eventType === 'INSERT') {
-        setKids(prev => {
-          const exists = prev.some(kid => kid.id === payload.new.id);
-          if (exists) return prev;
-          return [...prev, payload.new];
-        });
-      } else if (payload.eventType === 'UPDATE') {
-        setKids(prev => prev.map(kid => kid.id === payload.new.id ? payload.new : kid));
-      } else if (payload.eventType === 'DELETE') {
-        setKids(prev => prev.filter(kid => kid.id !== payload.old.id));
-      }
+    const debouncedUpdate = debounce((payload: RealtimePayload<Record<string, unknown>>) => {
+      setKids((prev) => applyKidRealtime(prev, payload));
     }, 300);
 
+    // Household-scoped channel name so switching households tears down the old
+    // channel and opens a distinct one (no stale/duplicate channels). (US-332)
+    const channelName = `kids:${householdId}`;
     const channel = supabase
-      .channel('kids_changes')
+      .channel(channelName)
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'kids',
         filter: `household_id=eq.${householdId}`
       }, debouncedUpdate)
       .subscribe();
 
-    registerSubscription('kids_changes', 'kids');
+    registerSubscription(channelName, 'kids');
 
     return () => {
-      unregisterSubscription('kids_changes');
+      unregisterSubscription(channelName);
       supabase.removeChannel(channel);
     };
   }, [userId, householdId]);
@@ -148,7 +162,7 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
   const refreshKids = useCallback(async () => {
     if (userId) {
       const { data } = await supabase.from('kids').select('*').order('created_at', { ascending: true });
-      if (data) setKids(data as unknown as Kid[]);
+      if (data) setKids((data as unknown[]).map((k) => normalizeKidFromDB(k as Record<string, unknown>)));
     }
   }, [userId]);
 

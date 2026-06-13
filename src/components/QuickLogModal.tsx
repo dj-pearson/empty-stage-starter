@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { logger } from "@/lib/logger";
 import {
   Dialog,
   DialogContent,
@@ -43,7 +44,7 @@ export function QuickLogModal({
       setSelectedResult(null);
       onOpenChange(false);
     } catch (error) {
-      console.error('Failed to log meal:', error);
+      logger.error('Failed to log meal:', error);
     } finally {
       setIsLoading(false);
     }

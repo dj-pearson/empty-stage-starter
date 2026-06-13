@@ -27,4 +27,15 @@ export default tseslint.config(
       }],
     },
   },
+  {
+    // US-343: app code must log through `@/lib/logger`, not console. Scoped to
+    // src/ so the Deno edge functions (functions/, which legitimately use
+    // console for server logging) are unaffected. logger.ts is the logging
+    // implementation itself, so it's exempt.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/lib/logger.ts"],
+    rules: {
+      "no-console": "error",
+    },
+  },
 );

@@ -242,7 +242,7 @@ export function ConversionFunnelDashboard() {
 
       setRecentConversions(conversions);
     } catch (error) {
-      console.error('Error fetching conversion metrics:', error);
+      logger.error('Error fetching conversion metrics:', error);
       toast.error('Failed to load conversion data');
     } finally {
       setIsLoading(false);

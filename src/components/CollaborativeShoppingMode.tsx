@@ -19,13 +19,6 @@ interface ShoppingSession {
   is_active: boolean;
 }
 
-interface ActiveShopper {
-  user_id: string;
-  user_name: string;
-  last_seen: string;
-  current_item_id?: string;
-}
-
 interface CollaborativeShoppingModeProps {
   groceryListId: string | null;
   householdId: string | null;
@@ -42,7 +35,9 @@ export function CollaborativeShoppingMode({
   onItemCheck,
 }: CollaborativeShoppingModeProps) {
   const [activeSession, setActiveSession] = useState<ShoppingSession | null>(null);
-  const [activeShoppers, setActiveShoppers] = useState<ActiveShopper[]>([]);
+  // (Removed the never-populated `activeShoppers` presence state — US-339.
+  //  Real presence can be added later via Supabase Realtime Presence; until
+  //  then we don't render a misleading empty indicator.)
   const [isStarting, setIsStarting] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
 
@@ -273,7 +268,7 @@ export function CollaborativeShoppingMode({
               </p>
             </div>
 
-            {/* Active Shoppers (simulated for now) */}
+            {/* Current shopper (multi-shopper presence is a future addition) */}
             {activeSession.started_by_user_id === userId && (
               <div className="space-y-2">
                 <p className="text-sm font-medium flex items-center gap-2">

@@ -253,7 +253,7 @@ export function LiveActivityFeed() {
       setActivities(rows.map(toActivityLog));
       setTableAvailable(true);
     } catch (err: unknown) {
-      console.error("Error loading activity feed:", err);
+      logger.error("Error loading activity feed:", err);
       toast.error("Error loading activity feed", { description: getErrorMessage(err) });
     } finally {
       setLoading(false);
@@ -269,6 +269,16 @@ export function LiveActivityFeed() {
     // Subscribe to real-time inserts on admin_live_activity.
     // If the table does not exist, the subscription silently does nothing.
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+    // US-335: only poll when realtime is NOT available. When the channel
+    // subscribes successfully we rely on live inserts and do not double-poll.
+    const startPollingFallback = () => {
+      if (!autoRefresh || pollInterval) return;
+      pollInterval = setInterval(() => {
+        fetchActivities();
+      }, POLL_INTERVAL_MS);
+    };
 
     logger.debug('Subscribing to admin_activity_changes');
     try {
@@ -290,31 +300,26 @@ export function LiveActivityFeed() {
           },
         )
         .subscribe((status) => {
-          if (status === "CHANNEL_ERROR") {
-            // Real-time not available for this table -- fall back to polling only
-            console.warn(
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            // Real-time not available -- fall back to polling only.
+            logger.warn(
               "Real-time subscription failed for admin_live_activity; using polling only.",
             );
+            startPollingFallback();
           }
         });
     } catch {
-      // If channel creation throws, continue without real-time
-      console.warn("Could not create real-time channel; using polling only.");
+      // If channel creation throws, continue with polling.
+      logger.warn("Could not create real-time channel; using polling only.");
+      startPollingFallback();
     }
-
-    // Polling fallback: auto-refresh every 30 seconds
-    const interval = autoRefresh
-      ? setInterval(() => {
-          fetchActivities();
-        }, POLL_INTERVAL_MS)
-      : null;
 
     return () => {
       if (channel) {
         logger.debug('Unsubscribing from admin_activity_changes');
         supabase.removeChannel(channel);
       }
-      if (interval) clearInterval(interval);
+      if (pollInterval) clearInterval(pollInterval);
     };
   }, [autoRefresh, fetchActivities, scrollToTop]);
 

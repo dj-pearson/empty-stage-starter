@@ -66,7 +66,7 @@ export function useUsageStats() {
 
       setStats(data as any as UsageStats);
     } catch (err) {
-      console.error("Error fetching usage stats:", err);
+      logger.error("Error fetching usage stats:", err);
       setError(err instanceof Error ? err.message : "Failed to fetch usage stats");
     } finally {
       setLoading(false);

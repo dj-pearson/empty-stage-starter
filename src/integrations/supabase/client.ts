@@ -1,5 +1,6 @@
 // Updated to use environment variables for self-hosted Supabase
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { logger } from "@/lib/logger";
 import type { Database } from './types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -24,7 +25,7 @@ if (!isSupabaseConfigured) {
   const detail = !SUPABASE_URL
     ? 'VITE_SUPABASE_URL is missing'
     : 'VITE_SUPABASE_ANON_KEY is missing or a placeholder (expected a JWT starting with "eyJ")';
-  console.error(
+  logger.error(
     `[EatPal] Supabase is not properly configured: ${detail}. ` +
     'Authentication and database access are disabled. ' +
     'Check the deploy build environment (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).'

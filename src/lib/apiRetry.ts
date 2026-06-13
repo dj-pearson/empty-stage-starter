@@ -188,7 +188,7 @@ export async function withRetry<T>(
       const delayMs = calculateDelay(attempt, mergedConfig);
 
       if (import.meta.env.DEV) {
-        console.warn(
+        logger.warn(
           `[apiRetry] Attempt ${attempt + 1}/${mergedConfig.maxRetries + 1} failed, ` +
           `retrying in ${delayMs}ms...`,
           error

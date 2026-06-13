@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { logger } from "@/lib/logger";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import {
@@ -142,7 +143,7 @@ export function AddPaymentMethodDialog({
           }
         }, 100);
       } catch (err) {
-        console.error("Error initializing Stripe:", err);
+        logger.error("Error initializing Stripe:", err);
         setError(err instanceof Error ? err.message : "Failed to initialize payment form");
       } finally {
         setLoading(false);
@@ -195,7 +196,7 @@ export function AddPaymentMethodDialog({
         throw new Error("Failed to add payment method");
       }
     } catch (err) {
-      console.error("Error adding payment method:", err);
+      logger.error("Error adding payment method:", err);
       setError(err instanceof Error ? err.message : "Failed to add payment method");
     } finally {
       setLoading(false);

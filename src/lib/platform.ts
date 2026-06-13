@@ -74,7 +74,7 @@ export const getSyncStorage = (): SyncStorageInterface => {
       };
     } catch {
       // localStorage is disabled (e.g., private browsing in some browsers)
-      console.warn('localStorage is not available, using memory-only storage');
+      logger.warn('localStorage is not available, using memory-only storage');
     }
   }
 

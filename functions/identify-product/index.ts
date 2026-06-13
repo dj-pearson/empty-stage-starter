@@ -25,8 +25,11 @@
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
 import { authenticateRequest } from '../_shared/auth.ts';
+import { enforceRateLimit } from '../_shared/rate-limit.ts';
+import { validateImageSize } from '../_shared/validation.ts';
 
 // Mirrors FoodCategory.swift / FoodCategory web type. Keep in sync.
 const VALID_CATEGORIES = ['protein', 'carb', 'dairy', 'fruit', 'vegetable', 'snack'];
@@ -58,6 +61,7 @@ serve(async (req) => {
 
   const auth = await authenticateRequest(req);
   if (auth.error) return auth.error;
+  const user = auth.user;
 
   try {
     if (req.method !== 'POST') {
@@ -67,6 +71,20 @@ serve(async (req) => {
       );
     }
 
+    // Per-user rate limit (cost/DoS protection) before any vision work.
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } },
+    );
+    const limited = await enforceRateLimit(
+      supabaseClient,
+      user.id,
+      'identify-product',
+      corsHeaders,
+    );
+    if (limited) return limited;
+
     const { imageBase64 } = await req.json();
     if (!imageBase64 || typeof imageBase64 !== 'string') {
       return new Response(
@@ -74,6 +92,10 @@ serve(async (req) => {
         { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }
+
+    // Reject oversized images before forwarding to the vision API.
+    const tooLarge = validateImageSize(imageBase64, corsHeaders);
+    if (tooLarge) return tooLarge;
 
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiApiKey) {

@@ -39,7 +39,7 @@ export interface CompressionOptions {
  * });
  *
  * if (!result.valid) {
- *   console.error(result.errors);
+ *   logger.error(result.errors);
  * }
  * ```
  */

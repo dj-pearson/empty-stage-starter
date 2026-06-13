@@ -312,24 +312,25 @@ export const isDebugEnabled = (): boolean => {
 export const logger = {
   log: (...args: any[]) => {
     if (isDebugEnabled()) {
-      console.log(...args);
+      logger.info(...args);
     }
   },
   warn: (...args: any[]) => {
     if (isDebugEnabled()) {
-      console.warn(...args);
+      logger.warn(...args);
     }
   },
   error: (...args: any[]) => {
-    console.error(...args);
+    logger.error(...args);
   },
   debug: (...args: any[]) => {
     if (isDebugEnabled()) {
-      console.debug(...args);
+      logger.debug(...args);
     }
   },
   table: (data: any) => {
     if (isDebugEnabled()) {
+      // eslint-disable-next-line no-console -- console.table has no logger equivalent; dev-only
       console.table(data);
     }
   },

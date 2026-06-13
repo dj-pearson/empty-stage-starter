@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { logger } from "@/lib/logger";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -223,7 +224,7 @@ export function WeeklyProgressReport({ weekStart, kidId }: WeeklyProgressReportP
         toast.success('Report summary copied to clipboard!');
       }
     } catch (err) {
-      console.error('Share error:', err);
+      logger.error('Share error:', err);
       // Fallback: copy text to clipboard
       try {
         const shareText = generateShareText(reportData);
@@ -248,7 +249,7 @@ export function WeeklyProgressReport({ weekStart, kidId }: WeeklyProgressReportP
       downloadBlob(pdfBlob, filename);
       toast.success(`Downloaded ${filename}`);
     } catch (err) {
-      console.error('Download error:', err);
+      logger.error('Download error:', err);
       toast.error('Failed to generate PDF. Please try again.');
     } finally {
       setIsDownloading(false);

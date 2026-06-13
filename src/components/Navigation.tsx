@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Separator } from "@/components/ui/separator";
 import { loginHistory } from "@/lib/login-history";
 
@@ -28,6 +29,7 @@ const baseNavItems = [
 ];
 
 export function Navigation() {
+  const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
@@ -523,7 +525,7 @@ export function Navigation() {
                     }}
                   >
                     <LogOut className="h-5 w-5" aria-hidden="true" />
-                    <span>Sign Out</span>
+                    <span>{t('auth.signOut')}</span>
                   </Button>
                 </div>
               </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { logger } from "@/lib/logger";
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
@@ -104,7 +105,7 @@ export default function PickyEaterQuizResults() {
           },
         });
       } catch (error) {
-        console.error('Error saving quiz response:', error);
+        logger.error('Error saving quiz response:', error);
         toast.error('Unable to save your results to our database. Your results are still displayed below.');
       }
     })();
@@ -135,7 +136,7 @@ export default function PickyEaterQuizResults() {
 
       toast.success('PDF downloaded successfully!');
     } catch (error) {
-      console.error('Error downloading PDF:', error);
+      logger.error('Error downloading PDF:', error);
       toast.error('Failed to download PDF. Please try again.');
     } finally {
       setIsDownloadingPDF(false);

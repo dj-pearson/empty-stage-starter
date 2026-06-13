@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { logger } from "@/lib/logger";
 import { Helmet } from "react-helmet-async";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -95,7 +96,7 @@ export default function Billing() {
         toast.error("Unable to open billing portal. Please try again.");
       }
     } catch (err) {
-      console.error("Error opening Stripe portal:", err);
+      logger.error("Error opening Stripe portal:", err);
       if (err instanceof Error && err.message.includes("No subscription")) {
         toast.info("Subscribe to a plan first to access the billing portal.");
         navigate("/pricing");

@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { logger } from "@/lib/logger";
 import {
   BudgetCalculatorInput,
   BudgetCalculation,
@@ -45,7 +46,7 @@ export async function saveBudgetCalculation(
       .single();
 
     if (error) {
-      console.error('Error saving budget calculation:', error);
+      logger.error('Error saving budget calculation:', error);
       throw error;
     }
 
@@ -66,7 +67,7 @@ export async function saveBudgetCalculation(
 
     return data.id;
   } catch (error) {
-    console.error('Failed to save budget calculation:', error);
+    logger.error('Failed to save budget calculation:', error);
     throw error;
   }
 }
@@ -93,7 +94,7 @@ export async function captureBudgetEmailLead(
 
     if (checkError && checkError.code !== 'PGRST116') {
       // PGRST116 is "not found" error, which is ok
-      console.error('Error checking existing lead:', checkError);
+      logger.error('Error checking existing lead:', checkError);
     }
 
     if (existingLead) {
@@ -110,7 +111,7 @@ export async function captureBudgetEmailLead(
         .eq('email', emailData.email);
 
       if (updateError) {
-        console.error('Error updating lead:', updateError);
+        logger.error('Error updating lead:', updateError);
       }
     } else {
       // Create new lead
@@ -127,7 +128,7 @@ export async function captureBudgetEmailLead(
       });
 
       if (insertError) {
-        console.error('Error creating lead:', insertError);
+        logger.error('Error creating lead:', insertError);
         throw insertError;
       }
     }
@@ -143,7 +144,7 @@ export async function captureBudgetEmailLead(
       .eq('id', calculationId);
 
     if (updateCalcError) {
-      console.error('Error updating calculation with email:', updateCalcError);
+      logger.error('Error updating calculation with email:', updateCalcError);
     }
 
     // Track analytics event
@@ -165,7 +166,7 @@ export async function captureBudgetEmailLead(
       });
     }
   } catch (error) {
-    console.error('Failed to capture email lead:', error);
+    logger.error('Failed to capture email lead:', error);
     throw error;
   }
 }
@@ -183,7 +184,7 @@ export async function trackBudgetPDFDownload(calculationId: string): Promise<voi
       .eq('id', calculationId);
 
     if (error) {
-      console.error('Error tracking PDF download:', error);
+      logger.error('Error tracking PDF download:', error);
     }
 
     // Track analytics
@@ -202,7 +203,7 @@ export async function trackBudgetPDFDownload(calculationId: string): Promise<voi
       });
     }
   } catch (error) {
-    console.error('Failed to track PDF download:', error);
+    logger.error('Failed to track PDF download:', error);
   }
 }
 
@@ -220,7 +221,7 @@ export async function trackBudgetTrialStart(email: string): Promise<void> {
       .eq('email', email);
 
     if (error) {
-      console.error('Error tracking trial start:', error);
+      logger.error('Error tracking trial start:', error);
     }
 
     // Also update calculations
@@ -231,7 +232,7 @@ export async function trackBudgetTrialStart(email: string): Promise<void> {
       })
       .eq('email', email);
   } catch (error) {
-    console.error('Failed to track trial start:', error);
+    logger.error('Failed to track trial start:', error);
   }
 }
 
@@ -251,10 +252,10 @@ export async function trackAnalyticsEvent(event: BudgetAnalyticsEvent): Promise<
     });
 
     if (error) {
-      console.error('Error tracking analytics event:', error);
+      logger.error('Error tracking analytics event:', error);
     }
   } catch (error) {
-    console.error('Failed to track analytics event:', error);
+    logger.error('Failed to track analytics event:', error);
   }
 }
 
@@ -275,7 +276,7 @@ export async function trackBudgetSocialShare(
       .eq('id', calculationId);
 
     if (error) {
-      console.error('Error tracking social share:', error);
+      logger.error('Error tracking social share:', error);
     }
 
     // Track analytics
@@ -297,7 +298,7 @@ export async function trackBudgetSocialShare(
       });
     }
   } catch (error) {
-    console.error('Failed to track social share:', error);
+    logger.error('Failed to track social share:', error);
   }
 }
 
@@ -406,7 +407,7 @@ export async function getBudgetAnalyticsSummary(): Promise<{
       }>,
     };
   } catch (error) {
-    console.error('Failed to get budget analytics summary:', error);
+    logger.error('Failed to get budget analytics summary:', error);
     throw error;
   }
 }

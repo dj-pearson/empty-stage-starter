@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { logger } from "@/lib/logger";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -147,7 +148,7 @@ export function useFeatureFlag(flagKey: string, defaultValue: boolean = false): 
       const cached = getCachedFlag(flagKey);
       setIsEnabled(cached ?? defaultValue);
     } catch (error) {
-      console.error("Error checking feature flag:", error);
+      logger.error("Error checking feature flag:", error);
       setIsEnabled(getCachedFlag(flagKey) ?? defaultValue);
     }
   }, [flagKey, defaultValue]);
@@ -243,7 +244,7 @@ export function useFeatureFlags(): {
         setFlags(cached);
       }
     } catch (error) {
-      console.error("Error fetching feature flags:", error);
+      logger.error("Error fetching feature flags:", error);
       const cached = getAllCachedFlags();
       if (cached) {
         setFlags(cached);

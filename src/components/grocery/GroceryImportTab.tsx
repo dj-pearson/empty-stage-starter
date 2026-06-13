@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { logger } from "@/lib/logger";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
@@ -84,7 +85,7 @@ export function GroceryImportTab({ onAddItems }: GroceryImportTabProps) {
       setParsedItems(items);
       toast.success(`Found ${items.length} item${items.length !== 1 ? 's' : ''}`);
     } catch (err) {
-      console.error('Image parse error:', err);
+      logger.error('Image parse error:', err);
       toast.error('Failed to process image. Check your connection and try again.');
     } finally {
       setIsProcessing(false);

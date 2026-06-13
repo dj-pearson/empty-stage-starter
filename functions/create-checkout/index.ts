@@ -14,6 +14,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
+import { resolvePriceId } from '../_shared/stripe-prices.ts';
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -65,11 +66,13 @@ serve(async (req) => {
     const user_id = user.id;
 
     const body = await req.json();
-    const { price_id } = body;
 
-    if (!price_id || typeof price_id !== 'string') {
+    // Never pass a client-supplied price straight to Stripe (price/tier
+    // tampering). Resolve against a server-side allowlist sourced from env.
+    const price_id = resolvePriceId(Deno.env, body);
+    if (!price_id) {
       return new Response(
-        JSON.stringify({ error: 'price_id is required' }),
+        JSON.stringify({ error: 'Invalid or unknown price/plan' }),
         { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }

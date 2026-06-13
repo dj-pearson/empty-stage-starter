@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { logger } from "@/lib/logger";
 import { MealPlanInput, MealPlanResult } from '@/types/mealPlanGenerator';
 
 export interface MealPlanEmailCaptureData {
@@ -55,7 +56,7 @@ export async function saveMealPlanGeneration(
       .single();
 
     if (error) {
-      console.error('Error saving meal plan generation:', error);
+      logger.error('Error saving meal plan generation:', error);
       throw error;
     }
 
@@ -76,7 +77,7 @@ export async function saveMealPlanGeneration(
 
     return data.id;
   } catch (error) {
-    console.error('Failed to save meal plan generation:', error);
+    logger.error('Failed to save meal plan generation:', error);
     throw error;
   }
 }
@@ -102,7 +103,7 @@ export async function captureMealPlanEmailLead(
       .single();
 
     if (checkError && checkError.code !== 'PGRST116') {
-      console.error('Error checking existing lead:', checkError);
+      logger.error('Error checking existing lead:', checkError);
     }
 
     if (existingLead) {
@@ -119,7 +120,7 @@ export async function captureMealPlanEmailLead(
         .eq('email', emailData.email);
 
       if (updateError) {
-        console.error('Error updating lead:', updateError);
+        logger.error('Error updating lead:', updateError);
       }
     } else {
       // Create new lead
@@ -136,7 +137,7 @@ export async function captureMealPlanEmailLead(
       });
 
       if (insertError) {
-        console.error('Error creating lead:', insertError);
+        logger.error('Error creating lead:', insertError);
         throw insertError;
       }
     }
@@ -152,7 +153,7 @@ export async function captureMealPlanEmailLead(
       .eq('id', planId);
 
     if (updatePlanError) {
-      console.error('Error updating plan with email:', updatePlanError);
+      logger.error('Error updating plan with email:', updatePlanError);
     }
 
     // Track analytics
@@ -173,7 +174,7 @@ export async function captureMealPlanEmailLead(
       });
     }
   } catch (error) {
-    console.error('Failed to capture email lead:', error);
+    logger.error('Failed to capture email lead:', error);
     throw error;
   }
 }
@@ -191,7 +192,7 @@ export async function trackMealPlanPDFDownload(planId: string): Promise<void> {
       .eq('id', planId);
 
     if (error) {
-      console.error('Error tracking PDF download:', error);
+      logger.error('Error tracking PDF download:', error);
     }
 
     // Track analytics
@@ -209,7 +210,7 @@ export async function trackMealPlanPDFDownload(planId: string): Promise<void> {
       });
     }
   } catch (error) {
-    console.error('Failed to track PDF download:', error);
+    logger.error('Failed to track PDF download:', error);
   }
 }
 
@@ -227,7 +228,7 @@ export async function trackMealPlanTrialStart(email: string): Promise<void> {
       .eq('email', email);
 
     if (error) {
-      console.error('Error tracking trial start:', error);
+      logger.error('Error tracking trial start:', error);
     }
 
     // Also update generations
@@ -238,7 +239,7 @@ export async function trackMealPlanTrialStart(email: string): Promise<void> {
       })
       .eq('email', email);
   } catch (error) {
-    console.error('Failed to track trial start:', error);
+    logger.error('Failed to track trial start:', error);
   }
 }
 
@@ -258,7 +259,7 @@ export async function trackMealPlanSocialShare(
       .eq('id', planId);
 
     if (error) {
-      console.error('Error tracking social share:', error);
+      logger.error('Error tracking social share:', error);
     }
 
     // Track analytics
@@ -279,7 +280,7 @@ export async function trackMealPlanSocialShare(
       });
     }
   } catch (error) {
-    console.error('Failed to track social share:', error);
+    logger.error('Failed to track social share:', error);
   }
 }
 
@@ -307,10 +308,10 @@ async function trackMealPlanAnalytics(event: {
     });
 
     if (error) {
-      console.error('Error tracking analytics event:', error);
+      logger.error('Error tracking analytics event:', error);
     }
   } catch (error) {
-    console.error('Failed to track analytics event:', error);
+    logger.error('Failed to track analytics event:', error);
   }
 }
 
@@ -414,7 +415,7 @@ export async function getMealPlanAnalyticsSummary(): Promise<{
       }>,
     };
   } catch (error) {
-    console.error('Failed to get meal plan analytics summary:', error);
+    logger.error('Failed to get meal plan analytics summary:', error);
     throw error;
   }
 }

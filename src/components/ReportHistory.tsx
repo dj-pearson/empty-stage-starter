@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -74,7 +75,7 @@ export function ReportHistory({ householdId, className }: ReportHistoryProps) {
 
       setReports((data as unknown as Report[]) || []);
     } catch (error) {
-      console.error('Error loading reports:', error);
+      logger.error('Error loading reports:', error);
       toast.error('Failed to load reports');
     } finally {
       setIsLoading(false);
@@ -101,7 +102,7 @@ export function ReportHistory({ householdId, className }: ReportHistoryProps) {
         await viewReport(data.report.id);
       }
     } catch (error) {
-      console.error('Error generating report:', error);
+      logger.error('Error generating report:', error);
       toast.error('Failed to generate report');
     } finally {
       setIsGenerating(false);
@@ -147,7 +148,7 @@ export function ReportHistory({ householdId, className }: ReportHistoryProps) {
         ));
       }
     } catch (error) {
-      console.error('Error loading report:', error);
+      logger.error('Error loading report:', error);
       toast.error('Failed to load report details');
     }
   };

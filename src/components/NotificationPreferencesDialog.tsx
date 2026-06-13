@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import {
   Dialog,
   DialogContent,
@@ -121,7 +122,7 @@ export function NotificationPreferencesDialog({
         setPrefs(data);
       }
     } catch (error) {
-      console.error('Error loading preferences:', error);
+      logger.error('Error loading preferences:', error);
       toast.error('Failed to load notification preferences');
     } finally {
       setIsLoading(false);
@@ -162,7 +163,7 @@ export function NotificationPreferencesDialog({
       onOpenChange(false);
 
     } catch (error) {
-      console.error('Error saving preferences:', error);
+      logger.error('Error saving preferences:', error);
       toast.error('Failed to save preferences');
     } finally {
       setIsSaving(false);
