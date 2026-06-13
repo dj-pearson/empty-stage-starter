@@ -5299,7 +5299,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "Audit finding (Planner-Pantry GAP-6). reversalPayload exists in the model but is dead until this lands."
+      "notes": "Implemented on branch claude/ios-ui-ux-refinement-5s4hum (build verification deferred to local Xcode; RPC needs supabase db push). New migration 20260613000000_undo_meal_made.sql adds rpc_undo_meal_made(p_plan_entry_id) — additive/backward-compatible (new function only; plan_entry_made_log + rpc_mark_meal_made unchanged). It reads the most recent log row's reversal_payload, re-credits each debited food by LEAST(debited, previous_qty) so a clamped-at-0 food isn't over-credited, re-opens the auto-checked grocery items, clears plan_entries.result (RLS-gated), deletes the log row (one-shot), and returns {status:'reversed', credited:[{food_id,amount}], unchecked:[id], counts} or {status:'nothing_to_undo'}. iOS: UndoMealMadeResult model; DataService.undoMealMade; AppState.undoMealMade mirrors the returned credits/unchecks + clears local result, AND re-credits legacy (fallback-path) recipes that were debited client-side and are absent from the server payload (via MealMadeStrategy + updateFood). Toast gained an optional actionLabel ('Undo' instead of 'Retry'); the mark-made success and already-logged toasts now offer Undo, and PlanEntryRow's context menu shows 'Undo \"Made it\"' when wasRecentlyMarkedMade. Limitation: the undo affordance is session-scoped (madeEntryIds in memory) though the RPC works regardless. Pending: Swift build + db push + device check."
     },
     {
       "id": "US-350",
@@ -5315,7 +5315,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Audit finding (Planner-Pantry GAP-4): no re-credit logic exists anywhere. Depends on US-349 reversal plumbing."
+      "notes": "Implemented on branch claude/ios-ui-ux-refinement-5s4hum (build verification deferred to local Xcode). Deleting a plan entry that was marked made this session (AppState.wasRecentlyMarkedMade) now presents a confirmationDialog in PlanEntryRow: 'Restore ingredients & remove' (runs undoMealMade then deletePlanEntry) vs 'Just remove' vs Cancel. Entries that were never marked made delete silently as before. Reuses the US-349 reversal plumbing end-to-end. Limitation: detection is session-scoped via madeEntryIds, so a made meal deleted in a later cold session won't prompt (acceptable — the mark-made idempotency/undo window is ~1h anyway). Per-batch clear-week aggregation from the AC is not yet wired (clear-week loops deletePlanEntry without the prompt) — noted as follow-up. Pending: Swift build + device check."
     },
     {
       "id": "US-351",

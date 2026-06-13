@@ -714,6 +714,17 @@ final class AppState: ObservableObject {
 
     // MARK: - Mark Meal Made (US-262)
 
+    /// US-349/US-350: plan entries marked made this session — drives the
+    /// in-app Undo affordance and the restore-on-delete prompt while the
+    /// server log row is still reversible.
+    private var madeEntryIds: Set<String> = []
+
+    /// US-350: was this entry marked made recently enough that deleting it
+    /// should offer to restore the pantry?
+    func wasRecentlyMarkedMade(_ entryId: String) -> Bool {
+        madeEntryIds.contains(entryId)
+    }
+
     /// Logs a planned recipe as eaten. Server-side, the
     /// `rpc_mark_meal_made` function debits pantry foods linked via
     /// `recipe_ingredients.food_id`, auto-checks any grocery items
@@ -741,10 +752,14 @@ final class AppState: ObservableObject {
             let result = try await dataService.markMealMade(planEntryId: entryId)
             switch result.status {
             case .alreadyLogged:
-                toast.info(
-                    "Already logged",
-                    message: "This meal was logged within the last hour."
-                )
+                madeEntryIds.insert(entryId)
+                toast.show(Toast(
+                    type: .info,
+                    title: "Already logged",
+                    message: "Logged within the last hour.",
+                    actionLabel: "Undo",
+                    retry: { [weak self] in await self?.undoMealMade(entryId) }
+                ))
                 HapticManager.lightImpact()
             case .logged, .noRecipe:
                 // Legacy fallback: server RPC ignored the recipe (no
@@ -798,7 +813,14 @@ final class AppState: ObservableObject {
                 case (let d, let c):
                     detail = "Debited \(d) · checked \(c)."
                 }
-                toast.success("Meal logged", message: detail)
+                madeEntryIds.insert(entryId)
+                toast.show(Toast(
+                    type: .success,
+                    title: "Meal logged",
+                    message: detail,
+                    actionLabel: "Undo",
+                    retry: { [weak self] in await self?.undoMealMade(entryId) }
+                ))
                 HapticManager.success()
                 AnalyticsService.track(.mealMadeLogged(
                     debitedCount: totalDebited,
@@ -863,6 +885,76 @@ final class AppState: ObservableObject {
             if let idx = groceryItems.firstIndex(where: { $0.id == id }) {
                 groceryItems[idx].checked = true
             }
+        }
+    }
+
+    /// US-349: reverse a recent "mark meal made". `rpc_undo_meal_made`
+    /// re-credits pantry foods, re-opens auto-checked grocery items, and
+    /// clears the entry's result server-side; we mirror those into local
+    /// state. Legacy recipes (debited client-side via the fallback path, so
+    /// not in the server reversal payload) are re-credited here too. Returns
+    /// true when something was actually reversed.
+    @discardableResult
+    func undoMealMade(_ entryId: String) async -> Bool {
+        do {
+            let result = try await dataService.undoMealMade(planEntryId: entryId)
+            guard result.status == .reversed else {
+                madeEntryIds.remove(entryId)
+                toast.info("Nothing to undo", message: "This meal wasn't logged recently.")
+                return false
+            }
+
+            // Mirror server-reversed structured debits + grocery re-opens.
+            for credit in result.credited ?? [] {
+                if let idx = foods.firstIndex(where: { $0.id == credit.foodId }) {
+                    foods[idx].quantity = (foods[idx].quantity ?? 0) + credit.amount
+                }
+            }
+            for groceryId in result.unchecked ?? [] {
+                if let idx = groceryItems.firstIndex(where: { $0.id == groceryId }) {
+                    groceryItems[idx].checked = false
+                }
+            }
+            if let idx = planEntries.firstIndex(where: { $0.id == entryId }) {
+                planEntries[idx].result = nil
+            }
+
+            // Legacy recipes were debited client-side (fallback path) and are
+            // absent from the server reversal payload — re-credit them here.
+            if let entry = planEntries.first(where: { $0.id == entryId }),
+               let recipe = entry.recipeId.flatMap({ rid in recipes.first { $0.id == rid } }) {
+                let strategy = MealMadeStrategy.plan(for: recipe)
+                if strategy.fallbackUsed {
+                    for debit in strategy.debits {
+                        guard let idx = foods.firstIndex(where: { $0.id == debit.foodId }) else { continue }
+                        let restored = (foods[idx].quantity ?? 0) + Double(debit.amount)
+                        foods[idx].quantity = restored
+                        try? await dataService.updateFood(
+                            debit.foodId,
+                            updates: FoodUpdate(quantity: restored)
+                        )
+                    }
+                }
+            }
+
+            madeEntryIds.remove(entryId)
+
+            let credited = result.creditedCount ?? 0
+            let unchecked = result.uncheckedCount ?? 0
+            let detail: String
+            switch (credited, unchecked) {
+            case (0, 0): detail = "Reversed."
+            case (let c, 0): detail = "Restored \(c) pantry item\(c == 1 ? "" : "s")."
+            case (0, let u): detail = "Re-opened \(u) grocery item\(u == 1 ? "" : "s")."
+            case (let c, let u): detail = "Restored \(c) · re-opened \(u)."
+            }
+            toast.success("Undone", message: detail)
+            HapticManager.success()
+            return true
+        } catch {
+            toast.show(error, as: { .save(entity: "undo meal", underlying: $0) })
+            HapticManager.error()
+            return false
         }
     }
 
