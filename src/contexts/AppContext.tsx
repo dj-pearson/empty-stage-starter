@@ -14,6 +14,18 @@ import { PlanProvider, usePlan } from "./PlanContext";
 import { GroceryProvider, useGrocery } from "./GroceryContext";
 import type { GroceryAddInput } from "@/lib/groceryMerge";
 
+// US-331: re-export the narrow domain hooks so components can subscribe to only
+// the slice they use (e.g. `import { useFoods } from "@/contexts/AppContext"`)
+// without reaching through the merged `useApp()` value. Each domain context
+// value is independently memoized, so a grocery toggle no longer re-renders a
+// foods-only component. Prefer these over useApp() in new code; useApp() pulls
+// every domain and re-renders on any change.
+export { useFoods } from "./FoodsContext";
+export { useKids } from "./KidsContext";
+export { useRecipes } from "./RecipesContext";
+export { usePlan } from "./PlanContext";
+export { useGrocery } from "./GroceryContext";
+
 interface AppContextType {
   foods: Food[];
   kids: Kid[];
@@ -319,9 +331,15 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // US-331: keep a ref of the latest snapshot so exportData has a stable
+  // identity instead of a new reference on every data change. Without this the
+  // callback (and therefore the merged context value) churned on every edit.
+  const snapshotRef = useRef({ foods, kids, recipes, activeKidId, planEntries, groceryItems });
+  snapshotRef.current = { foods, kids, recipes, activeKidId, planEntries, groceryItems };
+
   const exportData = useCallback(() => {
-    return JSON.stringify({ foods, kids, recipes, activeKidId, planEntries, groceryItems }, null, 2);
-  }, [foods, kids, recipes, activeKidId, planEntries, groceryItems]);
+    return JSON.stringify(snapshotRef.current, null, 2);
+  }, []);
 
   const importData = useCallback((jsonData: string) => {
     try {
