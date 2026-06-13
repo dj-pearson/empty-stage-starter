@@ -5263,8 +5263,8 @@
         "No visual regression in English; typecheck passes; build succeeds"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": "Verified: 0 i18n usage in src (no i18next/react-intl/useTranslation). Lower priority / future-facing."
+      "passes": true,
+      "notes": "Verified: 0 i18n usage in src (no i18next/react-intl/useTranslation). Lower priority / future-facing. | DONE 2026-06-13: adopted i18next + react-i18next. src/i18n/index.ts initializes the singleton (en resource, fallbackLng en, returnNull:false); <I18nextProvider i18n={i18n}> wired at the app root in src/App.tsx. Pilot strings extracted to src/i18n/locales/en.json (common/nav/auth/onboarding) and a live useTranslation pilot in Navigation.tsx ('Sign Out' -> t('auth.signOut'), identical English so no visual change). Pattern documented in CLAUDE.md Conventions (incl. Intl.* for number/date locale-awareness). Added resolveJsonModule to tsconfig.app.json for clean JSON imports. Test src/i18n/i18n.test.ts (3: init, key resolution, missing-key fallback). Verified: vitest 925 passed, npm run build ✓ (exit 0)."
     },
     {
       "id": "US-348",
