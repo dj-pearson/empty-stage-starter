@@ -485,9 +485,35 @@ final class AppState: ObservableObject {
     // MARK: - Recipe Operations
 
     func addRecipe(_ recipe: Recipe) async throws {
+        // US-354: derive structured ingredient rows from the free-text
+        // ingredient blob at create time so the recipe is immediately usable by
+        // the planner shortfall prompt, grocery add, and detail view — instead
+        // of staying a freeform string until the next manual edit. Only runs
+        // when the caller hasn't already supplied structured rows.
+        var recipe = recipe
+        var derivedIngredients: [RecipeIngredient] = []
+        if recipe.ingredients.isEmpty,
+           let legacy = recipe.additionalIngredients,
+           !legacy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            derivedIngredients = RecipeIngredientLegacyParser.parse(legacy, recipeId: recipe.id)
+            // Link each row to a pantry food by exact name match so pantry
+            // debit + shortfall can resolve it. Conservative exact match only —
+            // fuzzy linking is handled (and hardened) separately in US-360.
+            for i in derivedIngredients.indices {
+                let needle = derivedIngredients[i].name.lowercased()
+                if let foodId = foods.first(where: { $0.name.lowercased() == needle })?.id {
+                    derivedIngredients[i].foodId = foodId
+                }
+            }
+            recipe.ingredients = derivedIngredients
+        }
+
         recipes.append(recipe)
         do {
             try await dataService.insertRecipe(recipe)
+            if !derivedIngredients.isEmpty {
+                try await dataService.insertRecipeIngredients(derivedIngredients)
+            }
             toast.success("Recipe created", message: "\(recipe.name) saved")
             HapticManager.success()
             // `addRecipe` callers default to `.manual` here; the URL-import path

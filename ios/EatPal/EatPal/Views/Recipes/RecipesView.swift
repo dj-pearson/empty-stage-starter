@@ -578,6 +578,31 @@ struct RecipeDetailView: View {
         "\(count) serving\(count == 1 ? "" : "s")"
     }
 
+    /// US-356: one structured ingredient row, with quantity scaled live by the
+    /// servings stepper. Quantity is optional (some imported rows are name-only),
+    /// in which case we just show the name.
+    @ViewBuilder
+    private func structuredIngredientRow(_ ingredient: RecipeIngredient) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            if let qty = ingredient.quantity, qty > 0 {
+                let scaled = qty * servingScale
+                let unitSuffix = ingredient.unit.map { " \($0)" } ?? ""
+                Text("\(RecipeScaling.formatQuantity(scaled))\(unitSuffix)")
+                    .font(.subheadline.weight(.medium))
+                    .monospacedDigit()
+                    .foregroundStyle(.primary)
+            } else {
+                Text("•")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Text(ingredient.name)
+                .font(.subheadline)
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -678,29 +703,40 @@ struct RecipeDetailView: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        ForEach(currentRecipe.foodIds, id: \.self) { foodId in
-                            if let food = appState.foods.first(where: { $0.id == foodId }) {
-                                HStack(spacing: 8) {
-                                    let cat = FoodCategory(rawValue: food.category)
-                                    Text(cat?.icon ?? "🍽")
-                                    Text(food.name)
-                                        .font(.subheadline)
+                        if !currentRecipe.ingredients.isEmpty {
+                            // US-356: structured rows are the source of truth —
+                            // render name + quantity/unit scaled by the servings
+                            // stepper. The legacy foodIds + additional-text path
+                            // below is only a fallback for recipes created
+                            // before US-265 / US-354 produced structured rows.
+                            ForEach(currentRecipe.ingredients.sorted { $0.sortOrder < $1.sortOrder }) { ingredient in
+                                structuredIngredientRow(ingredient)
+                            }
+                        } else {
+                            ForEach(currentRecipe.foodIds, id: \.self) { foodId in
+                                if let food = appState.foods.first(where: { $0.id == foodId }) {
+                                    HStack(spacing: 8) {
+                                        let cat = FoodCategory(rawValue: food.category)
+                                        Text(cat?.icon ?? "🍽")
+                                        Text(food.name)
+                                            .font(.subheadline)
+                                    }
                                 }
                             }
-                        }
 
-                        if let additional = currentRecipe.additionalIngredients, !additional.isEmpty {
-                            let rendered = isScaled
-                                ? RecipeScaling.scaleIngredientsText(additional, scale: servingScale)
-                                : additional
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Additional: \(rendered)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                if isScaled {
-                                    Text("Original: \(additional)")
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
+                            if let additional = currentRecipe.additionalIngredients, !additional.isEmpty {
+                                let rendered = isScaled
+                                    ? RecipeScaling.scaleIngredientsText(additional, scale: servingScale)
+                                    : additional
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Additional: \(rendered)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    if isScaled {
+                                        Text("Original: \(additional)")
+                                            .font(.caption2)
+                                            .foregroundStyle(.tertiary)
+                                    }
                                 }
                             }
                         }

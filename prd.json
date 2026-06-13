@@ -5378,7 +5378,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "Audit finding (Recipe Flow 1a/1c). Root cause of several downstream gaps — structured ingredients (US-265) are invisible until a manual re-save."
+      "notes": "Implemented on branch claude/ios-ui-ux-refinement-5s4hum (build verification deferred to local Xcode). AppState.addRecipe now derives structured RecipeIngredient rows from recipe.additionalIngredients at create time (when recipe.ingredients is empty), links each row to a pantry food by exact lowercased name match (conservative — fuzzy linking hardening is US-360), sets recipe.ingredients locally, and persists via dataService.insertRecipeIngredients alongside insertRecipe. Because both import paths funnel through addRecipe, share/deep-link imports (drainPendingRecipeImports) AND URL paste import (RecipesView.createRecipe) now get structured rows immediately — the planner shortfall prompt, By-Recipe grocery view, and detail view work without a manual re-save. Known partial: RecipesView.applyParsed still routes pantry-matched ingredients into foodIds (not structured rows) for the preview food-picker UX, so for URL imports only the unmatched ingredients become structured rows; full unification of that path is folded into US-358. Pending: Swift build + device check."
     },
     {
       "id": "US-355",
@@ -5392,7 +5392,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "Audit finding (Recipe Flow 1c BUG)."
+      "notes": "Implemented on branch claude/ios-ui-ux-refinement-5s4hum (build verification deferred to local Xcode). RecipeIngredientLegacyParser.parse now detects the delimiter: splits on newlines when any are present (URL paste + share-extension + deep-link imports all join with \\n), else falls back to comma split (legacy additional_ingredients blobs + RecipesView unmatched join). Newline-first means a line like 'salt, to taste' stays one ingredient instead of producing a bogus 'to taste' row. This reconciles every producer (share extension, DeepLinkHandler, applyParsed, manual EditRecipeView) on one delimiter-agnostic parser rather than forcing a single format. RecipeIngredientParserTests.swift covers newline split, internal-comma line, legacy comma split, sort-order offset, and blank-line skipping. Pending: Swift build + device check."
     },
     {
       "id": "US-356",
@@ -5407,7 +5407,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "Audit finding (Recipe Flow 2): the main structured data model is invisible in the detail view today."
+      "notes": "Implemented on branch claude/ios-ui-ux-refinement-5s4hum (build verification deferred to local Xcode). RecipeDetailView ingredient section now prefers currentRecipe.ingredients (structured) when present: new structuredIngredientRow() renders quantity (live-scaled by the servings stepper via servingScale * RecipeScaling.formatQuantity) + unit + name, sorted by sortOrder, with combined a11y. Legacy foodIds + additional_ingredients rendering is kept as a fallback only when ingredients.isEmpty (recipes pre-dating US-265/US-354). This fixes the prior behavior where structured rows were invisible and the foodId scaler always showed 1. The 'Add Ingredients to Grocery List' button still uses foodIds/additionalIngredients (retained on the recipe) — unifying it onto structured rows is US-358. Pending: Swift build + device check."
     },
     {
       "id": "US-357",
