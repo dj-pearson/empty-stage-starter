@@ -34,8 +34,35 @@ if [[ "$TOOL" != "amp" && "$TOOL" != "claude" ]]; then
   exit 1
 fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PRD_FILE="$SCRIPT_DIR/prd.json"
-PROGRESS_FILE="$SCRIPT_DIR/progress.txt"
+
+# Resolve the Claude CLI. Under WSL, `npm run` invokes /usr/bin/bash and a
+# Windows-installed claude.exe is not on PATH and bare `claude` won't match
+# `claude.exe` (WSL doesn't auto-append .exe the way Git Bash does).
+# Override with CLAUDE_BIN=... if your install lives elsewhere.
+if [ -z "$CLAUDE_BIN" ]; then
+  if command -v claude >/dev/null 2>&1; then
+    CLAUDE_BIN="claude"
+  else
+    for c in \
+      "/mnt/c/Users/$(whoami)/.local/bin/claude.exe" \
+      "/mnt/c/Users/pears/.local/bin/claude.exe" \
+      "/mnt/c/Users/pears/AppData/Roaming/npm/claude.cmd"; do
+      if [ -x "$c" ]; then CLAUDE_BIN="$c"; break; fi
+    done
+  fi
+fi
+if [ "$TOOL" == "claude" ] && [ -z "$CLAUDE_BIN" ]; then
+  echo "Error: could not find the Claude CLI. Set CLAUDE_BIN to its path." >&2
+  exit 1
+fi
+
+# The agent (claude/amp) runs from the repo root, so it reads/writes the
+# root-level prd.json and progress.txt. Point the harness's archive +
+# branch-tracking logic at those same files (the old $SCRIPT_DIR/prd.json
+# never existed, so archiving silently no-op'd).
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PRD_FILE="$REPO_ROOT/prd.json"
+PROGRESS_FILE="$REPO_ROOT/progress.txt"
 ARCHIVE_DIR="$SCRIPT_DIR/archive"
 LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch"
 
@@ -92,7 +119,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     OUTPUT=$(cat "$SCRIPT_DIR/prompt.md" | amp --dangerously-allow-all 2>&1 | tee /dev/stderr) || true
   else
     # Claude Code: use --dangerously-skip-permissions for autonomous operation, --print for output
-    OUTPUT=$(claude --dangerously-skip-permissions --print < "$SCRIPT_DIR/CLAUDE.md" 2>&1 | tee /dev/stderr) || true
+    OUTPUT=$("$CLAUDE_BIN" --dangerously-skip-permissions --print < "$SCRIPT_DIR/CLAUDE.md" 2>&1 | tee /dev/stderr) || true
   fi
   
   # Check for completion signal
