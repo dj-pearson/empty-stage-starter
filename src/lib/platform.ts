@@ -1,6 +1,7 @@
 /**
  * Platform detection utilities for cross-platform support
  */
+import { logger } from "@/lib/logger";
 
 export const isWeb = () => {
   return typeof window !== 'undefined' && window.document;

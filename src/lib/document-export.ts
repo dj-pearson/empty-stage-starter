@@ -4,6 +4,7 @@
  * Functions for exporting data to Microsoft Office formats (DOCX, XLSX)
  * Uses minimal dependencies with browser-native capabilities where possible.
  */
+import { logger } from "@/lib/logger";
 
 import { downloadFile } from "./file-utils";
 import { logger } from "./logger";

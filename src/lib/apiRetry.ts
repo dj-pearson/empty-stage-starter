@@ -4,6 +4,7 @@
  * Retries failed requests on network errors and 5xx status codes.
  * Does NOT retry on 4xx client errors (invalid input, auth failures, etc.).
  */
+import { logger } from "@/lib/logger";
 
 /** Configuration for retry behavior */
 export interface RetryConfig {

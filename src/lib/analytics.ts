@@ -4,6 +4,7 @@
  * Helper functions for tracking user events, page views, and conversions.
  * Provides a unified interface for analytics providers (GA4, Mixpanel, etc.)
  */
+import { logger } from "@/lib/logger";
 
 /**
  * Analytics event interface
