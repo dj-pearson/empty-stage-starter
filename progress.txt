@@ -2843,3 +2843,22 @@ Next web candidates (buildable here): US-328 (RLS gaps migration), US-331-336 (A
 
 ### Remaining false: 68
 Web candidates still open (buildable here): US-328 (RLS gaps migration), US-331 (context re-render isolation), US-333 (normalize Grocery/Plan/Kids realtime payloads), US-337 (web invite accept flow), US-338 (meal-vote upsert conflict target + migration), US-341 (localStorage vs Supabase precedence), US-342 (ban `any`), US-343 (console→logger), US-344 (select('*') trims), US-345 (dark-mode tokens), US-346 (admin features), US-347 (i18n). Plus the iOS Swift (US-348+, editable but unbuildable without Xcode), native Android/iOS-integration (need toolchains), and US-323 (prod deploy).
+
+## 2026-06-13 (cont. 2) - More web items (US-328/333/338/346/347)
+- Same branch. Continued after the realtime/admin/grocery batch. 5 more flipped: 68 false → 63 false. Verified by vitest (925 passed / 3 skipped) + build (exit 0). Edge/migration changes covered by the CI migration-test + reasoning.
+- US-333 realtime payload normalization: new src/lib/normalizeEntities.ts; extracted pure applyGroceryItemRealtime/applyPlanEntryRealtime/applyKidRealtime (normalize + dedupe-by-id) used in the contexts AND the load paths (AppContext + KidsContext.refreshKids) for true parity. Test realtimeApply.test.ts (6).
+- US-338 meal-vote dedupe: migration 20260613000003 (dedupe + UNIQUE INDEX meal_votes_kid_meal_slot_key on the always-non-null natural key); KidMealVoting upserts with onConflict via extracted buildMealVoteUpsert(). Test (3). MealVotingCard is swipe-only (no clickable vote button in jsdom) → pure-helper test.
+- US-328 RLS/privilege gaps: migration 20260613000004 (policy-only) — user_roles admin policies routed through SECURITY DEFINER has_role() (no self-reference recursion); ai_usage_logs INSERT WITH CHECK(true) -> auth.uid()=user_id (only writer is the SECURITY DEFINER log_ai_usage RPC, client reads only); health-check no longer uses SERVICE_ROLE_KEY on the unauthenticated endpoint (anon only).
+- US-346 admin dead features: SearchTrafficDashboard Export is now a real CSV download (new src/lib/csvExport.ts, RFC-4180 quoting; exports connections+sync status, never tokens); MultiRegionBackup shows an explicit "Backups not configured" empty state instead of zeroed "degraded" metrics. Other admin "coming soon" instances are already proper empty-state labels. Test csvExport.test.ts (3).
+- US-347 i18n scaffolding: i18next + react-i18next, <I18nextProvider> at app root, en locale (common/nav/auth/onboarding), live useTranslation pilot in Navigation, documented in CLAUDE.md, resolveJsonModule added. Test i18n.test.ts (3).
+
+### Migrations added this sub-batch (additive; NOT applied to prod here)
+- 20260613000003_meal_votes_dedupe_key.sql (US-338)
+- 20260613000004_rls_privilege_gaps.sql (US-328)
+
+### New deps
+- i18next, react-i18next (US-347)
+
+### Session total so far: 17 stories (80 -> 63 false)
+### Remaining false: 63
+Still-open web: US-331 (re-render isolation), US-337 (web invite accept), US-341 (localStorage/Supabase precedence — needs a real offline sync queue, deferred), US-342 (ban any), US-343 (console->logger, 255 calls/89 files — CI-lint-gating, large), US-344 (select(*) trims), US-345 (dark-mode tokens — visual verification needed). Plus iOS Swift (US-348+), native Android/integration, US-323 prod deploy.
