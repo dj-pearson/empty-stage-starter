@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { logger } from "@/lib/logger";
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -229,7 +230,7 @@ export default function BudgetCalculator() {
         },
       });
     } catch (error) {
-      console.error('Error calculating budget:', error);
+      logger.error('Error calculating budget:', error);
       setErrors({ submit: 'An error occurred. Please try again.' });
     } finally {
       setIsSubmitting(false);

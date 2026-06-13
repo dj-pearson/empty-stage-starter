@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { logger } from "@/lib/logger";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -53,7 +54,7 @@ export function QuizAnalyticsDashboard() {
       setAnalytics(summary);
       setLeads(recentLeads);
     } catch (error) {
-      console.error('Error loading quiz analytics:', error);
+      logger.error('Error loading quiz analytics:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);

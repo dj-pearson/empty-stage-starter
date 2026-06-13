@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { logger } from "@/lib/logger";
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -313,7 +314,7 @@ function OverviewTab() {
       const data = await getGenerationStats();
       setStats(data);
     } catch (err) {
-      console.error('Failed to fetch stats:', err);
+      logger.error('Failed to fetch stats:', err);
       toast.error('Failed to load overview stats');
     } finally {
       setLoading(false);
@@ -471,7 +472,7 @@ function TaxonomyTab() {
 
       setTaxonomy(items);
     } catch (err) {
-      console.error('Failed to fetch taxonomy:', err);
+      logger.error('Failed to fetch taxonomy:', err);
       toast.error('Failed to load taxonomy data');
     } finally {
       setLoading(false);
@@ -497,7 +498,7 @@ function TaxonomyTab() {
       );
       toast.success(`${item.display_name} ${item.is_active ? 'deactivated' : 'activated'}`);
     } catch (err) {
-      console.error('Toggle failed:', err);
+      logger.error('Toggle failed:', err);
       toast.error('Failed to update taxonomy item');
     } finally {
       setToggling(null);
@@ -666,7 +667,7 @@ function GenerateTab() {
         })),
       );
     } catch (err) {
-      console.error('Failed to fetch batches:', err);
+      logger.error('Failed to fetch batches:', err);
     } finally {
       setBatchesLoading(false);
     }
@@ -710,7 +711,7 @@ function GenerateTab() {
       toast.success(`Batch created: ${result.queued} pages queued`);
       fetchActiveBatches();
     } catch (err) {
-      console.error('Batch generation failed:', err);
+      logger.error('Batch generation failed:', err);
       toast.error('Failed to start batch generation');
     } finally {
       setBatchLoading(false);
@@ -736,7 +737,7 @@ function GenerateTab() {
         toast.error('Generation failed');
       }
     } catch (err) {
-      console.error('Single generation failed:', err);
+      logger.error('Single generation failed:', err);
       toast.error('Failed to generate page');
     } finally {
       setSingleLoading(false);
@@ -765,7 +766,7 @@ function GenerateTab() {
       }
       fetchActiveBatches();
     } catch (err) {
-      console.error(`Batch ${action} failed:`, err);
+      logger.error(`Batch ${action} failed:`, err);
       toast.error(`Failed to ${action} batch`);
     }
   };
@@ -1115,7 +1116,7 @@ function PageBrowserTab() {
       );
       setTotalCount(count ?? 0);
     } catch (err) {
-      console.error('Failed to fetch pages:', err);
+      logger.error('Failed to fetch pages:', err);
       toast.error('Failed to load pages');
     } finally {
       setLoading(false);
@@ -1153,7 +1154,7 @@ function PageBrowserTab() {
         toast.error(`Failed to ${action} page`);
       }
     } catch (err) {
-      console.error(`Action ${action} failed:`, err);
+      logger.error(`Action ${action} failed:`, err);
       toast.error(`Failed to ${action} page`);
     } finally {
       setActionLoading(null);
@@ -1502,7 +1503,7 @@ function QualityTab() {
       setMissingFaqs(noFaqs.slice(0, 20));
       setOrphanedPages(orphans.slice(0, 20));
     } catch (err) {
-      console.error('Failed to fetch quality data:', err);
+      logger.error('Failed to fetch quality data:', err);
       toast.error('Failed to load quality data');
     } finally {
       setLoading(false);
@@ -1683,7 +1684,7 @@ function QueueTab() {
         })),
       );
     } catch (err) {
-      console.error('Failed to fetch queue:', err);
+      logger.error('Failed to fetch queue:', err);
       toast.error('Failed to load generation queue');
     } finally {
       setLoading(false);
@@ -1705,7 +1706,7 @@ function QueueTab() {
       toast.success('Item re-queued for processing');
       fetchQueue();
     } catch (err) {
-      console.error('Retry failed:', err);
+      logger.error('Retry failed:', err);
       toast.error('Failed to retry item');
     } finally {
       setRetrying(null);
@@ -1723,7 +1724,7 @@ function QueueTab() {
       toast.success('Completed items cleared');
       fetchQueue();
     } catch (err) {
-      console.error('Clear failed:', err);
+      logger.error('Clear failed:', err);
       toast.error('Failed to clear completed items');
     }
   };
@@ -1743,7 +1744,7 @@ function QueueTab() {
           .sort((a, b) => b.priority - a.priority),
       );
     } catch (err) {
-      console.error('Priority update failed:', err);
+      logger.error('Priority update failed:', err);
       toast.error('Failed to update priority');
     }
   };

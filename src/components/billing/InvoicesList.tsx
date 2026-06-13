@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,7 +62,7 @@ export function InvoicesList() {
 
       setInvoices(data.invoices || []);
     } catch (err) {
-      console.error("Error fetching invoices:", err);
+      logger.error("Error fetching invoices:", err);
       toast.error("Failed to load invoices");
     } finally {
       setLoading(false);
@@ -86,7 +87,7 @@ export function InvoicesList() {
       // Cleanup URL after a delay
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
-      console.error("Error generating invoice:", err);
+      logger.error("Error generating invoice:", err);
       toast.error("Failed to generate invoice");
     } finally {
       setActionLoading(null);
@@ -129,7 +130,7 @@ export function InvoicesList() {
         }
       }
     } catch (err) {
-      console.error("Error downloading invoice:", err);
+      logger.error("Error downloading invoice:", err);
       toast.error("Failed to download invoice");
     } finally {
       setActionLoading(null);
@@ -148,7 +149,7 @@ export function InvoicesList() {
 
       toast.success(data.message || "Invoice sent to your email");
     } catch (err) {
-      console.error("Error sending invoice:", err);
+      logger.error("Error sending invoice:", err);
       toast.error("Failed to send invoice");
     } finally {
       setActionLoading(null);

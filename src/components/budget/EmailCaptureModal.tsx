@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { logger } from "@/lib/logger";
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -70,7 +71,7 @@ export function EmailCaptureModal({
       onEmailCaptured(email, name);
       onOpenChange(false);
     } catch (err) {
-      console.error('Error capturing email:', err);
+      logger.error('Error capturing email:', err);
       setError('Failed to save email. Please try again.');
       toast.error('Failed to save email');
     } finally {

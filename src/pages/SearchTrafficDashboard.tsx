@@ -94,7 +94,7 @@ export default function SearchTrafficDashboard() {
         setSelectedConnections(data.map(c => c.id));
       }
     } catch (error) {
-      console.error("Error fetching connections:", error);
+      logger.error("Error fetching connections:", error);
       toast.error("Failed to load platform connections");
     }
   };
@@ -120,7 +120,7 @@ export default function SearchTrafficDashboard() {
       // Refresh the dashboard data
       window.location.reload();
     } catch (error) {
-      console.error("Error syncing data:", error);
+      logger.error("Error syncing data:", error);
       const message = error instanceof Error ? error.message : "Failed to sync analytics data";
       toast.error(message);
     } finally {

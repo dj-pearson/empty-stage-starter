@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { logger } from "@/lib/logger";
 import {
   QuizAnswers,
   PersonalityType,
@@ -52,7 +53,7 @@ export async function saveQuizResponse(
 
     return data.id;
   } catch (error) {
-    console.error('Error saving quiz response:', error);
+    logger.error('Error saving quiz response:', error);
     throw error;
   }
 }
@@ -98,7 +99,7 @@ export async function captureEmailLead(
       .eq('id', quizResponseId);
 
   } catch (error) {
-    console.error('Error capturing email lead:', error);
+    logger.error('Error capturing email lead:', error);
     throw error;
   }
 }
@@ -126,7 +127,7 @@ export async function trackQuizAnalytics(
         ab_test_variant: event.abTestVariant,
       });
   } catch (error) {
-    console.error('Error tracking analytics:', error);
+    logger.error('Error tracking analytics:', error);
     // Don't throw - analytics failures shouldn't break the app
   }
 }
@@ -143,7 +144,7 @@ export async function trackPDFDownload(
       .update({ pdf_downloaded: true })
       .eq('id', quizResponseId);
   } catch (error) {
-    console.error('Error tracking PDF download:', error);
+    logger.error('Error tracking PDF download:', error);
   }
 }
 
@@ -176,7 +177,7 @@ export async function trackSocialShare(
         })
     ]);
   } catch (error) {
-    console.error('Error tracking social share:', error);
+    logger.error('Error tracking social share:', error);
   }
 }
 
@@ -233,7 +234,7 @@ export async function getQuizAnalyticsSummary(
       personalityDistribution,
     };
   } catch (error) {
-    console.error('Error getting analytics summary:', error);
+    logger.error('Error getting analytics summary:', error);
     throw error;
   }
 }
@@ -253,7 +254,7 @@ export async function getRecentLeads(limit: number = 50) {
 
     return data;
   } catch (error) {
-    console.error('Error getting recent leads:', error);
+    logger.error('Error getting recent leads:', error);
     throw error;
   }
 }
@@ -282,7 +283,7 @@ export async function updateEmailSequence(
       .update(updates)
       .eq('email', email);
   } catch (error) {
-    console.error('Error updating email sequence:', error);
+    logger.error('Error updating email sequence:', error);
   }
 }
 
@@ -308,7 +309,7 @@ export async function trackTrialStart(
         .eq('email', email)
     ]);
   } catch (error) {
-    console.error('Error tracking trial start:', error);
+    logger.error('Error tracking trial start:', error);
   }
 }
 
@@ -346,7 +347,7 @@ export async function trackReferral(
       { referrer_email_param: referrerData.email }
     );
   } catch (error) {
-    console.error('Error tracking referral:', error);
+    logger.error('Error tracking referral:', error);
   }
 }
 

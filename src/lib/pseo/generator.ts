@@ -6,6 +6,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from "@/lib/logger";
 import type { PseoPageType } from '@/types/pseo';
 
 // ---------------------------------------------------------------------------
@@ -412,7 +413,7 @@ export async function generatePseoPage(
 
     return { id: newPage.id, slug };
   } catch (error) {
-    console.error('Failed to generate pSEO page:', error);
+    logger.error('Failed to generate pSEO page:', error);
     return null;
   }
 }
@@ -616,7 +617,7 @@ export async function publishPage(pageId: string): Promise<boolean> {
     .eq('id', pageId);
 
   if (error) {
-    console.error('Failed to publish page:', error);
+    logger.error('Failed to publish page:', error);
     return false;
   }
   return true;
@@ -632,7 +633,7 @@ export async function unpublishPage(pageId: string): Promise<boolean> {
     .eq('id', pageId);
 
   if (error) {
-    console.error('Failed to unpublish page:', error);
+    logger.error('Failed to unpublish page:', error);
     return false;
   }
   return true;
@@ -647,7 +648,7 @@ export async function refreshPage(pageId: string): Promise<boolean> {
     .single();
 
   if (fetchError || !page) {
-    console.error('Failed to fetch page for refresh:', fetchError);
+    logger.error('Failed to fetch page for refresh:', fetchError);
     return false;
   }
 

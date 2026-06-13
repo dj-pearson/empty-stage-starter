@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { logger } from "@/lib/logger";
 import { Share2, Facebook, Twitter, Mail, Copy, Check } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -18,7 +19,7 @@ export function SocialShare({ title, text, url = window.location.href }: SocialS
         await navigator.share({ title, text, url });
         toast.success("Shared successfully!");
       } catch (error) {
-        console.error('Share failed:', error);
+        logger.error('Share failed:', error);
       }
     }
   };

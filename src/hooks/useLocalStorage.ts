@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, Dispatch, SetStateAction } from 'react';
+import { logger } from "@/lib/logger";
 
 /**
  * Persist state in localStorage with automatic sync
@@ -25,7 +26,7 @@ export function useLocalStorage<T>(
       const item = window.localStorage.getItem(key);
       return item ? (JSON.parse(item) as T) : initialValue;
     } catch (error) {
-      console.error(`Error loading localStorage key "${key}":`, error);
+      logger.error(`Error loading localStorage key "${key}":`, error);
       return initialValue;
     }
   });
@@ -45,7 +46,7 @@ export function useLocalStorage<T>(
           return valueToStore;
         });
       } catch (error) {
-        console.error(`Error setting localStorage key "${key}":`, error);
+        logger.error(`Error setting localStorage key "${key}":`, error);
       }
     },
     [key]
@@ -59,7 +60,7 @@ export function useLocalStorage<T>(
         setStoredValue(initialValue);
       }
     } catch (error) {
-      console.error(`Error removing localStorage key "${key}":`, error);
+      logger.error(`Error removing localStorage key "${key}":`, error);
     }
   }, [key, initialValue]);
 
@@ -74,7 +75,7 @@ export function useLocalStorage<T>(
         try {
           setStoredValue(JSON.parse(e.newValue) as T);
         } catch (error) {
-          console.error(`Error parsing localStorage key "${key}":`, error);
+          logger.error(`Error parsing localStorage key "${key}":`, error);
         }
       }
     };
@@ -110,7 +111,7 @@ export function useSessionStorage<T>(
       const item = window.sessionStorage.getItem(key);
       return item ? (JSON.parse(item) as T) : initialValue;
     } catch (error) {
-      console.error(`Error loading sessionStorage key "${key}":`, error);
+      logger.error(`Error loading sessionStorage key "${key}":`, error);
       return initialValue;
     }
   });
@@ -129,7 +130,7 @@ export function useSessionStorage<T>(
           return valueToStore;
         });
       } catch (error) {
-        console.error(`Error setting sessionStorage key "${key}":`, error);
+        logger.error(`Error setting sessionStorage key "${key}":`, error);
       }
     },
     [key]
@@ -142,7 +143,7 @@ export function useSessionStorage<T>(
         setStoredValue(initialValue);
       }
     } catch (error) {
-      console.error(`Error removing sessionStorage key "${key}":`, error);
+      logger.error(`Error removing sessionStorage key "${key}":`, error);
     }
   }, [key, initialValue]);
 

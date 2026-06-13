@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -131,7 +132,7 @@ export function GroceryDeliveryPanel({ householdId, className }: GroceryDelivery
         })) || []
       );
     } catch (error) {
-      console.error('Error loading delivery data:', error);
+      logger.error('Error loading delivery data:', error);
       toast.error('Failed to load delivery options');
     } finally {
       setIsLoading(false);
@@ -187,7 +188,7 @@ export function GroceryDeliveryPanel({ householdId, className }: GroceryDelivery
       setEstimate(estimateData);
       setShowEstimate(true);
     } catch (error) {
-      console.error('Error getting estimate:', error);
+      logger.error('Error getting estimate:', error);
       toast.error('Failed to get cost estimate');
     } finally {
       setIsCreating(false);
@@ -228,7 +229,7 @@ export function GroceryDeliveryPanel({ householdId, className }: GroceryDelivery
         setShowOrderDialog(true);
       }
     } catch (error) {
-      console.error('Error creating order:', error);
+      logger.error('Error creating order:', error);
       toast.error('Failed to create order');
     } finally {
       setIsCreating(false);
@@ -252,7 +253,7 @@ export function GroceryDeliveryPanel({ householdId, className }: GroceryDelivery
       setShowOrderDialog(false);
       await loadData();
     } catch (error) {
-      console.error('Error submitting order:', error);
+      logger.error('Error submitting order:', error);
       toast.error('Failed to submit order');
     }
   };

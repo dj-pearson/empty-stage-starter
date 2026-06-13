@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { logger } from "@/lib/logger";
 import {
   Dialog,
   DialogContent,
@@ -68,7 +69,7 @@ export function ExitIntentPopup({
         await captureEmailLead({ email, source: 'exit_intent' });
         setSubmitted(true);
       } catch (error) {
-        console.error('Error capturing email:', error);
+        logger.error('Error capturing email:', error);
         // Still show success to user, but log the error
         setSubmitted(true);
       }

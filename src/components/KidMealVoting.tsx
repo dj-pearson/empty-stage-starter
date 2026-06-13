@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -120,7 +121,7 @@ export function KidMealVoting({
 
       setVotes(existingVotes);
     } catch (error) {
-      console.error('Error loading votes:', error);
+      logger.error('Error loading votes:', error);
     }
   };
 
@@ -177,7 +178,7 @@ export function KidMealVoting({
       await checkAchievements();
 
     } catch (error) {
-      console.error('Error saving vote:', error);
+      logger.error('Error saving vote:', error);
       toast.error('Failed to save vote');
     }
   };
@@ -210,7 +211,7 @@ export function KidMealVoting({
         });
       }
     } catch (error) {
-      console.error('Error checking achievements:', error);
+      logger.error('Error checking achievements:', error);
     }
   };
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { calculateAge } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -382,7 +383,7 @@ const ActivityTimeline = ({ userId }: { userId: string }) => {
       if (error) throw error;
       setTimeline(data.timeline || []);
     } catch (error) {
-      console.error('Error loading timeline:', error);
+      logger.error('Error loading timeline:', error);
       toast.error('Failed to load activity timeline');
     } finally {
       setLoading(false);
@@ -503,7 +504,7 @@ const QuickActions = ({ userId, onActionComplete }: { userId: string; onActionCo
       setShowNoteDialog(false);
       onActionComplete();
     } catch (error) {
-      console.error('Error adding note:', error);
+      logger.error('Error adding note:', error);
       toast.error('Failed to add note');
     } finally {
       setLoading(false);
@@ -540,7 +541,7 @@ const QuickActions = ({ userId, onActionComplete }: { userId: string; onActionCo
       setShowEmailDialog(false);
       onActionComplete();
     } catch (error) {
-      console.error('Error sending email:', error);
+      logger.error('Error sending email:', error);
       toast.error('Failed to queue email');
     } finally {
       setLoading(false);
@@ -575,7 +576,7 @@ const QuickActions = ({ userId, onActionComplete }: { userId: string; onActionCo
       setShowCompSubDialog(false);
       onActionComplete();
     } catch (error) {
-      console.error('Error granting comp sub:', error);
+      logger.error('Error granting comp sub:', error);
       toast.error('Failed to grant complementary subscription');
     } finally {
       setLoading(false);
@@ -921,7 +922,7 @@ export function UserIntelligenceDashboard() {
       if (error) throw error;
       setSearchResults(data.users || []);
     } catch (error) {
-      console.error('Error searching users:', error);
+      logger.error('Error searching users:', error);
       toast.error('Failed to search users');
     } finally {
       setLoading(false);
@@ -946,7 +947,7 @@ export function UserIntelligenceDashboard() {
       if (error) throw error;
       setSelectedUser(data);
     } catch (error) {
-      console.error('Error loading user details:', error);
+      logger.error('Error loading user details:', error);
       toast.error('Failed to load user details');
     } finally {
       setLoading(false);

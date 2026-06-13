@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from "@/lib/logger";
 
 export interface DNSRecord {
   type: 'TXT' | 'CNAME' | 'A';
@@ -109,7 +110,7 @@ export async function verifyDomainDNS(
       details: result.details,
     };
   } catch (error) {
-    console.error('Domain verification error:', error);
+    logger.error('Domain verification error:', error);
 
     // Network error or Edge Function not available
     if (error instanceof TypeError && error.message.includes('fetch')) {
@@ -157,7 +158,7 @@ export async function updateDomainVerificationStatus(
 
     return { success: true };
   } catch (error: unknown) {
-    console.error('Error updating domain status:', error);
+    logger.error('Error updating domain status:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to update domain status',
@@ -237,7 +238,7 @@ export async function getUserCustomDomain(userId: string): Promise<Record<string
     if (error) throw new Error(error.message);
     return data;
   } catch (error) {
-    console.error('Error fetching custom domain:', error);
+    logger.error('Error fetching custom domain:', error);
     return null;
   }
 }
@@ -259,7 +260,7 @@ export async function getUserBrandSettings(userId: string): Promise<Record<strin
     if (error) throw new Error(error.message);
     return data;
   } catch (error) {
-    console.error('Error fetching brand settings:', error);
+    logger.error('Error fetching brand settings:', error);
     return null;
   }
 }

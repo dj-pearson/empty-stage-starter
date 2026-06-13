@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { logger } from "@/lib/logger";
 import { BudgetCalculation } from '@/types/budgetCalculator';
 import { formatCurrency } from '@/lib/budgetCalculator/calculator';
 import { trackBudgetSocialShare } from '@/lib/budgetCalculator/supabaseIntegration';
@@ -29,7 +30,7 @@ export function ShareButtons({
       try {
         await trackBudgetSocialShare(calculationId, platform);
       } catch (error) {
-        console.error('Error tracking share:', error);
+        logger.error('Error tracking share:', error);
       }
     }
   };
@@ -67,7 +68,7 @@ export function ShareButtons({
       await downloadShareImage(calculation, familySize, name);
       toast.success('Share image downloaded!');
     } catch (error) {
-      console.error('Error downloading share image:', error);
+      logger.error('Error downloading share image:', error);
       toast.error('Failed to download image. Please try again.');
     }
   };

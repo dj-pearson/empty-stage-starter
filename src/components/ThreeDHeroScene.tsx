@@ -1,4 +1,5 @@
 import { Canvas } from '@react-three/fiber';
+import { logger } from "@/lib/logger";
 import { Float, Html, PerspectiveCamera } from '@react-three/drei';
 import { Suspense, Component, ReactNode } from 'react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -16,7 +17,7 @@ class Canvas3DErrorBoundary extends Component<{ children: ReactNode; fallback?: 
 
   componentDidCatch(error: Error) {
     // Log error but don't crash the page
-    console.warn('[ThreeDHeroScene] 3D rendering failed, falling back to static view:', error.message);
+    logger.warn('[ThreeDHeroScene] 3D rendering failed, falling back to static view:', error.message);
   }
 
   render() {

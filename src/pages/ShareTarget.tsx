@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { logger } from "@/lib/logger";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Card } from '@/components/ui/card';
@@ -119,7 +120,7 @@ export default function ShareTarget() {
         }
       }
     } catch (err) {
-      console.error('ShareTarget error:', err);
+      logger.error('ShareTarget error:', err);
       toast.error('Something went wrong processing shared content');
     } finally {
       setLoading(false);

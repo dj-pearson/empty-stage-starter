@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,7 +84,7 @@ export function PlatformConnectionManager({ open, onClose }: Props) {
       if (error) throw error;
       setConnections(data || []);
     } catch (error: unknown) {
-      console.error("Error fetching connections:", error);
+      logger.error("Error fetching connections:", error);
       toast.error("Failed to load connections");
     } finally {
       setLoading(false);
@@ -136,7 +137,7 @@ export function PlatformConnectionManager({ open, onClose }: Props) {
       // Open OAuth flow in popup or redirect
       window.location.href = authUrl;
     } catch (error: unknown) {
-      console.error("Error connecting platform:", error);
+      logger.error("Error connecting platform:", error);
       toast.error((error instanceof Error ? error.message : undefined) || "Failed to connect platform");
     } finally {
       setConnecting(null);
@@ -178,7 +179,7 @@ export function PlatformConnectionManager({ open, onClose }: Props) {
       toast.success("Platform disconnected successfully");
       fetchConnections();
     } catch (error: unknown) {
-      console.error("Error disconnecting platform:", error);
+      logger.error("Error disconnecting platform:", error);
       toast.error((error instanceof Error ? error.message : undefined) || "Failed to disconnect platform");
     }
   };

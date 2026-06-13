@@ -23,6 +23,7 @@
  */
 
 import { invokeEdgeFunction } from '@/lib/edge-functions';
+import { logger } from "@/lib/logger";
 
 export type IndexingNotificationType = 'URL_UPDATED' | 'URL_DELETED';
 
@@ -58,7 +59,7 @@ export async function submitUrlsForIndexing(
   });
 
   if (error) {
-    console.error('Google Indexing API error:', error.message);
+    logger.error('Google Indexing API error:', error.message);
     return null;
   }
 

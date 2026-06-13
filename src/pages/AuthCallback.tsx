@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { logger } from "@/lib/logger";
 import { Helmet } from 'react-helmet-async';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -37,7 +38,7 @@ export default function AuthCallback() {
         const errorDescription = searchParams.get('error_description');
 
         if (error) {
-          console.error('OAuth error:', error, errorDescription);
+          logger.error('OAuth error:', error, errorDescription);
           setStatus('error');
           setErrorMessage(errorDescription || error || 'Authentication failed');
           return;
@@ -50,7 +51,7 @@ export default function AuthCallback() {
         const isNewUser = searchParams.get('new_user') === 'true';
 
         if (token && type) {
-          console.log('Magic link token detected, verifying...');
+          logger.info('Magic link token detected, verifying...');
 
           // Verify the magic link token
           const { data, error: verifyError } = await supabase.auth.verifyOtp({
@@ -59,14 +60,14 @@ export default function AuthCallback() {
           });
 
           if (verifyError) {
-            console.error('Token verification error:', verifyError);
+            logger.error('Token verification error:', verifyError);
             setStatus('error');
             setErrorMessage(verifyError.message);
             return;
           }
 
           if (data.session) {
-            console.log('Session created successfully via magic link');
+            logger.info('Session created successfully via magic link');
 
             // Track new signups
             if (isNewUser) {
@@ -86,21 +87,21 @@ export default function AuthCallback() {
         const code = searchParams.get('code');
 
         if (code) {
-          console.log('PKCE code detected, exchanging for session...');
+          logger.info('PKCE code detected, exchanging for session...');
 
           // Exchange the code for a session
           // The Supabase client handles PKCE verification automatically
           const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
           if (exchangeError) {
-            console.error('PKCE exchange error:', exchangeError);
+            logger.error('PKCE exchange error:', exchangeError);
             setStatus('error');
             setErrorMessage(exchangeError.message);
             return;
           }
 
           if (data.session) {
-            console.log('Session created successfully via PKCE');
+            logger.info('Session created successfully via PKCE');
             await handleSuccessfulAuth(data.session);
             return;
           }
@@ -114,7 +115,7 @@ export default function AuthCallback() {
         const errorFromHash = hashParams.get('error');
 
         if (errorFromHash) {
-          console.error('OAuth hash error:', errorFromHash);
+          logger.error('OAuth hash error:', errorFromHash);
           setStatus('error');
           setErrorMessage(hashParams.get('error_description') || errorFromHash);
           return;
@@ -128,7 +129,7 @@ export default function AuthCallback() {
           });
 
           if (sessionError) {
-            console.error('Session error:', sessionError);
+            logger.error('Session error:', sessionError);
             setStatus('error');
             setErrorMessage(sessionError.message);
             return;
@@ -150,11 +151,11 @@ export default function AuthCallback() {
         }
 
         // No session found - redirect to auth page
-        console.log('No session found in callback, redirecting to auth');
+        logger.info('No session found in callback, redirecting to auth');
         navigate('/auth', { replace: true });
 
       } catch (err) {
-        console.error('Auth callback error:', err);
+        logger.error('Auth callback error:', err);
         setStatus('error');
         setErrorMessage(err instanceof Error ? err.message : 'An unexpected error occurred');
       }

@@ -13,6 +13,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from "@/lib/logger";
 
 export interface EdgeFunctionResponse<T = unknown> {
   data: T | null;
@@ -118,7 +119,7 @@ export async function invokeEdgeFunction<T = unknown>(
       error: null,
     };
   } catch (error) {
-    console.error(`Error invoking Edge Function '${functionName}':`, error);
+    logger.error(`Error invoking Edge Function '${functionName}':`, error);
     return {
       data: null,
       error: error instanceof Error ? error : new Error(String(error)),

@@ -253,7 +253,7 @@ export function LiveActivityFeed() {
       setActivities(rows.map(toActivityLog));
       setTableAvailable(true);
     } catch (err: unknown) {
-      console.error("Error loading activity feed:", err);
+      logger.error("Error loading activity feed:", err);
       toast.error("Error loading activity feed", { description: getErrorMessage(err) });
     } finally {
       setLoading(false);

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -98,7 +99,7 @@ export function AITicketAnalysis({ ticketId }: { ticketId: string }) {
         }
       }
     } catch (error) {
-      console.error('Error loading analysis:', error);
+      logger.error('Error loading analysis:', error);
     } finally {
       setLoading(false);
     }
@@ -119,7 +120,7 @@ export function AITicketAnalysis({ ticketId }: { ticketId: string }) {
       toast.success('Ticket analyzed successfully');
       await loadAnalysis();
     } catch (error: unknown) {
-      console.error('Error analyzing ticket:', error);
+      logger.error('Error analyzing ticket:', error);
       toast.error('Failed to analyze ticket: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setAnalyzing(false);

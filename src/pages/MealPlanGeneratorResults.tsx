@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { logger } from "@/lib/logger";
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
@@ -58,7 +59,7 @@ export default function MealPlanGeneratorResults() {
         const id = await saveMealPlanGeneration(state.sessionId, state.input, state.mealPlan);
         setPlanId(id);
       } catch (error) {
-        console.error('Error saving meal plan:', error);
+        logger.error('Error saving meal plan:', error);
       }
     };
     savePlan();

@@ -1,4 +1,5 @@
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { logger } from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -64,7 +65,7 @@ export const MealSuggestionCard = memo(function MealSuggestionCard({
       await onAccept?.(suggestion);
       toast.success("Added to meal plan!");
     } catch (error) {
-      console.error("Error accepting suggestion:", error);
+      logger.error("Error accepting suggestion:", error);
       toast.error("Failed to add meal");
     } finally {
       setIsAccepting(false);
@@ -77,7 +78,7 @@ export const MealSuggestionCard = memo(function MealSuggestionCard({
       await onReject?.(suggestion);
       toast.success("Suggestion dismissed");
     } catch (error) {
-      console.error("Error rejecting suggestion:", error);
+      logger.error("Error rejecting suggestion:", error);
       toast.error("Failed to dismiss");
     } finally {
       setIsRejecting(false);
