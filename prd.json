@@ -5497,7 +5497,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "Audit findings (Grocery-Pantry Flow 1 & 2). This is the heart of the owner's 'does buying it add it to the pantry?' question — the loop exists but is nearly invisible, and Shopping Mode skips it entirely."
+      "notes": "Implemented on branch claude/ios-ui-ux-refinement-5s4hum (build verification deferred to local Xcode). GroceryView: removed the scroll-away 'Move to pantry'/'Clear Done' buttons from the summary card and replaced them with a persistent bottom checkout bar via .safeAreaInset(edge:.bottom) -> new private `checkoutBar` view, shown only when !checkedItems.isEmpty && !isSelecting (the bulk-select bottomBar owns that space otherwise). Bar shows '<n> in cart' + Clear + Move-to-pantry (borderedProminent), with VoiceOver labels. ShoppingModeView: added `showingFinishOptions` state + `boughtCount`; both the 'Finish trip' button and toolbar 'Exit' now route through exit(), which presents a confirmationDialog (Move <n> to pantry / Just clear bought items / Keep list as-is / Cancel) when boughtCount>0, else dismisses directly. All-done copy updated to 'Finish to move what you bought into your pantry.' Both Move-to-pantry paths reuse the existing AppState.moveCheckedToPantry(); success toast surfaces on GroceryView after dismiss. NOT in scope: unit conversion (US-363), bulk-delete batching + shopping-mode check-off rollback (US-365). Remaining AC pending: Swift build + manual device check."
     },
     {
       "id": "US-363",
