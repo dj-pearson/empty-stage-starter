@@ -52,18 +52,21 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
       }
     }, 300);
 
+    // Household-scoped channel name so switching households tears down the old
+    // channel and opens a distinct one (no stale/duplicate channels). (US-332)
+    const channelName = `kids:${householdId}`;
     const channel = supabase
-      .channel('kids_changes')
+      .channel(channelName)
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'kids',
         filter: `household_id=eq.${householdId}`
       }, debouncedUpdate)
       .subscribe();
 
-    registerSubscription('kids_changes', 'kids');
+    registerSubscription(channelName, 'kids');
 
     return () => {
-      unregisterSubscription('kids_changes');
+      unregisterSubscription(channelName);
       supabase.removeChannel(channel);
     };
   }, [userId, householdId]);

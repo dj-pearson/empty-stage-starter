@@ -58,18 +58,21 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
       }
     }, 300);
 
+    // Household-scoped channel name so switching households tears down the old
+    // channel and opens a distinct one (no stale/duplicate channels). (US-332)
+    const channelName = `grocery_items:${householdId}`;
     const channel = supabase
-      .channel('grocery_items_changes')
+      .channel(channelName)
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'grocery_items',
         filter: `household_id=eq.${householdId}`
       }, debouncedUpdate)
       .subscribe();
 
-    registerSubscription('grocery_items_changes', 'grocery_items');
+    registerSubscription(channelName, 'grocery_items');
 
     return () => {
-      unregisterSubscription('grocery_items_changes');
+      unregisterSubscription(channelName);
       supabase.removeChannel(channel);
     };
   }, [userId, householdId]);

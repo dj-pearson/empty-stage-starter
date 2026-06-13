@@ -48,18 +48,21 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
       }
     }, 300);
 
+    // Household-scoped channel name so switching households tears down the old
+    // channel and opens a distinct one (no stale/duplicate channels). (US-332)
+    const channelName = `plan_entries:${householdId}`;
     const channel = supabase
-      .channel('plan_entries_changes')
+      .channel(channelName)
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'plan_entries',
         filter: `household_id=eq.${householdId}`
       }, debouncedUpdate)
       .subscribe();
 
-    registerSubscription('plan_entries_changes', 'plan_entries');
+    registerSubscription(channelName, 'plan_entries');
 
     return () => {
-      unregisterSubscription('plan_entries_changes');
+      unregisterSubscription(channelName);
       supabase.removeChannel(channel);
     };
   }, [userId, householdId]);

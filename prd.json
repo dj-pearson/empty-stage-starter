@@ -5035,8 +5035,8 @@
         "Tests/typecheck pass"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": "Audit: GroceryContext.tsx:61, PlanContext.tsx:51, KidsContext.tsx:55 open static-named channels as soon as userId+householdId resolve; not household-scoped."
+      "passes": true,
+      "notes": "Audit: GroceryContext.tsx:61, PlanContext.tsx:51, KidsContext.tsx:55 open static-named channels as soon as userId+householdId resolve; not household-scoped. | DONE 2026-06-13: household-scoped realtime channel names. GroceryContext/PlanContext/KidsContext now use `grocery_items:${householdId}` / `plan_entries:${householdId}` / `kids:${householdId}` (and matching registerSubscription/unregisterSubscription keys) instead of static `*_changes` names, so switching households tears down the old channel and opens a distinct one. Effect deps already include householdId; cleanup runs supabase.removeChannel + unregisterSubscription. RecipesContext (US-340) follows the same scheme."
     },
     {
       "id": "US-333",
@@ -5096,8 +5096,8 @@
         "Typecheck passes; tests pass"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "Audit: pwa.ts blocking confirm(), perpetual update interval, and broken removeEventListener cleanup (listener leak)."
+      "passes": true,
+      "notes": "Audit: pwa.ts blocking confirm(), perpetual update interval, and broken removeEventListener cleanup (listener leak). | DONE 2026-06-13: src/lib/pwa.ts rewritten. (1) SW update prompt is now a non-blocking Sonner toast with a Reload action (no synchronous confirm()). (2) The hourly registration.update() interval is started only while the tab is visible and torn down on visibilitychange→hidden + pagehide (no leaked perpetual interval). (3) onOnlineStatusChange captures stable handleOnline/handleOffline refs so removeEventListener actually removes them. Replaced console.* with logger and dropped the `any` casts. New test src/lib/pwa.test.ts asserts the cleanup removes the exact listeners it added (2 tests, green). Full vitest 908 passed."
     },
     {
       "id": "US-337",
@@ -5158,8 +5158,8 @@
         "Add a test feeding a raw recipe payload through the handler asserting normalized state; typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "Audit: no recipes realtime subscription exists; recipe changes don't propagate live to other household members."
+      "passes": true,
+      "notes": "Audit: no recipes realtime subscription exists; recipe changes don't propagate live to other household members. | DONE 2026-06-13: RecipesContext now opens a household-scoped recipes realtime channel (`recipes:${householdId}`) with 300ms debounce, parity with Grocery/Plan/Kids. Extracted applyRecipeRealtime(prev,payload) which runs payload.new through normalizeRecipeFromDB (keeps image_url + camelCase fields) and dedupes by id; on UPDATE it preserves already-loaded recipe_ingredients because postgres_changes events don't carry the join. Cleanup tears down on unmount/household switch. New test src/contexts/RecipesContext.realtime.test.ts (4 tests: INSERT normalize, dedupe, UPDATE preserves ingredients, DELETE) — green."
     },
     {
       "id": "US-341",
