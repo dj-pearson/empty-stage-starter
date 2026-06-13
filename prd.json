@@ -5112,8 +5112,8 @@
         "Add tests for create + accept (happy path and invalid code); typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Audit: accept_household_invite/create_household_invite RPCs exist (iOS-only); web has no caller. ManageHouseholdDialog only inserts household_invitations rows with no acceptance flow -> dead end on web."
+      "passes": true,
+      "notes": "Audit: accept_household_invite/create_household_invite RPCs exist (iOS-only); web has no caller. ManageHouseholdDialog only inserts household_invitations rows with no acceptance flow -> dead end on web. | DONE 2026-06-13: built the web invite flow on the existing (iOS-only) RPCs. ManageHouseholdDialog now has a 'Create invite link' button calling create_household_invite -> shows the code + a copyable /join?code= link (replacing the dead-end household_invitations INSERT, which is removed). New /join route + src/pages/Join.tsx (behind ProtectedRoute, so the ?code survives the /auth round-trip) calls accept_household_invite and handles success / invalid-or-expired / missing-code; the RPC is idempotent for already-member and safe for self-invite. On success a full reload to /dashboard re-resolves the household so shared kids/plans/grocery appear via existing RLS+realtime. New src/lib/householdInvite.ts (buildInviteLink/parseInviteCode/inviteErrorMessage). Tests: householdInvite.test.ts (3) + Join.test.tsx (3: accept happy path asserts rpc('accept_household_invite',{p_code}), invalid-code friendly error, missing-code no-rpc). vitest 931 passed; build ✓. NOTE: the create flow's testable logic (link building) is unit-tested; its thin RPC call is verified via build/typecheck (a full dialog render test was skipped — heavy deps)."
     },
     {
       "id": "US-338",

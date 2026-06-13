@@ -35,6 +35,7 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const AuthCallback = lazy(() => import('./pages/AuthCallback'));
 const CheckoutSuccess = lazy(() => import('./pages/CheckoutSuccess'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Join = lazy(() => import('./pages/Join'));
 const Home = lazy(() => import('./pages/Home'));
 const Pantry = lazy(() => import('./pages/Pantry'));
 const Recipes = lazy(() => import('./pages/Recipes'));
@@ -377,6 +378,16 @@ const App = () => (
                       />
 
                       {/* Main Dashboard with nested routes - Protected */}
+                      <Route
+                        path="/join"
+                        element={
+                          <ProtectedRoute>
+                            <RouteErrorBoundary>
+                              <Join />
+                            </RouteErrorBoundary>
+                          </ProtectedRoute>
+                        }
+                      />
                       <Route
                         path="/dashboard"
                         element={
