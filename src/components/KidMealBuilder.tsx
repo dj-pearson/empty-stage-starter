@@ -28,7 +28,7 @@ import {
   Share2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useApp } from "@/contexts/AppContext";
+import { useKids, useFoods } from "@/contexts/AppContext";
 import { cn } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 
@@ -75,7 +75,8 @@ const PLATE_SECTIONS = {
 };
 
 export function KidMealBuilder() {
-  const { activeKidId, kids, foods, setActiveKidId } = useApp();
+  const { activeKidId, kids, setActiveKidId } = useKids();
+  const { foods } = useFoods();
   const [creations, setCreations] = useState<MealCreation[]>([]);
   const [recentAchievements, setRecentAchievements] = useState<Achievement[]>([]);
   const [showBuilder, setShowBuilder] = useState(false);

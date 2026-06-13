@@ -1,5 +1,5 @@
 import { Helmet } from "react-helmet-async";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods, useKids, usePlan } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -16,7 +16,9 @@ const RESULT_COLORS = {
 };
 
 export default function Analytics() {
-  const { foods, activeKidId, planEntries, kids, setActiveKidId } = useApp();
+  const { foods } = useFoods();
+  const { activeKidId, kids, setActiveKidId } = useKids();
+  const { planEntries } = usePlan();
   const activeKid = kids.find(k => k.id === activeKidId);
   const isFamilyMode = !activeKidId;
 

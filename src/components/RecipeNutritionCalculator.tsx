@@ -16,7 +16,7 @@ interface RecipeNutritionCalculatorProps {
 }
 
 export function RecipeNutritionCalculator({ foodIds, servings = 1 }: RecipeNutritionCalculatorProps) {
-  const { foods } = useApp();
+  const { foods } = useFoods();
 
   const nutrition = useMemo((): NutritionSummary => {
     const totals: NutritionSummary = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };

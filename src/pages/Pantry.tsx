@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } fro
 import { Helmet } from "react-helmet-async";
 // CSS animations used instead of framer-motion for list rendering performance
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods, useGrocery, useKids, usePlan } from "@/contexts/AppContext";
 import { FoodCard } from "@/components/FoodCard";
 import { ImportCsvDialog } from "@/components/ImportCsvDialog";
 import { ImageFoodCapture } from "@/components/ImageFoodCapture";
@@ -97,12 +97,11 @@ export default function Pantry() {
     addFoods,
     updateFood,
     deleteFood,
-    planEntries,
-    kids,
-    activeKidId,
     refreshFoods,
-    addGroceryItem,
-  } = useApp();
+  } = useFoods();
+  const { planEntries } = usePlan();
+  const { kids, activeKidId } = useKids();
+  const { addGroceryItem } = useGrocery();
   const isMobile = useIsMobile();
 
   // Dialog states

@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Upload, FileText, AlertTriangle, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods } from "@/contexts/AppContext";
 import { z } from "zod";
 
 const foodRowSchema = z.object({
@@ -61,7 +61,7 @@ export function DataImportDialog() {
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const { addFoods } = useApp();
+  const { addFoods } = useFoods();
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

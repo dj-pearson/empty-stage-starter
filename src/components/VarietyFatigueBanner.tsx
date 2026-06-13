@@ -13,7 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Shuffle, X, Zap } from 'lucide-react';
-import { useApp } from '@/contexts/AppContext';
+import { usePlan, useRecipes, useFoods } from '@/contexts/AppContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useVarietyNudgePref } from '@/hooks/useVarietyNudgePref';
 import { supabase } from '@/integrations/supabase/client';
@@ -54,7 +54,9 @@ function tierTone(tier: FatigueTier) {
 }
 
 export function VarietyFatigueBanner({ surface = 'unknown' }: Props) {
-  const { planEntries, recipes, foods } = useApp();
+  const { planEntries } = usePlan();
+  const { recipes } = useRecipes();
+  const { foods } = useFoods();
   const { enabled: nudgesEnabled } = useVarietyNudgePref();
   const navigate = useNavigate();
   const [dismissal, setDismissal] = useLocalStorage<DismissalState | null>(DISMISS_KEY, null);

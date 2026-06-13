@@ -14,13 +14,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Repeat, Shuffle } from 'lucide-react';
-import { useApp } from '@/contexts/AppContext';
+import { usePlan, useRecipes, useFoods } from '@/contexts/AppContext';
 import { useVarietyNudgePref } from '@/hooks/useVarietyNudgePref';
 import { analytics } from '@/lib/analytics';
 import { computeVarietyFatigue, type FatigueItem } from '@/lib/varietyFatigue';
 
 export function MostRepeatedMealsCard() {
-  const { planEntries, recipes, foods } = useApp();
+  const { planEntries } = usePlan();
+  const { recipes } = useRecipes();
+  const { foods } = useFoods();
   const { enabled: nudgesEnabled } = useVarietyNudgePref();
   const navigate = useNavigate();
 

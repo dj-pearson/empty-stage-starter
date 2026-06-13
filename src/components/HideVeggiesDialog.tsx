@@ -23,7 +23,7 @@ import { Salad, Sparkles, Plus, Loader2, Eye, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
-import { useApp } from '@/contexts/AppContext';
+import { useKids, useFoods, useRecipes } from '@/contexts/AppContext';
 import { useFeatureLimit } from '@/hooks/useFeatureLimit';
 import { analytics } from '@/lib/analytics';
 import {
@@ -77,7 +77,9 @@ function rowToTechnique(r: TechniqueRow): HiddenVeggieTechnique {
 }
 
 export function HideVeggiesDialog({ open, onOpenChange, recipe, kidIds, onVariantSaved }: Props) {
-  const { kids, foods, addRecipe } = useApp();
+  const { kids } = useKids();
+  const { foods } = useFoods();
+  const { addRecipe } = useRecipes();
   const { checkFeatureLimit, incrementUsage } = useFeatureLimit();
   const [techniques, setTechniques] = useState<HiddenVeggieTechnique[] | null>(null);
   const [loading, setLoading] = useState(false);

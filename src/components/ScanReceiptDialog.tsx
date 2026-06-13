@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Camera, Upload, Loader2, Check, X, Trash2, Receipt } from "lucide-react";
 import { toast } from "sonner";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods } from "@/contexts/AppContext";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { analytics } from "@/lib/analytics";
 import { useFeatureLimit } from "@/hooks/useFeatureLimit";
@@ -57,7 +57,7 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 export function ScanReceiptDialog({ open, onClose }: Props) {
-  const { foods, addFoods } = useApp();
+  const { foods, addFoods } = useFoods();
   const { checkFeatureLimit, incrementUsage } = useFeatureLimit();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stage, setStage] = useState<"upload" | "parsing" | "review" | "saving">("upload");

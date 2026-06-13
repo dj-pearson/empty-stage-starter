@@ -2,12 +2,14 @@ import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { useApp } from '@/contexts/AppContext';
+import { usePlan, useFoods, useKids } from '@/contexts/AppContext';
 import { TrendingUp, TrendingDown, Target, Award, Calendar, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function ProgressDashboard() {
-  const { planEntries, foods, activeKidId, kids } = useApp();
+  const { planEntries } = usePlan();
+  const { foods } = useFoods();
+  const { activeKidId, kids } = useKids();
 
   const activeKid = kids.find(k => k.id === activeKidId);
 

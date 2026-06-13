@@ -49,7 +49,7 @@ import {
   Check,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useApp } from "@/contexts/AppContext";
+import { useKids, useFoods } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import { format, differenceInYears } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -84,7 +84,8 @@ interface OnboardingDialogProps {
 }
 
 export function OnboardingDialog({ open, onComplete, onOpenChange }: OnboardingDialogProps) {
-  const { addKid, addFoods } = useApp();
+  const { addKid } = useKids();
+  const { addFoods } = useFoods();
   const [step, setStep] = useState(1);
   const [uploading, setUploading] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date());

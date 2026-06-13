@@ -1,5 +1,5 @@
 import { useState, useImperativeHandle, forwardRef } from "react";
-import { useApp } from "@/contexts/AppContext";
+import { useKids } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -75,7 +75,7 @@ export interface ManageKidsDialogRef {
 }
 
 const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) => {
-  const { kids, addKid, updateKid, deleteKid } = useApp();
+  const { kids, addKid, updateKid, deleteKid } = useKids();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);

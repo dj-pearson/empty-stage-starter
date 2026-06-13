@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,7 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FoodCategory } from "@/types";
 
 export function ImportCsvDialog() {
-  const { addFoods, foods } = useApp();
+  const { addFoods, foods } = useFoods();
   const [open, setOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<any[]>([]);
