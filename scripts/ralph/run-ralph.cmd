@@ -18,6 +18,9 @@ REM ============================================================================
 set "ITER=%~1"
 if "%ITER%"=="" set "ITER=10"
 
+REM Always operate from the repo root (two levels up from scripts\ralph\).
+cd /d "%~dp0..\.."
+
 REM RULE 1: cap the heap for every node child of this loop.
 set "NODE_OPTIONS=--max-old-space-size=3072"
 
@@ -32,6 +35,7 @@ if errorlevel 1 (
 
 echo [run-ralph] launching Ralph: cores 12-23 (FFF000), /belownormal, %ITER% iterations.
 echo [run-ralph] RULE 4: if GradeThread just started, wait a few minutes so first builds stagger.
-start "RalphOther" /belownormal /affinity FFF000 cmd /c "npm run ralph -- %ITER%"
+echo [run-ralph] loop output -> scripts\ralph\loop.log
+start "RalphOther" /belownormal /affinity FFF000 cmd /c "npm run ralph -- %ITER% 1> scripts\ralph\loop.log 2>&1"
 
 endlocal
