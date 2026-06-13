@@ -34,6 +34,7 @@ Entry points: routes → `src/App.tsx`; state → `AppContext.tsx`; supabase →
 ```bash
 npm run dev              # port 8080
 npm run build
+npm run typecheck        # tsc -b --noEmit (checks the referenced projects — CI gate)
 npm run test:run         # vitest
 npm run test:e2e         # playwright
 npm run lint && npm run format

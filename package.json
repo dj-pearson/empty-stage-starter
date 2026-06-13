@@ -10,6 +10,7 @@
     "build:dev": "vite build --mode development",
     "build:staging": "vite build --mode staging",
     "lint": "eslint .",
+    "typecheck": "tsc -b --noEmit",
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",

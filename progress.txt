@@ -2798,3 +2798,24 @@ The hard core — most need fresh code or are blocked by tooling unavailable in 
 - iOS Apple-platform integrations (need Xcode + entitlements): US-302–US-309 (EventKit / IntentDonation / iMessage / Files / Photos / App Clip / recipe-import deep link)
 - Android Kotlin (need Gradle pipeline): US-213, US-214, US-222
 ---
+
+## 2026-06-13 - Web security & infra batch (US-324/325/326/327/329/330)
+- Branch: `claude/prd-failing-items-v1ro95`. Worked the highest-priority WEB items that are genuinely buildable/testable in this sandbox (no Deno/Xcode/prod here). Left iOS-native + prod-deploy items (US-323 etc.) false — honest, unchanged.
+- PRD before: 80 false / 266 passing. After: 74 false / 272 passing (6 flipped, all with real code).
+- Verification: `npm run typecheck` (tsc -b, exit 0) + `npm run build` (✓ 7713 modules) + `npx vitest run` (902 passed / 3 skipped, exit 0). Edge fns are Deno (not in tsc/vite); covered by new Deno unit tests wired into CI.
+
+### What shipped
+- **US-330** (dead code): deleted ProductSafetyChecker.tsx (broken template literal line 110, 0 importers), BallPit3D/FoodOrbit3D/ProductShowcase3D (0 source importers). Removed unused static `import { AdminControlPanel }` from App.tsx so the ~15 admin dashboards stay in the lazy Admin chunk instead of the entry. grep-clean.
+- **US-329** (CI typecheck): added `typecheck` script = `tsc -b --noEmit` (old root tsconfig has files:[] → `tsc --noEmit` was a vacuous no-op). CI now runs `npm run typecheck`; documented in CLAUDE.md. The broken ProductSafetyChecker (now deleted) is exactly the file the old no-op never caught.
+- **US-326** (Stripe price tampering): `functions/_shared/stripe-prices.ts` resolvePriceId() — server-side allowlist from env (STRIPE_PRICE_IDS / STRIPE_PRICE_MAP), plan-key OR allowlisted price_id, unknown→400. create-checkout no longer passes body.price_id through. JWT user_id (US-005) preserved.
+- **US-324** (IDOR / household membership): `functions/_shared/household.ts` assertHouseholdMember→403. Audit: tonight-mode is the ONLY edge fn reading a body householdId; applied there. Others scope by kid_ids via forwarded-JWT RLS.
+- **US-325** (rate limit + size caps): `functions/_shared/rate-limit.ts` enforceRateLimit→429+Retry-After (check_rate_limit_with_tier RPC, fails CLOSED) + `functions/_shared/validation.ts` (5MB image cap, text caps). Applied across the 9 AI/LLM fns. Migration 20260613000001 seeds rate_limit_config. Limits table in SECURITY.md.
+- **US-327** (JWT validation + admin gating): suggest-foods switched to authenticateRequest (real signature/expiry check). `functions/_shared/admin.ts` assertAdmin gates generate-social-content + generate-blog-content. Untrusted text capped + 'treat as data' prompt boundary on social.
+- New Deno tests: `functions/_shared/helpers_test.ts` (size/text caps, price allowlist, membership/admin/rate-limit via mock client). CI `types-and-functions` job now runs `deno test` via denoland/setup-deno.
+
+### Honest deviations
+- The `*.spec.ts` "critical edge-function tests" run against a live local Supabase (CI `types-and-functions` job) — can't run here. New helper logic is covered by hermetic Deno unit tests instead.
+- US-323 (prod migration deploy) remains false: requires prod DB creds/network not in this sandbox.
+
+### Remaining false: 74
+Next web candidates (buildable here): US-328 (RLS gaps migration), US-331-336 (AppContext/realtime/perf refactors), US-337 (invite accept flow), US-338/340 (meal-vote + recipes realtime), US-339, US-341, US-342-347 (any-ban, console→logger, select(*) trims, dark-mode, admin features, i18n). iOS Swift source-only edits (US-348+) editable but unbuildable without Xcode.

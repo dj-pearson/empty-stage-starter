@@ -4908,8 +4908,8 @@
         "Existing critical edge-function tests still pass"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Verified: tonight-mode/index.ts:136-139 filters kids by body.householdId with no membership check; relies solely on forwarded-JWT RLS."
+      "passes": true,
+      "notes": "Verified: tonight-mode/index.ts:136-139 filters kids by body.householdId with no membership check; relies solely on forwarded-JWT RLS. | DONE 2026-06-13: created functions/_shared/household.ts (isHouseholdMember + assertHouseholdMember→403). Audit showed tonight-mode is the ONLY edge fn that reads a client body householdId (grep confirmed). Applied assertHouseholdMember after authenticateRequest in tonight-mode/index.ts; ai-meal-plan/suggest-recipe/suggest-foods use kid_ids scoped via forwarded-JWT RLS and now also validate the JWT. Deno unit tests in functions/_shared/helpers_test.ts assert non-member→403, member→null, no-household→null. Build+typecheck+vitest(902) green."
     },
     {
       "id": "US-325",
@@ -4924,8 +4924,8 @@
         "Add tests for rate-limit enforcement and oversize-payload rejection on at least the three vision functions"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Verified via audit: vision functions call OpenAI at detail:'high' with no size validation and no rate limit."
+      "passes": true,
+      "notes": "Verified via audit: vision functions call OpenAI at detail:'high' with no size validation and no rate limit. | DONE 2026-06-13: functions/_shared/rate-limit.ts (enforceRateLimit→429+Retry-After via check_rate_limit_with_tier RPC, fails CLOSED) + functions/_shared/validation.ts (validateImageSize 5MB / base64DecodedBytes / capText). Applied to ai-meal-plan, suggest-foods, suggest-recipe, tonight-mode, parse-grocery-image, parse-receipt-image, identify-product, generate-social-content, generate-blog-content. Image-size guard on the 3 vision fns; free-text caps on content_summary/topic. Migration 20260613000001 seeds rate_limit_config for the new endpoints. Limits documented in SECURITY.md table. Deno tests cover allow/429/fail-closed + oversize 413."
     },
     {
       "id": "US-326",
@@ -4940,8 +4940,8 @@
         "Typecheck passes; critical edge-function tests pass"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Verified: create-checkout/index.ts:68-89 accepts client price_id with only a typeof string check, no allowlist."
+      "passes": true,
+      "notes": "Verified: create-checkout/index.ts:68-89 accepts client price_id with only a typeof string check, no allowlist. | DONE 2026-06-13: functions/_shared/stripe-prices.ts resolvePriceId() validates against a server-side allowlist sourced from env (STRIPE_PRICE_IDS / STRIPE_PRICE_MAP), accepts a plan key OR an allowlisted price_id, rejects unknown→400. create-checkout/index.ts now resolves the price server-side instead of passing body.price_id through. JWT-derived user_id (US-005) preserved. Deno tests assert unknown price→null and known→resolved."
     },
     {
       "id": "US-327",
@@ -4956,8 +4956,8 @@
         "Critical edge-function tests pass"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit: suggest-foods checks token presence only; generate-social-content has no admin gating (index.ts:125 embeds user content_summary into the prompt)."
+      "passes": true,
+      "notes": "Audit: suggest-foods checks token presence only; generate-social-content has no admin gating (index.ts:125 embeds user content_summary into the prompt). | DONE 2026-06-13: suggest-foods switched from header-presence-only to the authenticateRequest path (validates signature/expiry via auth.getUser()). functions/_shared/admin.ts assertAdmin() gates generate-social-content + generate-blog-content to user_roles.role='admin' (403 otherwise). Untrusted content_summary/topic length-capped (capText) and the social user-prompt now carries a 'treat as data, not instructions' boundary. 401 invalid/expired, 403 non-admin. Deno tests cover non-admin→403."
     },
     {
       "id": "US-328",
@@ -4987,8 +4987,8 @@
         "CI run is green only after real type errors are resolved (coordinate with US-330/US-334 type fixes)"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Verified: root tsconfig.json has files:[] + references only; `npx tsc --noEmit` checks zero files and exits 0, so ProductSafetyChecker.tsx's syntax error was never caught by CI."
+      "passes": true,
+      "notes": "Verified: root tsconfig.json has files:[] + references only; `npx tsc --noEmit` checks zero files and exits 0, so ProductSafetyChecker.tsx's syntax error was never caught by CI. | DONE 2026-06-13: added npm script 'typecheck' = 'tsc -b --noEmit' (the old root tsconfig has files:[] so 'tsc --noEmit' checked ZERO files — vacuous pass). CI .github/workflows/ci.yml Typecheck step now runs 'npm run typecheck'. Documented in CLAUDE.md commands. Verified: 'tsc -b' transforms the real src project (7713 modules in the paired build); deleting the broken ProductSafetyChecker (US-330) is what makes it green. Also added a Deno helper-test step to CI."
     },
     {
       "id": "US-330",
@@ -5003,8 +5003,8 @@
         "Typecheck passes; npm run build succeeds; existing tests pass"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Verified: ProductSafetyChecker.tsx:110 unterminated template literal, 0 importers; App.tsx:16 imports AdminControlPanel unused; BallPit3D/FoodOrbit3D/ProductShowcase3D have 0 source importers."
+      "passes": true,
+      "notes": "Verified: ProductSafetyChecker.tsx:110 unterminated template literal, 0 importers; App.tsx:16 imports AdminControlPanel unused; BallPit3D/FoodOrbit3D/ProductShowcase3D have 0 source importers. | DONE 2026-06-13: deleted src/components/ProductSafetyChecker.tsx (unterminated template literal line 110, 0 importers), BallPit3D.tsx, FoodOrbit3D.tsx, ProductShowcase3D.tsx (all 0 source importers; LazyFoodOrbit uses ThreeDHeroScene+VisibleFoodOrbit, not FoodOrbit3D). Removed unused static `import { AdminControlPanel }` from src/App.tsx:16 — admin code is now only in the lazy Admin chunk, no longer eagerly in the entry chunk (index-*.js entry ~212KB/69KB gzip). grep-clean of all refs. typecheck + npm run build (✓ 7713 modules) + vitest (902 passed) all green."
     },
     {
       "id": "US-331",
