@@ -1144,20 +1144,40 @@ final class AppState: ObservableObject {
         }
         var deltas: [PantryDelta] = []
         var newFoods: [Food] = []
-        var unknownUnits = 0
+        // US-363: names of items we couldn't unit-convert when merging into an
+        // existing pantry food (different/unknown units). We still credit the
+        // raw quantity, but we surface these so the user can sanity-check the
+        // total instead of it being silently corrupted.
+        var mismatchedNames: [String] = []
 
         for item in checkedSnapshot {
             if let idx = foods.firstIndex(where: { $0.name.lowercased() == item.name.lowercased() }) {
                 let previous = foods[idx].quantity
-                if let existingUnit = foods[idx].unit, existingUnit != item.unit {
-                    unknownUnits += 1
+                // US-363: convert the bought quantity into the pantry food's
+                // existing unit when possible (e.g. 2 gal → 256 fl oz). When the
+                // units are unknown or live in different dimensions, fall back to
+                // adding the raw quantity and flag the item for review.
+                let increment: Double
+                if let existingUnit = foods[idx].unit,
+                   !existingUnit.isEmpty,
+                   existingUnit != item.unit {
+                    if let converted = UnitConverter.convert(
+                        item.quantity, from: item.unit, to: existingUnit
+                    ) {
+                        increment = converted
+                    } else {
+                        increment = item.quantity
+                        mismatchedNames.append(item.name)
+                    }
+                } else {
+                    increment = item.quantity
                 }
-                foods[idx].quantity = (previous ?? 0) + item.quantity
+                foods[idx].quantity = (previous ?? 0) + increment
                 deltas.append(PantryDelta(
                     foodId: foods[idx].id,
                     previousQuantity: previous,
                     createdNewFood: false,
-                    increment: item.quantity
+                    increment: increment
                 ))
             } else {
                 let newFood = Food(
@@ -1200,18 +1220,28 @@ final class AppState: ObservableObject {
                     updates: FoodUpdate(quantity: updated)
                 )
             }
-            // Finally remove the grocery rows. ON DELETE CASCADE on
-            // grocery_item_sources cleans those up server-side.
-            for id in checkedIds {
-                try await dataService.deleteGroceryItem(id)
-            }
+            // US-365: remove the grocery rows in a single batched delete
+            // instead of one request per item (a full cart was firing 30+
+            // serial round-trips). ON DELETE CASCADE on grocery_item_sources
+            // cleans those up server-side.
+            try await dataService.bulkDeleteGroceryItems(Array(checkedIds))
             toast.success(
                 "Moved \(checkedSnapshot.count) item\(checkedSnapshot.count == 1 ? "" : "s") to pantry"
             )
             HapticManager.success()
+            // US-363: tell the user which items merged without unit conversion
+            // so a mismatched total isn't a silent surprise in the pantry.
+            if !mismatchedNames.isEmpty {
+                let shown = mismatchedNames.prefix(3).joined(separator: ", ")
+                let extra = mismatchedNames.count > 3 ? " +\(mismatchedNames.count - 3) more" : ""
+                toast.warning(
+                    "Check pantry amounts",
+                    message: "Couldn't match units for \(shown)\(extra) — added as-is, no conversion."
+                )
+            }
             AnalyticsService.track(.groceryMovedToPantry(
                 count: checkedSnapshot.count,
-                unknownUnits: unknownUnits
+                unknownUnits: mismatchedNames.count
             ))
         } catch {
             // Roll back: restore grocery items + sources, undo pantry deltas

@@ -5511,7 +5511,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Audit findings (Grocery-Pantry Flow 4). Silent quantity corruption today."
+      "notes": "Implemented on branch claude/ios-ui-ux-refinement-5s4hum (build verification deferred to local Xcode). New Utilities/UnitConverter.swift: best-effort conversion across volume (ml/l/tsp/tbsp/fl oz/cup/pt/qt/gal), mass (g/kg/oz/lb), and count (count/dozen) with alias/plural normalization; returns nil for container units (pack/bag/box/jar/can/bottle/loaf/bunch), unknown units, and cross-dimension pairs. AppState.moveCheckedToPantry now converts the bought quantity into the existing pantry food's unit when compatible (e.g. 2 gal -> 256 fl oz); when not convertible it adds the raw quantity AND collects the item name into mismatchedNames, then surfaces a toast.warning('Check pantry amounts', listing up to 3 names + overflow) so totals aren't silently corrupted. Analytics groceryMovedToPantry(unknownUnits:) now reports mismatchedNames.count. Design note: bare 'oz' is treated as weight (matches UnitInference usage); fluid ounces must be 'fl oz', so volume<->mass pairings (gal->oz) are reported as mismatches rather than guessed. EatPalTests/UnitConverterTests.swift covers volume/mass/count conversions, aliases, identity, and nil cases (cross-dimension, container, unknown). Pending: Swift build + device check."
     },
     {
       "id": "US-364",
@@ -5540,7 +5540,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Audit findings (Grocery-Pantry Flow 1 BUG-P1 & Flow 5 rollback gap)."
+      "notes": "Implemented on branch claude/ios-ui-ux-refinement-5s4hum (build verification deferred to local Xcode). AppState.moveCheckedToPantry: replaced the serial per-item delete loop with a single dataService.bulkDeleteGroceryItems(Array(checkedIds)) call (was firing 30+ round-trips on a full cart). ShoppingModeView.check: toggleGroceryItem already rolls back the optimistic flip + shows an error toast on hard failure and enqueues offline on network errors (AppState.swift ~1016-1030), so the row reappears unchecked automatically; refined check() to only set lastCheckedItemId and schedule the 5s undo-dismiss inside the success branch, so a check that didn't stick no longer shows a misleading undo banner. Pending: Swift build + device check."
     },
     {
       "id": "US-366",

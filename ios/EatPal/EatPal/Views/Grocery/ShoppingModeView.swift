@@ -320,7 +320,15 @@ struct ShoppingModeView: View {
         undoTask?.cancel()
         HapticManager.success()
         Task {
-            try? await appState.toggleGroceryItem(item.id)
+            do {
+                try await appState.toggleGroceryItem(item.id)
+            } catch {
+                // US-365: toggleGroceryItem already rolled back the optimistic
+                // flip and surfaced an error toast, so the row reappears as
+                // unchecked. Don't present an undo banner for a check that
+                // didn't stick.
+                return
+            }
             await MainActor.run {
                 if reduceMotion {
                     lastCheckedItemId = item.id
@@ -329,17 +337,17 @@ struct ShoppingModeView: View {
                         lastCheckedItemId = item.id
                     }
                 }
-            }
-        }
-
-        undoTask = Task {
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                if reduceMotion {
-                    lastCheckedItemId = nil
-                } else {
-                    withAnimation { lastCheckedItemId = nil }
+                // Auto-dismiss the undo affordance after 5s.
+                undoTask = Task {
+                    try? await Task.sleep(for: .seconds(5))
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        if reduceMotion {
+                            lastCheckedItemId = nil
+                        } else {
+                            withAnimation { lastCheckedItemId = nil }
+                        }
+                    }
                 }
             }
         }
