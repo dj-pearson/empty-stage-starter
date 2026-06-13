@@ -5128,8 +5128,8 @@
         "Migration test + unit tests pass"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Audit: KidMealVoting writes to meal_votes; upsert lacks an onConflict target and UNIQUE(kid_id, plan_entry_id) has nullable plan_entry_id."
+      "passes": true,
+      "notes": "Audit: KidMealVoting writes to meal_votes; upsert lacks an onConflict target and UNIQUE(kid_id, plan_entry_id) has nullable plan_entry_id. | DONE 2026-06-13: root cause — KidMealVoting upsert had NO onConflict, so PostgREST fell back to the PK (fresh uuid) and every re-vote INSERTED a duplicate; the table's UNIQUE(kid_id,plan_entry_id)/UNIQUE(kid_id,recipe_id,meal_date,meal_slot) don't dedupe when those nullable cols are NULL. Migration 20260613000003 dedupes existing rows (keep latest voted_at) then adds UNIQUE INDEX meal_votes_kid_meal_slot_key (kid_id,meal_date,meal_slot) — all non-null for real votes; additive/backward-compatible (NULL kid_id rows stay distinct). KidMealVoting now upserts with onConflict='kid_id,meal_date,meal_slot' via an extracted pure buildMealVoteUpsert() helper. Test KidMealVoting.voteUpsert.test.ts (3) asserts the conflict target + row incl. the recipe-only (null plan_entry_id) case. MealVotingCard doesn't write votes (swipe UI only). Migration-test job validates the SQL; full vitest 919 passed. NOTE: MealVotingCard is swipe-only (framer-motion drag), not clickable in jsdom — hence the pure-helper unit test rather than a render+click test."
     },
     {
       "id": "US-339",
