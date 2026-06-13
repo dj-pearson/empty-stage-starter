@@ -534,6 +534,8 @@ struct PlanEntryRow: View {
     @State private var showingResultPicker = false
     @State private var showingDatePicker = false
     @State private var pickedDate: Date = Date()
+    // US-350: confirm whether to restore pantry when deleting a made meal.
+    @State private var showingDeleteRestore = false
     /// US-231: post-result feedback sheet. Wrapper is Identifiable so we
     /// can present it via .sheet(item:) and pass the entry name + result.
     @State private var feedbackContext: MealFeedbackContext?
@@ -616,6 +618,16 @@ struct PlanEntryRow: View {
                 } label: {
                     Label("Made it", systemImage: "fork.knife.circle.fill")
                 }
+                // US-349: undo the most recent "Made it" — re-credits the
+                // pantry and re-opens any auto-checked grocery items.
+                if appState.wasRecentlyMarkedMade(entry.id) {
+                    Button {
+                        HapticManager.lightImpact()
+                        Task { await appState.undoMealMade(entry.id) }
+                    } label: {
+                        Label("Undo \"Made it\"", systemImage: "arrow.uturn.backward")
+                    }
+                }
             }
 
             Divider()
@@ -657,10 +669,36 @@ struct PlanEntryRow: View {
 
             Button(role: .destructive) {
                 HapticManager.error()
-                Task { try? await appState.deletePlanEntry(entry.id) }
+                // US-350: if this meal was marked made, deleting it would
+                // otherwise leave the pantry debited with no recourse — ask
+                // whether to restore first.
+                if appState.wasRecentlyMarkedMade(entry.id) {
+                    showingDeleteRestore = true
+                } else {
+                    Task { try? await appState.deletePlanEntry(entry.id) }
+                }
             } label: {
                 Label("Remove from plan", systemImage: "trash")
             }
+        }
+        // US-350: restore-on-delete confirmation for a made meal.
+        .confirmationDialog(
+            "This meal was marked made",
+            isPresented: $showingDeleteRestore,
+            titleVisibility: .visible
+        ) {
+            Button("Restore ingredients & remove") {
+                Task {
+                    await appState.undoMealMade(entry.id)
+                    try? await appState.deletePlanEntry(entry.id)
+                }
+            }
+            Button("Just remove", role: .destructive) {
+                Task { try? await appState.deletePlanEntry(entry.id) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Restore its ingredients to your pantry before removing it from the plan?")
         }
         .sheet(isPresented: $showingDatePicker) {
             NavigationStack {
@@ -966,9 +1004,12 @@ struct AddPlanEntryView: View {
         let resolvedFoodId: String? = {
             if let id = selectedFoodId, !id.isEmpty { return id }
             if let recipeId = selectedRecipeId,
-               let recipe = appState.recipes.first(where: { $0.id == recipeId }),
-               let firstFoodId = recipe.foodIds.first {
-                return firstFoodId
+               let recipe = appState.recipes.first(where: { $0.id == recipeId }) {
+                // US-357: prefer a legacy linked food, then fall back to a
+                // structured ingredient's foodId (US-354) so imported recipes
+                // without `foodIds` aren't trapped as unplannable.
+                if let firstFoodId = recipe.foodIds.first { return firstFoodId }
+                if let linked = recipe.ingredients.compactMap(\.foodId).first { return linked }
             }
             return nil
         }()

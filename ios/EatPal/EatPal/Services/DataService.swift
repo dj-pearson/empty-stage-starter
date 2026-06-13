@@ -262,6 +262,18 @@ final class DataService {
         ).execute().value
     }
 
+    /// US-349: reverse a prior `rpc_mark_meal_made` for a plan entry.
+    func undoMealMade(planEntryId: String) async throws -> UndoMealMadeResult {
+        struct Args: Encodable {
+            let planEntryId: String
+            enum CodingKeys: String, CodingKey { case planEntryId = "p_plan_entry_id" }
+        }
+        return try await client.rpc(
+            "rpc_undo_meal_made",
+            params: Args(planEntryId: planEntryId)
+        ).execute().value
+    }
+
     /// US-286: Legacy single-food decrement used as a fallback when a
     /// recipe doesn't have structured ingredients (US-281) for the server
     /// RPC to walk. The web planner has called this RPC for

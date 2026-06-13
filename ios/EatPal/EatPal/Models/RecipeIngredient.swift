@@ -98,8 +98,18 @@ enum RecipeIngredientLegacyParser {
         recipeId: String,
         startingSortOrder: Int = 0
     ) -> [RecipeIngredient] {
-        legacy
-            .split(separator: ",")
+        // US-355: imports (URL paste + share extension) join ingredients with
+        // newlines, while the historical `additional_ingredients` blob is
+        // comma-separated. Split on whichever delimiter is actually present —
+        // newlines win when any exist, so a line like "salt, to taste" stays a
+        // single ingredient instead of splitting into a bogus "to taste" row.
+        let chunks: [Substring]
+        if legacy.contains(where: \.isNewline) {
+            chunks = legacy.split(whereSeparator: \.isNewline)
+        } else {
+            chunks = legacy.split(separator: ",")
+        }
+        return chunks
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .enumerated()
