@@ -127,7 +127,7 @@ export function createINPOptimizedHandler<T extends (...args: unknown[]) => void
  * Usage:
  * ```ts
  * const cleanup = observeINP((entry) => {
- *   logger.info('Interaction:', entry.name, entry.duration, entry.rating);
+ *   console.info('Interaction:', entry.name, entry.duration, entry.rating);
  *   if (entry.rating === 'poor') {
  *     reportToAnalytics(entry);
  *   }

@@ -309,28 +309,29 @@ export const isDebugEnabled = (): boolean => {
 /**
  * Console logger with environment awareness
  */
+// NOTE: this IS a console-wrapper logging utility, so it uses console directly
+// (excluded from the no-console rule in eslint.config.js, like src/lib/logger.ts).
 export const logger = {
   log: (...args: any[]) => {
     if (isDebugEnabled()) {
-      logger.info(...args);
+      console.log(...args);
     }
   },
   warn: (...args: any[]) => {
     if (isDebugEnabled()) {
-      logger.warn(...args);
+      console.warn(...args);
     }
   },
   error: (...args: any[]) => {
-    logger.error(...args);
+    console.error(...args);
   },
   debug: (...args: any[]) => {
     if (isDebugEnabled()) {
-      logger.debug(...args);
+      console.debug(...args);
     }
   },
   table: (data: any) => {
     if (isDebugEnabled()) {
-      // eslint-disable-next-line no-console -- console.table has no logger equivalent; dev-only
       console.table(data);
     }
   },

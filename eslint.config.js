@@ -33,7 +33,8 @@ export default tseslint.config(
     // console for server logging) are unaffected. logger.ts is the logging
     // implementation itself, so it's exempt.
     files: ["src/**/*.{ts,tsx}"],
-    ignores: ["src/lib/logger.ts"],
+    // logger.ts and env-utils.ts are the console-wrapper logging utilities.
+    ignores: ["src/lib/logger.ts", "src/lib/env-utils.ts"],
     rules: {
       "no-console": "error",
     },

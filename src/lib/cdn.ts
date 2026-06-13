@@ -24,6 +24,7 @@
  * const cacheControl = cdn.getCacheControl('image');
  * ```
  */
+import { logger } from "@/lib/logger";
 
 /**
  * CDN configuration
