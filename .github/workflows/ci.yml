@@ -32,8 +32,25 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Typecheck
-        run: npm run typecheck
+      # Real type-check (the old `tsc --noEmit` checked zero files — root
+      # tsconfig has files:[]). `npm run typecheck` runs `tsc -b` over the
+      # referenced projects. There is a large PRE-EXISTING backlog of type
+      # errors (mostly from a stale generated src/integrations/supabase/types.ts
+      # — regenerated in the `types-and-functions` job). Until that backlog is
+      # burned down this step is NON-BLOCKING: it surfaces errors as a warning
+      # annotation but does not fail the pipeline, so merges stay unblocked.
+      # Flip `continue-on-error` to false (hard gate) once the count hits zero.
+      - name: Typecheck (non-blocking until backlog cleared)
+        continue-on-error: true
+        run: |
+          set +e
+          npm run typecheck 2>&1 | tee /tmp/typecheck.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            count=$(grep -cE 'error TS' /tmp/typecheck.log || true)
+            echo "::warning title=Typecheck backlog::tsc reported ${count} type error(s). Non-blocking for now; burn the backlog down, then make this a hard gate."
+          fi
+          exit 0
 
   test:
     name: Unit Tests

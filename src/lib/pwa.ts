@@ -99,7 +99,11 @@ export async function registerSync(tag: string) {
   if ('serviceWorker' in navigator && 'sync' in ServiceWorkerRegistration.prototype) {
     try {
       const registration = await navigator.serviceWorker.ready;
-      await (registration as { sync: { register: (t: string) => Promise<void> } }).sync.register(tag);
+      // The Background Sync API isn't in the DOM lib types yet.
+      const syncReg = registration as unknown as {
+        sync: { register: (t: string) => Promise<void> };
+      };
+      await syncReg.sync.register(tag);
       logger.info('Background sync registered:', tag);
     } catch (error) {
       logger.error('Background sync registration failed:', error);
