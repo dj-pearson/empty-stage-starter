@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { logger } from "@/lib/logger";
 import {
   Dialog,
   DialogContent,
@@ -118,7 +119,7 @@ export function ApplyTemplateDialog({
         onTemplateApplied();
       }
     } catch (error) {
-      console.error('Error applying template:', error);
+      logger.error('Error applying template:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to apply template');
     } finally {
       setIsLoading(false);

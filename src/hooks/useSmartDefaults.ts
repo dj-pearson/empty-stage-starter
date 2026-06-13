@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { logger } from "@/lib/logger";
 import { useLocation } from "react-router-dom";
 import { getSyncStorage } from "@/lib/platform";
 
@@ -36,7 +37,7 @@ export function useSmartDefaults<T>({
           storage.removeItem(`smart-default-${storageKey}`);
         }
       } catch (error) {
-        console.error("Error parsing smart default:", error);
+        logger.error("Error parsing smart default:", error);
       }
     }
   }, [storageKey, storage]);
@@ -76,7 +77,7 @@ export function useFrequencyTracker(storageKey: string) {
       try {
         setFrequencies(JSON.parse(stored));
       } catch (error) {
-        console.error("Error parsing frequency data:", error);
+        logger.error("Error parsing frequency data:", error);
       }
     }
   }, [storageKey, storage]);
@@ -159,7 +160,7 @@ export function useRecentEntries<T>(storageKey: string, maxEntries: number = 10)
       try {
         setRecentEntries(JSON.parse(stored));
       } catch (error) {
-        console.error("Error parsing recent entries:", error);
+        logger.error("Error parsing recent entries:", error);
       }
     }
   }, [storageKey, storage]);
@@ -202,7 +203,7 @@ export function usePreferenceLearning(storageKey: string) {
       try {
         setPreferences(JSON.parse(stored));
       } catch (error) {
-        console.error("Error parsing preferences:", error);
+        logger.error("Error parsing preferences:", error);
       }
     }
   }, [storageKey, storage]);

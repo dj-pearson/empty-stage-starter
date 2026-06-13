@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -98,7 +99,7 @@ export function RevenueOperationsCenter() {
         loadCohortData(),
       ]);
     } catch (error) {
-      console.error('Error loading revenue data:', error);
+      logger.error('Error loading revenue data:', error);
       toast.error('Failed to load revenue data');
     } finally {
       setLoading(false);
@@ -182,7 +183,7 @@ export function RevenueOperationsCenter() {
       toast.success('Churn predictions updated');
       await loadAtRiskUsers();
     } catch (error) {
-      console.error('Error updating predictions:', error);
+      logger.error('Error updating predictions:', error);
       toast.error('Failed to update churn predictions');
     } finally {
       setUpdating(false);
@@ -198,7 +199,7 @@ export function RevenueOperationsCenter() {
       toast.success(`${data || 0} interventions triggered`);
       await loadRecentInterventions();
     } catch (error) {
-      console.error('Error triggering interventions:', error);
+      logger.error('Error triggering interventions:', error);
       toast.error('Failed to trigger interventions');
     } finally {
       setUpdating(false);

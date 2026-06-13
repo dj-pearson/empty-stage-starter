@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -59,7 +60,7 @@ export function SupportPerformanceDashboard() {
       if (error) throw error;
       setMetrics(data as PerformanceMetrics | null);
     } catch (error) {
-      console.error('Error loading metrics:', error);
+      logger.error('Error loading metrics:', error);
     } finally {
       setLoading(false);
     }

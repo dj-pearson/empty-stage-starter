@@ -34,6 +34,42 @@ struct MarkMealMadeResult: Codable {
     }
 }
 
+/// US-349: Result of `rpc_undo_meal_made`. The RPC re-credits pantry foods,
+/// re-opens auto-checked grocery items, clears the entry result, and returns
+/// the applied changes so the client can mirror them locally.
+struct UndoMealMadeResult: Codable {
+    enum Status: String, Codable {
+        case reversed
+        case nothingToUndo = "nothing_to_undo"
+    }
+
+    struct Credit: Codable {
+        let foodId: String
+        let amount: Double
+
+        enum CodingKeys: String, CodingKey {
+            case foodId = "food_id"
+            case amount
+        }
+    }
+
+    let status: Status
+    let creditedCount: Int?
+    let uncheckedCount: Int?
+    /// Foods re-credited, with the amount added back to each.
+    let credited: [Credit]?
+    /// Grocery item ids that were re-opened (checked -> false).
+    let unchecked: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case creditedCount = "credited_count"
+        case uncheckedCount = "unchecked_count"
+        case credited
+        case unchecked
+    }
+}
+
 /// Persisted log row. Mirrors `plan_entry_made_log`. Currently only
 /// surfaced indirectly (via the RPC result), but the standalone struct
 /// is here for the upcoming undo flow that will fetch + apply

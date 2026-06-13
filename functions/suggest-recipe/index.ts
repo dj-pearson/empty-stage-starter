@@ -23,8 +23,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
-import { assertKidsAccessible } from '../_shared/household.ts';
-import { enforceRateLimit, getClientIp, RATE_LIMITS } from '../_shared/rate-limit.ts';
+import { authenticateRequest } from '../_shared/auth.ts';
+import { enforceRateLimit } from '../_shared/rate-limit.ts';
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -41,19 +41,21 @@ serve(async (req) => {
       );
     }
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
-      );
-    }
+    // Validate the JWT (signature/expiry), not just header presence.
+    const auth = await authenticateRequest(req);
+    if (auth.error) return auth.error;
+    const user = auth.user;
 
+    const authHeader = req.headers.get('Authorization');
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } },
+      { global: { headers: { Authorization: authHeader ?? '' } } },
     );
+
+    // Per-user rate limit (cost/DoS protection) before any AI work.
+    const limited = await enforceRateLimit(supabaseClient, user.id, 'suggest-recipe', corsHeaders);
+    if (limited) return limited;
 
     const body = await req.json();
     const { available_foods = [], kid_ids = [], dietary_restrictions = [] } = body;
@@ -65,31 +67,9 @@ serve(async (req) => {
       );
     }
 
-    // US-325: resolve the authenticated user (validates the JWT) and rate-limit
-    // per user / per IP before any DB-heavy work.
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid or expired token' }),
-        { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
-      );
-    }
-    const limitError = await enforceRateLimit(
-      supabaseClient,
-      { userId: user.id, clientIp: getClientIp(req) },
-      RATE_LIMITS['suggest-recipe'],
-      corsHeaders,
-    );
-    if (limitError) return limitError;
-
     // Fetch allergens for all specified kids
     const kidAllergens: string[] = [];
     if (kid_ids.length > 0) {
-      // Authorization (US-324): reject if any requested kid is not the user's,
-      // rather than trusting RLS to silently filter the cross-household subset.
-      const kidsAuthError = await assertKidsAccessible(supabaseClient, kid_ids, corsHeaders);
-      if (kidsAuthError) return kidsAuthError;
-
       const { data: kids, error: kidsError } = await supabaseClient
         .from('kids')
         .select('id, allergens')

@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { logger } from "@/lib/logger";
 
 /**
  * Hook for copying text to clipboard
@@ -384,7 +385,7 @@ export function useMap<K, V>(initialValue?: Map<K, V>) {
  * Usage:
  * ```tsx
  * useInterval(() => {
- *   console.log('Every second');
+ *   logger.info('Every second');
  * }, 1000);
  * ```
  */
@@ -409,7 +410,7 @@ export function useInterval(callback: () => void, delay: number | null) {
  * Usage:
  * ```tsx
  * useTimeout(() => {
- *   console.log('After 3 seconds');
+ *   logger.info('After 3 seconds');
  * }, 3000);
  * ```
  */

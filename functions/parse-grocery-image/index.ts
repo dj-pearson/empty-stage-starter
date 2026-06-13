@@ -14,14 +14,11 @@
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
 import { authenticateRequest } from '../_shared/auth.ts';
-import {
-  assertImageWithinLimit,
-  enforceRateLimit,
-  getClientIp,
-  RATE_LIMITS,
-} from '../_shared/rate-limit.ts';
+import { enforceRateLimit } from '../_shared/rate-limit.ts';
+import { validateImageSize } from '../_shared/validation.ts';
 
 const VALID_CATEGORIES = ['protein', 'carb', 'dairy', 'fruit', 'vegetable', 'snack'];
 
@@ -35,6 +32,7 @@ serve(async (req) => {
   // Authenticate request
   const auth = await authenticateRequest(req);
   if (auth.error) return auth.error;
+  const user = auth.user;
 
   try {
     if (req.method !== 'POST') {
@@ -43,6 +41,20 @@ serve(async (req) => {
         { status: 405, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }
+
+    // Per-user rate limit (cost/DoS protection) before any vision work.
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } },
+    );
+    const limited = await enforceRateLimit(
+      supabaseClient,
+      user.id,
+      'parse-grocery-image',
+      corsHeaders,
+    );
+    if (limited) return limited;
 
     const body = await req.json();
     const { imageBase64 } = body;
@@ -54,18 +66,9 @@ serve(async (req) => {
       );
     }
 
-    // US-325: reject oversize images before paying for vision, and rate-limit the
-    // expensive AI call per user / per IP.
-    const sizeError = assertImageWithinLimit(imageBase64, corsHeaders);
-    if (sizeError) return sizeError;
-
-    const limitError = await enforceRateLimit(
-      auth.supabase,
-      { userId: auth.user.id, clientIp: getClientIp(req) },
-      RATE_LIMITS['parse-grocery-image'],
-      corsHeaders,
-    );
-    if (limitError) return limitError;
+    // Reject oversized images before forwarding to the vision API.
+    const tooLarge = validateImageSize(imageBase64, corsHeaders);
+    if (tooLarge) return tooLarge;
 
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiApiKey) {

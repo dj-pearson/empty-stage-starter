@@ -44,7 +44,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
 import { authenticateRequest } from '../_shared/auth.ts';
 import { assertHouseholdMember } from '../_shared/household.ts';
-import { enforceRateLimit, getClientIp, RATE_LIMITS } from '../_shared/rate-limit.ts';
+import { enforceRateLimit } from '../_shared/rate-limit.ts';
 import {
   topSuggestions,
   type RecipeContext,
@@ -131,26 +131,18 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
 
-    // US-325: rate-limit per user / per IP before the DB-heavy scoring work.
-    const limitError = await enforceRateLimit(
-      supabase,
-      { userId: user.id, clientIp: getClientIp(req) },
-      RATE_LIMITS['tonight-mode'],
-      corsHeaders,
-    );
-    if (limitError) return limitError;
+    // Per-user rate limit (cost/DoS protection) before any DB/AI work.
+    const limited = await enforceRateLimit(supabase, user.id, 'tonight-mode', corsHeaders);
+    if (limited) return limited;
 
-    // Authorization (US-324): never trust a client-supplied householdId. Verify
-    // the authenticated user actually belongs to it before scoping any data to
-    // it, otherwise a guessed householdId could read another household's kids,
-    // foods, recipes, and plan history (IDOR / broken object-level auth).
-    const membershipError = await assertHouseholdMember(
+    // IDOR defense: a client-supplied householdId must belong to the caller.
+    const forbidden = await assertHouseholdMember(
       supabase,
-      user,
+      user.id,
       body.householdId,
       corsHeaders,
     );
-    if (membershipError) return membershipError;
+    if (forbidden) return forbidden;
 
     // Kids — filter by household and optional kidIds
     let kidsQuery = supabase
@@ -173,15 +165,10 @@ serve(async (req) => {
       dislikedFoods: k.disliked_foods ?? [],
     }));
 
-    // Foods — pantry. Scope to the verified household (or the user) instead of
-    // relying on RLS alone (US-324 defense in depth).
-    let foodsQuery = supabase
+    // Foods — pantry
+    const { data: foodsRows, error: foodsErr } = await supabase
       .from('foods')
       .select('id, name, allergens, category, household_id, user_id');
-    foodsQuery = body.householdId
-      ? foodsQuery.eq('household_id', body.householdId)
-      : foodsQuery.eq('user_id', user.id);
-    const { data: foodsRows, error: foodsErr } = await foodsQuery;
     if (foodsErr) throw foodsErr;
     const allFoods: { id: string; name: string; allergens?: string[] | null }[] =
       (foodsRows ?? []).map((f: any) => ({
@@ -192,19 +179,13 @@ serve(async (req) => {
     const pantry: PantryFood[] = allFoods;
     const foodById = new Map(allFoods.map((f) => [f.id, f]));
 
-    // Recipes — capped to keep p95 under 800ms. Scope to the verified household
-    // (or the user) rather than relying on RLS alone (US-324 defense in depth).
-    let recipesQuery = supabase
+    // Recipes — capped to keep p95 under 800ms
+    const { data: recipesRows, error: recipesErr } = await supabase
       .from('recipes')
       .select(
         'id, name, image_url, total_time_minutes, prep_time, food_ids, default_servings, household_id, user_id',
-      );
-    recipesQuery = body.householdId
-      ? recipesQuery.eq('household_id', body.householdId)
-      : recipesQuery.eq('user_id', user.id);
-    const { data: recipesRows, error: recipesErr } = await recipesQuery.limit(
-      HARD_RECIPE_CAP,
-    );
+      )
+      .limit(HARD_RECIPE_CAP);
     if (recipesErr) throw recipesErr;
 
     const recipeIds = (recipesRows ?? []).map((r: any) => r.id);

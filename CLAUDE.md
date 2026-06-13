@@ -34,7 +34,7 @@ Entry points: routes → `src/App.tsx`; state → `AppContext.tsx`; supabase →
 ```bash
 npm run dev              # port 8080
 npm run build
-npm run typecheck        # tsc -b --noEmit — checks src + vite config. NOTE: plain `tsc --noEmit` is a no-op here (root tsconfig is files:[]+references), so always use this script.
+npm run typecheck        # tsc -b --noEmit (checks the referenced projects — CI gate)
 npm run test:run         # vitest
 npm run test:e2e         # playwright
 npm run lint && npm run format
@@ -75,6 +75,7 @@ Commit prefix `hotfix:` is recognized by CI to auto-fill App Store review notes 
 - **Errors**: try-catch async; `toast` from `sonner` for feedback; Zod at boundaries.
 - **a11y**: semantic HTML, ARIA on icon buttons, respect `useReducedMotion()`.
 - **Perf**: `lazy()` + `Suspense` for routes/heavy components; `useMemo`/`useCallback`/`memo()` where it matters; `OptimizedImage` for images.
+- **i18n** (US-347): framework is `i18next` + `react-i18next`, wired at the app root (`<I18nextProvider>` in `src/App.tsx`, config in `src/i18n/index.ts`, strings in `src/i18n/locales/en.json`). New user-facing copy → add a key under the right namespace and render via `const { t } = useTranslation(); t('nav.dashboard')` instead of a hardcoded literal. Only `en` exists today; a new language is just another locale file added to `resources`. For numbers/dates use `Intl.*` so a locale switch also localizes formatting.
 
 ## State (AppContext)
 

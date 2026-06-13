@@ -2,10 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 export async function authenticateRequest(
   req: Request
-): Promise<
-  | { user: any; supabase: ReturnType<typeof createClient>; error?: never }
-  | { user?: never; supabase?: never; error: Response }
-> {
+): Promise<{ user: any; error?: never } | { user?: never; error: Response }> {
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) {
     return {
@@ -36,7 +33,5 @@ export async function authenticateRequest(
     };
   }
 
-  // Also return the JWT-scoped client so callers can reuse it (e.g. rate-limit
-  // RPCs) without building a second client. US-325.
-  return { user, supabase };
+  return { user };
 }

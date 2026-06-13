@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { logger } from "@/lib/logger";
 import { Helmet } from "react-helmet-async";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -407,7 +408,7 @@ const Auth = () => {
     const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL || 'https://functions.tryeatpal.com';
     const oauthUrl = `${functionsUrl}/oauth-proxy?action=authorize&provider=${provider}&redirect_to=${encodeURIComponent(redirectTo)}`;
 
-    console.log('[OAuth] Using edge function:', oauthUrl);
+    logger.info('[OAuth] Using edge function:', oauthUrl);
 
     // Check if the edge function is available before redirecting
     try {
@@ -420,7 +421,7 @@ const Auth = () => {
       }
     } catch (e) {
       // Network error or CORS - try anyway, the redirect will show an error if it fails
-      console.log('[OAuth] Could not check function availability, proceeding anyway');
+      logger.info('[OAuth] Could not check function availability, proceeding anyway');
     }
 
     // Redirect to the OAuth proxy (full page redirect, not popup)

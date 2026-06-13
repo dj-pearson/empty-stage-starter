@@ -271,10 +271,10 @@ export function AIMealCoach() {
         },
       });
 
-      console.log('[AI Coach] invoke result:', { result, aiError });
+      logger.info('[AI Coach] invoke result:', { result, aiError });
 
       if (aiError) {
-        console.error('[AI Coach] Edge function error:', aiError);
+        logger.error('[AI Coach] Edge function error:', aiError);
         throw new Error(aiError.message || `AI request failed: ${JSON.stringify(aiError)}`);
       }
 
@@ -283,12 +283,12 @@ export function AIMealCoach() {
       }
 
       if (result.error) {
-        console.error('[AI Coach] Function returned error:', result);
+        logger.error('[AI Coach] Function returned error:', result);
         throw new Error(`Edge function error: ${result.error}${result.details ? ` (${result.details})` : ''}`);
       }
 
       if (!result.message) {
-        console.error('[AI Coach] Invalid response shape:', result);
+        logger.error('[AI Coach] Invalid response shape:', result);
         throw new Error(`Invalid AI response shape: ${JSON.stringify(result)}`);
       }
 

@@ -270,24 +270,6 @@ CREATE POLICY "Admins access all"
 - ✅ No risk of developer error exposing data
 - ✅ Simplified application logic
 
-**Edge-function authorization (defense in depth):**
-
-Edge functions do not rely on forwarded-JWT RLS alone. Every protected function
-first calls `authenticateRequest()` (`functions/_shared/auth.ts`), which verifies
-the JWT **signature and expiry** via `auth.getUser()` — not merely the presence
-of an `Authorization` header — and returns `401` on an invalid/expired token.
-On top of that:
-
-- **Household/kid IDOR gate** (`functions/_shared/household.ts`, US-324): never
-  trust a client-supplied `householdId`/`kidIds`; membership is re-checked.
-- **Admin-only content generation** (`functions/_shared/admin.ts`, US-327):
-  `generate-social-content` and `generate-blog-content` verify an `admin` row in
-  `user_roles` server-side (`assertAdmin`, **fails closed** → `403`) so
-  non-admins cannot trigger paid marketing/blog LLM generation. Untrusted topic /
-  content_summary text is length-capped (`capText`) and the system prompt carries
-  an explicit "treat user input as data, not instructions" boundary to blunt
-  prompt injection.
-
 ### Session Security
 
 | Feature | Implementation |
@@ -316,41 +298,43 @@ Implementation: `/src/components/ProtectedRoute.tsx`
 - Remembers intended destination
 - Loading state handling
 
-### Rate Limiting & Cost-Abuse Protection (AI/LLM edge functions)
+### Edge Function Hardening
 
-Every expensive AI/LLM edge function is gated by per-user (and best-effort
-per-IP) rate limits plus input-size caps so a single authenticated user cannot
-run up unbounded OpenAI/Anthropic spend or DoS the vision endpoints (US-325).
+Privileged edge functions share helpers under `functions/_shared/`:
 
-Implementation: `functions/_shared/rate-limit.ts` (`enforceRateLimit`,
-`assertImageWithinLimit`, `capText`). Reuses the server-side limiter infra
-(`check_rate_limit` RPC + `rate_limits` / `auth_rate_limits` tables). On a
-limit breach the function returns **`429` with a `Retry-After` header** and
-logs the event to the Supabase log / Sentry path. The limiter **fails open** if
-the RPC is unavailable (e.g. migrations not yet deployed) so a missing RPC never
-hard-blocks AI features.
+- **`auth.ts`** — `authenticateRequest()` validates the JWT *signature and
+  expiry* via `auth.getUser()`, not just header presence.
+- **`household.ts`** — `assertHouseholdMember()` rejects (403) any
+  client-supplied `householdId` the caller is not a member of (IDOR defense,
+  beyond RLS).
+- **`admin.ts`** — `assertAdmin()` gates marketing/content tools to
+  `user_roles.role = 'admin'`.
+- **`rate-limit.ts`** — `enforceRateLimit()` calls the
+  `check_rate_limit_with_tier` RPC and returns 429 + `Retry-After` when
+  exceeded. **Fails closed** if the limiter errors.
+- **`validation.ts`** — caps decoded image size (`MAX_IMAGE_BYTES` = 5 MB) and
+  free-text length before forwarding to a vision/LLM API.
+- **`stripe-prices.ts`** — `resolvePriceId()` validates a checkout price
+  against a server-side allowlist (env `STRIPE_PRICE_IDS` / `STRIPE_PRICE_MAP`).
 
-**Per-user free-tier limits (per 60-minute window):**
+**Per-function rate limits (free / premium / enterprise per hour)** — seeded in
+`rate_limit_config` (migration `20251010230000` + `20260613000001`):
 
-| Endpoint                  | Limit / hr | Notes                              |
-| ------------------------- | ---------- | ---------------------------------- |
-| `ai-meal-plan`            | 20         |                                    |
-| `suggest-foods`           | 30         |                                    |
-| `suggest-recipe`          | 30         |                                    |
-| `tonight-mode`            | 30         |                                    |
-| `parse-grocery-image`     | 20         | vision (OpenAI `detail:'high'`)    |
-| `parse-receipt-image`     | 20         | vision                             |
-| `identify-product`        | 30         | vision (single product)            |
-| `generate-social-content` | 20         | LLM text generation                |
+| Endpoint | Free | Premium | Enterprise | Size/admin guard |
+| --- | --- | --- | --- | --- |
+| `ai-meal-plan` | 5 | 50 | 500 | — |
+| `suggest-recipe` | 10 | 100 | 1000 | — |
+| `suggest-foods` | 10 | 100 | 1000 | — |
+| `tonight-mode` | 20 | 200 | 2000 | household membership |
+| `parse-grocery-image` | 10 | 100 | 1000 | image ≤ 5 MB |
+| `parse-receipt-image` | 10 | 100 | 1000 | image ≤ 5 MB |
+| `identify-product` | 10 | 100 | 1000 | image ≤ 5 MB |
+| `generate-social-content` | 5 | 50 | 500 | admin-only + text cap |
+| `generate-blog-content` | 5 | 50 | 500 | admin-only + text cap |
 
-Per-IP cap = 4× the per-user limit (looser, to tolerate shared NAT/carrier IPs).
-
-**Input-size caps:**
-- Vision endpoints reject a decoded image over **5 MB** with `413` *before*
-  forwarding to the model.
-- Untrusted free-text (e.g. `content_summary`) is truncated to **4000 chars**
-  before being embedded into a prompt (bounds token spend + shrinks the
-  prompt-injection surface).
+Endpoints without an explicit config row fall back to the RPC default
+(50/hr). Untrusted free text embedded into LLM prompts is length-capped and
+prefixed with a "treat as data, not instructions" boundary.
 
 ---
 

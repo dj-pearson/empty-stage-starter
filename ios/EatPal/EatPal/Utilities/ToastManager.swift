@@ -40,17 +40,23 @@ struct Toast: Identifiable, Equatable {
     /// Stored as `@MainActor (Sendable)?` so it lives inside an Equatable
     /// struct without breaking the `id`-based equality below.
     let retry: (@MainActor () async -> Void)?
+    /// US-349: label for the action button. Defaults to "Retry" when nil so
+    /// existing error-retry call sites are unchanged; success/info toasts can
+    /// pass e.g. "Undo".
+    let actionLabel: String?
 
     init(
         type: ToastType,
         title: String,
         message: String? = nil,
         duration: TimeInterval = 3.0,
+        actionLabel: String? = nil,
         retry: (@MainActor () async -> Void)? = nil
     ) {
         self.type = type
         self.title = title
         self.message = message
+        self.actionLabel = actionLabel
         // Error toasts with retry stay on screen a bit longer — the user
         // needs time to read the title + decide whether to tap Retry.
         if retry != nil && duration < 5 {
@@ -222,14 +228,13 @@ struct ToastView: View {
                             .controlSize(.small)
                             .frame(width: 14, height: 14)
                     } else {
-                        Text("Retry")
+                        Text(toast.actionLabel ?? "Retry")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(toast.type.color)
                     }
                 }
                 .disabled(isRetrying)
-                .accessibilityLabel("Retry")
-                .accessibilityHint("Re-runs the action that just failed.")
+                .accessibilityLabel(toast.actionLabel ?? "Retry")
             }
 
             Button {

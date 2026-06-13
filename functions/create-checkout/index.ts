@@ -4,8 +4,7 @@
  * Creates a Stripe checkout session for subscription purchases.
  *
  * POST /create-checkout
- * Body: { "price_id": "price_xxx" }  // validated against a server-side allowlist
- *   or { "planId": "pro", "billingCycle": "monthly" }  // resolved server-side
+ * Body: { "price_id": "price_xxx" }
  * Auth: JWT required
  *
  * Response (200):
@@ -15,7 +14,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
-import { resolveCheckoutPrice } from '../_shared/stripe-pricing.ts';
+import { resolvePriceId } from '../_shared/stripe-prices.ts';
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -68,26 +67,15 @@ serve(async (req) => {
 
     const body = await req.json();
 
-    // Resolve the price server-side. Never trust a client-supplied price_id:
-    // either it must be in the allowlist, or a plan/cycle key is resolved to a
-    // server-controlled price (US-326 — price/tier tampering defense).
-    const priceResult = resolveCheckoutPrice(
-      {
-        priceId: body.price_id,
-        planKey: body.planId ?? body.plan ?? body.tier,
-        billingCycle: body.billingCycle,
-      },
-      (key) => Deno.env.get(key),
-    );
-
-    if (!priceResult.ok) {
+    // Never pass a client-supplied price straight to Stripe (price/tier
+    // tampering). Resolve against a server-side allowlist sourced from env.
+    const price_id = resolvePriceId(Deno.env, body);
+    if (!price_id) {
       return new Response(
-        JSON.stringify({ error: priceResult.error }),
-        { status: priceResult.status, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
+        JSON.stringify({ error: 'Invalid or unknown price/plan' }),
+        { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }
-
-    const price_id = priceResult.priceId;
 
     const siteUrl = Deno.env.get('SITE_URL') ?? 'https://tryeatpal.com';
 

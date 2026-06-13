@@ -4,6 +4,7 @@
  * Helper functions for tracking user events, page views, and conversions.
  * Provides a unified interface for analytics providers (GA4, Mixpanel, etc.)
  */
+import { logger } from "@/lib/logger";
 
 /**
  * Analytics event interface
@@ -97,19 +98,19 @@ class GA4Provider implements AnalyticsProvider {
  */
 class ConsoleProvider implements AnalyticsProvider {
   trackEvent(event: AnalyticsEvent): void {
-    console.log('[Analytics] Event:', event);
+    logger.info('[Analytics] Event:', event);
   }
 
   trackPageView(pageView: PageView): void {
-    console.log('[Analytics] Page View:', pageView);
+    logger.info('[Analytics] Page View:', pageView);
   }
 
   identifyUser(properties: UserProperties): void {
-    console.log('[Analytics] Identify User:', properties);
+    logger.info('[Analytics] Identify User:', properties);
   }
 
   reset(): void {
-    console.log('[Analytics] Reset User');
+    logger.info('[Analytics] Reset User');
   }
 }
 

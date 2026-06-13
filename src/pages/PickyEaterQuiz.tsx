@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { logger } from "@/lib/logger";
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -37,7 +38,7 @@ export default function PickyEaterQuiz() {
 
   const trackAnalyticsEvent = (eventType: string, data?: Record<string, unknown>) => {
     // Legacy analytics tracking (for backward compatibility)
-    console.log('Analytics:', eventType, data);
+    logger.info('Analytics:', eventType, data);
   };
 
   const handleAnswer = (questionId: string, answer: string | string[]) => {

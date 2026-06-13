@@ -46,7 +46,7 @@ export function NotificationBell() {
           table: 'notification_history',
         },
         (payload) => {
-          console.log('New notification:', payload);
+          logger.info('New notification:', payload);
           loadNotifications();
         }
       )
@@ -86,7 +86,7 @@ export function NotificationBell() {
       setUnreadCount(unread);
 
     } catch (error) {
-      console.error('Error loading notifications:', error);
+      logger.error('Error loading notifications:', error);
     }
   };
 
@@ -111,7 +111,7 @@ export function NotificationBell() {
       setUnreadCount((prev) => Math.max(0, prev - 1));
 
     } catch (error) {
-      console.error('Error marking notification as read:', error);
+      logger.error('Error marking notification as read:', error);
     }
   };
 
@@ -134,7 +134,7 @@ export function NotificationBell() {
       setUnreadCount((prev) => Math.max(0, prev - 1));
 
     } catch (error) {
-      console.error('Error dismissing notification:', error);
+      logger.error('Error dismissing notification:', error);
     }
   };
 
@@ -157,7 +157,7 @@ export function NotificationBell() {
       loadNotifications();
 
     } catch (error) {
-      console.error('Error marking all as read:', error);
+      logger.error('Error marking all as read:', error);
     }
   };
 

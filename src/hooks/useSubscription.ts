@@ -102,7 +102,7 @@ export function useSubscription() {
         }
       }
     } catch (err: unknown) {
-      console.error("Error fetching subscription:", err);
+      logger.error("Error fetching subscription:", err);
     } finally {
       setLoading(false);
     }
@@ -167,7 +167,7 @@ export function useSubscription() {
 
       return { success: true };
     } catch (err) {
-      console.error("Error upgrading subscription:", err);
+      logger.error("Error upgrading subscription:", err);
       const errorMessage = err instanceof Error ? err.message : "Failed to upgrade subscription";
       toast.error(errorMessage);
       return { success: false, error: errorMessage };
@@ -196,7 +196,7 @@ export function useSubscription() {
 
       return { success: true };
     } catch (err) {
-      console.error("Error canceling subscription:", err);
+      logger.error("Error canceling subscription:", err);
       const errorMessage = err instanceof Error ? err.message : "Failed to cancel subscription";
       toast.error(errorMessage);
       return { success: false, error: errorMessage };
@@ -225,7 +225,7 @@ export function useSubscription() {
 
       return { success: true };
     } catch (err) {
-      console.error("Error reactivating subscription:", err);
+      logger.error("Error reactivating subscription:", err);
       const errorMessage = err instanceof Error ? err.message : "Failed to reactivate subscription";
       toast.error(errorMessage);
       return { success: false, error: errorMessage };
@@ -255,7 +255,7 @@ export function useSubscription() {
 
       return { success: true };
     } catch (err) {
-      console.error("Error changing billing cycle:", err);
+      logger.error("Error changing billing cycle:", err);
       const errorMessage = err instanceof Error ? err.message : "Failed to change billing cycle";
       toast.error(errorMessage);
       return { success: false, error: errorMessage };

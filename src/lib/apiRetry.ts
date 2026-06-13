@@ -4,6 +4,7 @@
  * Retries failed requests on network errors and 5xx status codes.
  * Does NOT retry on 4xx client errors (invalid input, auth failures, etc.).
  */
+import { logger } from "@/lib/logger";
 
 /** Configuration for retry behavior */
 export interface RetryConfig {
@@ -188,7 +189,7 @@ export async function withRetry<T>(
       const delayMs = calculateDelay(attempt, mergedConfig);
 
       if (import.meta.env.DEV) {
-        console.warn(
+        logger.warn(
           `[apiRetry] Attempt ${attempt + 1}/${mergedConfig.maxRetries + 1} failed, ` +
           `retrying in ${delayMs}ms...`,
           error

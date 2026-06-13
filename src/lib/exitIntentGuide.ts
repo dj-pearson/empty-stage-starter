@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from "@/lib/logger";
 
 interface CaptureEmailLeadParams {
   email: string;
@@ -45,7 +46,7 @@ export async function captureEmailLead({ email, source }: CaptureEmailLeadParams
 
     return { success: true, leadId: lead.id };
   } catch (error) {
-    console.error('Error capturing email lead:', error);
+    logger.error('Error capturing email lead:', error);
     throw error;
   }
 }

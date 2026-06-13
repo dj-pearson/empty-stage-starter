@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -130,7 +131,7 @@ export default function AccountSettings() {
         );
       }
     } catch (err) {
-      console.error("Error loading profile:", err);
+      logger.error("Error loading profile:", err);
     } finally {
       setLoadingProfile(false);
     }
@@ -232,7 +233,7 @@ export default function AccountSettings() {
         toast.error("Unable to open billing portal.");
       }
     } catch (err) {
-      console.error("Error opening Stripe portal:", err);
+      logger.error("Error opening Stripe portal:", err);
       if (err instanceof Error && err.message.includes("No subscription")) {
         toast.info("Subscribe to a plan first to access the billing portal.");
         navigate("/pricing");

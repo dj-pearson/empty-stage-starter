@@ -58,8 +58,8 @@ export function getUserAgent(): string {
  * Usage:
  * ```tsx
  * const browser = getBrowserInfo();
- * console.log(browser.name); // 'chrome'
- * console.log(browser.version); // '120.0.0'
+ * console.info(browser.name); // 'chrome'
+ * console.info(browser.version); // '120.0.0'
  * ```
  */
 export function getBrowserInfo(): BrowserInfo {

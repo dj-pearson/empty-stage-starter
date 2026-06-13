@@ -6,7 +6,7 @@ export function initializeSentry() {
   if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {
     // Skip if no DSN is configured
     if (!import.meta.env.VITE_SENTRY_DSN) {
-      console.warn('Sentry DSN not configured, skipping initialization');
+      logger.warn('Sentry DSN not configured, skipping initialization');
       return;
     }
 
@@ -89,7 +89,7 @@ export function initializeSentry() {
       },
     });
     } catch (error) {
-      console.error('Failed to initialize Sentry:', error);
+      logger.error('Failed to initialize Sentry:', error);
     }
   }
 }

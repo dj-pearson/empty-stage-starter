@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { logger } from "@/lib/logger";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -44,7 +45,7 @@ export function BudgetAnalyticsDashboard() {
         const data = await getBudgetAnalyticsSummary();
         setAnalytics(data);
       } catch (err) {
-        console.error('Error loading analytics:', err);
+        logger.error('Error loading analytics:', err);
         setError('Failed to load analytics');
       } finally {
         setIsLoading(false);
