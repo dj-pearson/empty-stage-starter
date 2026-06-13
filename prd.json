@@ -4262,7 +4262,8 @@
       ],
       "priority": 5,
       "passes": true,
-      "notes": "Verified complete on iOS branch claude/ios-planner-parity-us285-286 (audit only — no code change required this session): Utilities/ShortfallCalculator.swift mirrors web recipeShortfall.ts with structured ingredients + unit-normalised (case-insensitive trim) shortfall + 'verify' flag on unit mismatch (conservative on-hand=0 treatment) + foodId-precedence pantry match falling back to lowercased name match. Views/MealPlan/MissingIngredientsSheet.swift renders the rows with default-checked include toggle + per-row Stepper (0.25 step for tsp/tbsp/cup/oz/g/ml; 1 otherwise) + 'verify' badge on unit mismatch + 'Add N to grocery' CTA that bulk-inserts via AppState.addGroceryItem using GroceryItem.fromShortfall (stamps addedVia='recipe' + sourceRecipeId so US-262 mark-made auto-check can find them) + Skip toolbar shortcut. MealPlanView.handleAddEntryDismiss runs ShortfallCalculator.compute on the dropped recipe and only opens the sheet when shortfalls.isEmpty == false (silent no-op when fully covered or recipe has no structured ingredients). AnalyticsEvent.missingIngredientPromptShown(missingCount:totalCount:) fires on sheet appear; .missingIngredientsAddedToGrocery(addedCount:) fires on commit. EatPalTests/ShortfallCalculatorTests.swift covers 12 cases including arithmetic shortfall with units matching, case-insensitive unit normalization, unit-mismatch comparable=false branch, foodId precedence, lowercased-name fallback, no-match-fully-missing, sort-order preservation, nil-quantity defaulting to 1, blank-name skipping, fully-covered no-row, empty-ingredients no-row, mixed scenario. Build verification deferred to local Xcode."    },
+      "notes": "Verified complete on iOS branch claude/ios-planner-parity-us285-286 (audit only — no code change required this session): Utilities/ShortfallCalculator.swift mirrors web recipeShortfall.ts with structured ingredients + unit-normalised (case-insensitive trim) shortfall + 'verify' flag on unit mismatch (conservative on-hand=0 treatment) + foodId-precedence pantry match falling back to lowercased name match. Views/MealPlan/MissingIngredientsSheet.swift renders the rows with default-checked include toggle + per-row Stepper (0.25 step for tsp/tbsp/cup/oz/g/ml; 1 otherwise) + 'verify' badge on unit mismatch + 'Add N to grocery' CTA that bulk-inserts via AppState.addGroceryItem using GroceryItem.fromShortfall (stamps addedVia='recipe' + sourceRecipeId so US-262 mark-made auto-check can find them) + Skip toolbar shortcut. MealPlanView.handleAddEntryDismiss runs ShortfallCalculator.compute on the dropped recipe and only opens the sheet when shortfalls.isEmpty == false (silent no-op when fully covered or recipe has no structured ingredients). AnalyticsEvent.missingIngredientPromptShown(missingCount:totalCount:) fires on sheet appear; .missingIngredientsAddedToGrocery(addedCount:) fires on commit. EatPalTests/ShortfallCalculatorTests.swift covers 12 cases including arithmetic shortfall with units matching, case-insensitive unit normalization, unit-mismatch comparable=false branch, foodId precedence, lowercased-name fallback, no-match-fully-missing, sort-order preservation, nil-quantity defaulting to 1, blank-name skipping, fully-covered no-row, empty-ingredients no-row, mixed scenario. Build verification deferred to local Xcode."
+    },
     {
       "id": "US-286",
       "title": "iOS Planner: pantry decrement on mark-made (web parity)",
@@ -4277,7 +4278,8 @@
       ],
       "priority": 6,
       "passes": true,
-      "notes": "Verified complete on iOS branch claude/ios-planner-parity-us285-286 (audit only — no code change required this session): Utilities/MealMadeStrategy.swift owns the decision tree — recipes with structured recipe_ingredients route to the rpc_mark_meal_made server RPC (serverHandlesDebits=true, walks recipe_ingredients server-side); recipes with only food_ids fall back to per-food deduct_food_quantity calls owned by iOS (fallbackUsed=true); nil/empty recipes are a no-op. Dedupes repeated food_ids so a recipe listing the same food twice doesn't double-debit. Models/PlanEntryMadeLog.swift exists for the audit/undo path. App/AppState.markPlanEntryMade orchestrates: (1) calls dataService.markMealMade(planEntryId:), (2) on alreadyLogged status surfaces 'Already logged' toast + light haptic (idempotency), (3) on logged/noRecipe runs the legacy-fallback debit loop via dataService.deductFoodQuantity for each MealMadeStrategy.Debit when strategy.fallbackUsed, (4) applies optimistic local mutations via applyMealMadeMutationsLocally which subtracts from AppState.foods + flips plan_entry.result to 'ate' in the same write batch (best-effort plan-entry update — failure leaves the debit standing and lets the next loadAllData rectify), (5) builds the success toast with debit + grocery-check counts. AnalyticsEvent.mealMarkedMade(decrementedCount:fallbackUsed:) fires for the AC; .mealMadeLogged(debitedCount:checkedCount:) for the richer surface. Views/MealPlan/MealPlanView.swift PlanEntryRow contextMenu line 615 invokes 'Made it' which calls appState.markPlanEntryMade. EatPalTests/MealMadeStrategyTests.swift covers nil-recipe no-op, structured-server-handled path, structured-ignores-unlinked-foodId, structured-dedupes-repeats, legacy-fallback, legacy-dedupes, empty-recipe-no-op, and structured-takes-precedence-over-foodIds. Deviation from AC: 'serving-scaled quantity' is fixed at amount=1 in v1 — documented in MealMadeStrategy.swift as 'serving math is future polish' matching the server RPC's existing behavior. Build verification deferred to local Xcode."    },
+      "notes": "Verified complete on iOS branch claude/ios-planner-parity-us285-286 (audit only — no code change required this session): Utilities/MealMadeStrategy.swift owns the decision tree — recipes with structured recipe_ingredients route to the rpc_mark_meal_made server RPC (serverHandlesDebits=true, walks recipe_ingredients server-side); recipes with only food_ids fall back to per-food deduct_food_quantity calls owned by iOS (fallbackUsed=true); nil/empty recipes are a no-op. Dedupes repeated food_ids so a recipe listing the same food twice doesn't double-debit. Models/PlanEntryMadeLog.swift exists for the audit/undo path. App/AppState.markPlanEntryMade orchestrates: (1) calls dataService.markMealMade(planEntryId:), (2) on alreadyLogged status surfaces 'Already logged' toast + light haptic (idempotency), (3) on logged/noRecipe runs the legacy-fallback debit loop via dataService.deductFoodQuantity for each MealMadeStrategy.Debit when strategy.fallbackUsed, (4) applies optimistic local mutations via applyMealMadeMutationsLocally which subtracts from AppState.foods + flips plan_entry.result to 'ate' in the same write batch (best-effort plan-entry update — failure leaves the debit standing and lets the next loadAllData rectify), (5) builds the success toast with debit + grocery-check counts. AnalyticsEvent.mealMarkedMade(decrementedCount:fallbackUsed:) fires for the AC; .mealMadeLogged(debitedCount:checkedCount:) for the richer surface. Views/MealPlan/MealPlanView.swift PlanEntryRow contextMenu line 615 invokes 'Made it' which calls appState.markPlanEntryMade. EatPalTests/MealMadeStrategyTests.swift covers nil-recipe no-op, structured-server-handled path, structured-ignores-unlinked-foodId, structured-dedupes-repeats, legacy-fallback, legacy-dedupes, empty-recipe-no-op, and structured-takes-precedence-over-foodIds. Deviation from AC: 'serving-scaled quantity' is fixed at amount=1 in v1 — documented in MealMadeStrategy.swift as 'serving math is future polish' matching the server RPC's existing behavior. Build verification deferred to local Xcode."
+    },
     {
       "id": "US-287",
       "title": "Unit normalization layer (web util mirroring iOS UnitInference)",
@@ -4323,7 +4325,8 @@
       ],
       "priority": 9,
       "passes": true,
-      "notes": "Verified complete on iOS (audit only — no code change required): Views/Pantry/PantryQuickAddBar.swift mounted at top of PantryView via PantryQuickAddBar(onAdded: {}) at PantryView.swift:95. TextField with submit-on-return (.submitLabel(.done) + onSubmit), live preview chip recomputes on every text change via private parsed computed property (Self.parse(text)), voice button wraps VoiceInputService (@StateObject) and pipes dictation through the same parser, parser chain: (1) FoodBulkParser.parseLine for '<qty> [unit] <name>' with fractions/decimals/25-token unit table, (2) UnitInference.infer for bare-name fallback (eggs->dozen, milk->gal, 50-rule catalog shared with grocery quick-add), (3) bare name with no inference defaults to qty=1, unit=nil. AnalyticsEvent.pantryQuickAddSubmitted(parseConfidence:) fires on each successful submit. BulkAddFoodSheet kept for paste flow. Build verification deferred to local Xcode."    },
+      "notes": "Verified complete on iOS (audit only — no code change required): Views/Pantry/PantryQuickAddBar.swift mounted at top of PantryView via PantryQuickAddBar(onAdded: {}) at PantryView.swift:95. TextField with submit-on-return (.submitLabel(.done) + onSubmit), live preview chip recomputes on every text change via private parsed computed property (Self.parse(text)), voice button wraps VoiceInputService (@StateObject) and pipes dictation through the same parser, parser chain: (1) FoodBulkParser.parseLine for '<qty> [unit] <name>' with fractions/decimals/25-token unit table, (2) UnitInference.infer for bare-name fallback (eggs->dozen, milk->gal, 50-rule catalog shared with grocery quick-add), (3) bare name with no inference defaults to qty=1, unit=nil. AnalyticsEvent.pantryQuickAddSubmitted(parseConfidence:) fires on each successful submit. BulkAddFoodSheet kept for paste flow. Build verification deferred to local Xcode."
+    },
     {
       "id": "US-290",
       "title": "Plan-aware grocery flags: badge planned meals with unmet needs",
@@ -5262,6 +5265,397 @@
       "priority": 30,
       "passes": false,
       "notes": "Verified: 0 i18n usage in src (no i18next/react-intl/useTranslation). Lower priority / future-facing."
+    },
+    {
+      "id": "US-348",
+      "title": "iOS Planner: plan-time pantry awareness (coverage indicator on planned meals)",
+      "description": "As a parent planning the week, I want to see at a glance whether I already have the ingredients for a planned meal so that the planner reflects my real pantry instead of treating planning and inventory as disconnected. Today AppState.addPlanEntry only inserts the entry and never consults or reserves pantry stock; the pantry is read for shortfalls only when the missing-ingredients sheet fires. This story adds a read-only coverage signal (no destructive reservation) so the product owner's mental model of 'the planner knows what's in my pantry' is met without risking double-debit bugs.",
+      "acceptanceCriteria": [
+        "Each planned meal row backed by a recipe shows a pantry-coverage badge: fully stocked / partially stocked / not stocked, computed via ShortfallCalculator against appState.foods",
+        "Coverage is computed read-only; planning a meal must NOT decrement Food.quantity (debit remains exclusively at mark-made per US-262/US-286)",
+        "Tapping a 'partially/not stocked' badge opens the existing MissingIngredientsSheet for that recipe",
+        "Legacy recipes with no structured ingredients fall back to recipe.foodIds for coverage; if neither exists, show no badge rather than a misleading 'stocked'",
+        "Badge updates live when pantry or plan changes (no stale state)",
+        "Decision recorded in story notes: confirm with product owner that plan-time is advisory only and true reservation is out of scope for this story",
+        "VoiceOver label on the badge reads the coverage state explicitly",
+        "Swift builds; no force-unwraps introduced"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Audit finding (Planner-Pantry GAP-3): adding to the planner does NOT pull from the pantry today. Owner expectation. Recommended approach is an advisory coverage indicator, not destructive reservation, to avoid divergence from the server rpc_mark_meal_made debit path."
+    },
+    {
+      "id": "US-349",
+      "title": "iOS MealPlan: complete the mark-made UNDO flow (re-credit pantry + reopen grocery)",
+      "description": "As a parent who tapped 'Made it' by mistake, I want to undo it so the pantry debit and grocery auto-checks are reversed. PlanEntryMadeLog.reversalPayload is scaffolded (PlanEntryMadeLog.swift:39-50) with a comment about an 'upcoming undo flow', but no rpc_undo_meal_made call exists anywhere on iOS and the 'already logged' toast offers no undo affordance.",
+      "acceptanceCriteria": [
+        "Add an 'Undo' action to the mark-made success toast and to the plan-entry context menu for entries logged within the reversal window",
+        "Undo applies reversalPayload: re-credits the debited pantry foods and un-checks the grocery items that mark-made auto-checked",
+        "Implement/consume an rpc_undo_meal_made RPC (additive, backward-compatible per Migration Rules); mirror optimistically the way applyMealMadeMutationsLocally does",
+        "result on plan_entries reverts from 'ate' to its prior value",
+        "Undo is idempotent and guarded against double-apply",
+        "Error path shows ErrorBanner/toast and rolls back optimistic local changes",
+        "Swift builds; unit test covers debit-then-undo restoring original quantities"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Audit finding (Planner-Pantry GAP-6). reversalPayload exists in the model but is dead until this lands."
+    },
+    {
+      "id": "US-350",
+      "title": "iOS MealPlan: re-credit pantry when deleting a meal that was already marked made",
+      "description": "As a parent who deletes a planned meal I already cooked, I want the pantry restored if I'm removing it because it didn't actually happen. Today AppState.deletePlanEntry (AppState.swift:669-682) and MealPlanTemplateService.deleteWeekPlan (166-182) make ZERO pantry writes. Combined with US-348/US-349 this directly answers the owner's question 'does it add it back if we delete from that week?'.",
+      "acceptanceCriteria": [
+        "Deleting a plan entry that has a logged mark-made record prompts: 'This meal was marked made. Restore its ingredients to the pantry?' (Restore / Just delete)",
+        "On Restore, reuse the US-349 reversal logic to re-credit pantry and reopen grocery items, then delete the entry",
+        "Deleting an entry that was never marked made deletes silently (no pantry change) as today",
+        "Clear-week (deleteWeekPlan) aggregates restorable entries and asks once for the whole batch rather than per entry",
+        "No double-credit if the user already undid the mark-made before deleting",
+        "Swift builds; covered by a test for delete-after-made restoring quantities"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit finding (Planner-Pantry GAP-4): no re-credit logic exists anywhere. Depends on US-349 reversal plumbing."
+    },
+    {
+      "id": "US-351",
+      "title": "iOS MealPlan: serving- and quantity-scaled pantry debits with unit conversion at mark-made",
+      "description": "As a parent, I want 'Made it' to debit the real amount a recipe uses so my pantry counts stay accurate. Today MealMadeStrategy debits exactly 1 per linked food regardless of RecipeIngredient.quantity or servings (MealMadeStrategy.swift:52-54), and applyMealMadeMutationsLocally does no unit conversion (a recipe needing '2 cups flour' subtracts 1 from a pantry stored in grams). This is the iOS completion of US-287.",
+      "acceptanceCriteria": [
+        "Debit amount derives from RecipeIngredient.quantity scaled by the planned serving count, not a hardcoded 1",
+        "Introduce a shared UnitConverter (mirroring the web UnitInference/normalization from US-287) used by both mark-made debit and grocery->pantry move",
+        "When recipe unit and pantry unit are convertible (e.g., cups<->ml, lb<->g), convert before debiting; when not convertible, debit by best-effort and flag the item",
+        "Server rpc_mark_meal_made updated additively (or a *_v2 RPC added) to accept per-ingredient amounts without breaking older iOS clients",
+        "Local optimistic mirror matches server result",
+        "Unit test covers scaled debit and a cups->grams conversion case",
+        "Swift builds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit findings (Planner-Pantry GAP-9, GAP-10). Currently every ingredient debits exactly 1 unit regardless of recipe amount or unit."
+    },
+    {
+      "id": "US-352",
+      "title": "iOS MealPlan: insufficient-stock guard and feedback on mark-made",
+      "description": "As a parent, I want to be told when I mark a meal made but the pantry shows I'm out of an ingredient, so the silent floor-at-zero doesn't hide reality. applyMealMadeMutationsLocally uses max(0, current - amount) (AppState.swift:816) with no warning.",
+      "acceptanceCriteria": [
+        "Before/while debiting, detect ingredients whose pantry quantity is below the required debit",
+        "Surface a non-blocking summary after mark-made: 'Logged. N ingredient(s) were low or out of stock — add to grocery?' with a one-tap add-missing-to-grocery action",
+        "Pantry still floors at 0 (no negative quantities) but the user is now informed",
+        "No extra prompt when all ingredients had sufficient stock",
+        "Swift builds"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Audit finding (Planner-Pantry GAP-8)."
+    },
+    {
+      "id": "US-353",
+      "title": "iOS MealPlan: fire the missing-ingredient prompt from ALL plan-add paths",
+      "description": "As a parent, I want the 'add missing ingredients to grocery' prompt no matter how I add a meal. Today US-285's shortfall prompt only fires from the AddPlanEntryView recipe tab; drag-drop (MealSlotCard), AI plan (AIMealPlanView), template apply (applyTemplate), and copy-week/copy-to-other-kid all call appState.addPlanEntry directly and bypass it. Legacy recipes with no structured ingredients silently skip it (MealPlanView.swift:326).",
+      "acceptanceCriteria": [
+        "Extract a single shared post-add shortfall check usable by every entry path (drag-drop, AI plan, template apply, copy-week, copy-to-other-kid)",
+        "Each path runs the check and presents MissingIngredientsSheet when shortfalls exist",
+        "Legacy recipes (no structured ingredients) fall back to recipe.foodIds for the shortfall check instead of silently skipping",
+        "Fix the single-slot race: pendingRecipeForShortfall must queue or guard so rapid consecutive adds don't drop the first prompt (MealPlanView.swift:43-44)",
+        "Batch paths (template/copy-week) aggregate shortfalls into one sheet rather than N sheets",
+        "Swift builds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit findings (Planner-Pantry GAP-1, GAP-2; Recipe Flow 3 race condition)."
+    },
+    {
+      "id": "US-354",
+      "title": "iOS Recipes: create structured RecipeIngredient rows at import time (not lazily on edit)",
+      "description": "As a user importing a recipe by URL or via the share extension, I want its ingredients stored as structured rows immediately so the planner shortfall prompt, grocery add, and detail view all work without me having to open Edit and re-save. Today applyParsed/createRecipe store ingredients as a freeform string in additional_ingredients; structured recipe_ingredients rows are only created on a later EditRecipeView save (RecipesView.swift:1272-1311, AppState.drainPendingRecipeImports AppState.swift:52-101).",
+      "acceptanceCriteria": [
+        "On URL import and share-extension drain, parse each ingredient string into RecipeIngredient(quantity, unit, name) using the same parser EditRecipeView uses and persist to recipe_ingredients",
+        "Pantry fuzzy-match for foodIds still runs, but unmatched ingredients become structured rows rather than a comma blob",
+        "Imported recipes immediately trigger the planner shortfall prompt and appear correctly in 'By Recipe' grocery view",
+        "Backfill: opening an old freeform recipe still lazily migrates as today (no regression)",
+        "Swift builds; test covers import -> structured rows present"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Audit finding (Recipe Flow 1a/1c). Root cause of several downstream gaps — structured ingredients (US-265) are invisible until a manual re-save."
+    },
+    {
+      "id": "US-355",
+      "title": "iOS Share Extension: fix ingredient delimiter mismatch (newline vs comma)",
+      "description": "As a user importing a recipe from Safari/Instagram via the share sheet, I want its ingredients parsed correctly. The share extension joins ingredients with '\\n' (ShareImportView.swift:390-393) but RecipeIngredientLegacyParser splits on ',', so share-imported ingredients are never parsed into structured rows and remain one large blob.",
+      "acceptanceCriteria": [
+        "Share extension and main-app parser agree on a single delimiter/encoding for the pending-import ingredient payload",
+        "Share-imported recipes parse into the same structured rows as URL import (ties into US-354)",
+        "Existing queued PendingRecipeImport payloads drain without crashing after the format change",
+        "Swift builds; test covers a multi-ingredient share payload round-trip"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Audit finding (Recipe Flow 1c BUG)."
+    },
+    {
+      "id": "US-356",
+      "title": "iOS RecipeDetailView: render structured ingredients with quantity/unit and fix serving scaler",
+      "description": "As a user viewing a recipe, I want to see real ingredient quantities and have them scale with servings. RecipeDetailView currently renders only recipe.foodIds (name, no qty) and the additional_ingredients string, and ignores recipe.ingredients (the US-265 structured rows) entirely (RecipesView.swift:681-706). The pantry-food scaler hardcodes a base quantity of 1.0 (RecipesView.swift:809) so scaling always shows '1'.",
+      "acceptanceCriteria": [
+        "Detail view renders recipe.ingredients (quantity + unit + name) as the primary source when present",
+        "Falls back to foodIds/additional_ingredients only for legacy recipes with no structured rows",
+        "Serving stepper scales structured ingredient quantities correctly (remove the hardcoded 1.0 base)",
+        "No duplicate display when an ingredient exists both as a structured row and a foodId",
+        "Swift builds"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Audit finding (Recipe Flow 2): the main structured data model is invisible in the detail view today."
+    },
+    {
+      "id": "US-357",
+      "title": "iOS RecipeDetailView: add an 'Add to Meal Plan' action",
+      "description": "As a user browsing a recipe, I want to add it to a day/meal slot without leaving the recipe. Today there is no add-to-plan action in RecipeDetailView; the user must close the sheet, switch to the MealPlan tab, find the date and slot, open AddPlanEntryView, switch to the Recipe tab, and search again.",
+      "acceptanceCriteria": [
+        "RecipeDetailView has an 'Add to Meal Plan' button that opens a compact date + meal-slot (+ kid) picker",
+        "Confirming inserts the plan entry and then runs the shared shortfall check (US-353) so missing ingredients can be added to grocery in the same flow",
+        "Recipes with foodIds:[] (e.g. share-imported) are addable once US-354 gives them structured ingredients; the old 'pick a food or a recipe with ingredients' block no longer traps valid recipes",
+        "Success toast confirms the slot it was added to",
+        "Swift builds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit finding (Recipe Flow 3 GAP). Also addresses the foodIds:[] unaddable-recipe trap (MealPlanView.swift:966-980)."
+    },
+    {
+      "id": "US-358",
+      "title": "iOS Recipes: unify add-to-grocery paths on structured ingredients with correct dedup and source tagging",
+      "description": "As a user, I want every 'add ingredients to grocery' entry point to behave the same and only add what I actually need. Four paths exist with divergent behavior: list swipe (RecipesView.swift:424-456) and detail button (795-852) use foodIds and never set sourceRecipeId; bulkAddRecipesToGrocery (AppState.swift:1417-1488) has a dedupe seen-set bug for structured rows; MissingIngredientsSheet doesn't dedupe against existing grocery items.",
+      "acceptanceCriteria": [
+        "All paths prefer recipe.ingredients (structured) and fall back to foodIds only for legacy recipes",
+        "All paths set sourceRecipeId so items appear under the recipe in 'By Recipe' grocery view",
+        "Single dedup pass checks BOTH pantry stock and existing grocery items, adding only the true shortfall (delivers the real US-291 'add missing only')",
+        "Fix the bulkAddRecipesToGrocery seen-set bug so cross-recipe structured-ingredient duplicates aren't inserted (seen.insert is missing on the structured branch)",
+        "Detail 'Add to grocery' button is disabled/guarded while in-flight to prevent double-add on double-tap",
+        "Swift builds; test covers add-missing-only against a stocked pantry"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit findings (Recipe Flow 4 Paths A-D)."
+    },
+    {
+      "id": "US-359",
+      "title": "iOS Recipes: step-by-step cooking mode (numbered steps + keep-awake)",
+      "description": "As a parent cooking from a recipe, I want numbered, checkable steps and a screen that stays awake. Instructions are currently a single Text blob (RecipesView.swift:721-729) with no step structure.",
+      "acceptanceCriteria": [
+        "Instructions parse into numbered steps for display (best-effort splitting on newlines/numbering)",
+        "A 'Cook' mode presents steps one focus at a time with check-off and next/prev",
+        "UIApplication.shared.isIdleTimerDisabled (or scene equivalent) keeps the screen awake only while in cook mode and restores on exit",
+        "Respects reduce-motion for step transitions",
+        "Swift builds"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Audit finding (Recipe Flow 2 GAP)."
+    },
+    {
+      "id": "US-360",
+      "title": "iOS Recipes: fix fuzzy ingredient matching false-positives and gate pasteboard sniff",
+      "description": "As a user, I want accurate ingredient-to-pantry matching and no surprise clipboard banner. fuzzyMatchFood uses a >=3-char substring check (RecipesView.swift:1252-1269) so a pantry food named 'oil' or 'egg' false-matches any ingredient mentioning those letters; and AddRecipeView reads UIPasteboard on every onAppear (RecipesView.swift:1173-1183), triggering the iOS paste privacy banner unconditionally.",
+      "acceptanceCriteria": [
+        "Ingredient strings are normalized (strip quantity/unit via the parser) before matching against pantry food names",
+        "Matching uses token/word-boundary comparison, not raw substring, eliminating the 3-char false positives",
+        "Clipboard URL detection is gated behind an explicit 'Paste link' button/action instead of reading the pasteboard on appear",
+        "Swift builds; test covers '2 cloves garlic' matching 'garlic' and NOT matching 'oil'"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Audit findings (Recipe Flow 1a GAP). Pasteboard-on-appear is a privacy/UX smell on iOS 16+."
+    },
+    {
+      "id": "US-361",
+      "title": "iOS Recipes: OCR recipe-card scan (camera/photo to recipe)",
+      "description": "As a user with a printed/handwritten recipe card or a screenshot, I want to scan it into a structured recipe. UnifiedScannerView only supports .barcode and .groceryList modes; there is no recipe OCR path even though ImageTextRecognizer already exists for the grocery photo flow.",
+      "acceptanceCriteria": [
+        "Add a .recipe scan mode (or a 'Scan recipe' entry in AddRecipeView) using DataScanner/Vision OCR",
+        "Recognized text is sent through the recipe parser to produce name/ingredients/instructions, then the standard import review screen",
+        "Resulting recipe gets structured ingredient rows (ties into US-354)",
+        "Graceful empty/error state when OCR yields nothing usable",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Recipe Flow 1b): feature entirely absent today."
+    },
+    {
+      "id": "US-362",
+      "title": "iOS Grocery: make 'Move to pantry' discoverable and close the Shopping Mode loop",
+      "description": "As a user who just shopped, I want an obvious way to move what I bought into the pantry. 'Move to pantry' only renders in the summary card at the top of GroceryView (GroceryView.swift:531-553) and scrolls out of view on long lists; Shopping Mode's 'Finish trip' (ShoppingModeView.swift:330) dismisses without offering it at all.",
+      "acceptanceCriteria": [
+        "When there are checked items, a persistent/sticky action (bottom bar or banner) offers 'Move N to pantry' regardless of scroll position",
+        "Shopping Mode 'Finish trip' presents an action sheet: Move to pantry / Clear / Keep, before dismissing",
+        "Success path optionally deep-links/toasts to the Pantry tab",
+        "Behavior is consistent between GroceryView and Shopping Mode",
+        "Swift builds"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Audit findings (Grocery-Pantry Flow 1 & 2). This is the heart of the owner's 'does buying it add it to the pantry?' question — the loop exists but is nearly invisible, and Shopping Mode skips it entirely."
+    },
+    {
+      "id": "US-363",
+      "title": "iOS Grocery: unit conversion and mismatch feedback when moving grocery to pantry",
+      "description": "As a user, I want quantities to be correct when groceries become pantry stock. moveCheckedToPantry (AppState.swift:1150-1183) increments an existing pantry food's quantity by the grocery quantity while keeping the pantry's existing unit, with no conversion; unit mismatches are counted into unknownUnits (1212) but never shown to the user — '2 gal milk' merged into an 'oz' pantry entry adds 2, not 256.",
+      "acceptanceCriteria": [
+        "Use the shared UnitConverter (US-351) to convert grocery quantity into the pantry food's unit before incrementing when convertible",
+        "When units are not convertible, surface a post-move summary listing the mismatched items rather than silently corrupting totals",
+        "New pantry items continue to carry the grocery quantity/unit verbatim",
+        "Swift builds; test covers a gal->oz merge producing the correct total"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit findings (Grocery-Pantry Flow 4). Silent quantity corruption today."
+    },
+    {
+      "id": "US-364",
+      "title": "iOS Pantry: consistent dedup across all add paths (merge instead of duplicate)",
+      "description": "As a user, I don't want the same item appearing five times in my pantry. Only moveCheckedToPantry dedupes by name; AddFoodView, PantryQuickAddBar, BulkAddFoodSheet, and barcode ScannedProductView always insert. ScanReceiptSheet even shows a 'matches existing food' icon (ScanReceiptSheet.swift:321) but still bulk-inserts unconditionally (263) — the icon is cosmetic.",
+      "acceptanceCriteria": [
+        "All pantry add paths run the same lowercased-name dedup check used by moveCheckedToPantry",
+        "On a match, offer/auto-apply 'update existing' (increment quantity, with US-363 conversion) vs 'add new'",
+        "ScanReceiptSheet wires its matchedFoodId to an actual merge action instead of a cosmetic icon",
+        "Barcode rescans of the same product update quantity rather than creating a duplicate row",
+        "Swift builds; test covers manual-add of an existing item merging"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit findings (Grocery-Pantry Flow 3 & 5). Dedup is inconsistent; pantry inflates over time."
+    },
+    {
+      "id": "US-365",
+      "title": "iOS Grocery: batch the move-to-pantry deletes and add Shopping Mode check-off rollback",
+      "description": "As a user with a full cart, I don't want 30+ network round-trips, and I don't want a failed check to silently lose an item. moveCheckedToPantry deletes grocery items in a serial loop (AppState.swift:1205-1207) instead of using DataService.bulkDeleteGroceryItems (DataService.swift:389); Shopping Mode check-off has no error rollback unlike the GroceryView swipe (AppState.swift:1026).",
+      "acceptanceCriteria": [
+        "moveCheckedToPantry deletes via bulkDeleteGroceryItems in one call; pantry quantity updates batched where the SDK allows",
+        "Shopping Mode check (ShoppingModeView.swift:284) rolls back the optimistic state and re-shows the item on failure, matching GroceryView swipe behavior",
+        "No functional regression to the existing move/clear flows",
+        "Swift builds"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Audit findings (Grocery-Pantry Flow 1 BUG-P1 & Flow 5 rollback gap)."
+    },
+    {
+      "id": "US-366",
+      "title": "iOS Pantry: add quantity/unit fields to manual AddFoodView",
+      "description": "As a user adding a pantry item by hand, I want to set how much I have. AddFoodView (PantryView.swift:859-978) creates Food with quantity:nil/unit:nil, so manually added items render as '0' in the pantry row (FoodRowView.swift:651) until edited.",
+      "acceptanceCriteria": [
+        "AddFoodView includes quantity and unit inputs (with sensible default of 1 / count)",
+        "Saved food carries the entered quantity/unit; no more '0' rows for manual adds",
+        "Uses UnitInference defaults for common items where helpful",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Grocery-Pantry Flow 3 GAP-P3)."
+    },
+    {
+      "id": "US-367",
+      "title": "iOS Polish: replace raw red error text with the ErrorBanner component",
+      "description": "As a user, I want consistent, polished error presentation. AIMealPlanView (102-107), PaywallView (88-93), ScanReceiptSheet (97), and FridgePhotoSheet (122) render errors as plain Text(...).foregroundStyle(.red) instead of the existing ErrorBanner (LoadingView.swift:58).",
+      "acceptanceCriteria": [
+        "All four sites use ErrorBanner (with retry where applicable) instead of raw red text",
+        "Error color comes from AppTheme.Colors.danger, not Color.red",
+        "PaywallView (conversion-critical) error is clearly presented and dismissible",
+        "Swift builds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit finding (Visual GAP-1)."
+    },
+    {
+      "id": "US-368",
+      "title": "iOS Polish: add missing loading skeletons (Kids, Budget, FoodChaining, ProgressDashboard)",
+      "description": "As a user on a slow connection, I don't want to see a false 'No Children' empty state or zeroed charts while data loads. KidsView jumps straight to ContentUnavailableView while loading; BudgetView, FoodChainingView, and ProgressDashboardView render zeros/empty immediately with no skeleton.",
+      "acceptanceCriteria": [
+        "KidsView shows a skeleton while loading and only shows the empty state once loading completes with no kids",
+        "BudgetView, FoodChainingView, and ProgressDashboardView (Overview tab) show SkeletonView placeholders during initial load",
+        "Reuses the existing SkeletonView shapes; no bespoke spinners where a skeleton fits the pattern",
+        "Swift builds"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Audit findings (Visual GAP-2, GAP-10)."
+    },
+    {
+      "id": "US-369",
+      "title": "iOS Polish: reduce-motion gating on remaining withAnimation sites",
+      "description": "As a user with Reduce Motion enabled, I want animations suppressed app-wide. Several call sites use bare withAnimation {} / .animation(...) without the accessibleAnimation helper: PickyEaterQuizView (99,103), OnboardingView (70,80) page transitions, SyncStatusBanner (44).",
+      "acceptanceCriteria": [
+        "Audit withAnimation/.animation call sites and route them through accessibleAnimation/accessibleWithAnimation (Accessibility.swift)",
+        "PickyEaterQuiz transitions, Onboarding page transitions, and SyncStatusBanner rotation respect Reduce Motion",
+        "No animation regressions when Reduce Motion is off",
+        "Swift builds"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Audit finding (Visual GAP-3). Extends US-256/US-43 reduce-motion work to remaining sites."
+    },
+    {
+      "id": "US-370",
+      "title": "iOS Polish: consolidate duplicated components onto AppTheme (stat cards, CategoryChip, result/pickiness color)",
+      "description": "As a developer, I want one source of truth per UI primitive. DashboardStatCard (DashboardHomeView.swift:264), StatCard (MoreView.swift:374), and ProgressStatCard (ProgressDashboardView.swift:152) are three identical stat cards; CategoryChip lives in PantryView.swift:621 instead of Components/; resultColor/pickinessColor are re-implemented privately in KidsView (129), MealPlanView (784), MoreView (305) despite AppTheme.Colors.resultColor/pickinessColor existing.",
+      "acceptanceCriteria": [
+        "Single AppStatCard in Views/Components/ replaces all three stat-card structs and uses AppTheme tokens",
+        "CategoryChip moved to Views/Components/CategoryChip.swift",
+        "All private resultColor/pickinessColor removed in favor of AppTheme.Colors.resultColor(_:)/pickinessColor(_:)",
+        "Also set .navigationBarTitleDisplayMode(.inline) on FoodChainingView.swift:131 for nav consistency",
+        "No visual regressions; Swift builds"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Audit findings (Visual GAP-4, GAP-5, GAP-6, GAP-7)."
+    },
+    {
+      "id": "US-371",
+      "title": "iOS Polish: enforce AppTheme tokens (sweep raw colors and magic-number spacing)",
+      "description": "As a team, we want the design system actually used so a brand change is one edit and dark mode is token-safe. AppTheme.swift is solid but barely adopted: ~60 raw Color.green/red/orange across 29 files and ~244 hardcoded padding/frame numbers across 48 files; MainTabView uses .tint(.green) directly.",
+      "acceptanceCriteria": [
+        "Replace raw semantic Color.green/.red/.orange/etc. in Views with AppTheme.Colors.primary/.danger/.warning/etc. (start with GroceryView, PantryView, RecipesView, MealPlanView, MainTabView .tint)",
+        "Replace high-density magic-number padding/frames with AppTheme.Spacing/Radius (SkeletonView, RecipesView, PantryView first)",
+        "No visual regressions in light or dark mode",
+        "Add a lightweight lint/check or doc note to discourage new raw color usage",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit findings (Visual GAP-8, GAP-9). Large but mechanical; can be staged file-by-file."
+    },
+    {
+      "id": "US-372",
+      "title": "iOS Accessibility: chart VoiceOver, DayChip date labels, and Budget/FoodChaining annotations",
+      "description": "As a VoiceOver user, I want charts and key controls described. Swift Charts marks in InsightsCharts/JoyScoreChart have no accessibilityLabel; DayChip (MealPlanView.swift:401) reads ambiguously as 'Mon 14'; BudgetView and FoodChainingView have essentially no accessibility labels.",
+      "acceptanceCriteria": [
+        "Chart marks expose accessibilityLabel/value (e.g., BarMark/LineMark) in InsightsCharts.swift and JoyScoreChart.swift",
+        "DayChip announces full context: 'Monday, June 14, selected/not selected'",
+        "BudgetView stat rows/bars and FoodChainingView chip selectors and chain rows have meaningful labels",
+        "Swift builds; spot-checked with VoiceOver where feasible"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit findings (Visual GAP-11, GAP-12, GAP-13). Extends US-246/US-256."
+    },
+    {
+      "id": "US-373",
+      "title": "iOS IA: promote Dashboard out of 'More' to a primary surface",
+      "description": "As a returning user, I want the overview (today's meals, streak, quick actions) as my landing surface, not buried. The tab bar is Planner/Pantry/Recipes/Grocery/More and Dashboard is reached only via More -> Dashboard, so first-run lands on MealPlan and the product's 'home' is one tap too deep. Also FoodChaining, Insights, AICoach, Progress, Quiz are all stacked under More (kitchen-sink).",
+      "acceptanceCriteria": [
+        "Product decision recorded: make Dashboard the default/home tab (recommended) or add a Home tab, weighing the 5-tab budget",
+        "If adopted, Dashboard becomes the initial selected tab on launch and a primary tab item",
+        "Re-evaluate which secondary destinations stay under More vs surface on the Dashboard as quick links",
+        "No regression to deep links/Siri intents that target specific tabs",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Visual GAP - IA depth). Needs a product call from the owner before implementing; captured as a story per request."
     }
   ]
 }
