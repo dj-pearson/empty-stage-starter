@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { Helmet } from "react-helmet-async";
-import { useApp } from "@/contexts/AppContext";
+import { useKids } from "@/contexts/AppContext";
 import { FoodSuccessTracker } from "@/components/FoodSuccessTracker";
 import { KidSelector } from "@/components/KidSelector";
 import { ManageKidsDialog, ManageKidsDialogRef } from "@/components/ManageKidsDialog";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Target, Settings } from "lucide-react";
 
 export default function FoodTracker() {
-  const { kids } = useApp();
+  const { kids } = useKids();
   const manageKidsRef = useRef<ManageKidsDialogRef>(null);
 
   return (

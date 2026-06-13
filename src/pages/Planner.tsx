@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { GSAPCalendarMealPlanner } from "@/components/GSAPCalendarMealPlanner";
@@ -38,19 +38,23 @@ const MealPlanTemplateGallery = lazy(() => import("@/components/MealPlanTemplate
 export default function Planner() {
   const {
     foods,
+    updateFood,
+  } = useFoods();
+  const {
     kids,
-    recipes,
     activeKidId,
     setActiveKid,
+  } = useKids();
+  const { recipes } = useRecipes();
+  const {
     planEntries,
     setPlanEntries,
     updatePlanEntry,
     addPlanEntry,
-    updateFood,
     copyWeekPlan,
     deleteWeekPlan,
-    addGroceryItemsMerged,
-  } = useApp();
+  } = usePlan();
+  const { addGroceryItemsMerged } = useGrocery();
 
   const isMobile = useMediaQuery("(max-width: 1023px)");
 

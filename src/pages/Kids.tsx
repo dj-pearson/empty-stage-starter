@@ -1,5 +1,5 @@
 import { Helmet } from "react-helmet-async";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods, useKids, usePlan } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { UserCircle, UserPlus, Users2 } from "lucide-react";
@@ -12,7 +12,9 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 export default function Kids() {
-  const { kids, foods, planEntries } = useApp();
+  const { kids } = useKids();
+  const { foods } = useFoods();
+  const { planEntries } = usePlan();
   const manageKidsRef = useRef<ManageKidsDialogRef>(null);
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
   const [selectedKidForQuestionnaire, setSelectedKidForQuestionnaire] = useState<{ id: string; name: string } | null>(null);

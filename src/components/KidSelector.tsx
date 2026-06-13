@@ -1,4 +1,4 @@
-import { useApp } from "@/contexts/AppContext";
+import { useKids } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,7 +12,7 @@ import { UserCircle, ChevronDown, Users } from "lucide-react";
 import { calculateAge } from "@/lib/utils";
 
 export function KidSelector() {
-  const { kids, activeKidId, setActiveKid } = useApp();
+  const { kids, activeKidId, setActiveKid } = useKids();
   const activeKid = kids.find(k => k.id === activeKidId);
 
   if (kids.length === 0) return null;

@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, FileText, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods, useRecipes } from "@/contexts/AppContext";
 import type { FoodCategory } from "@/types";
 
 const VALID_CATEGORIES: FoodCategory[] = ["protein", "carb", "dairy", "fruit", "vegetable", "snack"];
@@ -47,7 +47,8 @@ function parseCSV(text: string): Record<string, string>[] {
 }
 
 export function DataImport() {
-  const { addFoods, addRecipe } = useApp();
+  const { addFoods } = useFoods();
+  const { addRecipe } = useRecipes();
   const [importType, setImportType] = useState<"foods" | "recipes">("foods");
   const [preview, setPreview] = useState<ParsedRow[] | null>(null);
   const [importing, setImporting] = useState(false);

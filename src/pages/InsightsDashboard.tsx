@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods, useKids, usePlan } from "@/contexts/AppContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -23,7 +23,9 @@ import {
 import { format, subDays } from "date-fns";
 
 export default function InsightsDashboard() {
-  const { kids, foods, planEntries, activeKidId, setActiveKidId } = useApp();
+  const { kids, activeKidId, setActiveKidId } = useKids();
+  const { foods } = useFoods();
+  const { planEntries } = usePlan();
   const activeKid = kids.find(k => k.id === activeKidId);
   const isFamilyMode = !activeKidId;
   const [insights, setInsights] = useState<any>({});

@@ -3,7 +3,7 @@ import { logger } from "@/lib/logger";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useApp } from '@/contexts/AppContext';
+import { usePlan, useFoods, useKids } from '@/contexts/AppContext';
 import {
   Calendar,
   TrendingUp,
@@ -37,7 +37,9 @@ interface WeeklyProgressReportProps {
 }
 
 export function WeeklyProgressReport({ weekStart, kidId }: WeeklyProgressReportProps) {
-  const { planEntries, foods, kids, activeKidId } = useApp();
+  const { planEntries } = usePlan();
+  const { foods } = useFoods();
+  const { kids, activeKidId } = useKids();
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(false);

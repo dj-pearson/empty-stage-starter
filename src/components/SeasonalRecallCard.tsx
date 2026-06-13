@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, History, X } from 'lucide-react';
-import { useApp } from '@/contexts/AppContext';
+import { useRecipes, usePlan } from '@/contexts/AppContext';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { analytics } from '@/lib/analytics';
@@ -55,7 +55,8 @@ function markDismissed(year: number, week: number, recipeId: string) {
 }
 
 export function SeasonalRecallCard() {
-  const { recipes, planEntries: currentPlanEntries, addPlanEntries } = useApp();
+  const { recipes } = useRecipes();
+  const { planEntries: currentPlanEntries, addPlanEntries } = usePlan();
   const [priorEntries, setPriorEntries] = useState<PlanEntry[] | null>(null);
   const [earliestPlanDate, setEarliestPlanDate] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);

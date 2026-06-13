@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FoodCategory } from "@/types";
 import { logger } from "@/lib/logger";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods, useGrocery } from "@/contexts/AppContext";
 import { useAutoRestockPref } from "@/hooks/useAutoRestockPref";
 import {
   chipLabel,
@@ -116,7 +116,8 @@ export function SmartRestockSuggestions({
   const [suggestions, setSuggestions] = useState<RestockSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [dismissed, setDismissed] = useState(false);
-  const { foods, groceryItems } = useApp();
+  const { foods } = useFoods();
+  const { groceryItems } = useGrocery();
   const { enabled: autoRestockEnabled, leadDays: autoRestockLeadDays } = useAutoRestockPref();
   const autoAddedRef = useRef(false);
 
