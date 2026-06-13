@@ -33,6 +33,7 @@
     "platform-test:generate": "cd platform-test && npx ts-node index.ts generate",
     "platform-test:run": "cd platform-test && npx ts-node index.ts run",
     "platform-test:headful": "cd platform-test && npx ts-node index.ts full --no-headless",
+    "ralph": "bash scripts/ralph/ralph.sh --tool claude",
     "pages:dev": "wrangler pages dev dist --compatibility-date 2024-12-19",
     "expo:start": "npx expo start",
     "expo:android": "npx expo start --android",
