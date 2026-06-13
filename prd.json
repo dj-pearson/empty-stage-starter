@@ -5081,8 +5081,8 @@
         "Typecheck passes; tests pass"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "Audit: LiveActivityFeed.tsx:306-310 polls every 30s even when realtime is live; SystemHealthDashboard.tsx:318-319 setState every 1000ms re-renders charts."
+      "passes": true,
+      "notes": "Audit: LiveActivityFeed.tsx:306-310 polls every 30s even when realtime is live; SystemHealthDashboard.tsx:318-319 setState every 1000ms re-renders charts. | DONE 2026-06-13: SystemHealthDashboard — extracted the 1s countdown into an isolated <RefreshCountdown> child (owns its own state+interval, resets on lastUpdate change) so the per-second tick no longer re-renders the dashboard/charts; removed the parent countdown state + 1s interval; data still refetches every 30s. LiveActivityFeed — polling fallback now starts ONLY on CHANNEL_ERROR/TIMED_OUT (or channel-create throw), not unconditionally, so realtime+poll no longer double-run; replaced console.warn with logger.warn. Existing tests green (SystemHealthDashboard 9, LiveActivityFeed 9)."
     },
     {
       "id": "US-336",
@@ -5143,8 +5143,8 @@
         "Add a test or manual-verification note for the chosen path; typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "Audit: activeShoppers is declared but never populated (dead presence feature) in collaborative shopping."
+      "passes": true,
+      "notes": "Audit: activeShoppers is declared but never populated (dead presence feature) in collaborative shopping. | DONE 2026-06-13: chose REMOVE per AC. Deleted the never-populated activeShoppers state + setActiveShoppers + the ActiveShopper interface in CollaborativeShoppingMode.tsx (grep-confirmed setActiveShoppers was never called and activeShoppers never read in JSX). The existing \"Current shopper\" panel only ever rendered the current user (hardcoded \"You\"), not the dead state, so no misleading empty presence indicator. Fixed the misleading \"(simulated for now)\" comment. Real presence left as a future Supabase Realtime Presence addition."
     },
     {
       "id": "US-340",
