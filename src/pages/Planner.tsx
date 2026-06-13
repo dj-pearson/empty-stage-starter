@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { GSAPCalendarMealPlanner } from "@/components/GSAPCalendarMealPlanner";
@@ -38,19 +38,23 @@ const MealPlanTemplateGallery = lazy(() => import("@/components/MealPlanTemplate
 export default function Planner() {
   const {
     foods,
+    updateFood,
+  } = useFoods();
+  const {
     kids,
-    recipes,
     activeKidId,
     setActiveKid,
+  } = useKids();
+  const { recipes } = useRecipes();
+  const {
     planEntries,
     setPlanEntries,
     updatePlanEntry,
     addPlanEntry,
-    updateFood,
     copyWeekPlan,
     deleteWeekPlan,
-    addGroceryItemsMerged,
-  } = useApp();
+  } = usePlan();
+  const { addGroceryItemsMerged } = useGrocery();
 
   const isMobile = useMediaQuery("(max-width: 1023px)");
 
@@ -202,10 +206,10 @@ export default function Planner() {
         },
       });
 
-      console.log('[AI Meal Plan] response:', { data, error });
+      logger.info('[AI Meal Plan] response:', { data, error });
 
       if (error) {
-        console.error('[AI Meal Plan] Edge function error:', error);
+        logger.error('[AI Meal Plan] Edge function error:', error);
         toast.error(`AI meal plan failed: ${error.message || JSON.stringify(error)}`);
         return;
       }
@@ -216,14 +220,14 @@ export default function Planner() {
       }
 
       if (data.error) {
-        console.error('[AI Meal Plan] Function error:', data);
+        logger.error('[AI Meal Plan] Function error:', data);
         toast.error(`${data.error}${data.details ? ` (${data.details})` : ''}`);
         return;
       }
 
       if (!data.plan) {
         toast.error('Invalid meal plan response shape');
-        console.error('[AI Meal Plan] Invalid shape:', data);
+        logger.error('[AI Meal Plan] Invalid shape:', data);
         return;
       }
 

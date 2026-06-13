@@ -2,7 +2,7 @@ import { useMemo, memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useApp } from '@/contexts/AppContext';
+import { usePlan, useFoods, useKids } from '@/contexts/AppContext';
 import { Clock, CheckCircle2, Circle, Sparkles, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, isToday } from 'date-fns';
@@ -19,7 +19,9 @@ const MEAL_SLOTS = [
 ];
 
 export const TodayMeals = memo(function TodayMeals({ onLogMeal }: TodayMealsProps) {
-  const { planEntries, foods, activeKidId, kids } = useApp();
+  const { planEntries } = usePlan();
+  const { foods } = useFoods();
+  const { activeKidId, kids } = useKids();
 
   const activeKid = kids.find(k => k.id === activeKidId);
 

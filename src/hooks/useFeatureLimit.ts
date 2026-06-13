@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -49,7 +50,7 @@ export function useFeatureLimit() {
 
       return result;
     } catch (error: unknown) {
-      console.error("Error checking feature limit:", error);
+      logger.error("Error checking feature limit:", error);
       return {
         allowed: true,
         message: "Unable to verify limit, proceeding with action",
@@ -73,7 +74,7 @@ export function useFeatureLimit() {
 
       if (error) throw error;
     } catch (error: unknown) {
-      console.error("Error incrementing usage:", error);
+      logger.error("Error incrementing usage:", error);
     }
   };
 

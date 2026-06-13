@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { logger } from "@/lib/logger";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -83,7 +84,7 @@ export function PantryQuickAdd({ onAddOne, onAddMany }: Props) {
       // Re-focus so the next item flows without mouse work.
       requestAnimationFrame(() => inputRef.current?.focus());
     } catch (err) {
-      console.error("Pantry quick-add failed:", err);
+      logger.error("Pantry quick-add failed:", err);
       toast.error("Could not add item — try again.");
     } finally {
       setSubmitting(false);
@@ -112,7 +113,7 @@ export function PantryQuickAdd({ onAddOne, onAddMany }: Props) {
         },
       });
     } catch (err) {
-      console.error("Pantry bulk-add failed:", err);
+      logger.error("Pantry bulk-add failed:", err);
       toast.error("Could not add items — try again.");
     } finally {
       setSubmitting(false);
@@ -178,7 +179,7 @@ export function PantryQuickAdd({ onAddOne, onAddMany }: Props) {
       setListening(true);
       r.start();
     } catch (err) {
-      console.error("Speech start failed:", err);
+      logger.error("Speech start failed:", err);
       toast.error("Voice input is busy — close other tabs using the mic.");
       setListening(false);
     }

@@ -26,6 +26,11 @@ struct ShoppingModeView: View {
     @AppStorage("shoppingMode.didOfferDim") private var didOfferDim = false
     @State private var showingBrightnessBanner = false
 
+    /// US-362: when finishing a trip with bought items, prompt to move them
+    /// into the pantry instead of silently stranding them on the list — the
+    /// grocery→pantry loop was otherwise invisible to shopping-mode users.
+    @State private var showingFinishOptions = false
+
     /// Stored brightness so we can restore it when the user exits.
     @State private var originalBrightness: CGFloat = UIScreen.main.brightness
 
@@ -66,6 +71,8 @@ struct ShoppingModeView: View {
     }
 
     private var totalRemaining: Int { unchecked.count }
+
+    private var boughtCount: Int { appState.groceryItems.filter(\.checked).count }
 
     var body: some View {
         NavigationStack {
@@ -112,6 +119,31 @@ struct ShoppingModeView: View {
                 if showingBrightnessBanner {
                     brightnessBanner
                 }
+            }
+            // US-362: close the grocery→pantry loop on the way out. Offer to
+            // move bought items into the pantry, just clear them, or leave the
+            // list untouched — then dismiss.
+            .confirmationDialog(
+                "Finish shopping trip",
+                isPresented: $showingFinishOptions,
+                titleVisibility: .visible
+            ) {
+                Button("Move \(boughtCount) to pantry") {
+                    Task {
+                        try? await appState.moveCheckedToPantry()
+                        dismiss()
+                    }
+                }
+                Button("Just clear bought items", role: .destructive) {
+                    Task {
+                        try? await appState.clearCheckedGroceryItems()
+                        dismiss()
+                    }
+                }
+                Button("Keep list as-is") { dismiss() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("You bought \(boughtCount) item\(boughtCount == 1 ? "" : "s"). Move them into your pantry so your inventory stays up to date.")
             }
         }
         .onAppear {
@@ -197,9 +229,10 @@ struct ShoppingModeView: View {
             Text("All done!")
                 .font(.title)
                 .fontWeight(.bold)
-            Text("Tap Exit to finish your trip.")
+            Text("Finish to move what you bought into your pantry.")
                 .font(.body)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
             Spacer()
             Button {
                 exit()
@@ -287,7 +320,15 @@ struct ShoppingModeView: View {
         undoTask?.cancel()
         HapticManager.success()
         Task {
-            try? await appState.toggleGroceryItem(item.id)
+            do {
+                try await appState.toggleGroceryItem(item.id)
+            } catch {
+                // US-365: toggleGroceryItem already rolled back the optimistic
+                // flip and surfaced an error toast, so the row reappears as
+                // unchecked. Don't present an undo banner for a check that
+                // didn't stick.
+                return
+            }
             await MainActor.run {
                 if reduceMotion {
                     lastCheckedItemId = item.id
@@ -296,17 +337,17 @@ struct ShoppingModeView: View {
                         lastCheckedItemId = item.id
                     }
                 }
-            }
-        }
-
-        undoTask = Task {
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                if reduceMotion {
-                    lastCheckedItemId = nil
-                } else {
-                    withAnimation { lastCheckedItemId = nil }
+                // Auto-dismiss the undo affordance after 5s.
+                undoTask = Task {
+                    try? await Task.sleep(for: .seconds(5))
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        if reduceMotion {
+                            lastCheckedItemId = nil
+                        } else {
+                            withAnimation { lastCheckedItemId = nil }
+                        }
+                    }
                 }
             }
         }
@@ -329,7 +370,13 @@ struct ShoppingModeView: View {
 
     private func exit() {
         HapticManager.mediumImpact()
-        dismiss()
+        // US-362: don't strand bought items. If anything is checked, offer to
+        // move it into the pantry before leaving; otherwise just dismiss.
+        if boughtCount > 0 {
+            showingFinishOptions = true
+        } else {
+            dismiss()
+        }
     }
 }
 

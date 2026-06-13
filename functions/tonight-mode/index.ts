@@ -43,6 +43,8 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
 import { authenticateRequest } from '../_shared/auth.ts';
+import { assertHouseholdMember } from '../_shared/household.ts';
+import { enforceRateLimit } from '../_shared/rate-limit.ts';
 import {
   topSuggestions,
   type RecipeContext,
@@ -128,6 +130,19 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } },
     );
+
+    // Per-user rate limit (cost/DoS protection) before any DB/AI work.
+    const limited = await enforceRateLimit(supabase, user.id, 'tonight-mode', corsHeaders);
+    if (limited) return limited;
+
+    // IDOR defense: a client-supplied householdId must belong to the caller.
+    const forbidden = await assertHouseholdMember(
+      supabase,
+      user.id,
+      body.householdId,
+      corsHeaders,
+    );
+    if (forbidden) return forbidden;
 
     // Kids — filter by household and optional kidIds
     let kidsQuery = supabase

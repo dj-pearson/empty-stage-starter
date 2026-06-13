@@ -21,6 +21,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from "@/lib/logger";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { logger } from './logger';
 
@@ -358,9 +359,9 @@ export class OAuthTokenManager {
       }
 
       // Edge function not available - use client-side encryption
-      console.warn('Token encryption Edge Function not available. Using client-side encryption.');
+      logger.warn('Token encryption Edge Function not available. Using client-side encryption.');
     } catch {
-      console.warn('Token encryption Edge Function failed. Using client-side encryption.');
+      logger.warn('Token encryption Edge Function failed. Using client-side encryption.');
     }
 
     // Fallback: Client-side encryption using Web Crypto API
@@ -424,7 +425,7 @@ export class OAuthTokenManager {
 
       throw new Error('Failed to decrypt token');
     } catch (error) {
-      console.error('Token decryption failed:', error);
+      logger.error('Token decryption failed:', error);
       throw new Error('Failed to decrypt OAuth token. The token may be corrupted or the encryption key may have changed.');
     }
   }

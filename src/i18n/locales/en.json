@@ -1,0 +1,31 @@
+{
+  "common": {
+    "appName": "EatPal",
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "retry": "Try again"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "pantry": "Pantry",
+    "recipes": "Recipes",
+    "planner": "Planner",
+    "grocery": "Grocery",
+    "kids": "Kids"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signUp": "Sign up",
+    "signOut": "Sign Out",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot password?"
+  },
+  "onboarding": {
+    "welcomeTitle": "Welcome to EatPal",
+    "welcomeSubtitle": "Evidence-based meal planning for picky eaters and ARFID.",
+    "getStarted": "Get started"
+  }
+}

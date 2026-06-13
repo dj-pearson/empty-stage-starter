@@ -7,6 +7,7 @@
  */
 
 import type { Metric } from 'web-vitals';
+import { logger } from "@/lib/logger";
 
 const isDev = import.meta.env.DEV;
 
@@ -27,7 +28,7 @@ function reportMetric(metric: Metric): void {
   if (isDev) {
     const rating = metric.rating; // 'good' | 'needs-improvement' | 'poor'
     const color = rating === 'good' ? '#0cce6b' : rating === 'needs-improvement' ? '#ffa400' : '#ff4e42';
-    console.log(
+    logger.info(
       `%c[Web Vitals] ${metric.name}: ${Math.round(metric.value * 100) / 100} (${rating})`,
       `color: ${color}; font-weight: bold;`,
     );
@@ -51,11 +52,11 @@ export async function initWebVitals(): Promise<void> {
     onINP(reportMetric);
 
     if (isDev) {
-      console.log('[Web Vitals] Monitoring initialized');
+      logger.info('[Web Vitals] Monitoring initialized');
     }
   } catch {
     if (isDev) {
-      console.warn('[Web Vitals] Failed to initialize — web-vitals library not available');
+      logger.warn('[Web Vitals] Failed to initialize — web-vitals library not available');
     }
   }
 }

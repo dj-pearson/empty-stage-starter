@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Flame, ChefHat, Clock, Loader2 } from "lucide-react";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods, useKids, useRecipes, usePlan } from "@/contexts/AppContext";
 import { analytics } from "@/lib/analytics";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { logger } from "@/lib/logger";
@@ -30,7 +30,10 @@ interface TonightModeCardProps {
 }
 
 export function TonightModeCard({ className, forceShow }: TonightModeCardProps) {
-  const { foods, kids, recipes, planEntries } = useApp();
+  const { foods } = useFoods();
+  const { kids } = useKids();
+  const { recipes } = useRecipes();
+  const { planEntries } = usePlan();
   const [selectedKidIds, setSelectedKidIds] = useLocalStorage<string[]>(
     STORAGE_KEY,
     [],

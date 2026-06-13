@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Star } from 'lucide-react';
 import { toast } from 'sonner';
-import { useApp } from '@/contexts/AppContext';
+import { useFoods, useKids, usePlan, useRecipes } from '@/contexts/AppContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSiblingResolutions } from '@/hooks/useSiblingResolutions';
 import {
@@ -48,7 +48,10 @@ const MEAL_SLOTS: { value: MealSlot; label: string }[] = [
 ];
 
 export default function SiblingMealFinder() {
-  const { kids, foods, recipes, addPlanEntry } = useApp();
+  const { kids } = useKids();
+  const { foods } = useFoods();
+  const { recipes } = useRecipes();
+  const { addPlanEntry } = usePlan();
   const { history, recordResolution } = useSiblingResolutions();
 
   const [selectedKidIds, setSelectedKidIds] = useLocalStorage<string[]>(STORAGE_KEY, []);

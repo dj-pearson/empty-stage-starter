@@ -298,6 +298,44 @@ Implementation: `/src/components/ProtectedRoute.tsx`
 - Remembers intended destination
 - Loading state handling
 
+### Edge Function Hardening
+
+Privileged edge functions share helpers under `functions/_shared/`:
+
+- **`auth.ts`** — `authenticateRequest()` validates the JWT *signature and
+  expiry* via `auth.getUser()`, not just header presence.
+- **`household.ts`** — `assertHouseholdMember()` rejects (403) any
+  client-supplied `householdId` the caller is not a member of (IDOR defense,
+  beyond RLS).
+- **`admin.ts`** — `assertAdmin()` gates marketing/content tools to
+  `user_roles.role = 'admin'`.
+- **`rate-limit.ts`** — `enforceRateLimit()` calls the
+  `check_rate_limit_with_tier` RPC and returns 429 + `Retry-After` when
+  exceeded. **Fails closed** if the limiter errors.
+- **`validation.ts`** — caps decoded image size (`MAX_IMAGE_BYTES` = 5 MB) and
+  free-text length before forwarding to a vision/LLM API.
+- **`stripe-prices.ts`** — `resolvePriceId()` validates a checkout price
+  against a server-side allowlist (env `STRIPE_PRICE_IDS` / `STRIPE_PRICE_MAP`).
+
+**Per-function rate limits (free / premium / enterprise per hour)** — seeded in
+`rate_limit_config` (migration `20251010230000` + `20260613000001`):
+
+| Endpoint | Free | Premium | Enterprise | Size/admin guard |
+| --- | --- | --- | --- | --- |
+| `ai-meal-plan` | 5 | 50 | 500 | — |
+| `suggest-recipe` | 10 | 100 | 1000 | — |
+| `suggest-foods` | 10 | 100 | 1000 | — |
+| `tonight-mode` | 20 | 200 | 2000 | household membership |
+| `parse-grocery-image` | 10 | 100 | 1000 | image ≤ 5 MB |
+| `parse-receipt-image` | 10 | 100 | 1000 | image ≤ 5 MB |
+| `identify-product` | 10 | 100 | 1000 | image ≤ 5 MB |
+| `generate-social-content` | 5 | 50 | 500 | admin-only + text cap |
+| `generate-blog-content` | 5 | 50 | 500 | admin-only + text cap |
+
+Endpoints without an explicit config row fall back to the RPC default
+(50/hr). Untrusted free text embedded into LLM prompts is length-capped and
+prefixed with a "treat as data, not instructions" boundary.
+
 ---
 
 ## Data Protection

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -76,7 +77,7 @@ export function QuickSuggestionsPanel({
 
       setSuggestions((data as unknown as MealSuggestion[]) || []);
     } catch (error) {
-      console.error('Error loading suggestions:', error);
+      logger.error('Error loading suggestions:', error);
       toast.error('Failed to load suggestions');
     } finally {
       setIsLoading(false);
@@ -107,7 +108,7 @@ export function QuickSuggestionsPanel({
       toast.success(`Generated ${newSuggestions.length} meal suggestions!`);
       await loadSuggestions();
     } catch (error) {
-      console.error('Error generating suggestions:', error);
+      logger.error('Error generating suggestions:', error);
       toast.error('Failed to generate suggestions');
     } finally {
       setIsGenerating(false);
@@ -131,7 +132,7 @@ export function QuickSuggestionsPanel({
 
       onSuggestionAccepted?.();
     } catch (error) {
-      console.error('Error accepting suggestion:', error);
+      logger.error('Error accepting suggestion:', error);
       throw error;
     }
   };
@@ -148,7 +149,7 @@ export function QuickSuggestionsPanel({
       // Remove from UI
       setSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
     } catch (error) {
-      console.error('Error rejecting suggestion:', error);
+      logger.error('Error rejecting suggestion:', error);
       throw error;
     }
   };

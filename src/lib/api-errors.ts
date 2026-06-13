@@ -6,6 +6,7 @@
  */
 
 import { PostgrestError } from '@supabase/supabase-js';
+import { logger } from "@/lib/logger";
 import * as Sentry from '@sentry/react';
 
 /**
@@ -386,7 +387,7 @@ export async function batchWithErrorHandling<T>(
  */
 export function logError(error: unknown, context?: Record<string, any>) {
   // Always log to console for debugging
-  console.error('Error:', error, 'Context:', context);
+  logger.error('Error:', error, 'Context:', context);
 
   // Send to Sentry in production (or if explicitly enabled)
   if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {

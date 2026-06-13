@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { logger } from "@/lib/logger";
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -225,7 +226,7 @@ export default function MealPlanGenerator() {
         },
       });
     } catch (error) {
-      console.error('Error generating meal plan:', error);
+      logger.error('Error generating meal plan:', error);
       setErrors({ submit: error instanceof Error ? error.message : 'Failed to generate meal plan. Please try again.' });
     } finally {
       setIsGenerating(false);

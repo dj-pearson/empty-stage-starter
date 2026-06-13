@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { logger } from "@/lib/logger";
 import DOMPurify from "dompurify";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -79,7 +80,7 @@ export function ReadingProgress({ postId, onProgressChange }: ReadingProgressPro
           }
         );
       } catch (error) {
-        console.error("Error tracking engagement:", error);
+        logger.error("Error tracking engagement:", error);
       }
     };
 
@@ -253,7 +254,7 @@ export function ShareButtons({ url, title, description }: ShareButtonsProps) {
         }
       );
     } catch (error) {
-      console.error("Error tracking share:", error);
+      logger.error("Error tracking share:", error);
     }
 
     // Open share window
@@ -270,7 +271,7 @@ export function ShareButtons({ url, title, description }: ShareButtonsProps) {
       // You could show a toast notification here
       alert("Link copied to clipboard!");
     } catch (error) {
-      console.error("Error copying link:", error);
+      logger.error("Error copying link:", error);
     }
   };
 

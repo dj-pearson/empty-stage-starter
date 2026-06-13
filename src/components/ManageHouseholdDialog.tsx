@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Mail, Trash2, UserPlus, X } from "lucide-react";
+import { Users, Mail, Trash2, UserPlus, X, Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
@@ -26,6 +26,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { logger } from "@/lib/logger";
+import { buildInviteLink } from "@/lib/householdInvite";
 
 interface HouseholdMember {
   id: string;
@@ -48,7 +49,7 @@ export function ManageHouseholdDialog() {
   const [open, setOpen] = useState(false);
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [householdName, setHouseholdName] = useState("");
   const [householdId, setHouseholdId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -120,37 +121,41 @@ export function ManageHouseholdDialog() {
     }
   };
 
-  const handleInvite = async () => {
-    if (!inviteEmail || !householdId) return;
-
+  // US-337: generate a shareable invite CODE via the create_household_invite
+  // RPC (the recipient accepts at /join), replacing the old dead-end insert
+  // into household_invitations that nothing on the web ever accepted.
+  const handleCreateInviteCode = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { error } = await supabase
-        .from("household_invitations")
-        .insert({
-          household_id: householdId,
-          email: inviteEmail.toLowerCase(),
-          invited_by: user.id,
-        });
+      const { data, error } = await (
+        supabase.rpc as unknown as (
+          fn: string,
+          args: Record<string, unknown>,
+        ) => Promise<{ data: string | null; error: unknown }>
+      )("create_household_invite", { p_role: "parent" });
 
       if (error) throw error;
+      if (!data) throw new Error("No invite code returned");
 
-      toast.success(`Invitation sent to ${inviteEmail}`);
-      setInviteEmail("");
+      setInviteCode(data);
+      toast.success("Invite link created — share it with the other caregiver.");
       loadHouseholdData();
     } catch (error: unknown) {
-      logger.error("Error sending invitation:", error);
-      const pgError = error as { code?: string };
-      if (pgError.code === '23505') {
-        toast.error("This email has already been invited");
-      } else {
-        toast.error("Failed to send invitation");
-      }
+      logger.error("Error creating invite code:", error);
+      toast.error("Failed to create invite link");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCopyInviteLink = async () => {
+    if (!inviteCode) return;
+    const link = buildInviteLink(inviteCode);
+    try {
+      await navigator.clipboard.writeText(link);
+      toast.success("Invite link copied to clipboard");
+    } catch {
+      toast.error("Couldn't copy — select and copy the link manually.");
     }
   };
 
@@ -248,21 +253,26 @@ export function ManageHouseholdDialog() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex gap-2">
-                <Input
-                  type="email"
-                  placeholder="parent@example.com"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleInvite()}
-                />
-                <Button onClick={handleInvite} disabled={loading || !inviteEmail}>
-                  <Mail className="h-4 w-4 mr-2" />
-                  Send Invite
-                </Button>
-              </div>
+              <Button onClick={handleCreateInviteCode} disabled={loading} className="w-full">
+                <UserPlus className="h-4 w-4 mr-2" />
+                Create invite link
+              </Button>
+              {inviteCode && (
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Input readOnly value={buildInviteLink(inviteCode)} aria-label="Invite link" />
+                    <Button variant="outline" onClick={handleCopyInviteLink} aria-label="Copy invite link">
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Or share this code: <span className="font-mono font-semibold">{inviteCode}</span>
+                  </p>
+                </div>
+              )}
               <p className="text-xs text-muted-foreground mt-2">
-                They'll receive an email to join your household and will have full access to manage kids, meals, and groceries.
+                Send the link to the other parent or guardian. After they sign in and open it,
+                they'll join your household with full access to kids, meals, and groceries.
               </p>
             </CardContent>
           </Card>

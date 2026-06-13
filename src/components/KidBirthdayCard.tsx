@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PartyPopper, Cake, AlertTriangle, X } from 'lucide-react';
-import { useApp } from '@/contexts/AppContext';
+import { useKids, useFoods } from '@/contexts/AppContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useEffect } from 'react';
 import { analytics } from '@/lib/analytics';
@@ -65,7 +65,8 @@ interface BirthdayKidContext {
 }
 
 export function KidBirthdayCard() {
-  const { kids, foods } = useApp();
+  const { kids } = useKids();
+  const { foods } = useFoods();
   const now = useMemo(() => new Date(), []);
   const year = now.getUTCFullYear();
   const [dismissedFlip, setDismissedFlip] = useState(0); // force-rerender on dismiss

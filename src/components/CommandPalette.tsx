@@ -9,7 +9,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { useNavigate } from "react-router-dom";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods, useRecipes, useKids, usePlan } from "@/contexts/AppContext";
 import {
   Home,
   Users,
@@ -52,7 +52,10 @@ export function CommandPalette() {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const navigate = useNavigate();
   const { setTheme, theme } = useTheme();
-  const { foods, recipes, kids, planEntries } = useApp();
+  const { foods } = useFoods();
+  const { recipes } = useRecipes();
+  const { kids } = useKids();
+  const { planEntries } = usePlan();
 
   // Toggle command palette with Cmd/Ctrl + K
   useKeyboardShortcuts({

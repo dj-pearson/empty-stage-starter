@@ -136,6 +136,9 @@ export function MultiRegionBackup() {
     rpo: 60,
     rto: 15,
   });
+  // US-346: distinguish "backups not configured" from a real "degraded"
+  // failure so we show an explicit empty state instead of zeroed metrics.
+  const [notConfigured, setNotConfigured] = useState(false);
 
   const [showAddRegionDialog, setShowAddRegionDialog] = useState(false);
   const [showAddPolicyDialog, setShowAddPolicyDialog] = useState(false);
@@ -164,6 +167,7 @@ export function MultiRegionBackup() {
 
   const loadData = async () => {
     setLoading(true);
+    setNotConfigured(false);
     try {
       // Multi-region backup requires external infrastructure setup
       // This feature displays the current state of configured backup regions
@@ -173,20 +177,12 @@ export function MultiRegionBackup() {
       const backupConfigured = import.meta.env.VITE_BACKUP_ENABLED === 'true';
 
       if (!backupConfigured) {
-        // No backup infrastructure configured - show empty state
+        // No backup infrastructure configured - show an explicit empty state
+        // (US-346) rather than a misleading "degraded" with zeroed metrics.
         setRegions([]);
         setPolicies([]);
         setJobs([]);
-        setHealth({
-          overallStatus: "degraded",
-          totalStorage: 0,
-          usedStorage: 0,
-          activeRegions: 0,
-          pendingReplications: 0,
-          lastFullBackup: null,
-          rpo: 0,
-          rto: 0,
-        });
+        setNotConfigured(true);
         return;
       }
 
@@ -196,20 +192,11 @@ export function MultiRegionBackup() {
       // - Database backup_policies table
       // - Database backup_jobs table
 
-      // For now, show empty state until infrastructure is configured
+      // Until that lands, treat it as not-configured (explicit empty state).
       setRegions([]);
       setPolicies([]);
       setJobs([]);
-      setHealth({
-        overallStatus: "degraded",
-        totalStorage: 0,
-        usedStorage: 0,
-        activeRegions: 0,
-        pendingReplications: 0,
-        lastFullBackup: null,
-        rpo: 0,
-        rto: 0,
-      });
+      setNotConfigured(true);
     } catch (error) {
       logger.error("Error loading backup data:", error);
       toast.error("Failed to load backup configuration");
@@ -392,6 +379,40 @@ export function MultiRegionBackup() {
     return (
       <div className="flex justify-center items-center py-12">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // US-346: explicit "not configured" state instead of zeroed metrics that
+  // look like a real outage. Backups need external infra (VITE_BACKUP_ENABLED).
+  if (notConfigured) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-3xl font-bold flex items-center gap-3">
+            <Globe className="h-8 w-8 text-primary" />
+            Multi-Region Backup
+          </h2>
+          <p className="text-muted-foreground mt-1">
+            Geo-redundant backup storage with automatic replication
+          </p>
+        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+            <Globe className="h-10 w-10 text-muted-foreground" />
+            <h3 className="text-lg font-semibold">Backups not configured</h3>
+            <p className="text-muted-foreground max-w-md">
+              Multi-region backup infrastructure isn&apos;t set up for this
+              environment yet. Once it&apos;s provisioned and{" "}
+              <code className="text-xs">VITE_BACKUP_ENABLED</code> is set, region
+              health, replication policies, and backup jobs will appear here.
+            </p>
+            <Button variant="outline" onClick={loadData} className="mt-2">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Re-check
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }

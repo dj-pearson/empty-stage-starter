@@ -140,7 +140,7 @@ export function VoteResultsDisplay({
         votes,
       });
     } catch (error) {
-      console.error('Error loading votes:', error);
+      logger.error('Error loading votes:', error);
     } finally {
       setIsLoading(false);
     }

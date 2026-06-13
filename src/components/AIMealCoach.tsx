@@ -27,7 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
 import { format } from "date-fns";
 import { cn, calculateAge } from "@/lib/utils";
 import { logger } from "@/lib/logger";
@@ -48,7 +48,10 @@ interface Conversation {
 }
 
 export function AIMealCoach() {
-  const { activeKidId, kids, foods, planEntries, recipes } = useApp();
+  const { activeKidId, kids } = useKids();
+  const { foods } = useFoods();
+  const { planEntries } = usePlan();
+  const { recipes } = useRecipes();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -271,10 +274,10 @@ export function AIMealCoach() {
         },
       });
 
-      console.log('[AI Coach] invoke result:', { result, aiError });
+      logger.info('[AI Coach] invoke result:', { result, aiError });
 
       if (aiError) {
-        console.error('[AI Coach] Edge function error:', aiError);
+        logger.error('[AI Coach] Edge function error:', aiError);
         throw new Error(aiError.message || `AI request failed: ${JSON.stringify(aiError)}`);
       }
 
@@ -283,12 +286,12 @@ export function AIMealCoach() {
       }
 
       if (result.error) {
-        console.error('[AI Coach] Function returned error:', result);
+        logger.error('[AI Coach] Function returned error:', result);
         throw new Error(`Edge function error: ${result.error}${result.details ? ` (${result.details})` : ''}`);
       }
 
       if (!result.message) {
-        console.error('[AI Coach] Invalid response shape:', result);
+        logger.error('[AI Coach] Invalid response shape:', result);
         throw new Error(`Invalid AI response shape: ${JSON.stringify(result)}`);
       }
 

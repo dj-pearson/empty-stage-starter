@@ -52,7 +52,7 @@ export function useWhiteLabelTheme() {
           applyFavicon(brandSettings.favicon_url);
         }
       } catch (error) {
-        console.error('Error applying white-label theme:', error);
+        logger.error('Error applying white-label theme:', error);
       }
     };
 
@@ -153,7 +153,7 @@ function applyThemeColors(brandSettings: BrandSettings) {
     root.setAttribute('data-brand-secondary', brandSettings.secondary_color);
     root.setAttribute('data-brand-accent', brandSettings.accent_color);
   } catch (error) {
-    console.error('Error applying theme colors:', error);
+    logger.error('Error applying theme colors:', error);
   }
 }
 

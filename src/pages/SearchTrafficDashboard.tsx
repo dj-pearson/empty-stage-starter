@@ -10,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
+import { toCsv, downloadCsv } from "@/lib/csvExport";
 import {
   BarChart3,
   TrendingUp,
@@ -92,7 +94,7 @@ export default function SearchTrafficDashboard() {
         setSelectedConnections(data.map(c => c.id));
       }
     } catch (error) {
-      console.error("Error fetching connections:", error);
+      logger.error("Error fetching connections:", error);
       toast.error("Failed to load platform connections");
     }
   };
@@ -118,7 +120,7 @@ export default function SearchTrafficDashboard() {
       // Refresh the dashboard data
       window.location.reload();
     } catch (error) {
-      console.error("Error syncing data:", error);
+      logger.error("Error syncing data:", error);
       const message = error instanceof Error ? error.message : "Failed to sync analytics data";
       toast.error(message);
     } finally {
@@ -126,12 +128,27 @@ export default function SearchTrafficDashboard() {
     }
   };
 
-  const handleExportData = async () => {
+  const handleExportData = () => {
     try {
-      toast.info("Export functionality coming soon!");
-      // TODO: Implement CSV/PDF export
+      if (connections.length === 0) {
+        toast.info("Nothing to export yet — connect a platform first.");
+        return;
+      }
+      // Export the connected platforms + sync status (never the tokens).
+      const csv = toCsv(connections, [
+        { header: "Platform", value: (c) => c.platform },
+        { header: "Account", value: (c) => c.platform_account_name ?? "" },
+        { header: "Active", value: (c) => (c.is_active ? "yes" : "no") },
+        { header: "Sync status", value: (c) => c.sync_status ?? "" },
+        { header: "Last sync", value: (c) => c.last_sync_at ?? "" },
+        { header: "Sync error", value: (c) => c.sync_error ?? "" },
+      ]);
+      const stamp = new Date().toISOString().slice(0, 10);
+      const ok = downloadCsv(`search-traffic-connections-${stamp}.csv`, csv);
+      if (ok) toast.success("Exported connections to CSV");
+      else toast.error("Export isn't available in this environment.");
     } catch (error) {
-      console.error("Error exporting data:", error);
+      logger.error("Error exporting data:", error);
       toast.error("Failed to export data");
     }
   };

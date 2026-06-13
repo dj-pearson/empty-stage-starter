@@ -505,6 +505,53 @@ struct GroceryView: View {
         }
     }
 
+    // US-362: sticky checkout bar pinned above the tab bar. Renders only when
+    // there are bought items and we're not in bulk-select mode (which has its
+    // own bottom toolbar). Makes the grocery→pantry handoff impossible to miss
+    // and survives long, scrolled lists.
+    @ViewBuilder
+    private var checkoutBar: some View {
+        if !checkedItems.isEmpty && !isSelecting {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("\(checkedItems.count) in cart")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Move them to your pantry")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                Button("Clear") {
+                    showingClearAlert = true
+                }
+                .font(.subheadline)
+                .foregroundStyle(.red)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear completed items without moving to pantry")
+
+                Button {
+                    HapticManager.mediumImpact()
+                    Task { try? await appState.moveCheckedToPantry() }
+                } label: {
+                    Label("Move to pantry", systemImage: "arrow.right.square.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
+                .accessibilityLabel(
+                    "Move \(checkedItems.count) completed item\(checkedItems.count == 1 ? "" : "s") to pantry"
+                )
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.regularMaterial)
+            .overlay(alignment: .top) { Divider() }
+        }
+    }
+
     var body: some View {
         List {
             // Summary Header
@@ -519,39 +566,11 @@ struct GroceryView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-
-                    Spacer()
-
-                    if !checkedItems.isEmpty {
-                        // US-283: primary path is "Move to pantry" — credits
-                        // the bought items into the inventory and removes
-                        // them from the list. "Clear Done" stays as the
-                        // destructive escape hatch for items the user
-                        // doesn't actually want to stock.
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Button {
-                                Task { try? await appState.moveCheckedToPantry() }
-                            } label: {
-                                Label(
-                                    "Move \(checkedItems.count) to pantry",
-                                    systemImage: "arrow.right.square.fill"
-                                )
-                                .font(.subheadline.weight(.semibold))
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.small)
-                            .accessibilityLabel(
-                                "Move \(checkedItems.count) completed item\(checkedItems.count == 1 ? "" : "s") to pantry"
-                            )
-
-                            Button("Clear Done") {
-                                showingClearAlert = true
-                            }
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                        }
-                    }
                 }
+                // US-362: the "Move to pantry" / "Clear Done" actions moved
+                // out of this scroll-away summary card and into the persistent
+                // `checkoutBar` (safeAreaInset below) so they're reachable no
+                // matter how far the list is scrolled.
                 .popoverTip(swipeTip)
             }
 
@@ -649,6 +668,10 @@ struct GroceryView: View {
             }
         }
         .listStyle(.insetGrouped)
+        // US-362: persistent checkout bar so "Move to pantry" is always
+        // reachable. The previous summary-card button scrolled out of view on
+        // long lists, which left the grocery→pantry loop effectively hidden.
+        .safeAreaInset(edge: .bottom) { checkoutBar }
         .navigationTitle(isSelecting ? "\(selectedIds.count) selected" : "Grocery List")
         .searchable(text: $searchText, prompt: "Search items...")
         .dropDestination(for: FoodTransferable.self) { droppedFoods, _ in

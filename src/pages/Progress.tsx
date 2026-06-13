@@ -4,12 +4,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProgressDashboard } from '@/components/ProgressDashboard';
 import { AchievementsView } from '@/components/AchievementsView';
 import { WeeklyProgressReport } from '@/components/WeeklyProgressReport';
-import { useApp } from '@/contexts/AppContext';
+import { useKids } from '@/contexts/AppContext';
 import { Card } from '@/components/ui/card';
 import { TrendingUp, Trophy, Calendar } from 'lucide-react';
 
 export default function Progress() {
-  const { kids, activeKidId } = useApp();
+  const { kids, activeKidId } = useKids();
   const [activeTab, setActiveTab] = useState('overview');
 
   const activeKid = kids.find(k => k.id === activeKidId);

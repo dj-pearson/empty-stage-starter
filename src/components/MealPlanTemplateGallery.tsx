@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import {
   Dialog,
   DialogContent,
@@ -97,7 +98,7 @@ export function MealPlanTemplateGallery({
 
       setTemplates(data.templates || []);
     } catch (error) {
-      console.error('Error loading templates:', error);
+      logger.error('Error loading templates:', error);
       toast.error('Failed to load templates');
     } finally {
       setIsLoading(false);

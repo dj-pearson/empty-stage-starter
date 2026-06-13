@@ -3,13 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { useApp } from '@/contexts/AppContext';
+import { usePlan, useFoods, useKids } from '@/contexts/AppContext';
 import { AchievementBadge, type Achievement } from './AchievementBadge';
 import { Trophy, Lock, Star, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
 
 export function AchievementsView() {
-  const { planEntries, foods, activeKidId, kids } = useApp();
+  const { planEntries } = usePlan();
+  const { foods } = useFoods();
+  const { activeKidId, kids } = useKids();
   const [filter, setFilter] = useState<'all' | 'unlocked' | 'locked'>('all');
 
   const activeKid = kids.find(k => k.id === activeKidId);

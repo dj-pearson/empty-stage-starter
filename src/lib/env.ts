@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import { logger } from "@/lib/logger";
 
 const envSchema = z.object({
   // Required
@@ -47,7 +48,7 @@ export function validateEnv(): Env | null {
 
   if (!result.success) {
     if (import.meta.env.DEV) {
-      console.error(
+      logger.error(
         '[EatPal] Environment variable validation failed:\n' +
           result.error.issues
             .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)
