@@ -5248,8 +5248,8 @@
         "Typecheck passes"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": "Verified TODOs: MultiRegionBackup.tsx:193 (mock/empty until infra), SearchTrafficDashboard.tsx:132 (export not implemented)."
+      "passes": true,
+      "notes": "Verified TODOs: MultiRegionBackup.tsx:193 (mock/empty until infra), SearchTrafficDashboard.tsx:132 (export not implemented). | DONE 2026-06-13: (1) SearchTrafficDashboard export is now a REAL CSV download (not a 'coming soon' no-op) via new src/lib/csvExport.ts (toCsv with RFC-4180 quoting + downloadCsv); exports the connected platforms + sync status (never tokens), empty-state toast when nothing connected. (2) MultiRegionBackup now renders an explicit 'Backups not configured' empty state (gated on VITE_BACKUP_ENABLED) instead of a misleading 'degraded' status with zeroed metrics. (3) Audited other admin 'coming soon' instances (RevenueOperationsCenter:584, SocialMediaManager:684) — already proper empty-state labels, not dead buttons; no action. Test src/lib/csvExport.test.ts (3). Verified: npm run build ✓ (exit 0), vitest 922 passed."
     },
     {
       "id": "US-347",
