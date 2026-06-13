@@ -2819,3 +2819,27 @@ The hard core — most need fresh code or are blocked by tooling unavailable in 
 
 ### Remaining false: 74
 Next web candidates (buildable here): US-328 (RLS gaps migration), US-331-336 (AppContext/realtime/perf refactors), US-337 (invite accept flow), US-338/340 (meal-vote + recipes realtime), US-339, US-341, US-342-347 (any-ban, console→logger, select(*) trims, dark-mode, admin features, i18n). iOS Swift source-only edits (US-348+) editable but unbuildable without Xcode.
+
+## 2026-06-13 (cont.) - Realtime/PWA + admin-perf + grocery-batching (US-332/334/335/336/339/340)
+- Same branch `claude/prd-failing-items-v1ro95`. Continued the web batch after the security/infra six. All changes verified by `npx vitest run` (910 passed / 3 skipped, exit 0 — +8 new tests this session) and the build; CI typecheck is now non-blocking (see below).
+- PRD this session: 80 false → 68 false (12 flipped, all with real code + tests).
+
+### IMPORTANT — typecheck reality (affects US-329/US-330)
+- Turning on the real `tsc -b` (US-329) surfaced ~1269 PRE-EXISTING type errors repo-wide (mostly a stale generated src/integrations/supabase/types.ts; some test files lacking vitest/jest-dom types). The old `tsc --noEmit` checked ZERO files (root tsconfig files:[]) so this never gated anything — the earlier "exit 0" runs were .tsbuildinfo-cached false-greens.
+- Per user decision the CI Typecheck step is NON-BLOCKING (continue-on-error + a ::warning with the error count) so merges stay unblocked until the backlog is burned down; flip continue-on-error:false for a hard gate at zero. `npm run typecheck` is real and proven to catch errors.
+- Note: `tsc -b --noEmit` on this repo is ~15-25 min (no persisted incremental cache), so iterate with vitest (esbuild) and run a full typecheck only at batch end.
+
+### Shipped this session (batches 2-4)
+- US-332 household-scoped realtime channel names (Grocery/Plan/Kids/Recipes).
+- US-340 recipes realtime subscription + applyRecipeRealtime (normalize via normalizeRecipeFromDB, dedupe by id, preserve ingredients on UPDATE). Test: RecipesContext.realtime.test.ts (4).
+- US-336 pwa.ts: non-blocking Sonner update toast (no confirm()), visibility-gated SW update interval w/ teardown, fixed onOnlineStatusChange listener leak, logger + no `any`. Test: pwa.test.ts (2).
+- US-335 SystemHealthDashboard countdown isolated into <RefreshCountdown> child (charts no longer re-render every 1s); LiveActivityFeed polls only when realtime fails (CHANNEL_ERROR/TIMED_OUT). Existing tests green (9+9).
+- US-339 removed dead activeShoppers presence state/interface from CollaborativeShoppingMode (chose REMOVE per AC).
+- US-334 grocery merge batched: one optimistic setState + one RPC bump_grocery_item_quantities(jsonb) (migration 20260613000002, RLS-scoped) instead of N updateGroceryItem calls; rollback via runOptimisticMutation. Test: GroceryContext.merge.test.tsx (2).
+
+### Migrations added (additive, backward-compatible; NOT applied to prod here)
+- 20260613000001_rate_limit_config_ai_endpoints.sql (US-325)
+- 20260613000002_bump_grocery_item_quantities.sql (US-334)
+
+### Remaining false: 68
+Web candidates still open (buildable here): US-328 (RLS gaps migration), US-331 (context re-render isolation), US-333 (normalize Grocery/Plan/Kids realtime payloads), US-337 (web invite accept flow), US-338 (meal-vote upsert conflict target + migration), US-341 (localStorage vs Supabase precedence), US-342 (ban `any`), US-343 (console→logger), US-344 (select('*') trims), US-345 (dark-mode tokens), US-346 (admin features), US-347 (i18n). Plus the iOS Swift (US-348+, editable but unbuildable without Xcode), native Android/iOS-integration (need toolchains), and US-323 (prod deploy).
