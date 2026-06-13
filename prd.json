@@ -5422,7 +5422,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Audit finding (Recipe Flow 3 GAP). Also addresses the foodIds:[] unaddable-recipe trap (MealPlanView.swift:966-980)."
+      "notes": "Implemented on branch claude/ios-ui-ux-refinement-5s4hum (build verification deferred to local Xcode). RecipeDetailView gains a prominent 'Add to Meal Plan' button (after the meta row) that presents AddRecipeToPlanSheet — a compact Form picker for date + meal slot + child (child picker shown only when >1 kid; defaults to activeKidId). On Add it builds a PlanEntry (same call shape as AddPlanEntryView) and calls appState.addPlanEntry, shows a 'Added to <slot>' toast, then reports the recipe back so RecipeDetailView.handleAddToPlanDismiss runs ShortfallCalculator.compute and presents the existing MissingIngredientsSheet when ingredients are short — the same add-missing-to-grocery flow as the planner (self-contained; will consolidate with US-353's shared check later). Trap fix: foodId resolution (plan_entries.food_id is NOT NULL) now falls back from recipe.foodIds.first to recipe.ingredients.compactMap(foodId).first in BOTH the new sheet and MealPlanView.AddPlanEntryView, so US-354-imported recipes without legacy foodIds are plannable. When no ingredient is linked to any pantry food, a clear message is shown instead of a silent failure. Pending: Swift build + device check."
     },
     {
       "id": "US-358",

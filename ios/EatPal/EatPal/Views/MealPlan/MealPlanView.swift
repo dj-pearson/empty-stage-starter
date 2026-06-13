@@ -966,9 +966,12 @@ struct AddPlanEntryView: View {
         let resolvedFoodId: String? = {
             if let id = selectedFoodId, !id.isEmpty { return id }
             if let recipeId = selectedRecipeId,
-               let recipe = appState.recipes.first(where: { $0.id == recipeId }),
-               let firstFoodId = recipe.foodIds.first {
-                return firstFoodId
+               let recipe = appState.recipes.first(where: { $0.id == recipeId }) {
+                // US-357: prefer a legacy linked food, then fall back to a
+                // structured ingredient's foodId (US-354) so imported recipes
+                // without `foodIds` aren't trapped as unplannable.
+                if let firstFoodId = recipe.foodIds.first { return firstFoodId }
+                if let linked = recipe.ingredients.compactMap(\.foodId).first { return linked }
             }
             return nil
         }()

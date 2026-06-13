@@ -546,6 +546,14 @@ struct RecipeDetailView: View {
     let recipe: Recipe
     @State private var showingEditRecipe = false
 
+    // US-357: add-to-meal-plan flow. `pendingShortfallRecipe` carries the
+    // just-planned recipe across the picker's dismissal so we can compute the
+    // pantry shortfall and present the missing-ingredient sheet — mirroring the
+    // MealPlanView add flow.
+    @State private var showingAddToPlan = false
+    @State private var pendingShortfallRecipe: Recipe?
+    @State private var detailShortfall: DetailShortfallContext?
+
     // US-224: live serving scaler. 0 == "show original".
     @State private var displayServings: Int = 0
 
@@ -644,6 +652,19 @@ struct RecipeDetailView: View {
                             MetaBadge(icon: "chart.bar.fill", text: difficulty.capitalized)
                         }
                     }
+
+                    // US-357: add this recipe straight to the planner without
+                    // leaving the detail view and re-searching for it.
+                    Button {
+                        showingAddToPlan = true
+                    } label: {
+                        Label("Add to Meal Plan", systemImage: "calendar.badge.plus")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                    .accessibilityHint("Pick a day and meal, then optionally add missing ingredients to your grocery list")
 
                     // US-224: Servings scaler
                     HStack(spacing: 12) {
@@ -816,6 +837,21 @@ struct RecipeDetailView: View {
             .sheet(isPresented: $showingEditRecipe) {
                 EditRecipeView(recipe: currentRecipe)
             }
+            // US-357: add-to-plan picker; on dismiss compute the shortfall.
+            .sheet(isPresented: $showingAddToPlan, onDismiss: handleAddToPlanDismiss) {
+                AddRecipeToPlanSheet(recipe: currentRecipe) { added in
+                    pendingShortfallRecipe = added
+                }
+                .environmentObject(appState)
+            }
+            .sheet(item: $detailShortfall) { ctx in
+                MissingIngredientsSheet(
+                    recipe: ctx.recipe,
+                    shortfalls: ctx.shortfalls,
+                    onFinish: { _ in detailShortfall = nil }
+                )
+                .environmentObject(appState)
+            }
             .onAppear {
                 // Restore the persisted per-recipe servings scale if any.
                 let stored = UserDefaults.standard.integer(forKey: scaleStorageKey)
@@ -826,6 +862,19 @@ struct RecipeDetailView: View {
                 }
             }
         }
+    }
+
+    /// US-357: after the add-to-plan picker closes, compute the pantry
+    /// shortfall for the just-planned recipe and present the missing-ingredient
+    /// sheet (mirrors MealPlanView.handleAddEntryDismiss). Silent no-op when the
+    /// recipe has no structured ingredients or nothing is short.
+    private func handleAddToPlanDismiss() {
+        guard let planned = pendingShortfallRecipe else { return }
+        pendingShortfallRecipe = nil
+        guard !planned.ingredients.isEmpty else { return }
+        let shortfalls = ShortfallCalculator.compute(recipe: planned, pantry: appState.foods)
+        guard !shortfalls.isEmpty else { return }
+        detailShortfall = DetailShortfallContext(recipe: planned, shortfalls: shortfalls)
     }
 
     private func addIngredientsToGrocery() async {
@@ -885,6 +934,120 @@ struct RecipeDetailView: View {
             message: "\(added) ingredients added\(scaleNote)."
         )
         HapticManager.success()
+    }
+}
+
+// MARK: - US-357 Add-to-Plan
+
+/// Identifiable wrapper so the missing-ingredient sheet can present via
+/// `.sheet(item:)` after the add-to-plan picker dismisses.
+private struct DetailShortfallContext: Identifiable {
+    let id = UUID()
+    let recipe: Recipe
+    let shortfalls: [ShortfallCalculator.Shortfall]
+}
+
+/// US-357: compact picker to drop a recipe onto the planner (date + meal slot
+/// + child). Inserts the plan entry and reports back via `onAdded` so the
+/// detail view can run the missing-ingredient shortfall check.
+private struct AddRecipeToPlanSheet: View {
+    @EnvironmentObject var appState: AppState
+    @Environment(\.dismiss) private var dismiss
+
+    let recipe: Recipe
+    var onAdded: (Recipe) -> Void
+
+    @State private var date = Date()
+    @State private var mealSlot: MealSlot = .dinner
+    @State private var kidId: String = ""
+    @State private var isSubmitting = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                DatePicker("Date", selection: $date, displayedComponents: .date)
+
+                Picker("Meal", selection: $mealSlot) {
+                    ForEach(MealSlot.allCases, id: \.self) { slot in
+                        Label(slot.displayName, systemImage: slot.icon).tag(slot)
+                    }
+                }
+
+                // Only ask which child when there's more than one profile.
+                if appState.kids.count > 1 {
+                    Picker("Child", selection: $kidId) {
+                        ForEach(appState.kids) { kid in
+                            Text(kid.name).tag(kid.id)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Add to Meal Plan")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") { Task { await add() } }
+                        .disabled(isSubmitting || kidId.isEmpty)
+                }
+            }
+            .onAppear {
+                if kidId.isEmpty {
+                    kidId = appState.activeKidId ?? appState.kids.first?.id ?? ""
+                }
+            }
+        }
+    }
+
+    /// `plan_entries.food_id` is NOT NULL, so resolve a concrete food UUID.
+    /// US-357: in addition to legacy `foodIds`, consider structured ingredient
+    /// links (US-354) so imported recipes whose ingredients live only in
+    /// `recipe_ingredients` aren't trapped as "unplannable".
+    private func resolveFoodId() -> String? {
+        if let first = recipe.foodIds.first { return first }
+        if let linked = recipe.ingredients.compactMap(\.foodId).first { return linked }
+        return nil
+    }
+
+    private func add() async {
+        guard !kidId.isEmpty else {
+            ToastManager.shared.error("Select a child profile first")
+            return
+        }
+        guard let foodId = resolveFoodId() else {
+            ToastManager.shared.error(
+                "Link an ingredient to your pantry first",
+                message: "Open this recipe's ingredients so we can plan it."
+            )
+            return
+        }
+
+        isSubmitting = true
+        let entry = PlanEntry(
+            id: UUID().uuidString,
+            userId: "",
+            kidId: kidId,
+            date: DateFormatter.isoDate.string(from: date),
+            mealSlot: mealSlot.rawValue,
+            foodId: foodId,
+            recipeId: recipe.id
+        )
+
+        do {
+            try await appState.addPlanEntry(entry)
+            onAdded(recipe)
+            let dateLabel = date.formatted(date: .abbreviated, time: .omitted)
+            ToastManager.shared.success(
+                "Added to \(mealSlot.displayName)",
+                message: dateLabel
+            )
+            dismiss()
+        } catch {
+            // addPlanEntry already surfaces an error toast; stay open to retry.
+            isSubmitting = false
+        }
     }
 }
 
