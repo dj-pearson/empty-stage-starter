@@ -45,7 +45,10 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    // US-328: this is an UNAUTHENTICATED endpoint — never hand it the
+    // service-role key. The anon key is enough for a connectivity probe (RLS
+    // just returns 0 rows, which still proves the DB is reachable).
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
     const supabaseClient = createClient(supabaseUrl, supabaseKey);
 

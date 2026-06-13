@@ -4972,8 +4972,8 @@
         "Migration test job passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Audit flagged: user_roles admin SELECT self-reference; ai_cost WITH CHECK(true); health-check uses service-role key unauthenticated."
+      "passes": true,
+      "notes": "Audit flagged: user_roles admin SELECT self-reference; ai_cost WITH CHECK(true); health-check uses service-role key unauthenticated. | DONE 2026-06-13: migration 20260613000004 (policy-only, additive, RLS stays on). (1) user_roles admin SELECT/INSERT/UPDATE/DELETE policies no longer self-reference user_roles in their USING/CHECK (was infinite-recursion risk from 20251109000003) — routed through the existing SECURITY DEFINER has_role(auth.uid(),'admin'). 'Users can view their own roles' unchanged. (2) ai_usage_logs INSERT WITH CHECK(true) -> WITH CHECK(auth.uid()=user_id); verified the only writer is the SECURITY DEFINER log_ai_usage() RPC (RLS-exempt) and the web client only READS, so no shipped client breaks (an old client inserting its OWN user_id still passes; only cross-user spoofing is blocked). (3) functions/health-check no longer uses SUPABASE_SERVICE_ROLE_KEY on this unauthenticated endpoint — now anon-only (RLS returns 0 rows but still proves connectivity). Read paths unchanged for older iOS clients. Migration-test CI job validates the SQL. Kept `version` in the response (existing health-check.spec asserts it); the service-role-key removal is the primary AC remediation (AC is an OR)."
     },
     {
       "id": "US-329",
