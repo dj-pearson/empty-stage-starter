@@ -187,7 +187,11 @@ final class StoreKitService: ObservableObject {
                     await self.syncSubscriptionToSupabase(transaction: transaction)
                     await transaction.finish()
                 } catch {
-                    print("Transaction verification failed: \(error)")
+                    // US-376: surface verification failures in Sentry instead
+                    // of swallowing them in a print().
+                    SentryService.capture(error, extras: [
+                        "context": "storekit_transaction_update"
+                    ])
                 }
             }
         }
@@ -272,7 +276,13 @@ final class StoreKitService: ObservableObject {
                 .upsert(payload, onConflict: "original_transaction_id")
                 .execute()
         } catch {
-            print("Failed to sync subscription to Supabase: \(error)")
+            // US-376: a failed upsert must be observable — report to Sentry
+            // with non-PII product/transaction context (no user_id/email).
+            SentryService.capture(error, extras: [
+                "context": "storekit_subscription_sync",
+                "product_id": transaction.productID,
+                "original_transaction_id": String(transaction.originalID)
+            ])
         }
     }
 }

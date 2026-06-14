@@ -2904,3 +2904,14 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - US-406 (P4, pairs with 405): AppDelegate didReceive maps the notification categoryIdentifier -> DeepLinkHandler.routeFromNotification, reusing the deep-link consumption path (MEALREMINDERS->Planner, GROCERY*->Grocery, EXPIRINGFOOD->Pantry, AISUMMARY->Dashboard, STREAKMILESTONE/TRYBITE->Progress). Added a .progress Destination + eatpal://progress + /app/progress.
 - Files: ios/.../Services/RealtimeService.swift, Services/NotificationService.swift, Views/Settings/SettingsView.swift, App/EatPalApp.swift, Utilities/DeepLinkHandler.swift, Views/Dashboard/MainTabView.swift, Views/Dashboard/MoreView.swift, EatPalTests/RealtimeDecodeTests.swift.
 - Remaining false: 85.
+
+## 2026-06-14 (cont.) - iOS stability/UX/security audit-fixes (US-374/376/377/386/409/410/411)
+- Same branch. Continued the one-by-one iOS audit-finding sweep. Swift build = local Xcode (source-audit verification here).
+- US-409 (Kids add error-swallow): AddKidView.addKid uses `defer { isSubmitting = false }`; do/catch around appState.addKid -> ToastManager.error + sheet stays open on failure; dismiss only on success.
+- US-386 (grocery N+1 delete): clearCheckedGroceryItems -> one dataService.bulkDeleteGroceryItems(Array(checkedIds)); rollback already restores the full checked+source snapshot.
+- US-376 (StoreKit print-swallow): both catch blocks -> SentryService.capture with context tag; sync carries product_id + original_transaction_id (no PII); no raw print() left.
+- US-377 (Apple user-id PII): dropped appleCredential.user from Sentry extras; added userid/user_id/useridentifier/user_identifier/appleuser to sensitiveKeys; verified no other Apple credential field is sent.
+- US-410 (Kid Safe Foods stat): scoped per-child — safe foods minus any whose allergens intersect the kid's allergens (case-insensitive disjoint).
+- US-411 (zeroed nutrition rings): DailyNutritionSummary shows "Nutrition data not available" instead of zeroed rings (Food has no macros yet); MacroRing value text gains lineLimit+minimumScaleFactor+maxWidth so big values don't overflow the 56pt ring.
+- US-374 (bind-email weak password): password step now enforces PasswordValidator (12-char policy) + match, reuses PasswordStrengthView, footer/placeholder updated to the real requirement.
+- Remaining false: 78.

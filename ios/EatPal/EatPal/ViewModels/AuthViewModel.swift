@@ -273,9 +273,11 @@ final class AuthViewModel: ObservableObject {
                 // Auth state listener will handle the transition to .authenticated
             } catch {
                 errorMessage = "Sign in with Apple failed: \(error.localizedDescription)"
+                // US-377: do NOT attach appleCredential.user — Apple's stable
+                // user identifier is PII and adds no actionable debug value
+                // beyond the context tag.
                 SentryService.capture(error, extras: [
-                    "context": "apple_sign_in_supabase_exchange",
-                    "userIdentifier": appleCredential.user
+                    "context": "apple_sign_in_supabase_exchange"
                 ])
             }
 

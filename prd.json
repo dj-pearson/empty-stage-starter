@@ -5668,8 +5668,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Auth/Security). BindEmailView.swift:165 placeholder + :212-214 validation; contrast AuthViewModel.isFormValid (.signUp) at AuthViewModel.swift:163-165 which requires passwordValidation.isValid."
+      "passes": true,
+      "notes": "Audit finding (Auth/Security). BindEmailView.swift:165 placeholder + :212-214 validation; contrast AuthViewModel.isFormValid (.signUp) at AuthViewModel.swift:163-165 which requires passwordValidation.isValid. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): BindEmailView password step now gates submit on PasswordValidator.validate(...).isValid (12-char policy) + match; reuses PasswordStrengthView for the same strength bar + failed-rule list as signup; placeholder/footer updated to the real 12-char + character-class requirement."
     },
     {
       "id": "US-375",
@@ -5696,8 +5696,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Stability). StoreKitService.swift:189-191 and :274-276. SentryService.capture already exists and scrubs PII (SentryService.swift:83-92)."
+      "passes": true,
+      "notes": "Audit finding (Stability). StoreKitService.swift:189-191 and :274-276. SentryService.capture already exists and scrubs PII (SentryService.swift:83-92). | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): both StoreKitService catch blocks (transaction-update listener + syncSubscriptionToSupabase) now call SentryService.capture with a context tag; sync failure carries product_id + original_transaction_id (no PII). No raw print() remains."
     },
     {
       "id": "US-377",
@@ -5710,8 +5710,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Security/Privacy). AuthViewModel.swift:278; scrub key list SentryService.swift:122-126."
+      "passes": true,
+      "notes": "Audit finding (Security/Privacy). AuthViewModel.swift:278; scrub key list SentryService.swift:122-126. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): removed appleCredential.user from the apple_sign_in_supabase_exchange Sentry extras; added userid/user_id/useridentifier/user_identifier/appleuser to SentryService.sensitiveKeys as defense-in-depth. Verified no other appleCredential fields (user/fullName) are sent to Sentry/analytics."
     },
     {
       "id": "US-378",
@@ -5836,8 +5836,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Performance). Same N+1 pattern US-334/US-365 already fixed elsewhere; call site AppState.swift:1218-1221 was overlooked."
+      "passes": true,
+      "notes": "Audit finding (Performance). Same N+1 pattern US-334/US-365 already fixed elsewhere; call site AppState.swift:1218-1221 was overlooked. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): clearCheckedGroceryItems now calls dataService.bulkDeleteGroceryItems(Array(checkedIds)) in one round-trip instead of N serial deletes; existing rollback restores the full checked + source snapshot on failure."
     },
     {
       "id": "US-387",
@@ -6161,8 +6161,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Stability). KidsView.swift:235 — try? then unconditional dismiss; isSubmitting set at :220 never cleared."
+      "passes": true,
+      "notes": "Audit finding (Stability). KidsView.swift:235 — try? then unconditional dismiss; isSubmitting set at :220 never cleared. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): addKid now uses defer to reset isSubmitting on every path; wraps appState.addKid in do/catch, shows a ToastManager error and keeps the sheet open on failure, dismisses only on confirmed success."
     },
     {
       "id": "US-410",
@@ -6174,8 +6174,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Functionality). Misleading per-kid data; today's-meals stat is correctly scoped via planEntriesForDate(kidId:), so the inconsistency is visible side-by-side."
+      "passes": true,
+      "notes": "Audit finding (Functionality). Misleading per-kid data; today's-meals stat is correctly scoped via planEntriesForDate(kidId:), so the inconsistency is visible side-by-side. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): KidDetailView Safe Foods stat now scoped to the child — excludes safe foods whose allergens intersect the kids allergen list (case-insensitive disjoint check); Todays Meals remains kid-scoped via planEntriesForDate(kidId:)."
     },
     {
       "id": "US-411",
@@ -6187,8 +6187,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (UX). Placeholder shipped as live UI; the fixed-frame ring (NutritionView.swift:104-119, .caption2 no scale) also overflows at large text sizes."
+      "passes": true,
+      "notes": "Audit finding (UX). Placeholder shipped as live UI; the fixed-frame ring (NutritionView.swift:104-119, .caption2 no scale) also overflows at large text sizes. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): DailyNutritionSummary shows an explicit Nutrition data not available state (Food has no per-item macros yet) instead of zeroed MacroRings; MacroRing value Text gained lineLimit(1)+minimumScaleFactor(0.5)+frame(maxWidth:48) so 3-4 digit values dont overflow the 56pt ring under Dynamic Type."
     },
     {
       "id": "US-412",

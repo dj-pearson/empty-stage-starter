@@ -122,7 +122,11 @@ enum SentryService {
     private static let sensitiveKeys: Set<String> = [
         "authorization", "auth", "cookie", "password", "token",
         "email", "name", "first_name", "last_name", "phone",
-        "dob", "birthday", "address"
+        "dob", "birthday", "address",
+        // US-377: Apple's stable user identifier (and similar user-id style
+        // keys) is PII — redact it defensively even though the call site no
+        // longer attaches it.
+        "userid", "user_id", "useridentifier", "user_identifier", "appleuser"
     ]
 
     private static func sanitise(dictionary: [String: Any]?) -> [String: Any]? {

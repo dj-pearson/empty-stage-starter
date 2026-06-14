@@ -1216,9 +1216,8 @@ final class AppState: ObservableObject {
         groceryItems.removeAll { $0.checked }
         groceryItemSources.removeAll { checkedIds.contains($0.groceryItemId) }
         do {
-            for id in checkedIds {
-                try await dataService.deleteGroceryItem(id)
-            }
+            // US-386: one bulk round-trip instead of N serial deletes.
+            try await dataService.bulkDeleteGroceryItems(Array(checkedIds))
             toast.success("Cleared \(checkedIds.count) items")
             HapticManager.success()
             AnalyticsService.track(.groceryListCleared(checkedCount: checkedIds.count))
