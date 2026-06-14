@@ -18,6 +18,9 @@ struct ScannedProductView: View {
     @State private var isTryBite = false
     @State private var allergens = ""
     @State private var isSubmitting = false
+    // US-389: when a scan matches an existing pantry item, offer update vs add-new.
+    @State private var duplicateMatch: Food?
+    @State private var pendingFood: Food?
 
     var body: some View {
         NavigationStack {
@@ -114,6 +117,33 @@ struct ScannedProductView: View {
             .task {
                 await lookupBarcode()
             }
+            // US-389: dedup prompt when the scanned product already exists.
+            .confirmationDialog(
+                "Already in pantry",
+                isPresented: Binding(
+                    get: { duplicateMatch != nil },
+                    set: { if !$0 { duplicateMatch = nil } }
+                ),
+                presenting: duplicateMatch
+            ) { existing in
+                Button("Update existing quantity") {
+                    Task {
+                        try? await appState.incrementFoodQuantity(existing.id, by: 1, unit: existing.unit)
+                        dismiss()
+                    }
+                }
+                Button("Add as new") {
+                    if let pendingFood {
+                        Task {
+                            try? await appState.addFood(pendingFood)
+                            dismiss()
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) { duplicateMatch = nil }
+            } message: { existing in
+                Text("\(existing.name) is already in your pantry. Update its quantity or add a separate entry?")
+            }
         }
     }
 
@@ -177,7 +207,19 @@ struct ScannedProductView: View {
             expiryDate: expiryISO
         )
 
+        // US-389: a barcode (or name) match means this product is already in
+        // the pantry — offer update-vs-add-new instead of silently inserting
+        // a duplicate. Applies to the manual-entry (lookup-failed) path too,
+        // which dedupes on name since it has no barcode match.
+        if let existing = appState.existingPantryFood(name: name, barcode: barcode) {
+            duplicateMatch = existing
+            pendingFood = food
+            isSubmitting = false
+            return
+        }
+
         try? await appState.addFood(food)
+        isSubmitting = false
         dismiss()
     }
 }

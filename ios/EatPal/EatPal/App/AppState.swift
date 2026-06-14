@@ -358,6 +358,68 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// US-364: find an existing pantry food matching `barcode` (preferred when
+    /// provided) or a case-insensitive `name`. Shared dedup lookup used by all
+    /// pantry add paths (manual add, barcode scan, receipt scan) so the pantry
+    /// stops inflating with duplicate rows.
+    func existingPantryFood(name: String, barcode: String? = nil) -> Food? {
+        PantryDedup.match(name: name, barcode: barcode, in: foods)
+    }
+
+    /// US-364: increment an existing pantry food's quantity by `quantity`,
+    /// converting from `unit` into the food's existing unit when possible
+    /// (US-363 UnitConverter), and persist. Optimistic with rollback.
+    func incrementFoodQuantity(
+        _ foodId: String,
+        by quantity: Double,
+        unit: String?,
+        notify: Bool = true
+    ) async throws {
+        guard let idx = foods.firstIndex(where: { $0.id == foodId }) else { return }
+        let previous = foods[idx].quantity
+        var increment = quantity
+        if let existingUnit = foods[idx].unit, !existingUnit.isEmpty,
+           let candidateUnit = unit, !candidateUnit.isEmpty, existingUnit != candidateUnit,
+           let converted = UnitConverter.convert(quantity, from: candidateUnit, to: existingUnit) {
+            increment = converted
+        }
+        let newQuantity = (previous ?? 0) + increment
+        foods[idx].quantity = newQuantity
+        let name = foods[idx].name
+        do {
+            try await dataService.updateFood(foodId, updates: FoodUpdate(quantity: newQuantity))
+            if notify {
+                toast.success("Updated \(name)", message: "Quantity increased")
+                HapticManager.success()
+            }
+            AnalyticsService.track(.foodUpdated)
+        } catch {
+            foods[idx].quantity = previous
+            if notify {
+                toast.show(error, as: { .save(entity: "food", underlying: $0) })
+                HapticManager.error()
+            }
+            throw error
+        }
+    }
+
+    /// US-364: merge-or-add. If a pantry food already matches by barcode/name,
+    /// increment its quantity; otherwise insert the candidate. Returns true
+    /// when it merged into an existing food, false when it added a new one.
+    @discardableResult
+    func mergeOrAddFood(_ candidate: Food) async throws -> Bool {
+        if let existing = existingPantryFood(name: candidate.name, barcode: candidate.barcode) {
+            try await incrementFoodQuantity(
+                existing.id,
+                by: candidate.quantity ?? 1,
+                unit: candidate.unit
+            )
+            return true
+        }
+        try await addFood(candidate)
+        return false
+    }
+
     func updateFood(_ id: String, updates: FoodUpdate) async throws {
         guard let index = foods.firstIndex(where: { $0.id == id }) else { return }
         let original = foods[index]

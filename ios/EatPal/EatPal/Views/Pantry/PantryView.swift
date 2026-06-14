@@ -973,7 +973,11 @@ struct AddFoodView: View {
             expiryDate: hasExpiry ? DateFormatter.isoDate.string(from: expiryDate) : nil
         )
 
-        try? await appState.addFood(food)
+        // US-364: dedup against the pantry — if a food with the same name
+        // already exists, increment its quantity instead of inserting a
+        // duplicate row (mergeOrAddFood auto-applies the merge).
+        try? await appState.mergeOrAddFood(food)
+        isSubmitting = false
         dismiss()
     }
 }

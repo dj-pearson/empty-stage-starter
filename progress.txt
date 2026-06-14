@@ -2943,3 +2943,10 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - US-402: TonightCookSheet.parseSteps fallback uses NSString sentence tokenizer (no mid-step splits on decimals/abbreviations); single blob -> one step.
 - US-395: UnifiedScannerView Cancel confirms discard of N recognized grocery lines; barcode/empty dismiss silently.
 - Remaining false: 63.
+
+## 2026-06-14 (cont. 6) - Pantry dedup cluster (US-364/389/390 P2)
+- Shared dedup: new Utilities/PantryDedup.swift (barcode-preferred else case-insensitive trimmed name) + AppState.existingPantryFood / incrementFoodQuantity(notify:) / mergeOrAddFood (UnitConverter on merge, optimistic+rollback).
+- US-364 manual AddFoodView -> mergeOrAddFood (auto-increment on match). Test PantryDedupTests.swift (4).
+- US-389 ScannedProductView -> Update-existing vs Add-new confirmationDialog on match (barcode-then-name).
+- US-390 ScanReceiptSheet.save -> matchedFoodId rows merge via incrementFoodQuantity(notify:false), only unmatched bulk-inserted; icon now truthful.
+- Remaining false: 60.

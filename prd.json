@@ -5525,8 +5525,8 @@
         "Swift builds; test covers manual-add of an existing item merging"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit findings (Grocery-Pantry Flow 3 & 5). Dedup is inconsistent; pantry inflates over time."
+      "passes": true,
+      "notes": "Audit findings (Grocery-Pantry Flow 3 & 5). Dedup is inconsistent; pantry inflates over time. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): shared dedup PantryDedup.match (barcode-preferred, else case-insensitive trimmed name) + AppState.existingPantryFood/incrementFoodQuantity(notify:)/mergeOrAddFood (UnitConverter on merge, optimistic+rollback). Manual AddFoodView (PantryView) now mergeOrAddFood (auto-apply increment on match). Barcode scan (US-389) and receipt scan (US-390) wired too. Test PantryDedupTests.swift (4) covers manual-add-of-existing merging."
     },
     {
       "id": "US-365",
@@ -5878,8 +5878,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Functionality). Verified ScannedProductView.swift:168-181 builds Food(id: UUID()...) unconditionally; no dedup call on the scan path. Related to PENDING US-364."
+      "passes": true,
+      "notes": "Audit finding (Functionality). Verified ScannedProductView.swift:168-181 builds Food(id: UUID()...) unconditionally; no dedup call on the scan path. Related to PENDING US-364. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): ScannedProductView.addFood now checks appState.existingPantryFood(name:barcode:) and, on hit, shows an Update-existing vs Add-new confirmationDialog instead of unconditionally inserting; Update increments via incrementFoodQuantity. Manual/lookup-failed path dedupes on barcode-then-name through the same check."
     },
     {
       "id": "US-390",
@@ -5892,8 +5892,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Functionality). matchExistingFood return value is stored on ReviewRow.matchedFoodId and rendered (ScanReceiptSheet.swift:321) but unused in save(). Related to PENDING US-364."
+      "passes": true,
+      "notes": "Audit finding (Functionality). matchExistingFood return value is stored on ReviewRow.matchedFoodId and rendered (ScanReceiptSheet.swift:321) but unused in save(). Related to PENDING US-364. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): ScanReceiptSheet.save now routes rows with a non-nil matchedFoodId to incrementFoodQuantity(notify:false) (merge) and only bulk-inserts unmatched rows; the matched-existing icon now reflects the real action; analytics count = merged + inserted."
     },
     {
       "id": "US-391",
