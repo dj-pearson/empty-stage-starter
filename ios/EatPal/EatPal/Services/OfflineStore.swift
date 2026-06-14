@@ -58,6 +58,16 @@ final class CachedKid {
         self.pickinessLevel = kid.pickinessLevel
         self.lastSyncedAt = Date()
     }
+
+    func toKid(userId: String) -> Kid {
+        Kid(
+            id: id,
+            userId: userId,
+            name: name,
+            age: age,
+            pickinessLevel: pickinessLevel
+        )
+    }
 }
 
 @Model
@@ -79,6 +89,18 @@ final class CachedGroceryItem {
         self.checked = item.checked
         self.lastSyncedAt = Date()
     }
+
+    func toGroceryItem(userId: String) -> GroceryItem {
+        GroceryItem(
+            id: id,
+            userId: userId,
+            name: name,
+            category: category,
+            quantity: quantity,
+            unit: unit,
+            checked: checked
+        )
+    }
 }
 
 /// Tracks mutations made while offline for later sync.
@@ -90,6 +112,11 @@ final class PendingMutation {
     var entityId: String
     var payload: Data? // JSON-encoded update
     var createdAt: Date
+    /// US-385: how many times this mutation has failed to replay. Used to
+    /// quarantine a permanently-failing mutation so it can't head-of-line
+    /// block the whole queue forever. Defaulted so SwiftData lightweight
+    /// migration adds it to existing rows.
+    var attemptCount: Int = 0
 
     init(table: String, operation: String, entityId: String, payload: Data? = nil) {
         self.id = UUID().uuidString
@@ -98,6 +125,7 @@ final class PendingMutation {
         self.entityId = entityId
         self.payload = payload
         self.createdAt = Date()
+        self.attemptCount = 0
     }
 }
 
@@ -179,10 +207,14 @@ final class OfflineStore: ObservableObject {
 
     // MARK: - Cache Foods
 
+    /// US-383: replace the cached snapshot wholesale (delete-all-then-insert)
+    /// so updated rows refresh, server-side deletions are pruned, and a
+    /// re-cache of an existing id can't 409 on the `.unique` constraint or
+    /// leak unbounded duplicate rows.
     func cacheFoods(_ foods: [Food]) {
+        try? context.delete(model: CachedFood.self)
         for food in foods {
-            let cached = CachedFood(from: food)
-            context.insert(cached)
+            context.insert(CachedFood(from: food))
         }
         try? context.save()
     }
@@ -198,21 +230,37 @@ final class OfflineStore: ObservableObject {
     // MARK: - Cache Kids
 
     func cacheKids(_ kids: [Kid]) {
+        try? context.delete(model: CachedKid.self)
         for kid in kids {
-            let cached = CachedKid(from: kid)
-            context.insert(cached)
+            context.insert(CachedKid(from: kid))
         }
         try? context.save()
+    }
+
+    func loadCachedKids(userId: String) -> [Kid] {
+        let descriptor = FetchDescriptor<CachedKid>(
+            sortBy: [SortDescriptor(\.name)]
+        )
+        let cached = (try? context.fetch(descriptor)) ?? []
+        return cached.map { $0.toKid(userId: userId) }
     }
 
     // MARK: - Cache Grocery Items
 
     func cacheGroceryItems(_ items: [GroceryItem]) {
+        try? context.delete(model: CachedGroceryItem.self)
         for item in items {
-            let cached = CachedGroceryItem(from: item)
-            context.insert(cached)
+            context.insert(CachedGroceryItem(from: item))
         }
         try? context.save()
+    }
+
+    func loadCachedGroceryItems(userId: String) -> [GroceryItem] {
+        let descriptor = FetchDescriptor<CachedGroceryItem>(
+            sortBy: [SortDescriptor(\.name)]
+        )
+        let cached = (try? context.fetch(descriptor)) ?? []
+        return cached.map { $0.toGroceryItem(userId: userId) }
     }
 
     // MARK: - Pending Mutations
@@ -309,12 +357,33 @@ final class OfflineStore: ObservableObject {
                 try await replay(mutation)
                 clearPendingMutation(mutation)
             } catch {
+                // US-385: count the failure. A mutation that keeps failing is
+                // quarantined (dropped + reported) so it can't permanently
+                // head-of-line block every later mutation; otherwise we break
+                // and preserve ordering for the next reconnection.
+                mutation.attemptCount += 1
+                try? context.save()
+
                 lastSyncError = error.localizedDescription
+                if mutation.attemptCount >= Self.maxReplayAttempts {
+                    SentryService.capture(error, extras: [
+                        "queue": "OfflineStore",
+                        "table": mutation.table,
+                        "operation": mutation.operation,
+                        "id": mutation.entityId,
+                        "quarantined": true,
+                        "attempts": mutation.attemptCount
+                    ])
+                    clearPendingMutation(mutation)
+                    continue // skip the poison mutation, keep draining
+                }
+
                 SentryService.capture(error, extras: [
                     "queue": "OfflineStore",
                     "table": mutation.table,
                     "operation": mutation.operation,
-                    "id": mutation.entityId
+                    "id": mutation.entityId,
+                    "attempts": mutation.attemptCount
                 ])
                 break // preserve ordering; retry on next reconnection
             }
@@ -322,6 +391,10 @@ final class OfflineStore: ObservableObject {
 
         refreshPendingCount()
     }
+
+    /// US-385: after this many failed replays a mutation is quarantined so it
+    /// stops blocking the rest of the queue.
+    private static let maxReplayAttempts = 5
 
     // MARK: - Private helpers
 
@@ -344,22 +417,25 @@ final class OfflineStore: ObservableObject {
         case Operation.insert.rawValue:
             guard let data = mutation.payload else { return }
 
+            // US-385: replay inserts as upsert-on-id so a row that already
+            // landed (e.g. the request succeeded server-side but the response
+            // was lost) refreshes instead of 409-ing and stalling the queue.
             switch table {
             case Table.groceryItems.rawValue:
                 let item = try decoder.decode(GroceryItem.self, from: data)
-                try await client.from(table).insert(item).execute()
+                try await client.from(table).upsert(item, onConflict: "id").execute()
             case Table.foods.rawValue:
                 let food = try decoder.decode(Food.self, from: data)
-                try await client.from(table).insert(food).execute()
+                try await client.from(table).upsert(food, onConflict: "id").execute()
             case Table.planEntries.rawValue:
                 let entry = try decoder.decode(PlanEntry.self, from: data)
-                try await client.from(table).insert(entry).execute()
+                try await client.from(table).upsert(entry, onConflict: "id").execute()
             case Table.kids.rawValue:
                 let kid = try decoder.decode(Kid.self, from: data)
-                try await client.from(table).insert(kid).execute()
+                try await client.from(table).upsert(kid, onConflict: "id").execute()
             case Table.recipes.rawValue:
                 let recipe = try decoder.decode(Recipe.self, from: data)
-                try await client.from(table).insert(recipe).execute()
+                try await client.from(table).upsert(recipe, onConflict: "id").execute()
             default:
                 break
             }

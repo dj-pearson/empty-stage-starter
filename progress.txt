@@ -2961,3 +2961,9 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - US-392: UnifiedScannerView torch toggle (toolbar, hidden w/o torch, off onDisappear; AVFoundation).
 - US-393: VoiceAddGrocerySheet reads auth on appear; denied -> persistent Open-Settings state, mic controls hidden; authorized unchanged.
 - Remaining false: 55.
+
+## 2026-06-14 (cont. 9) - Offline cache + sync-queue hardening (US-382/383/385)
+- US-383: OfflineStore.cacheFoods/Kids/GroceryItems now delete-all-then-insert (replace snapshot) so updates refresh, deletions prune, and re-cache of a .unique id can't 409/leak. Added loadCachedKids/loadCachedGroceryItems + toKid/toGroceryItem. Test OfflineStoreCacheTests.swift (2).
+- US-382: loadAllData writes the cache on success; on a connectivity-class failure falls back to the cache (Offline toast) instead of empty lists. New isConnectivityError() helper (NetworkMonitor + URLError codes).
+- US-385: replay inserts -> upsert(onConflict:id) (idempotent); syncPendingMutations tracks attemptCount (new defaulted @Model field) and quarantines a poison mutation after 5 attempts so it can't head-of-line block; transient failures still break to preserve order. AC3 drain test needs mocked Supabase (integration) — source-audit verified.
+- Remaining false: 52.

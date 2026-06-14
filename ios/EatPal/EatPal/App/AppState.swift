@@ -290,6 +290,13 @@ final class AppState: ObservableObject {
             // GroceryView; refreshed in lockstep with groceryItems.
             groceryItemSources = loadedGroceryItemSources
 
+            // US-382: persist the fresh snapshot to the SwiftData read-cache so
+            // a later offline launch shows last-synced data. cache* replaces
+            // the prior snapshot wholesale (US-383) so it can't grow unbounded.
+            OfflineStore.shared.cacheFoods(loadedFoods)
+            OfflineStore.shared.cacheKids(loadedKids)
+            OfflineStore.shared.cacheGroceryItems(loadedGroceryItems)
+
             if activeKidId == nil, let firstKid = kids.first {
                 activeKidId = firstKid.id
             }
@@ -318,6 +325,30 @@ final class AppState: ObservableObject {
                 }
             }
         } catch {
+            // US-382: on a connectivity failure, fall back to the SwiftData
+            // read-cache so launching offline shows last-synced data instead
+            // of empty lists. A non-connectivity error still surfaces.
+            if Self.isConnectivityError(error) {
+                let userId = (try? await SupabaseManager.client.auth.session)?
+                    .user.id.uuidString.lowercased() ?? ""
+                let cachedFoods = OfflineStore.shared.loadCachedFoods(userId: userId)
+                let cachedKids = OfflineStore.shared.loadCachedKids(userId: userId)
+                let cachedGrocery = OfflineStore.shared.loadCachedGroceryItems(userId: userId)
+
+                if !cachedFoods.isEmpty || !cachedKids.isEmpty || !cachedGrocery.isEmpty {
+                    foods = cachedFoods
+                    kids = cachedKids
+                    groceryItems = cachedGrocery
+                    if activeKidId == nil, let firstKid = kids.first {
+                        activeKidId = firstKid.id
+                    }
+                    errorMessage = nil
+                    toast.info("Offline", message: "Showing your last-synced data.")
+                    isLoading = false
+                    return
+                }
+            }
+
             // Single AppError mapping powers both the inline `errorMessage`
             // banner and the global toast so they stay in sync.
             let appError = AppError.wrap(error, as: { .load(entity: "your data", underlying: $0) })
@@ -327,6 +358,24 @@ final class AppState: ObservableObject {
         }
 
         isLoading = false
+    }
+
+    /// US-382: true when the error looks like a lost/absent network
+    /// connection (so we should fall back to the offline cache) rather than a
+    /// server/auth/decode error (which the user should see).
+    private static func isConnectivityError(_ error: Error) -> Bool {
+        if !NetworkMonitor.shared.isConnected { return true }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost, .timedOut,
+                 .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed,
+                 .dataNotAllowed, .internationalRoamingOff:
+                return true
+            default:
+                return false
+            }
+        }
+        return false
     }
 
     func clearData() {

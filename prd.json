@@ -5781,8 +5781,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Stability). Infrastructure built but unwired. Pairs with US-383 — cache also lacks eviction so wiring it naively would leak."
+      "passes": true,
+      "notes": "Audit finding (Stability). Infrastructure built but unwired. Pairs with US-383 — cache also lacks eviction so wiring it naively would leak. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): loadAllData now writes fetched foods/kids/grocery into the SwiftData cache (cacheFoods/Kids/GroceryItems) on success, and on a connectivity-class failure (NetworkMonitor offline or URLError notConnected/timedOut/etc.) falls back to loadCachedFoods/Kids/GroceryItems and shows an Offline toast instead of empty lists. Added loadCachedKids/loadCachedGroceryItems + CachedKid.toKid/CachedGroceryItem.toGroceryItem converters."
     },
     {
       "id": "US-383",
@@ -5795,8 +5795,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Stability). Blocks safely wiring the dead read-cache from US-382."
+      "passes": true,
+      "notes": "Audit finding (Stability). Blocks safely wiring the dead read-cache from US-382. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): cacheFoods/Kids/GroceryItems now delete-all-then-insert (context.delete(model:) then insert) so updated rows refresh, server deletions are pruned, and a re-cache of an existing .unique id cannot 409 or leak duplicates. Test OfflineStoreCacheTests.swift (re-cache smaller set prunes removed ids; re-cache existing id leaves one row)."
     },
     {
       "id": "US-384",
@@ -5823,8 +5823,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Stability). US-150 built the durable queue; this is the conflict/head-of-line-blocking gap it left."
+      "passes": true,
+      "notes": "Audit finding (Stability). US-150 built the durable queue; this is the conflict/head-of-line-blocking gap it left. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): replay() now upserts inserts with onConflict:id (idempotent — an already-landed row refreshes instead of 409-ing); syncPendingMutations counts per-mutation attemptCount (new defaulted @Model field, lightweight-migrated) and quarantines (drops + Sentry-reports) a mutation after maxReplayAttempts(5) so a poison row cant permanently head-of-line block the queue; transient failures still break to preserve ordering. AC3 server-side-exists drain test needs a mocked Supabase client (integration harness) — logic verified by source audit."
     },
     {
       "id": "US-386",
