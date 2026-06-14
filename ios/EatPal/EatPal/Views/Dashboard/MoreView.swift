@@ -1,5 +1,19 @@
 import SwiftUI
 
+/// US-405: programmatic push targets inside the More tab. Deep links and
+/// notification taps drive these via the More tab's NavigationStack path so a
+/// `.kidProfile`/`.quiz`/`.foodChaining`/`.settings` link opens the real
+/// screen instead of dead-ending on the tab root.
+enum MoreRoute: Hashable {
+    case dashboard
+    case kids
+    case kidProfile(id: String)
+    case foodChaining
+    case quiz
+    case settings
+    case progress
+}
+
 struct MoreView: View {
     @EnvironmentObject var appState: AppState
 
@@ -169,6 +183,29 @@ struct MoreView: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle("More")
+        // US-405: resolve programmatic pushes from deep links / notification taps.
+        .navigationDestination(for: MoreRoute.self) { route in
+            switch route {
+            case .dashboard:
+                DashboardHomeView()
+            case .kids:
+                KidsView()
+            case .kidProfile(let id):
+                if let kid = appState.kids.first(where: { $0.id == id }) {
+                    KidDetailView(kid: kid)
+                } else {
+                    KidsView()
+                }
+            case .foodChaining:
+                FoodChainingView()
+            case .quiz:
+                PickyEaterQuizView()
+            case .settings:
+                SettingsView()
+            case .progress:
+                ProgressDashboardView()
+            }
+        }
     }
 }
 

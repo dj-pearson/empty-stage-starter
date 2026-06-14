@@ -2,7 +2,11 @@ import SwiftUI
 
 struct MainTabView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var deepLinkHandler: DeepLinkHandler
     @State private var selectedTab: Tab = .planner
+    /// US-405: navigation path for the More tab so deep links / notification
+    /// taps can push the right sub-screen (kid profile, quiz, settings, …).
+    @State private var morePath: [MoreRoute] = []
 
     enum Tab: String, CaseIterable {
         case planner
@@ -53,6 +57,58 @@ struct MainTabView: View {
             // actual user navigation rather than just startup.
             AnalyticsService.screen("tab_\(newTab.rawValue)")
         }
+        // US-405: route deep links / notification taps to the correct tab and
+        // (for More sub-screens) push the right view, then clear so the same
+        // link re-triggers next time.
+        .onChange(of: deepLinkHandler.activeDestination) { _, destination in
+            guard let destination else { return }
+            route(to: destination)
+        }
+        .onAppear {
+            if let destination = deepLinkHandler.activeDestination {
+                route(to: destination)
+            }
+        }
+    }
+
+    /// Maps a parsed `DeepLinkHandler.Destination` onto tab selection and the
+    /// More-tab navigation path. Import destinations are handled elsewhere
+    /// (EatPalApp drains the queues) so they only need the tab switch.
+    private func route(to destination: DeepLinkHandler.Destination) {
+        switch destination {
+        case .dashboard:
+            selectedTab = .more
+            morePath = [.dashboard]
+        case .pantry:
+            selectedTab = .pantry
+        case .mealPlan:
+            selectedTab = .planner
+        case .recipes, .recipeImport:
+            selectedTab = .recipes
+        case .grocery, .groceryImport:
+            selectedTab = .grocery
+        case .scanner:
+            // No standalone scanner screen; the barcode scanner lives on the
+            // Pantry tab. Route there so the user can scan.
+            selectedTab = .pantry
+        case .kidProfile(let id):
+            selectedTab = .more
+            morePath = [.kidProfile(id: id)]
+        case .quiz:
+            selectedTab = .more
+            morePath = [.quiz]
+        case .foodChaining:
+            selectedTab = .more
+            morePath = [.foodChaining]
+        case .settings:
+            selectedTab = .more
+            morePath = [.settings]
+        case .progress:
+            selectedTab = .more
+            morePath = [.progress]
+        }
+        // AC4: clear so the identical link fires again next time.
+        deepLinkHandler.clearDestination()
     }
 
     @ViewBuilder
@@ -75,7 +131,7 @@ struct MainTabView: View {
                 GroceryView()
             }
         case .more:
-            NavigationStack {
+            NavigationStack(path: $morePath) {
                 MoreView()
             }
         }

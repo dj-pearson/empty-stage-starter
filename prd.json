@@ -5767,8 +5767,8 @@
         "Swift builds"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Audit finding (CRITICAL — realtime sync broken). Distinct from US-333 (web payload normalization). OfflineStore.swift:393-396 explicitly documents that domain structs declare snake_case CodingKeys so the default key strategy must be kept — RealtimeService violates exactly this. Verified: JSONDecoder.supabase is used ONLY in RealtimeService; Food.swift:31-46 confirms explicit snake_case CodingKeys."
+      "passes": true,
+      "notes": "Audit finding (CRITICAL — realtime sync broken). Distinct from US-333 (web payload normalization). OfflineStore.swift:393-396 explicitly documents that domain structs declare snake_case CodingKeys so the default key strategy must be kept — RealtimeService violates exactly this. Verified: JSONDecoder.supabase is used ONLY in RealtimeService; Food.swift:31-46 confirms explicit snake_case CodingKeys. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): JSONDecoder.supabase no longer sets .convertFromSnakeCase (models own explicit snake_case CodingKeys); 10 realtime decode sites now go through decodeRealtimeRecord() which reports failures to Sentry instead of try?-swallowing. Test RealtimeDecodeTests.swift (Food/GroceryItem/PlanEntry realtime payloads). Swift build is the local-Xcode step."
     },
     {
       "id": "US-382",
@@ -6075,8 +6075,8 @@
         "Swift builds"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Audit finding (Functionality — core feature non-functional). scheduleMealReminders is hardcoded to 8/12/18 and orphaned; verified by grep that neither scheduler is called anywhere. The per-topic settings UI (US-239) only fires test pings."
+      "passes": true,
+      "notes": "Audit finding (Functionality — core feature non-functional). scheduleMealReminders is hardcoded to 8/12/18 and orphaned; verified by grep that neither scheduler is called anywhere. The per-topic settings UI (US-239) only fires test pings. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): added scheduleTopic/cancelTopic/cancelAllTopics/rescheduleAllTopics on NotificationService using persisted enabled/hour/minute per Topic (UNCalendarNotificationTrigger, daily repeat). SettingsView wires topic toggle + DatePicker onChange to (re)schedule/cancel; master toggle off cancels all topics; on launch EatPalApp reschedules. Removed orphaned hardcoded 8/12/18 scheduleMealReminders/cancelMealReminders. Swift build = local Xcode."
     },
     {
       "id": "US-404",
@@ -6089,8 +6089,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Functionality). The mute UX implies a real silence window but only clears the (currently never-populated) pending queue once. Pairs with US-403."
+      "passes": true,
+      "notes": "Audit finding (Functionality). The mute UX implies a real silence window but only clears the (currently never-populated) pending queue once. Pairs with US-403. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): scheduleTopic skips adding while mutedUntil>now; AppDelegate willPresent returns [] while muted (foreground suppression); unmute() + launch rescheduleAllTopics() resume reminders automatically once the window passes. Swift build = local Xcode."
     },
     {
       "id": "US-405",
@@ -6104,8 +6104,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Functionality). Confirmed by grep: activeDestination is consumed only for import drains; navigation cases are parsed then discarded."
+      "passes": true,
+      "notes": "Audit finding (Functionality). Confirmed by grep: activeDestination is consumed only for import drains; navigation cases are parsed then discarded. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): MainTabView now consumes deepLinkHandler.activeDestination, switching tab and (for More sub-screens) driving a morePath via MoreRoute + .navigationDestination in MoreView; kidProfile/quiz/foodChaining/settings/progress/dashboard push their real screens; universal /app/* gains food-chaining/settings/progress parity; destination cleared after routing so the same link re-triggers. scanner routes to Pantry (scan entry point); mealPlan deep-date not yet honored (tab-level only). Swift build = local Xcode."
     },
     {
       "id": "US-406",
@@ -6118,8 +6118,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (UX). Pairs with US-405; once destinations are consumed, notification taps should feed the same path."
+      "passes": true,
+      "notes": "Audit finding (UX). Pairs with US-405; once destinations are consumed, notification taps should feed the same path. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): AppDelegate didReceive maps categoryIdentifier -> DeepLinkHandler.routeFromNotification (MEALREMINDERS->Planner, GROCERY*->Grocery, EXPIRINGFOOD->Pantry, AISUMMARY->Dashboard, STREAKMILESTONE/TRYBITE->Progress), reusing the same activeDestination consumption path as deep links. Added .progress Destination. Swift build = local Xcode."
     },
     {
       "id": "US-407",

@@ -50,6 +50,14 @@ struct EatPalApp: App {
                     // US-237: hand AppState to the WatchConnectivity service
                     // once it's ready. Idempotent — re-activation is cheap.
                     WatchConnectivityService.shared.start(appState: appState)
+
+                    // US-403/US-404: (re)schedule enabled daily reminders on
+                    // launch so persisted toggles actually fire, and so
+                    // reminders resume automatically once a mute window passes.
+                    await NotificationService.shared.checkAuthorizationStatus()
+                    if NotificationService.shared.isAuthorized {
+                        await NotificationService.shared.rescheduleAllTopics()
+                    }
                 }
         }
     }
@@ -81,12 +89,18 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         print("Failed to register for remote notifications: \(error)")
     }
 
-    // Handle notification taps when app is in foreground
+    // Handle notification presentation when app is in foreground
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        [.banner, .sound, .badge]
+        // US-404: honour an active mute window — suppress the foreground
+        // banner/sound while muted instead of presenting it anyway.
+        if let mutedUntil = await NotificationService.shared.mutedUntil,
+           mutedUntil > Date() {
+            return []
+        }
+        return [.banner, .sound, .badge]
     }
 
     // Handle notification response (user tapped notification)
@@ -94,7 +108,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
+        // US-406: route the tap to the relevant screen via the same
+        // destination-consumption path as deep links, instead of just
+        // logging the category and landing on the Planner.
         let categoryIdentifier = response.notification.request.content.categoryIdentifier
-        print("Notification tapped: \(categoryIdentifier)")
+        await DeepLinkHandler.shared.routeFromNotification(categoryIdentifier: categoryIdentifier)
     }
 }
