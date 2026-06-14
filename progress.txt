@@ -2894,3 +2894,10 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - No code change this batch — prd.json audit-flips only.
 - Session total: 29 stories (80 → 51 false).
 - Remaining 51: 16 not-implemented iOS (audit-finding GAPs needing fresh Swift — can't build-verify here), iOS-native/integration needing toolchains (US-147/148/149/213/214/etc.), and web items needing runtime/visual QA (US-344/345), the any-burndown (US-342), the re-render refactor (US-331), US-341 (offline queue), US-323 (prod deploy).
+
+## 2026-06-13 (cont. 6) - iOS polish implementations, build-deferred (US-369, US-366)
+- Per user direction to keep going, implemented the iOS items that are CLEANLY tractable without a build (surgical / single-surface, closely pattern-matched). No Swift toolchain here, so these are NOT compile-verified — Swift build deferred to local Xcode (same accepted pattern as the 10 audit-flips).
+- US-369 reduce-motion gating: OnboardingView (page Back/Next), PickyEaterQuizView.selectAnswer (advance/result), SyncStatusBanner (sync-icon rotation) now route through the existing Utilities/Accessibility.swift helpers (accessibleWithAnimation / .accessibleAnimation). Deduced project is non-strict-concurrency (existing @MainActor helper is already called from non-isolated closures), so the func-context call is fine.
+- US-366 manual AddFoodView quantity/unit: added an Inventory section (qty stepper + unit picker, default 1/count) mirroring FoodDetailView; addFood() passes quantity/unit into Food(...) (memberwise-init order verified); UnitInference pre-fills smarter unit/qty for common items only when defaults untouched. Fixes 0-qty manual rows.
+- DEFERRED (not cleanly doable blind): US-367 (which 4 red sites is ambiguous + ErrorBanner is a structural swap), US-368 (3 of 4 target views lack an obvious isLoading state), US-370/371 (multi-site refactors/sweeps), US-372 (5+ files incl. charts), US-373 (needs a product/IA call), and the data-flow items US-348/351/352/353/360/364 (logic-heavy, risky without runtime). Left honestly false.
+- Session total: 31 stories (80 -> 49 false).
