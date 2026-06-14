@@ -5281,8 +5281,8 @@
         "Swift builds; no force-unwraps introduced"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Audit finding (Planner-Pantry GAP-3): adding to the planner does NOT pull from the pantry today. Owner expectation. Recommended approach is an advisory coverage indicator, not destructive reservation, to avoid divergence from the server rpc_mark_meal_made debit path."
+      "passes": true,
+      "notes": "Audit finding (Planner-Pantry GAP-3): adding to the planner does NOT pull from the pantry today. Owner expectation. Recommended approach is an advisory coverage indicator, not destructive reservation, to avoid divergence from the server rpc_mark_meal_made debit path. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): new PantryCoverage helper (Utilities/PantryCoverage.swift) computes fully/partially/not-stocked read-only from ShortfallCalculator (structured ingredients) with legacy recipe.foodIds fallback and nil when neither exists; PlanEntryRow shows a coverage badge for recipe-backed rows that recomputes from appState.foods (live); tapping a partial/not badge opens MissingIngredientsSheet for that recipe; VoiceOver label on the badge. Advisory only — never debits Food.quantity (debit stays at mark-made per US-262/286). Tests PantryCoverageTests.swift (5). DECISION: plan-time is advisory; true reservation out of scope."
     },
     {
       "id": "US-349",
@@ -5346,8 +5346,8 @@
         "Swift builds"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Audit finding (Planner-Pantry GAP-8)."
+      "passes": true,
+      "notes": "Audit finding (Planner-Pantry GAP-8). | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): markPlanEntryMade snapshots ShortfallCalculator low/out-of-stock ingredients BEFORE the debit; on success fires a non-blocking info toast \"N ingredient(s) were low or out of stock — add to grocery?\" with a one-tap Add action -> new addShortfallsToGrocery() (reuses GroceryItem.fromShortfall). No toast when fully stocked. Pantry floor-at-0 unchanged (server/deduct path)."
     },
     {
       "id": "US-353",

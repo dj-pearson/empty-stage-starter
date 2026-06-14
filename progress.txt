@@ -2930,3 +2930,8 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - US-401: AICoachService send is a retained cancellable Task; clearChat cancels + resets isLoading; post-cancel responses discarded (Task.isCancelled); view uses non-async send/retry.
 - US-367: 4 raw-red error sites -> ErrorBanner (PaywallView, AIMealPlanView, RecipesView import, ScanReceiptSheet); ErrorBanner restyled to AppTheme.Colors.danger + optional onDismiss (PaywallView), retry wired where applicable.
 - Remaining false: 70.
+
+## 2026-06-14 (cont. 4) - Planner pantry-coverage (US-348 P1) + mark-made low-stock nudge (US-352)
+- US-348: new Utilities/PantryCoverage.swift (advisory, read-only) -> fully/partially/not-stocked via ShortfallCalculator with legacy foodIds fallback, nil when neither. PlanEntryRow renders a live coverage badge for recipe rows; actionable badge opens MissingIngredientsSheet; VoiceOver label. Never debits. Tests PantryCoverageTests.swift (5). Decision recorded: advisory-only.
+- US-352: markPlanEntryMade snapshots low/out-of-stock ingredients pre-debit; success path fires a non-blocking add-to-grocery nudge -> addShortfallsToGrocery (reuses GroceryItem.fromShortfall); no nudge when fully stocked.
+- Remaining false: 68.

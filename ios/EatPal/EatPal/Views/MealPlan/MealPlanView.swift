@@ -553,6 +553,17 @@ struct PlanEntryRow: View {
         recipe?.name ?? food?.name ?? "this meal"
     }
 
+    /// US-348: advisory, read-only pantry coverage for a recipe-backed row.
+    /// Recomputes from `appState.foods` so it stays live as the pantry or
+    /// plan changes (AC5). nil → no badge (AC4).
+    private var coverage: PantryCoverage? {
+        guard let recipe = recipe else { return nil }
+        return PantryCoverage.compute(recipe: recipe, pantry: appState.foods)
+    }
+
+    /// US-348: present the missing-ingredients sheet for an actionable badge.
+    @State private var coverageShortfallContext: CoverageShortfall?
+
     var body: some View {
         HStack(spacing: 10) {
             if let recipe = recipe {
@@ -565,6 +576,11 @@ struct PlanEntryRow: View {
                 Text(cat?.icon ?? "🍽")
                 Text(food?.name ?? "Unknown Food")
                     .font(.subheadline)
+            }
+
+            // US-348: pantry-coverage badge (advisory; never debits).
+            if let coverage = coverage {
+                coverageBadge(coverage)
             }
 
             Spacer()
@@ -592,6 +608,16 @@ struct PlanEntryRow: View {
                     Task { await logResult(result) }
                 }
             }
+        }
+        // US-348: tapping an actionable coverage badge opens the existing
+        // missing-ingredients sheet for that recipe.
+        .sheet(item: $coverageShortfallContext) { ctx in
+            MissingIngredientsSheet(
+                recipe: ctx.recipe,
+                shortfalls: ShortfallCalculator.compute(recipe: ctx.recipe, pantry: appState.foods),
+                onFinish: { _ in coverageShortfallContext = nil }
+            )
+            .environmentObject(appState)
         }
         .contextMenu {
             ForEach(MealResult.allCases, id: \.self) { result in
@@ -826,6 +852,37 @@ struct PlanEntryRow: View {
         case .refused: return .red
         }
     }
+
+    /// US-348: the coverage badge. Fully-stocked is informational; partial/not
+    /// is a button that opens the missing-ingredients sheet.
+    @ViewBuilder
+    private func coverageBadge(_ coverage: PantryCoverage) -> some View {
+        let content = Image(systemName: coverage.icon)
+            .font(.caption2)
+            .foregroundStyle(coverage.color)
+            .padding(4)
+            .background(coverage.color.opacity(0.15), in: Circle())
+            .accessibilityLabel(coverage.accessibilityLabel)
+
+        if coverage.isActionable, let recipe = recipe {
+            Button {
+                coverageShortfallContext = CoverageShortfall(recipe: recipe)
+            } label: {
+                content
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens missing ingredients")
+        } else {
+            content
+        }
+    }
+}
+
+/// US-348: Identifiable wrapper so the coverage badge can drive a
+/// `.sheet(item:)` for the missing-ingredients flow.
+private struct CoverageShortfall: Identifiable, Equatable {
+    let recipe: Recipe
+    var id: String { recipe.id }
 }
 
 // MARK: - Add Plan Entry View

@@ -748,6 +748,13 @@ final class AppState: ObservableObject {
         let recipe = entry?.recipeId.flatMap { id in recipes.first { $0.id == id } }
         let strategy = MealMadeStrategy.plan(for: recipe)
 
+        // US-352: snapshot which recipe ingredients are low/out of stock
+        // BEFORE the debit, so after logging we can nudge the user to restock
+        // (non-blocking). Empty when the recipe has no structured ingredients
+        // or everything was sufficiently stocked — in which case no nudge.
+        let lowStock: [ShortfallCalculator.Shortfall] = recipe
+            .map { ShortfallCalculator.compute(recipe: $0, pantry: foods) } ?? []
+
         do {
             let result = try await dataService.markMealMade(planEntryId: entryId)
             switch result.status {
@@ -822,6 +829,22 @@ final class AppState: ObservableObject {
                     retry: { [weak self] in await self?.undoMealMade(entryId) }
                 ))
                 HapticManager.success()
+
+                // US-352: if any ingredient was low/out of stock at debit time,
+                // surface a non-blocking nudge with a one-tap add-to-grocery.
+                if !lowStock.isEmpty {
+                    let n = lowStock.count
+                    let recipeId = recipe?.id
+                    toast.show(Toast(
+                        type: .info,
+                        title: "Logged",
+                        message: "\(n) ingredient\(n == 1 ? " was" : "s were") low or out of stock — add to grocery?",
+                        actionLabel: "Add",
+                        retry: { [weak self] in
+                            await self?.addShortfallsToGrocery(lowStock, recipeId: recipeId)
+                        }
+                    ))
+                }
                 AnalyticsService.track(.mealMadeLogged(
                     debitedCount: totalDebited,
                     checkedCount: checked
@@ -835,6 +858,31 @@ final class AppState: ObservableObject {
             toast.show(error, as: { .save(entity: "meal made log", underlying: $0) })
             HapticManager.error()
             throw error
+        }
+    }
+
+    /// US-352: add low/out-of-stock recipe ingredients to the grocery list in
+    /// one tap from the mark-made nudge. Uses the full needed amount and the
+    /// same `GroceryItem.fromShortfall` factory the MissingIngredientsSheet
+    /// uses, so the rows carry `sourceRecipeId` for cross-module links.
+    func addShortfallsToGrocery(_ shortfalls: [ShortfallCalculator.Shortfall], recipeId: String?) async {
+        var added = 0
+        for sf in shortfalls {
+            let item = GroceryItem.fromShortfall(
+                sf,
+                quantity: sf.needed,
+                sourceRecipeId: recipeId ?? ""
+            )
+            do {
+                try await addGroceryItem(item)
+                added += 1
+            } catch {
+                continue
+            }
+        }
+        if added > 0 {
+            toast.success("Added \(added) to grocery")
+            AnalyticsService.track(.missingIngredientsAddedToGrocery(addedCount: added))
         }
     }
 
