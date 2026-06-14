@@ -69,19 +69,16 @@ final class WatchSessionStore: NSObject, ObservableObject {
     /// Persist the latest snapshot to UserDefaults so a re-launched watch
     /// app immediately shows the last-known-good data instead of the
     /// "Open EatPal on iPhone" empty state.
-    private static let cacheKey = "EatPal.watch.snapshot"
-
     private func cache(_ snapshot: WatchSnapshot) {
-        guard let data = try? JSONEncoder().encode(snapshot) else { return }
-        UserDefaults.standard.set(data, forKey: Self.cacheKey)
+        // US-407: write to the shared App Group store so the complication
+        // extension reads the same data.
+        WatchSnapshotStore.save(snapshot)
     }
 
     private func loadCachedSnapshot() {
-        guard let data = UserDefaults.standard.data(forKey: Self.cacheKey),
-              let cached = try? JSONDecoder().decode(WatchSnapshot.self, from: data) else {
-            return
+        if let cached = WatchSnapshotStore.load() {
+            snapshot = cached
         }
-        snapshot = cached
     }
 }
 

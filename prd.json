@@ -6132,8 +6132,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Functionality). Verified both write (line 76) and read (line 26) use .standard; the iPhone widget uses a group suite, proving the mismatch is watch-side only."
+      "passes": true,
+      "notes": "Audit finding (Functionality). Verified both write (line 76) and read (line 26) use .standard; the iPhone widget uses a group suite, proving the mismatch is watch-side only. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): added shared WatchSnapshotStore (Shared/WatchSnapshot.swift) using UserDefaults(suiteName: group.com.eatpal.app) with .standard fallback; WatchSessionStore.cache/load and the complication SnapshotLoader both go through it, so the iPhone-pushed snapshot is read by the complication. NOTE: the App Group entitlement must be added to the watch app + complication extension targets in Xcode for the cross-process read to work (code is ready)."
     },
     {
       "id": "US-408",
@@ -6147,8 +6147,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (UX). Depends on US-405 to be useful; currently both layers are no-ops."
+      "passes": true,
+      "notes": "Audit finding (UX). Depends on US-405 to be useful; currently both layers are no-ops. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): MealPlanWidgetView applies .widgetURL — eatpal://meal-plan for meal families, eatpal://grocery (or eatpal://progress when a streak shows) for the circular accessory; fixed GroceryTripLiveActivity from the unrouted eatpal://openGroceryList to eatpal://grocery. Routes end-to-end via US-405 DeepLinkHandler consumption."
     },
     {
       "id": "US-409",
