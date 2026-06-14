@@ -96,6 +96,9 @@ struct LogMealResultIntent: AppIntent {
                 )
             }
 
+            // US-412: refresh the tonight/meals snapshot the widget reads.
+            await WidgetSnapshot.rebuildFromServer()
+
             SentryService.leaveBreadcrumb(
                 category: "intent",
                 message: "LogMealResultIntent: \(matches.count) entry(ies) marked \(domainResult)"

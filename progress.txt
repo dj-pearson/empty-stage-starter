@@ -3003,3 +3003,8 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - ForceUpdateService: fetch app_config.min_ios_build on launch (fail-open); needsUpdate = CFBundleVersion < min. RootView gates ForceUpdateView (blocking App Store screen) above auth states.
 - Additive migration 20260614000000_app_config.sql (table + anon-SELECT RLS + seed min_ios_build=1). NOT applied to prod here (deploy step). App Store URL via Info.plist APP_STORE_URL else search fallback (app id still placeholder in eas.json).
 - Remaining false: 43.
+
+## 2026-06-14 (cont. 17) - Siri intents refresh widget (US-412)
+- Extracted WidgetSnapshot.buildPayload (shared by AppState + intents) + rebuildFromServer() (fetch -> build -> writeImmediately + reload).
+- Called after background Siri mutations: AddGroceryItem/BulkAddGroceryItems, LogMealResult, MarkFoodSafe/MarkFoodTryBite. AppState.refreshWidgetSnapshot now uses the shared builder.
+- Remaining false: 42.

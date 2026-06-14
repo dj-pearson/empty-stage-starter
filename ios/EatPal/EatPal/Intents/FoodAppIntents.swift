@@ -111,6 +111,9 @@ struct MarkFoodSafeIntent: AppIntent {
                 food.id,
                 updates: FoodUpdate(isSafe: true, isTryBite: false)
             )
+            // US-412: refresh the widget snapshot (pantry-low count) after a
+            // Siri-driven food change.
+            await WidgetSnapshot.rebuildFromServer()
             SentryService.leaveBreadcrumb(
                 category: "intent",
                 message: "MarkFoodSafeIntent: \(food.name)"
@@ -150,6 +153,8 @@ struct MarkFoodTryBiteIntent: AppIntent {
                 food.id,
                 updates: FoodUpdate(isSafe: false, isTryBite: true)
             )
+            // US-412: refresh the widget snapshot after a Siri-driven change.
+            await WidgetSnapshot.rebuildFromServer()
             SentryService.leaveBreadcrumb(
                 category: "intent",
                 message: "MarkFoodTryBiteIntent: \(food.name)"

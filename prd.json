@@ -6201,8 +6201,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Functionality). Distinct from US-152 (freshness on AppState mutations) — these background intents bypass AppState entirely."
+      "passes": true,
+      "notes": "Audit finding (Functionality). Distinct from US-152 (freshness on AppState mutations) — these background intents bypass AppState entirely. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): extracted WidgetSnapshot.buildPayload (shared by AppState change-stream + intents) and added WidgetSnapshot.rebuildFromServer() (fetches foods/grocery/plan/recipes, builds payload, writeImmediately -> reloads timeline). Called after each background Siri mutation: AddGroceryItem + BulkAddGroceryItems (grocery count), LogMealResult (tonight/meals), MarkFoodSafe + MarkFoodTryBite (pantry-low). Widget now reflects Siri changes without opening the app; AppState.refreshWidgetSnapshot refactored onto the shared builder (identical output)."
     }
   ]
 }

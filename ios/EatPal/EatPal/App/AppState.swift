@@ -175,59 +175,14 @@ final class AppState: ObservableObject {
     }
 
     private func refreshWidgetSnapshot() {
-        let todayString = DateFormatter.isoDate.string(from: Date())
-        let kidId = activeKidId
-
-        // Today's meals (by slot): pick the first food per slot for the
-        // active kid, or across all kids when no active kid is set.
-        let todaysEntries = planEntries.filter { entry in
-            entry.date == todayString && (kidId == nil || entry.kidId == kidId)
-        }
-
-        let widgetMeals: [WidgetSnapshot.Payload.Meal] = MealSlot.allCases.compactMap { slot in
-            guard let entry = todaysEntries.first(where: { $0.mealSlot == slot.rawValue }) else {
-                return nil
-            }
-            let foodName: String = {
-                if let recipeId = entry.recipeId,
-                   let recipe = recipes.first(where: { $0.id == recipeId }) {
-                    return recipe.name
-                }
-                if let food = foods.first(where: { $0.id == entry.foodId }) {
-                    return food.name
-                }
-                return "Unnamed"
-            }()
-            return WidgetSnapshot.Payload.Meal(
-                slot: slot.displayName,
-                foodName: foodName,
-                icon: slot.icon
-            )
-        }
-
-        let tonightDish = todaysEntries
-            .first(where: { $0.mealSlot == MealSlot.dinner.rawValue })
-            .flatMap { entry -> String? in
-                if let recipeId = entry.recipeId,
-                   let recipe = recipes.first(where: { $0.id == recipeId }) {
-                    return recipe.name
-                }
-                return foods.first(where: { $0.id == entry.foodId })?.name
-            }
-
-        let pantryLowCount = foods.filter { food in
-            guard let qty = food.quantity else { return false }
-            return qty > 0 && qty <= 2
-        }.count
-
-        let unchecked = groceryItems.filter { !$0.checked }.count
-
-        let payload = WidgetSnapshot.Payload(
-            meals: widgetMeals,
-            groceryCount: unchecked,
-            pantryLowCount: pantryLowCount,
-            tonightDish: tonightDish,
-            tryBiteStreak: 0  // placeholder — real streak calc is a future story
+        // US-412: snapshot construction lives in WidgetSnapshot.buildPayload so
+        // the Siri-intent server-rebuild path produces an identical snapshot.
+        let payload = WidgetSnapshot.buildPayload(
+            planEntries: planEntries,
+            foods: foods,
+            recipes: recipes,
+            groceryItems: groceryItems,
+            activeKidId: activeKidId
         )
 
         // US-388: the Combine pipeline above already debounces this whole
