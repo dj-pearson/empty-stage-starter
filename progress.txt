@@ -2955,3 +2955,9 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - US-407: new shared WatchSnapshotStore (App Group group.com.eatpal.app, .standard fallback); WatchSessionStore + complication SnapshotLoader both use it instead of UserDefaults.standard so complications show real data. NOTE: App Group entitlement must be added to watch + complication targets in Xcode.
 - US-408: MealPlanWidgetView .widgetURL (meal-plan / grocery / progress by family); GroceryTripLiveActivity fixed eatpal://openGroceryList -> eatpal://grocery. Routes via US-405.
 - Remaining false: 58.
+
+## 2026-06-14 (cont. 8) - Pantry qty/unit + scanner torch + voice permission (US-366/392/393)
+- US-366: AddFoodView Quantity section (Stepper + unit field, default 1/count) -> Food carries qty/unit; UnitInference pre-fill on name change unless user-edited.
+- US-392: UnifiedScannerView torch toggle (toolbar, hidden w/o torch, off onDisappear; AVFoundation).
+- US-393: VoiceAddGrocerySheet reads auth on appear; denied -> persistent Open-Settings state, mic controls hidden; authorized unchanged.
+- Remaining false: 55.

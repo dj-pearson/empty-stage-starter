@@ -5553,8 +5553,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Grocery-Pantry Flow 3 GAP-P3)."
+      "passes": true,
+      "notes": "Audit finding (Grocery-Pantry Flow 3 GAP-P3). | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): AddFoodView (PantryView) gained a Quantity section (Stepper + unit TextField, default 1/count); the saved Food carries quantity/unit (no more 0 rows); name onChange pre-fills via UnitInference.infer unless the user already edited the fields (didEditQuantityUnit guard)."
     },
     {
       "id": "US-367",
@@ -5920,8 +5920,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (UX). Compared UnifiedScannerView.swift:103-120 (no torch) against BarcodeScannerView.swift:39-46 (has torch) — parity gap on the preferred scanner."
+      "passes": true,
+      "notes": "Audit finding (UX). Compared UnifiedScannerView.swift:103-120 (no torch) against BarcodeScannerView.swift:39-46 (has torch) — parity gap on the preferred scanner. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): UnifiedScannerView modern path adds a toolbar torch toggle (topBarTrailing), hidden when AVCaptureDevice has no torch; setTorch via lockForConfiguration; torch turned off onDisappear. import AVFoundation added."
     },
     {
       "id": "US-393",
@@ -5934,8 +5934,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (UX). requestAuthorization result discarded at VoiceAddGrocerySheet.swift:47; VoiceInputService already returns granular .micDenied/.speechDenied/.bothDenied (VoiceInputService.swift:83-88) but the sheet never reads it proactively."
+      "passes": true,
+      "notes": "Audit finding (UX). requestAuthorization result discarded at VoiceAddGrocerySheet.swift:47; VoiceInputService already returns granular .micDenied/.speechDenied/.bothDenied (VoiceInputService.swift:83-88) but the sheet never reads it proactively. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): VoiceAddGrocerySheet stores the requestAuthorization() result on appear; when micDenied/speechDenied/bothDenied it shows a persistent permissionDeniedView (mic.slash + explanation + Open Settings deep-link via UIApplication.openSettingsURLString) and hides the mic controls entirely; authorized users unchanged. import UIKit added."
     },
     {
       "id": "US-394",

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// US-140: voice-to-grocery sheet. Listens via `VoiceInputService`, displays a
 /// live transcript + waveform, parses the transcript into `ParsedGroceryItem`
@@ -14,6 +15,22 @@ struct VoiceAddGrocerySheet: View {
     @State private var excludedIds: Set<UUID> = []
     @State private var isSaving = false
 
+    // US-393: surface mic/speech denial proactively on appear.
+    @State private var authStatus: VoiceInputService.AuthorizationStatus = .notDetermined
+
+    private var isPermissionDenied: Bool {
+        authStatus == .micDenied || authStatus == .speechDenied || authStatus == .bothDenied
+    }
+
+    private var permissionDeniedMessage: String {
+        switch authStatus {
+        case .micDenied:    return "Microphone access is off. Enable it in Settings to add groceries by voice."
+        case .speechDenied: return "Speech recognition is off. Enable it in Settings to add groceries by voice."
+        case .bothDenied:   return "Microphone and speech recognition are off. Enable them in Settings to add groceries by voice."
+        default:            return ""
+        }
+    }
+
     private var didRecord: Bool {
         !voice.liveTranscript.isEmpty || !voice.finalTranscript.isEmpty
     }
@@ -25,14 +42,18 @@ struct VoiceAddGrocerySheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                transcriptArea
-                    .frame(maxHeight: .infinity)
+                if isPermissionDenied {
+                    permissionDeniedView
+                } else {
+                    transcriptArea
+                        .frame(maxHeight: .infinity)
 
-                previewList
+                    previewList
 
-                controls
-                    .padding()
-                    .background(.ultraThinMaterial)
+                    controls
+                        .padding()
+                        .background(.ultraThinMaterial)
+                }
             }
             .navigationTitle("Voice Add")
             .navigationBarTitleDisplayMode(.inline)
@@ -46,7 +67,9 @@ struct VoiceAddGrocerySheet: View {
             }
         }
         .task {
-            _ = await voice.requestAuthorization()
+            // US-393: read the real status on appear so denial is shown before
+            // the user taps the mic.
+            authStatus = await voice.requestAuthorization()
         }
         .onChange(of: voice.liveTranscript) { _, newValue in
             if !newValue.isEmpty {
@@ -61,6 +84,33 @@ struct VoiceAddGrocerySheet: View {
     }
 
     // MARK: - Sections
+
+    /// US-393: persistent denied state with a deep-link into Settings.
+    private var permissionDeniedView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "mic.slash.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(.secondary)
+            Text("Voice add unavailable")
+                .font(.headline)
+            Text(permissionDeniedMessage)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            Button {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                Label("Open Settings", systemImage: "gear")
+            }
+            .buttonStyle(.borderedProminent)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
 
     private var transcriptArea: some View {
         VStack(spacing: 16) {

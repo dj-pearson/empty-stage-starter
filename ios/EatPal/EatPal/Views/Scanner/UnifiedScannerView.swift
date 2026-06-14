@@ -1,5 +1,6 @@
 import SwiftUI
 import VisionKit
+import AVFoundation
 
 /// Unified scanner (US-139). Supports:
 ///  - **Barcode** mode — single tap/scan hands the payload back to the caller
@@ -54,6 +55,8 @@ struct UnifiedScannerView: View {
     @State private var lastError: String?
     // US-395: guard against discarding recognized grocery lines on Cancel.
     @State private var showingDiscardConfirm = false
+    // US-392: torch toggle for dark aisles on the modern scanner path.
+    @State private var torchOn = false
 
     init(
         initialMode: Mode = .barcode,
@@ -116,6 +119,19 @@ struct UnifiedScannerView: View {
                     }
                     .foregroundStyle(.white)
                 }
+                // US-392: torch toggle, hidden when the device has no torch.
+                if Self.deviceHasTorch {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            torchOn.toggle()
+                            Self.setTorch(torchOn)
+                        } label: {
+                            Image(systemName: torchOn ? "flashlight.on.fill" : "flashlight.off.fill")
+                        }
+                        .foregroundStyle(.white)
+                        .accessibilityLabel(torchOn ? "Turn off flashlight" : "Turn on flashlight")
+                    }
+                }
                 if mode == .groceryList {
                     ToolbarItem(placement: .primaryAction) {
                         Button("Done") {
@@ -126,6 +142,10 @@ struct UnifiedScannerView: View {
                         .disabled(collectedText.isEmpty)
                     }
                 }
+            }
+            // US-392: ensure the torch is off when the scanner goes away.
+            .onDisappear {
+                if torchOn { Self.setTorch(false) }
             }
             .toolbarBackground(.black.opacity(0.4), for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
@@ -161,6 +181,23 @@ struct UnifiedScannerView: View {
                 isHighlightingEnabled: true,
                 isGuidanceEnabled: true
             )
+        }
+    }
+
+    // MARK: - Torch (US-392)
+
+    private static var deviceHasTorch: Bool {
+        AVCaptureDevice.default(for: .video)?.hasTorch ?? false
+    }
+
+    private static func setTorch(_ on: Bool) {
+        guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else { return }
+        do {
+            try device.lockForConfiguration()
+            device.torchMode = on ? .on : .off
+            device.unlockForConfiguration()
+        } catch {
+            // Torch unavailable (in use / restricted) — non-fatal.
         }
     }
 
