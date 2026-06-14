@@ -58,6 +58,87 @@ enum WidgetSnapshot {
         persist(payload)
     }
 
+    /// US-412: build a snapshot payload from raw collections. Shared by the
+    /// AppState change-stream path and the Siri-intent server-rebuild path so
+    /// both produce an identical snapshot. `activeKidId` nil → meals across all
+    /// kids (the intent path has no active-kid context).
+    static func buildPayload(
+        planEntries: [PlanEntry],
+        foods: [Food],
+        recipes: [Recipe],
+        groceryItems: [GroceryItem],
+        activeKidId: String?
+    ) -> Payload {
+        let todayString = DateFormatter.isoDate.string(from: Date())
+        let todaysEntries = planEntries.filter { entry in
+            entry.date == todayString && (activeKidId == nil || entry.kidId == activeKidId)
+        }
+
+        let meals: [Payload.Meal] = MealSlot.allCases.compactMap { slot in
+            guard let entry = todaysEntries.first(where: { $0.mealSlot == slot.rawValue }) else {
+                return nil
+            }
+            let foodName: String = {
+                if let recipeId = entry.recipeId,
+                   let recipe = recipes.first(where: { $0.id == recipeId }) {
+                    return recipe.name
+                }
+                if let food = foods.first(where: { $0.id == entry.foodId }) {
+                    return food.name
+                }
+                return "Unnamed"
+            }()
+            return Payload.Meal(slot: slot.displayName, foodName: foodName, icon: slot.icon)
+        }
+
+        let tonightDish = todaysEntries
+            .first(where: { $0.mealSlot == MealSlot.dinner.rawValue })
+            .flatMap { entry -> String? in
+                if let recipeId = entry.recipeId,
+                   let recipe = recipes.first(where: { $0.id == recipeId }) {
+                    return recipe.name
+                }
+                return foods.first(where: { $0.id == entry.foodId })?.name
+            }
+
+        let pantryLowCount = foods.filter { food in
+            guard let qty = food.quantity else { return false }
+            return qty > 0 && qty <= 2
+        }.count
+
+        let unchecked = groceryItems.filter { !$0.checked }.count
+
+        return Payload(
+            meals: meals,
+            groceryCount: unchecked,
+            pantryLowCount: pantryLowCount,
+            tonightDish: tonightDish,
+            tryBiteStreak: 0
+        )
+    }
+
+    /// US-412: rebuild the widget snapshot from the server. Background Siri
+    /// intents bypass AppState entirely, so after a Siri mutation they call
+    /// this to fetch the current data, write the snapshot, and reload the
+    /// widget timeline — keeping the widget fresh without opening the app.
+    /// Best-effort: any fetch failure simply skips the refresh.
+    static func rebuildFromServer() async {
+        let ds = DataService.shared
+        async let foods = try? ds.fetchFoods()
+        async let grocery = try? ds.fetchGroceryItems()
+        async let plan = try? ds.fetchPlanEntries()
+        async let recipes = try? ds.fetchRecipes()
+        let (f, g, p, r) = await (foods ?? [], grocery ?? [], plan ?? [], recipes ?? [])
+        let payload = buildPayload(
+            planEntries: p,
+            foods: f,
+            recipes: r,
+            groceryItems: g,
+            activeKidId: nil
+        )
+        writeImmediately(payload)
+    }
+
     /// Writes a snapshot, debounced by 0.5s so a burst of mutations only
     /// triggers one widget reload.
     static func write(_ payload: Payload) {

@@ -2894,3 +2894,137 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - No code change this batch — prd.json audit-flips only.
 - Session total: 29 stories (80 → 51 false).
 - Remaining 51: 16 not-implemented iOS (audit-finding GAPs needing fresh Swift — can't build-verify here), iOS-native/integration needing toolchains (US-147/148/149/213/214/etc.), and web items needing runtime/visual QA (US-344/345), the any-burndown (US-342), the re-render refactor (US-331), US-341 (offline queue), US-323 (prod deploy).
+
+## 2026-06-14 - iOS notifications + realtime + deep-link routing (US-381/403/404/405/406)
+- Branch claude/zen-mccarthy-6xpo2a. Worked the open iOS Swift audit-findings one by one. Swift build is the user's local-Xcode step (no Swift toolchain in this sandbox); verification = source audit + a new XCTest for the decode fix.
+- US-381 (P1, CRITICAL realtime decode): JSONDecoder.supabase set keyDecodingStrategy=.convertFromSnakeCase while every model declares EXPLICIT snake_case CodingKeys -> double-conversion key-miss -> every multi-word non-optional field threw -> realtime insert/update silently never applied (masked by try?). Fix: dropped .convertFromSnakeCase (default key strategy now matches the CodingKeys, same contract OfflineStore relies on); all 10 decode sites go through new decodeRealtimeRecord() which reports decode failures to Sentry instead of swallowing. New EatPalTests/RealtimeDecodeTests.swift feeds realtime-shaped payloads (user_id/is_safe/created_at) and asserts Food/GroceryItem/PlanEntry fully populate.
+- US-403 (P1): NotificationService gained scheduleTopic/cancelTopic/cancelAllTopics/rescheduleAllTopics that read the persisted per-Topic enabled/hour/minute and schedule UNCalendarNotificationTrigger (daily repeat). SettingsView wires the topic toggle + DatePicker onChange to (re)schedule/cancel; master toggle off cancels all topic notifications; EatPalApp reschedules on launch. Removed the orphaned hardcoded-8/12/18 scheduleMealReminders/cancelMealReminders dead code the AC called out.
+- US-404 (P4, pairs with 403): scheduleTopic skips adding while mutedUntil is in the future; AppDelegate willPresent returns [] while muted (foreground suppression); unmute() and the launch reschedule resume reminders automatically once the window passes.
+- US-405 (P2): MainTabView now consumes deepLinkHandler.activeDestination -> switches tab and, for More sub-screens, drives a morePath ([MoreRoute]) bound to the More NavigationStack with .navigationDestination in MoreView. kidProfile/quiz/foodChaining/settings/progress/dashboard push their real screens; universal /app/* parsing gained food-chaining/settings/progress parity; destination is cleared after routing (AC4). scanner -> Pantry (the scan entry point); mealPlan honored at tab level (specific-date deep-select deferred).
+- US-406 (P4, pairs with 405): AppDelegate didReceive maps the notification categoryIdentifier -> DeepLinkHandler.routeFromNotification, reusing the deep-link consumption path (MEALREMINDERS->Planner, GROCERY*->Grocery, EXPIRINGFOOD->Pantry, AISUMMARY->Dashboard, STREAKMILESTONE/TRYBITE->Progress). Added a .progress Destination + eatpal://progress + /app/progress.
+- Files: ios/.../Services/RealtimeService.swift, Services/NotificationService.swift, Views/Settings/SettingsView.swift, App/EatPalApp.swift, Utilities/DeepLinkHandler.swift, Views/Dashboard/MainTabView.swift, Views/Dashboard/MoreView.swift, EatPalTests/RealtimeDecodeTests.swift.
+- Remaining false: 85.
+
+## 2026-06-14 (cont.) - iOS stability/UX/security audit-fixes (US-374/376/377/386/409/410/411)
+- Same branch. Continued the one-by-one iOS audit-finding sweep. Swift build = local Xcode (source-audit verification here).
+- US-409 (Kids add error-swallow): AddKidView.addKid uses `defer { isSubmitting = false }`; do/catch around appState.addKid -> ToastManager.error + sheet stays open on failure; dismiss only on success.
+- US-386 (grocery N+1 delete): clearCheckedGroceryItems -> one dataService.bulkDeleteGroceryItems(Array(checkedIds)); rollback already restores the full checked+source snapshot.
+- US-376 (StoreKit print-swallow): both catch blocks -> SentryService.capture with context tag; sync carries product_id + original_transaction_id (no PII); no raw print() left.
+- US-377 (Apple user-id PII): dropped appleCredential.user from Sentry extras; added userid/user_id/useridentifier/user_identifier/appleuser to sensitiveKeys; verified no other Apple credential field is sent.
+- US-410 (Kid Safe Foods stat): scoped per-child — safe foods minus any whose allergens intersect the kid's allergens (case-insensitive disjoint).
+- US-411 (zeroed nutrition rings): DailyNutritionSummary shows "Nutrition data not available" instead of zeroed rings (Food has no macros yet); MacroRing value text gains lineLimit+minimumScaleFactor+maxWidth so big values don't overflow the 56pt ring.
+- US-374 (bind-email weak password): password step now enforces PasswordValidator (12-char policy) + match, reuses PasswordStrengthView, footer/placeholder updated to the real requirement.
+- Remaining false: 78.
+
+## 2026-06-14 (cont. 2) - iOS push/realtime/AI audit-fixes (US-379/384/396/398)
+- Same branch. Swift build = local Xcode.
+- US-379 (APNs token cross-linking): handleDeviceToken rewritten to upsert push_tokens (the table process-notification-queue reads) with session user_id + platform ios + is_active, onConflict:token. Old code wrote a web-push-shaped row (endpoint/keys) to push_notifications with no user_id/conflict target. push_tokens RLS already scopes INSERT/UPDATE to auth.uid(). Failures -> Sentry.
+- US-384 (realtime no filter): subscribe() now scopes each postgresChange with household_id (or user_id solo) filter and namespaces channels <table>-changes-<scope>; unsubscribeAll-first means a re-call on household switch/re-auth recreates. currentHousehold() auto-creates via ensure_user_household RPC so the household filter is the normal path; all 5 tables carry both columns.
+- US-396 (AI Coach masks failures): online failures now render an isError bubble (orange + Retry) instead of a canned answer; canned tips only when offline, 📴-labeled; retryLastMessage re-sends the last prompt; failures -> Sentry. Added ChatMessage.isError.
+- US-398 (AI orphan plan entries): resolveFoodId (existing id -> name match -> create Food) guarantees a real foodId; single-add toasts on failure; Add All reports added-vs-skipped accurately.
+- Remaining false: 74.
+
+## 2026-06-14 (cont. 3) - iOS AI resilience + error-banner polish (US-367/397/400/401)
+- US-400: EdgeFunctions.invokeRaw centralizes retry-on-transient (502/503/504 + URLError timeout/connection-lost/etc) with 0.5s/1s backoff + Task.checkCancellation so view-dismiss aborts in-flight calls; 4xx/other 5xx surface immediately.
+- US-397: AIMealPlanView offline banner + disables Generate/fridge/Regenerate while loading/offline; Add All guarded by isAddingAll to prevent duplicate entries.
+- US-401: AICoachService send is a retained cancellable Task; clearChat cancels + resets isLoading; post-cancel responses discarded (Task.isCancelled); view uses non-async send/retry.
+- US-367: 4 raw-red error sites -> ErrorBanner (PaywallView, AIMealPlanView, RecipesView import, ScanReceiptSheet); ErrorBanner restyled to AppTheme.Colors.danger + optional onDismiss (PaywallView), retry wired where applicable.
+- Remaining false: 70.
+
+## 2026-06-14 (cont. 4) - Planner pantry-coverage (US-348 P1) + mark-made low-stock nudge (US-352)
+- US-348: new Utilities/PantryCoverage.swift (advisory, read-only) -> fully/partially/not-stocked via ShortfallCalculator with legacy foodIds fallback, nil when neither. PlanEntryRow renders a live coverage badge for recipe rows; actionable badge opens MissingIngredientsSheet; VoiceOver label. Never debits. Tests PantryCoverageTests.swift (5). Decision recorded: advisory-only.
+- US-352: markPlanEntryMade snapshots low/out-of-stock ingredients pre-debit; success path fires a non-blocking add-to-grocery nudge -> addShortfallsToGrocery (reuses GroceryItem.fromShortfall); no nudge when fully stocked.
+- Remaining false: 68.
+
+## 2026-06-14 (cont. 5) - iOS billing/auth/a11y/parser small fixes (US-375/378/394/395/402)
+- US-375: restorePurchases walks currentEntitlements -> syncSubscriptionToSupabase per verified txn (writes apple_subscriptions on fresh-install restore).
+- US-378: AuthViewModel.isEmailValid required by isFormValid (all 3 modes) + inline emailValidationMessage in AuthView; no network round-trip for malformed.
+- US-394: WaveformView + record-button pulse gated on accessibilityReduceMotion (static bars / no pulse; color+label still convey recording).
+- US-402: TonightCookSheet.parseSteps fallback uses NSString sentence tokenizer (no mid-step splits on decimals/abbreviations); single blob -> one step.
+- US-395: UnifiedScannerView Cancel confirms discard of N recognized grocery lines; barcode/empty dismiss silently.
+- Remaining false: 63.
+
+## 2026-06-14 (cont. 6) - Pantry dedup cluster (US-364/389/390 P2)
+- Shared dedup: new Utilities/PantryDedup.swift (barcode-preferred else case-insensitive trimmed name) + AppState.existingPantryFood / incrementFoodQuantity(notify:) / mergeOrAddFood (UnitConverter on merge, optimistic+rollback).
+- US-364 manual AddFoodView -> mergeOrAddFood (auto-increment on match). Test PantryDedupTests.swift (4).
+- US-389 ScannedProductView -> Update-existing vs Add-new confirmationDialog on match (barcode-then-name).
+- US-390 ScanReceiptSheet.save -> matchedFoodId rows merge via incrementFoodQuantity(notify:false), only unmatched bulk-inserted; icon now truthful.
+- Remaining false: 60.
+
+## 2026-06-14 (cont. 7) - Watch complications App Group + widget deep-links (US-407/408)
+- US-407: new shared WatchSnapshotStore (App Group group.com.eatpal.app, .standard fallback); WatchSessionStore + complication SnapshotLoader both use it instead of UserDefaults.standard so complications show real data. NOTE: App Group entitlement must be added to watch + complication targets in Xcode.
+- US-408: MealPlanWidgetView .widgetURL (meal-plan / grocery / progress by family); GroceryTripLiveActivity fixed eatpal://openGroceryList -> eatpal://grocery. Routes via US-405.
+- Remaining false: 58.
+
+## 2026-06-14 (cont. 8) - Pantry qty/unit + scanner torch + voice permission (US-366/392/393)
+- US-366: AddFoodView Quantity section (Stepper + unit field, default 1/count) -> Food carries qty/unit; UnitInference pre-fill on name change unless user-edited.
+- US-392: UnifiedScannerView torch toggle (toolbar, hidden w/o torch, off onDisappear; AVFoundation).
+- US-393: VoiceAddGrocerySheet reads auth on appear; denied -> persistent Open-Settings state, mic controls hidden; authorized unchanged.
+- Remaining false: 55.
+
+## 2026-06-14 (cont. 9) - Offline cache + sync-queue hardening (US-382/383/385)
+- US-383: OfflineStore.cacheFoods/Kids/GroceryItems now delete-all-then-insert (replace snapshot) so updates refresh, deletions prune, and re-cache of a .unique id can't 409/leak. Added loadCachedKids/loadCachedGroceryItems + toKid/toGroceryItem. Test OfflineStoreCacheTests.swift (2).
+- US-382: loadAllData writes the cache on success; on a connectivity-class failure falls back to the cache (Offline toast) instead of empty lists. New isConnectivityError() helper (NetworkMonitor + URLError codes).
+- US-385: replay inserts -> upsert(onConflict:id) (idempotent); syncPendingMutations tracks attemptCount (new defaulted @Model field) and quarantines a poison mutation after 5 attempts so it can't head-of-line block; transient failures still break to preserve order. AC3 drain test needs mocked Supabase (integration) — source-audit verified.
+- Remaining false: 52.
+
+## 2026-06-14 (cont. 10) - Thumbnail cache + widget debounce coalescing (US-387/388)
+- US-387: CachedAsyncImage now backed by ThumbnailImageCache (NSCache + bounded URLCache 25/150MB) + ThumbnailImageLoader; .task(id:url) loads, re-appearing rows hit cache. networkFetchCount hook + ThumbnailImageCacheTests (2).
+- US-388: refreshWidgetSnapshot -> writeImmediately (Combine already debounces 500ms; dropped redundant 2nd timer); single coalesced pass per window -> one reload. WidgetSnapshot + WatchConnectivityService debounce state confirmed @MainActor.
+- Remaining false: 50.
+
+## 2026-06-14 (cont. 11) - Loading skeletons + reduce-motion gating (US-368/369)
+- US-368: KidsView (.foodRow), BudgetView/FoodChainingView/ProgressDashboard OverviewTab (.card) show skeletons during initial load; FoodChaining empty hints gated on !isLoading.
+- US-369: PickyEaterQuiz + Onboarding transitions -> accessibleWithAnimation(reduceMotion:); SyncStatusBanner rotation -> accessibleAnimation. All gate on accessibilityReduceMotion.
+- Remaining false: 48.
+
+## 2026-06-14 (cont. 12) - Accessibility annotations (US-372)
+- Chart marks: InsightsCharts (4 charts) + JoyScoreChart PointMark get accessibilityLabel/value.
+- DayChip: full "Monday, June 14[, today]" + selected state + .isSelected trait.
+- FoodChip, ChainStepRow, ProgressStatCard, ProgressRow, BudgetView forecast: single labeled elements with values.
+- Remaining false: 47.
+
+## 2026-06-14 (cont. 13) - IA: Dashboard promoted to Home tab (US-373)
+- OWNER DECISION (2026-06-14): Home tab, relocate Recipes.
+- MainTabView: added .home (DashboardHomeView) as first + default tab; removed .recipes primary tab. Recipes -> MoreView top section + MoreRoute.recipes + navigationDestination. Deep-link routing updated (.dashboard->home, .recipes->More[.recipes]). No tab-selection code elsewhere -> no deep-link/Siri regression.
+- Remaining false: 46.
+
+## 2026-06-14 (cont. 14) - Recipe ingredient matching + pasteboard gate (US-360)
+- New Utilities/IngredientNameMatcher (parser-normalize + whole-word token-subset). RecipeFilters nameHits now uses it instead of raw line.contains(name) -> no 3-char false positives. Test IngredientNameMatcherTests (4).
+- Pasteboard: removed AddRecipe on-appear sniff + auto-prompt; added explicit "Paste link" button (reads clipboard on tap only); removed unused state.
+- Remaining false: 45.
+
+## 2026-06-14 (cont. 15) - Recipe step-by-step cook mode (US-359)
+- Extracted shared Utilities/RecipeStepParser (US-402 logic); TonightCookSheet.parseSteps delegates to it. Test RecipeStepParserTests (4).
+- New CookModeView (fullScreenCover from RecipeDetailView "Cook" button): one step at a time, check-off, Prev/Next/Finish, progress; keep-awake via isIdleTimerDisabled (set onAppear, restored onDisappear); transitions gated on reduceMotion.
+- Remaining false: 44.
+
+## 2026-06-14 (cont. 16) - Force-update gate (US-380)
+- ForceUpdateService: fetch app_config.min_ios_build on launch (fail-open); needsUpdate = CFBundleVersion < min. RootView gates ForceUpdateView (blocking App Store screen) above auth states.
+- Additive migration 20260614000000_app_config.sql (table + anon-SELECT RLS + seed min_ios_build=1). NOT applied to prod here (deploy step). App Store URL via Info.plist APP_STORE_URL else search fallback (app id still placeholder in eas.json).
+- Remaining false: 43.
+
+## 2026-06-14 (cont. 17) - Siri intents refresh widget (US-412)
+- Extracted WidgetSnapshot.buildPayload (shared by AppState + intents) + rebuildFromServer() (fetch -> build -> writeImmediately + reload).
+- Called after background Siri mutations: AddGroceryItem/BulkAddGroceryItems, LogMealResult, MarkFoodSafe/MarkFoodTryBite. AppState.refreshWidgetSnapshot now uses the shared builder.
+- Remaining false: 42.
+
+## 2026-06-14 (cont. 18) - Recipe import deep link audit-flip + scanner manual entry (US-309/391)
+- US-309: audit-flip — all 8 ACs already implemented in source (RecipeParseAPI in Shared/, .recipeImport destination + eatpal://recipe/import parsing, toasts, ImportRecipeFromURLIntent + shortcut phrases, telemetry, pending-queue reuse). Verified bullet-by-bullet.
+- US-391: ScannedProductView lookupFailed gains a Type-barcode field + Retry-lookup button (re-runs BarcodeService.lookup via lookupBarcode); saved Food/dedup use the effective corrected barcode.
+- Remaining false: 40.
+
+## 2026-06-14 (cont. 19) - Serving-scaled + unit-converted mark-made debits (US-351)
+- MealMadeStrategy: Debit.amount Double = quantity x servingScale (1.0 default), UnitConverter-converted to pantry unit; incompatible units -> best-effort raw + unitMismatch flag (Check-pantry-amounts toast); repeated foods summed. plan(for:pantry:servingScale:).
+- DataService.markMealMadeV2 -> additive migration 20260614000001_mark_meal_made_v2.sql (rpc_mark_meal_made_v2(p_plan_entry_id,p_debits jsonb); applies client amounts; shares plan_entry_made_log + reversal shape with undo; v1 untouched). NOT deployed here (deploy step).
+- AppState: structured -> v2 with computed debits + mirror EXACT amounts (AC5); legacy/no-recipe -> v1 + deduct_food_quantity (rounded); undo recomputes same pantry+scale.
+- Tests: scaled, cup->ml convert, cup->g incompatible+flag, summed dedupe.
+- Remaining false: 39.
+
+## 2026-06-14 (cont. 20) - Shared missing-ingredient prompt across plan-add paths (US-353)
+- New Utilities/ShortfallChecker: shortfalls(for:pantry:) (legacy food_ids fallback, AC3) + aggregate(recipes:pantry:) dedup-by-name (AC5). Tests ShortfallCheckerTests (3).
+- MealPlanView: race fix — pendingShortfallRecipeIds Set (was single slot) drained+aggregated into ONE MissingIngredientsSheet on sheet dismiss (AC4); single-add + copy-to-kid feed it. RecipeDetailView add-to-plan routed through ShortfallChecker (legacy prompts now).
+- MissingIngredientsSheet: per-row sourceRecipeId = ingredient.recipeId (aggregated multi-recipe sourcing); safe analytics denom.
+- copyWeekToOtherKid returns copiedRecipeIds; CopyWeekToKidSheet.onApplied surfaces them.
+- FINDING: AI plan (food-based), applyTemplate + copyWeekPlan (copy foodId only, no recipeId) -> food-only entries with no recipe ingredients -> no recipe shortfall; correctly not prompting.
+- Remaining false: 38.

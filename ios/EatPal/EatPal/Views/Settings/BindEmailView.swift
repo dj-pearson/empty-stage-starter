@@ -162,16 +162,25 @@ struct BindEmailView: View {
             }
 
             Section {
-                SecureField("At least 8 characters", text: $password)
+                SecureField("At least 12 characters", text: $password)
                     .textContentType(.newPassword)
                     .disabled(isWorking)
+                // US-374: same strength indicator + failed-rule list as signup.
+                if !password.isEmpty {
+                    PasswordStrengthView(validation: PasswordValidator.validate(password))
+                }
                 SecureField("Confirm password", text: $confirmPassword)
                     .textContentType(.newPassword)
                     .disabled(isWorking)
+                if !confirmPassword.isEmpty, password != confirmPassword {
+                    Label("Passwords don't match", systemImage: "xmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             } header: {
                 Text("Set a password")
             } footer: {
-                Text("After this you'll be able to sign in with email + password or continue using Sign in with Apple — both will work.")
+                Text("Use at least 12 characters with an uppercase letter, a lowercase letter, a number, and a special character. After this you'll be able to sign in with email + password or continue using Sign in with Apple — both will work.")
             }
 
             Section {
@@ -210,7 +219,9 @@ struct BindEmailView: View {
     }
 
     private var isPasswordValid: Bool {
-        password.count >= 8 && password == confirmPassword
+        // US-374: enforce the real 12-char policy (matches AuthView signup),
+        // not the old 8-char minimum.
+        PasswordValidator.validate(password).isValid && password == confirmPassword
     }
 
     // MARK: - Actions

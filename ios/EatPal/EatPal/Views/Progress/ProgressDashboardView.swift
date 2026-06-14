@@ -72,6 +72,12 @@ struct OverviewTab: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
+                if appState.isLoading && appState.foods.isEmpty && appState.planEntries.isEmpty {
+                    // US-368: skeleton placeholders during the initial load.
+                    ForEach(0..<4, id: \.self) { _ in
+                        SkeletonView(shape: .card)
+                    }
+                } else {
                 // Stats Grid
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     ProgressStatCard(
@@ -120,6 +126,7 @@ struct OverviewTab: View {
                 }
                 .padding()
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+                } // US-368: end loaded-content branch
             }
             .padding()
         }
@@ -146,6 +153,10 @@ struct ProgressRow: View {
             ProgressView(value: Double(count), total: Double(total))
                 .tint(color)
         }
+        // US-372: read the labeled bar as "Safe Foods, 8 of 20".
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue("\(count) of \(total)")
     }
 }
 
@@ -170,6 +181,10 @@ struct ProgressStatCard: View {
         .frame(maxWidth: .infinity)
         .padding()
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        // US-372: combine icon/value/title into one labeled stat.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
     }
 }
 

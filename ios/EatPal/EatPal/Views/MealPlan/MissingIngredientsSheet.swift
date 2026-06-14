@@ -89,7 +89,9 @@ struct MissingIngredientsSheet: View {
                 AnalyticsService.track(
                     .missingIngredientPromptShown(
                         missingCount: shortfalls.count,
-                        totalCount: recipe.ingredients.count
+                        // US-353: aggregated sheets pass a synthetic recipe with
+                        // no ingredients, so fall back to the shortfall count.
+                        totalCount: max(recipe.ingredients.count, shortfalls.count)
                     )
                 )
             }
@@ -198,7 +200,11 @@ struct MissingIngredientsSheet: View {
             let item = GroceryItem.fromShortfall(
                 row.shortfall,
                 quantity: row.quantity,
-                sourceRecipeId: recipe.id
+                // US-353: source each row to its OWN recipe (non-optional on
+                // RecipeIngredient) so an aggregated multi-recipe sheet links
+                // grocery items to the right recipe. Equals `recipe.id` for a
+                // single-recipe sheet.
+                sourceRecipeId: row.shortfall.ingredient.recipeId
             )
             do {
                 try await appState.addGroceryItem(item)

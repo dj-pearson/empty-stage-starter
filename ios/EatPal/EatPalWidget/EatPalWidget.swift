@@ -319,6 +319,20 @@ struct MealPlanWidgetView: View {
                 Color(.systemBackground)
             }
         }
+        // US-408: deep-link taps to the relevant screen (consumed by US-405's
+        // DeepLinkHandler routing). The circular accessory leans on grocery
+        // when there's no streak, so it points at the grocery list; the rest
+        // open the planner.
+        .widgetURL(deepLinkURL)
+    }
+
+    private var deepLinkURL: URL? {
+        switch family {
+        case .accessoryCircular:
+            return URL(string: entry.tryBiteStreak > 0 ? "eatpal://progress" : "eatpal://grocery")
+        default:
+            return URL(string: "eatpal://meal-plan")
+        }
     }
 }
 

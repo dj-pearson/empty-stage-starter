@@ -1,25 +1,40 @@
 import SwiftUI
 
+/// US-405: programmatic push targets inside the More tab. Deep links and
+/// notification taps drive these via the More tab's NavigationStack path so a
+/// `.kidProfile`/`.quiz`/`.foodChaining`/`.settings` link opens the real
+/// screen instead of dead-ending on the tab root.
+enum MoreRoute: Hashable {
+    case dashboard
+    case kids
+    case kidProfile(id: String)
+    case foodChaining
+    case quiz
+    case settings
+    case progress
+    // US-373: Recipes moved out of the tab bar into More.
+    case recipes
+}
+
 struct MoreView: View {
     @EnvironmentObject var appState: AppState
 
     var body: some View {
         List {
-            // Dashboard
+            // US-373: Recipes relocated here from the tab bar (Dashboard took
+            // its primary-tab slot). Surfaced first so it stays easy to reach.
             Section {
-                NavigationLink {
-                    DashboardHomeView()
-                } label: {
+                NavigationLink(value: MoreRoute.recipes) {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Dashboard")
+                            Text("Recipes")
                                 .font(.body)
-                            Text("Overview and quick stats")
+                            Text("\(appState.recipes.count) saved")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     } icon: {
-                        Image(systemName: "square.grid.2x2.fill")
+                        Image(systemName: "book.fill")
                             .foregroundStyle(.green)
                     }
                 }
@@ -169,6 +184,31 @@ struct MoreView: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle("More")
+        // US-405: resolve programmatic pushes from deep links / notification taps.
+        .navigationDestination(for: MoreRoute.self) { route in
+            switch route {
+            case .dashboard:
+                DashboardHomeView()
+            case .kids:
+                KidsView()
+            case .kidProfile(let id):
+                if let kid = appState.kids.first(where: { $0.id == id }) {
+                    KidDetailView(kid: kid)
+                } else {
+                    KidsView()
+                }
+            case .foodChaining:
+                FoodChainingView()
+            case .quiz:
+                PickyEaterQuizView()
+            case .settings:
+                SettingsView()
+            case .progress:
+                ProgressDashboardView()
+            case .recipes:
+                RecipesView()
+            }
+        }
     }
 }
 

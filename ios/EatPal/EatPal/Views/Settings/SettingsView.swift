@@ -283,8 +283,15 @@ struct NotificationSettingsView: View {
                                 if !granted {
                                     notificationsEnabled = false
                                     showingPermissionAlert = true
+                                } else {
+                                    // US-403: bring back any topics the user
+                                    // had enabled before disabling the master.
+                                    await notificationService.rescheduleAllTopics()
                                 }
                             } else {
+                                // US-403: master off cancels every scheduled
+                                // topic reminder (and any other pending).
+                                notificationService.cancelAllTopics()
                                 notificationService.cancelAll()
                             }
                         }
@@ -425,6 +432,16 @@ private struct NotificationTopicSection: View {
                 }
             }
             .disabled(!masterEnabled)
+            // US-403: toggling a topic schedules/cancels its real reminder.
+            .onChange(of: enabled) { _, isOn in
+                Task {
+                    if isOn {
+                        await NotificationService.shared.scheduleTopic(topic)
+                    } else {
+                        NotificationService.shared.cancelTopic(topic)
+                    }
+                }
+            }
 
             if enabled, masterEnabled, topic.supportsDailyTime {
                 DatePicker(
@@ -432,6 +449,13 @@ private struct NotificationTopicSection: View {
                     selection: pickerBinding,
                     displayedComponents: .hourAndMinute
                 )
+                // US-403: changing the time reschedules this topic.
+                .onChange(of: hour) { _, _ in
+                    Task { await NotificationService.shared.scheduleTopic(topic) }
+                }
+                .onChange(of: minute) { _, _ in
+                    Task { await NotificationService.shared.scheduleTopic(topic) }
+                }
             }
 
             if enabled, masterEnabled {

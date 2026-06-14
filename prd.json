@@ -4701,8 +4701,8 @@
         "No DB migration — reuses the existing pending_recipe_imports App Group queue and the existing drainPendingRecipeImports() drain on launch."
       ],
       "priority": 29,
-      "passes": false,
-      "notes": "Closes the recipe half of the Tier 1 deep-link work. Carved out of US-296 because moving ShareExtensionAPI to Shared/ + adding the network call to the main app target expanded the Tier 1 PR's review surface unnecessarily. Should ship as a small standalone PR once US-296 is in develop."
+      "passes": true,
+      "notes": "Closes the recipe half of the Tier 1 deep-link work. Carved out of US-296 because moving ShareExtensionAPI to Shared/ + adding the network call to the main app target expanded the Tier 1 PR's review surface unnecessarily. Should ship as a small standalone PR once US-296 is in develop. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): AUDIT-FLIP — fully implemented in source (prior US-296/309 work, left passes=false). Verified all 8 ACs: RecipeParseAPI.swift in Shared/; DeepLinkHandler.recipeImport destination + eatpal://recipe/import?url= parsing in handleCustomScheme (https-validated, inline parse, enqueue PendingRecipeImport); success/failure toasts (Imported [name] / open-in-Safari); ImportRecipeFromURLIntent in RecipeAppIntents + registered in EatPalAppShortcuts with phrases; telemetry deeplink_recipe_import_received/succeeded(timeMs)/failed(reason); reuses pending_recipe_imports App Group queue + drainOnLaunch (no migration). Swift build = local Xcode."
     },
     {
       "id": "US-310",
@@ -5281,8 +5281,8 @@
         "Swift builds; no force-unwraps introduced"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Audit finding (Planner-Pantry GAP-3): adding to the planner does NOT pull from the pantry today. Owner expectation. Recommended approach is an advisory coverage indicator, not destructive reservation, to avoid divergence from the server rpc_mark_meal_made debit path."
+      "passes": true,
+      "notes": "Audit finding (Planner-Pantry GAP-3): adding to the planner does NOT pull from the pantry today. Owner expectation. Recommended approach is an advisory coverage indicator, not destructive reservation, to avoid divergence from the server rpc_mark_meal_made debit path. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): new PantryCoverage helper (Utilities/PantryCoverage.swift) computes fully/partially/not-stocked read-only from ShortfallCalculator (structured ingredients) with legacy recipe.foodIds fallback and nil when neither exists; PlanEntryRow shows a coverage badge for recipe-backed rows that recomputes from appState.foods (live); tapping a partial/not badge opens MissingIngredientsSheet for that recipe; VoiceOver label on the badge. Advisory only — never debits Food.quantity (debit stays at mark-made per US-262/286). Tests PantryCoverageTests.swift (5). DECISION: plan-time is advisory; true reservation out of scope."
     },
     {
       "id": "US-349",
@@ -5331,8 +5331,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit findings (Planner-Pantry GAP-9, GAP-10). Currently every ingredient debits exactly 1 unit regardless of recipe amount or unit."
+      "passes": true,
+      "notes": "Audit findings (Planner-Pantry GAP-9, GAP-10). Currently every ingredient debits exactly 1 unit regardless of recipe amount or unit. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): MealMadeStrategy.Debit.amount is now Double = RecipeIngredient.quantity x servingScale (1.0 default; no per-entry serving field yet), unit-converted to the pantry foods unit via UnitConverter; incompatible units debit best-effort raw + unitMismatch flag (surfaced as a Check-pantry-amounts toast). Repeated foods sum. Structured path calls new DataService.markMealMadeV2 -> additive migration 20260614000001_mark_meal_made_v2.sql (rpc_mark_meal_made_v2(p_plan_entry_id,p_debits jsonb), applies client amounts, shares plan_entry_made_log + reversal shape with undo; v1 untouched for old clients). applyMealMadeMutationsLocally mirrors the EXACT debits the server applied (AC5 by construction). Legacy/no-recipe keep v1 + deduct_food_quantity (rounded). Undo recomputes with same pantry+scale. Tests: scaled debit, cup->ml conversion, cup->g incompatible+flag, summed dedupe (MealMadeStrategyTests). Migration NOT applied to prod here (deploy step, like US-323); Swift build = local Xcode."
     },
     {
       "id": "US-352",
@@ -5346,8 +5346,8 @@
         "Swift builds"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Audit finding (Planner-Pantry GAP-8)."
+      "passes": true,
+      "notes": "Audit finding (Planner-Pantry GAP-8). | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): markPlanEntryMade snapshots ShortfallCalculator low/out-of-stock ingredients BEFORE the debit; on success fires a non-blocking info toast \"N ingredient(s) were low or out of stock — add to grocery?\" with a one-tap Add action -> new addShortfallsToGrocery() (reuses GroceryItem.fromShortfall). No toast when fully stocked. Pantry floor-at-0 unchanged (server/deduct path)."
     },
     {
       "id": "US-353",
@@ -5362,8 +5362,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit findings (Planner-Pantry GAP-1, GAP-2; Recipe Flow 3 race condition)."
+      "passes": true,
+      "notes": "Audit findings (Planner-Pantry GAP-1, GAP-2; Recipe Flow 3 race condition). | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): new shared Utilities/ShortfallChecker (shortfalls(for:pantry:) with legacy food_ids fallback via synthesized ingredients [AC3]; aggregate(recipes:pantry:) dedup-by-name [AC5]) used by every recipe-add path. MealPlanView race fixed: pendingShortfallRecipeIds is a Set (was a single Recipe slot) drained+aggregated into ONE MissingIngredientsSheet on each sheets dismiss [AC4]; single-add, copy-to-kid both feed it. RecipeDetailView add-to-plan also routes through ShortfallChecker (legacy now prompts). MissingIngredientsSheet sources each grocery row by row.shortfall.ingredient.recipeId (non-optional) so aggregated multi-recipe sheets link correctly; analytics denom max(ingredients,shortfalls). copyWeekToOtherKid returns copiedRecipeIds; CopyWeekToKidSheet onApplied surfaces them. FINDING: AI plan (foods, US-398), applyTemplate + copyWeekPlan (both copy only foodId, no recipeId) produce food-only entries with NO recipe ingredients -> no recipe shortfall to prompt; correctly not wired. Tests ShortfallCheckerTests (structured, legacy fallback, aggregate dedup). Swift build = local Xcode."
     },
     {
       "id": "US-354",
@@ -5452,8 +5452,8 @@
         "Swift builds"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Audit finding (Recipe Flow 2 GAP)."
+      "passes": true,
+      "notes": "Audit finding (Recipe Flow 2 GAP). | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): extracted shared Utilities/RecipeStepParser (lines/bullets/numbers then sentence-tokenizer fallback; TonightCookSheet.parseSteps now delegates). New CookModeView (fullScreenCover) presents one step at a time with check-off + Previous/Next/Finish + progress; UIApplication.isIdleTimerDisabled set onAppear and restored onDisappear (keep-awake only in cook mode); step transitions via accessibleWithAnimation(reduceMotion:). RecipeDetailView Instructions header gets a Cook button. Tests RecipeStepParserTests (4)."
     },
     {
       "id": "US-360",
@@ -5466,8 +5466,8 @@
         "Swift builds; test covers '2 cloves garlic' matching 'garlic' and NOT matching 'oil'"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Audit findings (Recipe Flow 1a GAP). Pasteboard-on-appear is a privacy/UX smell on iOS 16+."
+      "passes": true,
+      "notes": "Audit findings (Recipe Flow 1a GAP). Pasteboard-on-appear is a privacy/UX smell on iOS 16+. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): new IngredientNameMatcher (parser-normalized via IngredientTextParser + whole-word token-subset match) replaces RecipeFilters raw line.contains(name) — kills 3-char substring false positives (oil vs broil). Pasteboard sniff: removed AddRecipe .onAppear(detectPasteboardURL) + auto-prompt alert; added explicit \"Paste link\" button (pasteLinkFromClipboard) so the clipboard is only read on user tap; dropped unused showPastePrompt/pasteboardURL state. Test IngredientNameMatcherTests (garlic matches, oil does not match 2 cloves garlic / broiled)."
     },
     {
       "id": "US-361",
@@ -5525,8 +5525,8 @@
         "Swift builds; test covers manual-add of an existing item merging"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit findings (Grocery-Pantry Flow 3 & 5). Dedup is inconsistent; pantry inflates over time."
+      "passes": true,
+      "notes": "Audit findings (Grocery-Pantry Flow 3 & 5). Dedup is inconsistent; pantry inflates over time. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): shared dedup PantryDedup.match (barcode-preferred, else case-insensitive trimmed name) + AppState.existingPantryFood/incrementFoodQuantity(notify:)/mergeOrAddFood (UnitConverter on merge, optimistic+rollback). Manual AddFoodView (PantryView) now mergeOrAddFood (auto-apply increment on match). Barcode scan (US-389) and receipt scan (US-390) wired too. Test PantryDedupTests.swift (4) covers manual-add-of-existing merging."
     },
     {
       "id": "US-365",
@@ -5553,8 +5553,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Grocery-Pantry Flow 3 GAP-P3)."
+      "passes": true,
+      "notes": "Audit finding (Grocery-Pantry Flow 3 GAP-P3). | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): AddFoodView (PantryView) gained a Quantity section (Stepper + unit TextField, default 1/count); the saved Food carries quantity/unit (no more 0 rows); name onChange pre-fills via UnitInference.infer unless the user already edited the fields (didEditQuantityUnit guard)."
     },
     {
       "id": "US-367",
@@ -5567,8 +5567,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Visual GAP-1)."
+      "passes": true,
+      "notes": "Audit finding (Visual GAP-1). | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): the four raw-red error-message sites (PaywallView store.errorMessage, AIMealPlanView aiService.errorMessage, RecipesView importError, ScanReceiptSheet errorMessage) now render ErrorBanner; ErrorBanner restyled to AppTheme.Colors.danger/dangerLight (not Color.red) and gained an optional onDismiss used by PaywallView; retry wired where applicable (AIMealPlan generate, Recipes import)."
     },
     {
       "id": "US-368",
@@ -5581,8 +5581,8 @@
         "Swift builds"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Audit findings (Visual GAP-2, GAP-10)."
+      "passes": true,
+      "notes": "Audit findings (Visual GAP-2, GAP-10). | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): KidsView shows SkeletonView(.foodRow) while appState.isLoading && kids.isEmpty (empty state only after load); BudgetView, FoodChainingView, and ProgressDashboard OverviewTab show SkeletonView(.card) placeholders during initial load (foods/grocery/planEntries empty + isLoading). FoodChaining empty hints gated on !isLoading so they dont flash. Reuses existing SkeletonView shapes."
     },
     {
       "id": "US-369",
@@ -5595,8 +5595,8 @@
         "Swift builds"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Audit finding (Visual GAP-3). Extends US-256/US-43 reduce-motion work to remaining sites."
+      "passes": true,
+      "notes": "Audit finding (Visual GAP-3). Extends US-256/US-43 reduce-motion work to remaining sites. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): routed the remaining sites through Accessibility.swift helpers — PickyEaterQuizView question transitions + OnboardingView page transitions use accessibleWithAnimation(reduceMotion:); SyncStatusBanner rotation uses accessibleAnimation. All read @Environment(accessibilityReduceMotion); no change when Reduce Motion is off."
     },
     {
       "id": "US-370",
@@ -5639,8 +5639,8 @@
         "Swift builds; spot-checked with VoiceOver where feasible"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit findings (Visual GAP-11, GAP-12, GAP-13). Extends US-246/US-256."
+      "passes": true,
+      "notes": "Audit findings (Visual GAP-11, GAP-12, GAP-13). Extends US-246/US-256. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): chart marks now expose accessibilityLabel/value — InsightsCharts (PantryDistribution/Weekly/FoodResults/Allergen Sector+Bar marks) and JoyScoreChart PointMark; DayChip announces \"Monday, June 14[, today], Selected/Not selected\" with .isSelected trait; FoodChip selectors + ChainStepRow + ProgressStatCard/ProgressRow + BudgetView forecast read as single labeled elements."
     },
     {
       "id": "US-373",
@@ -5654,8 +5654,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Visual GAP - IA depth). Needs a product call from the owner before implementing; captured as a story per request."
+      "passes": true,
+      "notes": "Audit finding (Visual GAP - IA depth). Needs a product call from the owner before implementing; captured as a story per request. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): PRODUCT DECISION (owner, 2026-06-14): make Dashboard the Home tab and relocate Recipes into More to keep 5 tabs. MainTabView: new .home tab (DashboardHomeView) as the first tab + default selectedTab; removed .recipes primary tab. Recipes moved to MoreView (top section, NavigationLink value: MoreRoute.recipes) + navigationDestination case. Deep-link/Siri routing: .dashboard -> Home tab; .recipes/.recipeImport -> More + [.recipes]. No tab-index code outside MainTabView, so no deep-link/intent regression (all .recipes refs are appState.recipes data)."
     },
     {
       "id": "US-374",
@@ -5668,8 +5668,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Auth/Security). BindEmailView.swift:165 placeholder + :212-214 validation; contrast AuthViewModel.isFormValid (.signUp) at AuthViewModel.swift:163-165 which requires passwordValidation.isValid."
+      "passes": true,
+      "notes": "Audit finding (Auth/Security). BindEmailView.swift:165 placeholder + :212-214 validation; contrast AuthViewModel.isFormValid (.signUp) at AuthViewModel.swift:163-165 which requires passwordValidation.isValid. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): BindEmailView password step now gates submit on PasswordValidator.validate(...).isValid (12-char policy) + match; reuses PasswordStrengthView for the same strength bar + failed-rule list as signup; placeholder/footer updated to the real 12-char + character-class requirement."
     },
     {
       "id": "US-375",
@@ -5682,8 +5682,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Billing integrity). StoreKitService.swift:171-176 vs :134-167; sync rationale at :234-277."
+      "passes": true,
+      "notes": "Audit finding (Billing integrity). StoreKitService.swift:171-176 vs :134-167; sync rationale at :234-277. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): restorePurchases now walks StoreKit.Transaction.currentEntitlements and calls syncSubscriptionToSupabase for each verified transaction, so a restore (incl. fresh install) writes the apple_subscriptions row keyed by original_transaction_id. Sync failures already report to Sentry (US-376)."
     },
     {
       "id": "US-376",
@@ -5696,8 +5696,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Stability). StoreKitService.swift:189-191 and :274-276. SentryService.capture already exists and scrubs PII (SentryService.swift:83-92)."
+      "passes": true,
+      "notes": "Audit finding (Stability). StoreKitService.swift:189-191 and :274-276. SentryService.capture already exists and scrubs PII (SentryService.swift:83-92). | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): both StoreKitService catch blocks (transaction-update listener + syncSubscriptionToSupabase) now call SentryService.capture with a context tag; sync failure carries product_id + original_transaction_id (no PII). No raw print() remains."
     },
     {
       "id": "US-377",
@@ -5710,8 +5710,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Security/Privacy). AuthViewModel.swift:278; scrub key list SentryService.swift:122-126."
+      "passes": true,
+      "notes": "Audit finding (Security/Privacy). AuthViewModel.swift:278; scrub key list SentryService.swift:122-126. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): removed appleCredential.user from the apple_sign_in_supabase_exchange Sentry extras; added userid/user_id/useridentifier/user_identifier/appleuser to SentryService.sensitiveKeys as defense-in-depth. Verified no other appleCredential fields (user/fullName) are sent to Sentry/analytics."
     },
     {
       "id": "US-378",
@@ -5724,8 +5724,8 @@
         "Swift builds"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Audit finding (UX). AuthViewModel.swift:158-169 (validation), :194-196 (raw localizedDescription surfaced). Compare BindEmailView.swift:205-210."
+      "passes": true,
+      "notes": "Audit finding (UX). AuthViewModel.swift:158-169 (validation), :194-196 (raw localizedDescription surfaced). Compare BindEmailView.swift:205-210. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): AuthViewModel.isEmailValid (non-empty local part + @ + dotted domain) now required by isFormValid for signIn/signUp/forgotPassword so malformed emails disable submit with no network round-trip; emailValidationMessage shows an inline message under the email field in AuthView. Valid-email flows unaffected."
     },
     {
       "id": "US-379",
@@ -5738,8 +5738,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Stability/Data integrity). NotificationService.swift:60-73 — no user_id field, no onConflict on the upsert."
+      "passes": true,
+      "notes": "Audit finding (Stability/Data integrity). NotificationService.swift:60-73 — no user_id field, no onConflict on the upsert. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): handleDeviceToken now writes to the canonical push_tokens table (what process-notification-queue reads) with the authenticated user_id from session, platform ios, is_active, and onConflict:token so a device re-register updates its row instead of duplicating/cross-linking. push_tokens RLS already requires user_id=auth.uid() for INSERT/UPDATE (migration 20251110000002). Failures now go to Sentry, not a DEBUG print."
     },
     {
       "id": "US-380",
@@ -5752,8 +5752,8 @@
         "Swift builds"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Audit finding (Stability/Release). No force-update/min-version code in ios/EatPal; RootView.swift:7-26 only branches on auth state. CLAUDE.md Migration Rules require this pairing."
+      "passes": true,
+      "notes": "Audit finding (Stability/Release). No force-update/min-version code in ios/EatPal; RootView.swift:7-26 only branches on auth state. CLAUDE.md Migration Rules require this pairing. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): new ForceUpdateService fetches app_config.min_ios_build on launch (Supabase select, fail-open) and flips needsUpdate when CFBundleVersion < min; RootView gates ForceUpdateView (blocking App Store update screen, no dismiss) above all auth states via .task. Additive migration 20260614000000_app_config.sql (app_config table, anon-SELECT RLS, seeded min_ios_build=1 so nobody is blocked until an admin bumps it) — NOT applied to prod here (deploy step, like US-323). App Store URL reads optional Info.plist APP_STORE_URL else falls back to a search URL (concrete App Store ID still a placeholder in eas.json)."
     },
     {
       "id": "US-381",
@@ -5767,8 +5767,8 @@
         "Swift builds"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Audit finding (CRITICAL — realtime sync broken). Distinct from US-333 (web payload normalization). OfflineStore.swift:393-396 explicitly documents that domain structs declare snake_case CodingKeys so the default key strategy must be kept — RealtimeService violates exactly this. Verified: JSONDecoder.supabase is used ONLY in RealtimeService; Food.swift:31-46 confirms explicit snake_case CodingKeys."
+      "passes": true,
+      "notes": "Audit finding (CRITICAL — realtime sync broken). Distinct from US-333 (web payload normalization). OfflineStore.swift:393-396 explicitly documents that domain structs declare snake_case CodingKeys so the default key strategy must be kept — RealtimeService violates exactly this. Verified: JSONDecoder.supabase is used ONLY in RealtimeService; Food.swift:31-46 confirms explicit snake_case CodingKeys. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): JSONDecoder.supabase no longer sets .convertFromSnakeCase (models own explicit snake_case CodingKeys); 10 realtime decode sites now go through decodeRealtimeRecord() which reports failures to Sentry instead of try?-swallowing. Test RealtimeDecodeTests.swift (Food/GroceryItem/PlanEntry realtime payloads). Swift build is the local-Xcode step."
     },
     {
       "id": "US-382",
@@ -5781,8 +5781,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Stability). Infrastructure built but unwired. Pairs with US-383 — cache also lacks eviction so wiring it naively would leak."
+      "passes": true,
+      "notes": "Audit finding (Stability). Infrastructure built but unwired. Pairs with US-383 — cache also lacks eviction so wiring it naively would leak. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): loadAllData now writes fetched foods/kids/grocery into the SwiftData cache (cacheFoods/Kids/GroceryItems) on success, and on a connectivity-class failure (NetworkMonitor offline or URLError notConnected/timedOut/etc.) falls back to loadCachedFoods/Kids/GroceryItems and shows an Offline toast instead of empty lists. Added loadCachedKids/loadCachedGroceryItems + CachedKid.toKid/CachedGroceryItem.toGroceryItem converters."
     },
     {
       "id": "US-383",
@@ -5795,8 +5795,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Stability). Blocks safely wiring the dead read-cache from US-382."
+      "passes": true,
+      "notes": "Audit finding (Stability). Blocks safely wiring the dead read-cache from US-382. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): cacheFoods/Kids/GroceryItems now delete-all-then-insert (context.delete(model:) then insert) so updated rows refresh, server deletions are pruned, and a re-cache of an existing .unique id cannot 409 or leak duplicates. Test OfflineStoreCacheTests.swift (re-cache smaller set prunes removed ids; re-cache existing id leaves one row)."
     },
     {
       "id": "US-384",
@@ -5809,8 +5809,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Performance/Correctness). US-332 claimed household-scoped channel names but the code uses global names with no filters — verified at RealtimeService.swift:22,39,56,73,90."
+      "passes": true,
+      "notes": "Audit finding (Performance/Correctness). US-332 claimed household-scoped channel names but the code uses global names with no filters — verified at RealtimeService.swift:22,39,56,73,90. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): RealtimeService.subscribe now scopes every postgresChange with filter=household_id=eq.<id> (or user_id when solo; currentHousehold() auto-creates so household is the normal path) and namespaces channels as <table>-changes-<scopeValue>. unsubscribeAll() at the top means a re-call on household-switch/re-auth tears down + recreates. All 5 tables carry both columns."
     },
     {
       "id": "US-385",
@@ -5823,8 +5823,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Stability). US-150 built the durable queue; this is the conflict/head-of-line-blocking gap it left."
+      "passes": true,
+      "notes": "Audit finding (Stability). US-150 built the durable queue; this is the conflict/head-of-line-blocking gap it left. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): replay() now upserts inserts with onConflict:id (idempotent — an already-landed row refreshes instead of 409-ing); syncPendingMutations counts per-mutation attemptCount (new defaulted @Model field, lightweight-migrated) and quarantines (drops + Sentry-reports) a mutation after maxReplayAttempts(5) so a poison row cant permanently head-of-line block the queue; transient failures still break to preserve ordering. AC3 server-side-exists drain test needs a mocked Supabase client (integration harness) — logic verified by source audit."
     },
     {
       "id": "US-386",
@@ -5836,8 +5836,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Performance). Same N+1 pattern US-334/US-365 already fixed elsewhere; call site AppState.swift:1218-1221 was overlooked."
+      "passes": true,
+      "notes": "Audit finding (Performance). Same N+1 pattern US-334/US-365 already fixed elsewhere; call site AppState.swift:1218-1221 was overlooked. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): clearCheckedGroceryItems now calls dataService.bulkDeleteGroceryItems(Array(checkedIds)) in one round-trip instead of N serial deletes; existing rollback restores the full checked + source snapshot on failure."
     },
     {
       "id": "US-387",
@@ -5850,8 +5850,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Performance). The name 'CachedAsyncImage' is misleading — no real caching/eviction exists."
+      "passes": true,
+      "notes": "Audit finding (Performance). The name 'CachedAsyncImage' is misleading — no real caching/eviction exists. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): rewrote CachedAsyncImage to use a real cache — new @MainActor ThumbnailImageCache (NSCache memory layer + URLSession with a bounded URLCache: 25MB mem / 150MB disk) and ThumbnailImageLoader; the view loads via .task(id:url) so a re-appearing same-URL row hits cache, not network. networkFetchCount test hook + ThumbnailImageCacheTests (cache hit does not refetch)."
     },
     {
       "id": "US-388",
@@ -5864,8 +5864,8 @@
         "Swift builds"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Audit finding (Stability/Perf). Correctness holds via @MainActor today, but the triple-debounce + full-rescan is wasteful on the hot toggle path (toggleGroceryItem at AppState.swift:1112)."
+      "passes": true,
+      "notes": "Audit finding (Stability/Perf). Correctness holds via @MainActor today, but the triple-debounce + full-rescan is wasteful on the hot toggle path (toggleGroceryItem at AppState.swift:1112). | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): refreshWidgetSnapshot now calls WidgetSnapshot.writeImmediately instead of write — the AppState Combine pipeline already debounces the whole O(n) rebuild by 500ms, so the second chained 0.5s timer was redundant; now a single coalesced pass per debounce window -> one reloadTimelines. Confirmed WidgetSnapshot and WatchConnectivityService debounce state are both @MainActor-isolated (no cross-thread mutation)."
     },
     {
       "id": "US-389",
@@ -5878,8 +5878,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Functionality). Verified ScannedProductView.swift:168-181 builds Food(id: UUID()...) unconditionally; no dedup call on the scan path. Related to PENDING US-364."
+      "passes": true,
+      "notes": "Audit finding (Functionality). Verified ScannedProductView.swift:168-181 builds Food(id: UUID()...) unconditionally; no dedup call on the scan path. Related to PENDING US-364. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): ScannedProductView.addFood now checks appState.existingPantryFood(name:barcode:) and, on hit, shows an Update-existing vs Add-new confirmationDialog instead of unconditionally inserting; Update increments via incrementFoodQuantity. Manual/lookup-failed path dedupes on barcode-then-name through the same check."
     },
     {
       "id": "US-390",
@@ -5892,8 +5892,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Functionality). matchExistingFood return value is stored on ReviewRow.matchedFoodId and rendered (ScanReceiptSheet.swift:321) but unused in save(). Related to PENDING US-364."
+      "passes": true,
+      "notes": "Audit finding (Functionality). matchExistingFood return value is stored on ReviewRow.matchedFoodId and rendered (ScanReceiptSheet.swift:321) but unused in save(). Related to PENDING US-364. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): ScanReceiptSheet.save now routes rows with a non-nil matchedFoodId to incrementFoodQuantity(notify:false) (merge) and only bulk-inserts unmatched rows; the matched-existing icon now reflects the real action; analytics count = merged + inserted."
     },
     {
       "id": "US-391",
@@ -5906,8 +5906,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Ease-of-use). ScannedProductView.swift:132-147 sets lookupFailed but renders no retry/rescan control; UnifiedScannerView.swift:204-213 only emits on success."
+      "passes": true,
+      "notes": "Audit finding (Ease-of-use). ScannedProductView.swift:132-147 sets lookupFailed but renders no retry/rescan control; UnifiedScannerView.swift:204-213 only emits on success. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): ScannedProductView lookupFailed now shows a Retry-lookup section — a numberPad Type barcode field (currentBarcode, seeded from the scanned value) + Retry lookup button that re-enters loading and re-calls BarcodeService.lookup via the same lookupBarcode() pipeline; the saved Food + dedup use the effective (possibly corrected) barcode."
     },
     {
       "id": "US-392",
@@ -5920,8 +5920,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (UX). Compared UnifiedScannerView.swift:103-120 (no torch) against BarcodeScannerView.swift:39-46 (has torch) — parity gap on the preferred scanner."
+      "passes": true,
+      "notes": "Audit finding (UX). Compared UnifiedScannerView.swift:103-120 (no torch) against BarcodeScannerView.swift:39-46 (has torch) — parity gap on the preferred scanner. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): UnifiedScannerView modern path adds a toolbar torch toggle (topBarTrailing), hidden when AVCaptureDevice has no torch; setTorch via lockForConfiguration; torch turned off onDisappear. import AVFoundation added."
     },
     {
       "id": "US-393",
@@ -5934,8 +5934,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (UX). requestAuthorization result discarded at VoiceAddGrocerySheet.swift:47; VoiceInputService already returns granular .micDenied/.speechDenied/.bothDenied (VoiceInputService.swift:83-88) but the sheet never reads it proactively."
+      "passes": true,
+      "notes": "Audit finding (UX). requestAuthorization result discarded at VoiceAddGrocerySheet.swift:47; VoiceInputService already returns granular .micDenied/.speechDenied/.bothDenied (VoiceInputService.swift:83-88) but the sheet never reads it proactively. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): VoiceAddGrocerySheet stores the requestAuthorization() result on appear; when micDenied/speechDenied/bothDenied it shows a persistent permissionDeniedView (mic.slash + explanation + Open Settings deep-link via UIApplication.openSettingsURLString) and hides the mic controls entirely; authorized users unchanged. import UIKit added."
     },
     {
       "id": "US-394",
@@ -5947,8 +5947,8 @@
         "Swift builds"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Audit finding (Accessibility). VoiceAddGrocerySheet.swift:278-303 WaveformView has no reduceMotion check; the recording-button pulse (line 163-164) is likewise ungated. Related to PENDING US-369."
+      "passes": true,
+      "notes": "Audit finding (Accessibility). VoiceAddGrocerySheet.swift:278-303 WaveformView has no reduceMotion check; the recording-button pulse (line 163-164) is likewise ungated. Related to PENDING US-369. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): WaveformView reads @Environment(accessibilityReduceMotion) and renders static (non-level-reactive, non-animated) bars when enabled; recording state still conveyed via green color + accessibilityLabel. The record-button pulse scaleEffect/animation is also gated on reduceMotion in VoiceAddGrocerySheet."
     },
     {
       "id": "US-395",
@@ -5960,8 +5960,8 @@
         "Swift builds"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Audit finding (UX). UnifiedScannerView.swift:104-109 dismisses unconditionally; collectedText (line 53) is only emitted via the Done button at line 112-118."
+      "passes": true,
+      "notes": "Audit finding (UX). UnifiedScannerView.swift:104-109 dismisses unconditionally; collectedText (line 53) is only emitted via the Done button at line 112-118. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): UnifiedScannerView Cancel in groceryList mode with non-empty collectedText now shows a confirmationDialog (\"Discard N recognized line(s)?\" Discard/Keep scanning); barcode mode and empty list dismiss without a prompt."
     },
     {
       "id": "US-396",
@@ -5975,8 +5975,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Stability). AICoachView.swift has an offline banner (line 62) but the service still fabricates a fallback answer on any failure; no message-level error state or retry exists in the chat UI."
+      "passes": true,
+      "notes": "Audit finding (Stability). AICoachView.swift has an offline banner (line 62) but the service still fabricates a fallback answer on any failure; no message-level error state or retry exists in the chat UI. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): AICoachService now logs edge failures to Sentry; on an ONLINE failure it appends an isError ChatMessage (orange error bubble + Retry button in ChatBubble) instead of a canned answer; the canned fallback is used only when offline and is clearly labeled with a 📴 offline prefix. retryLastMessage() re-sends the stored last user prompt. Added isError to ChatMessage."
     },
     {
       "id": "US-397",
@@ -5989,8 +5989,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (UX). EdgeFunctions.invoke uses a 60s timeoutInterval (EdgeFunctions.swift:73), so an offline generate looks frozen for a full minute before the local fallback in AIMealService.swift:219 kicks in."
+      "passes": true,
+      "notes": "Audit finding (UX). EdgeFunctions.invoke uses a 60s timeoutInterval (EdgeFunctions.swift:73), so an offline generate looks frozen for a full minute before the local fallback in AIMealService.swift:219 kicks in. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): AIMealPlanView shows an offline banner (matching AICoachView) when NetworkMonitor.shared.isConnected is false; Generate/fridge/Regenerate disabled while aiService.isLoading or offline; Add All guarded by isAddingAll (set+defer) so a double-tap cant duplicate entries."
     },
     {
       "id": "US-398",
@@ -6003,8 +6003,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Functionality). StarterMealPlanService.resolveFood (StarterMealPlanService.swift:174) auto-creates a Food when the name is missing; the AI path has no equivalent and just writes foodId == ''."
+      "passes": true,
+      "notes": "Audit finding (Functionality). StarterMealPlanService.resolveFood (StarterMealPlanService.swift:174) auto-creates a Food when the name is missing; the AI path has no equivalent and just writes foodId == ''. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): AIMealPlanView.resolveFoodId resolves a suggestion to a real Food (existing id -> name match -> create), so no PlanEntry is written with an empty foodId; single-add surfaces a toast on failure; Add All now counts added vs skipped and reports accurately, dismissing only when something was added."
     },
     {
       "id": "US-399",
@@ -6032,8 +6032,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Stability). TonightModeService wraps its own 1.5s soft timeout (TonightModeService.swift:294) but that pattern isn't reused; other AI calls just use the raw 60s URLSession with no retry."
+      "passes": true,
+      "notes": "Audit finding (Stability). TonightModeService wraps its own 1.5s soft timeout (TonightModeService.swift:294) but that pattern isn't reused; other AI calls just use the raw 60s URLSession with no retry. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): EdgeFunctions.invokeRaw now retries transient failures (502/503/504 + URLError timedOut/networkConnectionLost/cannotConnectToHost/cannotFindHost/dnsLookupFailed/notConnectedToInternet) once with exponential backoff (0.5s,1s); checks Task.checkCancellation() before each attempt and propagates CancellationError so dismissing a view aborts in-flight work; centralized so all AI callers benefit. 4xx/other 5xx surface immediately."
     },
     {
       "id": "US-401",
@@ -6046,8 +6046,8 @@
         "Swift builds"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Audit finding (Performance/Correctness). AICoachService.isLoading is a shared @Published on a singleton (AICoachService.swift:5,8); a stale completion can re-append a ChatMessage and reactivate the typing indicator after reset."
+      "passes": true,
+      "notes": "Audit finding (Performance/Correctness). AICoachService.isLoading is a shared @Published on a singleton (AICoachService.swift:5,8); a stale completion can re-append a ChatMessage and reactivate the typing indicator after reset. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): AICoachService retains the send as a cancellable Task (new send()/retryLastMessage route through it); clearChat() cancels it + resets isLoading; a response arriving after cancel/reset is discarded via Task.isCancelled checks; CancellationError swallowed cleanly. View calls the non-async send/retry."
     },
     {
       "id": "US-402",
@@ -6060,8 +6060,8 @@
         "Swift builds"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Audit finding (Functionality). The bullet/number regex path (line 226) is fine; only the naive .components(separatedBy: '. ') fallback (line 243) is fragile and feeds both the on-screen step and the spoken cue. Related to PENDING US-359."
+      "passes": true,
+      "notes": "Audit finding (Functionality). The bullet/number regex path (line 226) is fine; only the naive .components(separatedBy: '. ') fallback (line 243) is fragile and feeds both the on-screen step and the spoken cue. Related to PENDING US-359. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): TonightCookSheet.parseSteps fallback replaced the naive .components(separatedBy: \". \") with NSString.enumerateSubstrings(.bySentences), which doesnt split on decimals/abbreviations; a single-blob instruction returns [raw] (one step). Same text feeds the on-screen step and the spoken cue."
     },
     {
       "id": "US-403",
@@ -6075,8 +6075,8 @@
         "Swift builds"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Audit finding (Functionality — core feature non-functional). scheduleMealReminders is hardcoded to 8/12/18 and orphaned; verified by grep that neither scheduler is called anywhere. The per-topic settings UI (US-239) only fires test pings."
+      "passes": true,
+      "notes": "Audit finding (Functionality — core feature non-functional). scheduleMealReminders is hardcoded to 8/12/18 and orphaned; verified by grep that neither scheduler is called anywhere. The per-topic settings UI (US-239) only fires test pings. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): added scheduleTopic/cancelTopic/cancelAllTopics/rescheduleAllTopics on NotificationService using persisted enabled/hour/minute per Topic (UNCalendarNotificationTrigger, daily repeat). SettingsView wires topic toggle + DatePicker onChange to (re)schedule/cancel; master toggle off cancels all topics; on launch EatPalApp reschedules. Removed orphaned hardcoded 8/12/18 scheduleMealReminders/cancelMealReminders. Swift build = local Xcode."
     },
     {
       "id": "US-404",
@@ -6089,8 +6089,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Functionality). The mute UX implies a real silence window but only clears the (currently never-populated) pending queue once. Pairs with US-403."
+      "passes": true,
+      "notes": "Audit finding (Functionality). The mute UX implies a real silence window but only clears the (currently never-populated) pending queue once. Pairs with US-403. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): scheduleTopic skips adding while mutedUntil>now; AppDelegate willPresent returns [] while muted (foreground suppression); unmute() + launch rescheduleAllTopics() resume reminders automatically once the window passes. Swift build = local Xcode."
     },
     {
       "id": "US-405",
@@ -6104,8 +6104,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Functionality). Confirmed by grep: activeDestination is consumed only for import drains; navigation cases are parsed then discarded."
+      "passes": true,
+      "notes": "Audit finding (Functionality). Confirmed by grep: activeDestination is consumed only for import drains; navigation cases are parsed then discarded. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): MainTabView now consumes deepLinkHandler.activeDestination, switching tab and (for More sub-screens) driving a morePath via MoreRoute + .navigationDestination in MoreView; kidProfile/quiz/foodChaining/settings/progress/dashboard push their real screens; universal /app/* gains food-chaining/settings/progress parity; destination cleared after routing so the same link re-triggers. scanner routes to Pantry (scan entry point); mealPlan deep-date not yet honored (tab-level only). Swift build = local Xcode."
     },
     {
       "id": "US-406",
@@ -6118,8 +6118,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (UX). Pairs with US-405; once destinations are consumed, notification taps should feed the same path."
+      "passes": true,
+      "notes": "Audit finding (UX). Pairs with US-405; once destinations are consumed, notification taps should feed the same path. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): AppDelegate didReceive maps categoryIdentifier -> DeepLinkHandler.routeFromNotification (MEALREMINDERS->Planner, GROCERY*->Grocery, EXPIRINGFOOD->Pantry, AISUMMARY->Dashboard, STREAKMILESTONE/TRYBITE->Progress), reusing the same activeDestination consumption path as deep links. Added .progress Destination. Swift build = local Xcode."
     },
     {
       "id": "US-407",
@@ -6132,8 +6132,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Functionality). Verified both write (line 76) and read (line 26) use .standard; the iPhone widget uses a group suite, proving the mismatch is watch-side only."
+      "passes": true,
+      "notes": "Audit finding (Functionality). Verified both write (line 76) and read (line 26) use .standard; the iPhone widget uses a group suite, proving the mismatch is watch-side only. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): added shared WatchSnapshotStore (Shared/WatchSnapshot.swift) using UserDefaults(suiteName: group.com.eatpal.app) with .standard fallback; WatchSessionStore.cache/load and the complication SnapshotLoader both go through it, so the iPhone-pushed snapshot is read by the complication. NOTE: the App Group entitlement must be added to the watch app + complication extension targets in Xcode for the cross-process read to work (code is ready)."
     },
     {
       "id": "US-408",
@@ -6147,8 +6147,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (UX). Depends on US-405 to be useful; currently both layers are no-ops."
+      "passes": true,
+      "notes": "Audit finding (UX). Depends on US-405 to be useful; currently both layers are no-ops. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): MealPlanWidgetView applies .widgetURL — eatpal://meal-plan for meal families, eatpal://grocery (or eatpal://progress when a streak shows) for the circular accessory; fixed GroceryTripLiveActivity from the unrouted eatpal://openGroceryList to eatpal://grocery. Routes end-to-end via US-405 DeepLinkHandler consumption."
     },
     {
       "id": "US-409",
@@ -6161,8 +6161,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Stability). KidsView.swift:235 — try? then unconditional dismiss; isSubmitting set at :220 never cleared."
+      "passes": true,
+      "notes": "Audit finding (Stability). KidsView.swift:235 — try? then unconditional dismiss; isSubmitting set at :220 never cleared. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): addKid now uses defer to reset isSubmitting on every path; wraps appState.addKid in do/catch, shows a ToastManager error and keeps the sheet open on failure, dismisses only on confirmed success."
     },
     {
       "id": "US-410",
@@ -6174,8 +6174,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Functionality). Misleading per-kid data; today's-meals stat is correctly scoped via planEntriesForDate(kidId:), so the inconsistency is visible side-by-side."
+      "passes": true,
+      "notes": "Audit finding (Functionality). Misleading per-kid data; today's-meals stat is correctly scoped via planEntriesForDate(kidId:), so the inconsistency is visible side-by-side. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): KidDetailView Safe Foods stat now scoped to the child — excludes safe foods whose allergens intersect the kids allergen list (case-insensitive disjoint check); Todays Meals remains kid-scoped via planEntriesForDate(kidId:)."
     },
     {
       "id": "US-411",
@@ -6187,8 +6187,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (UX). Placeholder shipped as live UI; the fixed-frame ring (NutritionView.swift:104-119, .caption2 no scale) also overflows at large text sizes."
+      "passes": true,
+      "notes": "Audit finding (UX). Placeholder shipped as live UI; the fixed-frame ring (NutritionView.swift:104-119, .caption2 no scale) also overflows at large text sizes. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): DailyNutritionSummary shows an explicit Nutrition data not available state (Food has no per-item macros yet) instead of zeroed MacroRings; MacroRing value Text gained lineLimit(1)+minimumScaleFactor(0.5)+frame(maxWidth:48) so 3-4 digit values dont overflow the 56pt ring under Dynamic Type."
     },
     {
       "id": "US-412",
@@ -6201,8 +6201,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Functionality). Distinct from US-152 (freshness on AppState mutations) — these background intents bypass AppState entirely."
+      "passes": true,
+      "notes": "Audit finding (Functionality). Distinct from US-152 (freshness on AppState mutations) — these background intents bypass AppState entirely. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): extracted WidgetSnapshot.buildPayload (shared by AppState change-stream + intents) and added WidgetSnapshot.rebuildFromServer() (fetches foods/grocery/plan/recipes, builds payload, writeImmediately -> reloads timeline). Called after each background Siri mutation: AddGroceryItem + BulkAddGroceryItems (grocery count), LogMealResult (tonight/meals), MarkFoodSafe + MarkFoodTryBite (pantry-low). Widget now reflects Siri changes without opening the app; AppState.refreshWidgetSnapshot refactored onto the shared builder (identical output)."
     }
   ]
 }

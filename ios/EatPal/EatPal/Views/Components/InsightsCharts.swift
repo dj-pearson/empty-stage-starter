@@ -35,6 +35,9 @@ struct PantryDistributionChart: View {
                         angularInset: 2
                     )
                     .foregroundStyle(item.color)
+                    // US-372: VoiceOver reads category + count.
+                    .accessibilityLabel(item.category)
+                    .accessibilityValue("\(item.count)")
                     .annotation(position: .overlay) {
                         if item.count > 0 {
                             Text("\(item.count)")
@@ -95,6 +98,9 @@ struct WeeklyMealChart: View {
                 )
                 .foregroundStyle(Color.green.gradient)
                 .cornerRadius(4)
+                // US-372: VoiceOver reads day + meal count.
+                .accessibilityLabel(item.day)
+                .accessibilityValue("\(item.count) meal\(item.count == 1 ? "" : "s")")
             }
             .chartYAxis {
                 AxisMarks(values: .automatic(desiredCount: 5))
@@ -137,6 +143,9 @@ struct FoodResultsChart: View {
                         angularInset: 2
                     )
                     .foregroundStyle(item.color)
+                    // US-372: VoiceOver reads result + count.
+                    .accessibilityLabel(item.result)
+                    .accessibilityValue("\(item.count)")
                 }
                 .frame(height: 160)
 
@@ -188,6 +197,9 @@ struct AllergenChart: View {
                     )
                     .foregroundStyle(Color.red.gradient)
                     .cornerRadius(4)
+                    // US-372: VoiceOver reads allergen + count.
+                    .accessibilityLabel(item.allergen)
+                    .accessibilityValue("\(item.count) food\(item.count == 1 ? "" : "s")")
                 }
                 .frame(height: CGFloat(allergenData.count * 32 + 20))
             }

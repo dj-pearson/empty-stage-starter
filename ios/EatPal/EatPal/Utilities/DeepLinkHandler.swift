@@ -20,6 +20,9 @@ final class DeepLinkHandler: ObservableObject {
         case settings
         case quiz
         case foodChaining
+        /// US-406: progress/achievements surface, opened by streak/badge
+        /// notifications and `eatpal://progress`.
+        case progress
         /// US-296 (Tier 1): parsed grocery import via `eatpal://grocery/import?text=...`.
         /// The handler enqueues the parsed lines into `PendingGroceryImportQueue`
         /// and asks the app to switch to the grocery tab so the user sees the
@@ -102,6 +105,31 @@ final class DeepLinkHandler: ObservableObject {
             activeDestination = .quiz
         case "food-chaining":
             activeDestination = .foodChaining
+        case "progress":
+            activeDestination = .progress
+        default:
+            break
+        }
+    }
+
+    // MARK: - Notification routing (US-406)
+
+    /// Maps a local-notification `categoryIdentifier` to a navigation
+    /// destination so tapping a reminder lands on the relevant screen. Reuses
+    /// the same `activeDestination` consumption path as deep links. Topic
+    /// categories are the uppercased `NotificationService.Topic` raw values.
+    func routeFromNotification(categoryIdentifier: String) {
+        switch categoryIdentifier {
+        case "MEALREMINDERS", "MEAL_REMINDER":
+            activeDestination = .mealPlan(date: nil)
+        case "GROCERYREADY", "GROCERY_REMINDER":
+            activeDestination = .grocery
+        case "EXPIRINGFOOD":
+            activeDestination = .pantry
+        case "AISUMMARY":
+            activeDestination = .dashboard
+        case "STREAKMILESTONE", "TRYBITE":
+            activeDestination = .progress
         default:
             break
         }
@@ -226,6 +254,12 @@ final class DeepLinkHandler: ObservableObject {
             activeDestination = .scanner
         case "quiz":
             activeDestination = .quiz
+        case "food-chaining":
+            activeDestination = .foodChaining
+        case "settings":
+            activeDestination = .settings
+        case "progress":
+            activeDestination = .progress
         default:
             break
         }

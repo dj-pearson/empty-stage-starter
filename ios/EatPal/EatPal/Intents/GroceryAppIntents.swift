@@ -57,6 +57,9 @@ struct AddGroceryItemIntent: AppIntent {
 
         do {
             try await DataService.shared.insertGroceryItem(newItem)
+            // US-412: refresh the widget snapshot so the grocery count reflects
+            // the Siri-added item without opening the app.
+            await WidgetSnapshot.rebuildFromServer()
             SentryService.leaveBreadcrumb(
                 category: "intent",
                 message: "AddGroceryItemIntent: \(name)"
@@ -137,6 +140,11 @@ struct BulkAddGroceryItemsIntent: AppIntent {
             } catch {
                 failedNames.append(item.name)
             }
+        }
+
+        // US-412: refresh the widget snapshot after a Siri bulk add.
+        if addedCount > 0 {
+            await WidgetSnapshot.rebuildFromServer()
         }
 
         SentryService.leaveBreadcrumb(

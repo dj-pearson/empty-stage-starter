@@ -85,12 +85,13 @@ struct PaywallView: View {
                         .padding(.horizontal)
                     }
 
-                    // Error
+                    // Error (US-367: ErrorBanner, dismissible on this
+                    // conversion-critical surface).
                     if let error = store.errorMessage {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                            .padding(.horizontal)
+                        ErrorBanner(message: error, onDismiss: {
+                            store.errorMessage = nil
+                        })
+                        .padding(.horizontal)
                     }
 
                     // Restore & Terms

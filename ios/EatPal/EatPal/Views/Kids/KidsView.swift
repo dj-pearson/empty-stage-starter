@@ -7,7 +7,15 @@ struct KidsView: View {
 
     var body: some View {
         List {
-            if appState.kids.isEmpty {
+            if appState.isLoading && appState.kids.isEmpty {
+                // US-368: skeleton while loading; the empty state only shows
+                // once loading completes with no kids.
+                Section {
+                    ForEach(0..<3, id: \.self) { _ in
+                        SkeletonView(shape: .foodRow)
+                    }
+                }
+            } else if appState.kids.isEmpty {
                 Section {
                     ContentUnavailableView(
                         "No Children",
@@ -218,6 +226,9 @@ struct AddKidView: View {
 
     private func addKid() async {
         isSubmitting = true
+        // US-409: reset the submitting flag on every exit path.
+        defer { isSubmitting = false }
+
         let allergenList = allergens.isEmpty ? nil :
             allergens.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
 
@@ -232,8 +243,17 @@ struct AddKidView: View {
             pickinessLevel: pickinessLevel
         )
 
-        try? await appState.addKid(kid)
-        dismiss()
+        // US-409: only dismiss on confirmed success; surface failures and keep
+        // the sheet open so the user can retry instead of silently losing input.
+        do {
+            try await appState.addKid(kid)
+            dismiss()
+        } catch {
+            ToastManager.shared.error(
+                "Couldn't add child",
+                message: "Please try again."
+            )
+        }
     }
 }
 
@@ -304,7 +324,16 @@ struct KidDetailView: View {
 
                 // Stats
                 Section("Stats") {
-                    let safeFoodCount = appState.foods.filter(\.isSafe).count
+                    // US-410: scope Safe Foods to THIS child — a safe food is
+                    // excluded when any of its allergens match the kid's
+                    // allergen list, so the stat reflects the kid, not the
+                    // whole household.
+                    let kidAllergens = Set((kid.allergens ?? []).map { $0.lowercased() })
+                    let safeFoodCount = appState.foods.filter { food in
+                        guard food.isSafe else { return false }
+                        let foodAllergens = Set((food.allergens ?? []).map { $0.lowercased() })
+                        return foodAllergens.isDisjoint(with: kidAllergens)
+                    }.count
                     let todayEntries = appState.planEntriesForDate(Date(), kidId: kid.id)
 
                     LabeledContent("Safe Foods") {

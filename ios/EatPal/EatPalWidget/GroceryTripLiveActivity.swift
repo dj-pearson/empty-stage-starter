@@ -56,7 +56,9 @@ struct GroceryTripLiveActivity: Widget {
                 Image(systemName: "cart.fill")
                     .foregroundStyle(.green)
             }
-            .widgetURL(URL(string: "eatpal://openGroceryList"))
+            // US-408: route to a host DeepLinkHandler actually understands
+            // (was `eatpal://openGroceryList`, an unrouted host that dead-ended).
+            .widgetURL(URL(string: "eatpal://grocery"))
         }
     }
 }

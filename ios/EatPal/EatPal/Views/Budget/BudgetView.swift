@@ -52,25 +52,35 @@ struct BudgetView: View {
 
     var body: some View {
         Form {
-            // Weekly forecast — primary number on the screen.
-            forecastSection
+            if appState.isLoading && appState.foods.isEmpty && appState.groceryItems.isEmpty {
+                // US-368: skeletons during initial load instead of a flash of
+                // the empty forecast state.
+                Section {
+                    ForEach(0..<3, id: \.self) { _ in
+                        SkeletonView(shape: .card)
+                    }
+                }
+            } else {
+                // Weekly forecast — primary number on the screen.
+                forecastSection
 
-            if weeklyTarget > 0 {
-                targetProgressSection
-            }
+                if weeklyTarget > 0 {
+                    targetProgressSection
+                }
 
-            targetSection
+                targetSection
 
-            if !bySlot.isEmpty {
-                breakdownSection
-            }
+                if !bySlot.isEmpty {
+                    breakdownSection
+                }
 
-            inventorySection
+                inventorySection
 
-            Section {
-                Text("Prices stay on this device until you save them. EatPal never auto-converts currencies — mixed-currency lists are flagged so totals never lie.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                Section {
+                    Text("Prices stay on this device until you save them. EatPal never auto-converts currencies — mixed-currency lists are flagged so totals never lie.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .navigationTitle("Budget")
@@ -102,6 +112,10 @@ struct BudgetView: View {
                         .font(.title2)
                         .foregroundStyle(.green)
                 }
+                // US-372: read the forecast as one labeled stat.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("This week's grocery")
+                .accessibilityValue(BudgetService.format(groceryTotal, currency: groceryCurrency))
 
                 if unpricedGroceryCount > 0 {
                     Label(

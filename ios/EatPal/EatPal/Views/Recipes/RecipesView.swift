@@ -526,6 +526,8 @@ struct RecipeDetailView: View {
     @Environment(\.dismiss) var dismiss
     let recipe: Recipe
     @State private var showingEditRecipe = false
+    // US-359: step-by-step cooking mode.
+    @State private var showingCookMode = false
 
     // US-357: add-to-meal-plan flow. `pendingShortfallRecipe` carries the
     // just-planned recipe across the picker's dismissal so we can compute the
@@ -767,8 +769,21 @@ struct RecipeDetailView: View {
                     // Instructions
                     if let instructions = currentRecipe.instructions, !instructions.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Instructions")
-                                .font(.headline)
+                            HStack {
+                                Text("Instructions")
+                                    .font(.headline)
+                                Spacer()
+                                // US-359: launch step-by-step cook mode.
+                                Button {
+                                    showingCookMode = true
+                                } label: {
+                                    Label("Cook", systemImage: "flame.fill")
+                                        .font(.subheadline)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(.green)
+                                .controlSize(.small)
+                            }
 
                             Text(instructions)
                                 .font(.subheadline)
@@ -827,6 +842,13 @@ struct RecipeDetailView: View {
             .sheet(isPresented: $showingEditRecipe) {
                 EditRecipeView(recipe: currentRecipe)
             }
+            // US-359: step-by-step cooking mode.
+            .fullScreenCover(isPresented: $showingCookMode) {
+                CookModeView(
+                    recipeName: currentRecipe.name,
+                    instructions: currentRecipe.instructions
+                )
+            }
             // US-357: add-to-plan picker; on dismiss compute the shortfall.
             .sheet(isPresented: $showingAddToPlan, onDismiss: handleAddToPlanDismiss) {
                 AddRecipeToPlanSheet(recipe: currentRecipe) { added in
@@ -854,15 +876,14 @@ struct RecipeDetailView: View {
         }
     }
 
-    /// US-357: after the add-to-plan picker closes, compute the pantry
-    /// shortfall for the just-planned recipe and present the missing-ingredient
-    /// sheet (mirrors MealPlanView.handleAddEntryDismiss). Silent no-op when the
-    /// recipe has no structured ingredients or nothing is short.
+    /// US-357/US-353: after the add-to-plan picker closes, compute the pantry
+    /// shortfall for the just-planned recipe via the shared ShortfallChecker
+    /// (so legacy `food_ids` recipes prompt too) and present the
+    /// missing-ingredient sheet. Silent no-op when nothing is short.
     private func handleAddToPlanDismiss() {
         guard let planned = pendingShortfallRecipe else { return }
         pendingShortfallRecipe = nil
-        guard !planned.ingredients.isEmpty else { return }
-        let shortfalls = ShortfallCalculator.compute(recipe: planned, pantry: appState.foods)
+        let shortfalls = ShortfallChecker.shortfalls(for: planned, pantry: appState.foods)
         guard !shortfalls.isEmpty else { return }
         detailShortfall = DetailShortfallContext(recipe: planned, shortfalls: shortfalls)
     }
@@ -1151,8 +1172,6 @@ struct AddRecipeView: View {
     @State private var isImporting = false
     @State private var importError: String?
     @State private var importedFrom: String?
-    @State private var showPastePrompt = false
-    @State private var pasteboardURL: URL?
 
     var body: some View {
         NavigationStack {
@@ -1182,6 +1201,16 @@ struct AddRecipeView: View {
                         }
                     }
 
+                    // US-360: explicit clipboard read on tap — we no longer
+                    // sniff the pasteboard on appear (privacy/UX smell that
+                    // trips the iOS 16+ paste banner).
+                    Button {
+                        pasteLinkFromClipboard()
+                    } label: {
+                        Label("Paste link", systemImage: "doc.on.clipboard")
+                    }
+                    .disabled(isImporting)
+
                     Button {
                         Task { await importFromURL() }
                     } label: {
@@ -1196,9 +1225,10 @@ struct AddRecipeView: View {
                     .disabled(importURL.trimmingCharacters(in: .whitespaces).isEmpty || isImporting)
 
                     if let importError {
-                        Text(importError)
-                            .font(.caption)
-                            .foregroundStyle(.red)
+                        // US-367: ErrorBanner with retry.
+                        ErrorBanner(message: importError, retryAction: {
+                            Task { await importFromURL() }
+                        })
                     } else if let importedFrom {
                         Label("Imported from \(importedFrom)", systemImage: "checkmark.circle.fill")
                             .font(.caption)
@@ -1310,32 +1340,21 @@ struct AddRecipeView: View {
                     .disabled(name.isEmpty || isSubmitting)
                 }
             }
-            .onAppear(perform: detectPasteboardURL)
-            .alert("Import from \(pasteboardURL?.host ?? "clipboard")?", isPresented: $showPastePrompt, presenting: pasteboardURL) { url in
-                Button("Import") {
-                    importURL = url.absoluteString
-                    Task { await importFromURL() }
-                }
-                Button("Not now", role: .cancel) {}
-            } message: { url in
-                Text(url.absoluteString)
-                    .font(.caption)
-            }
         }
     }
 
     // MARK: - Recipe URL import (US-223)
 
-    private func detectPasteboardURL() {
+    /// US-360: read the clipboard only when the user taps "Paste link" — an
+    /// explicit, intentional action rather than an on-appear pasteboard sniff.
+    private func pasteLinkFromClipboard() {
         guard let clipboard = UIPasteboard.general.string,
               let url = RecipeImportService.firstURL(in: clipboard) else {
+            importError = "No recipe link found on the clipboard."
             return
         }
-        // Only prompt if fields are empty (first-open heuristic) so we don't
-        // pester users who are in the middle of editing.
-        guard name.isEmpty, importURL.isEmpty else { return }
-        pasteboardURL = url
-        showPastePrompt = true
+        importURL = url.absoluteString
+        importError = nil
     }
 
     private func importFromURL() async {
