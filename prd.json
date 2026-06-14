@@ -5452,8 +5452,8 @@
         "Swift builds"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Audit finding (Recipe Flow 2 GAP)."
+      "passes": true,
+      "notes": "Audit finding (Recipe Flow 2 GAP). | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): extracted shared Utilities/RecipeStepParser (lines/bullets/numbers then sentence-tokenizer fallback; TonightCookSheet.parseSteps now delegates). New CookModeView (fullScreenCover) presents one step at a time with check-off + Previous/Next/Finish + progress; UIApplication.isIdleTimerDisabled set onAppear and restored onDisappear (keep-awake only in cook mode); step transitions via accessibleWithAnimation(reduceMotion:). RecipeDetailView Instructions header gets a Cook button. Tests RecipeStepParserTests (4)."
     },
     {
       "id": "US-360",

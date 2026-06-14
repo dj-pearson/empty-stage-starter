@@ -219,42 +219,10 @@ struct TonightCookSheet: View {
         speech.speak(steps[stepIndex])
     }
 
+    // US-359: parsing now lives in the shared RecipeStepParser so the recipe
+    // Cook mode and Tonight Cook sheet stay in lockstep.
     static func parseSteps(_ raw: String?) -> [String] {
-        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
-            return []
-        }
-        let bullet = #"^\s*(\d+\.|[-*•])\s*"#
-        let regex = try? NSRegularExpression(pattern: bullet)
-        let lines = raw
-            .components(separatedBy: .newlines)
-            .map { line -> String in
-                let nsLine = line as NSString
-                let cleaned = regex?.stringByReplacingMatches(
-                    in: line,
-                    range: NSRange(location: 0, length: nsLine.length),
-                    withTemplate: ""
-                ) ?? line
-                return cleaned.trimmingCharacters(in: .whitespaces)
-            }
-            .filter { !$0.isEmpty }
-        if lines.count > 1 { return lines }
-
-        // US-402: the old `.components(separatedBy: ". ")` split mid-step on
-        // decimals ("1.5"), abbreviations ("No.", "tbsp.") and the like. Use
-        // Foundation's sentence tokenizer, which understands those, so the
-        // on-screen step AND the spoken cue read correctly. A single-blob
-        // instruction with no real sentence breaks stays one step.
-        let ns = raw as NSString
-        var sentences: [String] = []
-        ns.enumerateSubstrings(
-            in: NSRange(location: 0, length: ns.length),
-            options: .bySentences
-        ) { substring, _, _, _ in
-            if let s = substring?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty {
-                sentences.append(s)
-            }
-        }
-        return sentences.count > 1 ? sentences : [raw]
+        RecipeStepParser.parse(raw)
     }
 }
 

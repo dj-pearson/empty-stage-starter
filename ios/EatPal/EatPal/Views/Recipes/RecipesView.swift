@@ -526,6 +526,8 @@ struct RecipeDetailView: View {
     @Environment(\.dismiss) var dismiss
     let recipe: Recipe
     @State private var showingEditRecipe = false
+    // US-359: step-by-step cooking mode.
+    @State private var showingCookMode = false
 
     // US-357: add-to-meal-plan flow. `pendingShortfallRecipe` carries the
     // just-planned recipe across the picker's dismissal so we can compute the
@@ -767,8 +769,21 @@ struct RecipeDetailView: View {
                     // Instructions
                     if let instructions = currentRecipe.instructions, !instructions.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Instructions")
-                                .font(.headline)
+                            HStack {
+                                Text("Instructions")
+                                    .font(.headline)
+                                Spacer()
+                                // US-359: launch step-by-step cook mode.
+                                Button {
+                                    showingCookMode = true
+                                } label: {
+                                    Label("Cook", systemImage: "flame.fill")
+                                        .font(.subheadline)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(.green)
+                                .controlSize(.small)
+                            }
 
                             Text(instructions)
                                 .font(.subheadline)
@@ -826,6 +841,13 @@ struct RecipeDetailView: View {
             }
             .sheet(isPresented: $showingEditRecipe) {
                 EditRecipeView(recipe: currentRecipe)
+            }
+            // US-359: step-by-step cooking mode.
+            .fullScreenCover(isPresented: $showingCookMode) {
+                CookModeView(
+                    recipeName: currentRecipe.name,
+                    instructions: currentRecipe.instructions
+                )
             }
             // US-357: add-to-plan picker; on dismiss compute the shortfall.
             .sheet(isPresented: $showingAddToPlan, onDismiss: handleAddToPlanDismiss) {

@@ -2993,3 +2993,8 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - New Utilities/IngredientNameMatcher (parser-normalize + whole-word token-subset). RecipeFilters nameHits now uses it instead of raw line.contains(name) -> no 3-char false positives. Test IngredientNameMatcherTests (4).
 - Pasteboard: removed AddRecipe on-appear sniff + auto-prompt; added explicit "Paste link" button (reads clipboard on tap only); removed unused state.
 - Remaining false: 45.
+
+## 2026-06-14 (cont. 15) - Recipe step-by-step cook mode (US-359)
+- Extracted shared Utilities/RecipeStepParser (US-402 logic); TonightCookSheet.parseSteps delegates to it. Test RecipeStepParserTests (4).
+- New CookModeView (fullScreenCover from RecipeDetailView "Cook" button): one step at a time, check-off, Prev/Next/Finish, progress; keep-awake via isIdleTimerDisabled (set onAppear, restored onDisappear); transitions gated on reduceMotion.
+- Remaining false: 44.
