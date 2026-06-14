@@ -7,7 +7,15 @@ struct KidsView: View {
 
     var body: some View {
         List {
-            if appState.kids.isEmpty {
+            if appState.isLoading && appState.kids.isEmpty {
+                // US-368: skeleton while loading; the empty state only shows
+                // once loading completes with no kids.
+                Section {
+                    ForEach(0..<3, id: \.self) { _ in
+                        SkeletonView(shape: .foodRow)
+                    }
+                }
+            } else if appState.kids.isEmpty {
                 Section {
                     ContentUnavailableView(
                         "No Children",

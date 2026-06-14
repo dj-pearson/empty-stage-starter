@@ -42,7 +42,8 @@ struct SyncStatusBanner: View {
                     Image(systemName: iconName)
                         .font(.subheadline)
                         .rotationEffect(.degrees(store.isSyncing ? 360 : 0))
-                        .animation(
+                        // US-369: respect Reduce Motion — no spinning icon.
+                        .accessibleAnimation(
                             store.isSyncing
                                 ? .linear(duration: 1.2).repeatForever(autoreverses: false)
                                 : .default,

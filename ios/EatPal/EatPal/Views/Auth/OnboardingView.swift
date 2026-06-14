@@ -2,6 +2,8 @@ import SwiftUI
 
 struct OnboardingView: View {
     @EnvironmentObject var appState: AppState
+    // US-369: gate page transitions behind Reduce Motion.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var currentPage = 0
 
@@ -67,7 +69,7 @@ struct OnboardingView: View {
                     if currentPage > 0 {
                         Button("Back") {
                             HapticManager.selection()
-                            withAnimation { currentPage -= 1 }
+                            accessibleWithAnimation(reduceMotion: reduceMotion) { currentPage -= 1 }
                         }
                         .foregroundStyle(AppTheme.Colors.textSecondary)
                     }
@@ -77,7 +79,7 @@ struct OnboardingView: View {
                     if currentPage < pages.count - 1 {
                         Button {
                             HapticManager.selection()
-                            withAnimation { currentPage += 1 }
+                            accessibleWithAnimation(reduceMotion: reduceMotion) { currentPage += 1 }
                         } label: {
                             HStack {
                                 Text("Next")

@@ -2972,3 +2972,8 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - US-387: CachedAsyncImage now backed by ThumbnailImageCache (NSCache + bounded URLCache 25/150MB) + ThumbnailImageLoader; .task(id:url) loads, re-appearing rows hit cache. networkFetchCount hook + ThumbnailImageCacheTests (2).
 - US-388: refreshWidgetSnapshot -> writeImmediately (Combine already debounces 500ms; dropped redundant 2nd timer); single coalesced pass per window -> one reload. WidgetSnapshot + WatchConnectivityService debounce state confirmed @MainActor.
 - Remaining false: 50.
+
+## 2026-06-14 (cont. 11) - Loading skeletons + reduce-motion gating (US-368/369)
+- US-368: KidsView (.foodRow), BudgetView/FoodChainingView/ProgressDashboard OverviewTab (.card) show skeletons during initial load; FoodChaining empty hints gated on !isLoading.
+- US-369: PickyEaterQuiz + Onboarding transitions -> accessibleWithAnimation(reduceMotion:); SyncStatusBanner rotation -> accessibleAnimation. All gate on accessibilityReduceMotion.
+- Remaining false: 48.

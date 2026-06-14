@@ -5581,8 +5581,8 @@
         "Swift builds"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Audit findings (Visual GAP-2, GAP-10)."
+      "passes": true,
+      "notes": "Audit findings (Visual GAP-2, GAP-10). | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): KidsView shows SkeletonView(.foodRow) while appState.isLoading && kids.isEmpty (empty state only after load); BudgetView, FoodChainingView, and ProgressDashboard OverviewTab show SkeletonView(.card) placeholders during initial load (foods/grocery/planEntries empty + isLoading). FoodChaining empty hints gated on !isLoading so they dont flash. Reuses existing SkeletonView shapes."
     },
     {
       "id": "US-369",
@@ -5595,8 +5595,8 @@
         "Swift builds"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Audit finding (Visual GAP-3). Extends US-256/US-43 reduce-motion work to remaining sites."
+      "passes": true,
+      "notes": "Audit finding (Visual GAP-3). Extends US-256/US-43 reduce-motion work to remaining sites. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): routed the remaining sites through Accessibility.swift helpers — PickyEaterQuizView question transitions + OnboardingView page transitions use accessibleWithAnimation(reduceMotion:); SyncStatusBanner rotation uses accessibleAnimation. All read @Environment(accessibilityReduceMotion); no change when Reduce Motion is off."
     },
     {
       "id": "US-370",
