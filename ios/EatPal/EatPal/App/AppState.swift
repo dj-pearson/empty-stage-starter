@@ -818,7 +818,11 @@ final class AppState: ObservableObject {
         // Resolve entry + recipe upfront so we can pick a debit strategy.
         let entry = planEntries.first { $0.id == entryId }
         let recipe = entry?.recipeId.flatMap { id in recipes.first { $0.id == id } }
-        let strategy = MealMadeStrategy.plan(for: recipe)
+        // US-351: scale debits by the planned serving count and convert recipe
+        // units into pantry units. No per-entry serving field exists yet, so
+        // the scale is 1.0 (cook the recipe as written) — the scaling path is
+        // in place for when planned servings land.
+        let strategy = MealMadeStrategy.plan(for: recipe, pantry: foods, servingScale: 1.0)
 
         // US-352: snapshot which recipe ingredients are low/out of stock
         // BEFORE the debit, so after logging we can nudge the user to restock
@@ -828,7 +832,19 @@ final class AppState: ObservableObject {
             .map { ShortfallCalculator.compute(recipe: $0, pantry: foods) } ?? []
 
         do {
-            let result = try await dataService.markMealMade(planEntryId: entryId)
+            // US-351: structured recipes go through the v2 RPC with explicit
+            // serving-scaled, unit-converted per-food amounts. Legacy (food_ids
+            // only) and no-recipe entries keep the v1 RPC (grocery-check + log)
+            // and iOS deducts the legacy foods itself — unchanged behavior.
+            let result: MarkMealMadeResult
+            if strategy.serverHandlesDebits {
+                result = try await dataService.markMealMadeV2(
+                    planEntryId: entryId,
+                    debits: strategy.debits.map { ($0.foodId, $0.amount) }
+                )
+            } else {
+                result = try await dataService.markMealMade(planEntryId: entryId)
+            }
             switch result.status {
             case .alreadyLogged:
                 madeEntryIds.insert(entryId)
@@ -841,25 +857,26 @@ final class AppState: ObservableObject {
                 ))
                 HapticManager.lightImpact()
             case .logged, .noRecipe:
-                // Legacy fallback: server RPC ignored the recipe (no
-                // structured ingredients). Persist each food_id debit
-                // ourselves so the database matches the optimistic UI.
+                // Legacy fallback: v1 RPC ignored the recipe (no structured
+                // ingredients). Persist each food_id debit ourselves so the
+                // database matches the optimistic UI. Legacy amounts are the
+                // serving scale (no per-ingredient quantity), rounded for the
+                // integer deduct RPC.
                 if strategy.fallbackUsed {
                     for debit in strategy.debits {
                         try? await dataService.deductFoodQuantity(
                             foodId: debit.foodId,
-                            amount: debit.amount
+                            amount: max(1, Int(debit.amount.rounded()))
                         )
                     }
                 }
 
-                // Server-walked debits + grocery checks: mirror locally.
-                // For the legacy path, also subtract the food_ids since
-                // applyMealMadeMutationsLocally only handles structured
-                // ingredients.
+                // Mirror the exact debits + grocery checks locally. For the v2
+                // structured path these are the same amounts the server applied;
+                // for legacy they match the deduct calls above.
                 applyMealMadeMutationsLocally(
                     planEntryId: entryId,
-                    legacyDebits: strategy.fallbackUsed ? strategy.debits : []
+                    debits: strategy.debits
                 )
 
                 // Flip the entry's result so the row reflects the action.
@@ -917,6 +934,18 @@ final class AppState: ObservableObject {
                         }
                     ))
                 }
+                // US-351: flag ingredients debited best-effort because their
+                // recipe unit couldn't be converted to the pantry food's unit.
+                let mismatched = strategy.mismatchedNames
+                if !mismatched.isEmpty {
+                    let names = mismatched.prefix(3).joined(separator: ", ")
+                    toast.show(Toast(
+                        type: .info,
+                        title: "Check pantry amounts",
+                        message: "Couldn't convert units for \(names)\(mismatched.count > 3 ? "…" : "") — verify the quantity."
+                    ))
+                }
+
                 AnalyticsService.track(.mealMadeLogged(
                     debitedCount: totalDebited,
                     checkedCount: checked
@@ -963,37 +992,17 @@ final class AppState: ObservableObject {
     /// debit + grocery check immediately. The next `loadAllData` will
     /// confirm; until then this keeps the UI honest.
     ///
-    /// US-286: `legacyDebits` carries the food_id list for recipes the
-    /// server RPC ignored (no structured ingredients). When non-empty,
-    /// we apply these client-side and skip the structured-ingredient
-    /// loop so we don't double-decrement.
+    /// US-286 / US-351: `debits` are the exact per-food amounts applied by the
+    /// server (v2 structured path) or by the legacy `deduct_food_quantity`
+    /// calls — mirror them locally so the optimistic UI matches the server.
     private func applyMealMadeMutationsLocally(
         planEntryId: String,
-        legacyDebits: [MealMadeStrategy.Debit] = []
+        debits: [MealMadeStrategy.Debit] = []
     ) {
-        guard let entry = planEntries.first(where: { $0.id == planEntryId }) else { return }
-
-        if !legacyDebits.isEmpty {
-            // Legacy path — server didn't touch these, so iOS owns the
-            // optimistic update. `debit.amount` is the integer "1 per
-            // ingredient" cadence; Food.quantity is Double, so cast at
-            // the use site rather than narrowing the model.
-            for debit in legacyDebits {
-                guard let idx = foods.firstIndex(where: { $0.id == debit.foodId }) else { continue }
-                let current = foods[idx].quantity ?? 0
-                foods[idx].quantity = max(0, current - Double(debit.amount))
-            }
-        } else if let recipeId = entry.recipeId,
-                  let recipe = recipes.first(where: { $0.id == recipeId }) {
-            // Pantry debit: mirror the server's "decrement linked-food qty
-            // by 1" rule. We can derive linked food ids from the recipe's
-            // structured ingredients without an extra fetch.
-            for ing in recipe.ingredients {
-                guard let foodId = ing.foodId,
-                      let idx = foods.firstIndex(where: { $0.id == foodId }) else { continue }
-                let current = foods[idx].quantity ?? 0
-                foods[idx].quantity = max(0, current - 1)
-            }
+        for debit in debits {
+            guard let idx = foods.firstIndex(where: { $0.id == debit.foodId }) else { continue }
+            let current = foods[idx].quantity ?? 0
+            foods[idx].quantity = max(0, current - debit.amount)
         }
         // Grocery checks: any item with a source row pointing at this entry.
         let affectedIds = Set(
@@ -1043,11 +1052,14 @@ final class AppState: ObservableObject {
             // absent from the server reversal payload — re-credit them here.
             if let entry = planEntries.first(where: { $0.id == entryId }),
                let recipe = entry.recipeId.flatMap({ rid in recipes.first { $0.id == rid } }) {
-                let strategy = MealMadeStrategy.plan(for: recipe)
+                // US-351: recompute with the same pantry+scale so the re-credit
+                // amount matches what was debited (deterministic; pantry units
+                // are unchanged by the debit).
+                let strategy = MealMadeStrategy.plan(for: recipe, pantry: foods, servingScale: 1.0)
                 if strategy.fallbackUsed {
                     for debit in strategy.debits {
                         guard let idx = foods.firstIndex(where: { $0.id == debit.foodId }) else { continue }
-                        let restored = (foods[idx].quantity ?? 0) + Double(debit.amount)
+                        let restored = (foods[idx].quantity ?? 0) + debit.amount
                         foods[idx].quantity = restored
                         try? await dataService.updateFood(
                             debit.foodId,

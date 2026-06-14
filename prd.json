@@ -5331,8 +5331,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit findings (Planner-Pantry GAP-9, GAP-10). Currently every ingredient debits exactly 1 unit regardless of recipe amount or unit."
+      "passes": true,
+      "notes": "Audit findings (Planner-Pantry GAP-9, GAP-10). Currently every ingredient debits exactly 1 unit regardless of recipe amount or unit. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): MealMadeStrategy.Debit.amount is now Double = RecipeIngredient.quantity x servingScale (1.0 default; no per-entry serving field yet), unit-converted to the pantry foods unit via UnitConverter; incompatible units debit best-effort raw + unitMismatch flag (surfaced as a Check-pantry-amounts toast). Repeated foods sum. Structured path calls new DataService.markMealMadeV2 -> additive migration 20260614000001_mark_meal_made_v2.sql (rpc_mark_meal_made_v2(p_plan_entry_id,p_debits jsonb), applies client amounts, shares plan_entry_made_log + reversal shape with undo; v1 untouched for old clients). applyMealMadeMutationsLocally mirrors the EXACT debits the server applied (AC5 by construction). Legacy/no-recipe keep v1 + deduct_food_quantity (rounded). Undo recomputes with same pantry+scale. Tests: scaled debit, cup->ml conversion, cup->g incompatible+flag, summed dedupe (MealMadeStrategyTests). Migration NOT applied to prod here (deploy step, like US-323); Swift build = local Xcode."
     },
     {
       "id": "US-352",

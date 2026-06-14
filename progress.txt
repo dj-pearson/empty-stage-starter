@@ -3013,3 +3013,10 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - US-309: audit-flip — all 8 ACs already implemented in source (RecipeParseAPI in Shared/, .recipeImport destination + eatpal://recipe/import parsing, toasts, ImportRecipeFromURLIntent + shortcut phrases, telemetry, pending-queue reuse). Verified bullet-by-bullet.
 - US-391: ScannedProductView lookupFailed gains a Type-barcode field + Retry-lookup button (re-runs BarcodeService.lookup via lookupBarcode); saved Food/dedup use the effective corrected barcode.
 - Remaining false: 40.
+
+## 2026-06-14 (cont. 19) - Serving-scaled + unit-converted mark-made debits (US-351)
+- MealMadeStrategy: Debit.amount Double = quantity x servingScale (1.0 default), UnitConverter-converted to pantry unit; incompatible units -> best-effort raw + unitMismatch flag (Check-pantry-amounts toast); repeated foods summed. plan(for:pantry:servingScale:).
+- DataService.markMealMadeV2 -> additive migration 20260614000001_mark_meal_made_v2.sql (rpc_mark_meal_made_v2(p_plan_entry_id,p_debits jsonb); applies client amounts; shares plan_entry_made_log + reversal shape with undo; v1 untouched). NOT deployed here (deploy step).
+- AppState: structured -> v2 with computed debits + mirror EXACT amounts (AC5); legacy/no-recipe -> v1 + deduct_food_quantity (rounded); undo recomputes same pantry+scale.
+- Tests: scaled, cup->ml convert, cup->g incompatible+flag, summed dedupe.
+- Remaining false: 39.

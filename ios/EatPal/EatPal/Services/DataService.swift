@@ -262,6 +262,38 @@ final class DataService {
         ).execute().value
     }
 
+    /// US-351: serving-scaled mark-made. Sends client-computed per-food debit
+    /// amounts (already scaled + unit-converted) to `rpc_mark_meal_made_v2`.
+    /// Additive successor to `markMealMade` — v1 stays for older clients.
+    func markMealMadeV2(
+        planEntryId: String,
+        debits: [(foodId: String, amount: Double)]
+    ) async throws -> MarkMealMadeResult {
+        struct DebitArg: Encodable {
+            let foodId: String
+            let amount: Double
+            enum CodingKeys: String, CodingKey {
+                case foodId = "food_id"
+                case amount
+            }
+        }
+        struct Args: Encodable {
+            let planEntryId: String
+            let debits: [DebitArg]
+            enum CodingKeys: String, CodingKey {
+                case planEntryId = "p_plan_entry_id"
+                case debits = "p_debits"
+            }
+        }
+        return try await client.rpc(
+            "rpc_mark_meal_made_v2",
+            params: Args(
+                planEntryId: planEntryId,
+                debits: debits.map { DebitArg(foodId: $0.foodId, amount: $0.amount) }
+            )
+        ).execute().value
+    }
+
     /// US-349: reverse a prior `rpc_mark_meal_made` for a plan entry.
     func undoMealMade(planEntryId: String) async throws -> UndoMealMadeResult {
         struct Args: Encodable {
