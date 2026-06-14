@@ -14,16 +14,34 @@ final class RealtimeService {
     private init() {}
 
     /// Subscribes to all relevant table changes for the current user's data.
-    /// Call this after authentication succeeds.
+    /// Call this after authentication succeeds. Re-call on household switch or
+    /// re-auth — it tears down the existing channels first (US-384 AC3).
     func subscribe(appState: AppState) async {
         await unsubscribeAll()
 
+        // US-384: scope every subscription to the current user's data instead
+        // of streaming ALL users' rows and leaning entirely on RLS. When the
+        // user is in a household we filter by household_id (so every member's
+        // edits flow); solo users filter by their own user_id. The scope value
+        // also namespaces the channel names so households don't collide.
+        let userId = (try? await client.auth.session)?.user.id.uuidString.lowercased()
+        let householdId = (try? await HouseholdService.currentHousehold())?.id
+        let filterColumn = householdId != nil ? "household_id" : "user_id"
+        let scopeValue = householdId ?? userId ?? ""
+        guard !scopeValue.isEmpty else {
+            // Not authenticated yet — nothing to scope to. A later re-auth
+            // call will set this up.
+            return
+        }
+        let filter = "\(filterColumn)=eq.\(scopeValue)"
+
         // Foods channel
-        let foodsChannel = client.realtimeV2.channel("foods-changes")
+        let foodsChannel = client.realtimeV2.channel("foods-changes-\(scopeValue)")
         let foodsChanges = foodsChannel.postgresChange(
             AnyAction.self,
             schema: "public",
-            table: "foods"
+            table: "foods",
+            filter: filter
         )
         channels.append(foodsChannel)
         await subscribeChannel(foodsChannel, name: "foods")
@@ -36,11 +54,12 @@ final class RealtimeService {
         })
 
         // Kids channel
-        let kidsChannel = client.realtimeV2.channel("kids-changes")
+        let kidsChannel = client.realtimeV2.channel("kids-changes-\(scopeValue)")
         let kidsChanges = kidsChannel.postgresChange(
             AnyAction.self,
             schema: "public",
-            table: "kids"
+            table: "kids",
+            filter: filter
         )
         channels.append(kidsChannel)
         await subscribeChannel(kidsChannel, name: "kids")
@@ -53,11 +72,12 @@ final class RealtimeService {
         })
 
         // Grocery items channel
-        let groceryChannel = client.realtimeV2.channel("grocery-changes")
+        let groceryChannel = client.realtimeV2.channel("grocery-changes-\(scopeValue)")
         let groceryChanges = groceryChannel.postgresChange(
             AnyAction.self,
             schema: "public",
-            table: "grocery_items"
+            table: "grocery_items",
+            filter: filter
         )
         channels.append(groceryChannel)
         await subscribeChannel(groceryChannel, name: "grocery_items")
@@ -70,11 +90,12 @@ final class RealtimeService {
         })
 
         // Plan entries channel
-        let planChannel = client.realtimeV2.channel("plan-changes")
+        let planChannel = client.realtimeV2.channel("plan-changes-\(scopeValue)")
         let planChanges = planChannel.postgresChange(
             AnyAction.self,
             schema: "public",
-            table: "plan_entries"
+            table: "plan_entries",
+            filter: filter
         )
         channels.append(planChannel)
         await subscribeChannel(planChannel, name: "plan_entries")
@@ -87,11 +108,12 @@ final class RealtimeService {
         })
 
         // Recipes channel
-        let recipesChannel = client.realtimeV2.channel("recipes-changes")
+        let recipesChannel = client.realtimeV2.channel("recipes-changes-\(scopeValue)")
         let recipesChanges = recipesChannel.postgresChange(
             AnyAction.self,
             schema: "public",
-            table: "recipes"
+            table: "recipes",
+            filter: filter
         )
         channels.append(recipesChannel)
         await subscribeChannel(recipesChannel, name: "recipes")

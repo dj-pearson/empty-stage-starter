@@ -5738,8 +5738,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Stability/Data integrity). NotificationService.swift:60-73 — no user_id field, no onConflict on the upsert."
+      "passes": true,
+      "notes": "Audit finding (Stability/Data integrity). NotificationService.swift:60-73 — no user_id field, no onConflict on the upsert. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): handleDeviceToken now writes to the canonical push_tokens table (what process-notification-queue reads) with the authenticated user_id from session, platform ios, is_active, and onConflict:token so a device re-register updates its row instead of duplicating/cross-linking. push_tokens RLS already requires user_id=auth.uid() for INSERT/UPDATE (migration 20251110000002). Failures now go to Sentry, not a DEBUG print."
     },
     {
       "id": "US-380",
@@ -5809,8 +5809,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Performance/Correctness). US-332 claimed household-scoped channel names but the code uses global names with no filters — verified at RealtimeService.swift:22,39,56,73,90."
+      "passes": true,
+      "notes": "Audit finding (Performance/Correctness). US-332 claimed household-scoped channel names but the code uses global names with no filters — verified at RealtimeService.swift:22,39,56,73,90. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): RealtimeService.subscribe now scopes every postgresChange with filter=household_id=eq.<id> (or user_id when solo; currentHousehold() auto-creates so household is the normal path) and namespaces channels as <table>-changes-<scopeValue>. unsubscribeAll() at the top means a re-call on household-switch/re-auth tears down + recreates. All 5 tables carry both columns."
     },
     {
       "id": "US-385",
@@ -5975,8 +5975,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Stability). AICoachView.swift has an offline banner (line 62) but the service still fabricates a fallback answer on any failure; no message-level error state or retry exists in the chat UI."
+      "passes": true,
+      "notes": "Audit finding (Stability). AICoachView.swift has an offline banner (line 62) but the service still fabricates a fallback answer on any failure; no message-level error state or retry exists in the chat UI. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): AICoachService now logs edge failures to Sentry; on an ONLINE failure it appends an isError ChatMessage (orange error bubble + Retry button in ChatBubble) instead of a canned answer; the canned fallback is used only when offline and is clearly labeled with a 📴 offline prefix. retryLastMessage() re-sends the stored last user prompt. Added isError to ChatMessage."
     },
     {
       "id": "US-397",
@@ -6003,8 +6003,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Functionality). StarterMealPlanService.resolveFood (StarterMealPlanService.swift:174) auto-creates a Food when the name is missing; the AI path has no equivalent and just writes foodId == ''."
+      "passes": true,
+      "notes": "Audit finding (Functionality). StarterMealPlanService.resolveFood (StarterMealPlanService.swift:174) auto-creates a Food when the name is missing; the AI path has no equivalent and just writes foodId == ''. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): AIMealPlanView.resolveFoodId resolves a suggestion to a real Food (existing id -> name match -> create), so no PlanEntry is written with an empty foodId; single-add surfaces a toast on failure; Add All now counts added vs skipped and reports accurately, dismissing only when something was added."
     },
     {
       "id": "US-399",

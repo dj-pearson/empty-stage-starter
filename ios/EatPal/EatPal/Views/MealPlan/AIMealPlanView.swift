@@ -110,7 +110,16 @@ struct AIMealPlanView: View {
                         if !aiService.suggestions.isEmpty {
                             ForEach(aiService.suggestions) { suggestion in
                                 SuggestionCard(suggestion: suggestion) {
-                                    Task { await addSuggestionToPlan(suggestion) }
+                                    Task {
+                                        let ok = await addSuggestionToPlan(suggestion)
+                                        if !ok {
+                                            // US-398: don't silently drop — tell the user.
+                                            ToastManager.shared.error(
+                                                "Couldn't add meal",
+                                                message: "We couldn't match or create \(suggestion.foodName). Please try again."
+                                            )
+                                        }
+                                    }
                                 }
                             }
                             .padding(.horizontal)
@@ -219,10 +228,44 @@ struct AIMealPlanView: View {
         }
     }
 
-    private func addSuggestionToPlan(_ suggestion: AIMealService.MealSuggestion) async {
-        guard let kidId = appState.activeKidId else { return }
+    /// US-398: resolve a suggestion to a real Food id instead of writing an
+    /// orphan PlanEntry with an empty foodId. Order: a non-empty foodId that
+    /// matches a known food → a case-insensitive name match → otherwise create
+    /// a new Food (mirrors StarterMealPlanService.resolveFood). Returns nil
+    /// only when food creation fails, in which case the caller skips the entry.
+    private func resolveFoodId(for suggestion: AIMealService.MealSuggestion) async -> String? {
+        if let fid = suggestion.foodId, !fid.isEmpty,
+           appState.foods.contains(where: { $0.id == fid }) {
+            return fid
+        }
+        let normalized = suggestion.foodName.lowercased()
+        if let existing = appState.foods.first(where: { $0.name.lowercased() == normalized }) {
+            return existing.id
+        }
+        // No match — create a pantry food so the plan entry is never orphaned.
+        let newFood = Food(
+            id: UUID().uuidString,
+            userId: "",
+            name: suggestion.foodName,
+            category: FoodCategory.snack.rawValue,
+            isSafe: false,
+            isTryBite: false
+        )
+        do {
+            try await appState.addFood(newFood)
+            return newFood.id
+        } catch {
+            return nil
+        }
+    }
 
-        let foodId = suggestion.foodId ?? ""
+    /// Returns true when the suggestion was added, false when it was skipped
+    /// (food couldn't be resolved/created).
+    @discardableResult
+    private func addSuggestionToPlan(_ suggestion: AIMealService.MealSuggestion) async -> Bool {
+        guard let kidId = appState.activeKidId else { return false }
+        guard let foodId = await resolveFoodId(for: suggestion) else { return false }
+
         let entry = PlanEntry(
             id: UUID().uuidString,
             userId: "",
@@ -231,17 +274,36 @@ struct AIMealPlanView: View {
             mealSlot: suggestion.mealSlot,
             foodId: foodId
         )
-        try? await appState.addPlanEntry(entry)
-        HapticManager.success()
+        do {
+            try await appState.addPlanEntry(entry)
+            HapticManager.success()
+            return true
+        } catch {
+            return false
+        }
     }
 
     private func addAllSuggestions() async {
+        var added = 0
+        var skipped = 0
         for suggestion in aiService.suggestions {
-            await addSuggestionToPlan(suggestion)
+            if await addSuggestionToPlan(suggestion) {
+                added += 1
+            } else {
+                skipped += 1
+            }
         }
+        // US-398: report the real added-vs-skipped count rather than assuming
+        // every suggestion landed.
         let toast = ToastManager.shared
-        toast.success("All added", message: "\(aiService.suggestions.count) meals added to plan.")
-        dismiss()
+        if skipped == 0 {
+            toast.success("All added", message: "\(added) meals added to plan.")
+        } else if added == 0 {
+            toast.error("Couldn't add meals", message: "None of the \(skipped) suggestions could be added.")
+        } else {
+            toast.info("Added \(added) of \(added + skipped)", message: "\(skipped) couldn't be added.")
+        }
+        if added > 0 { dismiss() }
     }
 
     /// US-238: bulk-create grocery items for everything the plan needs

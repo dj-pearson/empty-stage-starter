@@ -7,6 +7,12 @@ final class AICoachService: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var isLoading = false
 
+    /// US-396: the last user prompt that failed against the edge function, so
+    /// Retry can re-send it without the user re-typing.
+    private var lastFailedUserText: String?
+    private var lastKid: Kid?
+    private var lastFoods: [Food] = []
+
     private init() {
         messages.append(ChatMessage(
             role: .assistant,
@@ -61,19 +67,58 @@ final class AICoachService: ObservableObject {
             )
             let assistantMessage = ChatMessage(role: .assistant, content: decoded.message)
             messages.append(assistantMessage)
+            // Success clears any stored retry context.
+            lastFailedUserText = nil
         } catch {
-            // Only fall back to the canned response when the edge call
-            // genuinely fails (network, auth, 5xx). Log so we can tell
-            // the canned path apart from a real model response in testing.
-            #if DEBUG
-            print("[AICoachService] edge invoke failed: \(error)")
-            #endif
-            let fallback = generateFallbackResponse(for: text, kid: kid)
-            let assistantMessage = ChatMessage(role: .assistant, content: fallback)
-            messages.append(assistantMessage)
+            // US-396: log the real failure to Sentry, not just a DEBUG print.
+            SentryService.capture(error, extras: ["context": "ai_coach_chat"])
+            handleFailure(for: text, kid: kid, foods: foods)
         }
 
         isLoading = false
+    }
+
+    /// US-396: re-send the last failed user message without re-typing. Drops
+    /// the trailing error bubble first so the transcript reads cleanly.
+    func retryLastMessage() async {
+        guard let text = lastFailedUserText else { return }
+        let kid = lastKid
+        let foods = lastFoods
+        // Remove the trailing error bubble and the original user echo so
+        // sendMessage re-appends a fresh user turn.
+        if let last = messages.last, last.isError {
+            messages.removeLast()
+        }
+        if let last = messages.last, last.role == .user, last.content == text {
+            messages.removeLast()
+        }
+        await sendMessage(text, kid: kid, foods: foods)
+    }
+
+    /// Branch the failure: offline -> a clearly-labeled offline-tips message;
+    /// online (transient/5xx) -> a visible error bubble with retry context.
+    private func handleFailure(for text: String, kid: Kid?, foods: [Food]) {
+        lastFailedUserText = text
+        lastKid = kid
+        lastFoods = foods
+
+        if NetworkMonitor.shared.isConnected {
+            // US-396 AC3: do NOT fabricate a canned answer for a transient
+            // online failure — surface it as an error the user can retry.
+            messages.append(ChatMessage(
+                role: .assistant,
+                content: "Sorry — I couldn't reach the coach just now. Please try again.",
+                isError: true
+            ))
+        } else {
+            // Offline: the canned tips are still useful, but label them as
+            // offline guidance rather than a real model reply.
+            let tips = generateFallbackResponse(for: text, kid: kid)
+            messages.append(ChatMessage(
+                role: .assistant,
+                content: "📴 You're offline. Here are some general tips while you reconnect:\n\n\(tips)"
+            ))
+        }
     }
 
     func clearChat() {

@@ -2915,3 +2915,11 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - US-411 (zeroed nutrition rings): DailyNutritionSummary shows "Nutrition data not available" instead of zeroed rings (Food has no macros yet); MacroRing value text gains lineLimit+minimumScaleFactor+maxWidth so big values don't overflow the 56pt ring.
 - US-374 (bind-email weak password): password step now enforces PasswordValidator (12-char policy) + match, reuses PasswordStrengthView, footer/placeholder updated to the real requirement.
 - Remaining false: 78.
+
+## 2026-06-14 (cont. 2) - iOS push/realtime/AI audit-fixes (US-379/384/396/398)
+- Same branch. Swift build = local Xcode.
+- US-379 (APNs token cross-linking): handleDeviceToken rewritten to upsert push_tokens (the table process-notification-queue reads) with session user_id + platform ios + is_active, onConflict:token. Old code wrote a web-push-shaped row (endpoint/keys) to push_notifications with no user_id/conflict target. push_tokens RLS already scopes INSERT/UPDATE to auth.uid(). Failures -> Sentry.
+- US-384 (realtime no filter): subscribe() now scopes each postgresChange with household_id (or user_id solo) filter and namespaces channels <table>-changes-<scope>; unsubscribeAll-first means a re-call on household switch/re-auth recreates. currentHousehold() auto-creates via ensure_user_household RPC so the household filter is the normal path; all 5 tables carry both columns.
+- US-396 (AI Coach masks failures): online failures now render an isError bubble (orange + Retry) instead of a canned answer; canned tips only when offline, 📴-labeled; retryLastMessage re-sends the last prompt; failures -> Sentry. Added ChatMessage.isError.
+- US-398 (AI orphan plan entries): resolveFoodId (existing id -> name match -> create Food) guarantees a real foodId; single-add toasts on failure; Add All reports added-vs-skipped accurately.
+- Remaining false: 74.

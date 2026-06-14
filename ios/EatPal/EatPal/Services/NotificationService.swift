@@ -56,25 +56,41 @@ final class NotificationService: ObservableObject {
         print("APNs device token: \(token)")
         #endif
 
-        // Store token in Supabase push_notifications table
+        // US-379: write to the canonical `push_tokens` table (what the
+        // process-notification-queue sender reads), scoped to the
+        // authenticated user, with `token` as the explicit conflict target so
+        // re-registering the same device updates its row instead of creating
+        // duplicates or cross-linking devices to other users. The old code
+        // wrote a web-push-shaped row (endpoint/keys) to `push_notifications`
+        // with no user_id and no conflict target.
         struct PushTokenPayload: Encodable {
-            let endpoint: String
+            let userId: String
+            let token: String
             let platform: String
-            let keys: [String: String]
+            let isActive: Bool
+
+            enum CodingKeys: String, CodingKey {
+                case userId = "user_id"
+                case token
+                case platform
+                case isActive = "is_active"
+            }
         }
-        let payload = PushTokenPayload(
-            endpoint: token,
-            platform: "ios",
-            keys: ["apns_token": token]
-        )
         do {
-            try await SupabaseManager.client.from("push_notifications")
-                .upsert(payload)
+            let session = try await SupabaseManager.client.auth.session
+            let payload = PushTokenPayload(
+                userId: session.user.id.uuidString.lowercased(),
+                token: token,
+                platform: "ios",
+                isActive: true
+            )
+            try await SupabaseManager.client.from("push_tokens")
+                .upsert(payload, onConflict: "token")
                 .execute()
         } catch {
-            #if DEBUG
-            print("Failed to store push token: \(error)")
-            #endif
+            // US-379/US-376 pattern: surface failures in Sentry rather than a
+            // DEBUG-only print.
+            SentryService.capture(error, extras: ["context": "apns_token_register"])
         }
     }
 

@@ -78,8 +78,11 @@ struct AICoachView: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         ForEach(coachService.messages) { message in
-                            ChatBubble(message: message)
-                                .id(message.id)
+                            ChatBubble(message: message) {
+                                // US-396: re-send the last failed message.
+                                Task { await coachService.retryLastMessage() }
+                            }
+                            .id(message.id)
                         }
 
                         // US-236: empty-state prompt chips
@@ -220,6 +223,8 @@ private struct EmptyChatPromptChips: View {
 
 struct ChatBubble: View {
     let message: ChatMessage
+    /// US-396: invoked when the user taps Retry on a failed assistant turn.
+    var onRetry: (() -> Void)? = nil
 
     private var isUser: Bool {
         message.role == .user
@@ -230,15 +235,43 @@ struct ChatBubble: View {
             if isUser { Spacer(minLength: 60) }
 
             VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
-                Text(message.content)
-                    .font(.subheadline)
-                    .foregroundStyle(isUser ? .white : .primary)
+                if message.isError {
+                    // US-396: visibly mark the failed turn as an error and offer
+                    // a Retry that re-sends the last user message.
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text(message.content)
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                    }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(
-                        isUser ? Color.green : Color(.secondarySystemBackground),
+                        Color.orange.opacity(0.12),
                         in: RoundedRectangle(cornerRadius: 16)
                     )
+
+                    if let onRetry {
+                        Button(action: onRetry) {
+                            Label("Retry", systemImage: "arrow.clockwise")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.orange)
+                        .accessibilityLabel("Retry sending the message")
+                    }
+                } else {
+                    Text(message.content)
+                        .font(.subheadline)
+                        .foregroundStyle(isUser ? .white : .primary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            isUser ? Color.green : Color(.secondarySystemBackground),
+                            in: RoundedRectangle(cornerRadius: 16)
+                        )
+                }
 
                 Text(message.timestamp, style: .time)
                     .font(.caption2)
