@@ -135,7 +135,7 @@ final class MealMadeStrategyTests: XCTestCase {
         ])
         let pantry = [makeFood(id: "food-a", unit: "count")]
         let plan = MealMadeStrategy.plan(for: recipe, pantry: pantry, servingScale: 3)
-        XCTAssertEqual(plan.debits.first?.amount, 6, accuracy: 0.0001)
+        XCTAssertEqual(plan.debits.first?.amount ?? 0, 6, accuracy: 0.0001)
         XCTAssertFalse(plan.debits.first?.unitMismatch ?? true)
     }
 
@@ -158,7 +158,7 @@ final class MealMadeStrategyTests: XCTestCase {
         ])
         let pantry = [makeFood(id: "food-a", unit: "g")]
         let plan = MealMadeStrategy.plan(for: recipe, pantry: pantry, servingScale: 1)
-        XCTAssertEqual(plan.debits.first?.amount, 2, accuracy: 0.0001)
+        XCTAssertEqual(plan.debits.first?.amount ?? 0, 2, accuracy: 0.0001)
         XCTAssertTrue(plan.debits.first?.unitMismatch ?? false)
         XCTAssertEqual(plan.mismatchedNames, ["flour"])
     }
@@ -172,7 +172,7 @@ final class MealMadeStrategyTests: XCTestCase {
         let pantry = [makeFood(id: "food-a", unit: "count")]
         let plan = MealMadeStrategy.plan(for: recipe, pantry: pantry)
         XCTAssertEqual(plan.debits.count, 1)
-        XCTAssertEqual(plan.debits.first?.amount, 3, accuracy: 0.0001)
+        XCTAssertEqual(plan.debits.first?.amount ?? 0, 3, accuracy: 0.0001)
     }
 
     // MARK: - Path precedence
