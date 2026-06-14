@@ -5752,8 +5752,8 @@
         "Swift builds"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Audit finding (Stability/Release). No force-update/min-version code in ios/EatPal; RootView.swift:7-26 only branches on auth state. CLAUDE.md Migration Rules require this pairing."
+      "passes": true,
+      "notes": "Audit finding (Stability/Release). No force-update/min-version code in ios/EatPal; RootView.swift:7-26 only branches on auth state. CLAUDE.md Migration Rules require this pairing. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): new ForceUpdateService fetches app_config.min_ios_build on launch (Supabase select, fail-open) and flips needsUpdate when CFBundleVersion < min; RootView gates ForceUpdateView (blocking App Store update screen, no dismiss) above all auth states via .task. Additive migration 20260614000000_app_config.sql (app_config table, anon-SELECT RLS, seeded min_ios_build=1 so nobody is blocked until an admin bumps it) — NOT applied to prod here (deploy step, like US-323). App Store URL reads optional Info.plist APP_STORE_URL else falls back to a search URL (concrete App Store ID still a placeholder in eas.json)."
     },
     {
       "id": "US-381",

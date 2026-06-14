@@ -3,26 +3,38 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    // US-380: server-driven force-update gate (fails open).
+    @StateObject private var forceUpdate = ForceUpdateService.shared
 
     var body: some View {
         Group {
-            switch authViewModel.authState {
-            case .loading:
-                LaunchScreenView()
-            case .unauthenticated:
-                AuthView()
-            case .authenticated:
-                if hasCompletedOnboarding {
-                    MainTabView()
-                        .withToasts()
-                        .withOfflineBanner()
-                        .withSyncStatusBanner()
-                } else {
-                    OnboardingView()
+            if forceUpdate.needsUpdate {
+                // US-380: blocks everything below the minimum supported build.
+                ForceUpdateView()
+            } else {
+                switch authViewModel.authState {
+                case .loading:
+                    LaunchScreenView()
+                case .unauthenticated:
+                    AuthView()
+                case .authenticated:
+                    if hasCompletedOnboarding {
+                        MainTabView()
+                            .withToasts()
+                            .withOfflineBanner()
+                            .withSyncStatusBanner()
+                    } else {
+                        OnboardingView()
+                    }
                 }
             }
         }
         .accessibleAnimation(AppTheme.Animation.standard, value: authViewModel.authState)
+        // US-380: check the minimum supported build on launch, before the user
+        // gets into the app.
+        .task {
+            await forceUpdate.checkMinimumVersion()
+        }
     }
 }
 

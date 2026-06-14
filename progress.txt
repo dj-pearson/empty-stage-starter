@@ -2998,3 +2998,8 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - Extracted shared Utilities/RecipeStepParser (US-402 logic); TonightCookSheet.parseSteps delegates to it. Test RecipeStepParserTests (4).
 - New CookModeView (fullScreenCover from RecipeDetailView "Cook" button): one step at a time, check-off, Prev/Next/Finish, progress; keep-awake via isIdleTimerDisabled (set onAppear, restored onDisappear); transitions gated on reduceMotion.
 - Remaining false: 44.
+
+## 2026-06-14 (cont. 16) - Force-update gate (US-380)
+- ForceUpdateService: fetch app_config.min_ios_build on launch (fail-open); needsUpdate = CFBundleVersion < min. RootView gates ForceUpdateView (blocking App Store screen) above auth states.
+- Additive migration 20260614000000_app_config.sql (table + anon-SELECT RLS + seed min_ios_build=1). NOT applied to prod here (deploy step). App Store URL via Info.plist APP_STORE_URL else search fallback (app id still placeholder in eas.json).
+- Remaining false: 43.
