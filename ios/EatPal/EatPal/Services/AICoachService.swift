@@ -13,11 +13,24 @@ final class AICoachService: ObservableObject {
     private var lastKid: Kid?
     private var lastFoods: [Food] = []
 
+    /// US-401: the in-flight send so Reset/clearChat can cancel it and a stale
+    /// completion can be discarded instead of re-appending after reset.
+    private var sendTask: Task<Void, Never>?
+
     private init() {
         messages.append(ChatMessage(
             role: .assistant,
             content: "Hi! I'm your AI meal coach. I can help with meal ideas, picky eating strategies, nutrition questions, and food introduction tips. How can I help?"
         ))
+    }
+
+    /// US-401: start a cancellable send. Cancels any prior in-flight request
+    /// first so a stale completion can't re-append after a new send/reset.
+    func send(_ text: String, kid: Kid?, foods: [Food]) {
+        sendTask?.cancel()
+        sendTask = Task { [weak self] in
+            await self?.sendMessage(text, kid: kid, foods: foods)
+        }
     }
 
     func sendMessage(_ text: String, kid: Kid?, foods: [Food]) async {
@@ -65,11 +78,18 @@ final class AICoachService: ObservableObject {
                 jsonBody: requestBody,
                 as: CoachResponse.self
             )
+            // US-401: a response that arrives after reset/cancel is discarded,
+            // not appended.
+            if Task.isCancelled { isLoading = false; return }
             let assistantMessage = ChatMessage(role: .assistant, content: decoded.message)
             messages.append(assistantMessage)
             // Success clears any stored retry context.
             lastFailedUserText = nil
+        } catch is CancellationError {
+            isLoading = false
+            return
         } catch {
+            if Task.isCancelled { isLoading = false; return }
             // US-396: log the real failure to Sentry, not just a DEBUG print.
             SentryService.capture(error, extras: ["context": "ai_coach_chat"])
             handleFailure(for: text, kid: kid, foods: foods)
@@ -80,7 +100,8 @@ final class AICoachService: ObservableObject {
 
     /// US-396: re-send the last failed user message without re-typing. Drops
     /// the trailing error bubble first so the transcript reads cleanly.
-    func retryLastMessage() async {
+    /// US-401: routed through the cancellable send Task.
+    func retryLastMessage() {
         guard let text = lastFailedUserText else { return }
         let kid = lastKid
         let foods = lastFoods
@@ -92,7 +113,7 @@ final class AICoachService: ObservableObject {
         if let last = messages.last, last.role == .user, last.content == text {
             messages.removeLast()
         }
-        await sendMessage(text, kid: kid, foods: foods)
+        send(text, kid: kid, foods: foods)
     }
 
     /// Branch the failure: offline -> a clearly-labeled offline-tips message;
@@ -122,6 +143,12 @@ final class AICoachService: ObservableObject {
     }
 
     func clearChat() {
+        // US-401: cancel any in-flight send so a late completion can't
+        // re-append a message or re-activate the typing indicator after reset.
+        sendTask?.cancel()
+        sendTask = nil
+        isLoading = false
+        lastFailedUserText = nil
         messages = [ChatMessage(
             role: .assistant,
             content: "Hi! I'm your AI meal coach. I can help with meal ideas, picky eating strategies, nutrition questions, and food introduction tips. How can I help?"

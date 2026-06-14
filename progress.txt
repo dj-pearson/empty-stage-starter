@@ -2923,3 +2923,10 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - US-396 (AI Coach masks failures): online failures now render an isError bubble (orange + Retry) instead of a canned answer; canned tips only when offline, 📴-labeled; retryLastMessage re-sends the last prompt; failures -> Sentry. Added ChatMessage.isError.
 - US-398 (AI orphan plan entries): resolveFoodId (existing id -> name match -> create Food) guarantees a real foodId; single-add toasts on failure; Add All reports added-vs-skipped accurately.
 - Remaining false: 74.
+
+## 2026-06-14 (cont. 3) - iOS AI resilience + error-banner polish (US-367/397/400/401)
+- US-400: EdgeFunctions.invokeRaw centralizes retry-on-transient (502/503/504 + URLError timeout/connection-lost/etc) with 0.5s/1s backoff + Task.checkCancellation so view-dismiss aborts in-flight calls; 4xx/other 5xx surface immediately.
+- US-397: AIMealPlanView offline banner + disables Generate/fridge/Regenerate while loading/offline; Add All guarded by isAddingAll to prevent duplicate entries.
+- US-401: AICoachService send is a retained cancellable Task; clearChat cancels + resets isLoading; post-cancel responses discarded (Task.isCancelled); view uses non-async send/retry.
+- US-367: 4 raw-red error sites -> ErrorBanner (PaywallView, AIMealPlanView, RecipesView import, ScanReceiptSheet); ErrorBanner restyled to AppTheme.Colors.danger + optional onDismiss (PaywallView), retry wired where applicable.
+- Remaining false: 70.

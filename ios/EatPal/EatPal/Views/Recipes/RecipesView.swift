@@ -1196,9 +1196,10 @@ struct AddRecipeView: View {
                     .disabled(importURL.trimmingCharacters(in: .whitespaces).isEmpty || isImporting)
 
                     if let importError {
-                        Text(importError)
-                            .font(.caption)
-                            .foregroundStyle(.red)
+                        // US-367: ErrorBanner with retry.
+                        ErrorBanner(message: importError, retryAction: {
+                            Task { await importFromURL() }
+                        })
                     } else if let importedFrom {
                         Label("Imported from \(importedFrom)", systemImage: "checkmark.circle.fill")
                             .font(.caption)

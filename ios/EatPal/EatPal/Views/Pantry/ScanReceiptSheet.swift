@@ -92,10 +92,8 @@ struct ScanReceiptSheet: View {
             .tint(.blue)
             .padding(.horizontal, 24)
             if let errorMessage {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
+                // US-367: ErrorBanner instead of raw red text.
+                ErrorBanner(message: errorMessage)
                     .padding(.horizontal, 24)
             }
             Text("Tip: lay the receipt flat, fill the frame, even light.")

@@ -80,7 +80,7 @@ struct AICoachView: View {
                         ForEach(coachService.messages) { message in
                             ChatBubble(message: message) {
                                 // US-396: re-send the last failed message.
-                                Task { await coachService.retryLastMessage() }
+                                coachService.retryLastMessage()
                             }
                             .id(message.id)
                         }
@@ -171,9 +171,8 @@ struct AICoachView: View {
         let text = messageText.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return }
         messageText = ""
-        Task {
-            await coachService.sendMessage(text, kid: activeKid, foods: appState.foods)
-        }
+        // US-401: cancellable send managed by the service.
+        coachService.send(text, kid: activeKid, foods: appState.foods)
     }
 }
 

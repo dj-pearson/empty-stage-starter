@@ -5567,8 +5567,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Visual GAP-1)."
+      "passes": true,
+      "notes": "Audit finding (Visual GAP-1). | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): the four raw-red error-message sites (PaywallView store.errorMessage, AIMealPlanView aiService.errorMessage, RecipesView importError, ScanReceiptSheet errorMessage) now render ErrorBanner; ErrorBanner restyled to AppTheme.Colors.danger/dangerLight (not Color.red) and gained an optional onDismiss used by PaywallView; retry wired where applicable (AIMealPlan generate, Recipes import)."
     },
     {
       "id": "US-368",
@@ -5989,8 +5989,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (UX). EdgeFunctions.invoke uses a 60s timeoutInterval (EdgeFunctions.swift:73), so an offline generate looks frozen for a full minute before the local fallback in AIMealService.swift:219 kicks in."
+      "passes": true,
+      "notes": "Audit finding (UX). EdgeFunctions.invoke uses a 60s timeoutInterval (EdgeFunctions.swift:73), so an offline generate looks frozen for a full minute before the local fallback in AIMealService.swift:219 kicks in. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): AIMealPlanView shows an offline banner (matching AICoachView) when NetworkMonitor.shared.isConnected is false; Generate/fridge/Regenerate disabled while aiService.isLoading or offline; Add All guarded by isAddingAll (set+defer) so a double-tap cant duplicate entries."
     },
     {
       "id": "US-398",
@@ -6032,8 +6032,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Stability). TonightModeService wraps its own 1.5s soft timeout (TonightModeService.swift:294) but that pattern isn't reused; other AI calls just use the raw 60s URLSession with no retry."
+      "passes": true,
+      "notes": "Audit finding (Stability). TonightModeService wraps its own 1.5s soft timeout (TonightModeService.swift:294) but that pattern isn't reused; other AI calls just use the raw 60s URLSession with no retry. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): EdgeFunctions.invokeRaw now retries transient failures (502/503/504 + URLError timedOut/networkConnectionLost/cannotConnectToHost/cannotFindHost/dnsLookupFailed/notConnectedToInternet) once with exponential backoff (0.5s,1s); checks Task.checkCancellation() before each attempt and propagates CancellationError so dismissing a view aborts in-flight work; centralized so all AI callers benefit. 4xx/other 5xx surface immediately."
     },
     {
       "id": "US-401",
@@ -6046,8 +6046,8 @@
         "Swift builds"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Audit finding (Performance/Correctness). AICoachService.isLoading is a shared @Published on a singleton (AICoachService.swift:5,8); a stale completion can re-append a ChatMessage and reactivate the typing indicator after reset."
+      "passes": true,
+      "notes": "Audit finding (Performance/Correctness). AICoachService.isLoading is a shared @Published on a singleton (AICoachService.swift:5,8); a stale completion can re-append a ChatMessage and reactivate the typing indicator after reset. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): AICoachService retains the send as a cancellable Task (new send()/retryLastMessage route through it); clearChat() cancels it + resets isLoading; a response arriving after cancel/reset is discarded via Task.isCancelled checks; CancellationError swallowed cleanly. View calls the non-async send/retry."
     },
     {
       "id": "US-402",

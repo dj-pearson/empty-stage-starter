@@ -4,6 +4,10 @@ struct AIMealPlanView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
     @StateObject private var aiService = AIMealService.shared
+    @ObservedObject private var network = NetworkMonitor.shared
+    /// US-397: guards the Add-All loop so it can't be triggered twice and
+    /// create duplicate plan entries.
+    @State private var isAddingAll = false
     /// US-243: read the same UserDefault the Budget view writes — when set,
     /// gets passed to the edge function so the LLM prefers cheaper picks.
     @AppStorage("budget.weeklyTarget") private var weeklyTarget: Double = 0
@@ -32,6 +36,21 @@ struct AIMealPlanView: View {
                         )
                         .padding(.top, 40)
                     } else {
+                        // US-397: offline banner, matching AICoachView.
+                        if !network.isConnected {
+                            HStack(spacing: 8) {
+                                Image(systemName: "wifi.slash")
+                                Text("AI Meal Plan needs internet — generating will fail until you're back online.")
+                                    .font(.caption)
+                                Spacer()
+                            }
+                            .foregroundStyle(.orange)
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
+                            .background(Color.orange.opacity(0.1))
+                            .accessibilityElement(children: .combine)
+                        }
+
                         // Context
                         VStack(spacing: 8) {
                             if let kid = activeKid {
@@ -57,6 +76,8 @@ struct AIMealPlanView: View {
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .tint(.green)
+                                // US-397: don't fire while offline or in-flight.
+                                .disabled(aiService.isLoading || !network.isConnected)
 
                                 // US-238: alternate entry — snap a fridge photo,
                                 // then generate using whatever the model recognized.
@@ -70,6 +91,7 @@ struct AIMealPlanView: View {
                                 }
                                 .buttonStyle(.bordered)
                                 .tint(.blue)
+                                .disabled(aiService.isLoading || !network.isConnected)
                             }
                             .padding(.horizontal)
                         }
@@ -98,12 +120,12 @@ struct AIMealPlanView: View {
                             .padding(.vertical, 40)
                         }
 
-                        // Error
+                        // Error (US-367: ErrorBanner with retry).
                         if let error = aiService.errorMessage {
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                                .padding(.horizontal)
+                            ErrorBanner(message: error, retryAction: {
+                                Task { await generateSuggestions() }
+                            })
+                            .padding(.horizontal)
                         }
 
                         // Suggestions
@@ -128,7 +150,7 @@ struct AIMealPlanView: View {
                             Button {
                                 Task { await addAllSuggestions() }
                             } label: {
-                                Label("Add All to Plan", systemImage: "plus.circle.fill")
+                                Label(isAddingAll ? "Adding…" : "Add All to Plan", systemImage: "plus.circle.fill")
                                     .font(.headline)
                                     .frame(maxWidth: .infinity)
                                     .padding()
@@ -136,6 +158,8 @@ struct AIMealPlanView: View {
                             .buttonStyle(.borderedProminent)
                             .tint(.green)
                             .padding(.horizontal)
+                            // US-397: prevent a double-tap from duplicating entries.
+                            .disabled(isAddingAll)
 
                             // US-238: items the plan needs but the fridge
                             // photo didn't include — one tap to add to grocery.
@@ -155,6 +179,8 @@ struct AIMealPlanView: View {
                                     .font(.subheadline)
                             }
                             .padding(.top, 4)
+                            // US-397: don't regenerate while a request is in flight or offline.
+                            .disabled(aiService.isLoading || !network.isConnected)
                         }
                     }
                 }
@@ -284,6 +310,10 @@ struct AIMealPlanView: View {
     }
 
     private func addAllSuggestions() async {
+        guard !isAddingAll else { return }
+        isAddingAll = true
+        defer { isAddingAll = false }
+
         var added = 0
         var skipped = 0
         for suggestion in aiService.suggestions {
