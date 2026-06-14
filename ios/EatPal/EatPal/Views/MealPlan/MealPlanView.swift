@@ -36,11 +36,12 @@ struct MealPlanView: View {
     @State private var templateName = ""
     @State private var copyTargetDate = Date()
     @State private var copyToKidId: String?
-    /// US-285: recipe queued from AddPlanEntryView for shortfall check.
-    /// Computed in `onDismiss` of the add sheet and lifted into
-    /// `shortfallContext` only when non-empty so the missing-ingredients
-    /// sheet doesn't briefly flash on full-pantry adds.
-    @State private var pendingRecipeForShortfall: Recipe?
+    /// US-285/US-353: recipe IDs queued for a shortfall check. A SET (not a
+    /// single slot) so rapid consecutive adds — or a batch copy that adds
+    /// several recipes — don't overwrite each other (the US-353 race fix).
+    /// Drained + aggregated into one `shortfallContext` on the presenting
+    /// sheet's dismiss.
+    @State private var pendingShortfallRecipeIds: Set<String> = []
     @State private var shortfallContext: ShortfallContext?
 
     /// US-235: true when there's an active kid with no meals planned for this week.
@@ -204,14 +205,15 @@ struct MealPlanView: View {
                 }
             }
         }
-        .sheet(item: $addEntryContext, onDismiss: handleAddEntryDismiss) { ctx in
+        .sheet(item: $addEntryContext, onDismiss: presentPendingShortfall) { ctx in
             AddPlanEntryView(
                 date: ctx.date,
                 mealSlot: ctx.slot,
                 onRecipeAdded: { recipe in
-                    // US-285: queue the recipe; shortfall is computed on
-                    // dismiss so the user only ever sees one sheet at a time.
-                    pendingRecipeForShortfall = recipe
+                    // US-285/US-353: queue the recipe id; the shortfall is
+                    // aggregated on dismiss so the user sees one sheet even
+                    // after several rapid adds.
+                    pendingShortfallRecipeIds.insert(recipe.id)
                 }
             )
         }
@@ -260,11 +262,14 @@ struct MealPlanView: View {
             }
             .presentationDetents([.medium])
         }
-        .sheet(isPresented: $showingCopyToKid) {
+        .sheet(isPresented: $showingCopyToKid, onDismiss: presentPendingShortfall) {
             CopyWeekToKidSheet(
                 weekStart: weekStart,
                 sourceKidId: appState.activeKidId,
                 targetKidId: $copyToKidId,
+                // US-353: queue the copied recipe-backed entries so the
+                // missing-ingredient prompt fires for the copy-to-kid path too.
+                onApplied: { recipeIds in pendingShortfallRecipeIds.formUnion(recipeIds) },
                 onDismiss: { showingCopyToKid = false }
             )
             .environmentObject(appState)
@@ -313,28 +318,29 @@ struct MealPlanView: View {
         }
     }
 
-    /// US-285: run after AddPlanEntryView closes. If the user added a recipe
-    /// and that recipe has structured ingredients, compute the pantry
-    /// shortfall and lift it into `shortfallContext` so the missing-
-    /// ingredient sheet presents. Silent no-op when nothing is short.
-    private func handleAddEntryDismiss() {
-        guard let recipe = pendingRecipeForShortfall else { return }
-        pendingRecipeForShortfall = nil
+    /// US-285/US-353: run after any add/copy sheet closes. Aggregates the
+    /// shortfall across every queued recipe (legacy `food_ids` recipes
+    /// included, via ShortfallChecker) and presents ONE missing-ingredient
+    /// sheet. Silent no-op when nothing is short. Drains the queue so the same
+    /// recipes don't re-prompt.
+    private func presentPendingShortfall() {
+        let ids = pendingShortfallRecipeIds
+        pendingShortfallRecipeIds = []
+        guard !ids.isEmpty else { return }
 
-        // Legacy recipes with no structured ingredients (US-281) skip the
-        // prompt — there's nothing to compute against.
-        guard !recipe.ingredients.isEmpty else { return }
+        let recipes = appState.recipes.filter { ids.contains($0.id) }
+        guard !recipes.isEmpty else { return }
 
-        let shortfalls = ShortfallCalculator.compute(
-            recipe: recipe,
-            pantry: appState.foods
-        )
+        let shortfalls = ShortfallChecker.aggregate(recipes: recipes, pantry: appState.foods)
         guard !shortfalls.isEmpty else { return }
 
-        shortfallContext = ShortfallContext(
-            recipe: recipe,
-            shortfalls: shortfalls
-        )
+        // Single recipe → show its name; multiple → a synthetic header (its id
+        // is unused, the sheet sources each row by its own ingredient.recipeId).
+        let header: Recipe = recipes.count == 1
+            ? recipes[0]
+            : Recipe(id: "", userId: recipes[0].userId, name: "Your plan", foodIds: [])
+
+        shortfallContext = ShortfallContext(recipe: header, shortfalls: shortfalls)
     }
 }
 
@@ -1123,6 +1129,9 @@ struct CopyWeekToKidSheet: View {
     let weekStart: Date
     let sourceKidId: String?
     @Binding var targetKidId: String?
+    /// US-353: report the recipe ids of the recipe-backed entries we copied so
+    /// the parent can fire the missing-ingredient prompt for them.
+    var onApplied: (Set<String>) -> Void = { _ in }
     let onDismiss: () -> Void
 
     @State private var isCopying = false
@@ -1296,6 +1305,12 @@ struct CopyWeekToKidSheet: View {
                     "Nothing copied to \(targetName)",
                     message: "All meals conflict with their allergens."
                 )
+            }
+
+            // US-353: hand the copied recipe-backed entries to the parent for
+            // the aggregated shortfall prompt.
+            if !result.copiedRecipeIds.isEmpty {
+                onApplied(Set(result.copiedRecipeIds))
             }
 
             onDismiss()

@@ -876,15 +876,14 @@ struct RecipeDetailView: View {
         }
     }
 
-    /// US-357: after the add-to-plan picker closes, compute the pantry
-    /// shortfall for the just-planned recipe and present the missing-ingredient
-    /// sheet (mirrors MealPlanView.handleAddEntryDismiss). Silent no-op when the
-    /// recipe has no structured ingredients or nothing is short.
+    /// US-357/US-353: after the add-to-plan picker closes, compute the pantry
+    /// shortfall for the just-planned recipe via the shared ShortfallChecker
+    /// (so legacy `food_ids` recipes prompt too) and present the
+    /// missing-ingredient sheet. Silent no-op when nothing is short.
     private func handleAddToPlanDismiss() {
         guard let planned = pendingShortfallRecipe else { return }
         pendingShortfallRecipe = nil
-        guard !planned.ingredients.isEmpty else { return }
-        let shortfalls = ShortfallCalculator.compute(recipe: planned, pantry: appState.foods)
+        let shortfalls = ShortfallChecker.shortfalls(for: planned, pantry: appState.foods)
         guard !shortfalls.isEmpty else { return }
         detailShortfall = DetailShortfallContext(recipe: planned, shortfalls: shortfalls)
     }

@@ -5362,8 +5362,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit findings (Planner-Pantry GAP-1, GAP-2; Recipe Flow 3 race condition)."
+      "passes": true,
+      "notes": "Audit findings (Planner-Pantry GAP-1, GAP-2; Recipe Flow 3 race condition). | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): new shared Utilities/ShortfallChecker (shortfalls(for:pantry:) with legacy food_ids fallback via synthesized ingredients [AC3]; aggregate(recipes:pantry:) dedup-by-name [AC5]) used by every recipe-add path. MealPlanView race fixed: pendingShortfallRecipeIds is a Set (was a single Recipe slot) drained+aggregated into ONE MissingIngredientsSheet on each sheets dismiss [AC4]; single-add, copy-to-kid both feed it. RecipeDetailView add-to-plan also routes through ShortfallChecker (legacy now prompts). MissingIngredientsSheet sources each grocery row by row.shortfall.ingredient.recipeId (non-optional) so aggregated multi-recipe sheets link correctly; analytics denom max(ingredients,shortfalls). copyWeekToOtherKid returns copiedRecipeIds; CopyWeekToKidSheet onApplied surfaces them. FINDING: AI plan (foods, US-398), applyTemplate + copyWeekPlan (both copy only foodId, no recipeId) produce food-only entries with NO recipe ingredients -> no recipe shortfall to prompt; correctly not wired. Tests ShortfallCheckerTests (structured, legacy fallback, aggregate dedup). Swift build = local Xcode."
     },
     {
       "id": "US-354",

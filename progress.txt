@@ -3020,3 +3020,11 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - AppState: structured -> v2 with computed debits + mirror EXACT amounts (AC5); legacy/no-recipe -> v1 + deduct_food_quantity (rounded); undo recomputes same pantry+scale.
 - Tests: scaled, cup->ml convert, cup->g incompatible+flag, summed dedupe.
 - Remaining false: 39.
+
+## 2026-06-14 (cont. 20) - Shared missing-ingredient prompt across plan-add paths (US-353)
+- New Utilities/ShortfallChecker: shortfalls(for:pantry:) (legacy food_ids fallback, AC3) + aggregate(recipes:pantry:) dedup-by-name (AC5). Tests ShortfallCheckerTests (3).
+- MealPlanView: race fix — pendingShortfallRecipeIds Set (was single slot) drained+aggregated into ONE MissingIngredientsSheet on sheet dismiss (AC4); single-add + copy-to-kid feed it. RecipeDetailView add-to-plan routed through ShortfallChecker (legacy prompts now).
+- MissingIngredientsSheet: per-row sourceRecipeId = ingredient.recipeId (aggregated multi-recipe sourcing); safe analytics denom.
+- copyWeekToOtherKid returns copiedRecipeIds; CopyWeekToKidSheet.onApplied surfaces them.
+- FINDING: AI plan (food-based), applyTemplate + copyWeekPlan (copy foodId only, no recipeId) -> food-only entries with no recipe ingredients -> no recipe shortfall; correctly not prompting.
+- Remaining false: 38.
