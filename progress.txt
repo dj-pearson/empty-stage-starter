@@ -2977,3 +2977,9 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - US-368: KidsView (.foodRow), BudgetView/FoodChainingView/ProgressDashboard OverviewTab (.card) show skeletons during initial load; FoodChaining empty hints gated on !isLoading.
 - US-369: PickyEaterQuiz + Onboarding transitions -> accessibleWithAnimation(reduceMotion:); SyncStatusBanner rotation -> accessibleAnimation. All gate on accessibilityReduceMotion.
 - Remaining false: 48.
+
+## 2026-06-14 (cont. 12) - Accessibility annotations (US-372)
+- Chart marks: InsightsCharts (4 charts) + JoyScoreChart PointMark get accessibilityLabel/value.
+- DayChip: full "Monday, June 14[, today]" + selected state + .isSelected trait.
+- FoodChip, ChainStepRow, ProgressStatCard, ProgressRow, BudgetView forecast: single labeled elements with values.
+- Remaining false: 47.

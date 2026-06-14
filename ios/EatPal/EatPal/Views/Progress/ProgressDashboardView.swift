@@ -153,6 +153,10 @@ struct ProgressRow: View {
             ProgressView(value: Double(count), total: Double(total))
                 .tint(color)
         }
+        // US-372: read the labeled bar as "Safe Foods, 8 of 20".
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue("\(count) of \(total)")
     }
 }
 
@@ -177,6 +181,10 @@ struct ProgressStatCard: View {
         .frame(maxWidth: .infinity)
         .padding()
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        // US-372: combine icon/value/title into one labeled stat.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
     }
 }
 

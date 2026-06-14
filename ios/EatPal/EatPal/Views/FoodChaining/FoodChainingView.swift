@@ -244,6 +244,11 @@ struct FoodChip: View {
             .foregroundStyle(isSelected ? .white : .primary)
         }
         .buttonStyle(.plain)
+        // US-372: announce the food + selection state instead of just the name.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(food.name)
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -285,6 +290,10 @@ struct ChainStepRow: View {
             }
             .padding(.bottom, isLast ? 0 : 8)
         }
+        // US-372: read the whole step as one element with full context.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Step \(stepNumber): \(step.foodName)")
+        .accessibilityValue(step.change)
     }
 
     private var stepColor: Color {

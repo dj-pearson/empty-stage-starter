@@ -5639,8 +5639,8 @@
         "Swift builds; spot-checked with VoiceOver where feasible"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit findings (Visual GAP-11, GAP-12, GAP-13). Extends US-246/US-256."
+      "passes": true,
+      "notes": "Audit findings (Visual GAP-11, GAP-12, GAP-13). Extends US-246/US-256. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): chart marks now expose accessibilityLabel/value — InsightsCharts (PantryDistribution/Weekly/FoodResults/Allergen Sector+Bar marks) and JoyScoreChart PointMark; DayChip announces \"Monday, June 14[, today], Selected/Not selected\" with .isSelected trait; FoodChip selectors + ChainStepRow + ProgressStatCard/ProgressRow + BudgetView forecast read as single labeled elements."
     },
     {
       "id": "US-373",

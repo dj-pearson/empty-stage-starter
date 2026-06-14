@@ -425,7 +425,19 @@ struct DayChip: View {
             .foregroundStyle(isSelected ? .white : .primary)
         }
         .buttonStyle(.plain)
+        // US-372: announce full context instead of just the day number.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(DayChip.accessibilityLabel.string(from: date) + (isToday ? ", today" : ""))
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
+
+    /// Full "Monday, June 14" style label for VoiceOver.
+    private static let accessibilityLabel: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("EEEEMMMMd")
+        return formatter
+    }()
 }
 
 // MARK: - Meal Slot Card

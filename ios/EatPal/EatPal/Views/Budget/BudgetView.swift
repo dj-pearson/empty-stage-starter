@@ -112,6 +112,10 @@ struct BudgetView: View {
                         .font(.title2)
                         .foregroundStyle(.green)
                 }
+                // US-372: read the forecast as one labeled stat.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("This week's grocery")
+                .accessibilityValue(BudgetService.format(groceryTotal, currency: groceryCurrency))
 
                 if unpricedGroceryCount > 0 {
                     Label(
