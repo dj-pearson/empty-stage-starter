@@ -5850,8 +5850,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Performance). The name 'CachedAsyncImage' is misleading — no real caching/eviction exists."
+      "passes": true,
+      "notes": "Audit finding (Performance). The name 'CachedAsyncImage' is misleading — no real caching/eviction exists. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): rewrote CachedAsyncImage to use a real cache — new @MainActor ThumbnailImageCache (NSCache memory layer + URLSession with a bounded URLCache: 25MB mem / 150MB disk) and ThumbnailImageLoader; the view loads via .task(id:url) so a re-appearing same-URL row hits cache, not network. networkFetchCount test hook + ThumbnailImageCacheTests (cache hit does not refetch)."
     },
     {
       "id": "US-388",
@@ -5864,8 +5864,8 @@
         "Swift builds"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Audit finding (Stability/Perf). Correctness holds via @MainActor today, but the triple-debounce + full-rescan is wasteful on the hot toggle path (toggleGroceryItem at AppState.swift:1112)."
+      "passes": true,
+      "notes": "Audit finding (Stability/Perf). Correctness holds via @MainActor today, but the triple-debounce + full-rescan is wasteful on the hot toggle path (toggleGroceryItem at AppState.swift:1112). | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): refreshWidgetSnapshot now calls WidgetSnapshot.writeImmediately instead of write — the AppState Combine pipeline already debounces the whole O(n) rebuild by 500ms, so the second chained 0.5s timer was redundant; now a single coalesced pass per debounce window -> one reloadTimelines. Confirmed WidgetSnapshot and WatchConnectivityService debounce state are both @MainActor-isolated (no cross-thread mutation)."
     },
     {
       "id": "US-389",

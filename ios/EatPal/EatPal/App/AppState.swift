@@ -230,7 +230,13 @@ final class AppState: ObservableObject {
             tryBiteStreak: 0  // placeholder — real streak calc is a future story
         )
 
-        WidgetSnapshot.write(payload)
+        // US-388: the Combine pipeline above already debounces this whole
+        // O(n) rebuild by 500ms, so the snapshot is coalesced to a single pass
+        // per window. Writing immediately here avoids a redundant SECOND
+        // debounce timer (the old `WidgetSnapshot.write` chained another 0.5s
+        // delay on top), which only added latency and another reload. Both
+        // this and WatchConnectivityService's 1.5s debounce are @MainActor.
+        WidgetSnapshot.writeImmediately(payload)
     }
 
     // MARK: - Computed Properties

@@ -2967,3 +2967,8 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - US-382: loadAllData writes the cache on success; on a connectivity-class failure falls back to the cache (Offline toast) instead of empty lists. New isConnectivityError() helper (NetworkMonitor + URLError codes).
 - US-385: replay inserts -> upsert(onConflict:id) (idempotent); syncPendingMutations tracks attemptCount (new defaulted @Model field) and quarantines a poison mutation after 5 attempts so it can't head-of-line block; transient failures still break to preserve order. AC3 drain test needs mocked Supabase (integration) — source-audit verified.
 - Remaining false: 52.
+
+## 2026-06-14 (cont. 10) - Thumbnail cache + widget debounce coalescing (US-387/388)
+- US-387: CachedAsyncImage now backed by ThumbnailImageCache (NSCache + bounded URLCache 25/150MB) + ThumbnailImageLoader; .task(id:url) loads, re-appearing rows hit cache. networkFetchCount hook + ThumbnailImageCacheTests (2).
+- US-388: refreshWidgetSnapshot -> writeImmediately (Combine already debounces 500ms; dropped redundant 2nd timer); single coalesced pass per window -> one reload. WidgetSnapshot + WatchConnectivityService debounce state confirmed @MainActor.
+- Remaining false: 50.
