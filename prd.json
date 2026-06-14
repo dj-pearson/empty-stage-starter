@@ -5656,6 +5656,553 @@
       "priority": 4,
       "passes": false,
       "notes": "Audit finding (Visual GAP - IA depth). Needs a product call from the owner before implementing; captured as a story per request."
+    },
+    {
+      "id": "US-374",
+      "title": "iOS Auth: bind-email set-password bypasses the 12-char password policy (8-char min)",
+      "description": "As a security owner, I want every password-setting path to enforce the same strength rules. BindEmailView's set-password step validates with isPasswordValid = password.count >= 8 && password == confirmPassword (BindEmailView.swift:212-214) and calls AuthService.setPassword (AuthService.swift:166-168), bypassing PasswordValidator (12 chars + upper/lower/number/special, PasswordValidator.swift:11-34) that the normal signup path enforces. An Apple user who binds an email can set an 8-char weak password that then works for email sign-in, undermining policy parity with the web app.",
+      "acceptanceCriteria": [
+        "BindEmailView password step calls PasswordValidator.validate() and blocks submit unless isValid",
+        "The set-password UI shows the same strength indicator / failed-rule list as AuthView signup",
+        "Footer copy updated from 'At least 8 characters' to the real 12-char requirement",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Auth/Security). BindEmailView.swift:165 placeholder + :212-214 validation; contrast AuthViewModel.isFormValid (.signUp) at AuthViewModel.swift:163-165 which requires passwordValidation.isValid."
+    },
+    {
+      "id": "US-375",
+      "title": "iOS StoreKit: restorePurchases never writes the server apple_subscriptions record",
+      "description": "As a subscriber restoring on a new device, I want the server to know I'm subscribed. StoreKitService.purchase() and the transaction listener both call syncSubscriptionToSupabase() (StoreKitService.swift:145,187), but restorePurchases() (StoreKitService.swift:171-176) only calls updateCustomerProductStatus() — it never upserts to apple_subscriptions. That row is the lookup the refund handler uses keyed by originalTransactionId. So a user who reinstalls/switches devices and restores keeps client-side entitlements but has NO server record, meaning App Store Server Notifications (refund/revocation) can't map back to the user and any server-side entitlement check sees them as free.",
+      "acceptanceCriteria": [
+        "restorePurchases() iterates currentEntitlements and calls syncSubscriptionToSupabase() for each verified transaction",
+        "A restore on a fresh install produces an apple_subscriptions row keyed by original_transaction_id",
+        "Sync failures are reported to Sentry (not just print) so silent gaps are observable",
+        "Swift builds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit finding (Billing integrity). StoreKitService.swift:171-176 vs :134-167; sync rationale at :234-277."
+    },
+    {
+      "id": "US-376",
+      "title": "iOS StoreKit: subscription sync failures are silently swallowed via print()",
+      "description": "As an operator, I want to detect when a paid subscription fails to record server-side. syncSubscriptionToSupabase() catches all errors with only print('Failed to sync subscription to Supabase: ...') (StoreKitService.swift:274-276), and listenForTransactions() does the same for verification failures (StoreKitService.swift:189-191). In release builds these prints go nowhere and there's no Sentry capture, so a user can pay, get client-side entitlement, but have no apple_subscriptions row — and no one is alerted.",
+      "acceptanceCriteria": [
+        "Both catch blocks call SentryService.capture(error, extras:) with a context tag",
+        "No raw print() remains in StoreKitService release paths",
+        "A failed upsert is observable in Sentry with productID/originalTransactionID context (no PII)",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Stability). StoreKitService.swift:189-191 and :274-276. SentryService.capture already exists and scrubs PII (SentryService.swift:83-92)."
+    },
+    {
+      "id": "US-377",
+      "title": "iOS Auth: Apple stable user identifier sent to Sentry as un-scrubbed PII",
+      "description": "As a privacy owner, I want Apple's stable user identifier kept out of crash telemetry. On a failed Apple token exchange, AuthViewModel captures the error with extras: ['userIdentifier': appleCredential.user] (AuthViewModel.swift:276-279). appleCredential.user is Apple's stable per-app user ID. SentryService.scrub only redacts a fixed key list — authorization/email/name/token/etc. (SentryService.swift:122-139) — and 'userIdentifier' is NOT in it, so this identifier leaves the device into Sentry extras unredacted.",
+      "acceptanceCriteria": [
+        "Remove appleCredential.user from the Sentry extras, or hash it before attaching",
+        "Add 'userid'/'useridentifier' style keys to SentryService.sensitiveKeys, or switch the extra to a non-identifying value",
+        "Verify no other Apple credential fields (user, fullName) are sent to Sentry/analytics",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Security/Privacy). AuthViewModel.swift:278; scrub key list SentryService.swift:122-126."
+    },
+    {
+      "id": "US-378",
+      "title": "iOS Auth: no email format validation before signup/sign-in/reset submit",
+      "description": "As a user, I want a clear inline message when my email is malformed instead of a confusing server error. AuthViewModel.isFormValid only checks email.isEmpty for all three modes (AuthViewModel.swift:158-169) and submit() sends whatever is typed straight to Supabase (AuthViewModel.swift:173-199). A typo like 'me@' round-trips to the server and surfaces error.localizedDescription (AuthViewModel.swift:195), a raw backend message. The bind-email screen already does a basic format check (BindEmailView.swift:205-210); the primary auth form does not.",
+      "acceptanceCriteria": [
+        "isFormValid requires a basic email format (contains '@' and a dot in the domain) for all three modes",
+        "Malformed email shows an inline validation message and disables submit, without a network round-trip",
+        "Existing valid-email flows are unaffected",
+        "Swift builds"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Audit finding (UX). AuthViewModel.swift:158-169 (validation), :194-196 (raw localizedDescription surfaced). Compare BindEmailView.swift:205-210."
+    },
+    {
+      "id": "US-379",
+      "title": "iOS Push: APNs token upsert lacks user_id and conflict target, cross-linking devices",
+      "description": "As an operator, I want each device's push token tied to its user and de-duplicated. handleDeviceToken upserts into push_notifications with only { endpoint, platform, keys } and no user_id and no onConflict target (NotificationService.swift:60-73). Without a conflict column the upsert behaves as a blind insert (duplicate rows per re-registration), and with no user_id the server can't route a push to the right account or sends to a stale token. Also depends on RLS for push_notifications; if INSERT is permissive this is a write path with no ownership stamp.",
+      "acceptanceCriteria": [
+        "Payload includes the authenticated user_id from the current session",
+        "Upsert specifies an explicit onConflict (e.g. endpoint or user_id+endpoint) to avoid duplicate rows",
+        "Verify push_notifications RLS requires auth.uid() = user_id for INSERT/UPDATE",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Stability/Data integrity). NotificationService.swift:60-73 — no user_id field, no onConflict on the upsert."
+    },
+    {
+      "id": "US-380",
+      "title": "iOS Auth: no app version / force-update gate despite backward-compat-breaking migration model",
+      "description": "As a release owner, I want the app to detect when it is below a server-declared minimum build and prompt an update. The native app has no MIN_SUPPORTED_IOS_BUILD check or force-update screen anywhere. CLAUDE.md's migration rules require that any backward-incompatible migration be paired with a force-update screen and a min-version bump shipped at least one release before the migration lands. Without a client-side version gate, that safety mechanism cannot be honored.",
+      "acceptanceCriteria": [
+        "App fetches a server-provided minimum supported build on launch (config/edge function)",
+        "When CFBundleVersion < minimum, RootView shows a blocking update screen linking to the App Store",
+        "Gate fails open on network error so a config outage doesn't lock everyone out",
+        "Swift builds"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Audit finding (Stability/Release). No force-update/min-version code in ios/EatPal; RootView.swift:7-26 only branches on auth state. CLAUDE.md Migration Rules require this pairing."
+    },
+    {
+      "id": "US-381",
+      "title": "iOS Realtime: snake_case CodingKeys + .convertFromSnakeCase double-conversion breaks decode",
+      "description": "As a caregiver in a shared household, I want live edits from the web/other devices to actually appear. RealtimeService decodes every payload with JSONDecoder.supabase which sets keyDecodingStrategy=.convertFromSnakeCase (RealtimeService.swift:316-321), but every model declares EXPLICIT snake_case CodingKeys (Food.swift:31-46 has userId='user_id', isSafe='is_safe'). Swift applies .convertFromSnakeCase to the incoming key FIRST (is_safe -> isSafe) then matches against the CodingKey rawValue which is literally 'is_safe' -> no match. Non-optional multi-word fields fail, the whole decodeRecord throws, and the error is swallowed by try? (RealtimeService.swift:136/142/157/178/207/295). Result: realtime insert/update events silently never apply to AppState. DataService fetch uses the SDK default decoder (respects CodingKeys) so initial load works, masking the bug.",
+      "acceptanceCriteria": [
+        "RealtimeService decodes payloads with a decoder that does NOT set .convertFromSnakeCase (use the SDK/default decoder so explicit CodingKeys match)",
+        "A decode test feeds a realtime-shaped payload with user_id/is_safe/created_at and asserts Food/GroceryItem/PlanEntry decode with all fields populated",
+        "Live insert and update events from a second client are reflected in AppState collections",
+        "Decode failures in handlers are logged to Sentry instead of being swallowed by try?",
+        "Swift builds"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Audit finding (CRITICAL — realtime sync broken). Distinct from US-333 (web payload normalization). OfflineStore.swift:393-396 explicitly documents that domain structs declare snake_case CodingKeys so the default key strategy must be kept — RealtimeService violates exactly this. Verified: JSONDecoder.supabase is used ONLY in RealtimeService; Food.swift:31-46 confirms explicit snake_case CodingKeys."
+    },
+    {
+      "id": "US-382",
+      "title": "iOS Offline: SwiftData read-cache is dead code — launching offline shows empty lists",
+      "description": "As a user on a plane / with no signal, I want to see my last-synced foods, kids and grocery list. OfflineStore implements cacheFoods/cacheKids/cacheGroceryItems/loadCachedFoods (OfflineStore.swift:182-216) but none are called outside OfflineStore.swift. AppState.loadAllData() (AppState.swift:256-330) fetches straight from Supabase and, on failure, only sets errorMessage + a toast (AppState.swift:320-327) — it never falls back to the SwiftData cache and never populates it on success. A cold launch offline yields blank Pantry/Planner/Grocery. US-150 delivered the write queue, not the read cache.",
+      "acceptanceCriteria": [
+        "loadAllData() writes fetched foods/kids/grocery items into the SwiftData cache on success",
+        "loadAllData() falls back to loadCachedFoods/Kids/GroceryItems when the network fetch fails with a connectivity error",
+        "Launching the app offline shows last-synced data instead of empty lists",
+        "Swift builds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit finding (Stability). Infrastructure built but unwired. Pairs with US-383 — cache also lacks eviction so wiring it naively would leak."
+    },
+    {
+      "id": "US-383",
+      "title": "iOS Offline: cache inserts never clear stale rows — unbounded growth & duplicate-key risk",
+      "description": "As a long-term user, I don't want the offline DB to grow forever or fail saves. cacheFoods/cacheKids/cacheGroceryItems (OfflineStore.swift:182-216) loop context.insert(...) then try? context.save() without first deleting rows that no longer exist server-side and without upsert semantics. Re-caching the same id relies on @Attribute(.unique) throwing on conflict (CachedFood.id, OfflineStore.swift:12) — the save then silently fails via try?, so an updated row never refreshes and deleted-server-side rows linger forever. There is no prune pass anywhere.",
+      "acceptanceCriteria": [
+        "Cache writes upsert (fetch-existing-then-update, or delete-all-then-insert) so updated rows refresh and deletions are pruned",
+        "Re-caching an existing id does not silently fail the whole save",
+        "A test caches a set, re-caches a smaller set, and asserts removed ids are gone from the cache",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Stability). Blocks safely wiring the dead read-cache from US-382."
+    },
+    {
+      "id": "US-384",
+      "title": "iOS Realtime: channels subscribe to all users' rows (no filter), relying solely on RLS",
+      "description": "As a user, I want the realtime socket to carry only my household's changes. RealtimeService.subscribe builds postgresChange for foods/kids/grocery_items/plan_entries/recipes with schema+table only and NO filter clause (RealtimeService.swift:22-104). Channel names are global static strings ('foods-changes', etc.) rather than household-scoped. Handlers re-filter client-side by id membership. A no-filter subscription is broader than needed and the global channel names contradict US-332's stated household-scoped goal — two devices/households share the same channel name on the client.",
+      "acceptanceCriteria": [
+        "Each postgresChange adds a filter scoping to the current user's user_id or household_id where the table supports it",
+        "Channel names are namespaced per household/user (e.g. 'foods-changes-<householdId>') so they don't collide",
+        "Subscriptions are torn down and re-created on household switch / re-auth",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Performance/Correctness). US-332 claimed household-scoped channel names but the code uses global names with no filters — verified at RealtimeService.swift:22,39,56,73,90."
+    },
+    {
+      "id": "US-385",
+      "title": "iOS Sync: offline queue replays inserts that already succeeded, risking duplicate-id inserts and head-of-line blocking",
+      "description": "As a user who added items while flaky, I don't want duplicate or failed inserts on reconnect. addGroceryItem enqueues an offline INSERT only when isNetworkError is true (AppState.swift:1030-1034), but the realtime echo / a later loadAllData can re-introduce the same row; on reconnect syncPendingMutations replays a plain .insert (OfflineStore.swift:350) which will 409/duplicate-key if the row reached the server via another path. Because syncPendingMutations stops on first failure (OfflineStore.swift:319) a single poison insert blocks the entire queue behind it indefinitely.",
+      "acceptanceCriteria": [
+        "Replayed inserts use upsert/onConflict on id (or pre-check existence) so a row that already landed doesn't 409",
+        "A failed/duplicate mutation is quarantined or skipped rather than permanently head-of-line-blocking the queue",
+        "Test: enqueue an insert whose row already exists server-side; sync drains the queue without permanently stalling",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Stability). US-150 built the durable queue; this is the conflict/head-of-line-blocking gap it left."
+    },
+    {
+      "id": "US-386",
+      "title": "iOS Perf: clearCheckedGroceryItems fires N serial deletes instead of one bulk delete",
+      "description": "As a user clearing a finished list, I don't want 30 serial network round-trips. clearCheckedGroceryItems loops `for id in checkedIds { try await dataService.deleteGroceryItem(id) }` (AppState.swift:1218-1221), one HTTP request per item. DataService already exposes bulkDeleteGroceryItems (DataService.swift:401-407) using a single .in('id', ids) delete, and the sibling moveCheckedToPantry path was already migrated to it (AppState.swift:1345, per US-365) — clearCheckedGroceryItems was missed. A 40-item clear is 40 sequential requests, slow and partial-failure-prone.",
+      "acceptanceCriteria": [
+        "clearCheckedGroceryItems calls dataService.bulkDeleteGroceryItems(Array(checkedIds)) in one round-trip",
+        "Rollback restores the full snapshot on failure (no half-deleted server state)",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Performance). Same N+1 pattern US-334/US-365 already fixed elsewhere; call site AppState.swift:1218-1221 was overlooked."
+    },
+    {
+      "id": "US-387",
+      "title": "iOS Perf: 'CachedAsyncImage' has no shared cache/eviction — thumbnails refetch on every scroll",
+      "description": "As a user scrolling Recipes, I don't want every thumbnail re-downloaded each time a cell reappears. CachedAsyncImage is a thin wrapper over SwiftUI's AsyncImage (CachedAsyncImage.swift:11-37) which only keeps a transient cache tied to view lifetime — scrolling a RecipesView list re-issues the network request for each off-then-on-screen row, and there is no URLCache configuration or memory/disk eviction policy. RecipeThumbnail/AvatarView inherit the same behavior.",
+      "acceptanceCriteria": [
+        "Images are served from a configured URLCache (or a small NSCache-backed loader) so a re-appearing row hits cache, not network",
+        "Cache has a bounded memory + disk capacity so it can't grow unbounded",
+        "Recipe list scrolling does not re-issue network requests for already-loaded thumbnails (verify via a request counter in tests)",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Performance). The name 'CachedAsyncImage' is misleading — no real caching/eviction exists."
+    },
+    {
+      "id": "US-388",
+      "title": "iOS Concurrency: WidgetSnapshot/WatchConnectivity triple-debounce re-runs full O(n) snapshot rebuilds",
+      "description": "As a developer, I want the snapshot rebuild coalesced and race-free. WidgetSnapshot stores a static mutable pendingWorkItem mutated from write()/writeImmediately() (WidgetSnapshot.swift:33,55-74). Combined with the 500ms AppState combineLatest debounce (AppState.swift:163-174) AND the watch's own 1.5s debounce (WatchConnectivityService.swift:47-54), a burst of mutations chains three timers and rebuilds the full snapshot payload (iterating planEntries/foods/recipes/groceryItems, AppState.swift:177-234) on each fire on the main thread.",
+      "acceptanceCriteria": [
+        "Snapshot rebuild is coalesced to a single pass per debounce window rather than re-run per chained timer",
+        "Debounce timer state is confirmed MainActor-isolated (or moved to an actor) with no cross-thread mutation",
+        "Rapid sequential grocery toggles produce at most one widget timeline reload per debounce window",
+        "Swift builds"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Audit finding (Stability/Perf). Correctness holds via @MainActor today, but the triple-debounce + full-rescan is wasteful on the hot toggle path (toggleGroceryItem at AppState.swift:1112)."
+    },
+    {
+      "id": "US-389",
+      "title": "iOS Pantry Scan: barcode scan of an existing pantry item creates a duplicate (no merge)",
+      "description": "As a parent re-scanning an item I already track, I want the scan to update my existing pantry entry, not create a second copy. ScannedProductView.addFood() (ScannedProductView.swift:149-181) always constructs a new Food with a fresh UUID and calls appState.addFood — it never looks up an existing food by barcode or name first, so re-scanning a tracked product silently duplicates the row. US-364 (consistent pantry dedup) is still PENDING and the scan entry point is one of the easiest ways to hit this.",
+      "acceptanceCriteria": [
+        "Before inserting, ScannedProductView checks appState.foods for a barcode match (then a case-insensitive name match) and, on hit, offers 'Update existing' vs 'Add new'",
+        "Choosing update increments/refreshes the existing food rather than inserting a new row",
+        "Manual entry path (lookupFailed) also dedupes on name",
+        "Swift builds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit finding (Functionality). Verified ScannedProductView.swift:168-181 builds Food(id: UUID()...) unconditionally; no dedup call on the scan path. Related to PENDING US-364."
+    },
+    {
+      "id": "US-390",
+      "title": "iOS Receipt Scan: matched-existing-food indicator is cosmetic; save still inserts duplicates",
+      "description": "As a user importing a receipt, I want items the app already recognizes in my pantry to merge, not duplicate. ScanReceiptSheet computes matchedFoodId via ReceiptScanService.matchExistingFood and shows a blue 'will match' icon (ScanReceiptSheet.swift:195-199, 321-325), but save() (ScanReceiptSheet.swift:239-261) maps every accepted row to a brand-new Food(id: UUID()) and calls bulkInsertFoods — matchedFoodId is never consulted, so 'matched' items become duplicates.",
+      "acceptanceCriteria": [
+        "save() routes rows with a non-nil matchedFoodId to an update/merge of the existing food instead of an insert",
+        "Only unmatched rows are bulk-inserted as new foods",
+        "The 'will match an existing pantry food' icon reflects the action actually taken",
+        "Swift builds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit finding (Functionality). matchExistingFood return value is stored on ReviewRow.matchedFoodId and rendered (ScanReceiptSheet.swift:321) but unused in save(). Related to PENDING US-364."
+    },
+    {
+      "id": "US-391",
+      "title": "iOS Scanner: no manual barcode entry / rescan when lookup fails or won't scan",
+      "description": "As a user with a damaged or unscannable barcode, I want to type the digits or try again without backing all the way out. UnifiedScannerView barcode mode only returns on a successful scan and has no 'enter manually' affordance; when the lookup fails, ScannedProductView shows 'Product not found, enter details manually' (ScannedProductView.swift:34-43) but provides no button to re-open the scanner or re-run the lookup — the user must Cancel and restart the whole flow.",
+      "acceptanceCriteria": [
+        "ScannedProductView shows a 'Scan again' / 'Retry lookup' action on lookupFailed",
+        "UnifiedScannerView (or ScannedProductView) offers a 'Type barcode' fallback that feeds the same lookup pipeline",
+        "Retry re-enters loading state and re-calls BarcodeService.lookup",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Ease-of-use). ScannedProductView.swift:132-147 sets lookupFailed but renders no retry/rescan control; UnifiedScannerView.swift:204-213 only emits on success."
+    },
+    {
+      "id": "US-392",
+      "title": "iOS Scanner: modern DataScanner barcode mode has no torch toggle for dark aisles",
+      "description": "As a user scanning in a dim pantry or low-lit aisle, I want a flashlight toggle. The legacy fallback BarcodeScannerView has a torch button (BarcodeScannerView.swift:39-46), but the primary iOS-17 UnifiedScannerView.modernScanner toolbar (UnifiedScannerView.swift:103-120) only has Cancel/Done — there is no torch control on the path most users actually hit, making barcodes in low light hard to read.",
+      "acceptanceCriteria": [
+        "UnifiedScannerView modern path exposes a torch toggle in the toolbar or overlay",
+        "Torch state is reset/turned off on dismiss",
+        "Torch control is hidden when the device has no torch",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (UX). Compared UnifiedScannerView.swift:103-120 (no torch) against BarcodeScannerView.swift:39-46 (has torch) — parity gap on the preferred scanner."
+    },
+    {
+      "id": "US-393",
+      "title": "iOS Voice Add: mic/speech denial not surfaced until first mic tap; no Settings deep-link",
+      "description": "As a user who previously denied microphone or speech access, I want the Voice Add sheet to tell me upfront and point me to Settings. VoiceAddGrocerySheet's .task calls voice.requestAuthorization() and discards the result (VoiceAddGrocerySheet.swift:46-48); the denied state only appears as a transient toast after the user taps the mic and start() fails (toggleRecording, line 211). There is no persistent 'enable in Settings' affordance like BarcodeScannerView's permission-denied view (BarcodeScannerView.swift:97-120).",
+      "acceptanceCriteria": [
+        "On appear, if authorization is .micDenied/.speechDenied/.bothDenied, the sheet shows a persistent explanatory state with an 'Open Settings' button (UIApplication.openSettingsURLString)",
+        "The mic button is disabled or routes to the Settings prompt when permission is denied",
+        "Authorized users see no change",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (UX). requestAuthorization result discarded at VoiceAddGrocerySheet.swift:47; VoiceInputService already returns granular .micDenied/.speechDenied/.bothDenied (VoiceInputService.swift:83-88) but the sheet never reads it proactively."
+    },
+    {
+      "id": "US-394",
+      "title": "iOS Voice Add: live waveform animation ignores Reduce Motion",
+      "description": "As a motion-sensitive user, I want the voice waveform to not animate when Reduce Motion is on. VoiceAddGrocerySheet's WaveformView animates each bar's height with .easeInOut on every input-level change (VoiceAddGrocerySheet.swift:299) with no accessibilityReduceMotion gate, unlike sibling scanner/shopping views that already gate their animations (BarcodeScannerView ScanLineView at BarcodeScannerView.swift:145-159, ShoppingModeView at lines 333-348).",
+      "acceptanceCriteria": [
+        "WaveformView reads @Environment(\\.accessibilityReduceMotion) and renders static bars (or a non-animated level meter) when enabled",
+        "Recording state is still conveyed without motion (color/label)",
+        "Swift builds"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Audit finding (Accessibility). VoiceAddGrocerySheet.swift:278-303 WaveformView has no reduceMotion check; the recording-button pulse (line 163-164) is likewise ungated. Related to PENDING US-369."
+    },
+    {
+      "id": "US-395",
+      "title": "iOS Scanner: grocery-list OCR transcript discarded on Cancel with no data-loss guard",
+      "description": "As a user who has slowly scanned a long handwritten list line-by-line, I want a warning before I lose it. In UnifiedScannerView grocery-list mode the Cancel toolbar button dismisses immediately (UnifiedScannerView.swift:104-109) and discards collectedText even when many lines have been recognized, while Done is the only path that emits them. There's no confirmation when collectedText is non-empty, so an accidental Cancel throws away accumulated scan work.",
+      "acceptanceCriteria": [
+        "In groceryList mode, tapping Cancel when collectedText is non-empty shows a confirmation ('Discard N recognized lines?')",
+        "Barcode mode and empty-list cancel dismiss without a prompt",
+        "Swift builds"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Audit finding (UX). UnifiedScannerView.swift:104-109 dismisses unconditionally; collectedText (line 53) is only emitted via the Done button at line 112-118."
+    },
+    {
+      "id": "US-396",
+      "title": "iOS AI Coach: surface edge failures with retry instead of masking as a canned reply",
+      "description": "As a parent, I want to know when the AI Coach failed so I can retry, not get a generic scripted answer presented as the real AI. AICoachService.sendMessage (AICoachService.swift:64-74) swallows every edge error (network/auth/5xx) and appends a keyword-matched canned response as an .assistant ChatMessage indistinguishable from a true model reply; the failure is only print()'d under #if DEBUG. The user sees a confident but generic answer and has no retry affordance.",
+      "acceptanceCriteria": [
+        "On edge-call failure, the failed turn is visibly marked as an error (e.g. an error bubble or banner), not a silent canned answer",
+        "A 'Retry' affordance re-sends the last user message without re-typing",
+        "Canned fallback is only used when offline (network.isConnected == false) or clearly labeled as offline tips, not for transient 5xx",
+        "Failures are logged to Sentry, not only DEBUG print",
+        "Swift builds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit finding (Stability). AICoachView.swift has an offline banner (line 62) but the service still fabricates a fallback answer on any failure; no message-level error state or retry exists in the chat UI."
+    },
+    {
+      "id": "US-397",
+      "title": "iOS AI Meal Plan: add offline guard + disable generate while in-flight to prevent duplicate calls",
+      "description": "As a parent, I want the AI plan screen to tell me I'm offline and to stop me firing duplicate generations. AIMealPlanView has no NetworkMonitor check (unlike AICoachView.swift:62) so offline taps spin for 60s then fall back silently; and Generate/Regenerate/'Plan from fridge' (AIMealPlanView.swift:50-66,142-148,163-165) are not gated on a network state and 'Add All' (line 119) is re-tappable, so a second tap re-runs generateSuggestions or re-adds entries.",
+      "acceptanceCriteria": [
+        "An offline banner appears when NetworkMonitor.shared.isConnected is false, matching AICoachView",
+        "Generate / Regenerate buttons are disabled (or no-op) while aiService.isLoading",
+        "'Add All to Plan' is disabled while the add loop runs to prevent duplicate plan entries",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (UX). EdgeFunctions.invoke uses a 60s timeoutInterval (EdgeFunctions.swift:73), so an offline generate looks frozen for a full minute before the local fallback in AIMealService.swift:219 kicks in."
+    },
+    {
+      "id": "US-398",
+      "title": "iOS AI Meal Plan: skip suggestions with no foodId instead of creating orphan plan entries",
+      "description": "As a parent, I want every meal I add from AI suggestions to reference a real food. AIMealPlanView.addSuggestionToPlan (AIMealPlanView.swift:225) does `let foodId = suggestion.foodId ?? ''` and creates a PlanEntry with an empty foodId when the LLM returns a name but no matched food_id (MealSuggestion.foodId is optional, AIMealService.swift:21). 'Add All' (line 238-244) adds these blindly, producing plan entries that resolve to 'Unknown' and break pantry/grocery/budget cross-references downstream.",
+      "acceptanceCriteria": [
+        "Suggestions with a nil/empty foodId either resolve to a created/matched Food or are not written as a PlanEntry with empty foodId",
+        "When a food can't be resolved, the user is told (toast or inline) rather than silently adding an orphan entry",
+        "'Add All' reports an accurate count of entries actually added vs skipped",
+        "Swift builds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit finding (Functionality). StarterMealPlanService.resolveFood (StarterMealPlanService.swift:174) auto-creates a Food when the name is missing; the AI path has no equivalent and just writes foodId == ''."
+    },
+    {
+      "id": "US-399",
+      "title": "iOS Food Chaining: generate real property-based chains and let users save them",
+      "description": "As a parent doing feeding therapy, I want a food chain built from the real similarity between my safe food and the target, and I want to keep it. FoodChainingView.generateChain (FoodChainingView.swift:144-199) emits hardcoded placeholder steps ('Modified <name>', 'Mixed plate', 'Similar <category>') driven only by whether categories match; it ignores texture/flavor/color/temperature despite the on-screen promise (lines 22-24). isGenerating is set true/false synchronously (lines 146,198) so the spinner never shows, and chainSteps is @State only (line 9) — every chain is lost on dismiss with no save/share.",
+      "acceptanceCriteria": [
+        "Chain steps are derived from actual shared/adjacent food properties (category plus at least texture or flavor) rather than fixed template strings",
+        "Generated chains can be saved or added to the plan/notes so they persist beyond the view's lifetime",
+        "A loading state is shown only if generation is actually async, otherwise the spinner code is removed",
+        "Empty/insufficient-foods state guides the user when no safe or try-bite foods exist",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Functionality). The view never references RecipeMatcher or any property-similarity helper; it's effectively a static explainer with cosmetic steps. No persistence path exists for chains."
+    },
+    {
+      "id": "US-400",
+      "title": "iOS Edge calls: add retry-on-transient + cancellable timeout to EdgeFunctions.invoke",
+      "description": "As a parent on flaky cellular, I want AI/recipe calls to retry a transient failure rather than immediately dropping to a degraded fallback. EdgeFunctions.invokeRaw (EdgeFunctions.swift:60-82) does a single URLSession attempt with a fixed 60s timeoutInterval, no retry on 502/503/504 or URLError.timedOut, and no Task-cancellation token — so a transient Kong/Coolify hiccup forces AIMealService/RecipeImportService/AICoachService onto fallbacks or surfaces an error, and a cancelled view can't abort the request.",
+      "acceptanceCriteria": [
+        "Transient failures (502/503/504, connection lost, timed out) are retried with backoff at least once before failing",
+        "The request honors Task cancellation so dismissing the view aborts in-flight work",
+        "Retry/timeout behavior is centralized in EdgeFunctions so all AI callers benefit",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Stability). TonightModeService wraps its own 1.5s soft timeout (TonightModeService.swift:294) but that pattern isn't reused; other AI calls just use the raw 60s URLSession with no retry."
+    },
+    {
+      "id": "US-401",
+      "title": "iOS AI Coach: make the in-flight request cancellable on reset and view dismiss",
+      "description": "As a parent, I want tapping Reset (or leaving the screen) while the coach is thinking to actually stop the request. AICoachView.sendMessage (AICoachView.swift:171-174) fires an unstructured Task with no stored handle, and the toolbar Reset button (lines 153-160) calls coachService.clearChat() without cancelling the live sendMessage Task — so a late response appends onto the freshly-cleared conversation and isLoading can flip back on after reset.",
+      "acceptanceCriteria": [
+        "The active send Task is retained and cancelled by clearChat() / Reset",
+        "A response that arrives after reset/cancel is discarded, not appended",
+        "isLoading is reset correctly when a send is cancelled",
+        "Swift builds"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Audit finding (Performance/Correctness). AICoachService.isLoading is a shared @Published on a singleton (AICoachService.swift:5,8); a stale completion can re-append a ChatMessage and reactivate the typing indicator after reset."
+    },
+    {
+      "id": "US-402",
+      "title": "iOS Tonight Cook: fix step parser so decimals/abbreviations don't split mid-step",
+      "description": "As a parent cooking hands-free, I want each cook step to be a real step, not a fragment. TonightCookSheet.parseSteps (TonightCookSheet.swift:222-246) falls back to splitting on '. ' when no bullet/numbered lines are found, which fractures instructions like 'Add 1.5 cups...' or 'Preheat to 350. Mr. Smith...' into nonsense steps, and the step text drives the AVSpeech voice cue (line 219).",
+      "acceptanceCriteria": [
+        "Sentence-split fallback does not break on decimals (e.g. '1.5'), abbreviations, or 'No.'",
+        "Single-blob instructions with no delimiters render as one step rather than over-segmenting",
+        "Voice cue reads the corrected step text",
+        "Swift builds"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Audit finding (Functionality). The bullet/number regex path (line 226) is fine; only the naive .components(separatedBy: '. ') fallback (line 243) is fragile and feeds both the on-screen step and the spoken cue. Related to PENDING US-359."
+    },
+    {
+      "id": "US-403",
+      "title": "iOS Notifications: preferences never schedule — toggles/times persist but no reminders fire",
+      "description": "As a parent, I want my notification toggles and daily times to actually deliver reminders. NotificationSettingsView persists per-topic enabled/hour/minute to UserDefaults (SettingsView.swift:382-410) and only ever calls fireTestNotification (SettingsView.swift:440), but scheduleMealReminders() and scheduleGroceryReminder() (NotificationService.swift:84,123) are defined and NEVER called anywhere. No code reads the Topic prefs to schedule UNCalendarNotificationTriggers. Enabling 'Meal-plan reminders' at a chosen time results in zero scheduled notifications.",
+      "acceptanceCriteria": [
+        "Toggling a topic on schedules its UNCalendarNotificationTrigger using the persisted hour/minute; toggling off removes it",
+        "Changing the DatePicker time reschedules that topic's notification",
+        "mealReminders/groceryReady/aiSummary respect supportsDailyTime and persisted times instead of hardcoded 8/12/18",
+        "Disabling the master toggle cancels all scheduled topic notifications",
+        "Swift builds"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Audit finding (Functionality — core feature non-functional). scheduleMealReminders is hardcoded to 8/12/18 and orphaned; verified by grep that neither scheduler is called anywhere. The per-topic settings UI (US-239) only fires test pings."
+    },
+    {
+      "id": "US-404",
+      "title": "iOS Notifications: mute-all is bypassed — mutedUntil gate is checked at no scheduling site",
+      "description": "As a parent who tapped 'Mute all for 24h', I want notifications actually suppressed for that window. mutedUntil is written by mute(forSeconds:) (NotificationService.swift:254) and read only by the Settings UI chip (SettingsView.swift:272,313). No scheduling/delivery path consults mutedUntil, and the AppDelegate willPresent handler (EatPalApp.swift:85-90) always returns [.banner,.sound,.badge]. mute() does a one-time removeAllPendingNotificationRequests but any later reschedule or remote push ignores the mute window.",
+      "acceptanceCriteria": [
+        "Scheduling helpers skip adding requests while mutedUntil is in the future",
+        "willPresent suppresses foreground banners while muted",
+        "Notifications resume automatically once mutedUntil passes",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Functionality). The mute UX implies a real silence window but only clears the (currently never-populated) pending queue once. Pairs with US-403."
+    },
+    {
+      "id": "US-405",
+      "title": "iOS Deep links: only import URLs route — pantry/quiz/kid/scanner/universal links dead-end on Planner",
+      "description": "As a user tapping a widget, Siri result, or universal link, I want to land on the right screen. DeepLinkHandler parses 10+ destinations (DeepLinkHandler.swift:57-104,209-228) but the only consumer, EatPalApp.swift:37-48, handles ONLY .groceryImport and .recipeImport. MainTabView never observes activeDestination. So eatpal://pantry, ://quiz, ://kid?id=, ://scanner, ://settings, ://food-chaining, ://dashboard, ://meal-plan and all https://tryeatpal.com/app/* links set activeDestination but switch no tab — the user stays on the default Planner.",
+      "acceptanceCriteria": [
+        "Each navigation Destination switches MainTabView to the correct tab (or pushes the right view) when activeDestination changes",
+        ".kidProfile(id:) opens that child; .quiz/.scanner/.foodChaining/.settings open their screens",
+        "Universal links under /app/* route identically to the custom scheme",
+        "Destination is cleared after routing so the same link re-triggers next time",
+        "Swift builds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit finding (Functionality). Confirmed by grep: activeDestination is consumed only for import drains; navigation cases are parsed then discarded."
+    },
+    {
+      "id": "US-406",
+      "title": "iOS Notifications: tapping a notification routes nowhere (AppDelegate only prints category)",
+      "description": "As a parent who taps a meal/grocery/badge notification, I want to land on the relevant screen. The didReceive response handler (EatPalApp.swift:93-99) only prints categoryIdentifier and does nothing — it never forwards to DeepLinkHandler or sets a destination. Combined with the dead deep-link routing, every notification tap just opens the app to the default tab.",
+      "acceptanceCriteria": [
+        "didReceive maps the notification categoryIdentifier (MEAL_REMINDER/GROCERY_REMINDER/topic) to a DeepLinkHandler.Destination",
+        "Tapping a grocery reminder opens Grocery; a meal reminder opens Planner; a badge/streak opens Progress",
+        "Routing reuses the same destination-consumption path as deep links",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (UX). Pairs with US-405; once destinations are consumed, notification taps should feed the same path."
+    },
+    {
+      "id": "US-407",
+      "title": "iOS Watch: complications read UserDefaults.standard not App Group, so they never show real data",
+      "description": "As a watch user, I want the Tonight/Grocery complications to reflect my real plan. WatchSessionStore writes the snapshot to UserDefaults.standard (WatchSessionStore.swift:76) and the complication SnapshotLoader.load() reads UserDefaults.standard (EatPalWatchComplications.swift:26). On watchOS the app and the WidgetKit complication are separate processes that do not share standard defaults — only UserDefaults(suiteName:) is shared (as the iPhone widget correctly does). So TonightProvider/GroceryProvider always fall back to .empty/placeholder in production, contradicting the 'both read the same cached snapshot' comment (EatPalWatchComplications.swift:9-11).",
+      "acceptanceCriteria": [
+        "WatchSessionStore caches the snapshot to a shared UserDefaults(suiteName:) App Group",
+        "Complication SnapshotLoader reads from the same suite",
+        "Complications display real tonight-dinner and grocery-remaining values after the iPhone pushes a snapshot",
+        "Swift builds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit finding (Functionality). Verified both write (line 76) and read (line 26) use .standard; the iPhone widget uses a group suite, proving the mismatch is watch-side only."
+    },
+    {
+      "id": "US-408",
+      "title": "iOS Widget: home/Lock-Screen widgets set no widgetURL — taps can't deep-link",
+      "description": "As a user, I want tapping the meal/grocery widget to open the right screen. EatPalWidget.swift contains no widgetURL anywhere, so the StaticConfiguration widgets and accessory views open the app to its default tab. The empty cell even reads 'Open EatPal to plan' yet can't route to the planner. The Live Activity sets a widgetURL, showing the API is known but not applied to the widgets.",
+      "acceptanceCriteria": [
+        "Meal widget views apply .widgetURL(eatpal://meal-plan)",
+        "Grocery widget views apply .widgetURL(eatpal://grocery)",
+        "Lock-Screen accessory widgets deep-link to their corresponding screen",
+        "Routing works end-to-end once deep-link destination consumption is fixed",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (UX). Depends on US-405 to be useful; currently both layers are no-ops."
+    },
+    {
+      "id": "US-409",
+      "title": "iOS Kids: AddKidView swallows save errors and dismisses as if succeeded",
+      "description": "As a parent adding a child, I want to know if the save failed. addKid() (KidsView.swift:219-237) sets isSubmitting=true (never reset), calls `try? await appState.addKid(kid)` discarding any error, then dismiss() runs unconditionally. On a network/RLS failure the sheet closes with no toast/alert and the child silently doesn't persist. KidProfileEditorView.save() shares the same try?-then-dismiss pattern.",
+      "acceptanceCriteria": [
+        "addKid surfaces an error toast/alert on failure and keeps the sheet open",
+        "isSubmitting is reset in all paths (use defer)",
+        "Dismiss happens only on confirmed success",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Stability). KidsView.swift:235 — try? then unconditional dismiss; isSubmitting set at :220 never cleared."
+    },
+    {
+      "id": "US-410",
+      "title": "iOS Kids: KidDetailView 'Safe Foods' stat shows global pantry count, not per-child",
+      "description": "As a parent viewing a child's profile, I expect the 'Safe Foods' stat to reflect that child. KidDetailView (titled kid.name, KidsView.swift:341) computes `appState.foods.filter(\\.isSafe).count` (KidsView.swift:307) — the entire household pantry's safe-food count, identical for every child. It reads as a per-kid metric but isn't scoped to the kid.",
+      "acceptanceCriteria": [
+        "Safe Foods reflects foods safe for this specific child (per kid allergen/safe-food scoping) or the stat is relabeled to make the household scope explicit",
+        "Today's Meals stat continues to be kid-scoped",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Functionality). Misleading per-kid data; today's-meals stat is correctly scoped via planEntriesForDate(kidId:), so the inconsistency is visible side-by-side."
+    },
+    {
+      "id": "US-411",
+      "title": "iOS Components: DailyNutritionSummary renders zeroed macro rings as live data",
+      "description": "As a parent who logged meals, I want the nutrition summary to show real macros or an honest 'not available' state. NutritionView.swift:135-138 hardcodes dailyCalories/Protein/Carbs/Fat to `return 0` ('Placeholder — needs nutrition data on Food model'), yet when entries are non-empty it renders MacroRingsView with all zeros plus 'N meals logged' (NutritionView.swift:149-159). Users see four empty 0-of-target rings presented as real data.",
+      "acceptanceCriteria": [
+        "When per-food nutrition is unavailable, show a clear 'Nutrition data not available' state instead of zeroed rings",
+        "MacroRing value Text uses minimumScaleFactor/lineLimit so 3-4 digit values don't overflow the fixed 56pt ring under Dynamic Type",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (UX). Placeholder shipped as live UI; the fixed-frame ring (NutritionView.swift:104-119, .caption2 no scale) also overflows at large text sizes."
+    },
+    {
+      "id": "US-412",
+      "title": "iOS Siri: mutation intents don't refresh the widget, so it stays stale after voice actions",
+      "description": "As a user logging via Siri without opening the app, I want the widget to reflect it. MarkFoodSafe (FoodAppIntents.swift:110), MarkFoodTryBite (:149), LogMealResult (MealAppIntents.swift:93), Add/BulkAdd grocery (GroceryAppIntents.swift:59,135) mutate via DataService and return, but none call WidgetSnapshot.write/WidgetCenter.reloadTimelines. Since these run with openAppWhenRun=false, AppState's snapshot writer never fires and the grocery-count/tonight-dish widget shows pre-Siri data until the app is next opened.",
+      "acceptanceCriteria": [
+        "Grocery add/bulk-add intents update the App Group snapshot and reload the widget timeline",
+        "LogMealResult/MarkFood* refresh the tonight/streak snapshot the widget reads",
+        "Widget reflects Siri-driven changes without opening the app",
+        "Swift builds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding (Functionality). Distinct from US-152 (freshness on AppState mutations) — these background intents bypass AppState entirely."
     }
   ]
 }
