@@ -2988,3 +2988,8 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - OWNER DECISION (2026-06-14): Home tab, relocate Recipes.
 - MainTabView: added .home (DashboardHomeView) as first + default tab; removed .recipes primary tab. Recipes -> MoreView top section + MoreRoute.recipes + navigationDestination. Deep-link routing updated (.dashboard->home, .recipes->More[.recipes]). No tab-selection code elsewhere -> no deep-link/Siri regression.
 - Remaining false: 46.
+
+## 2026-06-14 (cont. 14) - Recipe ingredient matching + pasteboard gate (US-360)
+- New Utilities/IngredientNameMatcher (parser-normalize + whole-word token-subset). RecipeFilters nameHits now uses it instead of raw line.contains(name) -> no 3-char false positives. Test IngredientNameMatcherTests (4).
+- Pasteboard: removed AddRecipe on-appear sniff + auto-prompt; added explicit "Paste link" button (reads clipboard on tap only); removed unused state.
+- Remaining false: 45.

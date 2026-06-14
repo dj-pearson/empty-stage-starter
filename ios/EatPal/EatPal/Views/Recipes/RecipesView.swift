@@ -1151,8 +1151,6 @@ struct AddRecipeView: View {
     @State private var isImporting = false
     @State private var importError: String?
     @State private var importedFrom: String?
-    @State private var showPastePrompt = false
-    @State private var pasteboardURL: URL?
 
     var body: some View {
         NavigationStack {
@@ -1181,6 +1179,16 @@ struct AddRecipeView: View {
                             .accessibilityLabel("Clear URL")
                         }
                     }
+
+                    // US-360: explicit clipboard read on tap — we no longer
+                    // sniff the pasteboard on appear (privacy/UX smell that
+                    // trips the iOS 16+ paste banner).
+                    Button {
+                        pasteLinkFromClipboard()
+                    } label: {
+                        Label("Paste link", systemImage: "doc.on.clipboard")
+                    }
+                    .disabled(isImporting)
 
                     Button {
                         Task { await importFromURL() }
@@ -1311,32 +1319,21 @@ struct AddRecipeView: View {
                     .disabled(name.isEmpty || isSubmitting)
                 }
             }
-            .onAppear(perform: detectPasteboardURL)
-            .alert("Import from \(pasteboardURL?.host ?? "clipboard")?", isPresented: $showPastePrompt, presenting: pasteboardURL) { url in
-                Button("Import") {
-                    importURL = url.absoluteString
-                    Task { await importFromURL() }
-                }
-                Button("Not now", role: .cancel) {}
-            } message: { url in
-                Text(url.absoluteString)
-                    .font(.caption)
-            }
         }
     }
 
     // MARK: - Recipe URL import (US-223)
 
-    private func detectPasteboardURL() {
+    /// US-360: read the clipboard only when the user taps "Paste link" — an
+    /// explicit, intentional action rather than an on-appear pasteboard sniff.
+    private func pasteLinkFromClipboard() {
         guard let clipboard = UIPasteboard.general.string,
               let url = RecipeImportService.firstURL(in: clipboard) else {
+            importError = "No recipe link found on the clipboard."
             return
         }
-        // Only prompt if fields are empty (first-open heuristic) so we don't
-        // pester users who are in the middle of editing.
-        guard name.isEmpty, importURL.isEmpty else { return }
-        pasteboardURL = url
-        showPastePrompt = true
+        importURL = url.absoluteString
+        importError = nil
     }
 
     private func importFromURL() async {

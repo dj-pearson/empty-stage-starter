@@ -5466,8 +5466,8 @@
         "Swift builds; test covers '2 cloves garlic' matching 'garlic' and NOT matching 'oil'"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Audit findings (Recipe Flow 1a GAP). Pasteboard-on-appear is a privacy/UX smell on iOS 16+."
+      "passes": true,
+      "notes": "Audit findings (Recipe Flow 1a GAP). Pasteboard-on-appear is a privacy/UX smell on iOS 16+. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): new IngredientNameMatcher (parser-normalized via IngredientTextParser + whole-word token-subset match) replaces RecipeFilters raw line.contains(name) — kills 3-char substring false positives (oil vs broil). Pasteboard sniff: removed AddRecipe .onAppear(detectPasteboardURL) + auto-prompt alert; added explicit \"Paste link\" button (pasteLinkFromClipboard) so the clipboard is only read on user tap; dropped unused showPastePrompt/pasteboardURL state. Test IngredientNameMatcherTests (garlic matches, oil does not match 2 cloves garlic / broiled)."
     },
     {
       "id": "US-361",
