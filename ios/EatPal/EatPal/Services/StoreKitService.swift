@@ -172,6 +172,16 @@ final class StoreKitService: ObservableObject {
         isLoading = true
         try? await AppStore.sync()
         await updateCustomerProductStatus()
+        // US-375: AppStore.sync() + updateCustomerProductStatus only refresh
+        // local entitlements; the server apple_subscriptions row was never
+        // written on a restore (e.g. fresh install). Walk currentEntitlements
+        // and sync each verified transaction so the backend has a row keyed by
+        // original_transaction_id.
+        for await result in StoreKit.Transaction.currentEntitlements {
+            if let transaction = try? checkVerified(result) {
+                await syncSubscriptionToSupabase(transaction: transaction)
+            }
+        }
         isLoading = false
     }
 

@@ -50,6 +50,13 @@ struct AuthView: View {
                                 .keyboardType(.emailAddress)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
+
+                            // US-378: inline format validation, no network call.
+                            if let emailMessage = authViewModel.emailValidationMessage {
+                                Label(emailMessage, systemImage: "exclamationmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                            }
                         }
 
                         // Password Field

@@ -5682,8 +5682,8 @@
         "Swift builds"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Audit finding (Billing integrity). StoreKitService.swift:171-176 vs :134-167; sync rationale at :234-277."
+      "passes": true,
+      "notes": "Audit finding (Billing integrity). StoreKitService.swift:171-176 vs :134-167; sync rationale at :234-277. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): restorePurchases now walks StoreKit.Transaction.currentEntitlements and calls syncSubscriptionToSupabase for each verified transaction, so a restore (incl. fresh install) writes the apple_subscriptions row keyed by original_transaction_id. Sync failures already report to Sentry (US-376)."
     },
     {
       "id": "US-376",
@@ -5724,8 +5724,8 @@
         "Swift builds"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Audit finding (UX). AuthViewModel.swift:158-169 (validation), :194-196 (raw localizedDescription surfaced). Compare BindEmailView.swift:205-210."
+      "passes": true,
+      "notes": "Audit finding (UX). AuthViewModel.swift:158-169 (validation), :194-196 (raw localizedDescription surfaced). Compare BindEmailView.swift:205-210. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): AuthViewModel.isEmailValid (non-empty local part + @ + dotted domain) now required by isFormValid for signIn/signUp/forgotPassword so malformed emails disable submit with no network round-trip; emailValidationMessage shows an inline message under the email field in AuthView. Valid-email flows unaffected."
     },
     {
       "id": "US-379",
