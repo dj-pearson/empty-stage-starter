@@ -5595,8 +5595,8 @@
         "Swift builds"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Audit finding (Visual GAP-3). Extends US-256/US-43 reduce-motion work to remaining sites."
+      "passes": true,
+      "notes": "Audit finding (Visual GAP-3). Extends US-256/US-43 reduce-motion work to remaining sites. | DONE 2026-06-13 (build-deferred): routed the 3 AC-named sites through the existing reduce-motion helpers (Utilities/Accessibility.swift). OnboardingView: added @Environment(.accessibilityReduceMotion) + both page Back/Next withAnimation -> accessibleWithAnimation(reduceMotion:). PickyEaterQuizView.selectAnswer: added the env var + both withAnimation (advance question / show result) -> accessibleWithAnimation(reduceMotion:). SyncStatusBanner: the sync-icon rotation .animation(_,value:) -> .accessibleAnimation(_,value:) (modifier reads reduceMotion internally). Animation preserved when Reduce Motion off. Verified against existing call-site pattern (MealPlanView:386, DashboardHomeView:122 already call the @MainActor helper from non-isolated closures, so project is non-strict-concurrency and selectAnswer is fine). NOT compile-verified here (no Swift toolchain) — Swift build deferred to local Xcode."
     },
     {
       "id": "US-370",

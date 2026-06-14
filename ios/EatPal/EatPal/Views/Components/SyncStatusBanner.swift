@@ -42,7 +42,7 @@ struct SyncStatusBanner: View {
                     Image(systemName: iconName)
                         .font(.subheadline)
                         .rotationEffect(.degrees(store.isSyncing ? 360 : 0))
-                        .animation(
+                        .accessibleAnimation(
                             store.isSyncing
                                 ? .linear(duration: 1.2).repeatForever(autoreverses: false)
                                 : .default,

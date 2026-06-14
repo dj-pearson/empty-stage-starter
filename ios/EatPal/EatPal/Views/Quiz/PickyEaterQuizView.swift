@@ -9,6 +9,7 @@ import SwiftUI
 /// informational tool only.
 struct PickyEaterQuizView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var currentQuestion = 0
     @State private var answers: [Int] = []
     @State private var showingResult = false
@@ -96,11 +97,11 @@ struct PickyEaterQuizView: View {
         HapticManager.lightImpact()
 
         if currentQuestion < questions.count - 1 {
-            withAnimation {
+            accessibleWithAnimation(reduceMotion: reduceMotion) {
                 currentQuestion += 1
             }
         } else {
-            withAnimation {
+            accessibleWithAnimation(reduceMotion: reduceMotion) {
                 showingResult = true
             }
         }
