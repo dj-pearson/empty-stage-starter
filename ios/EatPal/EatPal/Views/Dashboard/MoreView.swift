@@ -12,6 +12,8 @@ enum MoreRoute: Hashable {
     case quiz
     case settings
     case progress
+    // US-373: Recipes moved out of the tab bar into More.
+    case recipes
 }
 
 struct MoreView: View {
@@ -19,21 +21,20 @@ struct MoreView: View {
 
     var body: some View {
         List {
-            // Dashboard
+            // US-373: Recipes relocated here from the tab bar (Dashboard took
+            // its primary-tab slot). Surfaced first so it stays easy to reach.
             Section {
-                NavigationLink {
-                    DashboardHomeView()
-                } label: {
+                NavigationLink(value: MoreRoute.recipes) {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Dashboard")
+                            Text("Recipes")
                                 .font(.body)
-                            Text("Overview and quick stats")
+                            Text("\(appState.recipes.count) saved")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     } icon: {
-                        Image(systemName: "square.grid.2x2.fill")
+                        Image(systemName: "book.fill")
                             .foregroundStyle(.green)
                     }
                 }
@@ -204,6 +205,8 @@ struct MoreView: View {
                 SettingsView()
             case .progress:
                 ProgressDashboardView()
+            case .recipes:
+                RecipesView()
             }
         }
     }

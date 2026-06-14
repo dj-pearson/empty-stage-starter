@@ -3,23 +3,26 @@ import SwiftUI
 struct MainTabView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var deepLinkHandler: DeepLinkHandler
-    @State private var selectedTab: Tab = .planner
+    // US-373: Dashboard ("Home") is now the default landing tab.
+    @State private var selectedTab: Tab = .home
     /// US-405: navigation path for the More tab so deep links / notification
     /// taps can push the right sub-screen (kid profile, quiz, settings, …).
     @State private var morePath: [MoreRoute] = []
 
     enum Tab: String, CaseIterable {
+        // US-373: Home (Dashboard) promoted to a primary tab; Recipes moved
+        // into the More menu to stay within the 5-tab budget.
+        case home
         case planner
         case pantry
-        case recipes
         case grocery
         case more
 
         var title: String {
             switch self {
+            case .home: return "Home"
             case .planner: return "Planner"
             case .pantry: return "Pantry"
-            case .recipes: return "Recipes"
             case .grocery: return "Grocery"
             case .more: return "More"
             }
@@ -27,9 +30,9 @@ struct MainTabView: View {
 
         var icon: String {
             switch self {
+            case .home: return "square.grid.2x2.fill"
             case .planner: return "calendar"
             case .pantry: return "refrigerator.fill"
-            case .recipes: return "book.fill"
             case .grocery: return "cart.fill"
             case .more: return "ellipsis.circle.fill"
             }
@@ -77,14 +80,17 @@ struct MainTabView: View {
     private func route(to destination: DeepLinkHandler.Destination) {
         switch destination {
         case .dashboard:
-            selectedTab = .more
-            morePath = [.dashboard]
+            // US-373: Dashboard is now its own primary tab.
+            selectedTab = .home
+            morePath = []
         case .pantry:
             selectedTab = .pantry
         case .mealPlan:
             selectedTab = .planner
         case .recipes, .recipeImport:
-            selectedTab = .recipes
+            // US-373: Recipes now lives under More.
+            selectedTab = .more
+            morePath = [.recipes]
         case .grocery, .groceryImport:
             selectedTab = .grocery
         case .scanner:
@@ -114,6 +120,10 @@ struct MainTabView: View {
     @ViewBuilder
     private func tabContent(for tab: Tab) -> some View {
         switch tab {
+        case .home:
+            NavigationStack {
+                DashboardHomeView()
+            }
         case .planner:
             NavigationStack {
                 MealPlanView()
@@ -121,10 +131,6 @@ struct MainTabView: View {
         case .pantry:
             NavigationStack {
                 PantryView()
-            }
-        case .recipes:
-            NavigationStack {
-                RecipesView()
             }
         case .grocery:
             NavigationStack {

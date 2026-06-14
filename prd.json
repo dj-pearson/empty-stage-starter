@@ -5654,8 +5654,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Visual GAP - IA depth). Needs a product call from the owner before implementing; captured as a story per request."
+      "passes": true,
+      "notes": "Audit finding (Visual GAP - IA depth). Needs a product call from the owner before implementing; captured as a story per request. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): PRODUCT DECISION (owner, 2026-06-14): make Dashboard the Home tab and relocate Recipes into More to keep 5 tabs. MainTabView: new .home tab (DashboardHomeView) as the first tab + default selectedTab; removed .recipes primary tab. Recipes moved to MoreView (top section, NavigationLink value: MoreRoute.recipes) + navigationDestination case. Deep-link/Siri routing: .dashboard -> Home tab; .recipes/.recipeImport -> More + [.recipes]. No tab-index code outside MainTabView, so no deep-link/intent regression (all .recipes refs are appState.recipes data)."
     },
     {
       "id": "US-374",

@@ -2983,3 +2983,8 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - DayChip: full "Monday, June 14[, today]" + selected state + .isSelected trait.
 - FoodChip, ChainStepRow, ProgressStatCard, ProgressRow, BudgetView forecast: single labeled elements with values.
 - Remaining false: 47.
+
+## 2026-06-14 (cont. 13) - IA: Dashboard promoted to Home tab (US-373)
+- OWNER DECISION (2026-06-14): Home tab, relocate Recipes.
+- MainTabView: added .home (DashboardHomeView) as first + default tab; removed .recipes primary tab. Recipes -> MoreView top section + MoreRoute.recipes + navigationDestination. Deep-link routing updated (.dashboard->home, .recipes->More[.recipes]). No tab-selection code elsewhere -> no deep-link/Siri regression.
+- Remaining false: 46.
