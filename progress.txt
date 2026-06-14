@@ -3008,3 +3008,8 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - Extracted WidgetSnapshot.buildPayload (shared by AppState + intents) + rebuildFromServer() (fetch -> build -> writeImmediately + reload).
 - Called after background Siri mutations: AddGroceryItem/BulkAddGroceryItems, LogMealResult, MarkFoodSafe/MarkFoodTryBite. AppState.refreshWidgetSnapshot now uses the shared builder.
 - Remaining false: 42.
+
+## 2026-06-14 (cont. 18) - Recipe import deep link audit-flip + scanner manual entry (US-309/391)
+- US-309: audit-flip — all 8 ACs already implemented in source (RecipeParseAPI in Shared/, .recipeImport destination + eatpal://recipe/import parsing, toasts, ImportRecipeFromURLIntent + shortcut phrases, telemetry, pending-queue reuse). Verified bullet-by-bullet.
+- US-391: ScannedProductView lookupFailed gains a Type-barcode field + Retry-lookup button (re-runs BarcodeService.lookup via lookupBarcode); saved Food/dedup use the effective corrected barcode.
+- Remaining false: 40.

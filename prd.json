@@ -4701,8 +4701,8 @@
         "No DB migration — reuses the existing pending_recipe_imports App Group queue and the existing drainPendingRecipeImports() drain on launch."
       ],
       "priority": 29,
-      "passes": false,
-      "notes": "Closes the recipe half of the Tier 1 deep-link work. Carved out of US-296 because moving ShareExtensionAPI to Shared/ + adding the network call to the main app target expanded the Tier 1 PR's review surface unnecessarily. Should ship as a small standalone PR once US-296 is in develop."
+      "passes": true,
+      "notes": "Closes the recipe half of the Tier 1 deep-link work. Carved out of US-296 because moving ShareExtensionAPI to Shared/ + adding the network call to the main app target expanded the Tier 1 PR's review surface unnecessarily. Should ship as a small standalone PR once US-296 is in develop. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): AUDIT-FLIP — fully implemented in source (prior US-296/309 work, left passes=false). Verified all 8 ACs: RecipeParseAPI.swift in Shared/; DeepLinkHandler.recipeImport destination + eatpal://recipe/import?url= parsing in handleCustomScheme (https-validated, inline parse, enqueue PendingRecipeImport); success/failure toasts (Imported [name] / open-in-Safari); ImportRecipeFromURLIntent in RecipeAppIntents + registered in EatPalAppShortcuts with phrases; telemetry deeplink_recipe_import_received/succeeded(timeMs)/failed(reason); reuses pending_recipe_imports App Group queue + drainOnLaunch (no migration). Swift build = local Xcode."
     },
     {
       "id": "US-310",
@@ -5906,8 +5906,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Ease-of-use). ScannedProductView.swift:132-147 sets lookupFailed but renders no retry/rescan control; UnifiedScannerView.swift:204-213 only emits on success."
+      "passes": true,
+      "notes": "Audit finding (Ease-of-use). ScannedProductView.swift:132-147 sets lookupFailed but renders no retry/rescan control; UnifiedScannerView.swift:204-213 only emits on success. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): ScannedProductView lookupFailed now shows a Retry-lookup section — a numberPad Type barcode field (currentBarcode, seeded from the scanned value) + Retry lookup button that re-enters loading and re-calls BarcodeService.lookup via the same lookupBarcode() pipeline; the saved Food + dedup use the effective (possibly corrected) barcode."
     },
     {
       "id": "US-392",

@@ -21,6 +21,9 @@ struct ScannedProductView: View {
     // US-389: when a scan matches an existing pantry item, offer update vs add-new.
     @State private var duplicateMatch: Food?
     @State private var pendingFood: Food?
+    // US-391: editable barcode so the user can correct a misread / type one in
+    // and re-run the same lookup pipeline.
+    @State private var currentBarcode: String = ""
 
     var body: some View {
         NavigationStack {
@@ -37,11 +40,27 @@ struct ScannedProductView: View {
                         if lookupFailed {
                             Section {
                                 Label(
-                                    "Product not found in database. Enter details manually.",
+                                    "Product not found in database. Enter details manually, or correct the barcode and retry.",
                                     systemImage: "exclamationmark.circle"
                                 )
                                 .font(.callout)
                                 .foregroundStyle(.orange)
+                            }
+
+                            // US-391: type/correct the barcode and re-run the
+                            // same lookup pipeline, or fill details manually.
+                            Section("Retry lookup") {
+                                TextField("Type barcode", text: $currentBarcode)
+                                    .keyboardType(.numberPad)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+
+                                Button {
+                                    Task { await lookupBarcode() }
+                                } label: {
+                                    Label("Retry lookup", systemImage: "arrow.clockwise")
+                                }
+                                .disabled(currentBarcode.trimmingCharacters(in: .whitespaces).isEmpty || isLoading)
                             }
                         }
 
@@ -160,9 +179,15 @@ struct ScannedProductView: View {
     }
 
     private func lookupBarcode() async {
+        // US-391: seed the editable barcode from the scanned value on first run.
+        if currentBarcode.isEmpty { currentBarcode = barcode }
+        let code = currentBarcode.trimmingCharacters(in: .whitespaces)
+        guard !code.isEmpty else { lookupFailed = true; return }
+
         isLoading = true
+        lookupFailed = false
         do {
-            if let result = try await BarcodeService.lookup(barcode: barcode) {
+            if let result = try await BarcodeService.lookup(barcode: code) {
                 product = result
                 name = result.name
                 category = FoodCategory(rawValue: result.category) ?? .snack
@@ -195,6 +220,9 @@ struct ScannedProductView: View {
             .date(byAdding: .day, value: defaultExpiryDays, to: Date())
             .map { DateFormatter.isoDate.string(from: $0) }
 
+        // US-391: persist the effective (possibly user-corrected) barcode.
+        let effectiveBarcode = currentBarcode.isEmpty ? barcode : currentBarcode
+
         let food = Food(
             id: UUID().uuidString,
             userId: "",
@@ -203,7 +231,7 @@ struct ScannedProductView: View {
             isSafe: isSafe,
             isTryBite: isTryBite,
             allergens: allergenList,
-            barcode: barcode,
+            barcode: effectiveBarcode,
             expiryDate: expiryISO
         )
 
@@ -211,7 +239,7 @@ struct ScannedProductView: View {
         // the pantry — offer update-vs-add-new instead of silently inserting
         // a duplicate. Applies to the manual-entry (lookup-failed) path too,
         // which dedupes on name since it has no barcode match.
-        if let existing = appState.existingPantryFood(name: name, barcode: barcode) {
+        if let existing = appState.existingPantryFood(name: name, barcode: effectiveBarcode) {
             duplicateMatch = existing
             pendingFood = food
             isSubmitting = false
