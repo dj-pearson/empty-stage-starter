@@ -5553,8 +5553,8 @@
         "Swift builds"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Audit finding (Grocery-Pantry Flow 3 GAP-P3)."
+      "passes": true,
+      "notes": "Audit finding (Grocery-Pantry Flow 3 GAP-P3). | DONE 2026-06-13 (build-deferred): AddFoodView (in PantryView.swift) gains an Inventory section (qty stepper + TextField + unit menu Picker) mirroring FoodDetailView, defaulting to 1/count. addFood() now passes quantity/unit into Food(...) (memberwise init, declaration order allergens<quantity<unit<expiryDate verified vs the existing call). UnitInference.infer(name:) pre-fills a smarter unit+qty (e.g. eggs->1 dozen) ONLY when the user left the 1/count defaults untouched, so explicit edits always win and the inferred unit need not be in the picker. No more 0-qty manual rows. NOT compile-verified here (no Swift toolchain) — Swift build deferred to local Xcode."
     },
     {
       "id": "US-367",

@@ -867,6 +867,12 @@ struct AddFoodView: View {
     @State private var allergens = ""
     @State private var isSubmitting = false
 
+    // US-366: manual adds now capture quantity + unit (default 1 / count) so
+    // they no longer save as "0" rows. Mirrors FoodDetailView's inventory row.
+    @State private var quantity: Double = 1
+    @State private var unit: String = "count"
+    private let units = ["count", "oz", "lb", "g", "kg", "cups", "tbsp", "tsp", "ml", "l", "servings"]
+
     // US-230: optional expiry. Defaults to a sensible per-category window
     // when the user enables it (perishables → +7d, pantry → +30d).
     @State private var hasExpiry = false
@@ -890,6 +896,41 @@ struct AddFoodView: View {
                         if !hasExpiry {
                             expiryDate = defaultExpiry(for: newCategory)
                         }
+                    }
+                }
+
+                Section("Inventory") {
+                    HStack {
+                        Button {
+                            quantity = max(0, quantity - 1)
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+
+                        TextField("Qty", value: $quantity, format: .number)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+
+                        Button {
+                            quantity += 1
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+
+                        Picker("Unit", selection: $unit) {
+                            ForEach(units, id: \.self) { u in
+                                Text(u).tag(u)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
                     }
                 }
 
@@ -962,6 +1003,16 @@ struct AddFoodView: View {
         let allergenList = allergens.isEmpty ? nil :
             allergens.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
 
+        // US-366: when the user left the defaults (1 / count) untouched, let
+        // UnitInference pre-fill a smarter unit+quantity for common items
+        // (e.g. eggs → 1 dozen). An explicit edit always wins.
+        var finalQuantity = quantity
+        var finalUnit = unit
+        if quantity == 1, unit == "count", let inferred = UnitInference.infer(name: name) {
+            finalQuantity = inferred.quantity
+            finalUnit = inferred.unit
+        }
+
         let food = Food(
             id: UUID().uuidString,
             userId: "",
@@ -970,6 +1021,8 @@ struct AddFoodView: View {
             isSafe: isSafe,
             isTryBite: isTryBite,
             allergens: allergenList,
+            quantity: finalQuantity,
+            unit: finalUnit,
             expiryDate: hasExpiry ? DateFormatter.isoDate.string(from: expiryDate) : nil
         )
 
