@@ -239,10 +239,22 @@ struct TonightCookSheet: View {
             .filter { !$0.isEmpty }
         if lines.count > 1 { return lines }
 
-        return raw
-            .components(separatedBy: ". ")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
+        // US-402: the old `.components(separatedBy: ". ")` split mid-step on
+        // decimals ("1.5"), abbreviations ("No.", "tbsp.") and the like. Use
+        // Foundation's sentence tokenizer, which understands those, so the
+        // on-screen step AND the spoken cue read correctly. A single-blob
+        // instruction with no real sentence breaks stays one step.
+        let ns = raw as NSString
+        var sentences: [String] = []
+        ns.enumerateSubstrings(
+            in: NSRange(location: 0, length: ns.length),
+            options: .bySentences
+        ) { substring, _, _, _ in
+            if let s = substring?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty {
+                sentences.append(s)
+            }
+        }
+        return sentences.count > 1 ? sentences : [raw]
     }
 }
 

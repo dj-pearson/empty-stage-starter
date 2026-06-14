@@ -5947,8 +5947,8 @@
         "Swift builds"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Audit finding (Accessibility). VoiceAddGrocerySheet.swift:278-303 WaveformView has no reduceMotion check; the recording-button pulse (line 163-164) is likewise ungated. Related to PENDING US-369."
+      "passes": true,
+      "notes": "Audit finding (Accessibility). VoiceAddGrocerySheet.swift:278-303 WaveformView has no reduceMotion check; the recording-button pulse (line 163-164) is likewise ungated. Related to PENDING US-369. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): WaveformView reads @Environment(accessibilityReduceMotion) and renders static (non-level-reactive, non-animated) bars when enabled; recording state still conveyed via green color + accessibilityLabel. The record-button pulse scaleEffect/animation is also gated on reduceMotion in VoiceAddGrocerySheet."
     },
     {
       "id": "US-395",
@@ -5960,8 +5960,8 @@
         "Swift builds"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Audit finding (UX). UnifiedScannerView.swift:104-109 dismisses unconditionally; collectedText (line 53) is only emitted via the Done button at line 112-118."
+      "passes": true,
+      "notes": "Audit finding (UX). UnifiedScannerView.swift:104-109 dismisses unconditionally; collectedText (line 53) is only emitted via the Done button at line 112-118. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): UnifiedScannerView Cancel in groceryList mode with non-empty collectedText now shows a confirmationDialog (\"Discard N recognized line(s)?\" Discard/Keep scanning); barcode mode and empty list dismiss without a prompt."
     },
     {
       "id": "US-396",
@@ -6060,8 +6060,8 @@
         "Swift builds"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Audit finding (Functionality). The bullet/number regex path (line 226) is fine; only the naive .components(separatedBy: '. ') fallback (line 243) is fragile and feeds both the on-screen step and the spoken cue. Related to PENDING US-359."
+      "passes": true,
+      "notes": "Audit finding (Functionality). The bullet/number regex path (line 226) is fine; only the naive .components(separatedBy: '. ') fallback (line 243) is fragile and feeds both the on-screen step and the spoken cue. Related to PENDING US-359. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): TonightCookSheet.parseSteps fallback replaced the naive .components(separatedBy: \". \") with NSString.enumerateSubstrings(.bySentences), which doesnt split on decimals/abbreviations; a single-blob instruction returns [raw] (one step). Same text feeds the on-screen step and the spoken cue."
     },
     {
       "id": "US-403",

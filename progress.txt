@@ -2935,3 +2935,11 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - US-348: new Utilities/PantryCoverage.swift (advisory, read-only) -> fully/partially/not-stocked via ShortfallCalculator with legacy foodIds fallback, nil when neither. PlanEntryRow renders a live coverage badge for recipe rows; actionable badge opens MissingIngredientsSheet; VoiceOver label. Never debits. Tests PantryCoverageTests.swift (5). Decision recorded: advisory-only.
 - US-352: markPlanEntryMade snapshots low/out-of-stock ingredients pre-debit; success path fires a non-blocking add-to-grocery nudge -> addShortfallsToGrocery (reuses GroceryItem.fromShortfall); no nudge when fully stocked.
 - Remaining false: 68.
+
+## 2026-06-14 (cont. 5) - iOS billing/auth/a11y/parser small fixes (US-375/378/394/395/402)
+- US-375: restorePurchases walks currentEntitlements -> syncSubscriptionToSupabase per verified txn (writes apple_subscriptions on fresh-install restore).
+- US-378: AuthViewModel.isEmailValid required by isFormValid (all 3 modes) + inline emailValidationMessage in AuthView; no network round-trip for malformed.
+- US-394: WaveformView + record-button pulse gated on accessibilityReduceMotion (static bars / no pulse; color+label still convey recording).
+- US-402: TonightCookSheet.parseSteps fallback uses NSString sentence tokenizer (no mid-step splits on decimals/abbreviations); single blob -> one step.
+- US-395: UnifiedScannerView Cancel confirms discard of N recognized grocery lines; barcode/empty dismiss silently.
+- Remaining false: 63.

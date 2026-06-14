@@ -52,6 +52,8 @@ struct UnifiedScannerView: View {
     @State private var mode: Mode
     @State private var collectedText: [String] = []
     @State private var lastError: String?
+    // US-395: guard against discarding recognized grocery lines on Cancel.
+    @State private var showingDiscardConfirm = false
 
     init(
         initialMode: Mode = .barcode,
@@ -103,7 +105,14 @@ struct UnifiedScannerView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        dismiss()
+                        // US-395: in grocery-list mode, confirm before
+                        // discarding recognized lines. Barcode mode and an
+                        // empty list dismiss without a prompt.
+                        if mode == .groceryList, !collectedText.isEmpty {
+                            showingDiscardConfirm = true
+                        } else {
+                            dismiss()
+                        }
                     }
                     .foregroundStyle(.white)
                 }
@@ -120,6 +129,14 @@ struct UnifiedScannerView: View {
             }
             .toolbarBackground(.black.opacity(0.4), for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            .confirmationDialog(
+                "Discard \(collectedText.count) recognized line\(collectedText.count == 1 ? "" : "s")?",
+                isPresented: $showingDiscardConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Discard", role: .destructive) { dismiss() }
+                Button("Keep scanning", role: .cancel) {}
+            }
         }
     }
 

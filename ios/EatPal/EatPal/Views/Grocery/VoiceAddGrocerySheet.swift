@@ -6,6 +6,8 @@ import SwiftUI
 struct VoiceAddGrocerySheet: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
+    // US-394: gate the recording-button pulse under Reduce Motion.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @StateObject private var voice = VoiceInputService()
     @State private var parsedItems: [ParsedGroceryItem] = []
@@ -160,8 +162,8 @@ struct VoiceAddGrocerySheet: View {
                     Circle()
                         .fill(voice.state == .listening ? Color.red : Color.green)
                         .frame(width: 64, height: 64)
-                        .scaleEffect(voice.state == .listening ? 1.0 + voice.inputLevel * 0.2 : 1.0)
-                        .animation(.easeInOut(duration: 0.15), value: voice.inputLevel)
+                        .scaleEffect((voice.state == .listening && !reduceMotion) ? 1.0 + voice.inputLevel * 0.2 : 1.0)
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: voice.inputLevel)
                     Image(systemName: voice.state == .listening ? "stop.fill" : "mic.fill")
                         .font(.system(size: 28, weight: .semibold))
                         .foregroundStyle(.white)
@@ -278,6 +280,9 @@ struct VoiceAddGrocerySheet: View {
 private struct WaveformView: View {
     let level: Double
     let isActive: Bool
+    // US-394: respect Reduce Motion — render static bars instead of a
+    // level-reactive animation.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let barCount = 30
 
@@ -289,15 +294,21 @@ private struct WaveformView: View {
                 // than the edges — plays nice with the live `level` input
                 // without needing a timeline.
                 let shape = 0.5 + 0.5 * sin(phase * .pi * 4)
-                let magnitude = isActive
-                    ? max(0.1, min(1.0, level * shape + 0.1))
-                    : 0.1
+                // Under Reduce Motion, ignore the live level and draw a
+                // static shape so there's no motion; color still conveys
+                // the recording state.
+                let magnitude: Double = {
+                    guard isActive else { return 0.1 }
+                    if reduceMotion { return max(0.2, shape) }
+                    return max(0.1, min(1.0, level * shape + 0.1))
+                }()
 
                 Capsule()
                     .fill(isActive ? Color.green : Color.secondary.opacity(0.4))
                     .frame(width: 4, height: CGFloat(magnitude) * 80)
-                    .animation(.easeInOut(duration: 0.12), value: magnitude)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: magnitude)
             }
         }
+        .accessibilityLabel(isActive ? "Recording" : "Not recording")
     }
 }
