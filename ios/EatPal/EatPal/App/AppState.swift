@@ -22,6 +22,9 @@ final class AppState: ObservableObject {
     /// Loaded lazily — first read of the dashboard "Most loved" card or
     /// the AI prompt enrichment triggers `loadPlanEntryFeedback()`.
     @Published var planEntryFeedback: [PlanEntryFeedback] = []
+    /// US-249: durable per-kid earned badges (household-scoped). UserDefaults in
+    /// BadgeService is the write-through cache hydrated from this on load.
+    @Published var kidBadges: [KidBadge] = []
 
     @Published var activeKidId: String?
     @Published var isLoading = false
@@ -268,6 +271,11 @@ final class AppState: ObservableObject {
             // US-231: feedback isn't on the critical path of the meal planner
             // so it loads in the background after primary data is on screen.
             Task { await loadPlanEntryFeedback() }
+
+            // US-249: load earned badges, hydrate the BadgeService cache, and
+            // run the one-time UserDefaults→DB migration. Background — badges
+            // aren't on the planner critical path.
+            Task { await loadKidBadges() }
 
             // US-143: drain any recipes the share extension saved while the
             // user was signed out or the app was backgrounded.
@@ -1101,6 +1109,24 @@ final class AppState: ObservableObject {
         } catch {
             SentryService.capture(error, extras: ["context": "loadPlanEntryFeedback"])
         }
+    }
+
+    // MARK: - Kid Badges (US-249)
+
+    /// Background-loadable. Fetches the household's earned badges, hydrates the
+    /// BadgeService write-through cache so earned/locked rendering reflects the
+    /// DB across devices, then runs the one-time local→DB migration. Failures
+    /// are non-fatal — badges fall back to the local UserDefaults cache.
+    func loadKidBadges() async {
+        do {
+            let badges = try await dataService.fetchKidBadges()
+            kidBadges = badges
+            BadgeService.shared.hydrateFromServer(badges)
+        } catch {
+            SentryService.capture(error, extras: ["context": "loadKidBadges"])
+        }
+        // Sweep any pre-DB local badges up to the server once.
+        await BadgeService.shared.migrateLocalBadgesIfNeeded(kidIds: kids.map(\.id))
     }
 
     /// Records a 1-5 rating + optional note for a plan entry. Optimistic —

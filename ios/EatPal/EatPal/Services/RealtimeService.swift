@@ -124,6 +124,25 @@ final class RealtimeService {
                 await self.handleRecipesChange(change, appState: appState)
             }
         })
+
+        // US-249: kid_badges channel — celebrate badges another household
+        // member earns for a shared kid.
+        let badgesChannel = client.realtimeV2.channel("kid-badges-changes-\(scopeValue)")
+        let badgesChanges = badgesChannel.postgresChange(
+            AnyAction.self,
+            schema: "public",
+            table: "kid_badges",
+            filter: filter
+        )
+        channels.append(badgesChannel)
+        await subscribeChannel(badgesChannel, name: "kid_badges")
+
+        listenerTasks.append(Task { [weak appState] in
+            guard let appState else { return }
+            for await change in badgesChanges {
+                await self.handleKidBadgesChange(change, appState: appState)
+            }
+        })
     }
 
     /// Subscribe to a channel and surface errors instead of swallowing them silently.
@@ -350,6 +369,36 @@ final class RealtimeService {
             if let id = action.oldRecord["id"]?.stringValue {
                 appState.recipes.removeAll { $0.id == id }
             }
+        }
+    }
+
+    /// US-249: a badge was earned somewhere in the household. Mirror it into
+    /// appState.kidBadges and let BadgeService decide whether to celebrate
+    /// (it gates on a "last seen" watermark so old earns don't replay).
+    private func handleKidBadgesChange(_ change: AnyAction, appState: AppState) async {
+        switch change {
+        case .insert(let action):
+            if let badge: KidBadge = decodeRealtimeRecord({ try action.decodeRecord(decoder: JSONDecoder.supabase) }, table: "kid_badges") {
+                applyIncomingBadge(badge, appState: appState)
+            }
+        case .update(let action):
+            if let badge: KidBadge = decodeRealtimeRecord({ try action.decodeRecord(decoder: JSONDecoder.supabase) }, table: "kid_badges") {
+                applyIncomingBadge(badge, appState: appState)
+            }
+        case .delete(let action):
+            if let id = action.oldRecord["id"]?.stringValue {
+                appState.kidBadges.removeAll { $0.id == id }
+            }
+        }
+    }
+
+    private func applyIncomingBadge(_ badge: KidBadge, appState: AppState) {
+        if !appState.kidBadges.contains(where: { $0.id == badge.id }) {
+            appState.kidBadges.append(badge)
+        }
+        // Only celebrate for kids this household actually has loaded.
+        if appState.kids.contains(where: { $0.id == badge.kidId }) {
+            BadgeService.shared.applyRealtimeBadge(badge)
         }
     }
 }

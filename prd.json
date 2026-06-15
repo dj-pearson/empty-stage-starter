@@ -3672,8 +3672,8 @@
         "Realtime: when another household member earns a badge for a shared kid, the celebration sheet fires on this device too (gated by a 'last seen' UserDefaults timestamp to avoid replaying old earns on first sync)"
       ],
       "priority": 73,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): additive migration 20260614000002_kid_badges.sql (kid_badges: id, kid_id FK ON DELETE CASCADE, badge_id, earned_at, household_id, UNIQUE(kid_id,badge_id); household-scoped RLS via get_user_household_id + auto_fill_household_id trigger). New KidBadge model (explicit snake_case CodingKeys). DataService.fetchKidBadges + insertKidBadge (upsert onConflict kid_id,badge_id = idempotent). AppState.kidBadges + loadKidBadges() (background): fetch -> BadgeService.hydrateFromServer (write-through into the UserDefaults cache) -> one-time migrateLocalBadgesIfNeeded sweep (UserDefaults badges -> DB, guarded by badges.migratedToServer flag). BadgeService.evaluate now write-throughs to DB and advances a lastSeenEarnedAt watermark. RealtimeService kid_badges channel (household-filtered) -> applyRealtimeBadge: hydrate + celebrate only earns newer than the watermark (no historical replay on first sync). Test KidBadgeTests (decode + date). Migration NOT deployed to prod here (deploy step, like US-323); Swift build verified via iOS CI on next PR."
     },
     {
       "id": "US-250",

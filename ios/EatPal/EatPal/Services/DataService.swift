@@ -294,6 +294,37 @@ final class DataService {
         ).execute().value
     }
 
+    // MARK: - Kid Badges (US-249)
+
+    /// Fetch all earned badges visible to the user (household-scoped by RLS).
+    func fetchKidBadges() async throws -> [KidBadge] {
+        try await client.from("kid_badges").select().execute().value
+    }
+
+    /// Upsert an earned badge. `onConflict: kid_id,badge_id` makes re-evaluation
+    /// and the one-time migration idempotent (matches the table's unique key).
+    /// household_id is filled server-side by the auto_fill_household_id trigger.
+    func insertKidBadge(kidId: String, badgeId: String, earnedAt: Date) async throws {
+        struct Insert: Encodable {
+            let kidId: String
+            let badgeId: String
+            let earnedAt: String
+            enum CodingKeys: String, CodingKey {
+                case kidId = "kid_id"
+                case badgeId = "badge_id"
+                case earnedAt = "earned_at"
+            }
+        }
+        let payload = Insert(
+            kidId: kidId,
+            badgeId: badgeId,
+            earnedAt: ISO8601DateFormatter.kidBadge.string(from: earnedAt)
+        )
+        try await client.from("kid_badges")
+            .upsert(payload, onConflict: "kid_id,badge_id")
+            .execute()
+    }
+
     /// US-349: reverse a prior `rpc_mark_meal_made` for a plan entry.
     func undoMealMade(planEntryId: String) async throws -> UndoMealMadeResult {
         struct Args: Encodable {

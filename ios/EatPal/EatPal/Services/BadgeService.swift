@@ -183,7 +183,14 @@ final class BadgeService: ObservableObject {
         let now = Date()
         for badge in newlyEarned {
             persist(badgeId: badge.id, kidId: kidId, earnedAt: now)
+            // US-249 AC5: write-through to the server (best-effort; idempotent
+            // upsert). household_id is filled by the DB trigger.
+            let badgeId = badge.id
+            Task { try? await DataService.shared.insertKidBadge(kidId: kidId, badgeId: badgeId, earnedAt: now) }
         }
+        // US-249: advance the watermark so the realtime echo of our own insert
+        // doesn't re-fire the celebration on this device.
+        lastSeenEarnedAt = now
 
         revisionCounter &+= 1
 
@@ -221,6 +228,66 @@ final class BadgeService: ObservableObject {
             earnedAt.timeIntervalSince1970,
             forKey: Self.earnedAtKey(kidId: kidId, badgeId: badgeId)
         )
+    }
+
+    private func earnedAtDate(kidId: String, badgeId: String) -> Date? {
+        let v = UserDefaults.standard.double(forKey: Self.earnedAtKey(kidId: kidId, badgeId: badgeId))
+        return v > 0 ? Date(timeIntervalSince1970: v) : nil
+    }
+
+    // MARK: - DB sync (US-249)
+
+    private static let migratedKey = "badges.migratedToServer"
+    private static let lastSeenKey = "badges.lastSeenEarnedAt"
+
+    /// Watermark: the latest earned-at we've already surfaced. Realtime earns
+    /// newer than this fire a celebration; the initial sync batch advances it
+    /// WITHOUT celebrating so historical badges don't replay on first sync.
+    private var lastSeenEarnedAt: Date {
+        get {
+            let v = UserDefaults.standard.double(forKey: Self.lastSeenKey)
+            return v > 0 ? Date(timeIntervalSince1970: v) : .distantPast
+        }
+        set { UserDefaults.standard.set(newValue.timeIntervalSince1970, forKey: Self.lastSeenKey) }
+    }
+
+    /// US-249 AC3: hydrate the UserDefaults write-through cache from the server
+    /// so `earnedIds` (which reads the cache) reflects the DB across devices.
+    func hydrateFromServer(_ badges: [KidBadge]) {
+        var maxSeen = lastSeenEarnedAt
+        for b in badges {
+            let date = b.earnedDate ?? Date()
+            persist(badgeId: b.badgeId, kidId: b.kidId, earnedAt: date)
+            if date > maxSeen { maxSeen = date }
+        }
+        if maxSeen > lastSeenEarnedAt { lastSeenEarnedAt = maxSeen }
+        revisionCounter &+= 1
+    }
+
+    /// US-249 AC4: one-time upload of pre-DB local badges. Sweeps the
+    /// UserDefaults earned lists for each kid and upserts them (idempotent) with
+    /// their stored earnedAt, then marks the migration done.
+    func migrateLocalBadgesIfNeeded(kidIds: [String]) async {
+        guard !UserDefaults.standard.bool(forKey: Self.migratedKey) else { return }
+        for kidId in kidIds {
+            for badgeId in earnedIds(forKid: kidId) {
+                let when = earnedAtDate(kidId: kidId, badgeId: badgeId) ?? Date()
+                try? await DataService.shared.insertKidBadge(kidId: kidId, badgeId: badgeId, earnedAt: when)
+            }
+        }
+        UserDefaults.standard.set(true, forKey: Self.migratedKey)
+    }
+
+    /// US-249 AC6: apply a badge that landed via realtime (another household
+    /// member earned it for a shared kid). Hydrates the cache and, when the earn
+    /// is newer than the watermark, fires the celebration sheet on this device.
+    func applyRealtimeBadge(_ kidBadge: KidBadge) {
+        let date = kidBadge.earnedDate ?? Date()
+        persist(badgeId: kidBadge.badgeId, kidId: kidBadge.kidId, earnedAt: date)
+        revisionCounter &+= 1
+        guard date > lastSeenEarnedAt, let badge = Badge(rawValue: kidBadge.badgeId) else { return }
+        lastSeenEarnedAt = date
+        pendingCelebration = Earned(badge: badge, kidId: kidBadge.kidId, earnedAt: date)
     }
 
     private static func earnedKey(_ kidId: String) -> String {

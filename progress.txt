@@ -3028,3 +3028,12 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - copyWeekToOtherKid returns copiedRecipeIds; CopyWeekToKidSheet.onApplied surfaces them.
 - FINDING: AI plan (food-based), applyTemplate + copyWeekPlan (copy foodId only, no recipeId) -> food-only entries with no recipe ingredients -> no recipe shortfall; correctly not prompting.
 - Remaining false: 38.
+
+## 2026-06-14 (cont. 20) - Kid badges DB persistence (US-249)
+- Additive migration 20260614000002_kid_badges.sql (household-scoped RLS + auto_fill_household_id trigger, UNIQUE(kid_id,badge_id)). NOT deployed here.
+- KidBadge model; DataService.fetchKidBadges + insertKidBadge (idempotent upsert).
+- AppState.kidBadges + loadKidBadges (hydrate write-through cache + one-time UserDefaults->DB migration guarded by a flag).
+- BadgeService: hydrateFromServer, write-through DB insert in evaluate, lastSeenEarnedAt watermark, applyRealtimeBadge (celebrate only earns newer than watermark).
+- RealtimeService kid_badges channel (household-filtered) -> celebration on shared-kid earns.
+- Test KidBadgeTests (snake_case decode + earnedDate). Compile verified via iOS CI on next PR.
+- Remaining false: 37.
