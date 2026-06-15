@@ -22,6 +22,10 @@ struct RecipeIngredient: Identifiable, Codable, Equatable, Hashable {
     var groupLabel: String?
     /// Free-text notes — "use room temperature", "or substitute X".
     var optionalNotes: String?
+    /// US-251: optional price for this ingredient line (cost of the listed
+    /// quantity/unit). Summed into the recipe's weekly-budget contribution.
+    /// nil = unpriced.
+    var pricePerUnit: Double?
     var createdAt: String?
 
     enum CodingKeys: String, CodingKey {
@@ -34,6 +38,7 @@ struct RecipeIngredient: Identifiable, Codable, Equatable, Hashable {
         case unit
         case groupLabel = "group_label"
         case optionalNotes = "optional_notes"
+        case pricePerUnit = "price_per_unit"
         case createdAt = "created_at"
     }
 
@@ -72,6 +77,7 @@ struct RecipeIngredientUpdate: Codable {
     var unit: String??
     var groupLabel: String??
     var optionalNotes: String??
+    var pricePerUnit: Double??
 
     enum CodingKeys: String, CodingKey {
         case foodId = "food_id"
@@ -81,6 +87,7 @@ struct RecipeIngredientUpdate: Codable {
         case unit
         case groupLabel = "group_label"
         case optionalNotes = "optional_notes"
+        case pricePerUnit = "price_per_unit"
     }
 }
 

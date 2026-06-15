@@ -3037,3 +3037,11 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - RealtimeService kid_badges channel (household-filtered) -> celebration on shared-kid earns.
 - Test KidBadgeTests (snake_case decode + earnedDate). Compile verified via iOS CI on next PR.
 - Remaining false: 37.
+
+## 2026-06-14 (cont. 21) - Recipe per-ingredient pricing -> budget (US-251)
+- Additive migration 20260614000003 (recipe_ingredients.price_per_unit). RecipeIngredient + Update gain pricePerUnit.
+- EditRecipeView ingredient row: optional Price field under a DisclosureGroup (AC2).
+- BudgetService.recipeCost (sum priced lines + partial flag); weeklyCostBySlot takes recipes + routes recipe entries; BudgetView passes recipes + renders partial tag (AC3).
+- AC4 out of scope per AC; AC5 imports leave price NULL automatically. Test BudgetServiceRecipeCostTests (4).
+- AddRecipeView is free-text (no structured rows) so price column lives in EditRecipeView only.
+- Remaining false: 36.

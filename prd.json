@@ -3702,8 +3702,8 @@
         "Imported recipes (RecipeImportService URL parse) leave price NULL; a future enhancement can heuristically split a known total across N ingredients"
       ],
       "priority": 67,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): additive migration 20260614000003_recipe_ingredient_pricing.sql (recipe_ingredients.price_per_unit numeric NULL). RecipeIngredient + RecipeIngredientUpdate gain pricePerUnit (price_per_unit). EditRecipeView ingredient row gains an optional Price field collapsed under a DisclosureGroup (AC2). BudgetService.recipeCost(recipe) sums priced lines + partial flag; weeklyCostBySlot now takes recipes and routes recipe-backed entries through it; BudgetView passes appState.recipes + renders a partial tag (AC3). AC4 (proportional pantry debit) out of scope per AC; AC5 imported recipes leave price NULL automatically (parser sets nil). Test BudgetServiceRecipeCostTests (4). Migration NOT deployed here; Swift build verified via iOS CI on next PR. AddRecipeView uses free-text ingredients (no structured rows) so the price column lives only in EditRecipeView."
     },
     {
       "id": "US-252",

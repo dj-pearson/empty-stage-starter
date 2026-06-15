@@ -43,35 +43,55 @@ enum BudgetService {
     /// For each plan entry we look up the underlying Food's price (recipes
     /// don't carry a per-meal cost yet, so they're skipped). Granular
     /// enough to show the user "lunch is your most expensive meal".
+    /// US-251: a recipe's cost = sum of its priced ingredient lines. `partial`
+    /// is true when at least one ingredient is unpriced, so the UI can flag
+    /// that the number is incomplete. Returns nil when nothing is priced.
+    static func recipeCost(_ recipe: Recipe) -> (total: Double, partial: Bool)? {
+        let ingredients = recipe.ingredients
+        guard !ingredients.isEmpty else { return nil }
+        let priced = ingredients.compactMap(\.pricePerUnit)
+        guard !priced.isEmpty else { return nil }
+        let total = priced.reduce(0, +)
+        return (total: total, partial: priced.count < ingredients.count)
+    }
+
     static func weeklyCostBySlot(
         weekStart: Date,
         kidIds: [String],
         planEntries: [PlanEntry],
-        foods: [Food]
-    ) -> [(slot: MealSlot, total: Double, mealCount: Int)] {
+        foods: [Food],
+        recipes: [Recipe] = []
+    ) -> [(slot: MealSlot, total: Double, mealCount: Int, partial: Bool)] {
         let weekDates = Set(weekStart.weekDates.map(DateFormatter.isoDate.string(from:)))
+        let recipesById = Dictionary(uniqueKeysWithValues: recipes.map { ($0.id, $0) })
 
-        var bySlot: [String: (total: Double, count: Int)] = [:]
+        var bySlot: [String: (total: Double, count: Int, partial: Bool)] = [:]
         for entry in planEntries
             where weekDates.contains(entry.date)
             && (kidIds.isEmpty || kidIds.contains(entry.kidId))
         {
-            // Skip recipe-only entries — recipes don't carry priced
-            // ingredients in the model yet. This is a follow-up.
-            guard entry.recipeId == nil else { continue }
-            guard let food = foods.first(where: { $0.id == entry.foodId }) else { continue }
-            // Per-meal portion is one unit by convention; if/when we model
-            // serving sizes per plan entry, multiply here.
-            guard let price = food.pricePerUnit else { continue }
-            var bucket = bySlot[entry.mealSlot] ?? (total: 0, count: 0)
-            bucket.total += price
-            bucket.count += 1
+            var bucket = bySlot[entry.mealSlot] ?? (total: 0, count: 0, partial: false)
+
+            if let recipeId = entry.recipeId {
+                // US-251: recipe-backed entry → sum its priced ingredients.
+                guard let recipe = recipesById[recipeId],
+                      let cost = recipeCost(recipe) else { continue }
+                bucket.total += cost.total
+                bucket.count += 1
+                bucket.partial = bucket.partial || cost.partial
+            } else {
+                // Food-backed entry → the food's per-unit price.
+                guard let food = foods.first(where: { $0.id == entry.foodId }),
+                      let price = food.pricePerUnit else { continue }
+                bucket.total += price
+                bucket.count += 1
+            }
             bySlot[entry.mealSlot] = bucket
         }
 
         return MealSlot.allCases.compactMap { slot in
             guard let value = bySlot[slot.rawValue] else { return nil }
-            return (slot: slot, total: value.total, mealCount: value.count)
+            return (slot: slot, total: value.total, mealCount: value.count, partial: value.partial)
         }
     }
 

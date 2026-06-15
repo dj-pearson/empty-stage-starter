@@ -40,13 +40,16 @@ struct BudgetView: View {
         Date().weekDates.first ?? Date()
     }
 
-    private var bySlot: [(slot: MealSlot, total: Double, mealCount: Int)] {
+    private var bySlot: [(slot: MealSlot, total: Double, mealCount: Int, partial: Bool)] {
         let kidIds = appState.activeKidId.map { [$0] } ?? appState.kids.map(\.id)
         return BudgetService.weeklyCostBySlot(
             weekStart: weekStart,
             kidIds: kidIds,
             planEntries: appState.planEntries,
-            foods: appState.foods
+            foods: appState.foods,
+            // US-251: pass recipes so recipe-backed entries contribute their
+            // priced-ingredient subtotals.
+            recipes: appState.recipes
         )
     }
 
@@ -220,16 +223,25 @@ struct BudgetView: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Text(BudgetService.format(row.total))
-                        .monospacedDigit()
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(BudgetService.format(row.total))
+                            .monospacedDigit()
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        // US-251: flag when a recipe in this slot has unpriced
+                        // ingredients so the total reads as incomplete.
+                        if row.partial {
+                            Text("partial")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                        }
+                    }
                 }
             }
         } header: {
             Text("Per-meal breakdown")
         } footer: {
-            Text("Meal-cost estimates use the food's per-unit price. Recipe-based meals don't yet contribute — coming soon.")
+            Text("Meal-cost estimates use each food's per-unit price and each recipe's priced ingredients. A \"partial\" tag means some recipe ingredients aren't priced yet.")
                 .font(.caption2)
         }
     }

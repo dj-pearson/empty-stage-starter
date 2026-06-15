@@ -128,6 +128,25 @@ struct EditRecipeView: View {
 
                                 Spacer()
                             }
+
+                            // US-251: optional per-ingredient price, collapsed
+                            // by default so the common (unpriced) case stays
+                            // simple. Feeds the recipe's weekly-budget cost.
+                            DisclosureGroup("Price (optional)") {
+                                HStack(spacing: 8) {
+                                    Text(BudgetService.defaultCurrencyCode)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    TextField(
+                                        "Price",
+                                        value: $ing.pricePerUnit,
+                                        format: .number.precision(.fractionLength(0...2))
+                                    )
+                                    .keyboardType(.decimalPad)
+                                    .multilineTextAlignment(.trailing)
+                                }
+                            }
+                            .font(.caption)
                         }
                         .padding(.vertical, 2)
                     }
