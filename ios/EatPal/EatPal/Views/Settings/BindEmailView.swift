@@ -180,7 +180,11 @@ struct BindEmailView: View {
             } header: {
                 Text("Set a password")
             } footer: {
-                Text("Use at least 12 characters with an uppercase letter, a lowercase letter, a number, and a special character. After this you'll be able to sign in with email + password or continue using Sign in with Apple — both will work.")
+                Text(
+                    "Use at least 12 characters with an uppercase letter, a lowercase letter, "
+                    + "a number, and a special character. After this you'll be able to sign in "
+                    + "with email + password or continue using Sign in with Apple — both will work."
+                )
             }
 
             Section {
