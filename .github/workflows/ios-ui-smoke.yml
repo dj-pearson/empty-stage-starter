@@ -1,0 +1,120 @@
+name: iOS UI Smoke (Maestro)
+
+# Drives the actual built EatPal.app on a simulator with Maestro — the UI/flow
+# layer that XCTest (logic) and Playwright (web) don't cover. This is the
+# "app isn't broken on launch" gate before turning on paid acquisition.
+
+on:
+  pull_request:
+    paths:
+      - 'ios/**'
+      - '.maestro/**'
+      - '.github/workflows/ios-ui-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '.maestro/**'
+      - '.github/workflows/ios-ui-smoke.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ios-ui-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  XCODE_VERSION: '26.2'
+  SCHEME: 'EatPal'
+  PROJECT_DIR: 'ios/EatPal'
+  SIMULATOR: 'iPhone 16'
+
+jobs:
+  ui-smoke:
+    name: Maestro smoke flows
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      # Gate the authenticated flow on whether a test account secret is set.
+      HAS_TEST_CREDS: ${{ secrets.MAESTRO_TEST_EMAIL != '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode version
+        run: |
+          XCODE_APP="/Applications/Xcode_${{ env.XCODE_VERSION }}.app"
+          if [ ! -d "$XCODE_APP" ]; then
+            echo "::warning::Xcode ${{ env.XCODE_VERSION }} not found. Falling back to latest."
+            XCODE_APP=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          fi
+          sudo xcode-select -s "$XCODE_APP"
+          xcodebuild -version
+
+      - name: Install tooling
+        run: |
+          brew install xcodegen xcbeautify
+          curl -Ls https://get.maestro.mobile.dev | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Generate Xcode project
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: xcodegen generate
+
+      - name: Cache SPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/spm-cache
+          key: spm-${{ runner.os }}-${{ hashFiles('ios/EatPal/project.yml') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      - name: Build app for simulator
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project EatPal.xcodeproj \
+            -scheme "$SCHEME" \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,name=$SIMULATOR,OS=latest" \
+            -configuration Debug \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
+            SUPABASE_URL="https://placeholder.supabase.co" \
+            SUPABASE_ANON_KEY="placeholder-key-for-ci-build" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify
+
+      - name: Boot simulator and install app
+        run: |
+          set -o pipefail
+          UDID=$(xcrun simctl list devices available | grep "$SIMULATOR (" | head -1 | grep -oE '[0-9A-F-]{36}')
+          echo "Simulator UDID: $UDID"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator/EatPal.app"
+          xcrun simctl install "$UDID" "$APP_PATH"
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+
+      - name: Run Maestro smoke flows
+        run: maestro test .maestro/flows/smoke --format junit --output "$RUNNER_TEMP/maestro-smoke.xml"
+
+      - name: Run authenticated flow (only when test creds are present)
+        if: ${{ env.HAS_TEST_CREDS == 'true' }}
+        env:
+          MAESTRO_TEST_EMAIL: ${{ secrets.MAESTRO_TEST_EMAIL }}
+          MAESTRO_TEST_PASSWORD: ${{ secrets.MAESTRO_TEST_PASSWORD }}
+        run: maestro test .maestro/flows/authenticated
+
+      - name: Upload Maestro artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-results
+          path: |
+            ${{ runner.temp }}/maestro-smoke.xml
+            ~/.maestro/tests
+          retention-days: 7
+          if-no-files-found: ignore
