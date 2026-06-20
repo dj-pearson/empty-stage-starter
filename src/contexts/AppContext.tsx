@@ -8,7 +8,7 @@ import { handleSupabaseAuthError } from "@/lib/supabaseAuthError";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { FoodsProvider, useFoods } from "./FoodsContext";
 import { KidsProvider, useKids } from "./KidsContext";
-import { RecipesProvider, useRecipes, normalizeRecipeFromDB, RECIPE_WITH_INGREDIENTS_SELECT } from "./RecipesContext";
+import { RecipesProvider, useRecipes, normalizeRecipeFromDB, RECIPE_WITH_INGREDIENTS_SELECT, selectRecipesWithFallback } from "./RecipesContext";
 import { normalizeKidFromDB, normalizePlanEntryFromDB, normalizeGroceryItemFromDB } from "@/lib/normalizeEntities";
 import { PlanProvider, usePlan } from "./PlanContext";
 import { GroceryProvider, useGrocery } from "./GroceryContext";
@@ -193,9 +193,11 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
           householdId
             ? supabase.from('foods').select('*').eq('household_id', householdId).order('name', { ascending: true }).limit(500)
             : supabase.from('foods').select('*').order('name', { ascending: true }).limit(500),
+          // US-323: degrade to a plain select if the recipe_ingredients embed
+          // isn't deployed in this environment, so recipes still load.
           householdId
-            ? supabase.from('recipes').select(RECIPE_WITH_INGREDIENTS_SELECT).eq('household_id', householdId).order('created_at', { ascending: true }).limit(200)
-            : supabase.from('recipes').select(RECIPE_WITH_INGREDIENTS_SELECT).order('created_at', { ascending: true }).limit(200),
+            ? selectRecipesWithFallback((sel) => supabase.from('recipes').select(sel).eq('household_id', householdId).order('created_at', { ascending: true }).limit(200))
+            : selectRecipesWithFallback((sel) => supabase.from('recipes').select(sel).order('created_at', { ascending: true }).limit(200)),
           householdId
             ? supabase.from('plan_entries').select('*').eq('household_id', householdId)
                 .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
