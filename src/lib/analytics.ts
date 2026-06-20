@@ -180,7 +180,7 @@ class AnalyticsManager {
       // Queue page view as event
       this.queue.push({
         name: 'page_view',
-        properties: pageView,
+        properties: { ...pageView } as Record<string, unknown>,
         timestamp: Date.now(),
       });
       return;
