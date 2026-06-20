@@ -17,7 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Minus, XCircle, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -48,7 +47,7 @@ const STAGES = [
 const OUTCOMES = [
   { value: "success", label: "Success", icon: CheckCircle, color: "text-safe-food" },
   { value: "partial", label: "Partial", icon: Minus, color: "text-yellow-500" },
-  { value: "refused", label: "Refused", icon: XCircle, color: "text-gray-500" },
+  { value: "refused", label: "Refused", icon: XCircle, color: "text-muted-foreground" },
   { value: "tantrum", label: "Tantrum", icon: AlertTriangle, color: "text-red-500" },
 ];
 
