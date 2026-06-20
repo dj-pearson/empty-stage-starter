@@ -95,7 +95,7 @@ const STAGES = [
 const OUTCOMES = [
   { value: "success", label: "Success", icon: CheckCircle, color: "text-safe-food" },
   { value: "partial", label: "Partial", icon: Minus, color: "text-yellow-500" },
-  { value: "refused", label: "Refused", icon: XCircle, color: "text-gray-500" },
+  { value: "refused", label: "Refused", icon: XCircle, color: "text-muted-foreground" },
   { value: "tantrum", label: "Tantrum", icon: AlertTriangle, color: "text-red-500" },
 ];
 
@@ -677,7 +677,7 @@ export function FoodSuccessTracker({ onAddChild }: FoodSuccessTrackerProps) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {STAGES.map((stage, index) => {
+                  {STAGES.map((stage) => {
                     const count = attempts.filter((a) => a.stage === stage.value).length;
                     if (count === 0) return null;
                     return (

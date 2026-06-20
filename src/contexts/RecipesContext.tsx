@@ -54,6 +54,49 @@ type RecipeRow = Database['public']['Tables']['recipes']['Row'];
 export const RECIPE_WITH_INGREDIENTS_SELECT =
   '*, recipe_ingredients(id, recipe_id, food_id, sort_order, name, quantity, unit, group_label, optional_notes, created_at)';
 
+/**
+ * US-323 resilience: the recipe list normally embeds `recipe_ingredients`. If
+ * that table (or its FK relationship) isn't present in the target environment —
+ * e.g. a migration hasn't been deployed to prod yet — PostgREST rejects the
+ * embed with a 400 / PGRST200 and the ENTIRE recipes read fails, so the user
+ * sees zero recipes (the bug reported in US-323). This predicate detects that
+ * specific "embed not found" shape so the caller can degrade gracefully instead
+ * of treating it like a hard failure.
+ */
+export function isMissingIngredientsEmbedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const e = error as { code?: string; message?: string; details?: string; hint?: string };
+  if (e.code === 'PGRST200') return true; // PostgREST: could not find a relationship / embed
+  const haystack = `${e.message ?? ''} ${e.details ?? ''} ${e.hint ?? ''}`.toLowerCase();
+  return haystack.includes('recipe_ingredients')
+    && (haystack.includes('relationship')
+      || haystack.includes('could not find')
+      || haystack.includes('schema cache'));
+}
+
+/**
+ * Run a recipes query with the ingredient embed, and if the embed isn't
+ * available in this environment, retry the SAME query (same filters/order/limit)
+ * with a plain column select so recipes still render — minus structured
+ * ingredient rows — rather than 4xx-ing the whole list. `degraded` is true when
+ * the plain fallback was used. The caller passes a thunk that takes the select
+ * string and builds the query, keeping its own filters intact.
+ */
+export async function selectRecipesWithFallback<T extends { data: unknown; error: unknown }>(
+  run: (select: string) => PromiseLike<T>,
+): Promise<T & { degraded: boolean }> {
+  const primary = await run(RECIPE_WITH_INGREDIENTS_SELECT);
+  if (!isMissingIngredientsEmbedError(primary.error)) {
+    return Object.assign(primary, { degraded: false });
+  }
+  logger.warn(
+    'recipe_ingredients embed unavailable — falling back to a plain recipe select (US-323). Deploy the recipe_ingredients migration + NOTIFY pgrst to restore structured ingredients.',
+    primary.error,
+  );
+  const fallback = await run('*');
+  return Object.assign(fallback, { degraded: true });
+}
+
 /** Loose row shape with optionally joined ingredients. */
 type RecipeRowWithIngredients = RecipeRow & {
   recipe_ingredients?: RecipeIngredient[] | null;
@@ -265,10 +308,11 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
 
   const refreshRecipes = useCallback(async () => {
     if (userId) {
-      const { data } = await supabase
-        .from('recipes')
-        .select(RECIPE_WITH_INGREDIENTS_SELECT)
-        .order('created_at', { ascending: true });
+      // US-323: degrade to a plain select if the recipe_ingredients embed isn't
+      // available, so recipes still load instead of 400-ing the whole list.
+      const { data } = await selectRecipesWithFallback((sel) =>
+        supabase.from('recipes').select(sel).order('created_at', { ascending: true }),
+      );
       if (data) setRecipes((data as unknown[]).map((r) => normalizeRecipeFromDB(r as RecipeRowWithIngredients)));
     }
   }, [userId]);

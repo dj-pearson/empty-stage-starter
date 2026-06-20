@@ -89,6 +89,18 @@ Entities: foods, recipes, kids, plan entries, grocery items (each with add/updat
 
 **DB is snake_case, UI is camelCase** — see `normalizeRecipeFromDB()`.
 
+### Load Precedence (localStorage vs Supabase) — US-341
+
+The web app reads from two stores; precedence is **server-authoritative on load**:
+
+1. **Mount → cache first (offline fallback).** `AppContextComposer` hydrates each domain from platform storage (`getStorage()`, localStorage on web) so the UI paints instantly and works offline. This is a fallback, never a merge source once the server answers.
+2. **Authenticated → Supabase overwrites.** Once `userId` + `householdId` resolve, the load effect fetches each table and **replaces** the corresponding slice wholesale (`setFoods(serverData)`, etc.) — it does **not** merge stale local rows back in. A successful server fetch always wins, so a cross-device edit (or a deletion) can't be resurrected by a stale local backup.
+3. **Cache is write-through only.** A debounced effect persists the current in-memory state back to storage as a backup; it is read on mount (step 1) and never used to override the server (step 2).
+4. **Realtime → merge by id, last-write-wins.** Live `postgres_changes` events are folded in via the pure per-domain helpers `applyGroceryItemRealtime` / `applyPlanEntryRealtime` / `applyKidRealtime` / `applyRecipeRealtime` (deduped by `id`; normalize snake_case → camelCase). Ordering is the channel's; we do not re-order by `updated_at`.
+5. **Offline durability is mobile-only.** The web app has no durable write-queue — optimistic local writes that never reached Supabase are not replayed (a later server load wins per step 2). Native (Expo) offline durability lives in `app/mobile/lib/syncQueue` (FIFO replay + retry; see `src/lib/syncQueue.test.ts`).
+
+Tests pin this contract: `src/contexts/AppContext.precedence.test.tsx` (offline fallback renders cache; server load overwrites stale cache).
+
 ## Supabase
 
 ```typescript

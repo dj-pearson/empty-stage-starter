@@ -69,7 +69,7 @@ const CATEGORY_COLORS: Record<ActivityCategory, string> = {
   ai: 'bg-indigo-100 text-indigo-800',
   engagement: 'bg-teal-100 text-teal-800',
   storage: 'bg-muted text-foreground',
-  general: 'bg-slate-100 text-slate-800',
+  general: 'bg-muted text-foreground',
 };
 
 interface ActivityTimelineProps {

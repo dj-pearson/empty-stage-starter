@@ -8,7 +8,7 @@ import { handleSupabaseAuthError } from "@/lib/supabaseAuthError";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { FoodsProvider, useFoods } from "./FoodsContext";
 import { KidsProvider, useKids } from "./KidsContext";
-import { RecipesProvider, useRecipes, normalizeRecipeFromDB, RECIPE_WITH_INGREDIENTS_SELECT } from "./RecipesContext";
+import { RecipesProvider, useRecipes, normalizeRecipeFromDB, RECIPE_WITH_INGREDIENTS_SELECT, selectRecipesWithFallback } from "./RecipesContext";
 import { normalizeKidFromDB, normalizePlanEntryFromDB, normalizeGroceryItemFromDB } from "@/lib/normalizeEntities";
 import { PlanProvider, usePlan } from "./PlanContext";
 import { GroceryProvider, useGrocery } from "./GroceryContext";
@@ -159,6 +159,15 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   }, [foods, kids, recipes, activeKidId, planEntries, groceryItems]);
 
   // Sync with Supabase when authenticated.
+  //
+  // US-341 load precedence (see CLAUDE.md "Load Precedence"): this load is
+  // SERVER-AUTHORITATIVE. A successful fetch OVERWRITES each domain slice
+  // wholesale (setFoods(serverData), setKids(...), ...) rather than merging the
+  // localStorage cache back in, so a stale local backup can never resurrect a
+  // row another device edited or deleted. The cache (loaded above on mount) is
+  // only an offline-fallback / instant-paint source; once the server answers it
+  // wins. Realtime events are then merged by id via the applyXRealtime helpers.
+  //
   // Gate on householdId: `ensure_user_household` guarantees every signed-in
   // user resolves to a household, so a null here is only the brief window
   // before that RPC returns. Waiting for it avoids running the unscoped
@@ -184,9 +193,11 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
           householdId
             ? supabase.from('foods').select('*').eq('household_id', householdId).order('name', { ascending: true }).limit(500)
             : supabase.from('foods').select('*').order('name', { ascending: true }).limit(500),
+          // US-323: degrade to a plain select if the recipe_ingredients embed
+          // isn't deployed in this environment, so recipes still load.
           householdId
-            ? supabase.from('recipes').select(RECIPE_WITH_INGREDIENTS_SELECT).eq('household_id', householdId).order('created_at', { ascending: true }).limit(200)
-            : supabase.from('recipes').select(RECIPE_WITH_INGREDIENTS_SELECT).order('created_at', { ascending: true }).limit(200),
+            ? selectRecipesWithFallback((sel) => supabase.from('recipes').select(sel).eq('household_id', householdId).order('created_at', { ascending: true }).limit(200))
+            : selectRecipesWithFallback((sel) => supabase.from('recipes').select(sel).order('created_at', { ascending: true }).limit(200)),
           householdId
             ? supabase.from('plan_entries').select('*').eq('household_id', householdId)
                 .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
