@@ -11,7 +11,7 @@ import { logger } from "@/lib/logger";
  */
 export interface AnalyticsEvent {
   name: string;
-  properties?: Record<string, any>;
+  properties?: Record<string, unknown>;
   timestamp?: number;
 }
 
@@ -34,7 +34,7 @@ export interface UserProperties {
   name?: string;
   plan?: string;
   signupDate?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -145,7 +145,7 @@ class AnalyticsManager {
    * });
    * ```
    */
-  trackEvent(name: string, properties?: Record<string, any>): void {
+  trackEvent(name: string, properties?: Record<string, unknown>): void {
     const event: AnalyticsEvent = {
       name,
       properties,
@@ -355,7 +355,7 @@ export function trackSearch(query: string, resultCount?: number): void {
 /**
  * Track feature usage
  */
-export function trackFeatureUsage(featureName: string, properties?: Record<string, any>): void {
+export function trackFeatureUsage(featureName: string, properties?: Record<string, unknown>): void {
   analytics.trackEvent('feature_used', {
     feature_name: featureName,
     ...properties,
@@ -393,6 +393,6 @@ export function trackTiming(
 // Declare gtag for TypeScript
 declare global {
   interface Window {
-    gtag?: (...args: any[]) => void;
+    gtag?: (...args: unknown[]) => void;
   }
 }

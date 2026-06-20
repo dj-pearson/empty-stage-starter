@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod';
-import { FieldErrors, UseFormSetError } from 'react-hook-form';
+import { FieldErrors, UseFormSetError, FieldValues } from 'react-hook-form';
 
 /**
  * Convert Zod errors to react-hook-form errors
@@ -41,9 +41,9 @@ export function zodErrorsToFormErrors(zodError: z.ZodError): Record<string, stri
  * }
  * ```
  */
-export function setZodErrors(zodError: z.ZodError, setError: UseFormSetError<any>) {
+export function setZodErrors(zodError: z.ZodError, setError: UseFormSetError<FieldValues>) {
   zodError.errors.forEach((error) => {
-    const path = error.path.join('.') as any;
+    const path = error.path.join('.') as Parameters<typeof setError>[0];
     setError(path, {
       type: 'manual',
       message: error.message,
@@ -84,19 +84,20 @@ export function hasErrors(errors: FieldErrors): boolean {
 export function countErrors(errors: FieldErrors): number {
   let count = 0;
 
-  const countRecursive = (obj: any) => {
+  const countRecursive = (obj: Record<string, unknown>) => {
     Object.keys(obj).forEach((key) => {
-      if (obj[key] && typeof obj[key] === 'object') {
-        if (obj[key].message) {
+      const val = obj[key];
+      if (val && typeof val === 'object') {
+        if ((val as { message?: unknown }).message) {
           count++;
         } else {
-          countRecursive(obj[key]);
+          countRecursive(val as Record<string, unknown>);
         }
       }
     });
   };
 
-  countRecursive(errors);
+  countRecursive(errors as unknown as Record<string, unknown>);
   return count;
 }
 
@@ -300,27 +301,27 @@ export function getPasswordStrengthLabel(score: number): {
 /**
  * Trim all string fields in an object
  */
-export function trimObjectStrings<T extends Record<string, any>>(obj: T): T {
-  const result = { ...obj } as any;
+export function trimObjectStrings<T extends Record<string, unknown>>(obj: T): T {
+  const result: Record<string, unknown> = { ...obj };
 
   Object.keys(result).forEach((key) => {
     if (typeof result[key] === 'string') {
-      result[key] = result[key].trim();
+      result[key] = (result[key] as string).trim();
     }
   });
 
-  return result;
+  return result as T;
 }
 
 /**
  * Remove empty string fields from an object
  */
-export function removeEmptyStrings<T extends Record<string, any>>(obj: T): Partial<T> {
+export function removeEmptyStrings<T extends Record<string, unknown>>(obj: T): Partial<T> {
   const result: Partial<T> = {};
 
   Object.keys(obj).forEach((key) => {
     if (obj[key] !== '' && obj[key] !== null && obj[key] !== undefined) {
-      result[key as keyof T] = obj[key];
+      result[key as keyof T] = obj[key] as T[keyof T];
     }
   });
 
@@ -337,7 +338,7 @@ export async function delay(ms: number): Promise<void> {
 /**
  * Check if two form values are equal (deep comparison)
  */
-export function isFormValueEqual(a: any, b: any): boolean {
+export function isFormValueEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (a == null || b == null) return false;
   if (typeof a !== typeof b) return false;
@@ -348,12 +349,14 @@ export function isFormValueEqual(a: any, b: any): boolean {
   }
 
   if (typeof a === 'object') {
-    const keysA = Object.keys(a);
-    const keysB = Object.keys(b);
+    const objA = a as Record<string, unknown>;
+    const objB = b as Record<string, unknown>;
+    const keysA = Object.keys(objA);
+    const keysB = Object.keys(objB);
 
     if (keysA.length !== keysB.length) return false;
 
-    return keysA.every((key) => isFormValueEqual(a[key], b[key]));
+    return keysA.every((key) => isFormValueEqual(objA[key], objB[key]));
   }
 
   return false;
@@ -362,7 +365,7 @@ export function isFormValueEqual(a: any, b: any): boolean {
 /**
  * Check if form has unsaved changes
  */
-export function hasUnsavedChanges<T extends Record<string, any>>(
+export function hasUnsavedChanges<T extends Record<string, unknown>>(
   original: T,
   current: T
 ): boolean {

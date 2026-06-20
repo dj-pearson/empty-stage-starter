@@ -3042,3 +3042,16 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - US-344 (stays false): audited the hot-path reads — every DB column on foods/kids/plan_entries/grocery_items is referenced in src except kids.dietary_variety_score (1 small numeric). No meaningful over-fetch to cut (large-field reduction was US-014); narrowing would be zero-win busywork or risk dropping cast-accessed columns against the live DB. Recorded in the story note.
 - Verified: vite build passes (exit 0); 42 context tests pass (incl. 6 new fallback tests); changed files lint-clean. (tsc -b baseline backlog unchanged — adds no new errors.)
 - Remaining false: 35.
+
+## 2026-06-20 (cont.) - US-342 incremental: eliminate `any` in self-contained lib utils (slice 1)
+- CONTEXT: @typescript-eslint/no-explicit-any is ALREADY enabled as `error` (via tseslint recommended) and fires 382x; lint also has ~400 other errors (231 no-unused-vars, 26 ban-ts-comment, etc.). So "enable the rule" is done; the work is driving the 382 to 0, and "npm run lint passes" additionally needs the other ~400 cleared. Large multi-session effort — this is slice 1.
+- Strategy: target self-contained "ONLY-ANY" files (their only lint errors are no-explicit-any) so fixing them makes each fully lint-clean, and prefer files with NO importers (zero consumer-ripple risk) given tsc verification is expensive here.
+- Files fully cleaned (45 `any` -> precise types, all now eslint-clean):
+  - src/lib/api-errors.ts (23) — no importers. details?: unknown; typed `let code: string` to drop the ErrorCodes `as any` casts; handleFetchError(error: unknown) with guarded message; handleHTTPError body cast to a known shape; retryRequest/batch onError+shouldRetry+lastError -> unknown; logError context Record<string,unknown>.
+  - src/lib/browser-utils.ts (7) — no importers. Added precise interfaces (NetworkInformation/BatteryManager/PerformanceMemory/NavigatorWithExtras/PerformanceWithMemory) for the non-standard navigator/performance APIs, replacing `(navigator as any)` etc. Guarded msMaxTouchPoints with ?? 0.
+  - src/lib/form-utils.ts (9) — no importers. UseFormSetError<FieldValues>; path via Parameters<typeof setError>[0]; Record<string,any>->Record<string,unknown> generics with narrowing casts; isFormValueEqual(a/b: unknown) with object casts.
+  - src/lib/analytics.ts (5) — input-only widenings (properties Record<string,unknown>, UserProperties index sig unknown, gtag ...unknown[]). Safe: consumers write properties, never read them typed.
+  - src/lib/performance.ts (1) — aligned its duplicate `window.gtag` global declaration to ...unknown[] to match analytics.ts (a mismatched global merge would itself be a tsc error).
+- Verified: vite build passes (exit 0); changed files eslint-clean (0 errors); full tsc -b confirms ZERO new errors in the 5 changed files (baseline backlog otherwise unchanged). No unit tests import these modules.
+- US-342 remains passes=FALSE: 382 -> ~337 no-explicit-any remaining, and lint still has the unrelated ~400 errors. Continue file-by-file in later slices.
+- Remaining false: 35.
