@@ -86,10 +86,10 @@ export function showRateLimitError(result: RateLimitResult) {
  * @param body - Request body
  * @returns Function response or null if rate limited
  */
-export async function callWithRateLimit<T = any>(
+export async function callWithRateLimit<T = unknown>(
   endpoint: string,
   functionName: string,
-  body: any
+  body: unknown
 ): Promise<T | null> {
   // Check rate limit first
   const rateLimitCheck = await checkRateLimit(endpoint);
@@ -105,7 +105,7 @@ export async function callWithRateLimit<T = any>(
 
   try {
     // Make the actual function call
-    const { data, error } = await invokeEdgeFunction(functionName, { body });
+    const { data, error } = await invokeEdgeFunction<T>(functionName, { body });
 
     if (error) {
       logger.error(`${functionName} error:`, error);
