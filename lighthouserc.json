@@ -1,0 +1,35 @@
+{
+  "ci": {
+    "collect": {
+      "startServerCommand": "npm run preview -- --port 4173 --strictPort",
+      "startServerReadyPattern": "Local:",
+      "startServerReadyTimeout": 60000,
+      "url": [
+        "http://localhost:4173/",
+        "http://localhost:4173/pricing",
+        "http://localhost:4173/budget-calculator",
+        "http://localhost:4173/picky-eater-quiz",
+        "http://localhost:4173/blog",
+        "http://localhost:4173/faq"
+      ],
+      "numberOfRuns": 1,
+      "settings": {
+        "onlyCategories": ["performance", "accessibility", "best-practices", "seo"],
+        "skipAudits": ["uses-http2", "canonical"],
+        "_comment_skipAudits": "uses-http2: localhost preview is HTTP/1.1, false negative. canonical: SPA sets it client-side per route; audit it against the deployed site, not the preview server."
+      }
+    },
+    "assert": {
+      "_comment": "All WARN, never error — this audit informs SEO work, it does not gate merges. Tighten to 'error' later if you want a hard SEO gate.",
+      "assertions": {
+        "categories:seo": ["warn", { "minScore": 0.9 }],
+        "categories:performance": ["warn", { "minScore": 0.5 }],
+        "categories:accessibility": ["warn", { "minScore": 0.9 }],
+        "categories:best-practices": ["warn", { "minScore": 0.9 }]
+      }
+    },
+    "upload": {
+      "target": "temporary-public-storage"
+    }
+  }
+}

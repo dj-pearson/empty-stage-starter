@@ -6,7 +6,7 @@ export function initializeSentry() {
   if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {
     // Skip if no DSN is configured
     if (!import.meta.env.VITE_SENTRY_DSN) {
-      console.warn('Sentry DSN not configured, skipping initialization');
+      logger.warn('Sentry DSN not configured, skipping initialization');
       return;
     }
 
@@ -49,7 +49,7 @@ export function initializeSentry() {
       ],
 
       // Filter sensitive data
-      beforeSend(event, hint) {
+      beforeSend(event, _hint) {
         // Remove sensitive data from event
         if (event.request?.cookies) {
           delete event.request.cookies;
@@ -89,7 +89,7 @@ export function initializeSentry() {
       },
     });
     } catch (error) {
-      console.error('Failed to initialize Sentry:', error);
+      logger.error('Failed to initialize Sentry:', error);
     }
   }
 }
@@ -158,7 +158,7 @@ export function ErrorFallback({ error, resetError }: { error: Error; resetError:
 }
 
 // Custom error logging utility
-export function logError(error: Error, context?: Record<string, any>) {
+export function logError(error: Error, context?: Record<string, unknown>) {
   logger.error('Error:', error);
 
   if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {
@@ -172,12 +172,13 @@ export function logError(error: Error, context?: Record<string, any>) {
 }
 
 // Log API errors with context
-export function logApiError(endpoint: string, error: any, requestData?: any) {
+export function logApiError(endpoint: string, error: unknown, requestData?: unknown) {
+  const err = error as { status?: number; statusText?: string } | null | undefined;
   const errorContext = {
     endpoint,
     requestData,
-    status: error?.status,
-    statusText: error?.statusText,
+    status: err?.status,
+    statusText: err?.statusText,
   };
 
   logger.error('API Error:', errorContext);
@@ -194,7 +195,7 @@ export function logApiError(endpoint: string, error: any, requestData?: any) {
 }
 
 // Track custom events
-export function trackEvent(eventName: string, data?: Record<string, any>) {
+export function trackEvent(eventName: string, data?: Record<string, unknown>) {
   if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {
     Sentry.addBreadcrumb({
       category: 'custom_event',

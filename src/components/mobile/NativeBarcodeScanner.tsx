@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { logger } from "@/lib/logger";
 import { isMobile } from '@/lib/platform';
 
 // Types for the barcode scanner
@@ -61,7 +62,7 @@ export function NativeBarcodeScanner({
         setCameraModule(camera);
         setRNComponents(rn);
       } catch (err) {
-        console.error('Failed to load camera modules:', err);
+        logger.error('Failed to load camera modules:', err);
         onError('Camera module not available');
       }
     };
@@ -80,7 +81,7 @@ export function NativeBarcodeScanner({
           onError('Camera permission denied. Please enable camera access in settings.');
         }
       } catch (err) {
-        console.error('Permission request failed:', err);
+        logger.error('Permission request failed:', err);
         onError('Failed to request camera permission');
       }
     };

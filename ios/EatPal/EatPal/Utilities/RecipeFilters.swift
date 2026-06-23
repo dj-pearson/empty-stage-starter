@@ -119,8 +119,13 @@ struct RecipeFilters: Equatable {
                     if let fid = ing.foodId, requiredFoodIds.contains(fid) { return true }
                     return false
                 }
+                // US-360: word-boundary match (parser-normalized) instead of
+                // raw substring so a 3-char food name like "oil" no longer
+                // false-positives against "broil"/"spoil".
                 let nameHits = recipe.allIngredientText.contains { line in
-                    requiredFoodNames.contains { name in line.contains(name) }
+                    requiredFoodNames.contains { name in
+                        IngredientNameMatcher.matches(foodName: name, ingredientLine: line)
+                    }
                 }
                 if !(foodIdHits || ingredientFoodIdHits || nameHits) { return false }
             }

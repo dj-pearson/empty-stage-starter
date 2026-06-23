@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Helmet } from "react-helmet-async";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
 import { countMissingForRecipe } from "@/lib/recipeShortfall";
 import { analytics } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
@@ -93,12 +93,16 @@ function categoryLabel(category: string | null | undefined): string {
 }
 
 export default function Grocery() {
+  const { foods, addFood, updateFood } = useFoods();
+  const { kids, activeKidId } = useKids();
+  const { planEntries } = usePlan();
   const {
-    foods, kids, activeKidId, planEntries, groceryItems, recipes,
+    groceryItems,
     setGroceryItems, addGroceryItem, toggleGroceryItem,
     updateGroceryItem, deleteGroceryItem, deleteGroceryItems,
-    clearCheckedGroceryItems, addFood, updateFood
-  } = useApp();
+    clearCheckedGroceryItems
+  } = useGrocery();
+  const { recipes } = useRecipes();
 
   const [groupBy, setGroupBy] = useState<"category" | "aisle">("aisle");
   const [showAddDialog, setShowAddDialog] = useState(false);

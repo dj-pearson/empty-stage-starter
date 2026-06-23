@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,48 @@ import { MealVotingCard, VoteType } from "@/components/MealVotingCard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Kid, Recipe } from "@/types";
+
+/**
+ * US-338: dedupe key used as the upsert conflict target. Matches the unique
+ * index meal_votes_kid_meal_slot_key (migration 20260613000003). All three
+ * columns are always present on a real vote, so a re-vote UPDATES the prior
+ * row instead of inserting a duplicate.
+ */
+export const MEAL_VOTE_CONFLICT_TARGET = 'kid_id,meal_date,meal_slot';
+
+const VOTE_EMOJI: Record<Exclude<VoteType, null>, string> = {
+  love_it: '😍',
+  okay: '🙂',
+  no_way: '😭',
+};
+
+/**
+ * Build the meal_votes upsert (row + conflict options). Exported + pure so the
+ * dedupe contract (US-338) is unit-testable without the swipe UI: re-voting
+ * the same (kid, meal_date, meal_slot) UPDATES via MEAL_VOTE_CONFLICT_TARGET
+ * rather than inserting a duplicate.
+ */
+export function buildMealVoteUpsert(params: {
+  kidId: string;
+  householdId: string;
+  meal: { planEntryId?: string; recipeId?: string; mealDate: string; mealSlot: string };
+  vote: Exclude<VoteType, null>;
+}): { row: Record<string, unknown>; options: { onConflict: string } } {
+  const { kidId, householdId, meal, vote } = params;
+  return {
+    row: {
+      kid_id: kidId,
+      household_id: householdId,
+      plan_entry_id: meal.planEntryId,
+      recipe_id: meal.recipeId,
+      meal_date: meal.mealDate,
+      meal_slot: meal.mealSlot,
+      vote,
+      vote_emoji: VOTE_EMOJI[vote],
+    },
+    options: { onConflict: MEAL_VOTE_CONFLICT_TARGET },
+  };
+}
 
 interface MealToVote {
   id: string;
@@ -78,7 +121,7 @@ export function KidMealVoting({
 
       setVotes(existingVotes);
     } catch (error) {
-      console.error('Error loading votes:', error);
+      logger.error('Error loading votes:', error);
     }
   };
 
@@ -105,6 +148,7 @@ export function KidMealVoting({
   };
 
   const saveVote = async (meal: MealToVote, vote: VoteType) => {
+    if (!vote) return;
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -117,20 +161,16 @@ export function KidMealVoting({
 
       if (!profile) return;
 
-      const voteEmoji = vote === 'love_it' ? '😍' : vote === 'okay' ? '🙂' : '😭';
+      // US-338: explicit conflict target so a re-vote UPDATES the existing row
+      // instead of inserting a duplicate (no onConflict previously).
+      const { row, options } = buildMealVoteUpsert({
+        kidId: kid.id,
+        householdId: profile.household_id,
+        meal,
+        vote,
+      });
 
-      const { error } = await supabase
-        .from('meal_votes')
-        .upsert({
-          kid_id: kid.id,
-          household_id: profile.household_id,
-          plan_entry_id: meal.planEntryId,
-          recipe_id: meal.recipeId,
-          meal_date: meal.mealDate,
-          meal_slot: meal.mealSlot,
-          vote,
-          vote_emoji: voteEmoji,
-        });
+      const { error } = await supabase.from('meal_votes').upsert(row, options);
 
       if (error) throw error;
 
@@ -138,7 +178,7 @@ export function KidMealVoting({
       await checkAchievements();
 
     } catch (error) {
-      console.error('Error saving vote:', error);
+      logger.error('Error saving vote:', error);
       toast.error('Failed to save vote');
     }
   };
@@ -171,7 +211,7 @@ export function KidMealVoting({
         });
       }
     } catch (error) {
-      console.error('Error checking achievements:', error);
+      logger.error('Error checking achievements:', error);
     }
   };
 

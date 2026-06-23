@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,7 +50,6 @@ import { toast } from "sonner";
 import { Recipe, RecipeCollection, MealSlot, Food } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { assertUUID } from "@/lib/query-sanitize";
-import { analytics } from "@/lib/analytics";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -76,19 +75,13 @@ interface RecipeSuggestion {
 }
 
 export default function Recipes() {
-  const {
-    recipes,
-    foods,
-    addRecipe,
-    updateRecipe,
-    deleteRecipe,
-    kids,
-    activeKidId,
-    setActiveKid,
-    addGroceryItemsMerged,
-    groceryItems,
-    addPlanEntries,
-  } = useApp();
+  // US-331: subscribe only to the domain slices this page uses so a grocery
+  // toggle or food edit elsewhere doesn't re-render the whole Recipes page.
+  const { recipes, addRecipe, updateRecipe, deleteRecipe } = useRecipes();
+  const { foods } = useFoods();
+  const { kids, activeKidId, setActiveKid } = useKids();
+  const { addGroceryItemsMerged, groceryItems } = useGrocery();
+  const { addPlanEntries } = usePlan();
 
   // Builder state
   const [builderOpen, setBuilderOpen] = useState(false);

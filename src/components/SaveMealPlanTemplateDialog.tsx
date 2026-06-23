@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { logger } from "@/lib/logger";
 import {
   Dialog,
   DialogContent,
@@ -110,7 +111,7 @@ export function SaveMealPlanTemplateDialog({
         onTemplateSaved();
       }
     } catch (error) {
-      console.error('Error saving template:', error);
+      logger.error('Error saving template:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to save template');
     } finally {
       setIsLoading(false);

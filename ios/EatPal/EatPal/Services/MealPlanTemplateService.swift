@@ -91,6 +91,9 @@ final class MealPlanTemplateService {
         let copied: Int
         let skippedAllergens: [String] // unique allergen names that triggered skips
         let skippedCount: Int
+        /// US-353: recipe ids of the recipe-backed entries actually copied, so
+        /// the caller can fire the missing-ingredient prompt.
+        let copiedRecipeIds: [String]
     }
 
     /// Copies plan entries for a given week from `sourceKidId` to `targetKidId`.
@@ -112,7 +115,7 @@ final class MealPlanTemplateService {
 
         guard !sourceEntries.isEmpty else {
             toast.warning("Nothing to copy", message: "The source kid has no meals planned this week.")
-            return CrossKidCopyResult(copied: 0, skippedAllergens: [], skippedCount: 0)
+            return CrossKidCopyResult(copied: 0, skippedAllergens: [], skippedCount: 0, copiedRecipeIds: [])
         }
 
         let targetKid = appState.kids.first { $0.id == targetKidId }
@@ -121,6 +124,7 @@ final class MealPlanTemplateService {
         var copied = 0
         var skipped = 0
         var skippedAllergenSet: Set<String> = []
+        var copiedRecipeIds: [String] = []
 
         for entry in sourceEntries {
             // Allergen guard: if the entry's food declares any allergen the
@@ -148,6 +152,9 @@ final class MealPlanTemplateService {
             do {
                 try await appState.addPlanEntry(copy)
                 copied += 1
+                if let rid = copy.recipeId, !rid.isEmpty {
+                    copiedRecipeIds.append(rid)
+                }
             } catch {
                 skipped += 1
             }
@@ -156,7 +163,8 @@ final class MealPlanTemplateService {
         return CrossKidCopyResult(
             copied: copied,
             skippedAllergens: Array(skippedAllergenSet).sorted(),
-            skippedCount: skipped
+            skippedCount: skipped,
+            copiedRecipeIds: copiedRecipeIds
         )
     }
 

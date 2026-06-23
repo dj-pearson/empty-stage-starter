@@ -114,8 +114,7 @@ struct ErrorStatesGallery: View {
         .preferredColorScheme(.dark)
 }
 
-#Preview("Reduce motion") {
-    ErrorStatesGallery()
-        .environment(\.accessibilityReduceMotion, true)
-}
+// Note: `accessibilityReduceMotion` is a read-only environment value and cannot
+// be overridden in a `#Preview`. To preview reduced-motion behavior, toggle
+// "Reduce Motion" in the simulator/canvas accessibility settings instead.
 #endif

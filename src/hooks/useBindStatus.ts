@@ -10,6 +10,7 @@
 // reads auth.users.encrypted_password without exposing the auth schema.
 
 import { useEffect, useState } from "react";
+import { logger } from "@/lib/logger";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { isAppleAccount, isAppleRelayEmail } from "@/lib/apple";
@@ -47,7 +48,7 @@ export function useBindStatus(): BindStatus {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase.rpc as any)("current_user_has_password");
       if (error) {
-        console.warn("current_user_has_password failed:", error.message);
+        logger.warn("current_user_has_password failed:", error.message);
         setHasPassword(false);
       } else {
         setHasPassword(Boolean(data));

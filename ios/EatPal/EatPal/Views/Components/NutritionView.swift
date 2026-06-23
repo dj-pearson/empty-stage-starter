@@ -116,6 +116,11 @@ struct MacroRing: View {
                 Text(String(format: "%.0f", value))
                     .font(.caption2)
                     .fontWeight(.bold)
+                    // US-411: 3-4 digit values (e.g. calories) must not
+                    // overflow the fixed 56pt ring under large Dynamic Type.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .frame(maxWidth: 48)
             }
 
             Text(label)
@@ -132,10 +137,11 @@ struct DailyNutritionSummary: View {
     let entries: [PlanEntry]
     let foods: [Food]
 
-    private var dailyCalories: Double { 0 } // Placeholder — needs nutrition data on Food model
-    private var dailyProtein: Double { 0 }
-    private var dailyCarbs: Double { 0 }
-    private var dailyFat: Double { 0 }
+    /// US-411: the Food model carries no per-item macro/calorie data today, so
+    /// real daily totals cannot be computed. Surfacing zeroed rings reads as
+    /// "0 calories logged" — a placeholder masquerading as live data. Until
+    /// nutrition lands on Food, show an explicit unavailable state.
+    private var hasNutritionData: Bool { false }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -146,13 +152,10 @@ struct DailyNutritionSummary: View {
                 Text("No meals logged yet today.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-            } else {
-                MacroRingsView(
-                    calories: dailyCalories,
-                    protein: dailyProtein,
-                    carbs: dailyCarbs,
-                    fat: dailyFat
-                )
+            } else if !hasNutritionData {
+                Label("Nutrition data not available", systemImage: "chart.bar.doc.horizontal")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
 
                 Text("\(entries.count) meals logged")
                     .font(.caption)

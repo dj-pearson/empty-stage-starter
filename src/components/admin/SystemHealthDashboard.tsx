@@ -130,6 +130,27 @@ function buildDemoErrorTrend(): ErrorRatePoint[] {
 const REFRESH_INTERVAL_MS = 30_000; // 30 seconds
 
 // ---------------------------------------------------------------------------
+// Isolated countdown (US-335)
+// ---------------------------------------------------------------------------
+
+/**
+ * Renders the "next in Ns" countdown. Owns its own 1s tick so the per-second
+ * setState re-renders ONLY this tiny node, not the parent dashboard or its
+ * charts. Resets whenever `resetKey` changes (i.e. on each data refresh).
+ */
+function RefreshCountdown({ seconds, resetKey }: { seconds: number; resetKey: number }) {
+  const [remaining, setRemaining] = useState(seconds);
+  useEffect(() => {
+    setRemaining(seconds);
+    const id = setInterval(() => {
+      setRemaining((prev) => (prev > 0 ? prev - 1 : seconds));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [seconds, resetKey]);
+  return <>{remaining}s</>;
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -141,11 +162,10 @@ export function SystemHealthDashboard() {
   const [activeUserCount, setActiveUserCount] = useState<number>(0);
   const [errorTrend, setErrorTrend] = useState<ErrorRatePoint[]>([]);
   const [usingDemoData, setUsingDemoData] = useState(false);
-  const [countdown, setCountdown] = useState(REFRESH_INTERVAL_MS / 1000);
 
-  // Track interval id so we can reset the countdown on manual refresh.
+  // US-335: the 1s countdown lives in an isolated child (<RefreshCountdown>)
+  // so it no longer re-renders this dashboard (and its charts) every second.
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ------- Database connection check -------
   const checkDbConnection = useCallback(async () => {
@@ -300,42 +320,30 @@ export function SystemHealthDashboard() {
     }
   }, [checkDbConnection, fetchActiveUserCount, fetchErrorTrend]);
 
-  // ------- Countdown + refresh interval -------
-  const resetCountdown = useCallback(() => {
-    setCountdown(REFRESH_INTERVAL_MS / 1000);
-  }, []);
-
+  // ------- Refresh interval (data only; countdown UI is isolated) -------
   useEffect(() => {
     fetchMetrics();
 
-    // Auto-refresh every 30 seconds
+    // Auto-refresh data every 30 seconds. No per-second setState here, so the
+    // charts below are not re-rendered on a 1s cadence (US-335).
     refreshTimerRef.current = setInterval(() => {
       fetchMetrics();
-      resetCountdown();
     }, REFRESH_INTERVAL_MS);
-
-    // Countdown timer (ticks every second)
-    countdownTimerRef.current = setInterval(() => {
-      setCountdown((prev) => (prev > 0 ? prev - 1 : REFRESH_INTERVAL_MS / 1000));
-    }, 1000);
 
     return () => {
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
-      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
     };
-  }, [fetchMetrics, resetCountdown]);
+  }, [fetchMetrics]);
 
   // Manual refresh handler
   const handleManualRefresh = useCallback(() => {
     fetchMetrics();
-    resetCountdown();
     // Reset the auto-refresh interval
     if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
     refreshTimerRef.current = setInterval(() => {
       fetchMetrics();
-      resetCountdown();
     }, REFRESH_INTERVAL_MS);
-  }, [fetchMetrics, resetCountdown]);
+  }, [fetchMetrics]);
 
   // ------- Helpers -------
 
@@ -525,7 +533,10 @@ export function SystemHealthDashboard() {
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
             Updated {lastUpdate.toLocaleTimeString()} &middot; next in{" "}
-            {countdown}s
+            <RefreshCountdown
+              seconds={REFRESH_INTERVAL_MS / 1000}
+              resetKey={lastUpdate.getTime()}
+            />
           </span>
           <Button
             variant="outline"

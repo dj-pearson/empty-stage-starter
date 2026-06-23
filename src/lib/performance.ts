@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { logger } from "@/lib/logger";
 
 /**
  * Performance metric interface
@@ -15,6 +16,31 @@ export interface PerformanceMetric {
   value: number;
   rating: 'good' | 'needs-improvement' | 'poor';
   timestamp: number;
+}
+
+// Precise shapes for non-standard PerformanceEntry / Performance / Navigator
+// fields not yet in the DOM lib typings (US-342: replaces `as any` casts).
+interface LCPEntry extends PerformanceEntry {
+  renderTime: number;
+  loadTime: number;
+}
+interface FirstInputEntry extends PerformanceEntry {
+  processingStart: number;
+}
+interface LayoutShiftEntry extends PerformanceEntry {
+  hadRecentInput: boolean;
+  value: number;
+}
+interface PerformanceMemory {
+  usedJSHeapSize: number;
+  totalJSHeapSize: number;
+  jsHeapSizeLimit: number;
+}
+interface NetworkInformation {
+  effectiveType?: string;
+  downlink?: number;
+  rtt?: number;
+  saveData?: boolean;
 }
 
 /**
@@ -74,7 +100,7 @@ function reportMetric(metric: PerformanceMetric): void {
 
   // Log in development
   if (process.env.NODE_ENV === 'development') {
-    console.log('[Performance]', metric);
+    logger.info('[Performance]', metric);
   }
 }
 
@@ -84,7 +110,7 @@ function reportMetric(metric: PerformanceMetric): void {
  * Usage:
  * ```tsx
  * measureLCP((metric) => {
- *   console.log('LCP:', metric);
+ *   logger.info('LCP:', metric);
  * });
  * ```
  */
@@ -94,7 +120,7 @@ export function measureLCP(callback?: (metric: PerformanceMetric) => void): void
   try {
     const observer = new PerformanceObserver((list) => {
       const entries = list.getEntries();
-      const lastEntry = entries[entries.length - 1] as any;
+      const lastEntry = entries[entries.length - 1] as LCPEntry;
 
       const metric: PerformanceMetric = {
         name: 'LCP',
@@ -109,7 +135,7 @@ export function measureLCP(callback?: (metric: PerformanceMetric) => void): void
 
     observer.observe({ type: 'largest-contentful-paint', buffered: true });
   } catch (e) {
-    console.error('Failed to measure LCP:', e);
+    logger.error('Failed to measure LCP:', e);
   }
 }
 
@@ -122,7 +148,7 @@ export function measureFID(callback?: (metric: PerformanceMetric) => void): void
   try {
     const observer = new PerformanceObserver((list) => {
       const entries = list.getEntries();
-      const firstInput = entries[0] as any;
+      const firstInput = entries[0] as FirstInputEntry;
 
       const metric: PerformanceMetric = {
         name: 'FID',
@@ -140,7 +166,7 @@ export function measureFID(callback?: (metric: PerformanceMetric) => void): void
 
     observer.observe({ type: 'first-input', buffered: true });
   } catch (e) {
-    console.error('Failed to measure FID:', e);
+    logger.error('Failed to measure FID:', e);
   }
 }
 
@@ -151,11 +177,11 @@ export function measureCLS(callback?: (metric: PerformanceMetric) => void): void
   if (typeof window === 'undefined' || !('PerformanceObserver' in window)) return;
 
   let clsValue = 0;
-  let clsEntries: any[] = [];
+  const clsEntries: LayoutShiftEntry[] = [];
 
   try {
     const observer = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries() as any[]) {
+      for (const entry of list.getEntries() as LayoutShiftEntry[]) {
         if (!entry.hadRecentInput) {
           clsValue += entry.value;
           clsEntries.push(entry);
@@ -186,7 +212,7 @@ export function measureCLS(callback?: (metric: PerformanceMetric) => void): void
 
     window.addEventListener('pagehide', reportCLS);
   } catch (e) {
-    console.error('Failed to measure CLS:', e);
+    logger.error('Failed to measure CLS:', e);
   }
 }
 
@@ -199,7 +225,7 @@ export function measureFCP(callback?: (metric: PerformanceMetric) => void): void
   try {
     const observer = new PerformanceObserver((list) => {
       const entries = list.getEntries();
-      const fcpEntry = entries.find((entry) => entry.name === 'first-contentful-paint') as any;
+      const fcpEntry = entries.find((entry) => entry.name === 'first-contentful-paint');
 
       if (fcpEntry) {
         const metric: PerformanceMetric = {
@@ -216,7 +242,7 @@ export function measureFCP(callback?: (metric: PerformanceMetric) => void): void
 
     observer.observe({ type: 'paint', buffered: true });
   } catch (e) {
-    console.error('Failed to measure FCP:', e);
+    logger.error('Failed to measure FCP:', e);
   }
 }
 
@@ -227,7 +253,7 @@ export function measureTTFB(callback?: (metric: PerformanceMetric) => void): voi
   if (typeof window === 'undefined' || !window.performance) return;
 
   try {
-    const navigationEntry = performance.getEntriesByType('navigation')[0] as any;
+    const navigationEntry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
 
     if (navigationEntry) {
       const ttfb = navigationEntry.responseStart - navigationEntry.requestStart;
@@ -243,7 +269,7 @@ export function measureTTFB(callback?: (metric: PerformanceMetric) => void): voi
       callback?.(metric);
     }
   } catch (e) {
-    console.error('Failed to measure TTFB:', e);
+    logger.error('Failed to measure TTFB:', e);
   }
 }
 
@@ -290,7 +316,7 @@ export class PerformanceTimer {
       performance.mark(this.endMark);
       try {
         performance.measure(this.name, this.startMark, this.endMark);
-      } catch (e) {
+      } catch {
         // Marks might not exist, ignore
       }
     }
@@ -305,7 +331,7 @@ export class PerformanceTimer {
     }
 
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[Performance Timer] ${this.name}: ${duration.toFixed(2)}ms`);
+      logger.info(`[Performance Timer] ${this.name}: ${duration.toFixed(2)}ms`);
     }
 
     return duration;
@@ -359,7 +385,7 @@ export function measureResourceTiming(): void {
       const max = Math.max(...durations);
 
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[Resource Timing] ${type}:`, {
+        logger.info(`[Resource Timing] ${type}:`, {
           count: durations.length,
           average: avg.toFixed(2),
           max: max.toFixed(2),
@@ -367,7 +393,7 @@ export function measureResourceTiming(): void {
       }
     });
   } catch (e) {
-    console.error('Failed to measure resource timing:', e);
+    logger.error('Failed to measure resource timing:', e);
   }
 }
 
@@ -378,17 +404,17 @@ export function monitorMemoryUsage(): void {
   if (typeof window === 'undefined' || !('memory' in performance)) return;
 
   try {
-    const memory = (performance as any).memory;
+    const memory = (performance as Performance & { memory: PerformanceMemory }).memory;
 
     if (process.env.NODE_ENV === 'development') {
-      console.log('[Memory Usage]', {
+      logger.info('[Memory Usage]', {
         usedJSHeapSize: (memory.usedJSHeapSize / 1048576).toFixed(2) + ' MB',
         totalJSHeapSize: (memory.totalJSHeapSize / 1048576).toFixed(2) + ' MB',
         jsHeapSizeLimit: (memory.jsHeapSizeLimit / 1048576).toFixed(2) + ' MB',
       });
     }
   } catch (e) {
-    console.error('Failed to monitor memory:', e);
+    logger.error('Failed to monitor memory:', e);
   }
 }
 
@@ -414,7 +440,7 @@ export function getNavigationTiming(): Record<string, number> | null {
       totalTime: nav.loadEventEnd - nav.fetchStart,
     };
   } catch (e) {
-    console.error('Failed to get navigation timing:', e);
+    logger.error('Failed to get navigation timing:', e);
     return null;
   }
 }
@@ -425,7 +451,7 @@ export function getNavigationTiming(): Record<string, number> | null {
 export function isSlowConnection(): boolean {
   if (typeof navigator === 'undefined' || !('connection' in navigator)) return false;
 
-  const connection = (navigator as any).connection;
+  const connection = (navigator as Navigator & { connection?: NetworkInformation }).connection;
   if (!connection) return false;
 
   // Check for 2G or slow-2g
@@ -452,7 +478,7 @@ export function getConnectionInfo(): {
 } | null {
   if (typeof navigator === 'undefined' || !('connection' in navigator)) return null;
 
-  const connection = (navigator as any).connection;
+  const connection = (navigator as Navigator & { connection?: NetworkInformation }).connection;
   if (!connection) return null;
 
   return {
@@ -465,6 +491,6 @@ export function getConnectionInfo(): {
 
 declare global {
   interface Window {
-    gtag?: (...args: any[]) => void;
+    gtag?: (...args: unknown[]) => void;
   }
 }

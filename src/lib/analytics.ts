@@ -4,13 +4,14 @@
  * Helper functions for tracking user events, page views, and conversions.
  * Provides a unified interface for analytics providers (GA4, Mixpanel, etc.)
  */
+import { logger } from "@/lib/logger";
 
 /**
  * Analytics event interface
  */
 export interface AnalyticsEvent {
   name: string;
-  properties?: Record<string, any>;
+  properties?: Record<string, unknown>;
   timestamp?: number;
 }
 
@@ -33,7 +34,7 @@ export interface UserProperties {
   name?: string;
   plan?: string;
   signupDate?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -97,19 +98,19 @@ class GA4Provider implements AnalyticsProvider {
  */
 class ConsoleProvider implements AnalyticsProvider {
   trackEvent(event: AnalyticsEvent): void {
-    console.log('[Analytics] Event:', event);
+    logger.info('[Analytics] Event:', event);
   }
 
   trackPageView(pageView: PageView): void {
-    console.log('[Analytics] Page View:', pageView);
+    logger.info('[Analytics] Page View:', pageView);
   }
 
   identifyUser(properties: UserProperties): void {
-    console.log('[Analytics] Identify User:', properties);
+    logger.info('[Analytics] Identify User:', properties);
   }
 
   reset(): void {
-    console.log('[Analytics] Reset User');
+    logger.info('[Analytics] Reset User');
   }
 }
 
@@ -144,7 +145,7 @@ class AnalyticsManager {
    * });
    * ```
    */
-  trackEvent(name: string, properties?: Record<string, any>): void {
+  trackEvent(name: string, properties?: Record<string, unknown>): void {
     const event: AnalyticsEvent = {
       name,
       properties,
@@ -179,7 +180,7 @@ class AnalyticsManager {
       // Queue page view as event
       this.queue.push({
         name: 'page_view',
-        properties: pageView,
+        properties: { ...pageView } as Record<string, unknown>,
         timestamp: Date.now(),
       });
       return;
@@ -354,7 +355,7 @@ export function trackSearch(query: string, resultCount?: number): void {
 /**
  * Track feature usage
  */
-export function trackFeatureUsage(featureName: string, properties?: Record<string, any>): void {
+export function trackFeatureUsage(featureName: string, properties?: Record<string, unknown>): void {
   analytics.trackEvent('feature_used', {
     feature_name: featureName,
     ...properties,
@@ -392,6 +393,6 @@ export function trackTiming(
 // Declare gtag for TypeScript
 declare global {
   interface Window {
-    gtag?: (...args: any[]) => void;
+    gtag?: (...args: unknown[]) => void;
   }
 }

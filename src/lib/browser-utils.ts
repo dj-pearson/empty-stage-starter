@@ -5,6 +5,33 @@
  * and browser capabilities.
  */
 
+// Minimal shapes for non-standard / vendor-prefixed browser APIs that aren't in
+// the DOM lib typings (US-342: replaces `as any` casts with precise types).
+interface NetworkInformation {
+  effectiveType?: string;
+  downlink?: number;
+  rtt?: number;
+  saveData?: boolean;
+}
+interface BatteryManager {
+  charging: boolean;
+  level: number;
+  chargingTime: number;
+  dischargingTime: number;
+}
+interface PerformanceMemory {
+  jsHeapSizeLimit: number;
+  totalJSHeapSize: number;
+  usedJSHeapSize: number;
+}
+type NavigatorWithExtras = Navigator & {
+  msMaxTouchPoints?: number;
+  connection?: NetworkInformation;
+  getBattery?: () => Promise<BatteryManager>;
+  standalone?: boolean;
+};
+type PerformanceWithMemory = Performance & { memory?: PerformanceMemory };
+
 export type BrowserName =
   | 'chrome'
   | 'firefox'
@@ -58,8 +85,8 @@ export function getUserAgent(): string {
  * Usage:
  * ```tsx
  * const browser = getBrowserInfo();
- * console.log(browser.name); // 'chrome'
- * console.log(browser.version); // '120.0.0'
+ * console.info(browser.name); // 'chrome'
+ * console.info(browser.version); // '120.0.0'
  * ```
  */
 export function getBrowserInfo(): BrowserInfo {
@@ -206,7 +233,7 @@ export function getDeviceInfo(): DeviceInfo {
     typeof window !== 'undefined' &&
     ('ontouchstart' in window ||
       navigator.maxTouchPoints > 0 ||
-      (navigator as any).msMaxTouchPoints > 0);
+      ((navigator as NavigatorWithExtras).msMaxTouchPoints ?? 0) > 0);
 
   // Tablet detection
   const isTablet =
@@ -508,7 +535,7 @@ export function prefersHighContrast(): boolean {
  * Get connection information
  */
 export function getConnectionInfo() {
-  if (typeof navigator === 'undefined' || !(navigator as any).connection) {
+  if (typeof navigator === 'undefined' || !(navigator as NavigatorWithExtras).connection) {
     return {
       effectiveType: 'unknown',
       downlink: 0,
@@ -517,7 +544,7 @@ export function getConnectionInfo() {
     };
   }
 
-  const connection = (navigator as any).connection;
+  const connection = (navigator as NavigatorWithExtras).connection!;
 
   return {
     effectiveType: connection.effectiveType || 'unknown',
@@ -556,7 +583,7 @@ export async function getBatteryStatus() {
   }
 
   try {
-    const battery = await (navigator as any).getBattery();
+    const battery = await (navigator as NavigatorWithExtras).getBattery!();
     return {
       charging: battery.charging,
       level: battery.level,
@@ -572,11 +599,11 @@ export async function getBatteryStatus() {
  * Get memory information (Chrome only)
  */
 export function getMemoryInfo() {
-  if (typeof performance === 'undefined' || !(performance as any).memory) {
+  if (typeof performance === 'undefined' || !(performance as PerformanceWithMemory).memory) {
     return null;
   }
 
-  const memory = (performance as any).memory;
+  const memory = (performance as PerformanceWithMemory).memory!;
 
   return {
     jsHeapSizeLimit: memory.jsHeapSizeLimit,
@@ -601,7 +628,7 @@ export function isPWA(): boolean {
   if (typeof window === 'undefined') return false;
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
-    (window.navigator as any).standalone === true
+    (window.navigator as NavigatorWithExtras).standalone === true
   );
 }
 

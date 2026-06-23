@@ -4,6 +4,10 @@ struct AIMealPlanView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
     @StateObject private var aiService = AIMealService.shared
+    @ObservedObject private var network = NetworkMonitor.shared
+    /// US-397: guards the Add-All loop so it can't be triggered twice and
+    /// create duplicate plan entries.
+    @State private var isAddingAll = false
     /// US-243: read the same UserDefault the Budget view writes — when set,
     /// gets passed to the edge function so the LLM prefers cheaper picks.
     @AppStorage("budget.weeklyTarget") private var weeklyTarget: Double = 0
@@ -32,6 +36,21 @@ struct AIMealPlanView: View {
                         )
                         .padding(.top, 40)
                     } else {
+                        // US-397: offline banner, matching AICoachView.
+                        if !network.isConnected {
+                            HStack(spacing: 8) {
+                                Image(systemName: "wifi.slash")
+                                Text("AI Meal Plan needs internet — generating will fail until you're back online.")
+                                    .font(.caption)
+                                Spacer()
+                            }
+                            .foregroundStyle(.orange)
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
+                            .background(Color.orange.opacity(0.1))
+                            .accessibilityElement(children: .combine)
+                        }
+
                         // Context
                         VStack(spacing: 8) {
                             if let kid = activeKid {
@@ -57,6 +76,8 @@ struct AIMealPlanView: View {
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .tint(.green)
+                                // US-397: don't fire while offline or in-flight.
+                                .disabled(aiService.isLoading || !network.isConnected)
 
                                 // US-238: alternate entry — snap a fridge photo,
                                 // then generate using whatever the model recognized.
@@ -70,6 +91,7 @@ struct AIMealPlanView: View {
                                 }
                                 .buttonStyle(.bordered)
                                 .tint(.blue)
+                                .disabled(aiService.isLoading || !network.isConnected)
                             }
                             .padding(.horizontal)
                         }
@@ -98,19 +120,28 @@ struct AIMealPlanView: View {
                             .padding(.vertical, 40)
                         }
 
-                        // Error
+                        // Error (US-367: ErrorBanner with retry).
                         if let error = aiService.errorMessage {
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                                .padding(.horizontal)
+                            ErrorBanner(message: error, retryAction: {
+                                Task { await generateSuggestions() }
+                            })
+                            .padding(.horizontal)
                         }
 
                         // Suggestions
                         if !aiService.suggestions.isEmpty {
                             ForEach(aiService.suggestions) { suggestion in
                                 SuggestionCard(suggestion: suggestion) {
-                                    Task { await addSuggestionToPlan(suggestion) }
+                                    Task {
+                                        let ok = await addSuggestionToPlan(suggestion)
+                                        if !ok {
+                                            // US-398: don't silently drop — tell the user.
+                                            ToastManager.shared.error(
+                                                "Couldn't add meal",
+                                                message: "We couldn't match or create \(suggestion.foodName). Please try again."
+                                            )
+                                        }
+                                    }
                                 }
                             }
                             .padding(.horizontal)
@@ -119,7 +150,7 @@ struct AIMealPlanView: View {
                             Button {
                                 Task { await addAllSuggestions() }
                             } label: {
-                                Label("Add All to Plan", systemImage: "plus.circle.fill")
+                                Label(isAddingAll ? "Adding…" : "Add All to Plan", systemImage: "plus.circle.fill")
                                     .font(.headline)
                                     .frame(maxWidth: .infinity)
                                     .padding()
@@ -127,6 +158,8 @@ struct AIMealPlanView: View {
                             .buttonStyle(.borderedProminent)
                             .tint(.green)
                             .padding(.horizontal)
+                            // US-397: prevent a double-tap from duplicating entries.
+                            .disabled(isAddingAll)
 
                             // US-238: items the plan needs but the fridge
                             // photo didn't include — one tap to add to grocery.
@@ -146,6 +179,8 @@ struct AIMealPlanView: View {
                                     .font(.subheadline)
                             }
                             .padding(.top, 4)
+                            // US-397: don't regenerate while a request is in flight or offline.
+                            .disabled(aiService.isLoading || !network.isConnected)
                         }
                     }
                 }
@@ -219,10 +254,44 @@ struct AIMealPlanView: View {
         }
     }
 
-    private func addSuggestionToPlan(_ suggestion: AIMealService.MealSuggestion) async {
-        guard let kidId = appState.activeKidId else { return }
+    /// US-398: resolve a suggestion to a real Food id instead of writing an
+    /// orphan PlanEntry with an empty foodId. Order: a non-empty foodId that
+    /// matches a known food → a case-insensitive name match → otherwise create
+    /// a new Food (mirrors StarterMealPlanService.resolveFood). Returns nil
+    /// only when food creation fails, in which case the caller skips the entry.
+    private func resolveFoodId(for suggestion: AIMealService.MealSuggestion) async -> String? {
+        if let fid = suggestion.foodId, !fid.isEmpty,
+           appState.foods.contains(where: { $0.id == fid }) {
+            return fid
+        }
+        let normalized = suggestion.foodName.lowercased()
+        if let existing = appState.foods.first(where: { $0.name.lowercased() == normalized }) {
+            return existing.id
+        }
+        // No match — create a pantry food so the plan entry is never orphaned.
+        let newFood = Food(
+            id: UUID().uuidString,
+            userId: "",
+            name: suggestion.foodName,
+            category: FoodCategory.snack.rawValue,
+            isSafe: false,
+            isTryBite: false
+        )
+        do {
+            try await appState.addFood(newFood)
+            return newFood.id
+        } catch {
+            return nil
+        }
+    }
 
-        let foodId = suggestion.foodId ?? ""
+    /// Returns true when the suggestion was added, false when it was skipped
+    /// (food couldn't be resolved/created).
+    @discardableResult
+    private func addSuggestionToPlan(_ suggestion: AIMealService.MealSuggestion) async -> Bool {
+        guard let kidId = appState.activeKidId else { return false }
+        guard let foodId = await resolveFoodId(for: suggestion) else { return false }
+
         let entry = PlanEntry(
             id: UUID().uuidString,
             userId: "",
@@ -231,17 +300,40 @@ struct AIMealPlanView: View {
             mealSlot: suggestion.mealSlot,
             foodId: foodId
         )
-        try? await appState.addPlanEntry(entry)
-        HapticManager.success()
+        do {
+            try await appState.addPlanEntry(entry)
+            HapticManager.success()
+            return true
+        } catch {
+            return false
+        }
     }
 
     private func addAllSuggestions() async {
+        guard !isAddingAll else { return }
+        isAddingAll = true
+        defer { isAddingAll = false }
+
+        var added = 0
+        var skipped = 0
         for suggestion in aiService.suggestions {
-            await addSuggestionToPlan(suggestion)
+            if await addSuggestionToPlan(suggestion) {
+                added += 1
+            } else {
+                skipped += 1
+            }
         }
+        // US-398: report the real added-vs-skipped count rather than assuming
+        // every suggestion landed.
         let toast = ToastManager.shared
-        toast.success("All added", message: "\(aiService.suggestions.count) meals added to plan.")
-        dismiss()
+        if skipped == 0 {
+            toast.success("All added", message: "\(added) meals added to plan.")
+        } else if added == 0 {
+            toast.error("Couldn't add meals", message: "None of the \(skipped) suggestions could be added.")
+        } else {
+            toast.info("Added \(added) of \(added + skipped)", message: "\(skipped) couldn't be added.")
+        }
+        if added > 0 { dismiss() }
     }
 
     /// US-238: bulk-create grocery items for everything the plan needs

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// US-140: voice-to-grocery sheet. Listens via `VoiceInputService`, displays a
 /// live transcript + waveform, parses the transcript into `ParsedGroceryItem`
@@ -6,11 +7,29 @@ import SwiftUI
 struct VoiceAddGrocerySheet: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
+    // US-394: gate the recording-button pulse under Reduce Motion.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @StateObject private var voice = VoiceInputService()
     @State private var parsedItems: [ParsedGroceryItem] = []
     @State private var excludedIds: Set<UUID> = []
     @State private var isSaving = false
+
+    // US-393: surface mic/speech denial proactively on appear.
+    @State private var authStatus: VoiceInputService.AuthorizationStatus = .notDetermined
+
+    private var isPermissionDenied: Bool {
+        authStatus == .micDenied || authStatus == .speechDenied || authStatus == .bothDenied
+    }
+
+    private var permissionDeniedMessage: String {
+        switch authStatus {
+        case .micDenied:    return "Microphone access is off. Enable it in Settings to add groceries by voice."
+        case .speechDenied: return "Speech recognition is off. Enable it in Settings to add groceries by voice."
+        case .bothDenied:   return "Microphone and speech recognition are off. Enable them in Settings to add groceries by voice."
+        default:            return ""
+        }
+    }
 
     private var didRecord: Bool {
         !voice.liveTranscript.isEmpty || !voice.finalTranscript.isEmpty
@@ -23,14 +42,18 @@ struct VoiceAddGrocerySheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                transcriptArea
-                    .frame(maxHeight: .infinity)
+                if isPermissionDenied {
+                    permissionDeniedView
+                } else {
+                    transcriptArea
+                        .frame(maxHeight: .infinity)
 
-                previewList
+                    previewList
 
-                controls
-                    .padding()
-                    .background(.ultraThinMaterial)
+                    controls
+                        .padding()
+                        .background(.ultraThinMaterial)
+                }
             }
             .navigationTitle("Voice Add")
             .navigationBarTitleDisplayMode(.inline)
@@ -44,7 +67,9 @@ struct VoiceAddGrocerySheet: View {
             }
         }
         .task {
-            _ = await voice.requestAuthorization()
+            // US-393: read the real status on appear so denial is shown before
+            // the user taps the mic.
+            authStatus = await voice.requestAuthorization()
         }
         .onChange(of: voice.liveTranscript) { _, newValue in
             if !newValue.isEmpty {
@@ -59,6 +84,33 @@ struct VoiceAddGrocerySheet: View {
     }
 
     // MARK: - Sections
+
+    /// US-393: persistent denied state with a deep-link into Settings.
+    private var permissionDeniedView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "mic.slash.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(.secondary)
+            Text("Voice add unavailable")
+                .font(.headline)
+            Text(permissionDeniedMessage)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            Button {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                Label("Open Settings", systemImage: "gear")
+            }
+            .buttonStyle(.borderedProminent)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
 
     private var transcriptArea: some View {
         VStack(spacing: 16) {
@@ -160,8 +212,8 @@ struct VoiceAddGrocerySheet: View {
                     Circle()
                         .fill(voice.state == .listening ? Color.red : Color.green)
                         .frame(width: 64, height: 64)
-                        .scaleEffect(voice.state == .listening ? 1.0 + voice.inputLevel * 0.2 : 1.0)
-                        .animation(.easeInOut(duration: 0.15), value: voice.inputLevel)
+                        .scaleEffect((voice.state == .listening && !reduceMotion) ? 1.0 + voice.inputLevel * 0.2 : 1.0)
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: voice.inputLevel)
                     Image(systemName: voice.state == .listening ? "stop.fill" : "mic.fill")
                         .font(.system(size: 28, weight: .semibold))
                         .foregroundStyle(.white)
@@ -278,6 +330,9 @@ struct VoiceAddGrocerySheet: View {
 private struct WaveformView: View {
     let level: Double
     let isActive: Bool
+    // US-394: respect Reduce Motion — render static bars instead of a
+    // level-reactive animation.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let barCount = 30
 
@@ -289,15 +344,21 @@ private struct WaveformView: View {
                 // than the edges — plays nice with the live `level` input
                 // without needing a timeline.
                 let shape = 0.5 + 0.5 * sin(phase * .pi * 4)
-                let magnitude = isActive
-                    ? max(0.1, min(1.0, level * shape + 0.1))
-                    : 0.1
+                // Under Reduce Motion, ignore the live level and draw a
+                // static shape so there's no motion; color still conveys
+                // the recording state.
+                let magnitude: Double = {
+                    guard isActive else { return 0.1 }
+                    if reduceMotion { return max(0.2, shape) }
+                    return max(0.1, min(1.0, level * shape + 0.1))
+                }()
 
                 Capsule()
                     .fill(isActive ? Color.green : Color.secondary.opacity(0.4))
                     .frame(width: 4, height: CGFloat(magnitude) * 80)
-                    .animation(.easeInOut(duration: 0.12), value: magnitude)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: magnitude)
             }
         }
+        .accessibilityLabel(isActive ? "Recording" : "Not recording")
     }
 }

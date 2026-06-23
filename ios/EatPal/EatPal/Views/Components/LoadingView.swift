@@ -57,15 +57,21 @@ struct EmptyStateView: View {
 
 struct ErrorBanner: View {
     let message: String
-    let retryAction: (() -> Void)?
+    var retryAction: (() -> Void)? = nil
+    /// US-367: optional dismiss affordance (used by conversion-critical
+    /// surfaces like the paywall so the error can be cleared).
+    var onDismiss: (() -> Void)? = nil
 
     var body: some View {
-        HStack {
+        HStack(spacing: 8) {
+            // US-367: error styling comes from AppTheme.Colors.danger, not a
+            // raw Color.red.
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.yellow)
+                .foregroundStyle(AppTheme.Colors.danger)
 
             Text(message)
                 .font(.subheadline)
+                .foregroundStyle(.primary)
 
             Spacer()
 
@@ -74,9 +80,19 @@ struct ErrorBanner: View {
                     .font(.subheadline)
                     .buttonStyle(.bordered)
             }
+
+            if let onDismiss {
+                Button {
+                    onDismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("Dismiss error")
+            }
         }
         .padding()
-        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
+        .background(AppTheme.Colors.dangerLight, in: RoundedRectangle(cornerRadius: 10))
     }
 }
 

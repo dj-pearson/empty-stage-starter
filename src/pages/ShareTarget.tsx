@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
+import { logger } from "@/lib/logger";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useApp } from '@/contexts/AppContext';
+import { useGrocery } from '@/contexts/AppContext';
 import { supabase } from '@/integrations/supabase/client';
 import { parseGroceryText, type ParsedGroceryItem } from '@/lib/parse-grocery-text';
 import { ParsedItemsPreview } from '@/components/grocery/ParsedItemsPreview';
@@ -25,7 +26,7 @@ interface ShareData {
 export default function ShareTarget() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { addGroceryItem } = useApp();
+  const { addGroceryItem } = useGrocery();
 
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -119,7 +120,7 @@ export default function ShareTarget() {
         }
       }
     } catch (err) {
-      console.error('ShareTarget error:', err);
+      logger.error('ShareTarget error:', err);
       toast.error('Something went wrong processing shared content');
     } finally {
       setLoading(false);

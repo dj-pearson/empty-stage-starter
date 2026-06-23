@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { Button } from "@/components/ui/button";
@@ -105,7 +106,7 @@ export function AIModelManager() {
       setEnvConfig((envData as EnvironmentConfig[]) || []);
 
     } catch (error) {
-      console.error('Error loading data:', error);
+      logger.error('Error loading data:', error);
       toast.error('Failed to load AI configuration');
     } finally {
       setIsLoading(false);
@@ -133,7 +134,7 @@ export function AIModelManager() {
         });
       }
     } catch (error) {
-      console.error('Test failed:', error);
+      logger.error('Test failed:', error);
       toast.error('Failed to test configuration');
       setTestResult({
         success: false,

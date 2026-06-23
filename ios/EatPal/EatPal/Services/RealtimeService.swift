@@ -14,16 +14,34 @@ final class RealtimeService {
     private init() {}
 
     /// Subscribes to all relevant table changes for the current user's data.
-    /// Call this after authentication succeeds.
+    /// Call this after authentication succeeds. Re-call on household switch or
+    /// re-auth — it tears down the existing channels first (US-384 AC3).
     func subscribe(appState: AppState) async {
         await unsubscribeAll()
 
+        // US-384: scope every subscription to the current user's data instead
+        // of streaming ALL users' rows and leaning entirely on RLS. When the
+        // user is in a household we filter by household_id (so every member's
+        // edits flow); solo users filter by their own user_id. The scope value
+        // also namespaces the channel names so households don't collide.
+        let userId = (try? await client.auth.session)?.user.id.uuidString.lowercased()
+        let householdId = (try? await HouseholdService.currentHousehold())?.id
+        let filterColumn = householdId != nil ? "household_id" : "user_id"
+        let scopeValue = householdId ?? userId ?? ""
+        guard !scopeValue.isEmpty else {
+            // Not authenticated yet — nothing to scope to. A later re-auth
+            // call will set this up.
+            return
+        }
+        let filter = "\(filterColumn)=eq.\(scopeValue)"
+
         // Foods channel
-        let foodsChannel = client.realtimeV2.channel("foods-changes")
+        let foodsChannel = client.realtimeV2.channel("foods-changes-\(scopeValue)")
         let foodsChanges = foodsChannel.postgresChange(
             AnyAction.self,
             schema: "public",
-            table: "foods"
+            table: "foods",
+            filter: filter
         )
         channels.append(foodsChannel)
         await subscribeChannel(foodsChannel, name: "foods")
@@ -36,11 +54,12 @@ final class RealtimeService {
         })
 
         // Kids channel
-        let kidsChannel = client.realtimeV2.channel("kids-changes")
+        let kidsChannel = client.realtimeV2.channel("kids-changes-\(scopeValue)")
         let kidsChanges = kidsChannel.postgresChange(
             AnyAction.self,
             schema: "public",
-            table: "kids"
+            table: "kids",
+            filter: filter
         )
         channels.append(kidsChannel)
         await subscribeChannel(kidsChannel, name: "kids")
@@ -53,11 +72,12 @@ final class RealtimeService {
         })
 
         // Grocery items channel
-        let groceryChannel = client.realtimeV2.channel("grocery-changes")
+        let groceryChannel = client.realtimeV2.channel("grocery-changes-\(scopeValue)")
         let groceryChanges = groceryChannel.postgresChange(
             AnyAction.self,
             schema: "public",
-            table: "grocery_items"
+            table: "grocery_items",
+            filter: filter
         )
         channels.append(groceryChannel)
         await subscribeChannel(groceryChannel, name: "grocery_items")
@@ -70,11 +90,12 @@ final class RealtimeService {
         })
 
         // Plan entries channel
-        let planChannel = client.realtimeV2.channel("plan-changes")
+        let planChannel = client.realtimeV2.channel("plan-changes-\(scopeValue)")
         let planChanges = planChannel.postgresChange(
             AnyAction.self,
             schema: "public",
-            table: "plan_entries"
+            table: "plan_entries",
+            filter: filter
         )
         channels.append(planChannel)
         await subscribeChannel(planChannel, name: "plan_entries")
@@ -87,11 +108,12 @@ final class RealtimeService {
         })
 
         // Recipes channel
-        let recipesChannel = client.realtimeV2.channel("recipes-changes")
+        let recipesChannel = client.realtimeV2.channel("recipes-changes-\(scopeValue)")
         let recipesChanges = recipesChannel.postgresChange(
             AnyAction.self,
             schema: "public",
-            table: "recipes"
+            table: "recipes",
+            filter: filter
         )
         channels.append(recipesChannel)
         await subscribeChannel(recipesChannel, name: "recipes")
@@ -128,18 +150,39 @@ final class RealtimeService {
         channels.removeAll()
     }
 
+    // MARK: - Decode helper
+
+    /// US-381: decode a realtime record, reporting failures to Sentry
+    /// instead of swallowing them with `try?`. A thrown decode error here
+    /// means a live insert/update silently never applied — exactly the
+    /// class of bug we want surfaced, not hidden.
+    private func decodeRealtimeRecord<T: Decodable>(
+        _ body: () throws -> T,
+        table: String
+    ) -> T? {
+        do {
+            return try body()
+        } catch {
+            SentryService.capture(error, extras: [
+                "context": "realtime_decode",
+                "table": table
+            ])
+            return nil
+        }
+    }
+
     // MARK: - Change Handlers
 
     private func handleFoodsChange(_ change: AnyAction, appState: AppState) async {
         switch change {
         case .insert(let action):
-            if let food: Food = try? action.decodeRecord(decoder: JSONDecoder.supabase) {
+            if let food: Food = decodeRealtimeRecord({ try action.decodeRecord(decoder: JSONDecoder.supabase) }, table: "foods") {
                 if !appState.foods.contains(where: { $0.id == food.id }) {
                     appState.foods.append(food)
                 }
             }
         case .update(let action):
-            if let food: Food = try? action.decodeRecord(decoder: JSONDecoder.supabase) {
+            if let food: Food = decodeRealtimeRecord({ try action.decodeRecord(decoder: JSONDecoder.supabase) }, table: "foods") {
                 if let index = appState.foods.firstIndex(where: { $0.id == food.id }) {
                     appState.foods[index] = food
                 }
@@ -154,13 +197,13 @@ final class RealtimeService {
     private func handleKidsChange(_ change: AnyAction, appState: AppState) async {
         switch change {
         case .insert(let action):
-            if let kid: Kid = try? action.decodeRecord(decoder: JSONDecoder.supabase) {
+            if let kid: Kid = decodeRealtimeRecord({ try action.decodeRecord(decoder: JSONDecoder.supabase) }, table: "kids") {
                 if !appState.kids.contains(where: { $0.id == kid.id }) {
                     appState.kids.append(kid)
                 }
             }
         case .update(let action):
-            if let kid: Kid = try? action.decodeRecord(decoder: JSONDecoder.supabase) {
+            if let kid: Kid = decodeRealtimeRecord({ try action.decodeRecord(decoder: JSONDecoder.supabase) }, table: "kids") {
                 if let index = appState.kids.firstIndex(where: { $0.id == kid.id }) {
                     appState.kids[index] = kid
                 }
@@ -175,13 +218,13 @@ final class RealtimeService {
     private func handleGroceryChange(_ change: AnyAction, appState: AppState) async {
         switch change {
         case .insert(let action):
-            if let item: GroceryItem = try? action.decodeRecord(decoder: JSONDecoder.supabase) {
+            if let item: GroceryItem = decodeRealtimeRecord({ try action.decodeRecord(decoder: JSONDecoder.supabase) }, table: "grocery_items") {
                 if !appState.groceryItems.contains(where: { $0.id == item.id }) {
                     appState.groceryItems.append(item)
                 }
             }
         case .update(let action):
-            if let item: GroceryItem = try? action.decodeRecord(decoder: JSONDecoder.supabase) {
+            if let item: GroceryItem = decodeRealtimeRecord({ try action.decodeRecord(decoder: JSONDecoder.supabase) }, table: "grocery_items") {
                 // US-255: detect simultaneous local edit on the same row.
                 // Last-write-wins applies (we still take the realtime item),
                 // but the toast warns the user another member edited too.
@@ -204,13 +247,13 @@ final class RealtimeService {
     private func handlePlanChange(_ change: AnyAction, appState: AppState) async {
         switch change {
         case .insert(let action):
-            if let entry: PlanEntry = try? action.decodeRecord(decoder: JSONDecoder.supabase) {
+            if let entry: PlanEntry = decodeRealtimeRecord({ try action.decodeRecord(decoder: JSONDecoder.supabase) }, table: "plan_entries") {
                 if !appState.planEntries.contains(where: { $0.id == entry.id }) {
                     appState.planEntries.append(entry)
                 }
             }
         case .update(let action):
-            if let entry: PlanEntry = try? action.decodeRecord(decoder: JSONDecoder.supabase) {
+            if let entry: PlanEntry = decodeRealtimeRecord({ try action.decodeRecord(decoder: JSONDecoder.supabase) }, table: "plan_entries") {
                 // US-255: resolve a display name from the linked recipe or
                 // food; plan entries don't have a self-describing field.
                 let title = resolvePlanEntryTitle(entry, appState: appState)
@@ -292,13 +335,13 @@ final class RealtimeService {
     private func handleRecipesChange(_ change: AnyAction, appState: AppState) async {
         switch change {
         case .insert(let action):
-            if let recipe: Recipe = try? action.decodeRecord(decoder: JSONDecoder.supabase) {
+            if let recipe: Recipe = decodeRealtimeRecord({ try action.decodeRecord(decoder: JSONDecoder.supabase) }, table: "recipes") {
                 if !appState.recipes.contains(where: { $0.id == recipe.id }) {
                     appState.recipes.append(recipe)
                 }
             }
         case .update(let action):
-            if let recipe: Recipe = try? action.decodeRecord(decoder: JSONDecoder.supabase) {
+            if let recipe: Recipe = decodeRealtimeRecord({ try action.decodeRecord(decoder: JSONDecoder.supabase) }, table: "recipes") {
                 if let index = appState.recipes.firstIndex(where: { $0.id == recipe.id }) {
                     appState.recipes[index] = recipe
                 }
@@ -311,12 +354,20 @@ final class RealtimeService {
     }
 }
 
-// MARK: - JSON Decoder for Supabase snake_case
+// MARK: - JSON Decoder for Supabase realtime payloads
 
 extension JSONDecoder {
+    /// US-381: domain structs declare EXPLICIT snake_case CodingKeys (e.g.
+    /// Food.userId = "user_id", Food.isSafe = "is_safe"). Setting
+    /// `.convertFromSnakeCase` here would convert the incoming key
+    /// (`is_safe` -> `isSafe`) BEFORE matching against the CodingKey raw
+    /// value (`is_safe`), so the match fails and every multi-word
+    /// non-optional field throws — silently breaking realtime decode.
+    /// Keep the default key strategy so the explicit CodingKeys apply, the
+    /// same contract OfflineStore.swift relies on. Dates are stored as
+    /// ISO strings on the models, so no date strategy is required.
     static let supabase: JSONDecoder = {
         let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
         return decoder
     }()
 }

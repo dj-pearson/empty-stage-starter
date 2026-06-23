@@ -12,6 +12,8 @@ final class MealMadeStrategyTests: XCTestCase {
         id: String = UUID().uuidString,
         name: String = "Test",
         foodId: String? = nil,
+        quantity: Double? = nil,
+        unit: String? = nil,
         sortOrder: Int = 0
     ) -> RecipeIngredient {
         RecipeIngredient(
@@ -20,12 +22,17 @@ final class MealMadeStrategyTests: XCTestCase {
             foodId: foodId,
             sortOrder: sortOrder,
             name: name,
-            quantity: nil,
-            unit: nil,
+            quantity: quantity,
+            unit: unit,
             groupLabel: nil,
             optionalNotes: nil,
             createdAt: nil
         )
+    }
+
+    private func makeFood(id: String, unit: String?) -> Food {
+        Food(id: id, userId: "u1", name: "Food-\(id)", category: "snack",
+             isSafe: true, isTryBite: false, quantity: 100, unit: unit)
     }
 
     private func makeRecipe(
@@ -117,6 +124,55 @@ final class MealMadeStrategyTests: XCTestCase {
         XCTAssertTrue(plan.debits.isEmpty)
         XCTAssertFalse(plan.fallbackUsed, "Empty recipe is not a fallback case — there's nothing to fall back to")
         XCTAssertFalse(plan.serverHandlesDebits)
+    }
+
+    // MARK: - US-351: serving-scaled + unit-converted debits
+
+    func testScaledDebitMultipliesQuantityByServingScale() {
+        // 2 (qty) * 3 (servings) = 6, same/no unit → no conversion, no flag.
+        let recipe = makeRecipe(ingredients: [
+            makeIngredient(foodId: "food-a", quantity: 2, unit: "count")
+        ])
+        let pantry = [makeFood(id: "food-a", unit: "count")]
+        let plan = MealMadeStrategy.plan(for: recipe, pantry: pantry, servingScale: 3)
+        XCTAssertEqual(plan.debits.first?.amount ?? 0, 6, accuracy: 0.0001)
+        XCTAssertFalse(plan.debits.first?.unitMismatch ?? true)
+    }
+
+    func testConvertibleUnitsAreConvertedBeforeDebit() {
+        // 1 cup recipe → pantry tracked in ml → 236.59 ml debited, no flag.
+        let recipe = makeRecipe(ingredients: [
+            makeIngredient(foodId: "food-a", quantity: 1, unit: "cup")
+        ])
+        let pantry = [makeFood(id: "food-a", unit: "ml")]
+        let plan = MealMadeStrategy.plan(for: recipe, pantry: pantry, servingScale: 1)
+        XCTAssertEqual(plan.debits.first?.amount ?? 0, 236.588236, accuracy: 0.01)
+        XCTAssertFalse(plan.debits.first?.unitMismatch ?? true)
+    }
+
+    func testIncompatibleUnitsDebitBestEffortAndFlag() {
+        // cups (volume) → grams (mass) isn't convertible → best-effort raw qty,
+        // flagged so the user verifies.
+        let recipe = makeRecipe(ingredients: [
+            makeIngredient(name: "flour", foodId: "food-a", quantity: 2, unit: "cup")
+        ])
+        let pantry = [makeFood(id: "food-a", unit: "g")]
+        let plan = MealMadeStrategy.plan(for: recipe, pantry: pantry, servingScale: 1)
+        XCTAssertEqual(plan.debits.first?.amount ?? 0, 2, accuracy: 0.0001)
+        XCTAssertTrue(plan.debits.first?.unitMismatch ?? false)
+        XCTAssertEqual(plan.mismatchedNames, ["flour"])
+    }
+
+    func testRepeatedFoodAmountsAreSummed() {
+        // Same food twice → amounts sum (both already in pantry unit).
+        let recipe = makeRecipe(ingredients: [
+            makeIngredient(foodId: "food-a", quantity: 1, unit: "count"),
+            makeIngredient(foodId: "food-a", quantity: 2, unit: "count")
+        ])
+        let pantry = [makeFood(id: "food-a", unit: "count")]
+        let plan = MealMadeStrategy.plan(for: recipe, pantry: pantry)
+        XCTAssertEqual(plan.debits.count, 1)
+        XCTAssertEqual(plan.debits.first?.amount ?? 0, 3, accuracy: 0.0001)
     }
 
     // MARK: - Path precedence

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { logger } from "@/lib/logger";
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -62,7 +63,7 @@ export function EmailCaptureModal({
       toast.success('Email saved successfully!');
       onEmailCaptured(email, childName, parentName);
     } catch (error) {
-      console.error('Error saving email:', error);
+      logger.error('Error saving email:', error);
       toast.error('Failed to save email. Please try again.');
     } finally {
       setIsSubmitting(false);

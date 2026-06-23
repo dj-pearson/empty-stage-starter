@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { logger } from "@/lib/logger";
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion } from 'framer-motion';
@@ -78,7 +79,7 @@ export default function BudgetCalculatorResults() {
         const id = await saveBudgetCalculation(state.sessionId, state.input, state.calculation);
         setCalculationId(id);
       } catch (error) {
-        console.error('Error saving calculation:', error);
+        logger.error('Error saving calculation:', error);
       }
     };
     saveCalculation();
@@ -108,7 +109,7 @@ export default function BudgetCalculatorResults() {
 
       toast.success('PDF downloaded successfully!');
     } catch (error) {
-      console.error('Error downloading PDF:', error);
+      logger.error('Error downloading PDF:', error);
       toast.error('Failed to download PDF. Please try again.');
     } finally {
       setIsDownloadingPDF(false);

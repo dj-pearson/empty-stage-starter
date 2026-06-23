@@ -56,68 +56,45 @@ final class NotificationService: ObservableObject {
         print("APNs device token: \(token)")
         #endif
 
-        // Store token in Supabase push_notifications table
+        // US-379: write to the canonical `push_tokens` table (what the
+        // process-notification-queue sender reads), scoped to the
+        // authenticated user, with `token` as the explicit conflict target so
+        // re-registering the same device updates its row instead of creating
+        // duplicates or cross-linking devices to other users. The old code
+        // wrote a web-push-shaped row (endpoint/keys) to `push_notifications`
+        // with no user_id and no conflict target.
         struct PushTokenPayload: Encodable {
-            let endpoint: String
+            let userId: String
+            let token: String
             let platform: String
-            let keys: [String: String]
+            let isActive: Bool
+
+            enum CodingKeys: String, CodingKey {
+                case userId = "user_id"
+                case token
+                case platform
+                case isActive = "is_active"
+            }
         }
-        let payload = PushTokenPayload(
-            endpoint: token,
-            platform: "ios",
-            keys: ["apns_token": token]
-        )
         do {
-            try await SupabaseManager.client.from("push_notifications")
-                .upsert(payload)
+            let session = try await SupabaseManager.client.auth.session
+            let payload = PushTokenPayload(
+                userId: session.user.id.uuidString.lowercased(),
+                token: token,
+                platform: "ios",
+                isActive: true
+            )
+            try await SupabaseManager.client.from("push_tokens")
+                .upsert(payload, onConflict: "token")
                 .execute()
         } catch {
-            #if DEBUG
-            print("Failed to store push token: \(error)")
-            #endif
+            // US-379/US-376 pattern: surface failures in Sentry rather than a
+            // DEBUG-only print.
+            SentryService.capture(error, extras: ["context": "apns_token_register"])
         }
     }
 
-    // MARK: - Local Notifications: Meal Reminders
-
-    /// Schedules daily meal reminders based on user preferences.
-    func scheduleMealReminders() async {
-        // Remove old meal reminders
-        center.removePendingNotificationRequests(withIdentifiers: [
-            "meal-breakfast", "meal-lunch", "meal-dinner"
-        ])
-
-        let meals: [(id: String, title: String, hour: Int, minute: Int)] = [
-            ("meal-breakfast", "Time for breakfast!", 8, 0),
-            ("meal-lunch", "Time for lunch!", 12, 0),
-            ("meal-dinner", "Time for dinner!", 18, 0),
-        ]
-
-        for meal in meals {
-            let content = UNMutableNotificationContent()
-            content.title = "EatPal"
-            content.body = meal.title
-            content.sound = .default
-            content.categoryIdentifier = "MEAL_REMINDER"
-
-            var dateComponents = DateComponents()
-            dateComponents.hour = meal.hour
-            dateComponents.minute = meal.minute
-
-            let trigger = UNCalendarNotificationTrigger(
-                dateMatching: dateComponents,
-                repeats: true
-            )
-
-            let request = UNNotificationRequest(
-                identifier: meal.id,
-                content: content,
-                trigger: trigger
-            )
-
-            try? await center.add(request)
-        }
-    }
+    // MARK: - Local Notifications: Grocery
 
     /// Schedules a grocery reminder for a specific time.
     func scheduleGroceryReminder(at date: Date, itemCount: Int) async {
@@ -146,13 +123,6 @@ final class NotificationService: ObservableObject {
     }
 
     // MARK: - Cancel
-
-    /// Removes all meal reminders.
-    func cancelMealReminders() {
-        center.removePendingNotificationRequests(withIdentifiers: [
-            "meal-breakfast", "meal-lunch", "meal-dinner"
-        ])
-    }
 
     /// Removes all pending notifications.
     func cancelAll() {
@@ -258,6 +228,8 @@ final class NotificationService: ObservableObject {
 
     func unmute() {
         mutedUntil = nil
+        // US-404: reminders resume the moment the user unmutes.
+        Task { await rescheduleAllTopics() }
     }
 
     /// Fire a test notification right now so the user can preview the
@@ -286,6 +258,79 @@ final class NotificationService: ObservableObject {
         case .expiringFood:   return "3 foods in your pantry expire this week."
         case .aiSummary:      return "Last week: 5 try-bites, 12 wins. Tap for next week's ideas."
         case .streakMilestone:return "5-day try-bite streak unlocked! 🎉"
+        }
+    }
+
+    // MARK: - Topic scheduling (US-403)
+
+    /// Stable identifier for a topic's recurring daily reminder so a reschedule
+    /// replaces the previous request instead of stacking duplicates.
+    private func scheduledIdentifier(for topic: Topic) -> String {
+        "topic-\(topic.rawValue)"
+    }
+
+    /// Human-facing copy for a scheduled (not test) reminder.
+    private func scheduledBody(for topic: Topic) -> String {
+        switch topic {
+        case .mealReminders:  return "Time to plan or log a meal."
+        case .groceryReady:   return "Your grocery list is ready to shop."
+        case .aiSummary:      return "Your weekly summary and next-week ideas are ready."
+        default:              return sampleBody(for: topic)
+        }
+    }
+
+    /// US-403: schedule (or reschedule) a topic's daily notification from its
+    /// persisted enabled/hour/minute prefs. Always cancels the existing
+    /// request first so a time change replaces it. Only time-based topics are
+    /// scheduled here; event-driven topics (try-bite, expiring food, streaks)
+    /// fire from their own triggers.
+    ///
+    /// US-404: skips adding while a mute window is active so the mute is real,
+    /// not just a one-time queue flush.
+    func scheduleTopic(_ topic: Topic) async {
+        let id = scheduledIdentifier(for: topic)
+        center.removePendingNotificationRequests(withIdentifiers: [id])
+
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: topic.enabledKey) else { return }
+        guard topic.supportsDailyTime else { return }
+        // US-404: honour the global mute window.
+        if let mutedUntil, mutedUntil > Date() { return }
+
+        let hour = defaults.object(forKey: topic.hourKey) as? Int ?? topic.defaultHour
+        let minute = defaults.object(forKey: topic.minuteKey) as? Int ?? topic.defaultMinute
+
+        let content = UNMutableNotificationContent()
+        content.title = "EatPal · \(topic.title)"
+        content.body = scheduledBody(for: topic)
+        content.sound = .default
+        content.categoryIdentifier = topic.rawValue.uppercased()
+
+        var components = DateComponents()
+        components.hour = hour
+        components.minute = minute
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+        try? await center.add(request)
+    }
+
+    /// Cancel a single topic's scheduled daily reminder.
+    func cancelTopic(_ topic: Topic) {
+        center.removePendingNotificationRequests(withIdentifiers: [scheduledIdentifier(for: topic)])
+    }
+
+    /// Cancel every topic's scheduled daily reminder (master toggle off).
+    func cancelAllTopics() {
+        let ids = Topic.allCases.map { scheduledIdentifier(for: $0) }
+        center.removePendingNotificationRequests(withIdentifiers: ids)
+    }
+
+    /// US-403/US-404: (re)schedule every enabled time-based topic. Call on
+    /// app launch and after unmute so reminders resume automatically once a
+    /// mute window passes. A no-op for disabled/muted topics.
+    func rescheduleAllTopics() async {
+        for topic in Topic.allCases {
+            await scheduleTopic(topic)
         }
     }
 }

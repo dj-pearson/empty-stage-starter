@@ -56,29 +56,89 @@ enum EdgeFunctions {
         }
     }
 
+    /// HTTP status codes that are worth retrying — transient gateway/upstream
+    /// failures rather than client errors.
+    private static let retryableStatuses: Set<Int> = [502, 503, 504]
+
+    /// Max attempts (1 original + retries). US-400: at least one retry on a
+    /// transient failure before surfacing the error.
+    private static let maxAttempts = 2
+
     /// Invoke an edge function and return the raw response `Data`.
+    ///
+    /// US-400: retries transient failures (502/503/504, connection lost, timed
+    /// out) with backoff, and honors Task cancellation so dismissing a view
+    /// aborts in-flight work. Centralized here so every AI caller benefits.
     static func invokeRaw(_ name: String, jsonBody: Data) async throws -> Data {
         guard let url = url(for: name), let anonKey = anonKey() else {
             throw CallError.missingConfig
         }
 
+        let bearer = (await sessionAccessToken()) ?? anonKey
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(anonKey, forHTTPHeaderField: "apikey")
-
-        let bearer = (await sessionAccessToken()) ?? anonKey
         request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
         request.httpBody = jsonBody
         request.timeoutInterval = 60
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw CallError.invalidResponse }
+        var lastError: Error = CallError.invalidResponse
+        for attempt in 1...maxAttempts {
+            // Abort immediately if the caller's Task was cancelled (e.g. view
+            // dismissed) rather than starting another network round-trip.
+            try Task.checkCancellation()
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse else { throw CallError.invalidResponse }
 
-        guard (200..<300).contains(http.statusCode) else {
-            throw CallError.status(http.statusCode, String(data: data, encoding: .utf8))
+                if (200..<300).contains(http.statusCode) {
+                    return data
+                }
+
+                let statusError = CallError.status(http.statusCode, String(data: data, encoding: .utf8))
+                // Only retry transient upstream/gateway statuses; 4xx and other
+                // 5xx are surfaced immediately.
+                if retryableStatuses.contains(http.statusCode), attempt < maxAttempts {
+                    lastError = statusError
+                    try await backoff(forAttempt: attempt)
+                    continue
+                }
+                throw statusError
+            } catch let error as CallError {
+                throw error
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // URLError (timed out, connection lost, can't connect, etc.).
+                lastError = error
+                if attempt < maxAttempts, isTransient(error) {
+                    try await backoff(forAttempt: attempt)
+                    continue
+                }
+                throw error
+            }
         }
-        return data
+        throw lastError
+    }
+
+    /// Whether a URLSession error is transient and worth retrying.
+    private static func isTransient(_ error: Error) -> Bool {
+        guard let urlError = error as? URLError else { return false }
+        switch urlError.code {
+        case .timedOut, .networkConnectionLost, .cannotConnectToHost,
+             .cannotFindHost, .dnsLookupFailed, .notConnectedToInternet:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Cancellation-aware exponential backoff: 0.5s, 1s, …
+    private static func backoff(forAttempt attempt: Int) async throws {
+        let seconds = 0.5 * pow(2.0, Double(attempt - 1))
+        try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
     }
 
     // MARK: - Config

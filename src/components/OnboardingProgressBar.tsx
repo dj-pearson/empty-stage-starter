@@ -1,11 +1,14 @@
-import { useApp } from "@/contexts/AppContext";
+import { useKids, useFoods, usePlan, useGrocery } from "@/contexts/AppContext";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Circle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function OnboardingProgressBar() {
-  const { kids, foods, planEntries, groceryItems } = useApp();
+  const { kids } = useKids();
+  const { foods } = useFoods();
+  const { planEntries } = usePlan();
+  const { groceryItems } = useGrocery();
   const [dismissed, setDismissed] = useLocalStorage("onboarding-dismissed", false);
 
   if (dismissed) return null;

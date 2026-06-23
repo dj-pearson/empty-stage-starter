@@ -24,6 +24,7 @@
  * const cacheControl = cdn.getCacheControl('image');
  * ```
  */
+import { logger } from "@/lib/logger";
 
 /**
  * CDN configuration
@@ -313,7 +314,7 @@ class CdnService {
    */
   async purgeCache(urls: string[]): Promise<boolean> {
     // This would integrate with Cloudflare API in production
-    console.warn('CDN cache purge not implemented - requires Cloudflare API integration');
+    logger.warn('CDN cache purge not implemented - requires Cloudflare API integration');
     return false;
   }
 }

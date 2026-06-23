@@ -866,6 +866,12 @@ struct AddFoodView: View {
     @State private var isTryBite = false
     @State private var allergens = ""
     @State private var isSubmitting = false
+    // US-366: quantity/unit so manual adds carry real stock instead of nil/0.
+    @State private var quantity: Double = 1
+    @State private var unit: String = "count"
+    /// Tracks whether the user has hand-edited qty/unit so UnitInference
+    /// pre-fills don't clobber their choice.
+    @State private var didEditQuantityUnit = false
 
     // US-230: optional expiry. Defaults to a sensible per-category window
     // when the user enables it (perishables → +7d, pantry → +30d).
@@ -877,6 +883,15 @@ struct AddFoodView: View {
             Form {
                 Section("Food Details") {
                     TextField("Food name", text: $name)
+                        // US-366: pre-fill quantity/unit from common-product
+                        // inference once the user types a name, unless they've
+                        // already adjusted the fields themselves.
+                        .onChange(of: name) { _, newName in
+                            guard !didEditQuantityUnit,
+                                  let inferred = UnitInference.infer(name: newName) else { return }
+                            quantity = inferred.quantity
+                            unit = inferred.unit
+                        }
 
                     Picker("Category", selection: $category) {
                         ForEach(FoodCategory.allCases, id: \.self) { cat in
@@ -891,6 +906,25 @@ struct AddFoodView: View {
                             expiryDate = defaultExpiry(for: newCategory)
                         }
                     }
+                }
+
+                // US-366: quantity + unit so a manual add records real stock
+                // (no more "0" pantry rows) and feeds the US-364 merge math.
+                Section("Quantity") {
+                    Stepper(value: $quantity, in: 0...999, step: 1) {
+                        HStack {
+                            Text("Quantity")
+                            Spacer()
+                            Text(quantity.formatted(.number.precision(.fractionLength(0...2))))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .onChange(of: quantity) { _, _ in didEditQuantityUnit = true }
+
+                    TextField("Unit (e.g. count, oz, gal)", text: $unit)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .onChange(of: unit) { _, _ in didEditQuantityUnit = true }
                 }
 
                 Section("Status") {
@@ -970,10 +1004,17 @@ struct AddFoodView: View {
             isSafe: isSafe,
             isTryBite: isTryBite,
             allergens: allergenList,
+            // US-366: persist the entered quantity/unit.
+            quantity: quantity,
+            unit: unit.trimmingCharacters(in: .whitespaces).isEmpty ? "count" : unit,
             expiryDate: hasExpiry ? DateFormatter.isoDate.string(from: expiryDate) : nil
         )
 
-        try? await appState.addFood(food)
+        // US-364: dedup against the pantry — if a food with the same name
+        // already exists, increment its quantity instead of inserting a
+        // duplicate row (mergeOrAddFood auto-applies the merge).
+        try? await appState.mergeOrAddFood(food)
+        isSubmitting = false
         dismiss()
     }
 }

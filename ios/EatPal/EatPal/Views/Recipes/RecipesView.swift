@@ -421,38 +421,19 @@ struct RecipesView: View {
         }
     }
 
+    /// US-358: unified through GroceryGeneratorService (same path as the detail
+    /// view) — structured-first, pantry+list deduped, recipe-source tagged.
     private func addRecipeIngredientsToGrocery(_ recipe: Recipe) async {
-        var addedCount = 0
-        for foodId in recipe.foodIds {
-            guard let food = appState.foods.first(where: { $0.id == foodId }) else { continue }
-            let item = GroceryItem(
-                id: UUID().uuidString,
-                userId: "",
-                name: food.name,
-                category: food.category,
-                quantity: 1,
-                unit: food.unit ?? "count",
-                checked: false,
-                addedVia: "recipe"
-            )
-            do {
-                try await appState.addGroceryItem(item)
-                addedCount += 1
-            } catch {
-                continue
-            }
-        }
-        if addedCount > 0 {
-            ToastManager.shared.success(
-                "Added to grocery",
-                message: "\(addedCount) ingredient\(addedCount == 1 ? "" : "s") from \(recipe.name)"
-            )
-        } else {
-            ToastManager.shared.info(
-                "No ingredients linked",
-                message: "This recipe has no foods linked yet."
-            )
-        }
+        let result = GroceryGeneratorService.generateFromRecipes(
+            [recipe], appState: appState, skipPantryStocked: true
+        )
+        let n = result.items.count
+        try? await GroceryGeneratorService.addGeneratedItemsBatched(
+            result,
+            appState: appState,
+            successMessage: "Added \(n) missing ingredient\(n == 1 ? "" : "s") from \(recipe.name).",
+            emptyMessage: "You already have everything for \(recipe.name)."
+        )
     }
 }
 
@@ -545,6 +526,19 @@ struct RecipeDetailView: View {
     @Environment(\.dismiss) var dismiss
     let recipe: Recipe
     @State private var showingEditRecipe = false
+    // US-359: step-by-step cooking mode.
+    @State private var showingCookMode = false
+
+    // US-357: add-to-meal-plan flow. `pendingShortfallRecipe` carries the
+    // just-planned recipe across the picker's dismissal so we can compute the
+    // pantry shortfall and present the missing-ingredient sheet — mirroring the
+    // MealPlanView add flow.
+    @State private var showingAddToPlan = false
+    @State private var pendingShortfallRecipe: Recipe?
+    @State private var detailShortfall: DetailShortfallContext?
+
+    // US-358: guard the grocery-add button against double-taps.
+    @State private var isAddingToGrocery = false
 
     // US-224: live serving scaler. 0 == "show original".
     @State private var displayServings: Int = 0
@@ -576,6 +570,31 @@ struct RecipeDetailView: View {
     /// "4 servings". Used so the number never reads as a bare, unlabeled value.
     private func servingsLabel(_ count: Int) -> String {
         "\(count) serving\(count == 1 ? "" : "s")"
+    }
+
+    /// US-356: one structured ingredient row, with quantity scaled live by the
+    /// servings stepper. Quantity is optional (some imported rows are name-only),
+    /// in which case we just show the name.
+    @ViewBuilder
+    private func structuredIngredientRow(_ ingredient: RecipeIngredient) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            if let qty = ingredient.quantity, qty > 0 {
+                let scaled = qty * servingScale
+                let unitSuffix = ingredient.unit.map { " \($0)" } ?? ""
+                Text("\(RecipeScaling.formatQuantity(scaled))\(unitSuffix)")
+                    .font(.subheadline.weight(.medium))
+                    .monospacedDigit()
+                    .foregroundStyle(.primary)
+            } else {
+                Text("•")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Text(ingredient.name)
+                .font(.subheadline)
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     var body: some View {
@@ -619,6 +638,19 @@ struct RecipeDetailView: View {
                             MetaBadge(icon: "chart.bar.fill", text: difficulty.capitalized)
                         }
                     }
+
+                    // US-357: add this recipe straight to the planner without
+                    // leaving the detail view and re-searching for it.
+                    Button {
+                        showingAddToPlan = true
+                    } label: {
+                        Label("Add to Meal Plan", systemImage: "calendar.badge.plus")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                    .accessibilityHint("Pick a day and meal, then optionally add missing ingredients to your grocery list")
 
                     // US-224: Servings scaler
                     HStack(spacing: 12) {
@@ -678,29 +710,40 @@ struct RecipeDetailView: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        ForEach(currentRecipe.foodIds, id: \.self) { foodId in
-                            if let food = appState.foods.first(where: { $0.id == foodId }) {
-                                HStack(spacing: 8) {
-                                    let cat = FoodCategory(rawValue: food.category)
-                                    Text(cat?.icon ?? "🍽")
-                                    Text(food.name)
-                                        .font(.subheadline)
+                        if !currentRecipe.ingredients.isEmpty {
+                            // US-356: structured rows are the source of truth —
+                            // render name + quantity/unit scaled by the servings
+                            // stepper. The legacy foodIds + additional-text path
+                            // below is only a fallback for recipes created
+                            // before US-265 / US-354 produced structured rows.
+                            ForEach(currentRecipe.ingredients.sorted { $0.sortOrder < $1.sortOrder }) { ingredient in
+                                structuredIngredientRow(ingredient)
+                            }
+                        } else {
+                            ForEach(currentRecipe.foodIds, id: \.self) { foodId in
+                                if let food = appState.foods.first(where: { $0.id == foodId }) {
+                                    HStack(spacing: 8) {
+                                        let cat = FoodCategory(rawValue: food.category)
+                                        Text(cat?.icon ?? "🍽")
+                                        Text(food.name)
+                                            .font(.subheadline)
+                                    }
                                 }
                             }
-                        }
 
-                        if let additional = currentRecipe.additionalIngredients, !additional.isEmpty {
-                            let rendered = isScaled
-                                ? RecipeScaling.scaleIngredientsText(additional, scale: servingScale)
-                                : additional
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Additional: \(rendered)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                if isScaled {
-                                    Text("Original: \(additional)")
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
+                            if let additional = currentRecipe.additionalIngredients, !additional.isEmpty {
+                                let rendered = isScaled
+                                    ? RecipeScaling.scaleIngredientsText(additional, scale: servingScale)
+                                    : additional
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Additional: \(rendered)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    if isScaled {
+                                        Text("Original: \(additional)")
+                                            .font(.caption2)
+                                            .foregroundStyle(.tertiary)
+                                    }
                                 }
                             }
                         }
@@ -708,20 +751,39 @@ struct RecipeDetailView: View {
                         Button {
                             Task { await addIngredientsToGrocery() }
                         } label: {
-                            Label("Add Ingredients to Grocery List", systemImage: "cart.badge.plus")
-                                .font(.subheadline)
-                                .frame(maxWidth: .infinity)
+                            HStack {
+                                if isAddingToGrocery {
+                                    ProgressView().controlSize(.small)
+                                }
+                                Label("Add Missing to Grocery List", systemImage: "cart.badge.plus")
+                                    .font(.subheadline)
+                            }
+                            .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.bordered)
                         .tint(.green)
+                        .disabled(isAddingToGrocery)
                         .padding(.top, 4)
                     }
 
                     // Instructions
                     if let instructions = currentRecipe.instructions, !instructions.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Instructions")
-                                .font(.headline)
+                            HStack {
+                                Text("Instructions")
+                                    .font(.headline)
+                                Spacer()
+                                // US-359: launch step-by-step cook mode.
+                                Button {
+                                    showingCookMode = true
+                                } label: {
+                                    Label("Cook", systemImage: "flame.fill")
+                                        .font(.subheadline)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(.green)
+                                .controlSize(.small)
+                            }
 
                             Text(instructions)
                                 .font(.subheadline)
@@ -780,6 +842,28 @@ struct RecipeDetailView: View {
             .sheet(isPresented: $showingEditRecipe) {
                 EditRecipeView(recipe: currentRecipe)
             }
+            // US-359: step-by-step cooking mode.
+            .fullScreenCover(isPresented: $showingCookMode) {
+                CookModeView(
+                    recipeName: currentRecipe.name,
+                    instructions: currentRecipe.instructions
+                )
+            }
+            // US-357: add-to-plan picker; on dismiss compute the shortfall.
+            .sheet(isPresented: $showingAddToPlan, onDismiss: handleAddToPlanDismiss) {
+                AddRecipeToPlanSheet(recipe: currentRecipe) { added in
+                    pendingShortfallRecipe = added
+                }
+                .environmentObject(appState)
+            }
+            .sheet(item: $detailShortfall) { ctx in
+                MissingIngredientsSheet(
+                    recipe: ctx.recipe,
+                    shortfalls: ctx.shortfalls,
+                    onFinish: { _ in detailShortfall = nil }
+                )
+                .environmentObject(appState)
+            }
             .onAppear {
                 // Restore the persisted per-recipe servings scale if any.
                 let stored = UserDefaults.standard.integer(forKey: scaleStorageKey)
@@ -792,63 +876,156 @@ struct RecipeDetailView: View {
         }
     }
 
+    /// US-357/US-353: after the add-to-plan picker closes, compute the pantry
+    /// shortfall for the just-planned recipe via the shared ShortfallChecker
+    /// (so legacy `food_ids` recipes prompt too) and present the
+    /// missing-ingredient sheet. Silent no-op when nothing is short.
+    private func handleAddToPlanDismiss() {
+        guard let planned = pendingShortfallRecipe else { return }
+        pendingShortfallRecipe = nil
+        let shortfalls = ShortfallChecker.shortfalls(for: planned, pantry: appState.foods)
+        guard !shortfalls.isEmpty else { return }
+        detailShortfall = DetailShortfallContext(recipe: planned, shortfalls: shortfalls)
+    }
+
+    /// US-358: unified through GroceryGeneratorService — prefers structured
+    /// ingredients, falls back to foodIds/legacy text, dedupes against BOTH the
+    /// pantry and the existing grocery list (so only the *missing* items are
+    /// added), and stamps recipe source rows so the items appear under this
+    /// recipe in the grocery "By Recipe" view.
     private func addIngredientsToGrocery() async {
-        let existingNames = Set(appState.groceryItems.map { $0.name.lowercased() })
-        let scale = servingScale
-        var added = 0
+        guard !isAddingToGrocery else { return }
+        isAddingToGrocery = true
+        defer { isAddingToGrocery = false }
 
-        for foodId in currentRecipe.foodIds {
-            guard let food = appState.foods.first(where: { $0.id == foodId }) else { continue }
-            if existingNames.contains(food.name.lowercased()) { continue }
-
-            let item = GroceryItem(
-                id: UUID().uuidString,
-                userId: "",
-                name: food.name,
-                category: food.category,
-                quantity: max(1.0, (1.0 * scale).rounded()),
-                unit: food.unit ?? "count",
-                checked: false,
-                addedVia: "recipe"
+        let result = GroceryGeneratorService.generateFromRecipes(
+            [currentRecipe], appState: appState, skipPantryStocked: true
+        )
+        let n = result.items.count
+        do {
+            try await GroceryGeneratorService.addGeneratedItemsBatched(
+                result,
+                appState: appState,
+                successMessage: "Added \(n) missing ingredient\(n == 1 ? "" : "s") from \(currentRecipe.name).",
+                emptyMessage: "You already have everything for \(currentRecipe.name)."
             )
-            try? await appState.addGroceryItem(item)
-            added += 1
+        } catch {
+            // addGeneratedItemsBatched surfaces its own error toast.
         }
+    }
+}
 
-        if let additional = currentRecipe.additionalIngredients, !additional.isEmpty {
-            let ingredients = additional
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
+// MARK: - US-357 Add-to-Plan
 
-            for ingredient in ingredients {
-                let scaledLine = isScaled
-                    ? RecipeScaling.scaleIngredientLine(ingredient, scale: scale)
-                    : ingredient
-                guard !existingNames.contains(scaledLine.lowercased()) else { continue }
+/// Identifiable wrapper so the missing-ingredient sheet can present via
+/// `.sheet(item:)` after the add-to-plan picker dismisses.
+private struct DetailShortfallContext: Identifiable {
+    let id = UUID()
+    let recipe: Recipe
+    let shortfalls: [ShortfallCalculator.Shortfall]
+}
 
-                let item = GroceryItem(
-                    id: UUID().uuidString,
-                    userId: "",
-                    name: scaledLine,
-                    category: "other",
-                    quantity: 1,
-                    unit: "",
-                    checked: false,
-                    addedVia: "recipe"
-                )
-                try? await appState.addGroceryItem(item)
-                added += 1
+/// US-357: compact picker to drop a recipe onto the planner (date + meal slot
+/// + child). Inserts the plan entry and reports back via `onAdded` so the
+/// detail view can run the missing-ingredient shortfall check.
+private struct AddRecipeToPlanSheet: View {
+    @EnvironmentObject var appState: AppState
+    @Environment(\.dismiss) private var dismiss
+
+    let recipe: Recipe
+    var onAdded: (Recipe) -> Void
+
+    @State private var date = Date()
+    @State private var mealSlot: MealSlot = .dinner
+    @State private var kidId: String = ""
+    @State private var isSubmitting = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                DatePicker("Date", selection: $date, displayedComponents: .date)
+
+                Picker("Meal", selection: $mealSlot) {
+                    ForEach(MealSlot.allCases, id: \.self) { slot in
+                        Label(slot.displayName, systemImage: slot.icon).tag(slot)
+                    }
+                }
+
+                // Only ask which child when there's more than one profile.
+                if appState.kids.count > 1 {
+                    Picker("Child", selection: $kidId) {
+                        ForEach(appState.kids) { kid in
+                            Text(kid.name).tag(kid.id)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Add to Meal Plan")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") { Task { await add() } }
+                        .disabled(isSubmitting || kidId.isEmpty)
+                }
+            }
+            .onAppear {
+                if kidId.isEmpty {
+                    kidId = appState.activeKidId ?? appState.kids.first?.id ?? ""
+                }
             }
         }
+    }
 
-        let toast = ToastManager.shared
-        let scaleNote = isScaled ? " (scaled for \(effectiveServings) servings)" : ""
-        toast.success(
-            "Added to grocery list",
-            message: "\(added) ingredients added\(scaleNote)."
+    /// `plan_entries.food_id` is NOT NULL, so resolve a concrete food UUID.
+    /// US-357: in addition to legacy `foodIds`, consider structured ingredient
+    /// links (US-354) so imported recipes whose ingredients live only in
+    /// `recipe_ingredients` aren't trapped as "unplannable".
+    private func resolveFoodId() -> String? {
+        if let first = recipe.foodIds.first { return first }
+        if let linked = recipe.ingredients.compactMap(\.foodId).first { return linked }
+        return nil
+    }
+
+    private func add() async {
+        guard !kidId.isEmpty else {
+            ToastManager.shared.error("Select a child profile first")
+            return
+        }
+        guard let foodId = resolveFoodId() else {
+            ToastManager.shared.error(
+                "Link an ingredient to your pantry first",
+                message: "Open this recipe's ingredients so we can plan it."
+            )
+            return
+        }
+
+        isSubmitting = true
+        let entry = PlanEntry(
+            id: UUID().uuidString,
+            userId: "",
+            kidId: kidId,
+            date: DateFormatter.isoDate.string(from: date),
+            mealSlot: mealSlot.rawValue,
+            foodId: foodId,
+            recipeId: recipe.id
         )
-        HapticManager.success()
+
+        do {
+            try await appState.addPlanEntry(entry)
+            onAdded(recipe)
+            let dateLabel = date.formatted(date: .abbreviated, time: .omitted)
+            ToastManager.shared.success(
+                "Added to \(mealSlot.displayName)",
+                message: dateLabel
+            )
+            dismiss()
+        } catch {
+            // addPlanEntry already surfaces an error toast; stay open to retry.
+            isSubmitting = false
+        }
     }
 }
 
@@ -995,8 +1172,6 @@ struct AddRecipeView: View {
     @State private var isImporting = false
     @State private var importError: String?
     @State private var importedFrom: String?
-    @State private var showPastePrompt = false
-    @State private var pasteboardURL: URL?
 
     var body: some View {
         NavigationStack {
@@ -1026,6 +1201,16 @@ struct AddRecipeView: View {
                         }
                     }
 
+                    // US-360: explicit clipboard read on tap — we no longer
+                    // sniff the pasteboard on appear (privacy/UX smell that
+                    // trips the iOS 16+ paste banner).
+                    Button {
+                        pasteLinkFromClipboard()
+                    } label: {
+                        Label("Paste link", systemImage: "doc.on.clipboard")
+                    }
+                    .disabled(isImporting)
+
                     Button {
                         Task { await importFromURL() }
                     } label: {
@@ -1040,9 +1225,10 @@ struct AddRecipeView: View {
                     .disabled(importURL.trimmingCharacters(in: .whitespaces).isEmpty || isImporting)
 
                     if let importError {
-                        Text(importError)
-                            .font(.caption)
-                            .foregroundStyle(.red)
+                        // US-367: ErrorBanner with retry.
+                        ErrorBanner(message: importError, retryAction: {
+                            Task { await importFromURL() }
+                        })
                     } else if let importedFrom {
                         Label("Imported from \(importedFrom)", systemImage: "checkmark.circle.fill")
                             .font(.caption)
@@ -1154,32 +1340,21 @@ struct AddRecipeView: View {
                     .disabled(name.isEmpty || isSubmitting)
                 }
             }
-            .onAppear(perform: detectPasteboardURL)
-            .alert("Import from \(pasteboardURL?.host ?? "clipboard")?", isPresented: $showPastePrompt, presenting: pasteboardURL) { url in
-                Button("Import") {
-                    importURL = url.absoluteString
-                    Task { await importFromURL() }
-                }
-                Button("Not now", role: .cancel) {}
-            } message: { url in
-                Text(url.absoluteString)
-                    .font(.caption)
-            }
         }
     }
 
     // MARK: - Recipe URL import (US-223)
 
-    private func detectPasteboardURL() {
+    /// US-360: read the clipboard only when the user taps "Paste link" — an
+    /// explicit, intentional action rather than an on-appear pasteboard sniff.
+    private func pasteLinkFromClipboard() {
         guard let clipboard = UIPasteboard.general.string,
               let url = RecipeImportService.firstURL(in: clipboard) else {
+            importError = "No recipe link found on the clipboard."
             return
         }
-        // Only prompt if fields are empty (first-open heuristic) so we don't
-        // pester users who are in the middle of editing.
-        guard name.isEmpty, importURL.isEmpty else { return }
-        pasteboardURL = url
-        showPastePrompt = true
+        importURL = url.absoluteString
+        importError = nil
     }
 
     private func importFromURL() async {

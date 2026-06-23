@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Helmet } from "react-helmet-async";
-import { useApp } from "@/contexts/AppContext";
+import { useKids, usePlan } from "@/contexts/AppContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -15,7 +15,8 @@ import { logger } from "@/lib/logger";
 import { calculateAge } from "@/lib/utils";
 
 export default function AIPlanner() {
-  const { kids, activeKidId, setActiveKidId, addPlanEntries } = useApp();
+  const { kids, activeKidId, setActiveKidId } = useKids();
+  const { addPlanEntries } = usePlan();
   const [isGenerating, setIsGenerating] = useState(false);
   const [mealPlan, setMealPlan] = useState<any[]>([]);
   const [insights, setInsights] = useState<any>(null);

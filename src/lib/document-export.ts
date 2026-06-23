@@ -12,6 +12,15 @@ import { logger } from "./logger";
 // TYPES
 // =============================================================================
 
+/** Minimal shape of the optional global JSZip dependency (loaded via CDN if present). */
+interface JSZipInstance {
+  file(path: string, content: string): void;
+  generateAsync(options: { type: string; compression?: string }): Promise<Blob>;
+}
+interface JSZipConstructor {
+  new (): JSZipInstance;
+}
+
 export interface ExcelColumn {
   header: string;
   key: string;
@@ -23,7 +32,7 @@ export interface ExcelColumn {
 export interface ExcelSheet {
   name: string;
   columns: ExcelColumn[];
-  data: Record<string, any>[];
+  data: Record<string, unknown>[];
   freezeHeader?: boolean;
   autoFilter?: boolean;
 }
@@ -95,28 +104,30 @@ function getColumnLetter(num: number): string {
 /**
  * Format value for Excel cell based on type
  */
-function formatCellValue(value: any, type?: ExcelColumn["type"]): { value: string; type: string } {
+function formatCellValue(value: unknown, type?: ExcelColumn["type"]): { value: string; type: string } {
   if (value === null || value === undefined) {
     return { value: "", type: "inlineStr" };
   }
 
   switch (type) {
     case "number":
-    case "currency":
-      const num = parseFloat(value);
+    case "currency": {
+      const num = parseFloat(value as string);
       if (isNaN(num)) {
         return { value: escapeXml(String(value)), type: "inlineStr" };
       }
       return { value: String(num), type: "n" };
+    }
 
-    case "date":
-      const date = new Date(value);
+    case "date": {
+      const date = new Date(value as string | number | Date);
       if (isNaN(date.getTime())) {
         return { value: escapeXml(String(value)), type: "inlineStr" };
       }
       // Excel dates are number of days since 1900-01-01
       const excelDate = (date.getTime() / 86400000) + 25569;
       return { value: String(excelDate), type: "n" };
+    }
 
     case "boolean":
       return { value: value ? "1" : "0", type: "b" };
@@ -333,9 +344,9 @@ export async function exportToExcel(options: ExcelExportOptions): Promise<void> 
  */
 async function createZipBlob(files: Record<string, string>): Promise<Blob> {
   // Try to use JSZip if available
-  if (typeof window !== "undefined" && (window as any).JSZip) {
-    const JSZip = (window as any).JSZip;
-    const zip = new JSZip();
+  const JSZipCtor = (window as unknown as { JSZip?: JSZipConstructor }).JSZip;
+  if (typeof window !== "undefined" && JSZipCtor) {
+    const zip = new JSZipCtor();
 
     Object.entries(files).forEach(([path, content]) => {
       zip.file(path, content);
@@ -667,7 +678,7 @@ function generateDocxTable(table: DocxTable): string {
  * Export array of objects to Excel with automatic column detection
  */
 export async function exportDataToExcel(
-  data: Record<string, any>[],
+  data: Record<string, unknown>[],
   filename: string,
   sheetName: string = "Data"
 ): Promise<void> {
@@ -702,7 +713,7 @@ export async function exportDataToExcel(
 export async function exportReportToDocx(
   title: string,
   description: string,
-  data: Record<string, any>[],
+  data: Record<string, unknown>[],
   filename: string
 ): Promise<void> {
   if (data.length === 0) {

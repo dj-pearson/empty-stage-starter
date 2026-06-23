@@ -1,0 +1,24 @@
+# Auth-screen interaction smoke test.
+#
+# Verifies the sign-in / sign-up segmented control actually toggles the form
+# (a common breakage after AuthView refactors) without needing credentials.
+# Tapping "Sign Up" must reveal the Create Account button + Confirm Password
+# field; tapping back to "Sign In" must restore the Forgot Password affordance.
+appId: com.eatpal.app
+name: Auth screen toggles between sign-in and sign-up
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- assertVisible: "Email"
+- assertVisible: "Password"
+# Switch to Sign Up via the segmented control.
+- tapOn: "Sign Up"
+- assertVisible: "Create Account"
+- assertVisible: "Confirm Password"
+# Switch back to Sign In.
+- tapOn: "Sign In"
+- assertVisible: "Forgot Password?"
+- takeScreenshot: auth-screen

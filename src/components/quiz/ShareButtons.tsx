@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { logger } from "@/lib/logger";
 import { PersonalityType } from '@/types/quiz';
 import { getPersonalityName } from '@/lib/quiz/personalityTypes';
 import { trackSocialShare } from '@/lib/quiz/supabaseIntegration';
@@ -22,7 +23,7 @@ export function ShareButtons({ personalityType, quizResponseId, childName }: Sha
       try {
         await trackSocialShare(quizResponseId, platform, personalityType);
       } catch (error) {
-        console.error('Error tracking share:', error);
+        logger.error('Error tracking share:', error);
       }
     }
   };
@@ -56,7 +57,7 @@ export function ShareButtons({ personalityType, quizResponseId, childName }: Sha
       await downloadShareImage(personalityType, childName);
       toast.success('Share image downloaded!');
     } catch (error) {
-      console.error('Error downloading share image:', error);
+      logger.error('Error downloading share image:', error);
       toast.error('Failed to download image. Please try again.');
     }
   };

@@ -155,16 +155,34 @@ final class AuthViewModel: ObservableObject {
         passwordValidation = PasswordValidator.validate(password)
     }
 
+    /// US-378: basic email format check (non-empty local part, '@', and a dot
+    /// in the domain) so we can block malformed submits without a network
+    /// round-trip. Not a full RFC validator — just enough to catch typos.
+    var isEmailValid: Bool {
+        let trimmed = email.trimmingCharacters(in: .whitespaces)
+        let parts = trimmed.split(separator: "@", omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[0].isEmpty else { return false }
+        let domain = parts[1]
+        return domain.contains(".") && !domain.hasPrefix(".") && !domain.hasSuffix(".")
+    }
+
+    /// US-378: inline message shown under the email field when the user has
+    /// typed something that isn't a valid email yet.
+    var emailValidationMessage: String? {
+        guard !email.isEmpty, !isEmailValid else { return nil }
+        return "Enter a valid email address."
+    }
+
     var isFormValid: Bool {
         switch authMode {
         case .signIn:
-            return !email.isEmpty && !password.isEmpty
+            return isEmailValid && !password.isEmpty
         case .signUp:
-            return !email.isEmpty && !password.isEmpty &&
+            return isEmailValid && !password.isEmpty &&
                    password == confirmPassword &&
                    (passwordValidation?.isValid ?? false)
         case .forgotPassword:
-            return !email.isEmpty
+            return isEmailValid
         }
     }
 
@@ -273,9 +291,11 @@ final class AuthViewModel: ObservableObject {
                 // Auth state listener will handle the transition to .authenticated
             } catch {
                 errorMessage = "Sign in with Apple failed: \(error.localizedDescription)"
+                // US-377: do NOT attach appleCredential.user — Apple's stable
+                // user identifier is PII and adds no actionable debug value
+                // beyond the context tag.
                 SentryService.capture(error, extras: [
-                    "context": "apple_sign_in_supabase_exchange",
-                    "userIdentifier": appleCredential.user
+                    "context": "apple_sign_in_supabase_exchange"
                 ])
             }
 

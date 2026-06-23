@@ -92,10 +92,8 @@ struct ScanReceiptSheet: View {
             .tint(.blue)
             .padding(.horizontal, 24)
             if let errorMessage {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
+                // US-367: ErrorBanner instead of raw red text.
+                ErrorBanner(message: errorMessage)
                     .padding(.horizontal, 24)
             }
             Text("Tip: lay the receipt flat, fill the frame, even light.")
@@ -236,7 +234,14 @@ struct ScanReceiptSheet: View {
     private func save() async {
         guard !acceptedRows.isEmpty else { return }
         stage = .saving
-        let foods: [Food] = acceptedRows.map { row in
+
+        // US-390: rows that matched an existing pantry food merge into it
+        // (increment quantity) instead of inserting a duplicate; only
+        // unmatched rows become new foods.
+        let matchedRows = acceptedRows.filter { $0.matchedFoodId != nil }
+        let unmatchedRows = acceptedRows.filter { $0.matchedFoodId == nil }
+
+        let newFoods: [Food] = unmatchedRows.map { row in
             Food(
                 id: UUID().uuidString,
                 userId: "",
@@ -260,13 +265,25 @@ struct ScanReceiptSheet: View {
             )
         }
         do {
-            try await DataService.shared.bulkInsertFoods(foods)
+            for row in matchedRows {
+                guard let id = row.matchedFoodId else { continue }
+                try await appState.incrementFoodQuantity(
+                    id,
+                    by: row.item.qty,
+                    unit: row.item.unit.isEmpty ? nil : row.item.unit,
+                    notify: false
+                )
+            }
+            if !newFoods.isEmpty {
+                try await DataService.shared.bulkInsertFoods(newFoods)
+            }
             await appState.refreshFoodsAfterReceiptScan()
+            let savedCount = matchedRows.count + newFoods.count
             AnalyticsService.track(.receiptItemsAccepted(
-                acceptedCount: foods.count,
+                acceptedCount: savedCount,
                 droppedCount: droppedCount
             ))
-            AnalyticsService.track(.receiptFirstScanCompleted(itemCount: foods.count))
+            AnalyticsService.track(.receiptFirstScanCompleted(itemCount: savedCount))
             dismiss()
         } catch {
             errorMessage = "Couldn't save: \(error.localizedDescription)"

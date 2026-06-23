@@ -1,0 +1,19 @@
+# Cold-start smoke test.
+#
+# This is the single most important pre-ads check: an Apple Search Ads install
+# opens the app fresh, and if it crashes or hangs on launch the user is gone
+# and the ad spend is wasted. We clear all state/keychain to simulate a brand
+# new install, then assert the unauthenticated landing screen (AuthView)
+# actually renders. No backend or test account required — with placeholder
+# Supabase creds the session check fails and the app falls through to AuthView.
+appId: com.eatpal.app
+name: Cold start renders the auth screen
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- assertVisible: "Meal planning made simple"
+- assertVisible: "Sign in with Apple"
+- takeScreenshot: cold-start

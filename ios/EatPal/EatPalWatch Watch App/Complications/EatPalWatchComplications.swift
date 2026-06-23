@@ -20,15 +20,11 @@ struct EatPalWatchComplicationsBundle: WidgetBundle {
 // MARK: - Snapshot loader
 
 private enum SnapshotLoader {
-    static let cacheKey = "EatPal.watch.snapshot"
-
     static func load() -> WatchSnapshot {
-        guard let data = UserDefaults.standard.data(forKey: cacheKey),
-              let decoded = try? JSONDecoder().decode(WatchSnapshot.self, from: data)
-        else {
-            return .empty
-        }
-        return decoded
+        // US-407: read from the shared App Group store the iPhone writes to,
+        // not UserDefaults.standard (per-process; always empty for the
+        // complication, so it never showed real data).
+        WatchSnapshotStore.load() ?? .empty
     }
 }
 

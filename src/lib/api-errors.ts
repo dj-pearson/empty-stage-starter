@@ -6,6 +6,7 @@
  */
 
 import { PostgrestError } from '@supabase/supabase-js';
+import { logger } from "@/lib/logger";
 import * as Sentry from '@sentry/react';
 
 /**
@@ -16,7 +17,7 @@ export class APIError extends Error {
     message: string,
     public statusCode: number = 500,
     public code?: string,
-    public details?: any
+    public details?: unknown
   ) {
     super(message);
     this.name = 'APIError';
@@ -121,34 +122,34 @@ export function handleSupabaseError(error: PostgrestError | Error): APIError {
     const pgError = error as PostgrestError;
 
     // Map Postgrest error codes to our error codes
-    let code = ErrorCodes.DATABASE_ERROR;
+    let code: string = ErrorCodes.DATABASE_ERROR;
     let statusCode = 500;
     let message = pgError.message;
 
     // Unique constraint violation
     if (pgError.code === '23505') {
-      code = ErrorCodes.ALREADY_EXISTS as any;
+      code = ErrorCodes.ALREADY_EXISTS;
       statusCode = 409;
       message = 'This resource already exists.';
     }
 
     // Foreign key violation
     if (pgError.code === '23503') {
-      code = ErrorCodes.CONSTRAINT_VIOLATION as any;
+      code = ErrorCodes.CONSTRAINT_VIOLATION;
       statusCode = 400;
       message = 'Referenced resource does not exist.';
     }
 
     // Not null violation
     if (pgError.code === '23502') {
-      code = ErrorCodes.MISSING_REQUIRED_FIELD as any;
+      code = ErrorCodes.MISSING_REQUIRED_FIELD;
       statusCode = 400;
       message = 'Required field is missing.';
     }
 
     // Row level security violation
     if (pgError.code === '42501') {
-      code = ErrorCodes.FORBIDDEN as any;
+      code = ErrorCodes.FORBIDDEN;
       statusCode = 403;
       message = 'You do not have permission to access this resource.';
     }
@@ -167,12 +168,15 @@ export function handleSupabaseError(error: PostgrestError | Error): APIError {
 /**
  * Handle fetch/network errors
  */
-export function handleFetchError(error: any): APIError {
-  if (error.name === 'AbortError') {
+export function handleFetchError(error: unknown): APIError {
+  const err = error as { name?: string; message?: string };
+  const message = typeof err?.message === 'string' ? err.message : '';
+
+  if (err?.name === 'AbortError') {
     return new APIError('Request was cancelled', 499, ErrorCodes.TIMEOUT);
   }
 
-  if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+  if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
     return new APIError(
       'Network error. Please check your connection.',
       0,
@@ -180,12 +184,12 @@ export function handleFetchError(error: any): APIError {
     );
   }
 
-  if (error.message.includes('timeout')) {
+  if (message.includes('timeout')) {
     return new APIError('Request timed out. Please try again.', 408, ErrorCodes.TIMEOUT);
   }
 
   return new APIError(
-    error.message || 'An unexpected error occurred',
+    message || 'An unexpected error occurred',
     500,
     ErrorCodes.INTERNAL_SERVER_ERROR
   );
@@ -196,12 +200,12 @@ export function handleFetchError(error: any): APIError {
  */
 export async function handleHTTPError(response: Response): Promise<APIError> {
   let message = response.statusText;
-  let code = ErrorCodes.INTERNAL_SERVER_ERROR;
-  let details: any = null;
+  let code: string = ErrorCodes.INTERNAL_SERVER_ERROR;
+  let details: unknown = null;
 
   // Try to parse error body
   try {
-    const body = await response.json();
+    const body = (await response.json()) as { message?: string; error?: string; code?: string };
     if (body.message) message = body.message;
     if (body.error) message = body.error;
     if (body.code) code = body.code;
@@ -213,31 +217,31 @@ export async function handleHTTPError(response: Response): Promise<APIError> {
   // Map HTTP status codes to error codes
   switch (response.status) {
     case 400:
-      code = ErrorCodes.INVALID_INPUT as any;
+      code = ErrorCodes.INVALID_INPUT;
       break;
     case 401:
-      code = ErrorCodes.UNAUTHORIZED as any;
+      code = ErrorCodes.UNAUTHORIZED;
       break;
     case 403:
-      code = ErrorCodes.FORBIDDEN as any;
+      code = ErrorCodes.FORBIDDEN;
       break;
     case 404:
-      code = ErrorCodes.NOT_FOUND as any;
+      code = ErrorCodes.NOT_FOUND;
       break;
     case 409:
-      code = ErrorCodes.CONFLICT as any;
+      code = ErrorCodes.CONFLICT;
       break;
     case 422:
-      code = ErrorCodes.VALIDATION_ERROR as any;
+      code = ErrorCodes.VALIDATION_ERROR;
       break;
     case 429:
-      code = ErrorCodes.RATE_LIMIT_EXCEEDED as any;
+      code = ErrorCodes.RATE_LIMIT_EXCEEDED;
       break;
     case 500:
-      code = ErrorCodes.INTERNAL_SERVER_ERROR as any;
+      code = ErrorCodes.INTERNAL_SERVER_ERROR;
       break;
     case 503:
-      code = ErrorCodes.SERVICE_UNAVAILABLE as any;
+      code = ErrorCodes.SERVICE_UNAVAILABLE;
       break;
   }
 
@@ -273,14 +277,14 @@ export function getErrorMessage(error: unknown): string {
  * Check if error is retryable
  */
 export function isRetryableError(error: APIError): boolean {
-  const retryableCodes = [
+  const retryableCodes: string[] = [
     ErrorCodes.TIMEOUT,
     ErrorCodes.SERVICE_UNAVAILABLE,
     ErrorCodes.NETWORK_ERROR,
     ErrorCodes.INTERNAL_SERVER_ERROR,
   ];
 
-  return error.code ? retryableCodes.includes(error.code as any) : false;
+  return error.code ? retryableCodes.includes(error.code) : false;
 }
 
 /**
@@ -300,12 +304,12 @@ export async function retryRequest<T>(
     maxRetries?: number;
     delayMs?: number;
     backoff?: 'linear' | 'exponential';
-    shouldRetry?: (error: any) => boolean;
+    shouldRetry?: (error: unknown) => boolean;
   } = {}
 ): Promise<T> {
   const { maxRetries = 3, delayMs = 1000, backoff = 'exponential', shouldRetry } = options;
 
-  let lastError: any;
+  let lastError: unknown;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -354,12 +358,12 @@ export async function batchWithErrorHandling<T>(
   operations: Array<() => Promise<T>>,
   options: {
     continueOnError?: boolean;
-    onError?: (error: any, index: number) => void;
+    onError?: (error: unknown, index: number) => void;
   } = {}
-): Promise<Array<{ success: boolean; data?: T; error?: any }>> {
+): Promise<Array<{ success: boolean; data?: T; error?: unknown }>> {
   const { continueOnError = false, onError } = options;
 
-  const results: Array<{ success: boolean; data?: T; error?: any }> = [];
+  const results: Array<{ success: boolean; data?: T; error?: unknown }> = [];
 
   for (let i = 0; i < operations.length; i++) {
     try {
@@ -384,9 +388,9 @@ export async function batchWithErrorHandling<T>(
 /**
  * Log error to Sentry and console
  */
-export function logError(error: unknown, context?: Record<string, any>) {
+export function logError(error: unknown, context?: Record<string, unknown>) {
   // Always log to console for debugging
-  console.error('Error:', error, 'Context:', context);
+  logger.error('Error:', error, 'Context:', context);
 
   // Send to Sentry in production (or if explicitly enabled)
   if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {

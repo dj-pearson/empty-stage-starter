@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useApp } from '@/contexts/AppContext';
+import { usePlan, useFoods, useKids } from '@/contexts/AppContext';
 import {
   Lightbulb,
   TrendingUp,
@@ -26,7 +26,9 @@ interface Insight {
 }
 
 export function SmartInsights() {
-  const { planEntries, foods, activeKidId, kids } = useApp();
+  const { planEntries } = usePlan();
+  const { foods } = useFoods();
+  const { activeKidId, kids } = useKids();
 
   const activeKid = kids.find(k => k.id === activeKidId);
 

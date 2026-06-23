@@ -40,7 +40,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useApp } from "@/contexts/AppContext";
+import { useKids, useFoods } from "@/contexts/AppContext";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { calculateAge } from "@/lib/utils";
@@ -95,7 +95,7 @@ const STAGES = [
 const OUTCOMES = [
   { value: "success", label: "Success", icon: CheckCircle, color: "text-safe-food" },
   { value: "partial", label: "Partial", icon: Minus, color: "text-yellow-500" },
-  { value: "refused", label: "Refused", icon: XCircle, color: "text-gray-500" },
+  { value: "refused", label: "Refused", icon: XCircle, color: "text-muted-foreground" },
   { value: "tantrum", label: "Tantrum", icon: AlertTriangle, color: "text-red-500" },
 ];
 
@@ -107,7 +107,8 @@ const MOODS = [
 ];
 
 export function FoodSuccessTracker({ onAddChild }: FoodSuccessTrackerProps) {
-  const { activeKidId, kids, foods, setActiveKid } = useApp();
+  const { activeKidId, kids, setActiveKid } = useKids();
+  const { foods } = useFoods();
   const navigate = useNavigate();
   const [attempts, setAttempts] = useState<FoodAttempt[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
@@ -676,7 +677,7 @@ export function FoodSuccessTracker({ onAddChild }: FoodSuccessTrackerProps) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {STAGES.map((stage, index) => {
+                  {STAGES.map((stage) => {
                     const count = attempts.filter((a) => a.stage === stage.value).length;
                     if (count === 0) return null;
                     return (

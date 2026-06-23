@@ -175,62 +175,23 @@ final class AppState: ObservableObject {
     }
 
     private func refreshWidgetSnapshot() {
-        let todayString = DateFormatter.isoDate.string(from: Date())
-        let kidId = activeKidId
-
-        // Today's meals (by slot): pick the first food per slot for the
-        // active kid, or across all kids when no active kid is set.
-        let todaysEntries = planEntries.filter { entry in
-            entry.date == todayString && (kidId == nil || entry.kidId == kidId)
-        }
-
-        let widgetMeals: [WidgetSnapshot.Payload.Meal] = MealSlot.allCases.compactMap { slot in
-            guard let entry = todaysEntries.first(where: { $0.mealSlot == slot.rawValue }) else {
-                return nil
-            }
-            let foodName: String = {
-                if let recipeId = entry.recipeId,
-                   let recipe = recipes.first(where: { $0.id == recipeId }) {
-                    return recipe.name
-                }
-                if let food = foods.first(where: { $0.id == entry.foodId }) {
-                    return food.name
-                }
-                return "Unnamed"
-            }()
-            return WidgetSnapshot.Payload.Meal(
-                slot: slot.displayName,
-                foodName: foodName,
-                icon: slot.icon
-            )
-        }
-
-        let tonightDish = todaysEntries
-            .first(where: { $0.mealSlot == MealSlot.dinner.rawValue })
-            .flatMap { entry -> String? in
-                if let recipeId = entry.recipeId,
-                   let recipe = recipes.first(where: { $0.id == recipeId }) {
-                    return recipe.name
-                }
-                return foods.first(where: { $0.id == entry.foodId })?.name
-            }
-
-        let pantryLowCount = foods.filter { food in
-            guard let qty = food.quantity else { return false }
-            return qty > 0 && qty <= 2
-        }.count
-
-        let unchecked = groceryItems.filter { !$0.checked }.count
-
-        let payload = WidgetSnapshot.Payload(
-            meals: widgetMeals,
-            groceryCount: unchecked,
-            pantryLowCount: pantryLowCount,
-            tonightDish: tonightDish,
-            tryBiteStreak: 0  // placeholder — real streak calc is a future story
+        // US-412: snapshot construction lives in WidgetSnapshot.buildPayload so
+        // the Siri-intent server-rebuild path produces an identical snapshot.
+        let payload = WidgetSnapshot.buildPayload(
+            planEntries: planEntries,
+            foods: foods,
+            recipes: recipes,
+            groceryItems: groceryItems,
+            activeKidId: activeKidId
         )
 
-        WidgetSnapshot.write(payload)
+        // US-388: the Combine pipeline above already debounces this whole
+        // O(n) rebuild by 500ms, so the snapshot is coalesced to a single pass
+        // per window. Writing immediately here avoids a redundant SECOND
+        // debounce timer (the old `WidgetSnapshot.write` chained another 0.5s
+        // delay on top), which only added latency and another reload. Both
+        // this and WatchConnectivityService's 1.5s debounce are @MainActor.
+        WidgetSnapshot.writeImmediately(payload)
     }
 
     // MARK: - Computed Properties
@@ -290,6 +251,13 @@ final class AppState: ObservableObject {
             // GroceryView; refreshed in lockstep with groceryItems.
             groceryItemSources = loadedGroceryItemSources
 
+            // US-382: persist the fresh snapshot to the SwiftData read-cache so
+            // a later offline launch shows last-synced data. cache* replaces
+            // the prior snapshot wholesale (US-383) so it can't grow unbounded.
+            OfflineStore.shared.cacheFoods(loadedFoods)
+            OfflineStore.shared.cacheKids(loadedKids)
+            OfflineStore.shared.cacheGroceryItems(loadedGroceryItems)
+
             if activeKidId == nil, let firstKid = kids.first {
                 activeKidId = firstKid.id
             }
@@ -318,6 +286,30 @@ final class AppState: ObservableObject {
                 }
             }
         } catch {
+            // US-382: on a connectivity failure, fall back to the SwiftData
+            // read-cache so launching offline shows last-synced data instead
+            // of empty lists. A non-connectivity error still surfaces.
+            if Self.isConnectivityError(error) {
+                let userId = (try? await SupabaseManager.client.auth.session)?
+                    .user.id.uuidString.lowercased() ?? ""
+                let cachedFoods = OfflineStore.shared.loadCachedFoods(userId: userId)
+                let cachedKids = OfflineStore.shared.loadCachedKids(userId: userId)
+                let cachedGrocery = OfflineStore.shared.loadCachedGroceryItems(userId: userId)
+
+                if !cachedFoods.isEmpty || !cachedKids.isEmpty || !cachedGrocery.isEmpty {
+                    foods = cachedFoods
+                    kids = cachedKids
+                    groceryItems = cachedGrocery
+                    if activeKidId == nil, let firstKid = kids.first {
+                        activeKidId = firstKid.id
+                    }
+                    errorMessage = nil
+                    toast.info("Offline", message: "Showing your last-synced data.")
+                    isLoading = false
+                    return
+                }
+            }
+
             // Single AppError mapping powers both the inline `errorMessage`
             // banner and the global toast so they stay in sync.
             let appError = AppError.wrap(error, as: { .load(entity: "your data", underlying: $0) })
@@ -327,6 +319,24 @@ final class AppState: ObservableObject {
         }
 
         isLoading = false
+    }
+
+    /// US-382: true when the error looks like a lost/absent network
+    /// connection (so we should fall back to the offline cache) rather than a
+    /// server/auth/decode error (which the user should see).
+    private static func isConnectivityError(_ error: Error) -> Bool {
+        if !NetworkMonitor.shared.isConnected { return true }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost, .timedOut,
+                 .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed,
+                 .dataNotAllowed, .internationalRoamingOff:
+                return true
+            default:
+                return false
+            }
+        }
+        return false
     }
 
     func clearData() {
@@ -356,6 +366,68 @@ final class AppState: ObservableObject {
             HapticManager.error()
             throw error
         }
+    }
+
+    /// US-364: find an existing pantry food matching `barcode` (preferred when
+    /// provided) or a case-insensitive `name`. Shared dedup lookup used by all
+    /// pantry add paths (manual add, barcode scan, receipt scan) so the pantry
+    /// stops inflating with duplicate rows.
+    func existingPantryFood(name: String, barcode: String? = nil) -> Food? {
+        PantryDedup.match(name: name, barcode: barcode, in: foods)
+    }
+
+    /// US-364: increment an existing pantry food's quantity by `quantity`,
+    /// converting from `unit` into the food's existing unit when possible
+    /// (US-363 UnitConverter), and persist. Optimistic with rollback.
+    func incrementFoodQuantity(
+        _ foodId: String,
+        by quantity: Double,
+        unit: String?,
+        notify: Bool = true
+    ) async throws {
+        guard let idx = foods.firstIndex(where: { $0.id == foodId }) else { return }
+        let previous = foods[idx].quantity
+        var increment = quantity
+        if let existingUnit = foods[idx].unit, !existingUnit.isEmpty,
+           let candidateUnit = unit, !candidateUnit.isEmpty, existingUnit != candidateUnit,
+           let converted = UnitConverter.convert(quantity, from: candidateUnit, to: existingUnit) {
+            increment = converted
+        }
+        let newQuantity = (previous ?? 0) + increment
+        foods[idx].quantity = newQuantity
+        let name = foods[idx].name
+        do {
+            try await dataService.updateFood(foodId, updates: FoodUpdate(quantity: newQuantity))
+            if notify {
+                toast.success("Updated \(name)", message: "Quantity increased")
+                HapticManager.success()
+            }
+            AnalyticsService.track(.foodUpdated)
+        } catch {
+            foods[idx].quantity = previous
+            if notify {
+                toast.show(error, as: { .save(entity: "food", underlying: $0) })
+                HapticManager.error()
+            }
+            throw error
+        }
+    }
+
+    /// US-364: merge-or-add. If a pantry food already matches by barcode/name,
+    /// increment its quantity; otherwise insert the candidate. Returns true
+    /// when it merged into an existing food, false when it added a new one.
+    @discardableResult
+    func mergeOrAddFood(_ candidate: Food) async throws -> Bool {
+        if let existing = existingPantryFood(name: candidate.name, barcode: candidate.barcode) {
+            try await incrementFoodQuantity(
+                existing.id,
+                by: candidate.quantity ?? 1,
+                unit: candidate.unit
+            )
+            return true
+        }
+        try await addFood(candidate)
+        return false
     }
 
     func updateFood(_ id: String, updates: FoodUpdate) async throws {
@@ -485,9 +557,35 @@ final class AppState: ObservableObject {
     // MARK: - Recipe Operations
 
     func addRecipe(_ recipe: Recipe) async throws {
+        // US-354: derive structured ingredient rows from the free-text
+        // ingredient blob at create time so the recipe is immediately usable by
+        // the planner shortfall prompt, grocery add, and detail view — instead
+        // of staying a freeform string until the next manual edit. Only runs
+        // when the caller hasn't already supplied structured rows.
+        var recipe = recipe
+        var derivedIngredients: [RecipeIngredient] = []
+        if recipe.ingredients.isEmpty,
+           let legacy = recipe.additionalIngredients,
+           !legacy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            derivedIngredients = RecipeIngredientLegacyParser.parse(legacy, recipeId: recipe.id)
+            // Link each row to a pantry food by exact name match so pantry
+            // debit + shortfall can resolve it. Conservative exact match only —
+            // fuzzy linking is handled (and hardened) separately in US-360.
+            for i in derivedIngredients.indices {
+                let needle = derivedIngredients[i].name.lowercased()
+                if let foodId = foods.first(where: { $0.name.lowercased() == needle })?.id {
+                    derivedIngredients[i].foodId = foodId
+                }
+            }
+            recipe.ingredients = derivedIngredients
+        }
+
         recipes.append(recipe)
         do {
             try await dataService.insertRecipe(recipe)
+            if !derivedIngredients.isEmpty {
+                try await dataService.insertRecipeIngredients(derivedIngredients)
+            }
             toast.success("Recipe created", message: "\(recipe.name) saved")
             HapticManager.success()
             // `addRecipe` callers default to `.manual` here; the URL-import path
@@ -688,6 +786,17 @@ final class AppState: ObservableObject {
 
     // MARK: - Mark Meal Made (US-262)
 
+    /// US-349/US-350: plan entries marked made this session — drives the
+    /// in-app Undo affordance and the restore-on-delete prompt while the
+    /// server log row is still reversible.
+    private var madeEntryIds: Set<String> = []
+
+    /// US-350: was this entry marked made recently enough that deleting it
+    /// should offer to restore the pantry?
+    func wasRecentlyMarkedMade(_ entryId: String) -> Bool {
+        madeEntryIds.contains(entryId)
+    }
+
     /// Logs a planned recipe as eaten. Server-side, the
     /// `rpc_mark_meal_made` function debits pantry foods linked via
     /// `recipe_ingredients.food_id`, auto-checks any grocery items
@@ -709,37 +818,65 @@ final class AppState: ObservableObject {
         // Resolve entry + recipe upfront so we can pick a debit strategy.
         let entry = planEntries.first { $0.id == entryId }
         let recipe = entry?.recipeId.flatMap { id in recipes.first { $0.id == id } }
-        let strategy = MealMadeStrategy.plan(for: recipe)
+        // US-351: scale debits by the planned serving count and convert recipe
+        // units into pantry units. No per-entry serving field exists yet, so
+        // the scale is 1.0 (cook the recipe as written) — the scaling path is
+        // in place for when planned servings land.
+        let strategy = MealMadeStrategy.plan(for: recipe, pantry: foods, servingScale: 1.0)
+
+        // US-352: snapshot which recipe ingredients are low/out of stock
+        // BEFORE the debit, so after logging we can nudge the user to restock
+        // (non-blocking). Empty when the recipe has no structured ingredients
+        // or everything was sufficiently stocked — in which case no nudge.
+        let lowStock: [ShortfallCalculator.Shortfall] = recipe
+            .map { ShortfallCalculator.compute(recipe: $0, pantry: foods) } ?? []
 
         do {
-            let result = try await dataService.markMealMade(planEntryId: entryId)
+            // US-351: structured recipes go through the v2 RPC with explicit
+            // serving-scaled, unit-converted per-food amounts. Legacy (food_ids
+            // only) and no-recipe entries keep the v1 RPC (grocery-check + log)
+            // and iOS deducts the legacy foods itself — unchanged behavior.
+            let result: MarkMealMadeResult
+            if strategy.serverHandlesDebits {
+                result = try await dataService.markMealMadeV2(
+                    planEntryId: entryId,
+                    debits: strategy.debits.map { ($0.foodId, $0.amount) }
+                )
+            } else {
+                result = try await dataService.markMealMade(planEntryId: entryId)
+            }
             switch result.status {
             case .alreadyLogged:
-                toast.info(
-                    "Already logged",
-                    message: "This meal was logged within the last hour."
-                )
+                madeEntryIds.insert(entryId)
+                toast.show(Toast(
+                    type: .info,
+                    title: "Already logged",
+                    message: "Logged within the last hour.",
+                    actionLabel: "Undo",
+                    retry: { [weak self] in await self?.undoMealMade(entryId) }
+                ))
                 HapticManager.lightImpact()
             case .logged, .noRecipe:
-                // Legacy fallback: server RPC ignored the recipe (no
-                // structured ingredients). Persist each food_id debit
-                // ourselves so the database matches the optimistic UI.
+                // Legacy fallback: v1 RPC ignored the recipe (no structured
+                // ingredients). Persist each food_id debit ourselves so the
+                // database matches the optimistic UI. Legacy amounts are the
+                // serving scale (no per-ingredient quantity), rounded for the
+                // integer deduct RPC.
                 if strategy.fallbackUsed {
                     for debit in strategy.debits {
                         try? await dataService.deductFoodQuantity(
                             foodId: debit.foodId,
-                            amount: debit.amount
+                            amount: max(1, Int(debit.amount.rounded()))
                         )
                     }
                 }
 
-                // Server-walked debits + grocery checks: mirror locally.
-                // For the legacy path, also subtract the food_ids since
-                // applyMealMadeMutationsLocally only handles structured
-                // ingredients.
+                // Mirror the exact debits + grocery checks locally. For the v2
+                // structured path these are the same amounts the server applied;
+                // for legacy they match the deduct calls above.
                 applyMealMadeMutationsLocally(
                     planEntryId: entryId,
-                    legacyDebits: strategy.fallbackUsed ? strategy.debits : []
+                    debits: strategy.debits
                 )
 
                 // Flip the entry's result so the row reflects the action.
@@ -772,8 +909,43 @@ final class AppState: ObservableObject {
                 case (let d, let c):
                     detail = "Debited \(d) · checked \(c)."
                 }
-                toast.success("Meal logged", message: detail)
+                madeEntryIds.insert(entryId)
+                toast.show(Toast(
+                    type: .success,
+                    title: "Meal logged",
+                    message: detail,
+                    actionLabel: "Undo",
+                    retry: { [weak self] in await self?.undoMealMade(entryId) }
+                ))
                 HapticManager.success()
+
+                // US-352: if any ingredient was low/out of stock at debit time,
+                // surface a non-blocking nudge with a one-tap add-to-grocery.
+                if !lowStock.isEmpty {
+                    let n = lowStock.count
+                    let recipeId = recipe?.id
+                    toast.show(Toast(
+                        type: .info,
+                        title: "Logged",
+                        message: "\(n) ingredient\(n == 1 ? " was" : "s were") low or out of stock — add to grocery?",
+                        actionLabel: "Add",
+                        retry: { [weak self] in
+                            await self?.addShortfallsToGrocery(lowStock, recipeId: recipeId)
+                        }
+                    ))
+                }
+                // US-351: flag ingredients debited best-effort because their
+                // recipe unit couldn't be converted to the pantry food's unit.
+                let mismatched = strategy.mismatchedNames
+                if !mismatched.isEmpty {
+                    let names = mismatched.prefix(3).joined(separator: ", ")
+                    toast.show(Toast(
+                        type: .info,
+                        title: "Check pantry amounts",
+                        message: "Couldn't convert units for \(names)\(mismatched.count > 3 ? "…" : "") — verify the quantity."
+                    ))
+                }
+
                 AnalyticsService.track(.mealMadeLogged(
                     debitedCount: totalDebited,
                     checkedCount: checked
@@ -790,42 +962,47 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// US-352: add low/out-of-stock recipe ingredients to the grocery list in
+    /// one tap from the mark-made nudge. Uses the full needed amount and the
+    /// same `GroceryItem.fromShortfall` factory the MissingIngredientsSheet
+    /// uses, so the rows carry `sourceRecipeId` for cross-module links.
+    func addShortfallsToGrocery(_ shortfalls: [ShortfallCalculator.Shortfall], recipeId: String?) async {
+        var added = 0
+        for sf in shortfalls {
+            let item = GroceryItem.fromShortfall(
+                sf,
+                quantity: sf.needed,
+                sourceRecipeId: recipeId ?? ""
+            )
+            do {
+                try await addGroceryItem(item)
+                added += 1
+            } catch {
+                continue
+            }
+        }
+        if added > 0 {
+            toast.success("Added \(added) to grocery")
+            AnalyticsService.track(.missingIngredientsAddedToGrocery(addedCount: added))
+        }
+    }
+
     /// Optimistically apply the side effects of a successful
     /// `rpc_mark_meal_made` to local state so the user sees the pantry
     /// debit + grocery check immediately. The next `loadAllData` will
     /// confirm; until then this keeps the UI honest.
     ///
-    /// US-286: `legacyDebits` carries the food_id list for recipes the
-    /// server RPC ignored (no structured ingredients). When non-empty,
-    /// we apply these client-side and skip the structured-ingredient
-    /// loop so we don't double-decrement.
+    /// US-286 / US-351: `debits` are the exact per-food amounts applied by the
+    /// server (v2 structured path) or by the legacy `deduct_food_quantity`
+    /// calls — mirror them locally so the optimistic UI matches the server.
     private func applyMealMadeMutationsLocally(
         planEntryId: String,
-        legacyDebits: [MealMadeStrategy.Debit] = []
+        debits: [MealMadeStrategy.Debit] = []
     ) {
-        guard let entry = planEntries.first(where: { $0.id == planEntryId }) else { return }
-
-        if !legacyDebits.isEmpty {
-            // Legacy path — server didn't touch these, so iOS owns the
-            // optimistic update. `debit.amount` is the integer "1 per
-            // ingredient" cadence; Food.quantity is Double, so cast at
-            // the use site rather than narrowing the model.
-            for debit in legacyDebits {
-                guard let idx = foods.firstIndex(where: { $0.id == debit.foodId }) else { continue }
-                let current = foods[idx].quantity ?? 0
-                foods[idx].quantity = max(0, current - Double(debit.amount))
-            }
-        } else if let recipeId = entry.recipeId,
-                  let recipe = recipes.first(where: { $0.id == recipeId }) {
-            // Pantry debit: mirror the server's "decrement linked-food qty
-            // by 1" rule. We can derive linked food ids from the recipe's
-            // structured ingredients without an extra fetch.
-            for ing in recipe.ingredients {
-                guard let foodId = ing.foodId,
-                      let idx = foods.firstIndex(where: { $0.id == foodId }) else { continue }
-                let current = foods[idx].quantity ?? 0
-                foods[idx].quantity = max(0, current - 1)
-            }
+        for debit in debits {
+            guard let idx = foods.firstIndex(where: { $0.id == debit.foodId }) else { continue }
+            let current = foods[idx].quantity ?? 0
+            foods[idx].quantity = max(0, current - debit.amount)
         }
         // Grocery checks: any item with a source row pointing at this entry.
         let affectedIds = Set(
@@ -837,6 +1014,79 @@ final class AppState: ObservableObject {
             if let idx = groceryItems.firstIndex(where: { $0.id == id }) {
                 groceryItems[idx].checked = true
             }
+        }
+    }
+
+    /// US-349: reverse a recent "mark meal made". `rpc_undo_meal_made`
+    /// re-credits pantry foods, re-opens auto-checked grocery items, and
+    /// clears the entry's result server-side; we mirror those into local
+    /// state. Legacy recipes (debited client-side via the fallback path, so
+    /// not in the server reversal payload) are re-credited here too. Returns
+    /// true when something was actually reversed.
+    @discardableResult
+    func undoMealMade(_ entryId: String) async -> Bool {
+        do {
+            let result = try await dataService.undoMealMade(planEntryId: entryId)
+            guard result.status == .reversed else {
+                madeEntryIds.remove(entryId)
+                toast.info("Nothing to undo", message: "This meal wasn't logged recently.")
+                return false
+            }
+
+            // Mirror server-reversed structured debits + grocery re-opens.
+            for credit in result.credited ?? [] {
+                if let idx = foods.firstIndex(where: { $0.id == credit.foodId }) {
+                    foods[idx].quantity = (foods[idx].quantity ?? 0) + credit.amount
+                }
+            }
+            for groceryId in result.unchecked ?? [] {
+                if let idx = groceryItems.firstIndex(where: { $0.id == groceryId }) {
+                    groceryItems[idx].checked = false
+                }
+            }
+            if let idx = planEntries.firstIndex(where: { $0.id == entryId }) {
+                planEntries[idx].result = nil
+            }
+
+            // Legacy recipes were debited client-side (fallback path) and are
+            // absent from the server reversal payload — re-credit them here.
+            if let entry = planEntries.first(where: { $0.id == entryId }),
+               let recipe = entry.recipeId.flatMap({ rid in recipes.first { $0.id == rid } }) {
+                // US-351: recompute with the same pantry+scale so the re-credit
+                // amount matches what was debited (deterministic; pantry units
+                // are unchanged by the debit).
+                let strategy = MealMadeStrategy.plan(for: recipe, pantry: foods, servingScale: 1.0)
+                if strategy.fallbackUsed {
+                    for debit in strategy.debits {
+                        guard let idx = foods.firstIndex(where: { $0.id == debit.foodId }) else { continue }
+                        let restored = (foods[idx].quantity ?? 0) + debit.amount
+                        foods[idx].quantity = restored
+                        try? await dataService.updateFood(
+                            debit.foodId,
+                            updates: FoodUpdate(quantity: restored)
+                        )
+                    }
+                }
+            }
+
+            madeEntryIds.remove(entryId)
+
+            let credited = result.creditedCount ?? 0
+            let unchecked = result.uncheckedCount ?? 0
+            let detail: String
+            switch (credited, unchecked) {
+            case (0, 0): detail = "Reversed."
+            case (let c, 0): detail = "Restored \(c) pantry item\(c == 1 ? "" : "s")."
+            case (0, let u): detail = "Re-opened \(u) grocery item\(u == 1 ? "" : "s")."
+            case (let c, let u): detail = "Restored \(c) · re-opened \(u)."
+            }
+            toast.success("Undone", message: detail)
+            HapticManager.success()
+            return true
+        } catch {
+            toast.show(error, as: { .save(entity: "undo meal", underlying: $0) })
+            HapticManager.error()
+            return false
         }
     }
 
@@ -1098,9 +1348,8 @@ final class AppState: ObservableObject {
         groceryItems.removeAll { $0.checked }
         groceryItemSources.removeAll { checkedIds.contains($0.groceryItemId) }
         do {
-            for id in checkedIds {
-                try await dataService.deleteGroceryItem(id)
-            }
+            // US-386: one bulk round-trip instead of N serial deletes.
+            try await dataService.bulkDeleteGroceryItems(Array(checkedIds))
             toast.success("Cleared \(checkedIds.count) items")
             HapticManager.success()
             AnalyticsService.track(.groceryListCleared(checkedCount: checkedIds.count))
@@ -1144,20 +1393,40 @@ final class AppState: ObservableObject {
         }
         var deltas: [PantryDelta] = []
         var newFoods: [Food] = []
-        var unknownUnits = 0
+        // US-363: names of items we couldn't unit-convert when merging into an
+        // existing pantry food (different/unknown units). We still credit the
+        // raw quantity, but we surface these so the user can sanity-check the
+        // total instead of it being silently corrupted.
+        var mismatchedNames: [String] = []
 
         for item in checkedSnapshot {
             if let idx = foods.firstIndex(where: { $0.name.lowercased() == item.name.lowercased() }) {
                 let previous = foods[idx].quantity
-                if let existingUnit = foods[idx].unit, existingUnit != item.unit {
-                    unknownUnits += 1
+                // US-363: convert the bought quantity into the pantry food's
+                // existing unit when possible (e.g. 2 gal → 256 fl oz). When the
+                // units are unknown or live in different dimensions, fall back to
+                // adding the raw quantity and flag the item for review.
+                let increment: Double
+                if let existingUnit = foods[idx].unit,
+                   !existingUnit.isEmpty,
+                   existingUnit != item.unit {
+                    if let converted = UnitConverter.convert(
+                        item.quantity, from: item.unit, to: existingUnit
+                    ) {
+                        increment = converted
+                    } else {
+                        increment = item.quantity
+                        mismatchedNames.append(item.name)
+                    }
+                } else {
+                    increment = item.quantity
                 }
-                foods[idx].quantity = (previous ?? 0) + item.quantity
+                foods[idx].quantity = (previous ?? 0) + increment
                 deltas.append(PantryDelta(
                     foodId: foods[idx].id,
                     previousQuantity: previous,
                     createdNewFood: false,
-                    increment: item.quantity
+                    increment: increment
                 ))
             } else {
                 let newFood = Food(
@@ -1200,18 +1469,28 @@ final class AppState: ObservableObject {
                     updates: FoodUpdate(quantity: updated)
                 )
             }
-            // Finally remove the grocery rows. ON DELETE CASCADE on
-            // grocery_item_sources cleans those up server-side.
-            for id in checkedIds {
-                try await dataService.deleteGroceryItem(id)
-            }
+            // US-365: remove the grocery rows in a single batched delete
+            // instead of one request per item (a full cart was firing 30+
+            // serial round-trips). ON DELETE CASCADE on grocery_item_sources
+            // cleans those up server-side.
+            try await dataService.bulkDeleteGroceryItems(Array(checkedIds))
             toast.success(
                 "Moved \(checkedSnapshot.count) item\(checkedSnapshot.count == 1 ? "" : "s") to pantry"
             )
             HapticManager.success()
+            // US-363: tell the user which items merged without unit conversion
+            // so a mismatched total isn't a silent surprise in the pantry.
+            if !mismatchedNames.isEmpty {
+                let shown = mismatchedNames.prefix(3).joined(separator: ", ")
+                let extra = mismatchedNames.count > 3 ? " +\(mismatchedNames.count - 3) more" : ""
+                toast.warning(
+                    "Check pantry amounts",
+                    message: "Couldn't match units for \(shown)\(extra) — added as-is, no conversion."
+                )
+            }
             AnalyticsService.track(.groceryMovedToPantry(
                 count: checkedSnapshot.count,
-                unknownUnits: unknownUnits
+                unknownUnits: mismatchedNames.count
             ))
         } catch {
             // Roll back: restore grocery items + sources, undo pantry deltas
@@ -1411,82 +1690,25 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Add every linked food + structured ingredient from a batch of
-    /// recipes onto the grocery list. Dedupes against existing grocery
-    /// items by lowercased name. One bulk insert at the end.
+    /// Add the missing ingredients from a batch of recipes onto the grocery
+    /// list. US-358: routed through GroceryGeneratorService so it shares the
+    /// structured-first preference order, the candidate-map dedupe (which
+    /// inherently fixes the prior per-branch seen-set handling), pantry-aware
+    /// "add missing only", and recipe source-row tagging for the By-Recipe view.
     func bulkAddRecipesToGrocery(_ recipeIds: Set<String>) async throws {
-        let existing = Set(groceryItems.map { $0.name.lowercased() })
-        var seen = existing
-        var newItems: [GroceryItem] = []
         let selected = recipes.filter { recipeIds.contains($0.id) }
-        for recipe in selected {
-            if !recipe.ingredients.isEmpty {
-                for ing in recipe.ingredients {
-                    // Defensive reparse — recipes imported before the
-                    // qty/unit split landed the whole "4 tablespoons
-                    // vegetable oil" line in `name`. Cleaning here gives
-                    // a presentable grocery item without requiring users
-                    // to re-edit every imported recipe.
-                    let parsed = IngredientTextParser.parse(ing.name)
-                    let displayName = parsed.name
-                    let key = displayName.lowercased()
-                    guard !seen.contains(key) else { continue }
-                    seen.insert(key)
-                    let linkedFood = ing.foodId.flatMap { fid in foods.first(where: { $0.id == fid }) }
-                    let category = linkedFood?.category ?? "other"
-                    // Linked food → use its FoodCategory→Aisle mapping;
-                    // otherwise lean on the keyword classifier so unlinked
-                    // ingredients land in a real aisle, not "Other".
-                    let aisle: GroceryAisle = linkedFood != nil
-                        ? GroceryAisle.fromLegacyCategory(category)
-                        : GroceryAisle.classify(displayName)
-                    newItems.append(GroceryItem(
-                        id: UUID().uuidString,
-                        userId: "",
-                        name: displayName,
-                        category: category,
-                        quantity: ing.quantity ?? parsed.quantity ?? 1,
-                        unit: ing.unit ?? parsed.unit ?? "",
-                        checked: false,
-                        addedVia: "bulk_recipe",
-                        aisleSection: aisle.rawValue
-                    ))
-                }
-                continue
-            }
-            for foodId in recipe.foodIds {
-                guard let food = foods.first(where: { $0.id == foodId }) else { continue }
-                let key = food.name.lowercased()
-                guard !seen.contains(key) else { continue }
-                seen.insert(key)
-                newItems.append(GroceryItem(
-                    id: UUID().uuidString,
-                    userId: "",
-                    name: food.name,
-                    category: food.category,
-                    quantity: 1,
-                    unit: food.unit ?? "count",
-                    checked: false,
-                    addedVia: "bulk_recipe",
-                    aisleSection: GroceryAisle.fromLegacyCategory(food.category).rawValue
-                ))
-            }
-        }
-        guard !newItems.isEmpty else {
-            toast.info("Already on list", message: "All ingredients are already on your grocery list.")
-            return
-        }
-        groceryItems.append(contentsOf: newItems)
-        do {
-            try await dataService.bulkInsertGroceryItems(newItems)
-            toast.success("Added \(newItems.count) ingredients")
-            HapticManager.success()
-        } catch {
-            let newIds = Set(newItems.map(\.id))
-            groceryItems.removeAll { newIds.contains($0.id) }
-            toast.show(error, as: { .save(entity: "grocery items", underlying: $0) })
-            HapticManager.error()
-            throw error
-        }
+        guard !selected.isEmpty else { return }
+
+        let result = GroceryGeneratorService.generateFromRecipes(
+            selected, appState: self, skipPantryStocked: true
+        )
+        let n = result.items.count
+        let recipeWord = selected.count == 1 ? "recipe" : "recipes"
+        try await GroceryGeneratorService.addGeneratedItemsBatched(
+            result,
+            appState: self,
+            successMessage: "Added \(n) missing ingredient\(n == 1 ? "" : "s") from \(selected.count) \(recipeWord).",
+            emptyMessage: "You already have everything for the selected \(recipeWord)."
+        )
     }
 }

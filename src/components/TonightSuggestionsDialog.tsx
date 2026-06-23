@@ -20,7 +20,7 @@ import {
   Ban,
   ImageIcon,
 } from "lucide-react";
-import { useApp } from "@/contexts/AppContext";
+import { useRecipes, useGrocery } from "@/contexts/AppContext";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { analytics } from "@/lib/analytics";
@@ -50,7 +50,8 @@ export function TonightSuggestionsDialog({
   onRefresh,
 }: Props) {
   const navigate = useNavigate();
-  const { recipes, addGroceryItem } = useApp();
+  const { recipes } = useRecipes();
+  const { addGroceryItem } = useGrocery();
   const [cookingRecipeId, setCookingRecipeId] = useState<string | null>(null);
 
   const cookingRecipe = useMemo(

@@ -93,10 +93,13 @@ struct EatPalAppShortcuts: AppShortcutsProvider {
         // EatPal` so a "Saved URLs → EatPal" automation Just Works.
         AppShortcut(
             intent: ImportRecipeFromURLIntent(),
+            // Note: App Shortcut phrases may only interpolate AppEntity/AppEnum
+            // parameters, so the `sourceURL` (a URL) cannot appear here. The
+            // URL is still supplied through the Shortcuts UI / parameterSummary.
             phrases: [
-                "Import recipe in \(.applicationName) from \(\.$sourceURL)",
-                "Save recipe to \(.applicationName) from \(\.$sourceURL)",
-                "Add \(\.$sourceURL) to \(.applicationName) recipes"
+                "Import a recipe in \(.applicationName)",
+                "Save a recipe to \(.applicationName)",
+                "Import a recipe URL into \(.applicationName)"
             ],
             shortTitle: "Import recipe from URL",
             systemImageName: "book.closed.fill"

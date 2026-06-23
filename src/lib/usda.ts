@@ -1,3 +1,3 @@
-export async function queryUsda(barcode: string): Promise<any> {
+export async function queryUsda(_barcode: string): Promise<unknown> {
   return null;
 }

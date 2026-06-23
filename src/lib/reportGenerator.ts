@@ -4,6 +4,7 @@
  */
 
 import jsPDF from 'jspdf';
+import { logger } from "@/lib/logger";
 import html2canvas from 'html2canvas';
 import { format } from 'date-fns';
 
@@ -323,7 +324,7 @@ export async function shareReport(
         // User cancelled share
         return false;
       }
-      console.error('Share failed:', err);
+      logger.error('Share failed:', err);
       return false;
     }
   }
@@ -336,7 +337,7 @@ export async function shareReport(
     await navigator.clipboard.writeText(shareText);
     return true;
   } catch (err) {
-    console.error('Clipboard write failed:', err);
+    logger.error('Clipboard write failed:', err);
     return false;
   }
 }

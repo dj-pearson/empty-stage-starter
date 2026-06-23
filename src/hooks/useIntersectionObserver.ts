@@ -1,4 +1,5 @@
 import { useEffect, useState, RefObject } from 'react';
+import { logger } from "@/lib/logger";
 
 export interface UseIntersectionObserverOptions extends IntersectionObserverInit {
   /**
@@ -96,7 +97,7 @@ export function useIntersectionObserver<T extends HTMLElement = HTMLElement>(
  * const visibilityMap = useIntersectionObserverMultiple(refs);
  *
  * refs.forEach((ref, index) => {
- *   console.log(`Element ${index} is ${visibilityMap.get(ref.current) ? 'visible' : 'hidden'}`);
+ *   logger.info(`Element ${index} is ${visibilityMap.get(ref.current) ? 'visible' : 'hidden'}`);
  * });
  * ```
  */

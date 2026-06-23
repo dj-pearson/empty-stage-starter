@@ -155,6 +155,9 @@ struct JoyScoreChart: View {
                 )
                 .foregroundStyle(.yellow)
                 .symbolSize(point.ratingCount > 0 ? 80 : 0)
+                // US-372: VoiceOver reads each week's joy score + sample size.
+                .accessibilityLabel("Week of \(point.weekStart.formatted(.dateTime.month().day()))")
+                .accessibilityValue(String(format: "Joy score %.1f from %d ratings", avg, point.ratingCount))
                 .annotation(position: .top, alignment: .center, spacing: 2) {
                     Text(String(format: "%.1f", avg))
                         .font(.caption2.monospacedDigit())
@@ -355,7 +358,7 @@ private struct JoyScoreWeekDetailSheet: View {
                     }
                 }
             }
-            .navigationTitle(detail.weekStart, format: .dateTime.month().day())
+            .navigationTitle(detail.weekStart.formatted(.dateTime.month().day()))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

@@ -1,0 +1,45 @@
+# Authenticated end-to-end smoke test (OPT-IN — requires a seeded test account
+# and a real Supabase backend).
+#
+# Run locally or in CI only when MAESTRO_TEST_EMAIL / MAESTRO_TEST_PASSWORD are
+# set and the build points at a non-placeholder Supabase project. It signs in
+# with email/password and walks every primary tab, confirming the core shell
+# loads post-auth.
+#
+# HARDENING NOTE: this flow currently matches on visible text. "Sign In" is
+# ambiguous (it's both the segmented-control label and the submit button), so
+# we disambiguate with index below. The durable fix is to add
+# `.accessibilityIdentifier("auth.submit")` etc. to AuthView controls and match
+# on IDs — see .maestro/README.md.
+appId: com.eatpal.app
+name: Sign in and navigate all tabs
+tags:
+  - authenticated
+env:
+  EMAIL: ${MAESTRO_TEST_EMAIL}
+  PASSWORD: ${MAESTRO_TEST_PASSWORD}
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- tapOn: "you@example.com"
+- inputText: ${EMAIL}
+- tapOn: "Enter password"
+- inputText: ${PASSWORD}
+- hideKeyboard
+# The submit button is the second "Sign In" on screen (index 0 is the segment).
+- tapOn:
+    text: "Sign In"
+    index: 1
+# Allow time for the auth round-trip + initial data load.
+- assertVisible:
+    text: "Home"
+    timeout: 25000
+- tapOn: "Planner"
+- assertVisible: "Planner"
+- tapOn: "Pantry"
+- assertVisible: "Pantry"
+- tapOn: "Grocery"
+- assertVisible: "Grocery"
+- tapOn: "More"
+- takeScreenshot: authenticated-more-tab

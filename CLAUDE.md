@@ -34,6 +34,7 @@ Entry points: routes → `src/App.tsx`; state → `AppContext.tsx`; supabase →
 ```bash
 npm run dev              # port 8080
 npm run build
+npm run typecheck        # tsc -b --noEmit (checks the referenced projects — CI gate)
 npm run test:run         # vitest
 npm run test:e2e         # playwright
 npm run lint && npm run format
@@ -74,6 +75,7 @@ Commit prefix `hotfix:` is recognized by CI to auto-fill App Store review notes 
 - **Errors**: try-catch async; `toast` from `sonner` for feedback; Zod at boundaries.
 - **a11y**: semantic HTML, ARIA on icon buttons, respect `useReducedMotion()`.
 - **Perf**: `lazy()` + `Suspense` for routes/heavy components; `useMemo`/`useCallback`/`memo()` where it matters; `OptimizedImage` for images.
+- **i18n** (US-347): framework is `i18next` + `react-i18next`, wired at the app root (`<I18nextProvider>` in `src/App.tsx`, config in `src/i18n/index.ts`, strings in `src/i18n/locales/en.json`). New user-facing copy → add a key under the right namespace and render via `const { t } = useTranslation(); t('nav.dashboard')` instead of a hardcoded literal. Only `en` exists today; a new language is just another locale file added to `resources`. For numbers/dates use `Intl.*` so a locale switch also localizes formatting.
 
 ## State (AppContext)
 
@@ -86,6 +88,18 @@ const { foods, addFood, updateFood, deleteFood, kids, activeKidId } = useApp();
 Entities: foods, recipes, kids, plan entries, grocery items (each with add/update/delete + bulk). Flow: component → AppContext → local state (sync) → Supabase (async) → localStorage backup → realtime subscription (300ms debounce).
 
 **DB is snake_case, UI is camelCase** — see `normalizeRecipeFromDB()`.
+
+### Load Precedence (localStorage vs Supabase) — US-341
+
+The web app reads from two stores; precedence is **server-authoritative on load**:
+
+1. **Mount → cache first (offline fallback).** `AppContextComposer` hydrates each domain from platform storage (`getStorage()`, localStorage on web) so the UI paints instantly and works offline. This is a fallback, never a merge source once the server answers.
+2. **Authenticated → Supabase overwrites.** Once `userId` + `householdId` resolve, the load effect fetches each table and **replaces** the corresponding slice wholesale (`setFoods(serverData)`, etc.) — it does **not** merge stale local rows back in. A successful server fetch always wins, so a cross-device edit (or a deletion) can't be resurrected by a stale local backup.
+3. **Cache is write-through only.** A debounced effect persists the current in-memory state back to storage as a backup; it is read on mount (step 1) and never used to override the server (step 2).
+4. **Realtime → merge by id, last-write-wins.** Live `postgres_changes` events are folded in via the pure per-domain helpers `applyGroceryItemRealtime` / `applyPlanEntryRealtime` / `applyKidRealtime` / `applyRecipeRealtime` (deduped by `id`; normalize snake_case → camelCase). Ordering is the channel's; we do not re-order by `updated_at`.
+5. **Offline durability is mobile-only.** The web app has no durable write-queue — optimistic local writes that never reached Supabase are not replayed (a later server load wins per step 2). Native (Expo) offline durability lives in `app/mobile/lib/syncQueue` (FIFO replay + retry; see `src/lib/syncQueue.test.ts`).
+
+Tests pin this contract: `src/contexts/AppContext.precedence.test.tsx` (offline fallback renders cache; server load overwrites stale cache).
 
 ## Supabase
 

@@ -112,6 +112,26 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify
 
+      - name: Enforce coverage floor
+        working-directory: ${{ env.PROJECT_DIR }}
+        env:
+          # Conservative starting floor — set low on purpose so this gate can't
+          # break CI before you know the real number. The step prints the actual
+          # coverage on every run; after the first green run, raise this to a
+          # couple of points below that figure, then ratchet it up as the
+          # Services/DeepLink/Analytics suites grow. It only moves one way.
+          MIN_COVERAGE: '0.05'
+        run: |
+          set -o pipefail
+          COV=$(xcrun xccov view --report --json "$RUNNER_TEMP/TestResults.xcresult" | jq -r '.lineCoverage')
+          PCT=$(awk -v c="$COV" 'BEGIN { printf "%.2f", c * 100 }')
+          FLOOR_PCT=$(awk -v f="$MIN_COVERAGE" 'BEGIN { printf "%.0f", f * 100 }')
+          echo "Line coverage: ${PCT}% (floor ${FLOOR_PCT}%)"
+          if awk -v c="$COV" -v f="$MIN_COVERAGE" 'BEGIN { exit !(c + 0 < f + 0) }'; then
+            echo "::error::Line coverage ${PCT}% is below the floor of ${FLOOR_PCT}%"
+            exit 1
+          fi
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -128,10 +148,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Blocking gate. Runs from ios/EatPal so it picks up .swiftlint.yml and
+      # its `included:` paths (EatPal, EatPalWidget).
+      #
+      # NOTE: this fails the job on SwiftLint *errors* only (e.g. line_length
+      # > 200, snake_case identifiers configured as error). Warnings still pass
+      # so flipping the switch can't break CI on day one. Once the warning
+      # backlog is clean, add `args: --strict` below to make warnings blocking
+      # too — that's the final ratchet.
       - name: Run SwiftLint
         uses: norio-nomura/action-swiftlint@3.2.1
-        with:
-          args: --strict
         env:
-          WORKING_DIRECTORY: ios/EatPal/EatPal
-        continue-on-error: true
+          WORKING_DIRECTORY: ios/EatPal

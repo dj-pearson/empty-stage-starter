@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
@@ -139,7 +140,7 @@ export function TrafficOverview({ dateRange, connections }: Props) {
         },
       ]);
     } catch (error: unknown) {
-      console.error("Error fetching traffic overview:", error);
+      logger.error("Error fetching traffic overview:", error);
     } finally {
       setLoading(false);
     }

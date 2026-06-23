@@ -219,30 +219,10 @@ struct TonightCookSheet: View {
         speech.speak(steps[stepIndex])
     }
 
+    // US-359: parsing now lives in the shared RecipeStepParser so the recipe
+    // Cook mode and Tonight Cook sheet stay in lockstep.
     static func parseSteps(_ raw: String?) -> [String] {
-        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
-            return []
-        }
-        let bullet = #"^\s*(\d+\.|[-*•])\s*"#
-        let regex = try? NSRegularExpression(pattern: bullet)
-        let lines = raw
-            .components(separatedBy: .newlines)
-            .map { line -> String in
-                let nsLine = line as NSString
-                let cleaned = regex?.stringByReplacingMatches(
-                    in: line,
-                    range: NSRange(location: 0, length: nsLine.length),
-                    withTemplate: ""
-                ) ?? line
-                return cleaned.trimmingCharacters(in: .whitespaces)
-            }
-            .filter { !$0.isEmpty }
-        if lines.count > 1 { return lines }
-
-        return raw
-            .components(separatedBy: ". ")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
+        RecipeStepParser.parse(raw)
     }
 }
 

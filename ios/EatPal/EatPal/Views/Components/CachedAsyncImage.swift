@@ -1,4 +1,75 @@
 import SwiftUI
+import UIKit
+
+/// US-387: a real thumbnail cache. `AsyncImage` (which this used to wrap)
+/// does NOT cache, so every scroll re-issued network requests. This is an
+/// in-memory `NSCache` in front of a `URLSession` whose `URLCache` has a
+/// bounded memory + disk capacity, so a re-appearing row hits cache instead
+/// of the network and the cache can't grow without bound.
+@MainActor
+final class ThumbnailImageCache {
+    static let shared = ThumbnailImageCache()
+
+    private let memory = NSCache<NSURL, UIImage>()
+    private let session: URLSession
+
+    /// US-387 AC3 test hook: how many actual network fetches were issued.
+    /// A cache hit must not increment this.
+    private(set) var networkFetchCount = 0
+
+    init(
+        memoryCountLimit: Int = 200,
+        memoryCapacityBytes: Int = 25 * 1024 * 1024,
+        diskCapacityBytes: Int = 150 * 1024 * 1024
+    ) {
+        memory.countLimit = memoryCountLimit
+        let urlCache = URLCache(
+            memoryCapacity: memoryCapacityBytes,
+            diskCapacity: diskCapacityBytes,
+            diskPath: "eatpal_thumbnails"
+        )
+        let config = URLSessionConfiguration.default
+        config.urlCache = urlCache
+        config.requestCachePolicy = .returnCacheDataElseLoad
+        session = URLSession(configuration: config)
+    }
+
+    func cachedImage(for url: URL) -> UIImage? {
+        memory.object(forKey: url as NSURL)
+    }
+
+    func store(_ image: UIImage, for url: URL) {
+        memory.setObject(image, forKey: url as NSURL)
+    }
+
+    /// Returns the image for `url`, serving from the in-memory cache when
+    /// possible (no network). Misses go through the URLCache-backed session.
+    func image(for url: URL) async -> UIImage? {
+        if let cached = cachedImage(for: url) { return cached }
+        networkFetchCount += 1
+        guard let (data, _) = try? await session.data(from: url),
+              let image = UIImage(data: data) else { return nil }
+        store(image, for: url)
+        return image
+    }
+}
+
+@MainActor
+final class ThumbnailImageLoader: ObservableObject {
+    @Published var image: UIImage?
+
+    func load(_ url: URL?) async {
+        guard let url else {
+            image = nil
+            return
+        }
+        if let cached = ThumbnailImageCache.shared.cachedImage(for: url) {
+            image = cached
+            return
+        }
+        image = await ThumbnailImageCache.shared.image(for: url)
+    }
+}
 
 /// Reusable async image loader with placeholder and error fallback.
 /// Use for profile pictures, recipe images, and food photos.
@@ -7,32 +78,32 @@ struct CachedAsyncImage<Placeholder: View>: View {
     let size: CGSize
     @ViewBuilder let placeholder: () -> Placeholder
 
+    @StateObject private var loader = ThumbnailImageLoader()
+
     var body: some View {
-        if let url {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .empty:
-                    placeholder()
-                        .overlay {
-                            ProgressView()
-                                .tint(AppTheme.Colors.textTertiary)
-                        }
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: size.width, height: size.height)
-                        .clipped()
-                case .failure:
-                    placeholder()
-                @unknown default:
-                    placeholder()
-                }
+        Group {
+            if let uiImage = loader.image {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: size.width, height: size.height)
+                    .clipped()
+            } else if url != nil {
+                placeholder()
+                    .overlay {
+                        ProgressView()
+                            .tint(AppTheme.Colors.textTertiary)
+                    }
+                    .frame(width: size.width, height: size.height)
+            } else {
+                placeholder()
+                    .frame(width: size.width, height: size.height)
             }
-            .frame(width: size.width, height: size.height)
-        } else {
-            placeholder()
-                .frame(width: size.width, height: size.height)
+        }
+        // US-387: reload only when the URL changes; a re-appearing row with the
+        // same URL is served from cache without a new network request.
+        .task(id: url) {
+            await loader.load(url)
         }
     }
 }
