@@ -39,6 +39,43 @@ export interface CostSummary {
   error_count: number;
 }
 
+export interface CostByEndpoint {
+  endpoint: string;
+  total_requests: number;
+  unique_users: number;
+  total_tokens: number;
+  total_cost_cents: number;
+  total_cost_dollars: number;
+  avg_cost_per_request_cents: number;
+  avg_tokens_per_request: number;
+  avg_duration_ms: number;
+}
+
+export interface CostByModel {
+  model: string;
+  total_requests: number;
+  unique_users: number;
+  total_tokens: number;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  total_cost_cents: number;
+  total_cost_dollars: number;
+  avg_cost_per_request_cents: number;
+  avg_duration_ms: number;
+}
+
+export interface CostByUser {
+  user_id: string;
+  full_name: string;
+  total_requests: number;
+  total_tokens: number;
+  total_cost_cents: number;
+  total_cost_dollars: number;
+  current_month_cost_cents: number;
+  monthly_budget_cents: number;
+  last_request_at: string;
+}
+
 /**
  * Log AI API usage with automatic cost calculation
  * Call this from Edge Functions after AI API calls
@@ -52,8 +89,8 @@ export async function logAIUsage(params: {
   requestDurationMs?: number;
   status?: string;
   errorMessage?: string;
-  requestMetadata?: any;
-  responseMetadata?: any;
+  requestMetadata?: Record<string, unknown>;
+  responseMetadata?: Record<string, unknown>;
 }): Promise<string | null> {
   try {
 const { data, error } = await supabase.rpc("log_ai_usage", {
@@ -169,19 +206,7 @@ const { data, error } = await supabase
 /**
  * Get cost breakdown by endpoint
  */
-export async function getCostByEndpoint(): Promise<
-  Array<{
-    endpoint: string;
-    total_requests: number;
-    unique_users: number;
-    total_tokens: number;
-    total_cost_cents: number;
-    total_cost_dollars: number;
-    avg_cost_per_request_cents: number;
-    avg_tokens_per_request: number;
-    avg_duration_ms: number;
-  }>
-> {
+export async function getCostByEndpoint(): Promise<CostByEndpoint[]> {
   try {
 const { data, error } = await supabase
       .from("ai_cost_by_endpoint")
@@ -193,7 +218,7 @@ const { data, error } = await supabase
       return [];
     }
 
-    return data as any[];
+    return (data ?? []) as unknown as CostByEndpoint[];
   } catch (error) {
     logger.error("Failed to fetch cost by endpoint:", error);
     return [];
@@ -203,20 +228,7 @@ const { data, error } = await supabase
 /**
  * Get cost breakdown by model
  */
-export async function getCostByModel(): Promise<
-  Array<{
-    model: string;
-    total_requests: number;
-    unique_users: number;
-    total_tokens: number;
-    total_prompt_tokens: number;
-    total_completion_tokens: number;
-    total_cost_cents: number;
-    total_cost_dollars: number;
-    avg_cost_per_request_cents: number;
-    avg_duration_ms: number;
-  }>
-> {
+export async function getCostByModel(): Promise<CostByModel[]> {
   try {
 const { data, error } = await supabase
       .from("ai_cost_by_model")
@@ -228,7 +240,7 @@ const { data, error } = await supabase
       return [];
     }
 
-    return data as any[];
+    return (data ?? []) as unknown as CostByModel[];
   } catch (error) {
     logger.error("Failed to fetch cost by model:", error);
     return [];
@@ -238,19 +250,7 @@ const { data, error } = await supabase
 /**
  * Get top users by AI cost (admin only)
  */
-export async function getCostByUser(limit: number = 20): Promise<
-  Array<{
-    user_id: string;
-    full_name: string;
-    total_requests: number;
-    total_tokens: number;
-    total_cost_cents: number;
-    total_cost_dollars: number;
-    current_month_cost_cents: number;
-    monthly_budget_cents: number;
-    last_request_at: string;
-  }>
-> {
+export async function getCostByUser(limit: number = 20): Promise<CostByUser[]> {
   try {
 const { data, error } = await supabase
       .from("ai_cost_by_user")
@@ -263,7 +263,7 @@ const { data, error } = await supabase
       return [];
     }
 
-    return data as any[];
+    return (data ?? []) as unknown as CostByUser[];
   } catch (error) {
     logger.error("Failed to fetch cost by user:", error);
     return [];
