@@ -68,8 +68,11 @@ export function getEnv(key: string, fallback: string = ''): string {
     return process.env[key] as string;
   }
 
-  if (typeof import.meta !== 'undefined' && (import.meta as any).env?.[key]) {
-    return (import.meta as any).env[key];
+  if (typeof import.meta !== 'undefined') {
+    const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+    if (metaEnv?.[key]) {
+      return metaEnv[key] as string;
+    }
   }
 
   return fallback;
@@ -118,7 +121,7 @@ export function getEnvNumber(key: string, fallback: number = 0): number {
 /**
  * Parse environment variable as JSON
  */
-export function getEnvJSON<T = any>(key: string, fallback: T): T {
+export function getEnvJSON<T = unknown>(key: string, fallback: T): T {
   const value = getEnv(key);
 
   if (!value) return fallback;
@@ -205,7 +208,7 @@ export const featureFlags = new FeatureFlags();
  * Configuration manager
  */
 export class Config {
-  private config: Map<string, any> = new Map();
+  private config: Map<string, unknown> = new Map();
 
   /**
    * Set config value
@@ -219,7 +222,7 @@ export class Config {
    */
   get<T>(key: string, fallback?: T): T {
     if (this.config.has(key)) {
-      return this.config.get(key);
+      return this.config.get(key) as T;
     }
 
     // Try environment variable
@@ -245,14 +248,14 @@ export class Config {
   /**
    * Get all config
    */
-  getAll(): Record<string, any> {
+  getAll(): Record<string, unknown> {
     return Object.fromEntries(this.config);
   }
 
   /**
    * Merge config
    */
-  merge(newConfig: Record<string, any>): void {
+  merge(newConfig: Record<string, unknown>): void {
     Object.entries(newConfig).forEach(([key, value]) => {
       this.config.set(key, value);
     });
@@ -312,25 +315,25 @@ export const isDebugEnabled = (): boolean => {
 // NOTE: this IS a console-wrapper logging utility, so it uses console directly
 // (excluded from the no-console rule in eslint.config.js, like src/lib/logger.ts).
 export const logger = {
-  log: (...args: any[]) => {
+  log: (...args: unknown[]) => {
     if (isDebugEnabled()) {
       console.log(...args);
     }
   },
-  warn: (...args: any[]) => {
+  warn: (...args: unknown[]) => {
     if (isDebugEnabled()) {
       console.warn(...args);
     }
   },
-  error: (...args: any[]) => {
+  error: (...args: unknown[]) => {
     console.error(...args);
   },
-  debug: (...args: any[]) => {
+  debug: (...args: unknown[]) => {
     if (isDebugEnabled()) {
       console.debug(...args);
     }
   },
-  table: (data: any) => {
+  table: (data: unknown) => {
     if (isDebugEnabled()) {
       console.table(data);
     }

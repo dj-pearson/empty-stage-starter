@@ -366,7 +366,7 @@ export function downloadTextFile(text: string, filename: string, mimeType: strin
 /**
  * Download JSON as file
  */
-export function downloadJSON(data: any, filename: string = 'data.json'): void {
+export function downloadJSON(data: unknown, filename: string = 'data.json'): void {
   const json = JSON.stringify(data, null, 2);
   downloadTextFile(json, filename, 'application/json');
 }
@@ -375,7 +375,7 @@ export function downloadJSON(data: any, filename: string = 'data.json'): void {
  * Download CSV as file
  */
 export function downloadCSV(
-  data: any[],
+  data: Record<string, unknown>[],
   filename: string = 'data.csv',
   headers?: string[]
 ): void {
@@ -556,12 +556,12 @@ export async function createThumbnail(
 /**
  * Batch upload files with progress
  */
-export async function batchUpload(
+export async function batchUpload<T = unknown>(
   files: File[],
-  uploadFn: (file: File) => Promise<any>,
+  uploadFn: (file: File) => Promise<T>,
   onProgress?: (progress: number, file: File, index: number) => void
-): Promise<any[]> {
-  const results: any[] = [];
+): Promise<T[]> {
+  const results: T[] = [];
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
@@ -619,7 +619,7 @@ export function base64ToBlob(base64: string, mimeType: string = 'application/oct
 /**
  * Parse CSV file
  */
-export async function parseCSV(file: File): Promise<any[]> {
+export async function parseCSV(file: File): Promise<Record<string, string>[]> {
   const text = await readFileAsText(file);
   const lines = text.split('\n').filter((line) => line.trim());
 
@@ -630,7 +630,7 @@ export async function parseCSV(file: File): Promise<any[]> {
 
   for (let i = 1; i < lines.length; i++) {
     const values = lines[i].split(',').map((v) => v.trim());
-    const row: any = {};
+    const row: Record<string, string> = {};
 
     headers.forEach((header, index) => {
       row[header] = values[index];
