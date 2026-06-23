@@ -26,7 +26,7 @@ export interface AsyncState<T> {
  * ```
  */
 export function useAsync<T>(
-  asyncFunction: (...args: any[]) => Promise<T>,
+  asyncFunction: (...args: unknown[]) => Promise<T>,
   options: {
     immediate?: boolean;
     onSuccess?: (data: T) => void;
@@ -50,7 +50,7 @@ export function useAsync<T>(
   }, []);
 
   const execute = useCallback(
-    async (...args: any[]) => {
+    async (...args: unknown[]) => {
       setState({ data: null, error: null, loading: true });
 
       try {
