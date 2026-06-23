@@ -57,14 +57,14 @@ export function useUsageStats() {
         throw new Error("Not authenticated");
       }
 
-      // @ts-ignore - RPC function exists but not in generated types
+      // @ts-expect-error - RPC function exists but not in generated types
       const { data, error: rpcError } = await supabase.rpc("get_usage_stats", {
         p_user_id: user.id,
       });
 
       if (rpcError) throw rpcError;
 
-      setStats(data as any as UsageStats);
+      setStats(data as unknown as UsageStats);
     } catch (err) {
       logger.error("Error fetching usage stats:", err);
       setError(err instanceof Error ? err.message : "Failed to fetch usage stats");

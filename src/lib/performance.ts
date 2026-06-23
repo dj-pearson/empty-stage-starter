@@ -18,6 +18,31 @@ export interface PerformanceMetric {
   timestamp: number;
 }
 
+// Precise shapes for non-standard PerformanceEntry / Performance / Navigator
+// fields not yet in the DOM lib typings (US-342: replaces `as any` casts).
+interface LCPEntry extends PerformanceEntry {
+  renderTime: number;
+  loadTime: number;
+}
+interface FirstInputEntry extends PerformanceEntry {
+  processingStart: number;
+}
+interface LayoutShiftEntry extends PerformanceEntry {
+  hadRecentInput: boolean;
+  value: number;
+}
+interface PerformanceMemory {
+  usedJSHeapSize: number;
+  totalJSHeapSize: number;
+  jsHeapSizeLimit: number;
+}
+interface NetworkInformation {
+  effectiveType?: string;
+  downlink?: number;
+  rtt?: number;
+  saveData?: boolean;
+}
+
 /**
  * Core Web Vitals thresholds
  */
@@ -95,7 +120,7 @@ export function measureLCP(callback?: (metric: PerformanceMetric) => void): void
   try {
     const observer = new PerformanceObserver((list) => {
       const entries = list.getEntries();
-      const lastEntry = entries[entries.length - 1] as any;
+      const lastEntry = entries[entries.length - 1] as LCPEntry;
 
       const metric: PerformanceMetric = {
         name: 'LCP',
@@ -123,7 +148,7 @@ export function measureFID(callback?: (metric: PerformanceMetric) => void): void
   try {
     const observer = new PerformanceObserver((list) => {
       const entries = list.getEntries();
-      const firstInput = entries[0] as any;
+      const firstInput = entries[0] as FirstInputEntry;
 
       const metric: PerformanceMetric = {
         name: 'FID',
@@ -152,11 +177,11 @@ export function measureCLS(callback?: (metric: PerformanceMetric) => void): void
   if (typeof window === 'undefined' || !('PerformanceObserver' in window)) return;
 
   let clsValue = 0;
-  let clsEntries: any[] = [];
+  const clsEntries: LayoutShiftEntry[] = [];
 
   try {
     const observer = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries() as any[]) {
+      for (const entry of list.getEntries() as LayoutShiftEntry[]) {
         if (!entry.hadRecentInput) {
           clsValue += entry.value;
           clsEntries.push(entry);
@@ -200,7 +225,7 @@ export function measureFCP(callback?: (metric: PerformanceMetric) => void): void
   try {
     const observer = new PerformanceObserver((list) => {
       const entries = list.getEntries();
-      const fcpEntry = entries.find((entry) => entry.name === 'first-contentful-paint') as any;
+      const fcpEntry = entries.find((entry) => entry.name === 'first-contentful-paint');
 
       if (fcpEntry) {
         const metric: PerformanceMetric = {
@@ -228,7 +253,7 @@ export function measureTTFB(callback?: (metric: PerformanceMetric) => void): voi
   if (typeof window === 'undefined' || !window.performance) return;
 
   try {
-    const navigationEntry = performance.getEntriesByType('navigation')[0] as any;
+    const navigationEntry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
 
     if (navigationEntry) {
       const ttfb = navigationEntry.responseStart - navigationEntry.requestStart;
@@ -291,7 +316,7 @@ export class PerformanceTimer {
       performance.mark(this.endMark);
       try {
         performance.measure(this.name, this.startMark, this.endMark);
-      } catch (e) {
+      } catch {
         // Marks might not exist, ignore
       }
     }
@@ -379,7 +404,7 @@ export function monitorMemoryUsage(): void {
   if (typeof window === 'undefined' || !('memory' in performance)) return;
 
   try {
-    const memory = (performance as any).memory;
+    const memory = (performance as Performance & { memory: PerformanceMemory }).memory;
 
     if (process.env.NODE_ENV === 'development') {
       logger.info('[Memory Usage]', {
@@ -426,7 +451,7 @@ export function getNavigationTiming(): Record<string, number> | null {
 export function isSlowConnection(): boolean {
   if (typeof navigator === 'undefined' || !('connection' in navigator)) return false;
 
-  const connection = (navigator as any).connection;
+  const connection = (navigator as Navigator & { connection?: NetworkInformation }).connection;
   if (!connection) return false;
 
   // Check for 2G or slow-2g
@@ -453,7 +478,7 @@ export function getConnectionInfo(): {
 } | null {
   if (typeof navigator === 'undefined' || !('connection' in navigator)) return null;
 
-  const connection = (navigator as any).connection;
+  const connection = (navigator as Navigator & { connection?: NetworkInformation }).connection;
   if (!connection) return null;
 
   return {
