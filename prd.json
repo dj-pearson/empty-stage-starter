@@ -6218,7 +6218,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Verified in audit. Pattern: `try? await ... ; dismiss()` discards errors and closes the sheet as if it succeeded, losing edits. AddKidView (KidsView.swift ~227-257) is the correct reference implementation."
+      "notes": "PARTIAL (impl, needs Xcode build/test): EditRecipeView.saveRecipe, KidProfileEditorView.save and KidDetailView save now do/catch, dismiss only on success, reset isSubmitting, and warn on photo-upload failure. REMAINING: AddRecipeView (RecipesView) create-path error handling + image-drop warning, and unsaved-changes discard guards (.interactiveDismissDisabled)."
     },
     {
       "id": "US-414",
@@ -6233,7 +6233,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Verified. Multiple grocery write paths swallow errors; only ShoppingMode has undo today."
+      "notes": "MOSTLY DONE (impl, needs Xcode build/test): AddGroceryItemView/EditGroceryItemView do/catch + isSubmitting (dismiss only on success); bulkSetAisle/bulkDelete empty catch replaced with error toast; drag-drop fires success haptic/toast only when an item landed (error otherwise). REMAINING: Clear-Completed undo snackbar; normalize min-quantity rules across the three add/edit surfaces."
     },
     {
       "id": "US-415",
@@ -6248,7 +6248,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Verified. Recurring `try?` on destructive/server mutations produces silent partial-success states."
+      "notes": "PARTIAL (impl, needs Xcode build/test): AIMealPlanView add-all now dismisses only on a clean run (keeps sheet open on partial failure); addMissingToGrocery classifies aisle via GroceryAisleClassifier instead of hardcoding 'snack' and surfaces a failure toast. REMAINING: MealPlanView copy-week / clear-week / remove-from-plan feedback + undo."
     },
     {
       "id": "US-416",
@@ -6262,7 +6262,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Verified. Optimistic `try?` writes hide failures; receipt save is non-transactional."
+      "notes": "PARTIAL (impl, needs Xcode build/test): single pantry-food delete (swipe + context menu) now routes through a confirmation dialog + deleteFood() helper with a retryable failure toast. REMAINING: roll back optimistic per-row updateFood writes (mark safe/unsafe, quantity adjust); make ScanReceiptSheet.save transactional; surface BulkAddFoodSheet failed-row count."
     },
     {
       "id": "US-417",
@@ -6275,7 +6275,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "Verified critical: destructive, data-losing kid delete fires immediately on swipe with `try?` and no confirmation."
+      "notes": "DONE (impl, needs Xcode build/test): KidsView child delete now confirms via confirmationDialog and surfaces failures with a retryable toast instead of a silent try?. REMAINING (tracked here): consolidate the two kid editors."
     },
     {
       "id": "US-418",
@@ -6288,7 +6288,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Verified directly in code: DashboardHomeView.swift:307 action:{} and CookableRecipesSheet stub with misleading analytics. (FoodChaining fake generation is already tracked as US-399.)"
+      "notes": "DONE (impl, needs Xcode build/test): Dashboard 'New Recipe' quick action now presents AddRecipeView (was action:{}); CookableRecipesSheet 'Add to plan' now opens the real AddRecipeToPlanSheet (made non-private) instead of a toast stub. FoodChaining fake-generation remains separate (US-399)."
     },
     {
       "id": "US-419",
@@ -6416,7 +6416,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Verified. Backs every avatar/thumbnail; a failed load currently shows a permanent placeholder+spinner with no telemetry."
+      "notes": "DONE (impl, needs Xcode build/test): CachedAsyncImage/ThumbnailImageLoader now track isLoading vs didFail so a broken image shows the bare placeholder (no eternal spinner); fetch/decode failures log a Sentry breadcrumb instead of try? swallow; AvatarView.initialsUrl renamed to imageURL."
     },
     {
       "id": "US-428",
@@ -6428,7 +6428,7 @@
       ],
       "priority": 4,
       "passes": false,
-      "notes": "Verified bug in SkeletonView.swift:211."
+      "notes": "DONE (impl, needs Xcode build/test): SkeletonView TextSkeleton invalid .frame(width: .infinity) replaced with .frame(maxWidth:) so full-width skeleton lines render correctly."
     },
     {
       "id": "US-429",
@@ -6454,7 +6454,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Verified. loadAllData re-subscribes realtime and re-drains queues with no guard."
+      "notes": "DONE (impl, needs Xcode build/test): MainTabView.loadAllData() now runs once per session via a didLoad guard instead of re-firing the full load + realtime re-subscribe on every .task re-attach (view is recreated on a new session, resetting the guard)."
     },
     {
       "id": "US-431",
