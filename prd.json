@@ -6218,7 +6218,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "PARTIAL (impl, needs Xcode build/test): EditRecipeView, AddRecipeView (createRecipe), KidProfileEditorView and KidDetailView saves now do/catch, dismiss only on success, reset isSubmitting, and warn on photo-upload failure instead of silently dropping edits/photos. REMAINING: unsaved-changes discard guards (.interactiveDismissDisabled + confirm on Cancel) for the recipe/kid editors."
+      "notes": "DONE (impl, needs Xcode build/test): all four save paths (EditRecipeView, AddRecipeView createRecipe, KidProfileEditorView, KidDetailView) do/catch, dismiss only on success, reset isSubmitting, warn on photo-upload failure; unsaved-changes guards (snapshot dirty-tracking + .interactiveDismissDisabled + Cancel confirm) added to the long-form editors KidProfileEditorView and EditRecipeView."
     },
     {
       "id": "US-414",
@@ -6331,7 +6331,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Verified. catch collapses all errors into lookupFailed='not found'."
+      "notes": "DONE (impl, needs Xcode build/test): ScannedProductView distinguishes a thrown lookup error (offline/server/decode) from a clean nil 'not found' — the error case shows a retryable 'couldn't reach the lookup service' message via a new lookupErrored state, while a genuine miss keeps the 'not found' copy; both share the existing barcode-correct/retry section."
     },
     {
       "id": "US-422",
@@ -6345,7 +6345,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Verified. No timeout/cancel on AI generation; empty fridge recognition silently returns to picker."
+      "notes": "MOSTLY DONE (impl, needs Xcode build/test): AIMealPlanView retains the generation Task, adds a Cancel button during loading, and cancels on dismiss; FridgePhotoSheet adds an explicit empty-detection state (re-shoot / enter manually) instead of silently returning to the picker; AICoachView confirms before clearing a real conversation. REMAINING: optional hard client-side timeout watchdog (service already has a local fallback on error)."
     },
     {
       "id": "US-423",
