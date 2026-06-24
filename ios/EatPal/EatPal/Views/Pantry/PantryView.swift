@@ -745,9 +745,13 @@ struct FoodRowView: View {
                 } label: {
                     Image(systemName: "minus.circle.fill")
                         .foregroundStyle(.secondary)
+                        // US-423: 44pt tap target on the stock stepper.
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(displayQuantity <= 0)
+                .accessibilityLabel("Decrease quantity")
 
                 Button {
                     showQuantityAdjust = true
@@ -775,8 +779,12 @@ struct FoodRowView: View {
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .foregroundStyle(.secondary)
+                        // US-423: 44pt tap target on the stock stepper.
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Increase quantity")
             }
 
             Image(systemName: "chevron.right")

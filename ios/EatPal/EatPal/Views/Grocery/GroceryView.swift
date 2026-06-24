@@ -1298,8 +1298,16 @@ struct GroceryItemRow: View {
                 Image(systemName: item.checked ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
                     .foregroundStyle(item.checked ? .green : .secondary)
+                    // US-423: 44pt tap target for the primary check toggle.
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // US-423: state isn't conveyed by the green/strikethrough alone —
+            // expose it to VoiceOver as a labeled, checkable button.
+            .accessibilityLabel(item.name)
+            .accessibilityValue(item.checked ? "Checked off" : "Not checked")
+            .accessibilityAddTraits(.isButton)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.name)

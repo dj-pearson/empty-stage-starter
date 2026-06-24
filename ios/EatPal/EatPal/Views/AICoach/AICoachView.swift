@@ -144,6 +144,9 @@ struct AICoachView: View {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.title2)
                         .foregroundStyle(messageText.trimmingCharacters(in: .whitespaces).isEmpty ? .gray : .green)
+                        // US-423: meet the 44pt minimum tap target.
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .disabled(messageText.trimmingCharacters(in: .whitespaces).isEmpty || coachService.isLoading)
                 .accessibilityLabel("Send message")

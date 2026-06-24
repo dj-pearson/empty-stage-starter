@@ -496,7 +496,11 @@ struct MealSlotCard: View {
                 Button(action: onAdd) {
                     Image(systemName: "plus.circle.fill")
                         .foregroundStyle(.green)
+                        // US-423: ensure a 44pt hit target for the primary add.
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel("Add to \(slot.displayName)")
             }
 
             // Entries
