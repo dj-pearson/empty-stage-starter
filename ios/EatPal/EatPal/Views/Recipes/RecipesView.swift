@@ -1448,17 +1448,30 @@ struct AddRecipeView: View {
 
     private func createRecipe() async {
         isSubmitting = true
+        // US-413: always reset the submitting flag so a failed create doesn't
+        // leave the Create button stuck disabled.
+        defer { isSubmitting = false }
+
         let tagList = tags.isEmpty ? nil :
             tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
 
         let recipeId = UUID().uuidString
         var imageUrl: String? = remoteImageUrl
         if let image = recipeImage {
-            imageUrl = try? await ImageUploadService.upload(
-                image: image,
-                folder: .recipes,
-                id: recipeId
-            )
+            // US-413: surface upload failure instead of silently dropping the
+            // photo; fall back to any imported remote image and warn.
+            do {
+                imageUrl = try await ImageUploadService.upload(
+                    image: image,
+                    folder: .recipes,
+                    id: recipeId
+                )
+            } catch {
+                ToastManager.shared.warning(
+                    "Couldn't upload photo",
+                    message: "Saved the recipe without the new image."
+                )
+            }
         }
 
         let trimmedAdditional = additionalIngredients.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1483,8 +1496,19 @@ struct AddRecipeView: View {
             difficultyLevel: difficulty
         )
 
-        try? await appState.addRecipe(recipe)
-        dismiss()
+        // US-413: only dismiss on confirmed success; on failure surface a toast
+        // and keep the form open so the user doesn't lose their input.
+        do {
+            try await appState.addRecipe(recipe)
+            HapticManager.success()
+            dismiss()
+        } catch {
+            HapticManager.error()
+            ToastManager.shared.error(
+                "Couldn't create recipe",
+                message: "Please try again."
+            )
+        }
     }
 }
 
