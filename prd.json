@@ -6218,7 +6218,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "PARTIAL (impl, needs Xcode build/test): EditRecipeView.saveRecipe, KidProfileEditorView.save and KidDetailView save now do/catch, dismiss only on success, reset isSubmitting, and warn on photo-upload failure. REMAINING: AddRecipeView (RecipesView) create-path error handling + image-drop warning, and unsaved-changes discard guards (.interactiveDismissDisabled)."
+      "notes": "PARTIAL (impl, needs Xcode build/test): EditRecipeView, AddRecipeView (createRecipe), KidProfileEditorView and KidDetailView saves now do/catch, dismiss only on success, reset isSubmitting, and warn on photo-upload failure instead of silently dropping edits/photos. REMAINING: unsaved-changes discard guards (.interactiveDismissDisabled + confirm on Cancel) for the recipe/kid editors."
     },
     {
       "id": "US-414",
@@ -6248,7 +6248,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "PARTIAL (impl, needs Xcode build/test): AIMealPlanView add-all now dismisses only on a clean run (keeps sheet open on partial failure); addMissingToGrocery classifies aisle via GroceryAisleClassifier instead of hardcoding 'snack' and surfaces a failure toast. REMAINING: MealPlanView copy-week / clear-week / remove-from-plan feedback + undo."
+      "notes": "DONE (impl, needs Xcode build/test): AIMealPlanView add-all dismisses only on a clean run and classifies add-missing aisles (no hardcoded 'snack') with failure toasts; MealPlanView copy-week and clear-week now do/catch with success/failure toasts (copy closes only on success); remove-from-plan routed through removeEntry() that surfaces failures and offers Undo on the plain-remove path."
     },
     {
       "id": "US-416",
@@ -6303,7 +6303,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Verified. App Store revenue path: purchase errors are swallowed, CTA hidden until selection, no product-load/retry."
+      "notes": "DONE (impl, needs Xcode build/test): PaywallView purchase now confirms a completed buy (toast + haptic) and dismisses, with cancel/pending falling through and real errors via the existing ErrorBanner; first non-purchased plan is default-selected so the Subscribe CTA shows immediately; empty/failed product load offers a Retry. StoreKitService already handled verify/cancel/pending/restore correctly."
     },
     {
       "id": "US-420",
@@ -6319,7 +6319,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Verified. Modern scanner path has no permission UI; legacy path leaks session/torch on dismiss."
+      "notes": "PARTIAL (impl, needs Xcode build/test): UnifiedScannerView (iOS 17+ DataScanner path, used on current devices) now gates on AVCaptureDevice authorization with a denied 'Open Settings' screen instead of a black feed, and has a single-shot complete() guard against double onComplete. REMAINING: legacy BarcodeScannerView capture-session stopRunning + torch reset on dismiss (dismantleUIView/onDisappear); torch-device correctness; foreground re-check."
     },
     {
       "id": "US-421",
