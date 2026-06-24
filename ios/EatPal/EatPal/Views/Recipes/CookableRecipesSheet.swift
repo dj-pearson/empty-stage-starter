@@ -180,8 +180,11 @@ private struct MatchRow: View {
                                 .font(.caption)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(Color.orange.opacity(0.12), in: Capsule())
-                                .foregroundStyle(.orange)
+                                // US-425: the orange capsule signals "missing";
+                                // use a high-contrast label color for the text
+                                // (orange-on-light-orange was low contrast).
+                                .background(Color.orange.opacity(0.18), in: Capsule())
+                                .foregroundStyle(.primary)
                         }
                     }
                 }
