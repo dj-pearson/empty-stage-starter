@@ -54,7 +54,8 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json}\"",
     "optimize:images": "node scripts/optimize-images.js",
-    "analyze:bundle": "vite build --mode production && npx vite-bundle-visualizer"
+    "analyze:bundle": "vite build --mode production && npx vite-bundle-visualizer",
+    "ralph": "bash scripts/ralph/ralph.sh --tool claude"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
