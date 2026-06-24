@@ -333,7 +333,9 @@ struct AIMealPlanView: View {
         } else {
             toast.info("Added \(added) of \(added + skipped)", message: "\(skipped) couldn't be added.")
         }
-        if added > 0 { dismiss() }
+        // US-415: only dismiss on a clean run; on partial success keep the
+        // sheet open so the user can retry the suggestions that didn't land.
+        if skipped == 0 { dismiss() }
     }
 
     /// US-238: bulk-create grocery items for everything the plan needs
@@ -341,15 +343,19 @@ struct AIMealPlanView: View {
     private func addMissingToGrocery() async {
         var added = 0
         for suggestion in missingFromFridge {
+            // US-415: classify the aisle from the name instead of dumping
+            // everything under "snack".
+            let aisle = GroceryAisleClassifier.classify(suggestion.foodName)
             let item = GroceryItem(
                 id: UUID().uuidString,
                 userId: "",
                 name: suggestion.foodName,
-                category: "snack",  // unknown — user can re-categorize later
+                category: "other",
                 quantity: 1,
                 unit: "count",
                 checked: false,
-                addedVia: "ai"
+                addedVia: "ai",
+                aisleSection: aisle.rawValue
             )
             do {
                 try await appState.addGroceryItem(item)
@@ -358,11 +364,19 @@ struct AIMealPlanView: View {
                 continue
             }
         }
+        // US-415: surface failure instead of staying silent when nothing landed.
         if added > 0 {
             ToastManager.shared.success(
                 "Added to grocery",
                 message: "\(added) item\(added == 1 ? "" : "s") to round out the plan."
             )
+            HapticManager.success()
+        } else if !missingFromFridge.isEmpty {
+            ToastManager.shared.error(
+                "Couldn't add to grocery",
+                message: "Please try again."
+            )
+            HapticManager.error()
         }
     }
 }
