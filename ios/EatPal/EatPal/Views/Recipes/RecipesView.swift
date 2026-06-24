@@ -928,12 +928,14 @@ private struct DetailShortfallContext: Identifiable {
 /// US-357: compact picker to drop a recipe onto the planner (date + meal slot
 /// + child). Inserts the plan entry and reports back via `onAdded` so the
 /// detail view can run the missing-ingredient shortfall check.
-private struct AddRecipeToPlanSheet: View {
+// US-418: made non-private so the "What can I make?" sheet can reuse the
+// real add-to-plan flow instead of a toast stub.
+struct AddRecipeToPlanSheet: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
 
     let recipe: Recipe
-    var onAdded: (Recipe) -> Void
+    var onAdded: (Recipe) -> Void = { _ in }
 
     @State private var date = Date()
     @State private var mealSlot: MealSlot = .dinner

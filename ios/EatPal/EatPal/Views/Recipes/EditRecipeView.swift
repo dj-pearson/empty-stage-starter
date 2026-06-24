@@ -249,14 +249,26 @@ struct EditRecipeView: View {
 
     private func saveRecipe() async {
         isSubmitting = true
+        // US-413: always reset the submitting flag so a failed save doesn't
+        // leave the Save button stuck disabled.
+        defer { isSubmitting = false }
 
         var imageUrl: String?
         if let image = recipeImage {
-            imageUrl = try? await ImageUploadService.upload(
-                image: image,
-                folder: .recipes,
-                id: recipe.id
-            )
+            // US-413: surface upload failure instead of silently dropping the
+            // new photo; fall back to the existing image and warn the user.
+            do {
+                imageUrl = try await ImageUploadService.upload(
+                    image: image,
+                    folder: .recipes,
+                    id: recipe.id
+                )
+            } catch {
+                ToastManager.shared.warning(
+                    "Couldn't upload photo",
+                    message: "Saved your other changes with the previous image."
+                )
+            }
         }
 
         let tagList = tags.isEmpty ? nil :
@@ -287,11 +299,22 @@ struct EditRecipeView: View {
             tips: tips.isEmpty ? nil : tips
         )
 
-        try? await appState.updateRecipeWithIngredients(
-            recipe.id,
-            updates: updates,
-            ingredients: resolvedIngredients
-        )
-        dismiss()
+        // US-413: only dismiss on confirmed success; on failure surface a toast
+        // and keep the sheet open so the user's edits aren't silently lost.
+        do {
+            try await appState.updateRecipeWithIngredients(
+                recipe.id,
+                updates: updates,
+                ingredients: resolvedIngredients
+            )
+            HapticManager.success()
+            dismiss()
+        } catch {
+            HapticManager.error()
+            ToastManager.shared.error(
+                "Couldn't save recipe",
+                message: "Please try again."
+            )
+        }
     }
 }

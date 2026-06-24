@@ -319,16 +319,25 @@ struct KidProfileEditorView: View {
 
     private func save() async {
         isSubmitting = true
+        // US-413: always reset the submitting flag on every exit path.
+        defer { isSubmitting = false }
 
         // Upload photo if changed
         var photoURL = kid.profilePictureUrl
         if let image = profileImage {
-            if let url = try? await ImageUploadService.upload(
-                image: image,
-                folder: .kids,
-                id: kid.id
-            ) {
-                photoURL = url
+            // US-413: warn on upload failure instead of silently keeping the
+            // stale photo, so the user knows their new avatar wasn't saved.
+            do {
+                photoURL = try await ImageUploadService.upload(
+                    image: image,
+                    folder: .kids,
+                    id: kid.id
+                )
+            } catch {
+                ToastManager.shared.warning(
+                    "Couldn't upload photo",
+                    message: "Saved your other changes with the previous photo."
+                )
             }
         }
 
@@ -354,9 +363,19 @@ struct KidProfileEditorView: View {
             helpfulStrategies: parseList(helpfulStrategies)
         )
 
-        try? await appState.updateKid(kid.id, updates: updates)
-        isSubmitting = false
-        dismiss()
+        // US-413: only dismiss on confirmed success; on failure surface a toast
+        // and keep the sheet open so the user doesn't lose their profile edits.
+        do {
+            try await appState.updateKid(kid.id, updates: updates)
+            HapticManager.success()
+            dismiss()
+        } catch {
+            HapticManager.error()
+            ToastManager.shared.error(
+                "Couldn't save profile",
+                message: "Please try again."
+            )
+        }
     }
 
     private func parseList(_ text: String) -> [String]? {
