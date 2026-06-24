@@ -18,6 +18,10 @@ struct AIMealPlanView: View {
     /// Set by the FridgePhotoSheet confirmation step; cleared on Close.
     @State private var fridgeIngredients: [String] = []
     @State private var showingFridgeSheet = false
+    /// US-422: retain the generation task so the user can cancel an in-flight
+    /// request (and so it's cancelled on dismiss) instead of being stuck on the
+    /// spinner with only "Close" as an escape.
+    @State private var generationTask: Task<Void, Never>?
 
     private var activeKid: Kid? {
         guard let kidId = appState.activeKidId else { return nil }
@@ -67,7 +71,7 @@ struct AIMealPlanView: View {
                         if aiService.suggestions.isEmpty && !aiService.isLoading {
                             VStack(spacing: 10) {
                                 Button {
-                                    Task { await generateSuggestions() }
+                                    startGeneration()
                                 } label: {
                                     Label("Generate Suggestions", systemImage: "wand.and.stars")
                                         .font(.headline)
@@ -116,6 +120,11 @@ struct AIMealPlanView: View {
                                 Text("Generating meal ideas...")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
+                                // US-422: let the user bail out of the request
+                                // without dismissing the whole sheet.
+                                Button("Cancel") { cancelGeneration() }
+                                    .font(.subheadline)
+                                    .padding(.top, 4)
                             }
                             .padding(.vertical, 40)
                         }
@@ -123,7 +132,7 @@ struct AIMealPlanView: View {
                         // Error (US-367: ErrorBanner with retry).
                         if let error = aiService.errorMessage {
                             ErrorBanner(message: error, retryAction: {
-                                Task { await generateSuggestions() }
+                                startGeneration()
                             })
                             .padding(.horizontal)
                         }
@@ -173,7 +182,7 @@ struct AIMealPlanView: View {
 
                             // Regenerate
                             Button {
-                                Task { await generateSuggestions() }
+                                startGeneration()
                             } label: {
                                 Label("Regenerate", systemImage: "arrow.clockwise")
                                     .font(.subheadline)
@@ -196,14 +205,33 @@ struct AIMealPlanView: View {
             .sheet(isPresented: $showingFridgeSheet) {
                 FridgePhotoSheet { confirmed in
                     fridgeIngredients = confirmed
-                    Task { await generateSuggestions() }
+                    startGeneration()
                 }
             }
         }
         .onDisappear {
+            // US-422: cancel any in-flight generation when the sheet goes away.
+            generationTask?.cancel()
+            generationTask = nil
             aiService.clearSuggestions()
             fridgeIngredients = []
         }
+    }
+
+    /// US-422: start (or restart) generation, retaining the task handle so it
+    /// can be cancelled by the user or on dismiss.
+    private func startGeneration() {
+        generationTask?.cancel()
+        generationTask = Task { await generateSuggestions() }
+    }
+
+    /// US-422: cancel the in-flight request and clear the loading state so the
+    /// user isn't stranded on the spinner.
+    private func cancelGeneration() {
+        generationTask?.cancel()
+        generationTask = nil
+        aiService.isLoading = false
+        HapticManager.selection()
     }
 
     /// US-238: ingredients the plan called for that the fridge photo did

@@ -22,6 +22,11 @@ struct FridgePhotoSheet: View {
     @State private var keptIds: Set<String> = []
     @State private var manualName: String = ""
     @State private var manualItems: [String] = []
+    // US-422: recognition succeeded but found nothing — show a clear empty
+    // state instead of silently bouncing back to the picker.
+    @State private var recognitionEmpty = false
+    // US-422: user chose to enter items manually after an empty/!match scan.
+    @State private var forceManual = false
 
     /// Currently-checked ingredient names (detected + manual) that will be
     /// passed back via `onConfirm`. De-duped, lowercased for the LLM.
@@ -75,10 +80,52 @@ struct FridgePhotoSheet: View {
     private var content: some View {
         if isRecognizing {
             recognizingState
-        } else if !detected.isEmpty || !manualItems.isEmpty {
+        } else if !detected.isEmpty || !manualItems.isEmpty || forceManual {
             confirmList
+        } else if recognitionEmpty {
+            emptyDetectionState
         } else {
             picker
+        }
+    }
+
+    // US-422: distinct state when recognition came back with nothing, so the
+    // user can re-shoot or add items by hand instead of a silent reset.
+    private var emptyDetectionState: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 56))
+                .foregroundStyle(.secondary)
+            VStack(spacing: 6) {
+                Text("No ingredients spotted")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                Text("Try another photo with better lighting, or add what you have by hand.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+            }
+            Spacer()
+            Button {
+                forceManual = true
+            } label: {
+                Label("Enter manually", systemImage: "pencil")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
+            .padding(.horizontal, 24)
+
+            PhotosPicker(selection: $selectedItem, matching: .images) {
+                Label("Try another photo", systemImage: "camera")
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .padding(.horizontal, 24)
+            Spacer().frame(height: 16)
         }
     }
 
@@ -213,6 +260,9 @@ struct FridgePhotoSheet: View {
 
     private func handlePicked(_ item: PhotosPickerItem) async {
         recognitionError = nil
+        // US-422: reset empty/manual flags for the new photo.
+        recognitionEmpty = false
+        forceManual = false
         // US-260: funnel step 1 — user committed to a photo (camera roll
         // selection or capture). Fires before recognition so we can measure
         // drop-off between "took a photo" and "got results back".
@@ -233,6 +283,8 @@ struct FridgePhotoSheet: View {
                 // Pre-check anything the model was at least 60% confident about.
                 keptIds = Set(items.filter { $0.confidence >= 0.6 }.map(\.id))
                 isRecognizing = false
+                // US-422: surface a clear empty state when nothing was found.
+                recognitionEmpty = items.isEmpty
 
                 // US-260: funnel step 2 — recognition returned. Counts only,
                 // no detected food names (privacy contract documented on

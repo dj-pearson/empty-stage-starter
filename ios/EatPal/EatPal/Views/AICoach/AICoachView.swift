@@ -5,6 +5,8 @@ struct AICoachView: View {
     @StateObject private var coachService = AICoachService.shared
     @ObservedObject private var network = NetworkMonitor.shared
     @State private var messageText = ""
+    // US-422: confirm before wiping the conversation.
+    @State private var showingClearConfirm = false
     @FocusState private var isInputFocused: Bool
 
     private var activeKid: Kid? {
@@ -155,12 +157,31 @@ struct AICoachView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    coachService.clearChat()
+                    // US-422: only prompt when there's a real conversation to
+                    // lose; an empty/intro-only thread just resets quietly.
+                    if coachService.messages.contains(where: { $0.role == .user }) {
+                        showingClearConfirm = true
+                    } else {
+                        coachService.clearChat()
+                    }
                 } label: {
                     Image(systemName: "arrow.counterclockwise")
                 }
                 .accessibilityLabel("Reset conversation")
             }
+        }
+        .confirmationDialog(
+            "Clear this conversation?",
+            isPresented: $showingClearConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Clear", role: .destructive) {
+                coachService.clearChat()
+                HapticManager.selection()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently removes your coaching chat history.")
         }
         .onTapGesture {
             isInputFocused = false

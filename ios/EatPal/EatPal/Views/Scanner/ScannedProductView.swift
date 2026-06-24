@@ -10,6 +10,10 @@ struct ScannedProductView: View {
     @State private var isLoading = true
     @State private var product: BarcodeService.ProductResult?
     @State private var lookupFailed = false
+    // US-421: a thrown error (offline / server / decode) is NOT the same as a
+    // clean "not found" — surface it as retryable rather than telling the user
+    // the product doesn't exist.
+    @State private var lookupErrored = false
 
     // Editable fields (pre-filled from lookup)
     @State private var name = ""
@@ -37,7 +41,18 @@ struct ScannedProductView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     Form {
-                        if lookupFailed {
+                        if lookupErrored {
+                            // US-421: transient/connection failure — retryable,
+                            // don't claim the product doesn't exist.
+                            Section {
+                                Label(
+                                    "Couldn't reach the lookup service. Check your connection and retry, or enter details manually.",
+                                    systemImage: "wifi.exclamationmark"
+                                )
+                                .font(.callout)
+                                .foregroundStyle(.orange)
+                            }
+                        } else if lookupFailed {
                             Section {
                                 Label(
                                     "Product not found in database. Enter details manually, or correct the barcode and retry.",
@@ -46,7 +61,9 @@ struct ScannedProductView: View {
                                 .font(.callout)
                                 .foregroundStyle(.orange)
                             }
+                        }
 
+                        if lookupFailed || lookupErrored {
                             // US-391: type/correct the barcode and re-run the
                             // same lookup pipeline, or fill details manually.
                             Section("Retry lookup") {
@@ -186,6 +203,7 @@ struct ScannedProductView: View {
 
         isLoading = true
         lookupFailed = false
+        lookupErrored = false
         do {
             if let result = try await BarcodeService.lookup(barcode: code) {
                 product = result
@@ -193,10 +211,12 @@ struct ScannedProductView: View {
                 category = FoodCategory(rawValue: result.category) ?? .snack
                 allergens = result.allergens.joined(separator: ", ")
             } else {
+                // Clean nil = the service answered and has no such product.
                 lookupFailed = true
             }
         } catch {
-            lookupFailed = true
+            // US-421: a thrown error is transient/connectivity, not "not found".
+            lookupErrored = true
         }
         isLoading = false
     }
