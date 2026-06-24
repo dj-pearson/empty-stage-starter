@@ -42,6 +42,10 @@ struct KidProfileEditorView: View {
     // Photo
     @State private var profileImage: UIImage?
     @State private var isSubmitting = false
+    // US-413: unsaved-changes guard. Snapshot taken once the kid is loaded;
+    // the form is "dirty" when the current values diverge from it.
+    @State private var loadedSnapshot: String?
+    @State private var showDiscardConfirm = false
 
     // US-228: HealthKit import state
     @State private var isImportingFromHealth = false
@@ -269,8 +273,21 @@ struct KidProfileEditorView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        // US-413: confirm before discarding unsaved edits.
+                        if isDirty { showDiscardConfirm = true } else { dismiss() }
+                    }
                 }
+            }
+            // US-413: block accidental swipe-to-dismiss while there are edits.
+            .interactiveDismissDisabled(isDirty)
+            .confirmationDialog(
+                "Discard changes?",
+                isPresented: $showDiscardConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Discard", role: .destructive) { dismiss() }
+                Button("Keep editing", role: .cancel) {}
             }
             .onAppear { loadKid() }
             .sheet(isPresented: $showingQuiz) {
@@ -313,6 +330,25 @@ struct KidProfileEditorView: View {
         healthGoals = (kid.healthGoals ?? []).joined(separator: ", ")
         nutritionConcerns = (kid.nutritionConcerns ?? []).joined(separator: ", ")
         helpfulStrategies = (kid.helpfulStrategies ?? []).joined(separator: ", ")
+        // US-413: capture the baseline for the unsaved-changes guard.
+        loadedSnapshot = currentSnapshot
+    }
+
+    /// US-413: serialized form state for dirty-tracking (separator avoids
+    /// false matches across field boundaries).
+    private var currentSnapshot: String {
+        [
+            name, String(age), gender, pickinessLevel, heightCm, weightKg,
+            allergens, dietaryRestrictions, favoriteFoods, dislikedFoods,
+            texturePreferences, textureDislikes, flavorPreferences,
+            behavioralNotes, notes, healthGoals, nutritionConcerns,
+            helpfulStrategies, profileImage == nil ? "0" : "1",
+        ].joined(separator: "\u{1}")
+    }
+
+    private var isDirty: Bool {
+        guard let loadedSnapshot else { return false }
+        return loadedSnapshot != currentSnapshot
     }
 
     // MARK: - Save

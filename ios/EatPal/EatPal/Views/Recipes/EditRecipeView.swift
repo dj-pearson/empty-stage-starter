@@ -19,6 +19,9 @@ struct EditRecipeView: View {
     @State private var tips = ""
     @State private var recipeImage: UIImage?
     @State private var isSubmitting = false
+    // US-413: unsaved-changes guard.
+    @State private var loadedSnapshot: String?
+    @State private var showDiscardConfirm = false
 
     /// US-265: structured ingredient rows. Loaded from recipe.ingredients
     /// on appear; if that's empty and the legacy `additional_ingredients`
@@ -178,7 +181,10 @@ struct EditRecipeView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        // US-413: confirm before discarding unsaved edits.
+                        if isDirty { showDiscardConfirm = true } else { dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
@@ -186,6 +192,15 @@ struct EditRecipeView: View {
                     }
                     .disabled(name.isEmpty || isSubmitting)
                 }
+            }
+            .interactiveDismissDisabled(isDirty)
+            .confirmationDialog(
+                "Discard changes?",
+                isPresented: $showDiscardConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Discard", role: .destructive) { dismiss() }
+                Button("Keep editing", role: .cancel) {}
             }
             .onAppear {
                 name = recipe.name
@@ -206,8 +221,26 @@ struct EditRecipeView: View {
                 // structuredIngredients stays empty and we'll lazy-migrate
                 // on first save.
                 structuredIngredients = recipe.ingredients.sorted(by: { $0.sortOrder < $1.sortOrder })
+                // US-413: baseline for the unsaved-changes guard.
+                loadedSnapshot = currentSnapshot
             }
         }
+    }
+
+    /// US-413: serialized form state for dirty-tracking.
+    private var currentSnapshot: String {
+        ([
+            name, description, instructions, prepTime, cookTime, servings,
+            difficulty, tags, additionalIngredients, tips,
+            selectedFoodIds.sorted().joined(separator: ","),
+            structuredIngredients.map(\.id).joined(separator: ","),
+            recipeImage == nil ? "0" : "1",
+        ]).joined(separator: "\u{1}")
+    }
+
+    private var isDirty: Bool {
+        guard let loadedSnapshot else { return false }
+        return loadedSnapshot != currentSnapshot
     }
 
     // MARK: - US-265 ingredient editor helpers
