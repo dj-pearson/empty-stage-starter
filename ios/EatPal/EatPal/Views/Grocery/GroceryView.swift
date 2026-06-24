@@ -701,14 +701,22 @@ struct GroceryView: View {
                         continue
                     }
                 }
-                HapticManager.success()
                 await TipEvents.didDragFood.donate()
+                // US-414: only signal success when something actually landed;
+                // a total failure now shows an error instead of a success buzz.
                 if addedCount > 0 {
+                    HapticManager.success()
                     ToastManager.shared.success(
                         "Added to grocery",
                         message: addedCount == 1
                             ? (droppedFoods.first?.name ?? "1 item")
                             : "\(addedCount) items"
+                    )
+                } else {
+                    HapticManager.error()
+                    ToastManager.shared.error(
+                        "Couldn't add to grocery",
+                        message: "Please try again."
                     )
                 }
             }
@@ -1108,7 +1116,15 @@ struct GroceryView: View {
         do {
             try await appState.bulkSetGroceryAisle(selectedIds, aisle: aisle)
             exitSelectMode()
-        } catch { }
+        } catch {
+            // US-414: surface the failure and keep the selection so the user
+            // can retry, instead of an empty catch that reads as a no-op bug.
+            HapticManager.error()
+            ToastManager.shared.error(
+                "Couldn't move items",
+                message: "Please try again."
+            )
+        }
     }
 
     private func bulkDelete() async {
@@ -1116,7 +1132,15 @@ struct GroceryView: View {
         do {
             try await appState.bulkDeleteGroceryItems(selectedIds)
             exitSelectMode()
-        } catch { }
+        } catch {
+            // US-414: surface the failure and keep the selection so the user
+            // can retry, instead of an empty catch that reads as a no-op bug.
+            HapticManager.error()
+            ToastManager.shared.error(
+                "Couldn't delete items",
+                message: "Please try again."
+            )
+        }
     }
 
     /// US-276: drop a restock-suggestion onto the grocery list using
@@ -1274,8 +1298,16 @@ struct GroceryItemRow: View {
                 Image(systemName: item.checked ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
                     .foregroundStyle(item.checked ? .green : .secondary)
+                    // US-423: 44pt tap target for the primary check toggle.
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // US-423: state isn't conveyed by the green/strikethrough alone —
+            // expose it to VoiceOver as a labeled, checkable button.
+            .accessibilityLabel(item.name)
+            .accessibilityValue(item.checked ? "Checked off" : "Not checked")
+            .accessibilityAddTraits(.isButton)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.name)
@@ -1333,6 +1365,8 @@ struct AddGroceryItemView: View {
     @State private var priority = "medium"
     // US-243: optional unit price + locale-default currency
     @State private var pricePerUnit: Double = 0
+    // US-414: guard double-submit and only dismiss on a confirmed add.
+    @State private var isSubmitting = false
 
     private let units = ["count", "oz", "lb", "g", "kg", "cups", "tbsp", "tsp", "ml", "l"]
     private let priorities = ["low", "medium", "high"]
@@ -1463,7 +1497,7 @@ struct AddGroceryItemView: View {
                     Button("Add") {
                         Task { await addItem() }
                     }
-                    .disabled(name.isEmpty)
+                    .disabled(name.isEmpty || isSubmitting)
                 }
             }
         }
@@ -1507,8 +1541,21 @@ struct AddGroceryItemView: View {
             aisleSection: aisleSection.rawValue
         )
 
-        try? await appState.addGroceryItem(item)
-        dismiss()
+        // US-414: only dismiss on confirmed success; on failure surface a toast
+        // and keep the form open so the user doesn't lose what they entered.
+        isSubmitting = true
+        defer { isSubmitting = false }
+        do {
+            try await appState.addGroceryItem(item)
+            HapticManager.success()
+            dismiss()
+        } catch {
+            HapticManager.error()
+            ToastManager.shared.error(
+                "Couldn't add item",
+                message: "Please try again."
+            )
+        }
     }
 }
 
@@ -1527,6 +1574,8 @@ struct EditGroceryItemView: View {
     @State private var unit: String = "count"
     @State private var notes: String = ""
     @State private var priority: String = "medium"
+    // US-414: guard double-submit and only dismiss on a confirmed save.
+    @State private var isSubmitting = false
 
     private let units = ["count", "oz", "lb", "g", "kg", "cups", "tbsp", "tsp", "ml", "l"]
     private let priorities = ["low", "medium", "high"]
@@ -1611,7 +1660,7 @@ struct EditGroceryItemView: View {
                         Task { await save() }
                     }
                     .frame(maxWidth: .infinity)
-                    .disabled(name.isEmpty)
+                    .disabled(name.isEmpty || isSubmitting)
                 }
             }
             .navigationTitle("Edit Item")
@@ -1634,19 +1683,32 @@ struct EditGroceryItemView: View {
     }
 
     private func save() async {
-        try? await appState.updateGroceryItem(
-            item.id,
-            updates: GroceryItemUpdate(
-                name: name,
-                category: category.rawValue,
-                quantity: quantity,
-                unit: unit,
-                notes: notes.isEmpty ? nil : notes,
-                priority: priority,
-                aisleSection: aisleSection.rawValue
+        // US-414: only dismiss on confirmed success; surface failures instead
+        // of closing the sheet as if the edit was saved.
+        isSubmitting = true
+        defer { isSubmitting = false }
+        do {
+            try await appState.updateGroceryItem(
+                item.id,
+                updates: GroceryItemUpdate(
+                    name: name,
+                    category: category.rawValue,
+                    quantity: quantity,
+                    unit: unit,
+                    notes: notes.isEmpty ? nil : notes,
+                    priority: priority,
+                    aisleSection: aisleSection.rawValue
+                )
             )
-        )
-        dismiss()
+            HapticManager.success()
+            dismiss()
+        } catch {
+            HapticManager.error()
+            ToastManager.shared.error(
+                "Couldn't save changes",
+                message: "Please try again."
+            )
+        }
     }
 }
 

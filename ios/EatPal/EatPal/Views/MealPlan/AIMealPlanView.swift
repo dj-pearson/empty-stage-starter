@@ -18,6 +18,10 @@ struct AIMealPlanView: View {
     /// Set by the FridgePhotoSheet confirmation step; cleared on Close.
     @State private var fridgeIngredients: [String] = []
     @State private var showingFridgeSheet = false
+    /// US-422: retain the generation task so the user can cancel an in-flight
+    /// request (and so it's cancelled on dismiss) instead of being stuck on the
+    /// spinner with only "Close" as an escape.
+    @State private var generationTask: Task<Void, Never>?
 
     private var activeKid: Kid? {
         guard let kidId = appState.activeKidId else { return nil }
@@ -67,7 +71,7 @@ struct AIMealPlanView: View {
                         if aiService.suggestions.isEmpty && !aiService.isLoading {
                             VStack(spacing: 10) {
                                 Button {
-                                    Task { await generateSuggestions() }
+                                    startGeneration()
                                 } label: {
                                     Label("Generate Suggestions", systemImage: "wand.and.stars")
                                         .font(.headline)
@@ -116,6 +120,11 @@ struct AIMealPlanView: View {
                                 Text("Generating meal ideas...")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
+                                // US-422: let the user bail out of the request
+                                // without dismissing the whole sheet.
+                                Button("Cancel") { cancelGeneration() }
+                                    .font(.subheadline)
+                                    .padding(.top, 4)
                             }
                             .padding(.vertical, 40)
                         }
@@ -123,7 +132,7 @@ struct AIMealPlanView: View {
                         // Error (US-367: ErrorBanner with retry).
                         if let error = aiService.errorMessage {
                             ErrorBanner(message: error, retryAction: {
-                                Task { await generateSuggestions() }
+                                startGeneration()
                             })
                             .padding(.horizontal)
                         }
@@ -173,7 +182,7 @@ struct AIMealPlanView: View {
 
                             // Regenerate
                             Button {
-                                Task { await generateSuggestions() }
+                                startGeneration()
                             } label: {
                                 Label("Regenerate", systemImage: "arrow.clockwise")
                                     .font(.subheadline)
@@ -196,14 +205,33 @@ struct AIMealPlanView: View {
             .sheet(isPresented: $showingFridgeSheet) {
                 FridgePhotoSheet { confirmed in
                     fridgeIngredients = confirmed
-                    Task { await generateSuggestions() }
+                    startGeneration()
                 }
             }
         }
         .onDisappear {
+            // US-422: cancel any in-flight generation when the sheet goes away.
+            generationTask?.cancel()
+            generationTask = nil
             aiService.clearSuggestions()
             fridgeIngredients = []
         }
+    }
+
+    /// US-422: start (or restart) generation, retaining the task handle so it
+    /// can be cancelled by the user or on dismiss.
+    private func startGeneration() {
+        generationTask?.cancel()
+        generationTask = Task { await generateSuggestions() }
+    }
+
+    /// US-422: cancel the in-flight request and clear the loading state so the
+    /// user isn't stranded on the spinner.
+    private func cancelGeneration() {
+        generationTask?.cancel()
+        generationTask = nil
+        aiService.isLoading = false
+        HapticManager.selection()
     }
 
     /// US-238: ingredients the plan called for that the fridge photo did
@@ -333,7 +361,9 @@ struct AIMealPlanView: View {
         } else {
             toast.info("Added \(added) of \(added + skipped)", message: "\(skipped) couldn't be added.")
         }
-        if added > 0 { dismiss() }
+        // US-415: only dismiss on a clean run; on partial success keep the
+        // sheet open so the user can retry the suggestions that didn't land.
+        if skipped == 0 { dismiss() }
     }
 
     /// US-238: bulk-create grocery items for everything the plan needs
@@ -341,15 +371,19 @@ struct AIMealPlanView: View {
     private func addMissingToGrocery() async {
         var added = 0
         for suggestion in missingFromFridge {
+            // US-415: classify the aisle from the name instead of dumping
+            // everything under "snack".
+            let aisle = GroceryAisleClassifier.classify(suggestion.foodName)
             let item = GroceryItem(
                 id: UUID().uuidString,
                 userId: "",
                 name: suggestion.foodName,
-                category: "snack",  // unknown — user can re-categorize later
+                category: "other",
                 quantity: 1,
                 unit: "count",
                 checked: false,
-                addedVia: "ai"
+                addedVia: "ai",
+                aisleSection: aisle.rawValue
             )
             do {
                 try await appState.addGroceryItem(item)
@@ -358,11 +392,19 @@ struct AIMealPlanView: View {
                 continue
             }
         }
+        // US-415: surface failure instead of staying silent when nothing landed.
         if added > 0 {
             ToastManager.shared.success(
                 "Added to grocery",
                 message: "\(added) item\(added == 1 ? "" : "s") to round out the plan."
             )
+            HapticManager.success()
+        } else if !missingFromFridge.isEmpty {
+            ToastManager.shared.error(
+                "Couldn't add to grocery",
+                message: "Please try again."
+            )
+            HapticManager.error()
         }
     }
 }

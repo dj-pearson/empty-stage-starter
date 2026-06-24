@@ -40,9 +40,17 @@ struct PaywallView: View {
                         ProgressView()
                             .padding()
                     } else if store.products.isEmpty {
-                        Text("No products available")
-                            .foregroundStyle(.secondary)
-                            .padding()
+                        // US-419: a failed StoreKit fetch is no longer a dead
+                        // end — offer a retry.
+                        VStack(spacing: 8) {
+                            Text("No products available")
+                                .foregroundStyle(.secondary)
+                            Button("Retry") {
+                                Task { await store.loadProducts() }
+                            }
+                            .font(.callout)
+                        }
+                        .padding()
                     } else {
                         VStack(spacing: 12) {
                             Text("Choose a Plan")
@@ -65,7 +73,21 @@ struct PaywallView: View {
                        !store.purchasedProductIDs.contains(product.id) {
                         Button {
                             Task {
-                                _ = try? await store.purchase(product)
+                                // US-419: confirm a completed purchase and close
+                                // the paywall; cancel/pending fall through quietly
+                                // and real errors surface via the ErrorBanner.
+                                do {
+                                    if try await store.purchase(product) != nil {
+                                        HapticManager.success()
+                                        ToastManager.shared.success(
+                                            "You're subscribed!",
+                                            message: "Enjoy EatPal Premium."
+                                        )
+                                        dismiss()
+                                    }
+                                } catch {
+                                    HapticManager.error()
+                                }
                             }
                         } label: {
                             HStack {
@@ -126,6 +148,23 @@ struct PaywallView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
+                }
+            }
+            // US-419: default-select the first plan so the Subscribe CTA is
+            // visible immediately instead of hidden until the user taps a card.
+            .task {
+                if store.products.isEmpty { await store.loadProducts() }
+                if selectedProduct == nil {
+                    selectedProduct = store.products.first {
+                        !store.purchasedProductIDs.contains($0.id)
+                    }
+                }
+            }
+            .onChange(of: store.products) { _, products in
+                if selectedProduct == nil {
+                    selectedProduct = products.first {
+                        !store.purchasedProductIDs.contains($0.id)
+                    }
                 }
             }
         }

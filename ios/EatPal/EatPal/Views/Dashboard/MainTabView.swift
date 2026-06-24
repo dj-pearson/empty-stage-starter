@@ -8,6 +8,11 @@ struct MainTabView: View {
     /// US-405: navigation path for the More tab so deep links / notification
     /// taps can push the right sub-screen (kid profile, quiz, settings, …).
     @State private var morePath: [MoreRoute] = []
+    /// US-430: guard the full data load + realtime re-subscribe so it runs once
+    /// per session, not every time `.task` re-attaches (background return,
+    /// force-update gate toggle, auth flip). The view is recreated on a new
+    /// session, which resets this flag and re-loads.
+    @State private var didLoad = false
 
     enum Tab: String, CaseIterable {
         // US-373: Home (Dashboard) promoted to a primary tab; Recipes moved
@@ -51,6 +56,9 @@ struct MainTabView: View {
         }
         .tint(.green)
         .task {
+            // US-430: only run the full load once per session.
+            guard !didLoad else { return }
+            didLoad = true
             await appState.loadAllData()
             // US-245: First screen view of the session.
             AnalyticsService.screen("tab_\(selectedTab.rawValue)")

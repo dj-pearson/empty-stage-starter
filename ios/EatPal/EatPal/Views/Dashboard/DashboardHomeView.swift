@@ -4,6 +4,8 @@ struct DashboardHomeView: View {
     @EnvironmentObject var appState: AppState
     @State private var showingScanner = false
     @State private var showingAddFood = false
+    // US-418: the "New Recipe" quick action was a no-op; present the editor.
+    @State private var showingAddRecipe = false
     @State private var scannedBarcode: ScannedBarcodeItem?
     /// US-230: opens the pantry tab pre-filtered to expiring foods.
     @State private var showingExpiringSheet = false
@@ -70,7 +72,8 @@ struct DashboardHomeView: View {
                 // Quick Actions
                 QuickActionsSection(
                     onAddFood: { showingAddFood = true },
-                    onScanBarcode: { showingScanner = true }
+                    onScanBarcode: { showingScanner = true },
+                    onNewRecipe: { showingAddRecipe = true }
                 )
             }
             .padding()
@@ -91,6 +94,9 @@ struct DashboardHomeView: View {
         }
         .sheet(isPresented: $showingAddFood) {
             AddFoodView()
+        }
+        .sheet(isPresented: $showingAddRecipe) {
+            AddRecipeView()
         }
         .sheet(item: $scannedBarcode) { item in
             ScannedProductView(barcode: item.code)
@@ -291,6 +297,7 @@ struct DashboardStatCard: View {
 struct QuickActionsSection: View {
     var onAddFood: () -> Void = {}
     var onScanBarcode: () -> Void = {}
+    var onNewRecipe: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -304,7 +311,7 @@ struct QuickActionsSection: View {
             ], spacing: 12) {
                 QuickActionButton(title: "Add Food", icon: "plus.circle.fill", color: .green, action: onAddFood)
                 QuickActionButton(title: "Scan Barcode", icon: "barcode.viewfinder", color: .blue, action: onScanBarcode)
-                QuickActionButton(title: "New Recipe", icon: "book.fill", color: .orange, action: {})
+                QuickActionButton(title: "New Recipe", icon: "book.fill", color: .orange, action: onNewRecipe)
             }
         }
     }

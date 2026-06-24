@@ -248,13 +248,25 @@ struct MealPlanView: View {
                             Task {
                                 guard let kidId = appState.activeKidId else { return }
                                 let targetStart = copyTargetDate.weekDates.first ?? copyTargetDate
-                                try? await MealPlanTemplateService.shared.copyWeekPlan(
-                                    from: weekStart,
-                                    to: targetStart,
-                                    kidId: kidId,
-                                    appState: appState
-                                )
-                                showingCopyWeek = false
+                                // US-415: surface success/failure and only close
+                                // the sheet on a confirmed copy.
+                                do {
+                                    try await MealPlanTemplateService.shared.copyWeekPlan(
+                                        from: weekStart,
+                                        to: targetStart,
+                                        kidId: kidId,
+                                        appState: appState
+                                    )
+                                    HapticManager.success()
+                                    ToastManager.shared.success("Week copied")
+                                    showingCopyWeek = false
+                                } catch {
+                                    HapticManager.error()
+                                    ToastManager.shared.error(
+                                        "Couldn't copy week",
+                                        message: "Please try again."
+                                    )
+                                }
                             }
                         }
                     }
@@ -282,11 +294,23 @@ struct MealPlanView: View {
             Button("Clear", role: .destructive) {
                 Task {
                     guard let kidId = appState.activeKidId else { return }
-                    try? await MealPlanTemplateService.shared.deleteWeekPlan(
-                        weekStart: weekStart,
-                        kidId: kidId,
-                        appState: appState
-                    )
+                    // US-415: surface success/failure instead of a silent try?
+                    // that left entries to reappear on next load with no notice.
+                    do {
+                        try await MealPlanTemplateService.shared.deleteWeekPlan(
+                            weekStart: weekStart,
+                            kidId: kidId,
+                            appState: appState
+                        )
+                        HapticManager.success()
+                        ToastManager.shared.success("Week cleared")
+                    } catch {
+                        HapticManager.error()
+                        ToastManager.shared.error(
+                            "Couldn't clear week",
+                            message: "Please try again."
+                        )
+                    }
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -472,7 +496,11 @@ struct MealSlotCard: View {
                 Button(action: onAdd) {
                     Image(systemName: "plus.circle.fill")
                         .foregroundStyle(.green)
+                        // US-423: ensure a 44pt hit target for the primary add.
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel("Add to \(slot.displayName)")
             }
 
             // Entries
@@ -719,7 +747,7 @@ struct PlanEntryRow: View {
                 if appState.wasRecentlyMarkedMade(entry.id) {
                     showingDeleteRestore = true
                 } else {
-                    Task { try? await appState.deletePlanEntry(entry.id) }
+                    removeEntry(restoreFirst: false, allowUndo: true)
                 }
             } label: {
                 Label("Remove from plan", systemImage: "trash")
@@ -732,13 +760,11 @@ struct PlanEntryRow: View {
             titleVisibility: .visible
         ) {
             Button("Restore ingredients & remove") {
-                Task {
-                    await appState.undoMealMade(entry.id)
-                    try? await appState.deletePlanEntry(entry.id)
-                }
+                // US-415: surface failures; no undo (pantry was re-credited).
+                removeEntry(restoreFirst: true, allowUndo: false)
             }
             Button("Just remove", role: .destructive) {
-                Task { try? await appState.deletePlanEntry(entry.id) }
+                removeEntry(restoreFirst: false, allowUndo: true)
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -788,6 +814,43 @@ struct PlanEntryRow: View {
     }
 
     // MARK: - Result logging (US-231)
+
+    /// US-415: remove an entry, surfacing failures (was a silent try?) and —
+    /// for the plain remove — offering an Undo that re-adds it. `restoreFirst`
+    /// covers the made-meal path that restores pantry stock before removing.
+    private func removeEntry(restoreFirst: Bool, allowUndo: Bool) {
+        let snapshot = entry
+        Task {
+            if restoreFirst { await appState.undoMealMade(snapshot.id) }
+            do {
+                try await appState.deletePlanEntry(snapshot.id)
+                HapticManager.success()
+                if allowUndo {
+                    ToastManager.shared.show(Toast(
+                        type: .success,
+                        title: "Removed from plan",
+                        actionLabel: "Undo",
+                        retry: {
+                            do { try await appState.addPlanEntry(snapshot) }
+                            catch {
+                                ToastManager.shared.error(
+                                    "Couldn't undo",
+                                    message: "Please re-add the meal manually."
+                                )
+                            }
+                        }
+                    ))
+                }
+            } catch {
+                HapticManager.error()
+                ToastManager.shared.error(
+                    "Couldn't remove meal",
+                    message: "Please try again.",
+                    retry: { removeEntry(restoreFirst: restoreFirst, allowUndo: allowUndo) }
+                )
+            }
+        }
+    }
 
     /// Persists the result, then surfaces the optional 1-5 feedback sheet.
     /// Pulled out so the confirmationDialog and contextMenu paths share
