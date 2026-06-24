@@ -6509,7 +6509,7 @@
       ],
       "priority": 4,
       "passes": false,
-      "notes": "Verified. Forward-only quiz with no back; state never reset."
+      "notes": "DONE (impl, needs Xcode build/test): PickyEaterQuizView adds a Back button that pops the last answer (answers stay aligned with the question index) so mis-taps are correctable; calculatePersonality guards maxScore>0 against NaN."
     }
   ]
 }
