@@ -3,6 +3,13 @@ import AuthenticationServices
 
 struct AuthView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    // US-432: keyboard focus management so Return advances email → password →
+    // confirm and submits from the last field.
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable {
+        case email, password, confirm
+    }
 
     var body: some View {
         NavigationStack {
@@ -50,6 +57,9 @@ struct AuthView: View {
                                 .keyboardType(.emailAddress)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
+                                .focused($focusedField, equals: .email)
+                                .submitLabel(authViewModel.authMode == .forgotPassword ? .go : .next)
+                                .onSubmit { advanceFromEmail() }
 
                             // US-378: inline format validation, no network call.
                             if let emailMessage = authViewModel.emailValidationMessage {
@@ -69,6 +79,9 @@ struct AuthView: View {
                                 SecureField("Enter password", text: $authViewModel.password)
                                     .textFieldStyle(.roundedBorder)
                                     .textContentType(authViewModel.authMode == .signUp ? .newPassword : .password)
+                                    .focused($focusedField, equals: .password)
+                                    .submitLabel(authViewModel.authMode == .signUp ? .next : .go)
+                                    .onSubmit { advanceFromPassword() }
                                     .onChange(of: authViewModel.password) {
                                         authViewModel.validatePassword()
                                     }
@@ -92,6 +105,9 @@ struct AuthView: View {
                                 SecureField("Confirm password", text: $authViewModel.confirmPassword)
                                     .textFieldStyle(.roundedBorder)
                                     .textContentType(.newPassword)
+                                    .focused($focusedField, equals: .confirm)
+                                    .submitLabel(.go)
+                                    .onSubmit { submitIfValid() }
 
                                 if !authViewModel.confirmPassword.isEmpty &&
                                    authViewModel.password != authViewModel.confirmPassword {
@@ -176,6 +192,29 @@ struct AuthView: View {
             }
             .scrollDismissesKeyboard(.interactively)
         }
+    }
+
+    // US-432: keyboard Return navigation between the auth fields.
+    private func advanceFromEmail() {
+        if authViewModel.authMode == .forgotPassword {
+            submitIfValid()
+        } else {
+            focusedField = .password
+        }
+    }
+
+    private func advanceFromPassword() {
+        if authViewModel.authMode == .signUp {
+            focusedField = .confirm
+        } else {
+            submitIfValid()
+        }
+    }
+
+    private func submitIfValid() {
+        guard authViewModel.isFormValid, !authViewModel.isSubmitting else { return }
+        focusedField = nil
+        Task { await authViewModel.submit() }
     }
 
     private var submitButtonTitle: String {
