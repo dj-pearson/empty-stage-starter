@@ -373,7 +373,7 @@ struct AIMealPlanView: View {
         for suggestion in missingFromFridge {
             // US-415: classify the aisle from the name instead of dumping
             // everything under "snack".
-            let aisle = GroceryAisleClassifier.classify(suggestion.foodName)
+            let aisle = GroceryAisle.classify(suggestion.foodName)
             let item = GroceryItem(
                 id: UUID().uuidString,
                 userId: "",
