@@ -6361,7 +6361,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Verified. accessibilityLabel present in only ~40/61 view files; many icon buttons unlabeled and sub-44pt."
+      "notes": "PARTIAL (impl, needs Xcode build/test): added accessibilityLabel + 44pt hit targets to the highest-traffic icon buttons named in the audit — MealPlanView per-slot add ('Add to <slot>'), GroceryItemRow check toggle (name label + checked/unchecked value + .isButton), PantryView quantity steppers (Decrease/Increase), AICoachView send. REMAINING: full sweep of the other icon-only buttons/chips across the 61 views + an Accessibility Inspector pass."
     },
     {
       "id": "US-424",
@@ -6483,7 +6483,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Verified across auth shell. Note: ignore the earlier Expo audit — app/ is the deprecated React Native shell (US-314); production is the Swift app under ios/EatPal."
+      "notes": "PARTIAL (impl, needs Xcode build/test): AuthView @FocusState + .submitLabel/.onSubmit keyboard navigation (email->password->confirm->submit); HouseholdSettingsView calls appState.loadAllData() after a successful join so shared data appears live (replaced the 'reload the app' copy). REMAINING: session-expiry re-auth in RootView/AuthViewModel, sign-out loading/error state, BindEmailView resend-cooldown drift (need VM/service internals)."
     },
     {
       "id": "US-433",
@@ -6496,7 +6496,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Verified. Mixed-currency sums and unbounded target produce misleading output."
+      "notes": "DONE (impl, needs Xcode build/test): BudgetView suppresses the headline grocery total (shows '—' + existing mixed-currency warning) and hides the target-progress comparison when currencies are mixed; weekly-target input clamped to a non-negative sane range (0...100000). Divide-by-zero was already guarded by the weeklyTarget>0 checks."
     },
     {
       "id": "US-434",
