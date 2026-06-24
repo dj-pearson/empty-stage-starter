@@ -19,6 +19,8 @@ struct PantryView: View {
     @State private var selectedIds: Set<String> = []
     @State private var showingChangeCategory = false
     @State private var showingDeleteConfirm = false
+    // US-416: single-item delete confirmation (parity with bulk delete).
+    @State private var foodPendingDeletion: Food?
     @State private var filterCategories: Set<FoodCategory> = []
     @State private var filterAllergens: Set<String> = []
     @State private var filterSafeOnly = false
@@ -222,8 +224,8 @@ struct PantryView: View {
                                 .swipeActions(edge: .trailing, allowsFullSwipe: !isSelecting) {
                                     if !isSelecting {
                                         Button(role: .destructive) {
-                                            HapticManager.error()
-                                            Task { try? await appState.deleteFood(food.id) }
+                                            // US-416: confirm before deleting.
+                                            foodPendingDeletion = food
                                         } label: {
                                             Label("Delete", systemImage: "trash")
                                         }
@@ -316,8 +318,8 @@ struct PantryView: View {
                                         }
 
                                         Button(role: .destructive) {
-                                            HapticManager.error()
-                                            Task { try? await appState.deleteFood(food.id) }
+                                            // US-416: confirm before deleting.
+                                            foodPendingDeletion = food
                                         } label: {
                                             Label("Delete", systemImage: "trash")
                                         }
@@ -481,6 +483,24 @@ struct PantryView: View {
         } message: {
             Text("This can't be undone.")
         }
+        // US-416: single-item delete confirmation + failure surfacing, matching
+        // the bulk-delete guard (was a bare swipe `try?` with no confirm).
+        .confirmationDialog(
+            "Delete \(foodPendingDeletion?.name ?? "this food")?",
+            isPresented: Binding(
+                get: { foodPendingDeletion != nil },
+                set: { if !$0 { foodPendingDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: foodPendingDeletion
+        ) { food in
+            Button("Delete", role: .destructive) {
+                deleteFood(food)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("This can't be undone.")
+        }
         .sheet(item: $selectedFood) { food in
             FoodDetailView(food: food)
         }
@@ -607,6 +627,25 @@ struct PantryView: View {
             exitSelectMode()
         } catch {
             // toast surfaced inside bulkDeleteFoods
+        }
+    }
+
+    /// US-416: delete a single food with confirmation already given, surfacing
+    /// failures (retryable) instead of the old silent swipe `try?` that let a
+    /// failed delete silently reappear on the next load.
+    private func deleteFood(_ food: Food) {
+        Task {
+            do {
+                try await appState.deleteFood(food.id)
+                HapticManager.success()
+            } catch {
+                HapticManager.error()
+                ToastManager.shared.error(
+                    "Couldn't delete \(food.name)",
+                    message: "Please try again.",
+                    retry: { deleteFood(food) }
+                )
+            }
         }
     }
 
