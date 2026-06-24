@@ -44,6 +44,9 @@ struct PantryDistributionChart: View {
                                 .font(.caption2)
                                 .fontWeight(.bold)
                                 .foregroundStyle(.white)
+                                // US-426: keep the count legible on lighter
+                                // slices where plain white washes out.
+                                .shadow(color: .black.opacity(0.4), radius: 1)
                         }
                     }
                 }
@@ -91,21 +94,28 @@ struct WeeklyMealChart: View {
             Text("This Week's Meals")
                 .font(.headline)
 
-            Chart(dailyData, id: \.day) { item in
-                BarMark(
-                    x: .value("Day", item.day),
-                    y: .value("Meals", item.count)
-                )
-                .foregroundStyle(Color.green.gradient)
-                .cornerRadius(4)
-                // US-372: VoiceOver reads day + meal count.
-                .accessibilityLabel(item.day)
-                .accessibilityValue("\(item.count) meal\(item.count == 1 ? "" : "s")")
+            // US-426: empty state instead of a flat, axis-only chart when no
+            // meals are logged this week (parity with the other insight charts).
+            if dailyData.allSatisfy({ $0.count == 0 }) {
+                Text("No meals logged this week yet")
+                    .foregroundStyle(.secondary)
+            } else {
+                Chart(dailyData, id: \.day) { item in
+                    BarMark(
+                        x: .value("Day", item.day),
+                        y: .value("Meals", item.count)
+                    )
+                    .foregroundStyle(Color.green.gradient)
+                    .cornerRadius(4)
+                    // US-372: VoiceOver reads day + meal count.
+                    .accessibilityLabel(item.day)
+                    .accessibilityValue("\(item.count) meal\(item.count == 1 ? "" : "s")")
+                }
+                .chartYAxis {
+                    AxisMarks(values: .automatic(desiredCount: 5))
+                }
+                .frame(height: 180)
             }
-            .chartYAxis {
-                AxisMarks(values: .automatic(desiredCount: 5))
-            }
-            .frame(height: 180)
         }
         .padding()
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
