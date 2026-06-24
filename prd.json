@@ -6203,6 +6203,313 @@
       "priority": 4,
       "passes": true,
       "notes": "Audit finding (Functionality). Distinct from US-152 (freshness on AppState mutations) — these background intents bypass AppState entirely. | DONE 2026-06-14 (claude/zen-mccarthy-6xpo2a): extracted WidgetSnapshot.buildPayload (shared by AppState change-stream + intents) and added WidgetSnapshot.rebuildFromServer() (fetches foods/grocery/plan/recipes, builds payload, writeImmediately -> reloads timeline). Called after each background Siri mutation: AddGroceryItem + BulkAddGroceryItems (grocery count), LogMealResult (tonight/meals), MarkFoodSafe + MarkFoodTryBite (pantry-low). Widget now reflects Siri changes without opening the app; AppState.refreshWidgetSnapshot refactored onto the shared builder (identical output)."
+    },
+    {
+      "id": "US-413",
+      "title": "iOS: Stop silent data loss on Recipe/Kid form saves (handle errors, guard unsaved changes)",
+      "description": "As a user editing a recipe or child profile, I want a failed save to keep my work and tell me it failed, so that I never silently lose what I typed.",
+      "acceptanceCriteria": [
+        "EditRecipeView.saveRecipe() (EditRecipeView.swift ~250-296): replace `try?` on updateRecipeWithIngredients with do/catch; only dismiss() on success; on failure reset isSubmitting, keep sheet open, show ToastManager error",
+        "AddRecipeView.create (RecipesView.swift ~1454-1484): wrap addRecipe in do/catch, only dismiss on success; if ImageUploadService.upload fails surface a toast and offer save-without-photo instead of silently dropping the image",
+        "KidProfileEditorView.save() (KidProfileEditorView.swift ~357-359) and KidDetailView save (KidsView.swift ~352-366): same do/catch + dismiss-on-success-only pattern (mirror AddKidView which already does this correctly)",
+        "KidProfileEditorView photo upload (~324-333): surface upload failure instead of silently keeping the stale URL",
+        "Add unsaved-changes guard to EditRecipeView, AddRecipeView and KidProfileEditorView: track a dirty flag, apply .interactiveDismissDisabled(isDirty), confirm discard on Cancel/swipe-down",
+        "Manual test: force a save failure (airplane mode) and confirm the sheet stays open with an error toast and the form contents intact"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Verified in audit. Pattern: `try? await ... ; dismiss()` discards errors and closes the sheet as if it succeeded, losing edits. AddKidView (KidsView.swift ~227-257) is the correct reference implementation."
+    },
+    {
+      "id": "US-414",
+      "title": "iOS Grocery: surface mutation failures and add undo for destructive clears",
+      "description": "As a shopper, I want add/edit/bulk grocery actions to tell me when they fail and let me undo a bulk clear, so that I don't get false-success or lose my list.",
+      "acceptanceCriteria": [
+        "AddGroceryItemView.addItem() and EditGroceryItemView.save() (GroceryView.swift ~1510, ~1636): stop using `try?`+unconditional dismiss(); only dismiss on success, surface inline error otherwise",
+        "Drag-and-drop add (GroceryView.swift ~677-716): only fire HapticManager.success() and the success toast when addedCount>0; show an error toast when every add failed (addedCount==0)",
+        "bulkSetAisle / bulkDelete (GroceryView.swift ~1106-1120): replace empty `catch {}` with an error toast and keep the selection intact so the user can retry",
+        "Clear Completed (GroceryView.swift ~1064-1071): after clearing, show an undo snackbar that restores the cleared items (snapshot before delete)",
+        "Normalize minimum-quantity rules across AddGroceryItemView (no floor), EditGroceryItemView (floor 0) and QuickAddGrocerySheet (floor 0.5) so no path can create a 0-quantity item"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Verified. Multiple grocery write paths swallow errors; only ShoppingMode has undo today."
+    },
+    {
+      "id": "US-415",
+      "title": "iOS Meal Plan: feedback + correct dismiss for copy/clear/delete and AI add-all",
+      "description": "As a parent planning meals, I want copy-week, clear-week, delete-entry and AI add-all to confirm success/failure, so that destructive/bulk actions are never silent.",
+      "acceptanceCriteria": [
+        "Copy Week (MealPlanView.swift ~247-259): replace `try?`+dismiss with do/catch; show success/failure toast; don't dismiss the sheet on failure",
+        "Clear This Week (MealPlanView.swift ~281-295): surface success/error toasts and add an undo affordance for this bulk destructive action",
+        "Remove-from-plan context action (MealPlanView.swift ~712-726): surface delete failures and add an undo toast for the plain (non-recently-made) delete path",
+        "AIMealPlanView add-all (AIMealPlanView.swift ~312-337): only dismiss() when skipped==0; on partial success keep the sheet open so the user can retry the remainder",
+        "AIMealPlanView addMissingToGrocery (~341-367): show an error toast when added==0; classify grocery aisle via GroceryAisle.classify instead of hardcoding category \"snack\""
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Verified. Recurring `try?` on destructive/server mutations produces silent partial-success states."
+    },
+    {
+      "id": "US-416",
+      "title": "iOS Pantry: rollback optimistic writes, confirm single delete, make receipt save idempotent",
+      "description": "As a user managing my pantry, I want failed quantity/delete edits to roll back with feedback, a confirm on single delete, and receipt imports that can't double-count, so that pantry data stays trustworthy.",
+      "acceptanceCriteria": [
+        "Per-row mutations (PantryView.swift ~187-330: swipe +1, mark safe/unsafe, delete, add-to-grocery, QuantityAdjustSheet, FoodDetailView save): replace `try?` with error handling that toasts on failure and rolls back optimistic state (mirror the bulk helpers that already do this)",
+        "Single-item delete (PantryView.swift ~224-229, ~318-323): add an undo toast or confirmation for parity with bulk delete (which shows a 'can't be undone' alert)",
+        "ScanReceiptSheet.save() (ScanReceiptSheet.swift ~234-291): make the matched-increment + unmatched-insert sequence transactional or track per-row success, so a mid-save failure + retry cannot double-increment already-incremented foods",
+        "BulkAddFoodSheet.commit() (BulkAddFoodSheet.swift ~101-138): surface the failed-row count to the user instead of silently dropping rows; prefer a bulk insert over N sequential awaits"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Verified. Optimistic `try?` writes hide failures; receipt save is non-transactional."
+    },
+    {
+      "id": "US-417",
+      "title": "iOS Kids: confirm child deletion and stop swallowing the error",
+      "description": "As a parent, I want deleting a child to require confirmation and report failures, so that a stray swipe can't silently wipe a kid's data.",
+      "acceptanceCriteria": [
+        "KidsView swipe-to-delete (KidsView.swift ~31-37): present a confirmation alert before deleting (cascades streaks/plan entries), and replace `try?` with do/catch that toasts on failure",
+        "Verify the deleted row does not silently reappear on next load when the server delete fails (currently it does, with no feedback)",
+        "Consolidate the two kid editors (KidDetailView in KidsView.swift vs the richer KidProfileEditorView) or document why both exist; ensure both persist the same field set"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Verified critical: destructive, data-losing kid delete fires immediately on swipe with `try?` and no confirmation."
+    },
+    {
+      "id": "US-418",
+      "title": "iOS: Wire up dead/no-op and misleading primary buttons",
+      "description": "As a user, I want every prominent button to actually do something, so that I'm not tapping controls that silently fail or mislead me.",
+      "acceptanceCriteria": [
+        "Dashboard 'New Recipe' quick action (DashboardHomeView.swift ~307) currently has `action: {}` — wire it to present the new-recipe sheet (or navigate to the Recipes new-recipe flow), matching the other two quick actions",
+        "CookableRecipesSheet 'Add to plan' (CookableRecipesSheet.swift ~124-132) is a toast-only stub that claims (and logs analytics for) an add that never persists — either wire it to the real AddPlanEntryView/addPlanEntry flow with the recipe pre-selected, or relabel it (e.g. 'How to plan') so it stops promising an action it doesn't perform",
+        "Audit-confirm no other QuickActionButton/primary CTA is passed an empty closure"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Verified directly in code: DashboardHomeView.swift:307 action:{} and CookableRecipesSheet stub with misleading analytics. (FoodChaining fake generation is already tracked as US-399.)"
+    },
+    {
+      "id": "US-419",
+      "title": "iOS Paywall: robust StoreKit purchase/restore, loading and error states",
+      "description": "As a user subscribing, I want clear feedback on purchase/restore success, cancel and failure plus a visible subscribe CTA, so that the paywall reliably converts and never appears to do nothing.",
+      "acceptanceCriteria": [
+        "PaywallView purchase (PaywallView.swift ~64-86): stop discarding the result with `_ = try? await store.purchase`; do/catch and branch on Product.PurchaseResult (.success/.userCancelled/.pending), with a success confirmation and an error surface",
+        "Default-select the recommended/first product when products load so the Subscribe CTA isn't hidden until a tap (~51-65)",
+        "Add `.task { await store.loadProducts() }` (or equivalent) and a Retry affordance in the empty/error branch (~256-258) so a failed StoreKit fetch isn't a dead 'No products available' screen",
+        "Provide a working 'Restore Purchases' action with success/failure feedback",
+        "Verify prices render from StoreKit localized price strings (not hardcoded)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Verified. App Store revenue path: purchase errors are swallowed, CTA hidden until selection, no product-load/retry."
+    },
+    {
+      "id": "US-420",
+      "title": "iOS Scanner: camera permission handling and session/torch lifecycle cleanup",
+      "description": "As a user scanning barcodes/shelves, I want the camera to release on dismiss, the torch to turn off, and clear handling when permission is denied, so that the scanner is reliable and doesn't drain battery or strand me on a black screen.",
+      "acceptanceCriteria": [
+        "BarcodeScannerView (BarcodeScannerView.swift ~228-280): add dismantleUIView/teardown that calls captureSession.stopRunning() and setTorch(false); reset torch on .onDisappear; move capture configuration off the main thread; show a 'Camera unavailable' state when device/input acquisition fails instead of a frozen black screen",
+        "UnifiedScannerView (UnifiedScannerView.swift ~73-83): gate the DataScanner path behind AVCaptureDevice.authorizationStatus and present a denied/restricted state with an 'Open Settings' link (parity with the legacy view), rather than a black screen with a small error label",
+        "ARShelfFinderView (ARShelfFinderView.swift ~37-57): add the same camera-permission check + denied state with Settings deep-link",
+        "UnifiedScannerView torch (~189-202): drive the torch through the scanner's own session (not AVCaptureDevice.default) and surface failures instead of swallowing them",
+        "Re-check camera authorization on willEnterForeground so returning from Settings updates the denied screen (BarcodeScannerView ~124-135)",
+        "UnifiedScannerView (~258-285): add a hasCompleted guard so onComplete/dismiss can't double-fire"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Verified. Modern scanner path has no permission UI; legacy path leaks session/torch on dismiss."
+    },
+    {
+      "id": "US-421",
+      "title": "iOS Scanner: distinguish barcode lookup network failure from 'not found' and offer retry",
+      "description": "As a user scanning a product, I want a transient lookup failure to be retryable rather than told the product doesn't exist, so that offline/server blips don't push me into needless manual entry.",
+      "acceptanceCriteria": [
+        "ScannedProductView.lookupBarcode() (ScannedProductView.swift ~136-202): in the catch, distinguish a thrown error (network/timeout/server/decoding) from a clean nil result; for the error case show a 'Couldn't reach lookup service — Retry' state with a retry button, and only show 'Product not found' for a genuine empty result",
+        "Ensure the duplicate-match 'Add as new' action (~140-165) is never a silent no-op when pendingFood is nil (guarantee it's set or surface a fallback)"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Verified. catch collapses all errors into lookupFailed='not found'."
+    },
+    {
+      "id": "US-422",
+      "title": "iOS AI flows: timeout, cancel, and empty-result handling",
+      "description": "As a user invoking AI features, I want a way to cancel, a timeout, and a clear message when nothing comes back, so that I'm never stuck on an endless spinner or a dead-end screen.",
+      "acceptanceCriteria": [
+        "AIMealPlanView.generateSuggestions() (AIMealPlanView.swift ~220-255): store the work in a cancellable @State Task, add a Cancel button during loading, and enforce a client-side timeout that surfaces via the existing ErrorBanner; 'Close' must actually cancel the in-flight request",
+        "FridgePhotoSheet (FridgePhotoSheet.swift ~214-249): add an explicit empty-detection state ('we couldn't find anything — add manually / re-shoot') distinct from the initial picker when recognition returns zero items",
+        "AICoachView clear-chat (AICoachView.swift ~156-163): gate the reset behind a confirmation dialog so an accidental tap can't wipe the conversation",
+        "AICoachView send (~139-147): optionally disable send when offline so it doesn't round-trip to a guaranteed failure"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Verified. No timeout/cancel on AI generation; empty fridge recognition silently returns to picker."
+    },
+    {
+      "id": "US-423",
+      "title": "iOS A11y: accessibility labels and 44pt touch targets on icon-only controls",
+      "description": "As a VoiceOver user, I want every icon button labeled and large enough to hit, so that core actions are usable and meet Apple's HIG minimums.",
+      "acceptanceCriteria": [
+        "MealPlanView per-slot add (MealPlanView.swift ~472-475): add .accessibilityLabel(\"Add to <slot>\") and a 44x44 contentShape/hit target",
+        "PantryView quantity steppers (PantryView.swift ~704-741): label minus/plus as 'Decrease/Increase quantity' and enforce .frame(minWidth:44,minHeight:44)",
+        "GroceryItemRow checkbox (GroceryView.swift ~1265-1316): add accessibilityLabel/value (checked/unchecked) and .accessibilityAddTraits(.isButton)",
+        "AICoachView send button (AICoachView.swift ~139-147): enforce a 44pt tappable frame",
+        "BarcodeScanner torch button and other icon-only buttons across audited views: add labels + 44pt targets",
+        "Add an automated/manual check (Accessibility Inspector pass) covering the main tab screens"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Verified. accessibilityLabel present in only ~40/61 view files; many icon buttons unlabeled and sub-44pt."
+    },
+    {
+      "id": "US-424",
+      "title": "iOS A11y: Dynamic Type support — remove fixed font sizes and clipping fixed frames",
+      "description": "As a user with larger text sizes, I want screens to scale and not clip, so that the app is legible at accessibility text sizes (and the in-kitchen modes get bigger, not fixed).",
+      "acceptanceCriteria": [
+        "Replace fixed point fonts with text styles / @ScaledMetric: TonightCookSheet step text .system(size:28) (TonightCookSheet.swift ~50-56), CookModeView step .title3 -> larger scalable style (CookModeView.swift ~59-60)",
+        "ShoppingModeView (ShoppingModeView.swift ~397-401): stop force-pinning .dynamicTypeSize(.accessibility1); let it scale (or clamp with a floor, not a fixed value)",
+        "Replace fixed frames that clip large text: MealPlanView DayChip frame(width:44,height:56) (~424-432) -> use @ScaledMetric; ScanReceiptSheet qty/unit fields frame(width:56/64) (~316-335) -> allow growth/wrap",
+        "Adopt a Dynamic Type policy (sensible maxFontSizeMultiplier where layout is tight) and spot-check the main screens at the largest accessibility size"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Verified. Only ~3/61 view files reference dynamicTypeSize/minimumScaleFactor; several hardcoded font sizes and fixed frames."
+    },
+    {
+      "id": "US-425",
+      "title": "iOS A11y: eliminate color-only status signaling",
+      "description": "As a color-blind user, I want status conveyed by icon/shape/text in addition to color, so that I can distinguish meal results, expiry urgency, difficulty and checked state.",
+      "acceptanceCriteria": [
+        "Meal result ate/tasted/refused (MealPlanView.swift ~607-621): ensure each result has a distinct icon shape (not just tint) and is exposed to VoiceOver as one labeled element",
+        "Pantry expiry urgency and grocery/shopping checked state: keep the existing text labels and add non-color cues (icon/strikethrough already partial) — verify ExpiryChip and GroceryItemRow don't rely on hue alone",
+        "Recipe difficulty capsule (RecipesView.swift ~487-519) and CookableRecipes coverage/missing chips: pair color with text/icon and fix low-contrast orange-on-orange (CookableRecipesSheet ~184-185)",
+        "Add this to the design-system guidance so new status UI follows the color+icon+text rule"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Verified across MealPlan, Pantry, Recipes, Grocery."
+    },
+    {
+      "id": "US-426",
+      "title": "iOS A11y: chart VoiceOver support and empty/zero-data states",
+      "description": "As a user reviewing progress and insights, I want charts to be navigable with VoiceOver and to show a clear empty state, so that data screens are accessible and don't render confusing blank axes.",
+      "acceptanceCriteria": [
+        "JoyScoreChart (JoyScoreChart.swift ~142-215): add an .accessibilityAction on points (or an accessible list alternative) so VoiceOver users can open the week-detail sheet that's currently tap-only via .chartOverlay; thin x-axis labels for small widths/large Dynamic Type",
+        "InsightsCharts WeeklyMealChart (InsightsCharts.swift ~89-113): add an empty/zero-data state instead of a flat empty axis when all days are 0",
+        "InsightsCharts sector/pie charts (~184-210): don't encode meaning by color alone — add labels/patterns; fix the hardcoded .white overlay count text (~46) so it stays readable on light slices"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Verified. PointMark has per-point labels but drilldown is tap-only; WeeklyMealChart lacks empty state."
+    },
+    {
+      "id": "US-427",
+      "title": "iOS: CachedAsyncImage failed-load state (fix app-wide infinite spinners)",
+      "description": "As a user, I want broken or unreachable images to show a placeholder instead of spinning forever, and failures to be logged, so that avatars/recipe thumbnails/food photos degrade gracefully.",
+      "acceptanceCriteria": [
+        "CachedAsyncImage / ThumbnailImageLoader (CachedAsyncImage.swift ~47-108): add an explicit loadFailed/isLoading flag; on failure render the bare placeholder() with no spinner (and optional retry-on-tap), distinguishing 'loading' from 'failed/no image'",
+        "Stop swallowing URLSession errors with `try?` (~50-51): capture the error and log via the app's Sentry/analytics path so CDN/storage regressions are visible",
+        "Rename AvatarView.initialsUrl (~118-121) to imageURL/photoURL — it returns the photo URL, not initials, and the misleading name is a latent breakage trap",
+        "Verify recipe thumbnails and food photos also show a terminal fallback (not an eternal ProgressView)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Verified. Backs every avatar/thumbnail; a failed load currently shows a permanent placeholder+spinner with no telemetry."
+    },
+    {
+      "id": "US-428",
+      "title": "iOS: Fix SkeletonView invalid .frame(width: .infinity)",
+      "description": "As a user seeing loading skeletons, I want skeleton lines to fill the row correctly, so that loading states look intentional rather than degenerate.",
+      "acceptanceCriteria": [
+        "TextSkeleton (SkeletonView.swift ~211): change `.frame(width: index == lines-1 ? 160 : .infinity, height: 12)` to use `maxWidth:` for the full-width case (.frame(maxWidth: .infinity)); `.frame(width: .infinity)` is invalid and renders at an unbounded/degenerate width",
+        "Visually verify multi-line skeletons fill the available width with a shorter final line"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Verified bug in SkeletonView.swift:211."
+    },
+    {
+      "id": "US-429",
+      "title": "iOS Perf: decompose monolithic views and memoize derived state",
+      "description": "As a user, I want list-heavy screens to stay responsive while typing/scrolling, so that search and selection don't trigger full re-filter/re-group storms.",
+      "acceptanceCriteria": [
+        "Decompose the four monolithic views into child views/files so SwiftUI scopes invalidation: GroceryView.swift (1658), RecipesView.swift (1557, also split RecipeDetailView/AddRecipeView/helpers), MealPlanView.swift (1329, split AddPlanEntryView/CopyWeekToKidSheet/etc), PantryView.swift (1225, extract FoodRow/toolbar/actions)",
+        "Memoize derived collections currently recomputed in body: GroceryView groupedUncheckedItems/groupedByRecipeBuckets, RecipesView filteredRecipes (referenced 5+ times per render, debounce search), PantryView filteredFoods/groupedFoods, PantryQuickAddBar.parsed (parse runs every body pass — move to .onChange(of: text) @State)",
+        "Debounce/collapse onChange recompute storms: CookableRecipesSheet recompute() fires from 3 observers + a redundant manual call (CookableRecipesSheet.swift ~54-57, ~116)",
+        "Make list ForEach ids stable (reconcile optimistic UUID -> server id) for PlanEntry/Recipe rows to avoid identity churn on realtime echo"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Verified. Heavy computed properties recompute in body on every keystroke/selection across the four largest screens."
+    },
+    {
+      "id": "US-430",
+      "title": "iOS: Guard MainTabView loadAllData against refetch storms",
+      "description": "As a user, I want the full data load + realtime re-subscribe to run once per session, not on every tab re-attach/foreground, so that I don't trigger redundant 8-table fetches and duplicate subscriptions.",
+      "acceptanceCriteria": [
+        "MainTabView (MainTabView.swift ~53-57): the `.task { await appState.loadAllData() }` re-runs whenever the view identity is re-established (background return, force-update gate toggle, auth flip). Gate it with a didLoad flag or move it to RootView keyed on userId via .task(id: userId) so it fires once per session",
+        "Confirm realtimeService.subscribe is not stacking duplicate channels on re-entry"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Verified. loadAllData re-subscribes realtime and re-drains queues with no guard."
+    },
+    {
+      "id": "US-431",
+      "title": "iOS i18n foundation: adopt String Catalog and localize high-traffic screens",
+      "description": "As an international user, I want the iOS app to support localization the way the web app does (US-347), so that a future locale launch doesn't require rewriting every view.",
+      "acceptanceCriteria": [
+        "Add a String Catalog (.xcstrings) / Localizable.strings and adopt String(localized:) for non-literal/interpolated user-facing strings (Text(\"literal\") auto-localizes, but interpolated/String-typed labels, toast messages, Alert text and errorMessage do not)",
+        "Replace manual pluralization (e.g. `count == 1 ? \"\" : \"s\"` in RecipesView ~334/434/909, '\\(count) in cart') with .stringsdict / inflection so plurals localize",
+        "Sweep the highest-traffic screens first: Dashboard, MealPlan, Grocery, Pantry, Recipes, Settings, Auth/Onboarding, Paywall",
+        "Use locale-aware formatting (NumberFormatter/Date.FormatStyle) for counts, dates and currency"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Verified. iOS ships English-only literals; no parallel to the web i18next framework. Large but foundational."
+    },
+    {
+      "id": "US-432",
+      "title": "iOS Auth/session: keyboard UX, session-expiry re-auth, sign-out and household-join feedback",
+      "description": "As a user, I want smooth keyboard navigation, to be re-prompted when my session expires, and clear feedback on sign-out and joining a household, so that auth and account flows feel reliable.",
+      "acceptanceCriteria": [
+        "AuthView (AuthView.swift ~47-101): add @FocusState-driven focus with .submitLabel(.next/.go) and .onSubmit chaining (email->password->confirm->submit); ensure keyboardType/textContentType/secure entry are set",
+        "Session expiry (RootView.swift ~15-29): ensure the auth listener flips authState to .unauthenticated on refresh-token failure (JWT expired) and surfaces a re-auth prompt instead of leaving the user in MainTabView with every fetch failing",
+        "Sign out (SettingsView.swift ~206-216): show a progress state and handle a thrown signOut() before/with clearData() so local data and session can't end up inconsistent with no feedback",
+        "Household join (HouseholdSettingsView.swift ~342-352): after acceptInvite() call appState.loadAllData() so shared data appears live, instead of telling the user to 'Reload the app'",
+        "BindEmailView resend cooldown (BindEmailView.swift ~286-292): compute remaining time from a stored deadline Date (or reset on cancel via defer) so the counter can't get stuck non-zero"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Verified across auth shell. Note: ignore the earlier Expo audit — app/ is the deprecated React Native shell (US-314); production is the Swift app under ios/EatPal."
+    },
+    {
+      "id": "US-433",
+      "title": "iOS Budget: mixed-currency totals, target validation and divide-by-zero guards",
+      "description": "As a budgeting user, I want correct totals when items have different currencies and a sane weekly target, so that the budget screen never shows a meaningless or NaN number.",
+      "acceptanceCriteria": [
+        "BudgetView mixed currency (BudgetView.swift ~129-133, ~160, ~223): when groceryCurrency is nil (mixed), suppress the aggregate number (show '—' or per-currency subtotals) instead of summing different currencies into one locale-formatted total",
+        "Validate/clamp the weeklyTarget @AppStorage decimalPad field (~266-281) to a non-negative, sane range on commit so tiny/huge values can't blow up the ratio copy",
+        "Guard ratio/progress math against zero and extreme values (maxScore/total>0)"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Verified. Mixed-currency sums and unbounded target produce misleading output."
+    },
+    {
+      "id": "US-434",
+      "title": "iOS Quiz: back navigation and answer correction",
+      "description": "As a user taking the picky-eater quiz, I want to go back and fix an answer, so that a mis-tap doesn't lock in the wrong result.",
+      "acceptanceCriteria": [
+        "PickyEaterQuizView (PickyEaterQuizView.swift ~96-109): add a Back affordance that pops the last answer (answers.removeLast(), decrement currentQuestion) so answers are correctable",
+        "Reset answers/currentQuestion on appear so a re-take can't append onto stale state (~14-17)",
+        "Compute personality once into a let/@State on transition to the result and guard maxScore>0 (~111-126) to avoid recompute and NaN on degenerate input"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Verified. Forward-only quiz with no back; state never reset."
     }
   ]
 }
