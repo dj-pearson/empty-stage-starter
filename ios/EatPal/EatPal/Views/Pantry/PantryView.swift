@@ -86,7 +86,10 @@ struct PantryView: View {
             .sorted { $0.key < $1.key }
     }
 
-    var body: some View {
+    // US-429/build-fix: extracted the List + toolbar into its own property so
+    // the `body` expression (this content + ~11 presentation modifiers) stays
+    // under the Swift type-checker's complexity budget.
+    private var pantryContent: some View {
         List {
             // US-289: insanely-fast quick-add bar. Lives above category
             // chips so it's the first input target on the screen. Hidden
@@ -449,6 +452,10 @@ struct PantryView: View {
                 }
             }
         }
+    }
+
+    var body: some View {
+        pantryContent
         .sheet(isPresented: $showingAddFood) {
             AddFoodView()
         }
@@ -491,14 +498,13 @@ struct PantryView: View {
                 get: { foodPendingDeletion != nil },
                 set: { if !$0 { foodPendingDeletion = nil } }
             ),
-            titleVisibility: .visible,
-            presenting: foodPendingDeletion
-        ) { food in
+            titleVisibility: .visible
+        ) {
             Button("Delete", role: .destructive) {
-                deleteFood(food)
+                if let food = foodPendingDeletion { deleteFood(food) }
             }
             Button("Cancel", role: .cancel) {}
-        } message: { _ in
+        } message: {
             Text("This can't be undone.")
         }
         .sheet(item: $selectedFood) { food in
