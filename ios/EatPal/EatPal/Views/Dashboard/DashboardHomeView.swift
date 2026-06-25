@@ -223,8 +223,18 @@ struct TodayMealSummaryCard: View {
     }
 
     private func foodNames(for entries: [PlanEntry]) -> String {
+        // US-446: resolve recipe-based meals by recipe name too. Previously a
+        // plan entry with a recipeId (and empty/unknown foodId) resolved to
+        // nothing and silently vanished from "today's meals".
         entries.compactMap { entry in
-            appState.foods.first { $0.id == entry.foodId }?.name
+            if let food = appState.foods.first(where: { $0.id == entry.foodId }) {
+                return food.name
+            }
+            if let recipeId = entry.recipeId,
+               let recipe = appState.recipes.first(where: { $0.id == recipeId }) {
+                return recipe.name
+            }
+            return nil
         }.joined(separator: ", ")
     }
 }

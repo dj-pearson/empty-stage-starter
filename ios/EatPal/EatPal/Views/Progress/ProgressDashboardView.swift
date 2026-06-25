@@ -49,8 +49,18 @@ struct OverviewTab: View {
         appState.foods.count
     }
 
+    /// US-446: plan entries for the currently-selected child only, so success
+    /// rate and the results chart reflect the child being viewed (matching
+    /// `thisWeekMeals`) instead of mixing every kid in the household. Pantry
+    /// stats above stay household-level because `foods` carry no kidId.
+    private var activeKidEntries: [PlanEntry] {
+        let kidId = appState.activeKidId ?? ""
+        guard !kidId.isEmpty else { return [] }
+        return appState.planEntries.filter { $0.kidId == kidId }
+    }
+
     private var successRate: Double {
-        let results = appState.planEntries.compactMap(\.result)
+        let results = activeKidEntries.compactMap(\.result)
         guard !results.isEmpty else { return 0 }
         let ateCount = results.filter { $0 == "ate" }.count
         return Double(ateCount) / Double(results.count) * 100
@@ -106,9 +116,9 @@ struct OverviewTab: View {
                     )
                 }
 
-                // Results Chart
+                // Results Chart — US-446: scoped to the active child.
                 if #available(iOS 17.0, *) {
-                    FoodResultsChart(planEntries: appState.planEntries)
+                    FoodResultsChart(planEntries: activeKidEntries)
                 }
 
                 // Safe vs Try Bite
@@ -476,7 +486,15 @@ struct WeeklyReportsTab: View {
             let resultsLogged = entries.filter { $0.result != nil }.count
             let ateCount = entries.filter { $0.result == "ate" }.count
 
-            let foodIds = Set(entries.map(\.foodId))
+            // US-446: "foods tried" should mean foods the child actually ate,
+            // not every food that was merely planned — and must exclude empty
+            // recipe-based foodIds.
+            let foodIds = Set(
+                entries
+                    .filter { $0.result == "ate" }
+                    .map(\.foodId)
+                    .filter { !$0.isEmpty }
+            )
             let newFoods = foodIds.count
 
             return WeekReport(

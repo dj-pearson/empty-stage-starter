@@ -15,7 +15,11 @@ struct GroceryWatchView: View {
         if snap.grocery.isEmpty {
             return "All done — \(snap.checkedGroceryCount) checked off."
         }
-        return "\(snap.grocery.count) of \(snap.totalGroceryCount) left"
+        // US-450: the rendered list is capped at 50 rows, so use the uncapped
+        // unchecked count (total − checked) for the "N of M left" summary
+        // instead of grocery.count, which under-reports on large lists.
+        let remaining = max(snap.grocery.count, snap.totalGroceryCount - snap.checkedGroceryCount)
+        return "\(remaining) of \(snap.totalGroceryCount) left"
     }
 
     var body: some View {

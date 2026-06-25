@@ -162,14 +162,19 @@ struct BudgetView: View {
                 HStack {
                     Text("Target")
                     Spacer()
-                    Text(BudgetService.format(weeklyTarget))
+                    // US-456: format the target in the same currency the rest
+                    // of the section uses (progressCopy), not the default.
+                    Text(BudgetService.format(weeklyTarget, currency: groceryCurrency))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                 }
 
+                // US-456: fill to 100% at the target (over-budget state is shown
+                // by progressTint + progressCopy), instead of only ~67% full
+                // when the user is exactly on budget.
                 ProgressView(
-                    value: min(groceryTotal, weeklyTarget * 1.5),
-                    total: weeklyTarget * 1.5
+                    value: min(groceryTotal, weeklyTarget),
+                    total: weeklyTarget
                 )
                 .tint(progressTint)
 

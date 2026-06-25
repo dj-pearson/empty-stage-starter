@@ -6678,8 +6678,8 @@
         "DashboardHomeView TodayMealSummaryCard falls back to the recipe name when foodId doesn't resolve so recipe-based meals aren't dropped (DashboardHomeView.swift:225-228)"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Same per-child-scoping class as US-410, but in the Progress dashboard and Today summary."
+      "passes": true,
+      "notes": "OverviewTab successRate + FoodResultsChart now scoped to the active child; WeeklyReports 'foods tried' counts distinct non-empty foodIds among entries actually eaten; DashboardHomeView today-summary falls back to recipe name so recipe-based meals aren't dropped. Pantry-derived stats (Foods Tried/Categories) stay household-level because `foods` carry no kidId. Implemented on branch claude/ios-app-review-prd-pbedlw. Pending Xcode build/device verification (no Swift toolchain in this web env)."
     },
     {
       "id": "US-447",
@@ -6733,7 +6733,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Multiple extension data-contract drifts found by the extensions agent."
+      "notes": "PARTIAL: watch grocery summary and complication now use the uncapped unchecked count (total-checked) instead of the 50-capped list; WatchSessionStore.cache reloads complication timelines on each new snapshot. REMAINING: centralize slot display encoding between widget/watch snapshots and populate/remove tryBiteStreak. Implemented on branch claude/ios-app-review-prd-pbedlw. Pending Xcode build/device verification (no Swift toolchain in this web env)."
     },
     {
       "id": "US-451",
@@ -6810,8 +6810,8 @@
         "Bar turns to the over-budget state at 100% of target, not 150%"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "US-433 handled mixed-currency totals; this is the remaining progress-bar scaling + section currency."
+      "passes": true,
+      "notes": "Target progress bar now totals weeklyTarget (fills 100% at target; over-budget shown via tint+copy) instead of *1.5; target amount formatted in groceryCurrency to match progressCopy. Implemented on branch claude/ios-app-review-prd-pbedlw. Pending Xcode build/device verification (no Swift toolchain in this web env)."
     },
     {
       "id": "US-457",
