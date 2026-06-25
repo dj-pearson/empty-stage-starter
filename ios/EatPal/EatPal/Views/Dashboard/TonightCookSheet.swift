@@ -97,7 +97,10 @@ struct TonightCookSheet: View {
             }
         } else {
             Text(steps[stepIndex])
-                .font(.system(size: 28, weight: .medium))
+                // US-424: scalable text style (was a fixed 28pt that ignored
+                // Dynamic Type) — this hands-free cook step should grow for
+                // low-vision users, which is exactly who big-text mode serves.
+                .font(.title.weight(.medium))
                 .lineSpacing(8)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)

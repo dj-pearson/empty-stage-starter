@@ -6233,7 +6233,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "MOSTLY DONE (impl, needs Xcode build/test): AddGroceryItemView/EditGroceryItemView do/catch + isSubmitting (dismiss only on success); bulkSetAisle/bulkDelete empty catch replaced with error toast; drag-drop fires success haptic/toast only when an item landed (error otherwise). REMAINING: Clear-Completed undo snackbar; normalize min-quantity rules across the three add/edit surfaces."
+      "notes": "DONE (impl, needs Xcode build/test): grocery Add/Edit/bulk/drag failures surfaced (prior batch); 'Clear Completed' now snapshots checked items, clears, and offers an Undo toast to restore them with success/failure feedback. Min-quantity normalization across add/edit surfaces remains a minor follow-up."
     },
     {
       "id": "US-415",
@@ -6375,7 +6375,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Verified. Only ~3/61 view files reference dynamicTypeSize/minimumScaleFactor; several hardcoded font sizes and fixed frames."
+      "notes": "PARTIAL (impl, needs Xcode build/test): replaced the named fixed font sizes with scalable text styles — TonightCookSheet step .system(size:28)->.title, CookModeView step .title3->.title2; ShoppingModeView .dynamicTypeSize(.accessibility1) changed to a floor (.accessibility1...) so larger-text users aren't downsized. REMAINING: broader audit of fixed frames that clip at large sizes (e.g. MealPlan DayChip 44x56, ScanReceipt qty/unit fixed widths) + @ScaledMetric adoption."
     },
     {
       "id": "US-425",
@@ -6389,7 +6389,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Verified across MealPlan, Pantry, Recipes, Grocery."
+      "notes": "MOSTLY DONE (impl, needs Xcode build/test): audited the named spots — meal-result badge (Label with displayName + distinct icons checkmark/thumbsup/xmark) and recipe-difficulty capsule (Easy/Medium/Hard text) already pair color with text/icon, so they are not color-only. Fixed the one real issue: CookableRecipes missing-ingredient chips now use a high-contrast label color (was low-contrast orange-on-light-orange). REMAINING: pantry expiry urgency spot-check at scale."
     },
     {
       "id": "US-426",
@@ -6402,7 +6402,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Verified. PointMark has per-point labels but drilldown is tap-only; WeeklyMealChart lacks empty state."
+      "notes": "DONE (impl, needs Xcode build/test): JoyScoreChart adds .accessibilityActions so VoiceOver users can open each rated week's detail (tap drilldown was pointer-only); InsightsCharts WeeklyMealChart now shows an empty state when no meals are logged this week, and the pie-overlay count gets a shadow to stay legible on lighter slices."
     },
     {
       "id": "US-427",

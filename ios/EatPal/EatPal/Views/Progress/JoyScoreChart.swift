@@ -212,6 +212,17 @@ struct JoyScoreChart: View {
         .frame(height: 180)
         .accessibilityLabel("Joy Score chart")
         .accessibilityValue(accessibilitySummary)
+        // US-426: the tap drilldown is pointer-only; give VoiceOver users an
+        // equivalent set of actions to open each rated week's detail.
+        .accessibilityActions {
+            ForEach(weekPoints.filter { ($0.averageRating ?? 0) > 0 }) { point in
+                Button("Open week of \(point.weekStart.formatted(.dateTime.month().day()))") {
+                    if let detail = buildDetail(for: point.weekStart) {
+                        selectedWeek = detail
+                    }
+                }
+            }
+        }
     }
 
     private var accessibilitySummary: String {

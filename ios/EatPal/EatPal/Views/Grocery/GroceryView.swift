@@ -1071,7 +1071,7 @@ struct GroceryView: View {
         }
         .alert("Clear Completed Items?", isPresented: $showingClearAlert) {
             Button("Clear", role: .destructive) {
-                Task { try? await appState.clearCheckedGroceryItems() }
+                clearCompleted()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -1087,6 +1087,51 @@ struct GroceryView: View {
         .task {
             await storeLayouts.ensureLoaded()
             await refreshRestockSuggestions()
+        }
+    }
+
+    // US-414: clear checked items with an Undo affordance — snapshot the
+    // checked rows first, clear, then offer to restore them via a toast action.
+    private func clearCompleted() {
+        let snapshot = checkedItems
+        guard !snapshot.isEmpty else { return }
+        Task {
+            do {
+                try await appState.clearCheckedGroceryItems()
+                HapticManager.success()
+                ToastManager.shared.show(Toast(
+                    type: .success,
+                    title: "Cleared \(snapshot.count) item\(snapshot.count == 1 ? "" : "s")",
+                    actionLabel: "Undo",
+                    retry: { await restoreClearedItems(snapshot) }
+                ))
+            } catch {
+                HapticManager.error()
+                ToastManager.shared.error(
+                    "Couldn't clear items",
+                    message: "Please try again."
+                )
+            }
+        }
+    }
+
+    private func restoreClearedItems(_ items: [GroceryItem]) async {
+        var restored = 0
+        for item in items {
+            do {
+                try await appState.addGroceryItem(item)
+                restored += 1
+            } catch {
+                continue
+            }
+        }
+        if restored > 0 {
+            HapticManager.success()
+        } else {
+            ToastManager.shared.error(
+                "Couldn't restore items",
+                message: "Please re-add them manually."
+            )
         }
     }
 
