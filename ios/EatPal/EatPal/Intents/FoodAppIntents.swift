@@ -186,6 +186,12 @@ struct TodaysPlanIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        // US-445: guard for an active session so a signed-out Shortcut gives
+        // clear guidance instead of "nothing planned".
+        guard (try? await SupabaseManager.client.auth.session) != nil else {
+            return .result(dialog: "Open EatPal and sign in first to see today's plan.")
+        }
+
         let todayString = DateFormatter.isoDate.string(from: Date())
 
         do {
@@ -201,7 +207,11 @@ struct TodaysPlanIntent: AppIntent {
 
             // Group by slot in canonical morning→evening order so the spoken
             // summary follows the day instead of database insertion order.
-            let slotOrder: [String] = MealSlot.allCases.map(\.rawValue)
+            // US-445: exclude the try-bite slot — it's a practice exposure, not
+            // a scheduled meal, and shouldn't be read out as part of the plan.
+            let slotOrder: [String] = MealSlot.allCases
+                .filter { $0 != .tryBite }
+                .map(\.rawValue)
             var lines: [String] = []
             for slot in slotOrder {
                 let slotEntries = today.filter { $0.mealSlot == slot }

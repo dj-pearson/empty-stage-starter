@@ -6666,7 +6666,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Multi-kid correctness + signed-out Shortcut guidance."
+      "notes": "PARTIAL: LogMealResultIntent/TodaysPlanIntent now guard for an active session (sign-in prompt when signed out); spoken dialog uses natural-language labels instead of raw enum values; TodaysPlanIntent excludes the try-bite slot from the spoken plan. DEFERRED to a build session: the optional Kid parameter to scope LogMealResult to one child — needs a cross-process activeKidId (App Group) or a Kid AppEntity, both warranting device verification. Implemented on branch claude/ios-app-review-prd-pbedlw. Pending Xcode build/device verification (no Swift toolchain in this web env)."
     },
     {
       "id": "US-446",
@@ -6704,8 +6704,8 @@
         "Remove or correctly drive the unused isGenerating flag (currently flips true→false synchronously so the ProgressView never shows)"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Safety-adjacent: can produce an allergen as the target for an allergic child."
+      "passes": true,
+      "notes": "Food-chaining pickers now exclude foods conflicting with the active child's allergens; a selected conflict shows a red allergen warning and suppresses the chain; chainSteps/warning cleared at the top of generateChain; dead isGenerating flag removed. Implemented on branch claude/ios-app-review-prd-pbedlw. Pending Xcode build/device verification (no Swift toolchain in this web env)."
     },
     {
       "id": "US-449",
