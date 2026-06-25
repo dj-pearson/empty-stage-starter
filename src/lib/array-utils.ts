@@ -104,9 +104,9 @@ export function randomItems<T>(array: T[], count: number): T[] {
 /**
  * Flatten nested array
  */
-export function flatten<T>(array: any[]): T[] {
-  return array.reduce(
-    (flat, item) => flat.concat(Array.isArray(item) ? flatten(item) : item),
+export function flatten<T>(array: unknown[]): T[] {
+  return array.reduce<T[]>(
+    (flat, item) => flat.concat(Array.isArray(item) ? flatten<T>(item) : (item as T)),
     []
   );
 }
@@ -230,12 +230,12 @@ export function maxBy<T>(array: T[], key: keyof T): T | undefined {
  */
 export function deepClone<T>(obj: T): T {
   if (obj === null || typeof obj !== 'object') return obj;
-  if (obj instanceof Date) return new Date(obj.getTime()) as any;
-  if (obj instanceof Array) return obj.map((item) => deepClone(item)) as any;
+  if (obj instanceof Date) return new Date(obj.getTime()) as unknown as T;
+  if (obj instanceof Array) return obj.map((item) => deepClone(item)) as unknown as T;
 
   const cloned = {} as T;
   for (const key in obj) {
-    if (obj.hasOwnProperty(key)) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
       cloned[key] = deepClone(obj[key]);
     }
   }
@@ -245,14 +245,18 @@ export function deepClone<T>(obj: T): T {
 /**
  * Deep merge objects
  */
-export function deepMerge<T extends Record<string, any>>(target: T, ...sources: Partial<T>[]): T {
+export function deepMerge<T extends Record<string, unknown>>(
+  target: T,
+  ...sources: Partial<T>[]
+): T {
   if (sources.length === 0) return target;
 
   const source = sources.shift();
   if (!source) return deepMerge(target, ...sources);
 
+  const mutableTarget = target as Record<string, unknown>;
   for (const key in source) {
-    if (source.hasOwnProperty(key)) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
       const sourceValue = source[key];
       const targetValue = target[key];
 
@@ -264,9 +268,12 @@ export function deepMerge<T extends Record<string, any>>(target: T, ...sources: 
         typeof targetValue === 'object' &&
         !Array.isArray(targetValue)
       ) {
-        target[key] = deepMerge({ ...targetValue }, sourceValue as any);
+        mutableTarget[key] = deepMerge(
+          { ...(targetValue as Record<string, unknown>) },
+          sourceValue as Record<string, unknown>
+        );
       } else {
-        target[key] = sourceValue as any;
+        mutableTarget[key] = sourceValue;
       }
     }
   }
@@ -277,7 +284,7 @@ export function deepMerge<T extends Record<string, any>>(target: T, ...sources: 
 /**
  * Pick keys from object
  */
-export function pick<T extends Record<string, any>, K extends keyof T>(
+export function pick<T extends Record<string, unknown>, K extends keyof T>(
   obj: T,
   keys: K[]
 ): Pick<T, K> {
@@ -293,7 +300,7 @@ export function pick<T extends Record<string, any>, K extends keyof T>(
 /**
  * Omit keys from object
  */
-export function omit<T extends Record<string, any>, K extends keyof T>(
+export function omit<T extends Record<string, unknown>, K extends keyof T>(
   obj: T,
   keys: K[]
 ): Omit<T, K> {
@@ -313,22 +320,22 @@ export function omit<T extends Record<string, any>, K extends keyof T>(
  * get({ a: { b: { c: 1 } } }, 'a.b.x', 'default'); // 'default'
  * ```
  */
-export function get<T = any>(
-  obj: any,
+export function get<T = unknown>(
+  obj: unknown,
   path: string,
   defaultValue?: T
 ): T {
   const keys = path.split('.');
-  let result = obj;
+  let result: unknown = obj;
 
   for (const key of keys) {
     if (result == null || typeof result !== 'object') {
       return defaultValue as T;
     }
-    result = result[key];
+    result = (result as Record<string, unknown>)[key];
   }
 
-  return result !== undefined ? result : (defaultValue as T);
+  return result !== undefined ? (result as T) : (defaultValue as T);
 }
 
 /**
@@ -339,16 +346,20 @@ export function get<T = any>(
  * set({}, 'a.b.c', 1); // { a: { b: { c: 1 } } }
  * ```
  */
-export function set(obj: any, path: string, value: any): any {
+export function set(
+  obj: Record<string, unknown>,
+  path: string,
+  value: unknown
+): Record<string, unknown> {
   const keys = path.split('.');
   const lastKey = keys.pop()!;
-  let current = obj;
+  let current: Record<string, unknown> = obj;
 
   for (const key of keys) {
     if (!(key in current) || typeof current[key] !== 'object') {
       current[key] = {};
     }
-    current = current[key];
+    current = current[key] as Record<string, unknown>;
   }
 
   current[lastKey] = value;
@@ -358,7 +369,7 @@ export function set(obj: any, path: string, value: any): any {
 /**
  * Check if object is empty
  */
-export function isEmpty(obj: any): boolean {
+export function isEmpty(obj: unknown): boolean {
   if (obj == null) return true;
   if (Array.isArray(obj) || typeof obj === 'string') return obj.length === 0;
   if (typeof obj === 'object') return Object.keys(obj).length === 0;
