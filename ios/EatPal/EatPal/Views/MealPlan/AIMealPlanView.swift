@@ -22,6 +22,8 @@ struct AIMealPlanView: View {
     /// request (and so it's cancelled on dismiss) instead of being stuck on the
     /// spinner with only "Close" as an escape.
     @State private var generationTask: Task<Void, Never>?
+    // US-422: watchdog that surfaces a timeout if generation hangs.
+    @State private var timeoutTask: Task<Void, Never>?
 
     private var activeKid: Kid? {
         guard let kidId = appState.activeKidId else { return nil }
@@ -213,6 +215,8 @@ struct AIMealPlanView: View {
             // US-422: cancel any in-flight generation when the sheet goes away.
             generationTask?.cancel()
             generationTask = nil
+            timeoutTask?.cancel()
+            timeoutTask = nil
             aiService.clearSuggestions()
             fridgeIngredients = []
         }
@@ -222,7 +226,24 @@ struct AIMealPlanView: View {
     /// can be cancelled by the user or on dismiss.
     private func startGeneration() {
         generationTask?.cancel()
-        generationTask = Task { await generateSuggestions() }
+        timeoutTask?.cancel()
+        generationTask = Task {
+            await generateSuggestions()
+            // Work finished (or was cancelled) — stand the watchdog down.
+            timeoutTask?.cancel()
+        }
+        // US-422: hard client-side timeout. If generation hasn't completed
+        // within the window, cancel it and surface the failure via the existing
+        // ErrorBanner so the user is never stranded on an endless spinner.
+        timeoutTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
+            guard !Task.isCancelled, aiService.isLoading else { return }
+            generationTask?.cancel()
+            generationTask = nil
+            aiService.isLoading = false
+            aiService.errorMessage = "This is taking longer than expected. Check your connection and try again."
+            HapticManager.error()
+        }
     }
 
     /// US-422: cancel the in-flight request and clear the loading state so the
@@ -230,6 +251,8 @@ struct AIMealPlanView: View {
     private func cancelGeneration() {
         generationTask?.cancel()
         generationTask = nil
+        timeoutTask?.cancel()
+        timeoutTask = nil
         aiService.isLoading = false
         HapticManager.selection()
     }

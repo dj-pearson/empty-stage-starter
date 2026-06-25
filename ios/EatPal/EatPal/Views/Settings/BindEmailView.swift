@@ -282,12 +282,18 @@ struct BindEmailView: View {
 
     private func startResendCooldown() {
         cooldownTask?.cancel()
+        // US-432: drive the counter from a wall-clock deadline rather than a
+        // raw per-tick decrement. If the app is backgrounded/suspended the
+        // Task.sleep loop drifts; recomputing remaining from the deadline each
+        // tick (and clamping to 0) means the counter can't get stuck non-zero.
+        let deadline = Date().addingTimeInterval(60)
         resendCooldown = 60
         cooldownTask = Task { @MainActor in
-            while resendCooldown > 0 {
+            while !Task.isCancelled {
+                let remaining = max(0, Int(deadline.timeIntervalSinceNow.rounded(.up)))
+                resendCooldown = remaining
+                if remaining == 0 { break }
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
-                if Task.isCancelled { return }
-                resendCooldown -= 1
             }
         }
     }

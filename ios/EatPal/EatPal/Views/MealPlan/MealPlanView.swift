@@ -296,6 +296,15 @@ struct MealPlanView: View {
                     guard let kidId = appState.activeKidId else { return }
                     // US-415: surface success/failure instead of a silent try?
                     // that left entries to reappear on next load with no notice.
+                    // Snapshot the whole week first so this bulk-destructive
+                    // action can be undone (parity with Clear Completed grocery
+                    // and the remove-from-plan undo above).
+                    let snapshot = (0..<7).flatMap { offset -> [PlanEntry] in
+                        let date = Calendar.current.date(
+                            byAdding: .day, value: offset, to: weekStart
+                        ) ?? weekStart
+                        return appState.planEntriesForDate(date, kidId: kidId)
+                    }
                     do {
                         try await MealPlanTemplateService.shared.deleteWeekPlan(
                             weekStart: weekStart,
@@ -303,7 +312,28 @@ struct MealPlanView: View {
                             appState: appState
                         )
                         HapticManager.success()
-                        ToastManager.shared.success("Week cleared")
+                        if snapshot.isEmpty {
+                            ToastManager.shared.success("Week cleared")
+                        } else {
+                            ToastManager.shared.show(Toast(
+                                type: .success,
+                                title: "Week cleared",
+                                actionLabel: "Undo",
+                                retry: {
+                                    do {
+                                        for entry in snapshot {
+                                            try await appState.addPlanEntry(entry)
+                                        }
+                                        HapticManager.success()
+                                    } catch {
+                                        ToastManager.shared.error(
+                                            "Couldn't undo",
+                                            message: "Some meals may need to be re-added manually."
+                                        )
+                                    }
+                                }
+                            ))
+                        }
                     } catch {
                         HapticManager.error()
                         ToastManager.shared.error(
@@ -434,6 +464,12 @@ struct DayChip: View {
     let isToday: Bool
     let action: () -> Void
 
+    // US-424: scale the chip with Dynamic Type so the day-of-week label and
+    // date number don't clip at larger accessibility text sizes (was a fixed
+    // 44x56 frame).
+    @ScaledMetric(relativeTo: .title3) private var chipWidth: CGFloat = 44
+    @ScaledMetric(relativeTo: .title3) private var chipHeight: CGFloat = 56
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 4) {
@@ -445,7 +481,7 @@ struct DayChip: View {
                     .font(.title3)
                     .fontWeight(isSelected ? .bold : .regular)
             }
-            .frame(width: 44, height: 56)
+            .frame(minWidth: chipWidth, minHeight: chipHeight)
             .background(
                 isSelected ? Color.green :
                     isToday ? Color.green.opacity(0.15) :
