@@ -154,11 +154,27 @@ struct BulkAddFoodSheet: View {
         lastAddedIds = []
         showUndo = false
 
+        // US-442: count actual successful deletions so we don't report a
+        // false "Removed N" when some/all deletes failed.
+        var removed = 0
         for id in ids {
-            try? await appState.deleteFood(id)
+            do {
+                try await appState.deleteFood(id)
+                removed += 1
+            } catch {
+                // keep going; report the real count below
+            }
         }
 
-        HapticManager.warning()
-        ToastManager.shared.info("Undone", message: "Removed \(ids.count) food\(ids.count == 1 ? "" : "s").")
+        if removed == ids.count {
+            HapticManager.warning()
+            ToastManager.shared.info("Undone", message: "Removed \(removed) food\(removed == 1 ? "" : "s").")
+        } else if removed > 0 {
+            HapticManager.error()
+            ToastManager.shared.error("Partly undone", message: "Removed \(removed) of \(ids.count); please try again.")
+        } else {
+            HapticManager.error()
+            ToastManager.shared.error("Couldn't undo", message: "Please try again.")
+        }
     }
 }

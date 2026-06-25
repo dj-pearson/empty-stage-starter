@@ -344,6 +344,13 @@ struct RecipesView: View {
         .refreshable {
             await appState.loadAllData()
         }
+        // US-441: when the search/filter changes, drop any selection that's no
+        // longer visible so bulk actions can never touch filter-hidden recipes
+        // and the None/All toggle label stays truthful.
+        .onChange(of: filteredRecipes.map(\.id)) { _, visibleIds in
+            guard isSelecting else { return }
+            selectedIds.formIntersection(visibleIds)
+        }
     }
 
     // MARK: - US-269 bulk actions
@@ -353,18 +360,26 @@ struct RecipesView: View {
         isSelecting = false
     }
 
+    /// US-441: selection scoped to what's currently visible. Bulk ops act on
+    /// this, never on the raw `selectedIds`, so hidden recipes are never hit.
+    private var visibleSelectedIds: Set<String> {
+        selectedIds.intersection(filteredRecipes.map(\.id))
+    }
+
     private func bulkAddIngredientsToGrocery() async {
-        guard !selectedIds.isEmpty else { return }
+        let ids = visibleSelectedIds
+        guard !ids.isEmpty else { return }
         do {
-            try await appState.bulkAddRecipesToGrocery(selectedIds)
+            try await appState.bulkAddRecipesToGrocery(ids)
             exitSelectMode()
         } catch { }
     }
 
     private func bulkDelete() async {
-        guard !selectedIds.isEmpty else { return }
+        let ids = visibleSelectedIds
+        guard !ids.isEmpty else { return }
         do {
-            try await appState.bulkDeleteRecipes(selectedIds)
+            try await appState.bulkDeleteRecipes(ids)
             exitSelectMode()
         } catch { }
     }

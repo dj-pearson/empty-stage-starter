@@ -1088,9 +1088,17 @@ struct AddFoodView: View {
         // US-364: dedup against the pantry — if a food with the same name
         // already exists, increment its quantity instead of inserting a
         // duplicate row (mergeOrAddFood auto-applies the merge).
-        try? await appState.mergeOrAddFood(food)
-        isSubmitting = false
-        dismiss()
+        // US-442: surface failures and only dismiss on success so the user
+        // never loses input thinking the food was saved.
+        defer { isSubmitting = false }
+        do {
+            try await appState.mergeOrAddFood(food)
+            HapticManager.success()
+            dismiss()
+        } catch {
+            ToastManager.shared.show(error, as: { .save(entity: "foods", underlying: $0) })
+            HapticManager.error()
+        }
     }
 }
 
