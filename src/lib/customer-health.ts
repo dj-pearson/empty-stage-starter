@@ -195,7 +195,7 @@ class CustomerHealthService {
   async recalculateScore(userId: string): Promise<HealthScore | null> {
     try {
       // Call the database function to calculate score
-      const { data: scoreResult, error: scoreError } = await supabase
+      const { error: scoreError } = await supabase
         .rpc('calculate_customer_health_score', { p_user_id: userId });
 
       if (scoreError) {
@@ -470,30 +470,31 @@ class CustomerHealthService {
   /**
    * Map database row to HealthScore
    */
-  private mapRowToScore(row: any): HealthScore {
+  private mapRowToScore(rawRow: unknown): HealthScore {
+    const row = rawRow as Record<string, unknown>;
     return {
-      userId: row.user_id,
-      healthScore: row.health_score,
+      userId: row.user_id as string,
+      healthScore: row.health_score as number,
       healthTier: row.health_tier as HealthTier,
-      engagementScore: row.engagement_score || 0,
-      featureAdoptionScore: row.feature_adoption_score || 0,
-      activityFrequencyScore: row.activity_frequency_score || 0,
-      recencyScore: row.recency_score || 0,
-      breadthScore: row.breadth_score || 0,
-      depthScore: row.depth_score || 0,
-      daysActiveLast30: row.days_active_last_30 || 0,
-      daysActiveLast7: row.days_active_last_7 || 0,
-      totalSessions30d: row.total_sessions_30d || 0,
-      avgSessionDurationMinutes: row.avg_session_duration_minutes || 0,
-      featuresUsedCount: row.features_used_count || 0,
-      aiInteractions30d: row.ai_interactions_30d || 0,
-      mealsPlanned30d: row.meals_planned_30d || 0,
-      foodsLogged30d: row.foods_logged_30d || 0,
-      recipesCreated30d: row.recipes_created_30d || 0,
-      scoreTrend: (row.score_trend || 'stable') as ScoreTrend,
-      scoreChange30d: row.score_change_30d || 0,
-      lastActivityAt: row.last_activity_at,
-      calculatedAt: row.calculated_at,
+      engagementScore: (row.engagement_score as number) || 0,
+      featureAdoptionScore: (row.feature_adoption_score as number) || 0,
+      activityFrequencyScore: (row.activity_frequency_score as number) || 0,
+      recencyScore: (row.recency_score as number) || 0,
+      breadthScore: (row.breadth_score as number) || 0,
+      depthScore: (row.depth_score as number) || 0,
+      daysActiveLast30: (row.days_active_last_30 as number) || 0,
+      daysActiveLast7: (row.days_active_last_7 as number) || 0,
+      totalSessions30d: (row.total_sessions_30d as number) || 0,
+      avgSessionDurationMinutes: (row.avg_session_duration_minutes as number) || 0,
+      featuresUsedCount: (row.features_used_count as number) || 0,
+      aiInteractions30d: (row.ai_interactions_30d as number) || 0,
+      mealsPlanned30d: (row.meals_planned_30d as number) || 0,
+      foodsLogged30d: (row.foods_logged_30d as number) || 0,
+      recipesCreated30d: (row.recipes_created_30d as number) || 0,
+      scoreTrend: (row.score_trend as ScoreTrend) || 'stable',
+      scoreChange30d: (row.score_change_30d as number) || 0,
+      lastActivityAt: row.last_activity_at as string,
+      calculatedAt: row.calculated_at as string,
     };
   }
 }

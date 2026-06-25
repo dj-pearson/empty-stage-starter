@@ -3,7 +3,7 @@ import { queryOpenFoodFacts } from './open-food-facts';
 import { queryUsda } from './usda';
 import { queryFoodRepo } from './food-repo'; // New import
 
-export async function queryDatabases(barcode: string): Promise<any> {
+export async function queryDatabases(barcode: string): Promise<unknown> {
   const result = await queryLocalDb(barcode);
   if (result) {
     return result;

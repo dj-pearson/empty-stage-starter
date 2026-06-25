@@ -1,9 +1,40 @@
-export function harmonizeFoodData(results: any[]): any {
+export interface HarmonizedNutrient {
+  name: string;
+  value: number;
+  unit: string;
+}
+
+interface HarmonizationSource {
+  source: string;
+  name?: string;
+  calories?: number;
+  nutrients?: HarmonizedNutrient[];
+  product_name?: string;
+  nutriments?: {
+    energy_value?: number;
+    fiber_g?: number;
+    [key: string]: number | undefined;
+  };
+  description?: string;
+  foodNutrients?: Array<{
+    nutrientName: string;
+    unitName: string;
+    value: number;
+  }>;
+}
+
+export interface HarmonizedFood {
+  name: string;
+  calories: number;
+  nutrients: HarmonizedNutrient[];
+}
+
+export function harmonizeFoodData(results: HarmonizationSource[]): HarmonizedFood | null {
   if (!results || results.length === 0) {
     return null;
   }
 
-  let harmonized: any = {
+  const harmonized: HarmonizedFood = {
     name: '',
     calories: 0,
     nutrients: [],
@@ -14,9 +45,9 @@ export function harmonizeFoodData(results: any[]): any {
   // Prioritize local data
   const localResult = results.find(r => r.source === 'local');
   if (localResult) {
-    harmonized.name = localResult.name;
-    harmonized.calories = localResult.calories;
-    localResult.nutrients.forEach((n: any) => nutrientMap.set(n.name, { value: n.value, unit: n.unit }));
+    harmonized.name = localResult.name ?? '';
+    harmonized.calories = localResult.calories ?? 0;
+    localResult.nutrients?.forEach((n) => nutrientMap.set(n.name, { value: n.value, unit: n.unit }));
   }
 
   // Process Open Food Facts data
@@ -44,12 +75,12 @@ export function harmonizeFoodData(results: any[]): any {
     if (!harmonized.name && usdaResult.description) {
       harmonized.name = usdaResult.description;
     }
-    usdaResult.foodNutrients.forEach((n: any) => {
+    usdaResult.foodNutrients.forEach((n) => {
       const nutrientName = n.nutrientName;
       const normalizedNutrientName = nutrientName === 'Fiber, total dietary' ? 'Fiber' : nutrientName;
       if (!nutrientMap.has(normalizedNutrientName)) {
-        let unit = n.unitName.toLowerCase();
-        let value = n.value;
+        const unit = n.unitName.toLowerCase();
+        const value = n.value;
 
         if (normalizedNutrientName === 'Fiber') {
           nutrientMap.set('Fiber', { value: value, unit: 'g' });

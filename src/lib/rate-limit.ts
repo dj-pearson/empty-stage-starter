@@ -86,10 +86,10 @@ export function showRateLimitError(result: RateLimitResult) {
  * @param body - Request body
  * @returns Function response or null if rate limited
  */
-export async function callWithRateLimit<T = any>(
+export async function callWithRateLimit<T = unknown>(
   endpoint: string,
   functionName: string,
-  body: any
+  body: Record<string, unknown>
 ): Promise<T | null> {
   // Check rate limit first
   const rateLimitCheck = await checkRateLimit(endpoint);
