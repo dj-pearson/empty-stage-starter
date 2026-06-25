@@ -6746,7 +6746,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Extension runs in the tightest-memory process; file-URL share currently 404s as a recipe."
+      "notes": "PARTIAL: ShareViewController rejects file/non-http(s) URLs (so a shared file no longer dead-ends in the recipe parser) and caps shared text to 20k chars before parsing (extension memory budget). REMAINING: debounce the editor re-parse in ShareImportView, and confirm the extension target injects FUNCTIONS_URL/SUPABASE_URL Info.plist keys (RecipeParseAPI Bundle.main fallback). Implemented on branch claude/ios-app-review-prd-pbedlw. Pending Xcode build/device verification via PR #200 CI."
     },
     {
       "id": "US-452",
@@ -6864,8 +6864,8 @@
         "StoreKitService.restorePurchases surfaces AppStore.sync() failures so 'nothing to restore' is distinguishable from 'restore failed' (StoreKitService.swift:171-186)"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Observability for silent degradation paths across services."
+      "passes": true,
+      "notes": "TonightModeService edge-fetch fallback now records a Sentry breadcrumb (not print); BarcodeService throws TransientLookupError on 429/5xx (distinct from nil not-found) so callers can retry; StoreKitService.restorePurchases surfaces AppStore.sync() failures via errorMessage + Sentry breadcrumb instead of try?. Implemented on branch claude/ios-app-review-prd-pbedlw. Pending Xcode build/device verification via PR #200 CI."
     }
   ]
 }

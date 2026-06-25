@@ -120,8 +120,13 @@ enum TonightModeService {
                 return response.suggestions
             }
         } catch {
-            // Logged but swallowed — we want the fallback to still run.
-            print("[TonightMode] edge fetch failed, falling back: \(error)")
+            // Swallowed — we want the fallback to still run — but US-460:
+            // record it in Sentry so we can see how often this flagship feature
+            // silently degrades to local picks, instead of only print().
+            SentryService.leaveBreadcrumb(
+                category: "tonight",
+                message: "edge fetch failed, falling back to local picks: \(error)"
+            )
         }
 
         return clientFallback(
