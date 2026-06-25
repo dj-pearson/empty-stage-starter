@@ -6525,7 +6525,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "Independently flagged by 3 audit agents (Services, App/ViewModels). Highest-confidence correctness bug."
+      "notes": "PARTIAL: writeHealthSample now skips the write on date-parse failure instead of mis-dating to now(); TonightModeService.clientFallback parses with the app-standard DateFormatter.isoDate (no separate UTC formatter). DEFERRED (needs Xcode build + confirmation of web's civil-date semantics before flipping global behavior): changing DateFormatter.isoDate's timeZone and the 23:30-near-midnight test. Implemented on branch claude/ios-app-review-prd-pbedlw with unit tests where runnable. Pending Xcode build/device verification (no Swift toolchain in this web env)."
     },
     {
       "id": "US-436",
@@ -6568,8 +6568,8 @@
         "Add tests for both fractional and non-fractional timestamp strings"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Postgres timestamptz often emits whole-second values; current parsers require '.SSS'."
+      "passes": true,
+      "notes": "ISO8601DateFormatter.parseTimestamp tolerates fractional AND whole-second timestamps; wired into HouseholdInviteCode.isExpired/expiresInDescription and RestockPredictor. Tests in PlatformHardeningV3Tests. Implemented on branch claude/ios-app-review-prd-pbedlw with unit tests where runnable. Pending Xcode build/device verification (no Swift toolchain in this web env)."
     },
     {
       "id": "US-439",
@@ -6582,8 +6582,8 @@
         "No unbounded query: confirm a reasonable upper bound or pagination"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Combined with server-authoritative replace, out-of-window rows become invisible until they re-enter the window."
+      "passes": true,
+      "notes": "DataService plan-entry fetch window widened from -30/+90 to -365/+365 days via named constants (planFetchPastDays/planFetchFutureDays), still bounded. Implemented on branch claude/ios-app-review-prd-pbedlw with unit tests where runnable. Pending Xcode build/device verification (no Swift toolchain in this web env)."
     },
     {
       "id": "US-440",

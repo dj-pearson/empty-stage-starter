@@ -55,4 +55,48 @@ final class PlatformHardeningV3Tests: XCTestCase {
         let decoded = try JSONDecoder().decode(AisleWrapper.self, from: data)
         XCTAssertEqual(decoded.aisle, .ethnicAsian)
     }
+
+    // MARK: - US-438: tolerant timestamp parsing
+
+    /// Postgres `timestamptz` emits whole-second values without a fraction,
+    /// which an `.withFractionalSeconds` formatter rejects. The tolerant
+    /// parser must handle both shapes so expiry/restock math doesn't silently
+    /// treat the value as missing.
+    func testParseTimestampHandlesFractionalAndWholeSeconds() throws {
+        XCTAssertNotNil(ISO8601DateFormatter.parseTimestamp("2026-04-26T12:34:56.789Z"))
+        XCTAssertNotNil(ISO8601DateFormatter.parseTimestamp("2026-04-26T12:34:56Z"))
+        XCTAssertNil(ISO8601DateFormatter.parseTimestamp("not-a-timestamp"))
+    }
+
+    /// An invite whose whole-second expiry is in the past must read as expired
+    /// (previously parsing failed and isExpired returned false).
+    func testInviteCodeExpiryParsesWholeSeconds() throws {
+        let past = ISO8601DateFormatter.permissiveNoFraction.string(from: Date().addingTimeInterval(-3600))
+        let json = """
+        {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "household_id": "h1",
+            "code": "ABC123",
+            "role": "member",
+            "created_by": "u1",
+            "expires_at": "\(past)"
+        }
+        """.data(using: .utf8)!
+        let code = try JSONDecoder.supabase.decode(HouseholdInviteCode.self, from: json)
+        XCTAssertTrue(code.isExpired)
+
+        let future = ISO8601DateFormatter.permissiveNoFraction.string(from: Date().addingTimeInterval(3600))
+        let futureJSON = """
+        {
+            "id": "00000000-0000-0000-0000-000000000002",
+            "household_id": "h1",
+            "code": "XYZ789",
+            "role": "member",
+            "created_by": "u1",
+            "expires_at": "\(future)"
+        }
+        """.data(using: .utf8)!
+        let futureCode = try JSONDecoder.supabase.decode(HouseholdInviteCode.self, from: futureJSON)
+        XCTAssertFalse(futureCode.isExpired)
+    }
 }

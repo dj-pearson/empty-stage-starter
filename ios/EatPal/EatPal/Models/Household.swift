@@ -73,7 +73,7 @@ struct HouseholdInviteCode: Identifiable, Codable, Equatable {
     }
 
     var isExpired: Bool {
-        guard let parsed = ISO8601DateFormatter.permissive.date(from: expiresAt) else {
+        guard let parsed = ISO8601DateFormatter.parseTimestamp(expiresAt) else {
             return false
         }
         return parsed < Date()
@@ -83,7 +83,7 @@ struct HouseholdInviteCode: Identifiable, Codable, Equatable {
 
     /// Human-friendly relative expiry — "expires in 3 hours".
     var expiresInDescription: String {
-        guard let parsed = ISO8601DateFormatter.permissive.date(from: expiresAt) else {
+        guard let parsed = ISO8601DateFormatter.parseTimestamp(expiresAt) else {
             return ""
         }
         let interval = parsed.timeIntervalSinceNow
@@ -104,4 +104,21 @@ extension ISO8601DateFormatter {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
+
+    /// Same, but for whole-second timestamps. `ISO8601DateFormatter` with
+    /// `.withFractionalSeconds` *requires* a fraction and fails on
+    /// `2026-04-26T12:34:56Z`, while the default form fails when a fraction
+    /// is present — so Postgres (which omits the fraction for whole seconds)
+    /// breaks one or the other. See US-438.
+    static let permissiveNoFraction: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    /// Parse a Supabase `timestamptz` whether or not it carries fractional
+    /// seconds. Returns nil only when the value is genuinely unparseable.
+    static func parseTimestamp(_ value: String) -> Date? {
+        permissive.date(from: value) ?? permissiveNoFraction.date(from: value)
+    }
 }

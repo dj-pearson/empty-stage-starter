@@ -743,8 +743,11 @@ final class AppState: ObservableObject {
               let recipe = recipes.first(where: { $0.id == recipeId }),
               let nutrition = recipe.nutritionInfo else { return }
 
-        let formatter = DateFormatter.isoDate
-        let mealDate = formatter.date(from: entry.date) ?? Date()
+        // US-435: date the sample to the meal's civil day. If the stored date
+        // can't be parsed, skip the write rather than silently mis-dating the
+        // sample to "now" (which would attribute the meal to the wrong day in
+        // Health).
+        guard let mealDate = DateFormatter.isoDate.date(from: entry.date) else { return }
 
         do {
             try await service.writeMeal(
