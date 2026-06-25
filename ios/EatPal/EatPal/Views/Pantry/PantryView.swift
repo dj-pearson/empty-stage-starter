@@ -194,10 +194,15 @@ struct PantryView: View {
                                         Button {
                                             HapticManager.lightImpact()
                                             Task {
-                                                try? await appState.updateFood(
-                                                    food.id,
-                                                    updates: FoodUpdate(quantity: (food.quantity ?? 0) + 1)
-                                                )
+                                                // US-416: do/catch — appState.updateFood already
+                                                // rolls back the optimistic change and surfaces an
+                                                // error toast on failure (was a silent try?).
+                                                do {
+                                                    try await appState.updateFood(
+                                                        food.id,
+                                                        updates: FoodUpdate(quantity: (food.quantity ?? 0) + 1)
+                                                    )
+                                                } catch { /* rolled back + toasted in AppState */ }
                                                 await TipEvents.didSwipePantry.donate()
                                             }
                                         } label: {
@@ -209,10 +214,12 @@ struct PantryView: View {
                                         Button {
                                             HapticManager.selection()
                                             Task {
-                                                try? await appState.updateFood(
-                                                    food.id,
-                                                    updates: FoodUpdate(isSafe: !food.isSafe)
-                                                )
+                                                do {
+                                                    try await appState.updateFood(
+                                                        food.id,
+                                                        updates: FoodUpdate(isSafe: !food.isSafe)
+                                                    )
+                                                } catch { /* rolled back + toasted in AppState */ }
                                                 await TipEvents.didSwipePantry.donate()
                                             }
                                         } label: {
@@ -246,11 +253,12 @@ struct PantryView: View {
                                                     checked: false,
                                                     addedVia: "restock"
                                                 )
-                                                try? await appState.addGroceryItem(item)
-                                                ToastManager.shared.success(
-                                                    "Added to grocery",
-                                                    message: food.name
-                                                )
+                                                // US-416: only confirm on success — addGroceryItem
+                                                // already toasts (added / queued / error); the old
+                                                // try? fired a false "Added to grocery" even on failure.
+                                                do {
+                                                    try await appState.addGroceryItem(item)
+                                                } catch { /* toasted in AppState */ }
                                                 await TipEvents.didSwipePantry.donate()
                                             }
                                         } label: {
@@ -275,8 +283,11 @@ struct PantryView: View {
                                                     checked: false,
                                                     addedVia: "restock"
                                                 )
-                                                try? await appState.addGroceryItem(item)
-                                                ToastManager.shared.success("Added to grocery", message: food.name)
+                                                // US-416: see swipe action — only the AppState
+                                                // toast should fire (no false success on failure).
+                                                do {
+                                                    try await appState.addGroceryItem(item)
+                                                } catch { /* toasted in AppState */ }
                                             }
                                         } label: {
                                             Label("Add to Grocery", systemImage: "cart.fill.badge.plus")
@@ -285,10 +296,12 @@ struct PantryView: View {
                                         Button {
                                             HapticManager.selection()
                                             Task {
-                                                try? await appState.updateFood(
-                                                    food.id,
-                                                    updates: FoodUpdate(isSafe: !food.isSafe)
-                                                )
+                                                do {
+                                                    try await appState.updateFood(
+                                                        food.id,
+                                                        updates: FoodUpdate(isSafe: !food.isSafe)
+                                                    )
+                                                } catch { /* rolled back + toasted in AppState */ }
                                             }
                                         } label: {
                                             Label(
@@ -300,10 +313,12 @@ struct PantryView: View {
                                         Button {
                                             HapticManager.selection()
                                             Task {
-                                                try? await appState.updateFood(
-                                                    food.id,
-                                                    updates: FoodUpdate(isTryBite: !food.isTryBite)
-                                                )
+                                                do {
+                                                    try await appState.updateFood(
+                                                        food.id,
+                                                        updates: FoodUpdate(isTryBite: !food.isTryBite)
+                                                    )
+                                                } catch { /* rolled back + toasted in AppState */ }
                                             }
                                         } label: {
                                             Label(
@@ -807,10 +822,13 @@ struct FoodRowView: View {
     private func adjust(by delta: Double) {
         let newQty = max(0, displayQuantity + delta)
         Task {
-            try? await appState.updateFood(
-                food.id,
-                updates: FoodUpdate(quantity: newQty)
-            )
+            // US-416: do/catch — AppState rolls back + toasts on failure.
+            do {
+                try await appState.updateFood(
+                    food.id,
+                    updates: FoodUpdate(quantity: newQty)
+                )
+            } catch { /* rolled back + toasted in AppState */ }
         }
     }
 }
@@ -875,11 +893,15 @@ struct QuantityAdjustSheet: View {
 
                 Button {
                     Task {
-                        try? await appState.updateFood(
-                            food.id,
-                            updates: FoodUpdate(quantity: draft)
-                        )
-                        dismiss()
+                        // US-416: only dismiss on success so a failed save keeps
+                        // the sheet open (AppState rolls back + toasts the error).
+                        do {
+                            try await appState.updateFood(
+                                food.id,
+                                updates: FoodUpdate(quantity: draft)
+                            )
+                            dismiss()
+                        } catch { /* rolled back + toasted in AppState */ }
                     }
                 } label: {
                     Text("Save")
@@ -1179,21 +1201,25 @@ struct FoodDetailView: View {
                             // Clearing an existing date via this UI isn't
                             // wired (would need a sentinel-aware encoder); the
                             // workaround is to set it to a far-future date.
-                            try? await appState.updateFood(
-                                food.id,
-                                updates: FoodUpdate(
-                                    name: name,
-                                    category: category.rawValue,
-                                    isSafe: isSafe,
-                                    isTryBite: isTryBite,
-                                    quantity: quantity,
-                                    unit: unit,
-                                    expiryDate: hasExpiry
-                                        ? DateFormatter.isoDate.string(from: expiryDate)
-                                        : nil
+                            // US-416: only dismiss on success so a failed save
+                            // doesn't silently drop the user's edits.
+                            do {
+                                try await appState.updateFood(
+                                    food.id,
+                                    updates: FoodUpdate(
+                                        name: name,
+                                        category: category.rawValue,
+                                        isSafe: isSafe,
+                                        isTryBite: isTryBite,
+                                        quantity: quantity,
+                                        unit: unit,
+                                        expiryDate: hasExpiry
+                                            ? DateFormatter.isoDate.string(from: expiryDate)
+                                            : nil
+                                    )
                                 )
-                            )
-                            dismiss()
+                                dismiss()
+                            } catch { /* rolled back + toasted in AppState */ }
                         }
                     }
                     .frame(maxWidth: .infinity)

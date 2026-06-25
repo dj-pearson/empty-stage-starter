@@ -22,6 +22,11 @@ struct ScanReceiptSheet: View {
     @State private var rows: [ReviewRow] = []
     @State private var errorMessage: String?
     @State private var startedAt: Date?
+    // US-416: idempotency for retry — matched foods already incremented and the
+    // one-shot unmatched bulk-insert must not run twice if a mid-save failure
+    // sends the user back to .review to hit Save again.
+    @State private var committedMatchedIds: Set<String> = []
+    @State private var insertedUnmatched = false
 
     private var acceptedRows: [ReviewRow] { rows.filter(\.accept) }
     private var droppedCount: Int { rows.count - acceptedRows.count }
@@ -267,15 +272,20 @@ struct ScanReceiptSheet: View {
         do {
             for row in matchedRows {
                 guard let id = row.matchedFoodId else { continue }
+                // US-416: skip rows already incremented in an earlier attempt so
+                // a retry after a partial failure can't double-count them.
+                if committedMatchedIds.contains(row.id.uuidString) { continue }
                 try await appState.incrementFoodQuantity(
                     id,
                     by: row.item.qty,
                     unit: row.item.unit.isEmpty ? nil : row.item.unit,
                     notify: false
                 )
+                committedMatchedIds.insert(row.id.uuidString)
             }
-            if !newFoods.isEmpty {
+            if !newFoods.isEmpty && !insertedUnmatched {
                 try await DataService.shared.bulkInsertFoods(newFoods)
+                insertedUnmatched = true
             }
             await appState.refreshFoodsAfterReceiptScan()
             let savedCount = matchedRows.count + newFoods.count
@@ -303,6 +313,10 @@ struct ReviewRow: Identifiable, Equatable {
 
 private struct ReviewRowView: View {
     @Binding var row: ReviewRow
+    // US-424: let the qty/unit fields grow with Dynamic Type instead of
+    // clipping inside fixed 56/64pt widths at larger accessibility sizes.
+    @ScaledMetric(relativeTo: .body) private var qtyFieldWidth: CGFloat = 56
+    @ScaledMetric(relativeTo: .body) private var unitFieldWidth: CGFloat = 64
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -318,9 +332,9 @@ private struct ReviewRowView: View {
                 HStack(spacing: 6) {
                     TextField("Qty", value: $row.item.qty, formatter: NumberFormatter.qty)
                         .keyboardType(.decimalPad)
-                        .frame(width: 56)
+                        .frame(minWidth: qtyFieldWidth)
                     TextField("unit", text: $row.item.unit)
-                        .frame(width: 64)
+                        .frame(minWidth: unitFieldWidth)
                     Text("$\(row.item.lineTotal, specifier: "%.2f")")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
