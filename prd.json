@@ -6510,6 +6510,362 @@
       "priority": 4,
       "passes": true,
       "notes": "DONE + source-verified: PickyEaterQuizView shows a Back button when currentQuestion>0 and goBack() removes the last answer + steps back so the user can re-select; scoring guards divide-by-zero. Verified."
+    },
+    {
+      "id": "US-435",
+      "title": "iOS Dates: civil-date formatter uses local timezone, causing off-by-one across the app",
+      "description": "As a user near midnight or in a non-UTC timezone, I want plan dates, expiry, and Health samples to land on the correct calendar day so that the iOS app agrees with the web app and reality.",
+      "acceptanceCriteria": [
+        "DateFormatters.isoDate parses/formats bare yyyy-MM-dd as timezone-agnostic civil dates (pin a fixed calendar/UTC) matching the web contract (DateFormatters.swift:9)",
+        "daysUntilExpiry, planEntriesForDate, and Siri 'today' queries no longer shift by a day east/west of UTC or across DST",
+        "AppState.writeHealthSample (AppState.swift:738-747) dates the HealthKit sample to the meal's civil day and SKIPS the write on parse failure instead of defaulting to Date()/now",
+        "TonightModeService.clientFallback (TonightModeService.swift:152-169) parses entry.date with the same civil-date formatter instead of a separate UTC ISO8601DateFormatter",
+        "Add EatPalTests covering a meal logged at 23:30 local in a UTC-7 timezone resolving to the correct day",
+        "No regression: existing same-day reads still resolve to the user's intended day"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "PARTIAL: writeHealthSample now skips the write on date-parse failure instead of mis-dating to now(); TonightModeService.clientFallback parses with the app-standard DateFormatter.isoDate (no separate UTC formatter). DEFERRED (needs Xcode build + confirmation of web's civil-date semantics before flipping global behavior): changing DateFormatter.isoDate's timeZone and the 23:30-near-midnight test. Implemented on branch claude/ios-app-review-prd-pbedlw with unit tests where runnable. Pending Xcode build/device verification (no Swift toolchain in this web env)."
+    },
+    {
+      "id": "US-436",
+      "title": "iOS Week math: startOfWeek is locale-dependent (Sunday) but app/web assume Monday",
+      "description": "As a user, I want weekly budgets, badges, and reports to use the same Monday week boundary everywhere so that meals aren't attributed to the wrong week or bucketed differently within the same screen.",
+      "acceptanceCriteria": [
+        "Date.startOfWeek pins firstWeekday=2 (Monday) on its calendar, matching the documented intent and the web planner (DateFormatters.swift:49-53)",
+        "BadgeService.perfectWeek and BudgetService.weeklyCostBySlot compute the same week boundary as the meal planner",
+        "JoyScoreChart (already Monday) and WeeklyReportsTab/OverviewTab now bucket the same meal into the same week (ProgressDashboardView weekly tab)",
+        "Add a test asserting startOfWeek for a known Sunday/Monday pair returns the Monday",
+        "No off-by-one in weekDates grid vs web"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "DateFormatters.startOfWeek pinned to Monday (firstWeekday=2); weekDates follows. Tests in PlatformHardeningV3Tests. Implemented on branch claude/ios-app-review-prd-pbedlw with unit tests where runnable. Pending Xcode build/device verification (no Swift toolchain in this web env)."
+    },
+    {
+      "id": "US-437",
+      "title": "iOS Decode: strict enums and non-null fields drop rows from older clients (forward-compat violation)",
+      "description": "As a user on an older shipped build, I want unknown enum values and newly-nullable columns to degrade gracefully so that a single new server value never drops an entire row — including safety-critical allergen data.",
+      "acceptanceCriteria": [
+        "GroceryAisle (GroceryAisle.swift:12) and other directly-decoded String enums (e.g. ResolvedProduct) implement init(from:) mapping unknown raw values to .other instead of throwing",
+        "Null-tolerant decode (decodeIfPresent ?? default) for fields that map to nullable/absent columns: Recipe.foodIds, PlanEntryMadeLog.madeAt, SmartProduct.timesAdded, StoreLayout.aisleOverrides, and Kid.allergenSeverity",
+        "Verify each field against supabase/migrations before changing the default",
+        "A row with a null allergenSeverity still decodes (Kid allergen profile is never dropped)",
+        "Add decode tests for an unknown aisle value and a null allergenSeverity row"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "PARTIAL: GroceryAisle now decodes unknown raw values to .other (forward-compat) with tests. Verified food_ids/times_added/aisle_overrides are NOT NULL DEFAULT in migrations (no null-decode risk) and Kid.allergenSeverity/PlanEntryMadeLog.madeAt are already optional. REMAINING: apply the same unknown->fallback decoder to other directly-decoded String enums (e.g. ResolvedProduct). Implemented on branch claude/ios-app-review-prd-pbedlw with unit tests where runnable. Pending Xcode build/device verification (no Swift toolchain in this web env)."
+    },
+    {
+      "id": "US-438",
+      "title": "iOS Timestamps: ISO parsers require fractional seconds, so whole-second timestamptz values fail",
+      "description": "As a user, I want invite-code expiry and restock history to parse Postgres timestamps so that expired invites are detected and restock cadence works.",
+      "acceptanceCriteria": [
+        "HouseholdInviteCode (Household.swift:75-95) timestamp parsing falls back to a non-fractional ISO8601 formatter when fractional seconds are absent",
+        "RestockPredictor.addHistory (RestockPredictor.swift:47-50) parses whole-second timestamps instead of silently dropping rows",
+        "isExpired returns true for an actually-expired invite emitted without fractional seconds",
+        "Add tests for both fractional and non-fractional timestamp strings"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "ISO8601DateFormatter.parseTimestamp tolerates fractional AND whole-second timestamps; wired into HouseholdInviteCode.isExpired/expiresInDescription and RestockPredictor. Tests in PlatformHardeningV3Tests. Implemented on branch claude/ios-app-review-prd-pbedlw with unit tests where runnable. Pending Xcode build/device verification (no Swift toolchain in this web env)."
+    },
+    {
+      "id": "US-439",
+      "title": "iOS Plan fetch: -30/+90 day window silently hides and evicts out-of-range plan entries",
+      "description": "As a user planning far ahead (parties, trips) or reviewing history, I want my plan entries to load regardless of date so that they don't disappear and get evicted from cache.",
+      "acceptanceCriteria": [
+        "DataService.fetchPlanEntries (DataService.swift:331-346) widens or removes the -30/+90 window (configurable, with a sane cap) so future/past entries load",
+        "A windowed fetch never evicts cached out-of-window rows per the load-precedence contract",
+        "Verify entries planned 4 months out are visible after a fresh load",
+        "No unbounded query: confirm a reasonable upper bound or pagination"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "DataService plan-entry fetch window widened from -30/+90 to -365/+365 days via named constants (planFetchPastDays/planFetchFutureDays), still bounded. Implemented on branch claude/ios-app-review-prd-pbedlw with unit tests where runnable. Pending Xcode build/device verification (no Swift toolchain in this web env)."
+    },
+    {
+      "id": "US-440",
+      "title": "iOS Recipes: Recipe.ingredients reset to [] on Codable round-trip / cache hydration",
+      "description": "As a user, I want a recipe's structured ingredients to survive offline cache hydration so that scaling, grocery-add, and cook mode don't silently lose ingredients.",
+      "acceptanceCriteria": [
+        "Recipe.ingredients (Recipe.swift:58) is re-hydrated from its joined/cached source after decode rather than relying on the silent [] default outside CodingKeys",
+        "A recipe cached offline and re-read retains its RecipeIngredient rows",
+        "RecipeDetailView scaling and add-to-grocery still work after a cold offline launch",
+        "Add a Codable round-trip test asserting ingredients are preserved"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Interacts with the SwiftData offline cache work (US-382/383)."
+    },
+    {
+      "id": "US-441",
+      "title": "iOS Bulk-select: bulk delete/edit acts on filter-hidden items the user can't see",
+      "description": "As a user, I want bulk actions to apply only to currently-visible items so that I never delete recipes or grocery items hidden by an active search/filter.",
+      "acceptanceCriteria": [
+        "RecipesView bulkDelete/bulkAddIngredientsToGrocery (RecipesView.swift:294-370) intersect selectedIds with the current filteredRecipes before acting",
+        "GroceryView select-all and bulk delete (GroceryView.swift:962-975) scope to the currently-filtered uncheckedItems",
+        "Changing the search/filter reconciles (or clears) the selection and the None/All toggle label reflects the visible set",
+        "Add a test: select-all, narrow the filter, confirm only visible items are affected"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Bulk-select scoped to visible set in RecipesView (visibleSelectedIds + onChange) and GroceryView (visibleSelectedIds + onChange on searchText). Implemented on branch claude/ios-app-review-prd-pbedlw with unit tests where runnable. Pending Xcode build/device verification (no Swift toolchain in this web env)."
+    },
+    {
+      "id": "US-442",
+      "title": "iOS Save paths: silent try? + unconditional dismiss loses data on AddFood / ScannedProduct / bulk undo",
+      "description": "As a user, I want add/save failures surfaced and the sheet to stay open so that I don't lose input thinking it saved — matching the US-413/US-416 hardening already applied elsewhere.",
+      "acceptanceCriteria": [
+        "AddFoodView.addFood (PantryView.swift:1069-1094) uses do/catch, surfaces a toast on failure, and dismisses only on success (with isSubmitting reset via defer)",
+        "ScannedProductView.addFood and the duplicate-dialog buttons (ScannedProductView.swift:166-271) surface errors and gate dismissal on success",
+        "BulkAddFoodSheet.undoLastAdd (BulkAddFoodSheet.swift:152-163) counts actual successful deletions and reports the real count, not the attempted count",
+        "No save path in these files swallows errors with try? then dismisses"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "AddFoodView.addFood, ScannedProductView.addFood + dup-dialog buttons, and BulkAddFoodSheet.undoLastAdd now do/catch, surface toasts, dismiss only on success, and report real counts. Implemented on branch claude/ios-app-review-prd-pbedlw with unit tests where runnable. Pending Xcode build/device verification (no Swift toolchain in this web env)."
+    },
+    {
+      "id": "US-443",
+      "title": "iOS Scanner: corrected barcode still displays (and a category picker still saves) the wrong value",
+      "description": "As a user who fixes a misread barcode, I want the displayed barcode to match what's persisted, and receipt category edits to be honored, so that I'm not misled and my categorization isn't discarded.",
+      "acceptanceCriteria": [
+        "ScannedProductView Product Details binds the Barcode label to currentBarcode (the value actually persisted), not the original scanned barcode (ScannedProductView.swift:93-97)",
+        "ScanReceiptSheet category Picker (ScanReceiptSheet.swift:342-401) offers only valid FoodCategory values, or normalizedCategory preserves the user's choice instead of collapsing everything to 'snack'",
+        "Re-categorizing a receipt line to 'frozen'/'beverage' persists that category"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Barcode label now shows the effective (corrected) barcode; ScanReceiptSheet category Picker restricted to real FoodCategory values so choices aren't collapsed to snack. Implemented on branch claude/ios-app-review-prd-pbedlw with unit tests where runnable. Pending Xcode build/device verification (no Swift toolchain in this web env)."
+    },
+    {
+      "id": "US-444",
+      "title": "iOS Units: fl oz parsed as mass; mismatch unflagged when one side is unitless; shortfall uses exact-string unit equality",
+      "description": "As a user marking meals made, I want unit handling to be volume/mass-aware and tolerant of formatting so that pantry debits and shortfalls are correct.",
+      "acceptanceCriteria": [
+        "IngredientTextParser keeps 'fl oz'/'fluid ounce' as a distinct volume canonical token, not collapsed to mass 'oz' (IngredientTextParser.swift:199 + UnitConverter)",
+        "MealMadeStrategy flags a unit mismatch when exactly one side has a unit (MealMadeStrategy.swift:111-117), consistent with ShortfallCalculator/PantryCoverage",
+        "ShortfallCalculator/ShortfallChecker normalize units via UnitConverter.canonical before comparing (so 'tbsp' == 'tbsp.') and merge duplicate ingredient names by summing/maxing needed quantity",
+        "Add tests for fl oz volume debit, one-sided-unit mismatch, and 'tbsp' vs 'tbsp.'"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Silently converts volume to weight on pantry debit; under-orders on duplicate names."
+    },
+    {
+      "id": "US-445",
+      "title": "iOS Siri: LogMealResult/TodaysPlan apply to ALL kids and leak tryBite/raw enum text",
+      "description": "As a parent in a multi-kid household, I want voice meal logging scoped to one child and the spoken plan to read naturally so that I don't mark every kid's dinner eaten by accident.",
+      "acceptanceCriteria": [
+        "LogMealResultIntent (MealAppIntents.swift:79-97) takes an optional Kid parameter defaulting to the active kid and scopes the result update to that child",
+        "TodaysPlanIntent excludes .tryBite from slotOrder so it isn't spoken as a scheduled meal (FoodAppIntents.swift:204)",
+        "Intent dialog uses caseDisplayRepresentations / display titles instead of raw enum rawValue (MealAppIntents.swift:88,107)",
+        "Intents and import deep-links guard for an active session and surface a 'sign in' result when signed out (DeepLinkHandler.swift:89-91)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "PARTIAL: LogMealResultIntent/TodaysPlanIntent now guard for an active session (sign-in prompt when signed out); spoken dialog uses natural-language labels instead of raw enum values; TodaysPlanIntent excludes the try-bite slot from the spoken plan. DEFERRED to a build session: the optional Kid parameter to scope LogMealResult to one child — needs a cross-process activeKidId (App Group) or a Kid AppEntity, both warranting device verification. Implemented on branch claude/ios-app-review-prd-pbedlw. Pending Xcode build/device verification (no Swift toolchain in this web env)."
+    },
+    {
+      "id": "US-446",
+      "title": "iOS Progress: Overview/Weekly stats read global data, not the active child",
+      "description": "As a parent viewing one child's progress, I want Foods Tried, success rate, and diversity scoped to that child so that the numbers reflect the child I'm looking at.",
+      "acceptanceCriteria": [
+        "ProgressDashboardView OverviewTab (ProgressDashboardView.swift:48-111) filters foods/plan entries to activeKidId before computing totalFoodsTried, successRate, categoryDiversity, and FoodResultsChart",
+        "WeeklyReportsTab 'Foods Tried' (ProgressDashboardView.swift:479-481) counts distinct foodIds only among entries with result=='ate', excluding empty ids, and is labeled accurately",
+        "DashboardHomeView TodayMealSummaryCard falls back to the recipe name when foodId doesn't resolve so recipe-based meals aren't dropped (DashboardHomeView.swift:225-228)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "OverviewTab successRate + FoodResultsChart now scoped to the active child; WeeklyReports 'foods tried' counts distinct non-empty foodIds among entries actually eaten; DashboardHomeView today-summary falls back to recipe name so recipe-based meals aren't dropped. Pantry-derived stats (Foods Tried/Categories) stay household-level because `foods` carry no kidId. Implemented on branch claude/ios-app-review-prd-pbedlw. Pending Xcode build/device verification (no Swift toolchain in this web env)."
+    },
+    {
+      "id": "US-447",
+      "title": "iOS Notifications: master toggle re-enables itself; mute window never auto-resumes",
+      "description": "As a user, I want my explicit notification choices respected so that disabled reminders stay off and a timed mute resumes reminders when it expires.",
+      "acceptanceCriteria": [
+        "NotificationSettingsView (.task, SettingsView.swift:385-390) does not force the master toggle ON just because OS permission is granted; it persists and respects the user's explicit master choice",
+        "When a timed mute (mutedUntil) expires, topics reschedule without requiring an app relaunch (NotificationService.swift:208-315) — e.g. re-evaluate on willEnterForeground or schedule a wake at mutedUntil",
+        "Add a test: master OFF with OS-granted permission stays OFF after reopening settings"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Beyond US-403/404: these are the toggle-persistence and mute-expiry edge cases."
+    },
+    {
+      "id": "US-448",
+      "title": "iOS Food Chaining: ignores allergens, shows stale chain, and never shows generating state",
+      "description": "As a parent of a child with allergies, I want generated food chains to exclude allergens and reflect the current selection so that suggestions are safe and accurate.",
+      "acceptanceCriteria": [
+        "FoodChainingView.generateChain (FoodChainingView.swift:152-207) filters target/bridge foods against the active kid's allergens and warns rather than suggesting an allergen",
+        "chainSteps is cleared at the top of generateChain when either selection is missing (no stale chain from a prior pairing)",
+        "Remove or correctly drive the unused isGenerating flag (currently flips true→false synchronously so the ProgressView never shows)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Food-chaining pickers now exclude foods conflicting with the active child's allergens; a selected conflict shows a red allergen warning and suppresses the chain; chainSteps/warning cleared at the top of generateChain; dead isGenerating flag removed. Implemented on branch claude/ios-app-review-prd-pbedlw. Pending Xcode build/device verification (no Swift toolchain in this web env)."
+    },
+    {
+      "id": "US-449",
+      "title": "iOS Perf: any single mutation rebuilds the full widget snapshot + watch push; foods slices not memoized",
+      "description": "As a user, I want single-item edits to avoid full O(n) snapshot rebuilds and re-renders so that the app stays responsive during edits and bulk imports.",
+      "acceptanceCriteria": [
+        "AppState.setupWidgetSnapshotSync (AppState.swift:162-195) gates the snapshot rebuild + watch push on a cheap content hash/version so no-op or check-only changes don't rebuild",
+        "Derived slices foodsByCategory/safeFoods/tryBiteFoods (AppState.swift:203-213) are cached and invalidated only when foods changes (or foods moves to its own observable)",
+        "A single grocery toggle no longer republishes unrelated arrays or pays a full snapshot rebuild",
+        "No behavioral change to widget/watch contents"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Builds on US-388/US-429 perf work; targets the combine pipeline + derived properties."
+    },
+    {
+      "id": "US-450",
+      "title": "iOS Watch/Widget: grocery counts mix capped vs total, complications never reload, slot encoding drifts",
+      "description": "As a watch/widget user, I want accurate counts and fresh data so that '50 of 80 left' isn't wrong and the watch face updates promptly.",
+      "acceptanceCriteria": [
+        "WatchSnapshot stores an uncapped uncheckedGroceryCount used for summaries/complications; the 50-row cap applies only to the rendered list (WatchConnectivityService.swift:103, GroceryWatchView.swift:13-19)",
+        "WatchSnapshotStore.save / WatchSessionStore.cache calls WidgetCenter.shared.reloadAllTimelines() so complications refresh on new snapshots (EatPalWatchComplications.swift, WatchSessionStore.swift:75)",
+        "Slot encoding is centralized in one shared helper so widget (displayName) and watch (raw) snapshots agree, and try_bite maps to a real label (TodayView.slotLabel)",
+        "tryBiteStreak is populated in WidgetSnapshot.buildPayload (or the dead streak branch/deep-link is removed) (EatPalWidget.swift:329-336, WidgetSnapshot.swift:117)"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "PARTIAL: watch grocery summary and complication now use the uncapped unchecked count (total-checked) instead of the 50-capped list; WatchSessionStore.cache reloads complication timelines on each new snapshot. REMAINING: centralize slot display encoding between widget/watch snapshots and populate/remove tryBiteStreak. Implemented on branch claude/ios-app-review-prd-pbedlw. Pending Xcode build/device verification (no Swift toolchain in this web env)."
+    },
+    {
+      "id": "US-451",
+      "title": "iOS Share Extension: file URLs routed to recipe parser, no text size cap, Bundle.main config keys",
+      "description": "As a user sharing into EatPal, I want non-web shares handled gracefully and large text bounded so that imports don't dead-end or blow the extension memory budget.",
+      "acceptanceCriteria": [
+        "ShareViewController.extractSharedContent rejects url.isFileURL / non-http(s) schemes and falls through to text handling (ShareViewController.swift:55-74)",
+        "Shared plain text is truncated to a sane cap (e.g. 20KB / few hundred lines) before GroceryTextParser.parse, and re-parsing is debounced (ShareImportView.swift:547)",
+        "Recipe-parse config (FUNCTIONS_URL/SUPABASE_URL) resolves correctly inside the extension target (inject the build-setting Info.plist keys or read from the App Group) instead of silently falling back to a hardcoded host (RecipeParseAPI.swift:127-143)"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "PARTIAL: ShareViewController rejects file/non-http(s) URLs (so a shared file no longer dead-ends in the recipe parser) and caps shared text to 20k chars before parsing (extension memory budget). REMAINING: debounce the editor re-parse in ShareImportView, and confirm the extension target injects FUNCTIONS_URL/SUPABASE_URL Info.plist keys (RecipeParseAPI Bundle.main fallback). Implemented on branch claude/ios-app-review-prd-pbedlw. Pending Xcode build/device verification via PR #200 CI."
+    },
+    {
+      "id": "US-452",
+      "title": "iOS AI/Images: AIMealService has no cancellation (stale result wins); uploads aren't resized",
+      "description": "As a user, I want the latest AI meal-plan request to win and photo uploads to be reasonably sized so that results are correct and uploads are fast on cellular.",
+      "acceptanceCriteria": [
+        "AIMealService.generateSuggestions (AIMealService.swift:124-226) tracks the in-flight Task and cancels/ignores stale completions (last-request-wins), mirroring AICoachService",
+        "ImageUploadService.upload resizes to a max dimension before JPEG compression (ImageUploadService.swift:22-46), matching the AI services' pre-shrink",
+        "Rapidly re-tapping Generate no longer lets an older response or local fallback clobber a newer result"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Last-completion-wins race + multi-MB full-res uploads."
+    },
+    {
+      "id": "US-453",
+      "title": "iOS Sync infra: ConflictDetector wall-clock + unbounded maps; NetworkMonitor defaults online at cold launch",
+      "description": "As a user, I want conflict detection and connectivity to be robust so that real conflicts aren't silenced by clock jumps and offline cold launches aren't treated as online.",
+      "acceptanceCriteria": [
+        "ConflictDetector stamps echo/conflict windows with a monotonic clock and tracks per-echo timestamps in a FIFO, evicting aged entries (ConflictDetector.swift:61-110)",
+        "RealtimeService INSERT handlers consume/clear the echo so echo bookkeeping stays balanced and a later real UPDATE isn't suppressed (RealtimeService.swift:176-225)",
+        "NetworkMonitor.isConnected initializes synchronously from monitor.currentPath.status so an offline cold launch isn't reported online (NetworkMonitor.swift:32-34)"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Echo/conflict correctness + cold-launch connectivity window."
+    },
+    {
+      "id": "US-454",
+      "title": "iOS Offline durability: only grocery mutations are queued; food/kid/recipe/plan edits are lost offline",
+      "description": "As a user editing offline, I want pantry, kid, recipe, and plan changes to survive so that no domain silently loses optimistic writes.",
+      "acceptanceCriteria": [
+        "Food, kid, recipe, and plan-entry mutations route through the same OfflineStore enqueue path as grocery on network errors (AppState.swift:433-464 vs 1148-1174)",
+        "Bulk grocery paths (clearChecked AppState.swift:1341, moveCheckedToPantry 1454) also enqueue for offline replay",
+        "OR: if grocery-only durability is intentional, document the scope in CLAUDE.md and surface it to the user; either way behavior is consistent and intentional"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Inconsistent durability across domains; ties into US-150/US-385."
+    },
+    {
+      "id": "US-455",
+      "title": "iOS Edge/Household: stale bearer on retry; nondeterministic active household",
+      "description": "As a user, I want edge retries to use a fresh token and a stable active household so that retries recover and realtime scopes to the right household.",
+      "acceptanceCriteria": [
+        "EdgeFunctions.invoke re-fetches the session access token per attempt (or refreshes on 401 before retrying) instead of baking it in before the loop (EdgeFunctions.swift:77-91)",
+        "HouseholdService.currentHousehold deterministically resolves the active household (explicit active id or stable ORDER BY), not .limit(1) with no order (HouseholdService.swift:22-34)",
+        "RealtimeService scopes channels to the deterministic household id"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Retry can 401 on expired token; multi-household users can subscribe to the wrong household."
+    },
+    {
+      "id": "US-456",
+      "title": "iOS Budget: target progress bar never reaches the budget line; residual currency mismatch",
+      "description": "As a user, I want the budget bar to fill at my actual target and all amounts in one currency so that 'on track' vs 'over' is honest.",
+      "acceptanceCriteria": [
+        "BudgetView target progress uses total: weeklyTarget (with separate overflow handling) so being at target reads as full, not ~67% (BudgetView.swift:170-291)",
+        "targetProgressSection formats the target with groceryCurrency consistently with progressCopy (no mixed currency symbols)",
+        "Bar turns to the over-budget state at 100% of target, not 150%"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Target progress bar now totals weeklyTarget (fills 100% at target; over-budget shown via tint+copy) instead of *1.5; target amount formatted in groceryCurrency to match progressCopy. Implemented on branch claude/ios-app-review-prd-pbedlw. Pending Xcode build/device verification (no Swift toolchain in this web env)."
+    },
+    {
+      "id": "US-457",
+      "title": "iOS Quiz: answers appended/removed by stack instead of indexed, under-reporting pickiness on back-nav",
+      "description": "As a user who goes back to change a quiz answer, I want my answers stored per-question so that scoring is correct and the progress bar completes.",
+      "acceptanceCriteria": [
+        "PickyEaterQuizView stores answers indexed by question (answers[currentQuestion]=index) rather than append + removeLast (PickyEaterQuizView.swift:135-152)",
+        "Going back and finishing mid-way scores the actually-answered questions correctly (no truncated array scored against full maxScore)",
+        "Progress bar uses currentQuestion+1 so it visually completes on the last question (PickyEaterQuizView.swift:40)",
+        "QuizResultView.applyToKid merges (unions) helpfulStrategies with existing rather than overwriting curated strategies (QuizResultView.swift:403-423)"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Re-verify against US-434 (marked done) — audit found append/removeLast still present."
+    },
+    {
+      "id": "US-458",
+      "title": "iOS UX polish: per-keystroke filter recompute, reparse wipes selections, cook-mode end, expiring-card window",
+      "description": "As a user, I want responsive lists and edits that don't discard my choices so that the app feels fast and predictable.",
+      "acceptanceCriteria": [
+        "RecipesView.filteredRecipes and GroceryView.groupedByRecipeBuckets are debounced/memoized rather than recomputed per keystroke in body (RecipesView.swift:33-48, GroceryView.swift:154-188)",
+        "TextImportGrocerySheet/MissingIngredientsSheet preserve user selections across reparse where item identity is unchanged (TextImportGrocerySheet.swift:69-72, MissingIngredientsSheet.swift:78-98)",
+        "CookModeView shows a completion screen before dismissing on the last step and starts progress at 0/N (CookModeView.swift:46-126)",
+        "DashboardHomeView expiring card bounds the lower end (e.g. days>=-3) so long-expired items don't perpetually nag (DashboardHomeView.swift:27-32)"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Grouped lower-severity UX/perf polish from the core + secondary views audits."
+    },
+    {
+      "id": "US-459",
+      "title": "iOS Pantry/Grocery: bulk safe/try-bite only sets (never clears); inconsistent min quantities; receipt dup-merge",
+      "description": "As a user, I want bulk tag actions to toggle and quantity minimums to be consistent so that I can un-mark in bulk and can't create 0-count items.",
+      "acceptanceCriteria": [
+        "PantryView bulk Safe/Try-Bite actions toggle based on selection state (can clear, not only set) (PantryView.swift:425-439,577-622)",
+        "Add/Edit/QuickAdd grocery entry points enforce a consistent minimum quantity (no 0-quantity grocery item from Edit) (GroceryView.swift:1656)",
+        "Receipt save / barcode add merge with existing pantry items instead of inserting duplicates where US-389/390 didn't already cover the path"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Bulk un-mark gap + quantity-minimum inconsistency across grocery entry points."
+    },
+    {
+      "id": "US-460",
+      "title": "iOS reliability telemetry: route silent fallbacks and HTTP failures through Sentry, distinguish transient errors",
+      "description": "As an operator, I want Tonight Mode fallbacks and barcode/HTTP failures captured so that I can see how often flagship features silently degrade.",
+      "acceptanceCriteria": [
+        "TonightModeService edge-fetch failure routes through SentryService (breadcrumb/capture) instead of print() (TonightModeService.swift:122-124)",
+        "BarcodeService distinguishes transient HTTP failures (e.g. 429) from a genuine product-not-found instead of mapping both to nil (BarcodeService.swift:40-45)",
+        "StoreKitService.restorePurchases surfaces AppStore.sync() failures so 'nothing to restore' is distinguishable from 'restore failed' (StoreKitService.swift:171-186)"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "TonightModeService edge-fetch fallback now records a Sentry breadcrumb (not print); BarcodeService throws TransientLookupError on 429/5xx (distinct from nil not-found) so callers can retry; StoreKitService.restorePurchases surfaces AppStore.sync() failures via errorMessage + Sentry breadcrumb instead of try?. Implemented on branch claude/ios-app-review-prd-pbedlw. Pending Xcode build/device verification via PR #200 CI."
     }
   ]
 }

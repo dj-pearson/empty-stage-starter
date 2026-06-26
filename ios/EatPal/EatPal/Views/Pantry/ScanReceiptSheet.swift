@@ -339,9 +339,13 @@ private struct ReviewRowView: View {
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 0)
+                    // US-443: only offer the real FoodCategory values. The old
+                    // list included beverage/pantry/frozen/household/other, which
+                    // normalizedCategory silently collapsed to "snack" — so the
+                    // user's deliberate choice was discarded on save.
                     Picker("Category", selection: $row.item.category) {
-                        ForEach(["protein", "carb", "dairy", "fruit", "vegetable", "snack", "beverage", "pantry", "frozen", "household", "other"], id: \.self) {
-                            Text($0).tag($0)
+                        ForEach(FoodCategory.allCases, id: \.self) { cat in
+                            Text(cat.displayName).tag(cat.rawValue)
                         }
                     }
                     .pickerStyle(.menu)

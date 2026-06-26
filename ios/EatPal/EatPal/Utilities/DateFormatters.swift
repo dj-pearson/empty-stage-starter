@@ -45,9 +45,18 @@ extension Date {
         DateFormatter.isoDate.string(from: self)
     }
 
+    /// Calendar pinned to a Monday-first week so week math matches the web
+    /// planner and JoyScoreChart regardless of the device locale's firstWeekday
+    /// (which is Sunday in en_US). See US-436.
+    static let mondayFirstCalendar: Calendar = {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2 // Monday
+        return calendar
+    }()
+
     /// Returns the start of the week (Monday) for this date.
     var startOfWeek: Date {
-        let calendar = Calendar.current
+        let calendar = Date.mondayFirstCalendar
         let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: self)
         return calendar.date(from: components) ?? self
     }

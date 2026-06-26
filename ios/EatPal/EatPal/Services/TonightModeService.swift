@@ -120,8 +120,13 @@ enum TonightModeService {
                 return response.suggestions
             }
         } catch {
-            // Logged but swallowed — we want the fallback to still run.
-            print("[TonightMode] edge fetch failed, falling back: \(error)")
+            // Swallowed — we want the fallback to still run — but US-460:
+            // record it in Sentry so we can see how often this flagship feature
+            // silently degrades to local picks, instead of only print().
+            SentryService.leaveBreadcrumb(
+                category: "tonight",
+                message: "edge fetch failed, falling back to local picks: \(error)"
+            )
         }
 
         return clientFallback(
@@ -150,11 +155,6 @@ enum TonightModeService {
 
         let now = Date()
         let cal = Calendar(identifier: .gregorian)
-        let isoFmt: ISO8601DateFormatter = {
-            let f = ISO8601DateFormatter()
-            f.formatOptions = [.withFullDate]
-            return f
-        }()
 
         // Recency weights: <=7d ×2, 8-14d ×1, 15-21d ×0.5
         func recencyWeight(_ daysAgo: Int) -> Double {
@@ -166,7 +166,10 @@ enum TonightModeService {
         func varietyScore(for recipeId: String) -> Double {
             var weighted = 0.0
             for entry in planEntries where entry.recipeId == recipeId {
-                guard let date = isoFmt.date(from: entry.date) else { continue }
+                // US-435: parse with the app-standard civil-date formatter so
+                // recency weighting agrees with planEntriesForDate instead of
+                // skewing by a day near midnight in non-UTC timezones.
+                guard let date = DateFormatter.isoDate.date(from: entry.date) else { continue }
                 let days = cal.dateComponents([.day], from: date, to: now).day ?? Int.max
                 if days < 0 || days > 21 { continue }
                 weighted += recencyWeight(days)

@@ -44,11 +44,12 @@ enum RestockPredictor {
         now: Date = Date(),
         confidenceFloor: Double = 0.5
     ) -> [Suggestion] {
-        let formatter = ISO8601DateFormatter()
         var results: [Suggestion] = []
         for pref in preferences {
+            // US-438: tolerate both fractional and whole-second timestamps so
+            // restock history rows aren't silently dropped.
             let timestamps: [Date] = (pref.addHistory ?? [])
-                .compactMap(formatter.date(from:))
+                .compactMap(ISO8601DateFormatter.parseTimestamp)
                 .sorted()
             // Need at least two adds to compute a cadence.
             guard timestamps.count >= 2, let lastAdded = timestamps.last else { continue }

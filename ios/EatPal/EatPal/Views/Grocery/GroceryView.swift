@@ -1081,6 +1081,13 @@ struct GroceryView: View {
             await appState.loadAllData()
             await storeLayouts.reload()
         }
+        // US-441: prune any selection that's no longer visible when the search
+        // narrows, so bulk delete/aisle/bought never act on hidden items and
+        // the None/All toggle label stays truthful.
+        .onChange(of: searchText) { _, _ in
+            guard isSelecting else { return }
+            selectedIds.formIntersection(uncheckedItems.map(\.id))
+        }
         // US-275: warm the store layout cache once when the user opens
         // the grocery tab — `ensureLoaded` is idempotent.
         // US-276: prime the restock predictor at the same time.
@@ -1142,13 +1149,21 @@ struct GroceryView: View {
         isSelecting = false
     }
 
+    /// US-441: selection scoped to the currently-visible (search-filtered)
+    /// unchecked items, so bulk actions can never touch items hidden by an
+    /// active search.
+    private var visibleSelectedIds: Set<String> {
+        selectedIds.intersection(uncheckedItems.map(\.id))
+    }
+
     private func bulkMarkBought() async {
-        guard !selectedIds.isEmpty else { return }
+        let ids = visibleSelectedIds
+        guard !ids.isEmpty else { return }
         do {
-            try await appState.bulkCheckGroceryItems(selectedIds, checked: true)
+            try await appState.bulkCheckGroceryItems(ids, checked: true)
             ToastManager.shared.success(
                 "Marked bought",
-                message: "\(selectedIds.count) item\(selectedIds.count == 1 ? "" : "s")"
+                message: "\(ids.count) item\(ids.count == 1 ? "" : "s")"
             )
             exitSelectMode()
         } catch {
@@ -1157,9 +1172,10 @@ struct GroceryView: View {
     }
 
     private func bulkSetAisle(_ aisle: GroceryAisle) async {
-        guard !selectedIds.isEmpty else { return }
+        let ids = visibleSelectedIds
+        guard !ids.isEmpty else { return }
         do {
-            try await appState.bulkSetGroceryAisle(selectedIds, aisle: aisle)
+            try await appState.bulkSetGroceryAisle(ids, aisle: aisle)
             exitSelectMode()
         } catch {
             // US-414: surface the failure and keep the selection so the user
@@ -1173,9 +1189,10 @@ struct GroceryView: View {
     }
 
     private func bulkDelete() async {
-        guard !selectedIds.isEmpty else { return }
+        let ids = visibleSelectedIds
+        guard !ids.isEmpty else { return }
         do {
-            try await appState.bulkDeleteGroceryItems(selectedIds)
+            try await appState.bulkDeleteGroceryItems(ids)
             exitSelectMode()
         } catch {
             // US-414: surface the failure and keep the selection so the user

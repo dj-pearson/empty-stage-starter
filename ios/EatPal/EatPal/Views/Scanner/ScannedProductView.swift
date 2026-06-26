@@ -91,7 +91,10 @@ struct ScannedProductView: View {
                             }
 
                             LabeledContent("Barcode") {
-                                Text(barcode)
+                                // US-443: show the effective (possibly user-corrected)
+                                // barcode that will actually be persisted, not the
+                                // original misread scan.
+                                Text(currentBarcode.isEmpty ? barcode : currentBarcode)
                                     .foregroundStyle(.secondary)
                                     .font(.caption)
                             }
@@ -164,15 +167,29 @@ struct ScannedProductView: View {
             ) { existing in
                 Button("Update existing quantity") {
                     Task {
-                        try? await appState.incrementFoodQuantity(existing.id, by: 1, unit: existing.unit)
-                        dismiss()
+                        // US-442: surface failures and only dismiss on success.
+                        do {
+                            try await appState.incrementFoodQuantity(existing.id, by: 1, unit: existing.unit)
+                            HapticManager.success()
+                            dismiss()
+                        } catch {
+                            ToastManager.shared.show(error, as: { .save(entity: "foods", underlying: $0) })
+                            HapticManager.error()
+                        }
                     }
                 }
                 Button("Add as new") {
                     if let pendingFood {
                         Task {
-                            try? await appState.addFood(pendingFood)
-                            dismiss()
+                            // US-442: surface failures and only dismiss on success.
+                            do {
+                                try await appState.addFood(pendingFood)
+                                HapticManager.success()
+                                dismiss()
+                            } catch {
+                                ToastManager.shared.show(error, as: { .save(entity: "foods", underlying: $0) })
+                                HapticManager.error()
+                            }
                         }
                     }
                 }
@@ -266,9 +283,17 @@ struct ScannedProductView: View {
             return
         }
 
-        try? await appState.addFood(food)
-        isSubmitting = false
-        dismiss()
+        // US-442: surface failures and only dismiss on success.
+        do {
+            try await appState.addFood(food)
+            isSubmitting = false
+            HapticManager.success()
+            dismiss()
+        } catch {
+            isSubmitting = false
+            ToastManager.shared.show(error, as: { .save(entity: "foods", underlying: $0) })
+            HapticManager.error()
+        }
     }
 }
 

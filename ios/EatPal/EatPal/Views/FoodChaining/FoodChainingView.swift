@@ -7,7 +7,32 @@ struct FoodChainingView: View {
     @State private var selectedSafeFood: Food?
     @State private var selectedTargetFood: Food?
     @State private var chainSteps: [ChainStep] = []
-    @State private var isGenerating = false
+    // US-448: surfaced when a selected food conflicts with the active child's
+    // allergens, so we warn instead of charting a path toward an allergen.
+    @State private var allergenWarning: String?
+
+    /// US-448: lowercased allergen set for the currently-active child.
+    private var activeKidAllergens: Set<String> {
+        guard let kidId = appState.activeKidId,
+              let kid = appState.kids.first(where: { $0.id == kidId }) else { return [] }
+        return Set((kid.allergens ?? []).map { $0.lowercased() })
+    }
+
+    /// US-448: true when a food carries any allergen the active child reacts to.
+    private func hasAllergenConflict(_ food: Food) -> Bool {
+        guard !activeKidAllergens.isEmpty else { return false }
+        let foodAllergens = Set((food.allergens ?? []).map { $0.lowercased() })
+        return !foodAllergens.isDisjoint(with: activeKidAllergens)
+    }
+
+    /// US-448: foods offered as starting/target options, with anything that
+    /// conflicts with the active child's allergens removed up front.
+    private var safeFoodOptions: [Food] {
+        appState.safeFoods.filter { !hasAllergenConflict($0) }
+    }
+    private var targetFoodOptions: [Food] {
+        appState.tryBiteFoods.filter { !hasAllergenConflict($0) }
+    }
 
     var body: some View {
         ScrollView {
@@ -44,7 +69,7 @@ struct FoodChainingView: View {
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            ForEach(appState.safeFoods) { food in
+                            ForEach(safeFoodOptions) { food in
                                 FoodChip(
                                     food: food,
                                     isSelected: selectedSafeFood?.id == food.id
@@ -56,7 +81,7 @@ struct FoodChainingView: View {
                         }
                     }
 
-                    if appState.safeFoods.isEmpty && !appState.isLoading {
+                    if safeFoodOptions.isEmpty && !appState.isLoading {
                         Text("Mark some foods as safe in your pantry first.")
                             .font(.caption)
                             .foregroundStyle(.orange)
@@ -71,7 +96,7 @@ struct FoodChainingView: View {
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            ForEach(appState.tryBiteFoods) { food in
+                            ForEach(targetFoodOptions) { food in
                                 FoodChip(
                                     food: food,
                                     isSelected: selectedTargetFood?.id == food.id
@@ -83,15 +108,23 @@ struct FoodChainingView: View {
                         }
                     }
 
-                    if appState.tryBiteFoods.isEmpty && !appState.isLoading {
+                    if targetFoodOptions.isEmpty && !appState.isLoading {
                         Text("Mark some foods as 'Try Bite' in your pantry.")
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
                 }
 
-                // Chain Steps
-                if !chainSteps.isEmpty {
+                // US-448: allergen conflict takes precedence over any chain.
+                if let allergenWarning {
+                    Label(allergenWarning, systemImage: "exclamationmark.triangle.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.red)
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                        .accessibilityLabel("Allergen warning. \(allergenWarning)")
+                } else if !chainSteps.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             Text("Food Chain")
@@ -107,13 +140,9 @@ struct FoodChainingView: View {
                         }
                     }
                 } else if selectedSafeFood != nil && selectedTargetFood != nil {
-                    if isGenerating {
-                        ProgressView("Generating chain...")
-                    } else {
-                        Text("Select both a safe food and a target food to generate a chain.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text("Select both a safe food and a target food to generate a chain.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
 
                 // Tips
@@ -150,8 +179,21 @@ struct FoodChainingView: View {
     // MARK: - Chain Generation
 
     private func generateChain() {
+        // US-448: clear any stale chain/warning from a prior pairing before
+        // (re)generating, so a half-finished selection never shows old steps.
+        chainSteps = []
+        allergenWarning = nil
+
         guard let safe = selectedSafeFood, let target = selectedTargetFood else { return }
-        isGenerating = true
+
+        // US-448: never chart a path toward (or starting from) a food that
+        // conflicts with the active child's allergens. Warn instead.
+        let conflicting = [safe, target].filter { hasAllergenConflict($0) }
+        if !conflicting.isEmpty {
+            let names = conflicting.map(\.name).joined(separator: ", ")
+            allergenWarning = "\(names) contains an allergen on this child's profile. Pick a different food before building a chain."
+            return
+        }
 
         // Generate intermediate steps based on category/property proximity
         var steps: [ChainStep] = []
@@ -203,7 +245,6 @@ struct FoodChainingView: View {
         ))
 
         chainSteps = steps
-        isGenerating = false
     }
 }
 

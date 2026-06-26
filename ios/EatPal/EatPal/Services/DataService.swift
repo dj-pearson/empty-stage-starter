@@ -328,11 +328,19 @@ final class DataService {
 
     // MARK: - Plan Entries
 
+    /// How far back / ahead `fetchPlanEntries` loads. US-439: the old
+    /// -30/+90 window silently hid (and, combined with the server-authoritative
+    /// load, evicted from cache) entries planned further out — e.g. a birthday
+    /// party months ahead — and most history. Widened to a year each way, which
+    /// still bounds the query for users with very long histories.
+    static let planFetchPastDays = -365
+    static let planFetchFutureDays = 365
+
     func fetchPlanEntries() async throws -> [PlanEntry] {
         let calendar = Calendar.current
         let now = Date()
-        let past = calendar.date(byAdding: .day, value: -30, to: now)!
-        let future = calendar.date(byAdding: .day, value: 90, to: now)!
+        let past = calendar.date(byAdding: .day, value: Self.planFetchPastDays, to: now)!
+        let future = calendar.date(byAdding: .day, value: Self.planFetchFutureDays, to: now)!
         let pastStr = DateFormatter.isoDate.string(from: past)
         let futureStr = DateFormatter.isoDate.string(from: future)
 
