@@ -135,7 +135,11 @@ struct GroceryView: View {
     }
 
     private func matchesSearch(_ item: GroceryItem) -> Bool {
-        searchText.isEmpty || item.name.localizedCaseInsensitiveContains(searchText)
+        // US-465: match name, aisle, category, and notes (was name-only) so
+        // searching "dairy" surfaces the dairy aisle. Reuses the shared
+        // GlobalSearch predicate so scope stays consistent with Pantry and
+        // the app-wide search.
+        searchText.isEmpty || GlobalSearch.matches(grocery: item, query: searchText)
     }
 
     // MARK: - US-264 By Recipe grouping

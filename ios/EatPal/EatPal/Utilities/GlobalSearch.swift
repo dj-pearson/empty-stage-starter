@@ -62,10 +62,20 @@ enum GlobalSearch {
     }
 
     static func matches(grocery: GroceryItem, query: String) -> Bool {
-        haystackContains(
-            [grocery.name, grocery.category, grocery.aisle ?? "", grocery.notes ?? ""],
-            normalize(query)
-        )
+        haystackContains(groceryHaystack(grocery), normalize(query))
+    }
+
+    /// Searchable fields for a grocery item: name, category, free-text aisle,
+    /// the structured aisle-section (raw + display name), and notes.
+    private static func groceryHaystack(_ item: GroceryItem) -> [String] {
+        [
+            item.name,
+            item.category,
+            item.aisle ?? "",
+            item.aisleSection ?? "",
+            item.aisleSectionEnum?.displayName ?? "",
+            item.notes ?? "",
+        ]
     }
 
     // MARK: - Run
@@ -104,7 +114,7 @@ enum GlobalSearch {
 
         results.grocery = Array(
             grocery
-                .filter { haystackContains([$0.name, $0.category, $0.aisle ?? "", $0.notes ?? ""], q) }
+                .filter { haystackContains(groceryHaystack($0), q) }
                 .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
                 .prefix(limitPerGroup)
         )

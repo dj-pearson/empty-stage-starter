@@ -6943,7 +6943,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "iOS function review: Pantry searches name+category+aisle+allergens (SearchFilterView.swift FoodFilterEngine), Grocery searches name only — inconsistent and surprising. Consolidate into one predicate."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: GroceryView.matchesSearch now delegates to the shared GlobalSearch.matches(grocery:) predicate, widening scope from name-only to name + category + free-text aisle + structured aisleSection (raw + display name) + notes. The haystack lives in one place (GlobalSearch.groceryHaystack) reused by the app-wide search, keeping scope consistent. Bulk-select visible-item pruning inherits the wider predicate automatically. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-466",
