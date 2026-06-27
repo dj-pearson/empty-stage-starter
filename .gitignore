@@ -140,3 +140,6 @@ android-native/app/release/app-release.aab
 *.tsbuildinfo
 scripts/ralph/.last-branch
 .claude-flow/metrics/consolidation.json
+
+# Transient PRD verification report (uploaded as a CI artifact, never committed)
+prd-verify-report.json

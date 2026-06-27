@@ -109,8 +109,11 @@ Stories that can't be verified in a Linux/web sandbox (iOS-native Swift,
 Android-native Kotlin, prod-deploy ops) are NOT flipped by hand. Instead:
 
 - `scripts/ralph/verify-stories.mjs` flips `passes: true` for a `passes: false`
-  story only when (a) an implementation commit references its id AND (b) the CI
-  gate that can verify it is green. Run `node scripts/ralph/verify-stories.mjs`
+  story only when (a) a **dedicated implementation commit** tags its id in the
+  `(US-XXX)` convention AND (b) the CI gate that can verify it is green. A bare
+  id mention is deliberately NOT enough — it false-positives on range/docs/bulk
+  commits (e.g. "add stories US-248..US-261") that reference a story without
+  implementing it. Run `node scripts/ralph/verify-stories.mjs`
   for a dry-run report; `--apply` to write. Gate results come from env
   `GATE_WEB` / `GATE_IOS` / `GATE_ANDROID` (GitHub job-result vocabulary).
 - `.github/workflows/prd-verify.yml` (workflow_dispatch) runs the real gates —
