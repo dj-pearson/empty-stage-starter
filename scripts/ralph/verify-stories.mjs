@@ -60,7 +60,12 @@ function classify(story) {
 
 function hasImplementation(id) {
   try {
-    const out = execSync(`git log --all --grep="${id}\\b" --oneline`, {
+    // Require the project's dedicated-commit convention: a focused commit whose
+    // subject tags the story as "(US-XXX)". A bare id mention is NOT enough — it
+    // false-positives on range/docs/bulk commits (e.g. "add stories US-248..US-261"
+    // or "flip 19 prd stories (US-413..US-434)") that reference a story without
+    // implementing it. --fixed-strings makes the parens literal.
+    const out = execSync(`git log --all --oneline --fixed-strings --grep='(${id})'`, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
