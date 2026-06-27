@@ -23,6 +23,12 @@ final class DeepLinkHandler: ObservableObject {
         /// US-406: progress/achievements surface, opened by streak/badge
         /// notifications and `eatpal://progress`.
         case progress
+        /// US-462: remaining More-tab tools now deep-linkable so notifications,
+        /// widgets, and Siri shortcuts can open them directly instead of
+        /// dead-ending on the More root. Routed onto the More tab's path.
+        case foodTracker
+        case insights
+        case aiCoach
         /// US-296 (Tier 1): parsed grocery import via `eatpal://grocery/import?text=...`.
         /// The handler enqueues the parsed lines into `PendingGroceryImportQueue`
         /// and asks the app to switch to the grocery tab so the user sees the
@@ -107,6 +113,12 @@ final class DeepLinkHandler: ObservableObject {
             activeDestination = .foodChaining
         case "progress":
             activeDestination = .progress
+        case "food-tracker":
+            activeDestination = .foodTracker
+        case "insights":
+            activeDestination = .insights
+        case "ai-coach":
+            activeDestination = .aiCoach
         default:
             break
         }
@@ -260,6 +272,12 @@ final class DeepLinkHandler: ObservableObject {
             activeDestination = .settings
         case "progress":
             activeDestination = .progress
+        case "food-tracker":
+            activeDestination = .foodTracker
+        case "insights":
+            activeDestination = .insights
+        case "ai-coach":
+            activeDestination = .aiCoach
         default:
             break
         }

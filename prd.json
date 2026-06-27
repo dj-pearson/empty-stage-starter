@@ -6896,7 +6896,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "iOS function review: MoreRoute (MoreView.swift:8-16) only covers dashboard/kids/kidProfile/foodChaining/quiz/settings/progress/recipes. Food Tracker, Insights, AI Coach have no route and cannot be deep-linked. Quick, high-value wiring fix."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: added MoreRoute .foodTracker/.insights/.aiCoach (MoreView.swift) and matching DeepLinkHandler.Destination cases + eatpal:// and universal-link parsing (food-tracker/insights/ai-coach). All MoreView Tools/Family/Settings links converted to value-based NavigationLink(value:) sharing one navigationDestination map; MainTabView.route(to:) routes the new destinations onto the More tab path. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-463",

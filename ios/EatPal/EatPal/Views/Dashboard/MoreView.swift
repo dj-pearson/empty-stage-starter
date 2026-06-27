@@ -14,6 +14,12 @@ enum MoreRoute: Hashable {
     case progress
     // US-373: Recipes moved out of the tab bar into More.
     case recipes
+    // US-462: complete deep-link coverage for the remaining Tools so
+    // notifications / widgets / Siri can open them instead of dead-ending
+    // on the More root.
+    case foodTracker
+    case insights
+    case aiCoach
 }
 
 struct MoreView: View {
@@ -41,10 +47,10 @@ struct MoreView: View {
             }
 
             // Family
+            // US-462: value-based links so a deep link / notification tap and a
+            // manual tap resolve through the same navigationDestination map.
             Section("Family") {
-                NavigationLink {
-                    KidsView()
-                } label: {
+                NavigationLink(value: MoreRoute.kids) {
                     Label {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
@@ -65,9 +71,7 @@ struct MoreView: View {
 
             // Tools
             Section("Tools") {
-                NavigationLink {
-                    FoodTrackerView()
-                } label: {
+                NavigationLink(value: MoreRoute.foodTracker) {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Food Tracker")
@@ -82,9 +86,7 @@ struct MoreView: View {
                     }
                 }
 
-                NavigationLink {
-                    InsightsView()
-                } label: {
+                NavigationLink(value: MoreRoute.insights) {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Insights")
@@ -99,9 +101,7 @@ struct MoreView: View {
                     }
                 }
 
-                NavigationLink {
-                    AICoachView()
-                } label: {
+                NavigationLink(value: MoreRoute.aiCoach) {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("AI Coach")
@@ -116,9 +116,7 @@ struct MoreView: View {
                     }
                 }
 
-                NavigationLink {
-                    FoodChainingView()
-                } label: {
+                NavigationLink(value: MoreRoute.foodChaining) {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Food Chaining")
@@ -133,9 +131,7 @@ struct MoreView: View {
                     }
                 }
 
-                NavigationLink {
-                    PickyEaterQuizView()
-                } label: {
+                NavigationLink(value: MoreRoute.quiz) {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Picky Eater Quiz")
@@ -150,9 +146,7 @@ struct MoreView: View {
                     }
                 }
 
-                NavigationLink {
-                    ProgressDashboardView()
-                } label: {
+                NavigationLink(value: MoreRoute.progress) {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Progress")
@@ -175,9 +169,7 @@ struct MoreView: View {
 
             // Settings
             Section {
-                NavigationLink {
-                    SettingsView()
-                } label: {
+                NavigationLink(value: MoreRoute.settings) {
                     Label("Settings", systemImage: "gearshape.fill")
                 }
             }
@@ -207,6 +199,12 @@ struct MoreView: View {
                 ProgressDashboardView()
             case .recipes:
                 RecipesView()
+            case .foodTracker:
+                FoodTrackerView()
+            case .insights:
+                InsightsView()
+            case .aiCoach:
+                AICoachView()
             }
         }
     }
