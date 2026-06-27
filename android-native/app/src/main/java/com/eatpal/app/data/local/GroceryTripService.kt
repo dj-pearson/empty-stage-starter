@@ -41,8 +41,14 @@ class GroceryTripService : Service() {
                         } else 0,
                     )
                 } else {
-                    androidx.core.app.NotificationManagerCompat.from(this)
-                        .notify(NOTIFICATION_ID, notification)
+                    // try/catch so lint accepts the [MissingPermission] call
+                    // (POST_NOTIFICATIONS, API 33+) — see LocalNotificationReceiver.
+                    try {
+                        androidx.core.app.NotificationManagerCompat.from(this)
+                            .notify(NOTIFICATION_ID, notification)
+                    } catch (_: SecurityException) {
+                        // POST_NOTIFICATIONS denied — skip the progress update.
+                    }
                 }
             }
             ACTION_STOP -> {

@@ -145,6 +145,17 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    lint {
+        // Print the full lint report to the CI console (stdout) so failures are
+        // diagnosable straight from the Actions log — the uploaded HTML artifact
+        // isn't always reachable. abortOnError stays at its default (true): lint
+        // errors still fail the build. Warnings never block, so keep them out of
+        // the console dump to leave only the actionable errors.
+        textReport = true
+        textOutput = file("stdout")
+        ignoreWarnings = true
+    }
 }
 
 dependencies {
