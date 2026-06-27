@@ -6928,7 +6928,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "iOS function review: RecipesView already shows an active-filter chip strip (RecipesView.swift:110-136); Pantry only shows a count badge (PantryView.swift:368-382), so users can't tell what's filtering results. Brings consistency."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: PantryView now renders a removable active-filter chip strip (one chip per advanced dimension: each category, each excluded allergen, safe-only, try-bite, non-default sort) mirroring the Recipes strip — tapping a chip removes just that dimension. A 'Showing X of Y' count plus an inline 'Clear filters' button appear whenever any filter/search/quick-chip/segment is narrowing the list. The toolbar badge is retained and supplemented by the named strip. Strip hidden when no advanced filters are active. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-465",
