@@ -147,13 +147,12 @@ android {
     }
 
     lint {
-        // Print the full lint report to the CI console (stdout) so failures are
-        // diagnosable straight from the Actions log — the uploaded HTML artifact
-        // isn't always reachable. abortOnError stays at its default (true): lint
-        // errors still fail the build. Warnings never block, so keep them out of
-        // the console dump to leave only the actionable errors.
+        // Keep the text report focused on errors (warnings never block the
+        // build). The CI workflow cats the generated text report on failure so
+        // lint errors are diagnosable straight from the Actions log. NOTE: AGP's
+        // `textOutput = file("stdout")` writes a literal file named `stdout`
+        // rather than the console stream, so we surface the report from CI instead.
         textReport = true
-        textOutput = file("stdout")
         ignoreWarnings = true
     }
 }
