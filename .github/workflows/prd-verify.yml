@@ -7,11 +7,28 @@ name: PRD Verify
 # manual/ops stories never auto-flip, net-new stories without an implementation
 # stay false, and any story whose gate is red stays false until a green run.
 #
-# Entry point is manual (workflow_dispatch) so the expensive macOS/Gradle gates
-# only run when you ask for a verification pass — e.g. after a batch of iOS work
-# merges. The flip commit carries [skip ci] so it can't loop back on itself.
+# Entry points:
+#  - pull_request -> main: a PR touching a verification surface (iOS, Android,
+#    web src, prd.json, or these workflows) runs the gates and, when a gate is
+#    green, commits the resulting passes=true flips ONTO THE PR BRANCH. Merging
+#    the PR carries the flips into main — so flags only change through review,
+#    never a direct push to protected main.
+#  - workflow_dispatch: same pipeline on demand (dry-run option via `apply`).
+# The flip commit carries [skip ci] and is pushed by GITHUB_TOKEN, so it can't
+# loop back and re-trigger CI.
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'android-native/**'
+      - 'src/**'
+      - 'prd.json'
+      - 'scripts/ralph/verify-stories.mjs'
+      - '.github/workflows/prd-verify.yml'
+      - '.github/workflows/ios-ci.yml'
+      - '.github/workflows/android-native-ci.yml'
   workflow_dispatch:
     inputs:
       apply:
@@ -63,11 +80,17 @@ jobs:
     runs-on: ubuntu-latest
     needs: [web-gate, ios-gate, android-gate]
     if: ${{ always() }}
+    # apply=false only when a dispatch explicitly asks for a dry-run; PRs always apply.
+    env:
+      APPLY: ${{ (github.event_name == 'workflow_dispatch' && inputs.apply == false) && 'false' || 'true' }}
+      TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history so the engine can detect "an implementation commit
-          # references US-XXX" for each story.
+          # Check out the PR head branch (not the detached merge ref) so flips
+          # can be pushed back onto it. Full history so the engine can detect
+          # "an implementation commit references US-XXX" for each story.
+          ref: ${{ github.head_ref || github.ref_name }}
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
@@ -78,16 +101,16 @@ jobs:
           GATE_WEB: ${{ needs.web-gate.result }}
           GATE_IOS: ${{ needs.ios-gate.result }}
           GATE_ANDROID: ${{ needs.android-gate.result }}
-          VERIFY_REF: ${{ github.sha }}
+          VERIFY_REF: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          if [ "${{ inputs.apply }}" = "false" ]; then
+          if [ "$APPLY" = "false" ]; then
             node scripts/ralph/verify-stories.mjs | tee "$GITHUB_STEP_SUMMARY"
           else
             node scripts/ralph/verify-stories.mjs --apply | tee "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Commit flipped flags
-        if: ${{ inputs.apply != false }}
+        if: ${{ env.APPLY != 'false' }}
         run: |
           set -e
           git config user.name "github-actions[bot]"
@@ -101,10 +124,10 @@ jobs:
           # Retry push a few times for transient network/ref races.
           n=0
           until [ $n -ge 4 ]; do
-            git push origin HEAD:${{ github.ref_name }} && break
+            git push origin "HEAD:${TARGET_BRANCH}" && break
             n=$((n+1))
             echo "push failed, retry $n…"; sleep $((2 ** n))
-            git pull --rebase origin ${{ github.ref_name }} || true
+            git pull --rebase origin "${TARGET_BRANCH}" || true
           done
 
       - name: Upload verification report
