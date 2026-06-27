@@ -7004,7 +7004,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "iOS function review: coverage is shown on planner rows (MealPlanView ~664) and in CookableRecipesSheet, but NOT in the main Recipes list — users must open a recipe to judge cookability. Reuse RecipeMatcher.rank."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: RecipeRowView gains an optional pantry-coverage badge (percent + tier color: green cookNow / orange almostThere) computed once per render via a coverageByRecipe map built from RecipeMatcher.rank (same matcher as the Cookable filter), so it's reactive to foods/grocery changes. Tapping the badge opens the existing MissingIngredientsSheet for that recipe (shortfalls via ShortfallCalculator.compute). VoiceOver label reads 'Cook now, you have 80 percent of ingredients'. Recipes below the matcher threshold or with no ingredients show no badge. Params default to nil so the single existing call site is unaffected. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-470",

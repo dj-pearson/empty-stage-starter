@@ -23,7 +23,26 @@ struct RecipesView: View {
     // US-270: cookable-recipes sheet entry.
     @State private var showingCookable = false
 
+    // US-469: recipe whose missing-ingredients sheet is open (from a tapped
+    // coverage badge).
+    @State private var coverageSheetRecipe: Recipe?
+
     private var swipeTip = SwipeRecipeTip()
+
+    /// US-469: per-recipe pantry coverage, computed once per render via the
+    /// same RecipeMatcher used by the Cookable filter. Recipes below the
+    /// matcher's display threshold (or with no ingredients) are absent — they
+    /// simply show no badge. Reactive to foods/grocery changes.
+    private var coverageByRecipe: [String: RecipeMatcher.Match] {
+        Dictionary(
+            RecipeMatcher.rank(
+                recipes: appState.recipes,
+                pantry: appState.foods,
+                groceryItems: appState.groceryItems
+            ).map { ($0.recipe.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
 
     /// Cuisines surfaced inline in the chip row. The full list lives in
     /// the filter sheet; this is just the top-of-mind set so people can
@@ -177,7 +196,12 @@ struct RecipesView: View {
                                 .font(.title3)
                                 .accessibilityLabel(selectedIds.contains(recipe.id) ? "Selected" : "Not selected")
                         }
-                        RecipeRowView(recipe: recipe)
+                        RecipeRowView(
+                            recipe: recipe,
+                            coverage: coverageByRecipe[recipe.id]?.coverage,
+                            coverageTier: coverageByRecipe[recipe.id]?.tier,
+                            onCoverageTap: { coverageSheetRecipe = recipe }
+                        )
                     }
                         .contentShape(Rectangle())
                         .onTapGesture {
@@ -374,6 +398,15 @@ struct RecipesView: View {
         .sheet(item: $selectedRecipe) { recipe in
             RecipeDetailView(recipe: recipe)
         }
+        // US-469: missing-ingredients sheet from a tapped coverage badge.
+        .sheet(item: $coverageSheetRecipe) { recipe in
+            MissingIngredientsSheet(
+                recipe: recipe,
+                shortfalls: ShortfallCalculator.compute(recipe: recipe, pantry: appState.foods),
+                onFinish: { _ in }
+            )
+            .environmentObject(appState)
+        }
         .sheet(isPresented: $showingCookable) {
             CookableRecipesSheet()
                 .environmentObject(appState)
@@ -509,6 +542,19 @@ struct RecipesView: View {
 struct RecipeRowView: View {
     @EnvironmentObject var appState: AppState
     let recipe: Recipe
+    // US-469: optional pantry-coverage badge. nil = no badge (low coverage
+    // or no ingredients). Defaults keep other call sites unchanged.
+    var coverage: Double? = nil
+    var coverageTier: RecipeMatcher.Tier? = nil
+    var onCoverageTap: (() -> Void)? = nil
+
+    private var coverageColor: Color {
+        switch coverageTier {
+        case .cookNow: return .green
+        case .almostThere: return .orange
+        default: return .secondary
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -554,6 +600,24 @@ struct RecipeRowView: View {
             }
 
             HStack(spacing: 12) {
+                // US-469: at-a-glance "can I make this now?" badge. Tapping it
+                // opens the missing-ingredients sheet for one-tap restock.
+                if let coverage, let coverageTier {
+                    Button {
+                        onCoverageTap?()
+                    } label: {
+                        Label("\(Int((coverage * 100).rounded()))%", systemImage: "basket.fill")
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(coverageColor.opacity(0.15), in: Capsule())
+                            .foregroundStyle(coverageColor)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(coverageTier.displayName), you have \(Int((coverage * 100).rounded())) percent of ingredients")
+                    .accessibilityHint("Opens missing ingredients")
+                }
+
                 if let prepTime = recipe.prepTime {
                     Label(prepTime, systemImage: "timer")
                         .font(.caption2)
