@@ -7019,7 +7019,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "iOS function review: BudgetView is buried 3 taps deep (More -> Settings -> Budget), not deep-linkable, and has no nudge from Grocery where spend is incurred."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: Budget now appears in the More -> Tools section (dollarsign.circle.fill) in addition to its existing Settings path (kept working). Added MoreRoute.budget + navigationDestination -> BudgetView(), DeepLinkHandler.Destination.budget with eatpal://budget and universal-link parsing, and MainTabView routing onto the More tab. GroceryView shows a one-tap budget nudge ('Track this week's spend') once >=3 items have a price (pricePerUnit), routing to Budget via the shared DeepLinkHandler. Weekly target @AppStorage + forecast render unchanged from the new entry point. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-471",

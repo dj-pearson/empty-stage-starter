@@ -126,6 +126,12 @@ struct GroceryView: View {
         hasActiveGroceryFilter || !searchText.isEmpty
     }
 
+    /// US-470: number of grocery items with a known price — gates the budget
+    /// nudge (the forecast needs a few priced items to be meaningful).
+    private var pricedItemCount: Int {
+        appState.groceryItems.filter { $0.pricePerUnit != nil }.count
+    }
+
     /// Aisles actually present on the list, so the filter picker stays short.
     private var availableAisles: [GroceryAisle] {
         Array(Set(appState.groceryItems.compactMap(\.aisleSectionEnum)))
@@ -694,6 +700,39 @@ struct GroceryView: View {
             // user's saved preferences. Hidden when empty so we don't
             // leave a header floating over nothing.
             restockSuggestionsSection
+
+            // US-470: budget nudge — once a few items are priced, offer a
+            // one-tap jump to set/review the weekly target where the spend is.
+            if pricedItemCount >= 3 {
+                Section {
+                    Button {
+                        HapticManager.lightImpact()
+                        DeepLinkHandler.shared.activeDestination = .budget
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "dollarsign.circle.fill")
+                                .foregroundStyle(.green)
+                                .imageScale(.large)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Track this week's spend")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.primary)
+                                Text("\(pricedItemCount) priced items — set or review your weekly target.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Track this week's spend in Budget")
+                }
+            }
 
             // Unchecked Items by Category
             if appState.isLoading && appState.groceryItems.isEmpty {

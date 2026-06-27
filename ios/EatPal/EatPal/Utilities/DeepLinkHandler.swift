@@ -29,6 +29,8 @@ final class DeepLinkHandler: ObservableObject {
         case foodTracker
         case insights
         case aiCoach
+        /// US-470: weekly budget surface.
+        case budget
         /// US-296 (Tier 1): parsed grocery import via `eatpal://grocery/import?text=...`.
         /// The handler enqueues the parsed lines into `PendingGroceryImportQueue`
         /// and asks the app to switch to the grocery tab so the user sees the
@@ -119,6 +121,8 @@ final class DeepLinkHandler: ObservableObject {
             activeDestination = .insights
         case "ai-coach":
             activeDestination = .aiCoach
+        case "budget":
+            activeDestination = .budget
         default:
             break
         }
@@ -278,6 +282,8 @@ final class DeepLinkHandler: ObservableObject {
             activeDestination = .insights
         case "ai-coach":
             activeDestination = .aiCoach
+        case "budget":
+            activeDestination = .budget
         default:
             break
         }

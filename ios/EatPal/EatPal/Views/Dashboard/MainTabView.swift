@@ -130,6 +130,10 @@ struct MainTabView: View {
         case .aiCoach:
             selectedTab = .more
             morePath = [.aiCoach]
+        case .budget:
+            // US-470: Budget lives under More now.
+            selectedTab = .more
+            morePath = [.budget]
         }
         // AC4: clear so the identical link fires again next time.
         deepLinkHandler.clearDestination()
