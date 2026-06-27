@@ -83,7 +83,7 @@ jobs:
             -project EatPal.xcodeproj \
             -scheme "$SCHEME" \
             -sdk iphonesimulator \
-            -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+            -destination "generic/platform=iOS Simulator" \
             -configuration Debug \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
             SUPABASE_URL="https://placeholder.supabase.co" \
@@ -97,11 +97,22 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           set -o pipefail
+          # `xcodebuild test` needs a concrete booted simulator — a hardcoded
+          # name like "iPhone 16" breaks whenever the runner image's simulator
+          # set changes. Resolve the first available iPhone simulator instead
+          # (same approach as ios-app-store-deploy.yml).
+          SIM_DEVICE=$(xcrun simctl list devices available -j \
+            | python3 -c "import sys,json; devs=json.load(sys.stdin)['devices']; print(next(d['udid'] for r in devs for d in devs[r] if 'iPhone' in d['name'] and d['isAvailable']),end='')" 2>/dev/null || true)
+          if [ -z "$SIM_DEVICE" ]; then
+            echo "::error::No available iPhone simulator found on the runner."
+            exit 1
+          fi
+          echo "Using simulator: $SIM_DEVICE"
           xcodebuild test \
             -project EatPal.xcodeproj \
             -scheme "$SCHEME" \
             -sdk iphonesimulator \
-            -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+            -destination "platform=iOS Simulator,id=$SIM_DEVICE" \
             -configuration Debug \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
             -resultBundlePath "$RUNNER_TEMP/TestResults.xcresult" \
