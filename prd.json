@@ -6973,7 +6973,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "iOS function review: RecipesView has rich filters but NO sort (order is app-provided array order); Pantry has 5 sort options (SearchFilterView FoodSortOption). Inconsistent and hurts browseability."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: added RecipeSortOption (Default/Name A-Z/Rating high-low/Total time quick-slow/Recently added) + a `sort` field on RecipeFilters; sorting runs at the end of RecipeFilters.apply via Array<Recipe>.sortedBy, so it composes with filters. Time sort uses resolvedTotalMinutes (no-time recipes sort last); rating sort puts unrated last. Sort lives in the persisted filter bundle (US-463). UI: a topBarLeading toolbar Menu/Picker labelled with the current option. Default = .defaultOrder (no client reordering) so existing users see no surprise until they pick a sort. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-468",

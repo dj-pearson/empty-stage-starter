@@ -241,6 +241,23 @@ struct RecipesView: View {
         .navigationTitle(isSelecting ? "\(selectedIds.count) selected" : "Recipes")
         .searchable(text: $searchText, prompt: "Search by name or ingredient…")
         .toolbar {
+            // US-467: sort control (parity with Pantry). Composes with the
+            // active filters so "easy Italian, fastest first" is possible.
+            ToolbarItem(placement: .topBarLeading) {
+                if !isSelecting {
+                    Menu {
+                        Picker("Sort", selection: $filters.sort) {
+                            ForEach(RecipeSortOption.allCases, id: \.self) { option in
+                                Text(option.rawValue).tag(option)
+                            }
+                        }
+                    } label: {
+                        Label("Sort: \(filters.sort.rawValue)", systemImage: "arrow.up.arrow.down")
+                    }
+                    .accessibilityLabel("Sort recipes")
+                }
+            }
+
             // US-269: select-mode entry + Done.
             ToolbarItem(placement: .primaryAction) {
                 if isSelecting {
