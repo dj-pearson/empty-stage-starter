@@ -628,6 +628,24 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// US-468: toggle a recipe favorite. Optimistic + quiet (no "Recipe
+    /// updated" toast — favoriting is a lightweight, frequent gesture) but
+    /// uses the same persistence path as other recipe edits so it inherits
+    /// realtime + retry behavior. Rolls back on failure.
+    func setRecipeFavorite(_ id: String, _ value: Bool) async {
+        guard let index = recipes.firstIndex(where: { $0.id == id }) else { return }
+        let original = recipes[index]
+        recipes[index].isFavorite = value
+        HapticManager.lightImpact()
+        do {
+            try await dataService.updateRecipe(id, updates: RecipeUpdate(isFavorite: value))
+        } catch {
+            recipes[index] = original
+            toast.show(error, as: { .save(entity: "recipe", underlying: $0) })
+            HapticManager.error()
+        }
+    }
+
     /// US-265: Save a recipe + its structured ingredients together. The
     /// editor builds the full ingredient set client-side and we replace
     /// the whole bag in one shot — simpler than diffing inserts/updates/

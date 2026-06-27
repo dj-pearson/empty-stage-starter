@@ -68,6 +68,14 @@ struct RecipesView: View {
                             HapticManager.selection()
                             filters.cookableOnly.toggle()
                         }
+                        // US-468: quick filter to starred recipes.
+                        CategoryChip(
+                            title: "⭐️ Favorites",
+                            isSelected: filters.favoritesOnly
+                        ) {
+                            HapticManager.selection()
+                            filters.favoritesOnly.toggle()
+                        }
                         ForEach(["easy", "medium", "hard"], id: \.self) { level in
                             CategoryChip(
                                 title: "\(difficultyIcon(level)) \(level.capitalized)",
@@ -197,6 +205,20 @@ struct RecipesView: View {
                                 }
                                 .tint(.blue)
                                 .accessibilityLabel("Add \(recipe.name) ingredients to grocery list")
+
+                                // US-468: star / unstar via swipe.
+                                Button {
+                                    Task { await appState.setRecipeFavorite(recipe.id, !(recipe.isFavorite ?? false)) }
+                                } label: {
+                                    Label(
+                                        (recipe.isFavorite ?? false) ? "Unfavorite" : "Favorite",
+                                        systemImage: (recipe.isFavorite ?? false) ? "star.slash" : "star.fill"
+                                    )
+                                }
+                                .tint(.yellow)
+                                .accessibilityLabel((recipe.isFavorite ?? false)
+                                    ? "Remove \(recipe.name) from favorites"
+                                    : "Add \(recipe.name) to favorites")
                             }
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: !isSelecting) {
@@ -210,6 +232,17 @@ struct RecipesView: View {
                             }
                         }
                         .contextMenu {
+                            // US-468: star / unstar.
+                            Button {
+                                HapticManager.selection()
+                                Task { await appState.setRecipeFavorite(recipe.id, !(recipe.isFavorite ?? false)) }
+                            } label: {
+                                Label(
+                                    (recipe.isFavorite ?? false) ? "Remove Favorite" : "Add to Favorites",
+                                    systemImage: (recipe.isFavorite ?? false) ? "star.slash" : "star"
+                                )
+                            }
+
                             Button {
                                 HapticManager.success()
                                 Task { await addRecipeIngredientsToGrocery(recipe) }
@@ -485,9 +518,18 @@ struct RecipeRowView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(recipe.name)
-                        .font(.body)
-                        .fontWeight(.semibold)
+                    HStack(spacing: 4) {
+                        // US-468: favorite indicator.
+                        if recipe.isFavorite == true {
+                            Image(systemName: "star.fill")
+                                .font(.caption)
+                                .foregroundStyle(.yellow)
+                                .accessibilityLabel("Favorite")
+                        }
+                        Text(recipe.name)
+                            .font(.body)
+                            .fontWeight(.semibold)
+                    }
 
                     if let description = recipe.description, !description.isEmpty {
                         Text(description)
@@ -864,6 +906,17 @@ struct RecipeDetailView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
+                }
+                // US-468: favorite toggle.
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        let isFav = currentRecipe.isFavorite ?? false
+                        Task { await appState.setRecipeFavorite(currentRecipe.id, !isFav) }
+                    } label: {
+                        Image(systemName: (currentRecipe.isFavorite ?? false) ? "star.fill" : "star")
+                            .foregroundStyle((currentRecipe.isFavorite ?? false) ? .yellow : .secondary)
+                    }
+                    .accessibilityLabel((currentRecipe.isFavorite ?? false) ? "Remove from favorites" : "Add to favorites")
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button {

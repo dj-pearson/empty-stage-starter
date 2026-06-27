@@ -31,6 +31,9 @@ struct RecipeFilters: Equatable, Codable {
     /// unchecked grocery items).
     var cookableOnly: Bool = false
 
+    /// US-468: when true, only show recipes the user has starred.
+    var favoritesOnly: Bool = false
+
     /// Max total time (prep + cook) in minutes. nil = any.
     var maxTotalMinutes: Int?
 
@@ -51,6 +54,7 @@ struct RecipeFilters: Equatable, Codable {
             || !requiredFoodIds.isEmpty
             || !ingredientQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || cookableOnly
+            || favoritesOnly
             || maxTotalMinutes != nil
     }
 
@@ -63,6 +67,7 @@ struct RecipeFilters: Equatable, Codable {
         if !requiredFoodIds.isEmpty { n += 1 }
         if !ingredientQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { n += 1 }
         if cookableOnly { n += 1 }
+        if favoritesOnly { n += 1 }
         if maxTotalMinutes != nil { n += 1 }
         return n
     }
@@ -100,6 +105,8 @@ struct RecipeFilters: Equatable, Codable {
             .lowercased()
 
         return recipes.filter { recipe in
+            if favoritesOnly, recipe.isFavorite != true { return false }
+
             if let difficulty, recipe.difficultyLevel != difficulty { return false }
 
             if let max = maxTotalMinutes {

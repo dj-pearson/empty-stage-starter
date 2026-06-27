@@ -6989,7 +6989,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "iOS function review: recipes have a rating field but no explicit favorite (no isFavorite in Models). Most-loved card is purely rating-derived and auto-hides under a 2-meal threshold. Migration must be additive per CLAUDE.md."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn (additive DB column approach). Migration 20260627000000_recipe_is_favorite.sql adds recipes.is_favorite boolean NOT NULL DEFAULT false (+ partial index), backward-compatible per CLAUDE.md; web types.ts updated (Row/Insert/Update). iOS: Recipe + RecipeUpdate gain isFavorite (is_favorite); AppState.setRecipeFavorite does an optimistic, quiet toggle via the existing dataService.updateRecipe path (inherits realtime/retry; partial PATCH is safe because RecipeUpdate optionals encode via encodeIfPresent). RecipeFilters gains favoritesOnly (counted in isAnyActive/activeCount, persisted in the bundle). UI: '⭐️ Favorites' rail chip, leading swipe action, context-menu toggle, row star indicator, and a star toggle in RecipeDetailView's toolbar. FOLLOW-UP: surfacing favorites in the Home 'Most loved' card (rating-based today) was left out to keep scope contained. Pending Xcode build/device verification + supabase db push / types regen in CI."
     },
     {
       "id": "US-469",
