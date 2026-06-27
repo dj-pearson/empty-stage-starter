@@ -7,6 +7,9 @@ struct FoodChainingView: View {
     @State private var selectedSafeFood: Food?
     @State private var selectedTargetFood: Food?
     @State private var chainSteps: [ChainStep] = []
+    // US-474: name-search for the selectors when the pantry gets long.
+    @State private var safeSearch = ""
+    @State private var targetSearch = ""
     // US-448: surfaced when a selected food conflicts with the active child's
     // allergens, so we warn instead of charting a path toward an allergen.
     @State private var allergenWarning: String?
@@ -32,6 +35,13 @@ struct FoodChainingView: View {
     }
     private var targetFoodOptions: [Food] {
         appState.tryBiteFoods.filter { !hasAllergenConflict($0) }
+    }
+
+    // US-474: case-insensitive name filter for the selectors.
+    private func matching(_ foods: [Food], _ query: String) -> [Food] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return foods }
+        return foods.filter { $0.name.lowercased().contains(q) }
     }
 
     var body: some View {
@@ -67,9 +77,13 @@ struct FoodChainingView: View {
                         .font(.subheadline)
                         .fontWeight(.medium)
 
+                    if safeFoodOptions.count > 6 {
+                        ChainFoodSearchField(text: $safeSearch, prompt: "Search safe foods")
+                    }
+
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            ForEach(safeFoodOptions) { food in
+                            ForEach(matching(safeFoodOptions, safeSearch)) { food in
                                 FoodChip(
                                     food: food,
                                     isSelected: selectedSafeFood?.id == food.id
@@ -94,9 +108,13 @@ struct FoodChainingView: View {
                         .font(.subheadline)
                         .fontWeight(.medium)
 
+                    if targetFoodOptions.count > 6 {
+                        ChainFoodSearchField(text: $targetSearch, prompt: "Search target foods")
+                    }
+
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            ForEach(targetFoodOptions) { food in
+                            ForEach(matching(targetFoodOptions, targetSearch)) { food in
                                 FoodChip(
                                     food: food,
                                     isSelected: selectedTargetFood?.id == food.id
@@ -137,6 +155,23 @@ struct FoodChainingView: View {
 
                         ForEach(Array(chainSteps.enumerated()), id: \.offset) { index, step in
                             ChainStepRow(step: step, stepNumber: index + 1, isLast: index == chainSteps.count - 1)
+                        }
+
+                        // US-474: act on the chain — put the target food on the
+                        // grocery list so the parent can buy it and start working
+                        // toward it.
+                        if let target = selectedTargetFood {
+                            Button {
+                                Task { await addTargetToGrocery(target) }
+                            } label: {
+                                Label("Add \(target.name) to grocery", systemImage: "cart.fill.badge.plus")
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.blue)
+                            .padding(.top, 4)
                         }
                     }
                 } else if selectedSafeFood != nil && selectedTargetFood != nil {
@@ -245,6 +280,53 @@ struct FoodChainingView: View {
         ))
 
         chainSteps = steps
+    }
+
+    // US-474: add the target food to the grocery list (same path as Pantry).
+    private func addTargetToGrocery(_ food: Food) async {
+        let item = GroceryItem(
+            id: UUID().uuidString,
+            userId: "",
+            name: food.name,
+            category: food.category,
+            quantity: 1,
+            unit: food.unit ?? "count",
+            checked: false,
+            addedVia: "food_chaining"
+        )
+        try? await appState.addGroceryItem(item)
+    }
+}
+
+// MARK: - Search field (US-474)
+
+private struct ChainFoodSearchField: View {
+    @Binding var text: String
+    let prompt: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .font(.caption)
+            TextField(prompt, text: $text)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .font(.subheadline)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
     }
 }
 

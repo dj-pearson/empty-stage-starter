@@ -5,6 +5,11 @@ struct AICoachView: View {
     @StateObject private var coachService = AICoachService.shared
     @ObservedObject private var network = NetworkMonitor.shared
     @State private var messageText = ""
+    /// US-474: optional pre-seeded prompt from a contextual entry point
+    /// (e.g. "Ask the coach about this recipe"). Only fills the input — the
+    /// user still taps send, so nothing is sent without an explicit action.
+    var initialPrompt: String? = nil
+    @State private var didSeedPrompt = false
     // US-422: confirm before wiping the conversation.
     @State private var showingClearConfirm = false
     @FocusState private var isInputFocused: Bool
@@ -188,6 +193,14 @@ struct AICoachView: View {
         }
         .onTapGesture {
             isInputFocused = false
+        }
+        .onAppear {
+            // US-474: seed the contextual prompt once, without auto-sending.
+            guard !didSeedPrompt, let prompt = initialPrompt, !prompt.isEmpty,
+                  messageText.isEmpty else { return }
+            didSeedPrompt = true
+            messageText = prompt
+            isInputFocused = true
         }
     }
 

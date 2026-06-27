@@ -7079,7 +7079,7 @@
       ],
       "priority": 4,
       "passes": false,
-      "notes": "iOS function review: FoodChainingView is read-only with no plan/grocery integration and no name search; AICoachView chat is ephemeral, unsearchable, and not deep-linkable. 'Tie everything together' bucket from the request."
+      "notes": "Implemented (focused subset) on branch claude/ios-app-function-review-t0arpn. Food Chaining: added a name-search field to both food selectors (shown when >6 options) and an 'Add <target> to grocery' action on a generated chain (same addGroceryItem path as Pantry) so the tool drives action. AI Coach: AICoachView gains an optional initialPrompt that seeds the input (without auto-sending — user still taps send, honoring AC5), and RecipeDetailView gains an 'Ask the coach about this recipe' toolbar button that opens the coach pre-seeded. AI Coach deep link already added in US-462. DEFERRED as follow-ups (service-layer / broader scope, flagged honestly): saving/favoriting generated chains; AI Coach per-kid PERSISTENT + SEARCHABLE history (today AICoachService.shared is a single in-memory conversation); and the additional contextual entry points from a planned meal and a kid profile (the initialPrompt mechanism is in place to enable them). Pending Xcode build/device verification."
     }
   ]
 }

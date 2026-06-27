@@ -668,6 +668,8 @@ struct RecipeDetailView: View {
     @State private var showingEditRecipe = false
     // US-359: step-by-step cooking mode.
     @State private var showingCookMode = false
+    // US-474: contextual AI Coach entry point seeded with this recipe.
+    @State private var showingCoach = false
 
     // US-357: add-to-meal-plan flow. `pendingShortfallRecipe` carries the
     // just-planned recipe across the picker's dismissal so we can compute the
@@ -982,6 +984,15 @@ struct RecipeDetailView: View {
                     }
                     .accessibilityLabel((currentRecipe.isFavorite ?? false) ? "Remove from favorites" : "Add to favorites")
                 }
+                // US-474: ask the AI Coach about this recipe (seeds the prompt).
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showingCoach = true
+                    } label: {
+                        Image(systemName: "bubble.left.and.text.bubble.right")
+                    }
+                    .accessibilityLabel("Ask the coach about this recipe")
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         showingEditRecipe = true
@@ -992,6 +1003,14 @@ struct RecipeDetailView: View {
             }
             .sheet(isPresented: $showingEditRecipe) {
                 EditRecipeView(recipe: currentRecipe)
+            }
+            .sheet(isPresented: $showingCoach) {
+                NavigationStack {
+                    AICoachView(
+                        initialPrompt: "Give me tips to help my child enjoy \"\(currentRecipe.name)\"."
+                    )
+                    .environmentObject(appState)
+                }
             }
             // US-359: step-by-step cooking mode.
             .fullScreenCover(isPresented: $showingCookMode) {
