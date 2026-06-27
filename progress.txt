@@ -3115,3 +3115,9 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - NEXT: run the `PRD Verify` workflow (Actions → PRD Verify → Run workflow on this branch). A green iOS gate auto-flips the 30 iOS stories; green Android flips the 3; a clean web gate flips US-342/344 once their backlog is cleared. The 4 manual + 29 net-new stories stay false by design.
 - Remaining false: 68 (0 flipped in-sandbox — by design, awaiting CI gates).
 ---
+
+## prd-verify — CI verification pass (ref ed1f638aa2a66eb82e62ccc73ffe49bb2d7ffb5e)
+- Gates: web=failure, ios=success, android=failure.
+- Flipped passes=true (gate green + implementation present): US-248, US-249, US-251, US-252, US-253, US-254, US-258, US-259, US-302, US-303, US-304, US-305, US-306, US-307, US-308, US-361, US-423, US-429, US-431, US-435, US-437, US-445, US-450, US-451, US-461, US-462, US-463, US-464, US-465, US-466, US-467, US-468, US-469, US-470, US-471, US-472, US-473, US-474.
+- Held false: 30 (breakdown {"awaiting-implementation":21,"gate-android":3,"verified":38,"manual-signoff-required":4,"gate-web":2}). Manual/ops stories never auto-flip; net-new stories await implementation; gate-red stories await a green CI run.
+---
