@@ -7,7 +7,7 @@ import Foundation
 /// The single struct lets the chip row, the filter sheet, and the
 /// "active filter" chip strip all read from one source of truth, and
 /// makes "clear all" a single `= RecipeFilters()` assignment.
-struct RecipeFilters: Equatable {
+struct RecipeFilters: Equatable, Codable {
 
     /// `easy` / `medium` / `hard`. nil = no difficulty constraint.
     var difficulty: String?
@@ -143,12 +143,34 @@ struct RecipeFilters: Equatable {
     }
 }
 
+// MARK: - Persistence (US-463)
+
+/// JSON-backed `RawRepresentable` so the whole filter set can live in
+/// `@AppStorage` and survive navigation away from the Recipes list and
+/// app relaunch. Struct Codable synthesis is memberwise, so encoding here
+/// never recurses through `rawValue`.
+extension RecipeFilters: RawRepresentable {
+    init?(rawValue: String) {
+        guard let data = rawValue.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode(RecipeFilters.self, from: data)
+        else { return nil }
+        self = decoded
+    }
+
+    var rawValue: String {
+        guard let data = try? JSONEncoder().encode(self),
+              let string = String(data: data, encoding: .utf8)
+        else { return "{}" }
+        return string
+    }
+}
+
 // MARK: - Cuisines
 
 /// Curated cuisine list. Stored on `Recipe` either via `category` or
 /// `tags`; the filter does case-insensitive substring matches against
 /// both, so a tag of "italian" or "Italian Pasta" both classify here.
-enum Cuisine: String, CaseIterable, Identifiable, Hashable {
+enum Cuisine: String, CaseIterable, Identifiable, Hashable, Codable {
     case italian
     case mexican
     case asian

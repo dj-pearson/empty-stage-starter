@@ -6866,6 +6866,220 @@
       "priority": 4,
       "passes": true,
       "notes": "TonightModeService edge-fetch fallback now records a Sentry breadcrumb (not print); BarcodeService throws TransientLookupError on 429/5xx (distinct from nil not-found) so callers can retry; StoreKitService.restorePurchases surfaces AppStore.sync() failures via errorMessage + Sentry breadcrumb instead of try?. Implemented on branch claude/ios-app-review-prd-pbedlw. Pending Xcode build/device verification via PR #200 CI."
+    },
+    {
+      "id": "US-461",
+      "title": "iOS: Global cross-entity search across foods, recipes, grocery & planned meals",
+      "description": "As a parent juggling pantry, recipes, and the grocery list, I want one search that looks everywhere so that I can find anything (an ingredient, a recipe that uses it, a grocery item, a planned meal) without first guessing which tab to open.",
+      "acceptanceCriteria": [
+        "Add a single global search entry reachable from the Home tab (search field or toolbar search button in DashboardHomeView) that is not scoped to one entity",
+        "Search matches across foods (name/category/aisle/allergens), recipes (name/ingredients), grocery_items (name/aisle/notes), and plan_entries (food/recipe name) using a shared, reusable matching predicate",
+        "Results are grouped by type (Foods, Recipes, Grocery, Planner) with a result count per group",
+        "Tapping a result deep-links to the correct screen/detail (food -> Pantry detail, recipe -> RecipeDetailView, grocery item -> Grocery, planned meal -> Planner on that date)",
+        "Empty query shows recent searches and/or quick suggestions; empty results show a clear 'no matches' state",
+        "Existing per-tab .searchable fields remain for in-context filtering; the global search is additive"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: new reusable GlobalSearch engine (Utilities/GlobalSearch.swift) with per-entity predicates + diacritic/case-insensitive normalization, capped/sorted grouped Results, and family-duplicate dedupe for planned meals. New GlobalSearchView (Views/Search/GlobalSearchView.swift) presented as a sheet from a Dashboard toolbar search button: grouped sections (Foods/Recipes/Grocery/Planner) with per-group counts, recent-searches via @AppStorage on empty query, ContentUnavailableView.search on no match. Food -> FoodDetailView, recipe -> RecipeDetailView (pushed in-sheet); grocery -> Grocery tab and planned meal -> Planner on its date via shared DeepLinkHandler. Per-tab .searchable fields left intact. Pending Xcode build/device verification (no Swift toolchain in env)."
+    },
+    {
+      "id": "US-462",
+      "title": "iOS: Complete deep-link routes for every More-tab feature",
+      "description": "As a user tapping a notification, widget, or Siri shortcut, I want it to open the exact feature it references so that deep links don't dead-end on a tab root.",
+      "acceptanceCriteria": [
+        "Add MoreRoute cases for Recipes, Food Tracker, Insights, and AI Coach (currently missing from the MoreRoute enum in MoreView.swift) so all More features are routable",
+        "Add matching DeepLinkHandler.Destination cases and wire them in MainTabView.route(to:) to select the More tab and push the right MoreRoute",
+        "Each MoreView NavigationLink uses value-based navigation (NavigationLink(value:)) so programmatic pushes and taps share one destination map",
+        "Verify a deep link to each of the 9 More features lands on the correct screen, not the More root",
+        "Existing routes (kids, kidProfile, foodChaining, quiz, settings, progress, recipes) continue to work"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: added MoreRoute .foodTracker/.insights/.aiCoach (MoreView.swift) and matching DeepLinkHandler.Destination cases + eatpal:// and universal-link parsing (food-tracker/insights/ai-coach). All MoreView Tools/Family/Settings links converted to value-based NavigationLink(value:) sharing one navigationDestination map; MainTabView.route(to:) routes the new destinations onto the More tab path. Pending Xcode build/device verification (no Swift toolchain in env)."
+    },
+    {
+      "id": "US-463",
+      "title": "iOS: Persist and restore filter, sort & planner-date state across launches and tab switches",
+      "description": "As a frequent user, I want my last-applied filters, sort order, and selected planner day to still be there when I come back so that I'm not re-applying the same filters every single session.",
+      "acceptanceCriteria": [
+        "Persist Pantry filter state (selected categories, excluded allergens, safe-only, try-bite-only, sort option) via @AppStorage/Codable so it survives app relaunch",
+        "Persist Recipes RecipeFilters (cookable, cuisines, difficulty, required foods, ingredient query, max time) across navigation away from RecipesView and across relaunch",
+        "Persist the Planner selectedDate (per active kid) so switching tabs and returning does not reset to today",
+        "Provide a clearly visible one-tap 'Reset filters' affordance wherever persisted filters are active",
+        "Grocery view-mode persistence (already @AppStorage) is unchanged; this story brings Pantry/Recipes/Planner to parity",
+        "No regression: a brand-new install starts with sensible defaults (name A-Z sort, no filters, today)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: RecipeFilters and a new PantryFilters bundle now conform to Codable + JSON-backed RawRepresentable and are stored via @AppStorage ('recipes.filters', 'pantry.filters') so advanced filters + sort survive navigation and relaunch (Cuisine/FoodCategory/FoodSortOption gained Codable). Planner selectedDate persists per active kid via @AppStorage 'planner.selectedDateByKid', clamped so a stale past day falls back to today (onAppear + onChange of activeKidId/selectedDate). Quick chips + search stay transient; reset affordances already exist (SearchFilterView 'Reset All Filters', Recipes 'All' chip + active-filter strip, planner 'Today'). New installs default to no filters / name A-Z / today. Pending Xcode build/device verification (no Swift toolchain in env)."
+    },
+    {
+      "id": "US-464",
+      "title": "iOS: Active-filter chip strip + result count on Pantry (parity with Recipes)",
+      "description": "As a user who applied several filters, I want to see exactly which filters are on and how many items are showing so that I'm not confused about why foods disappeared.",
+      "acceptanceCriteria": [
+        "Below the Pantry search bar, render a removable chip for each active filter (e.g. 'Category: Protein', 'Exclude: Milk', 'Safe only', 'Sort: Newest') mirroring the Recipes active-filter strip",
+        "Each chip has an 'x' to remove just that dimension without opening the filter sheet",
+        "Show a 'showing X of Y' count (or filtered count in the title) whenever any filter/search is active",
+        "Replace the opaque numeric badge on the filter toolbar icon with (or supplement it by) the named chip strip",
+        "Tapping a chip opens the relevant section of the advanced filter sheet",
+        "When no filters are active, the chip strip is hidden and layout is unchanged"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "iOS function review: RecipesView already shows an active-filter chip strip (RecipesView.swift:110-136); Pantry only shows a count badge (PantryView.swift:368-382), so users can't tell what's filtering results. Brings consistency."
+    },
+    {
+      "id": "US-465",
+      "title": "iOS: Unify search scope — Grocery search matches aisle, category & notes (not just name)",
+      "description": "As a shopper searching the grocery list, I want 'dairy' to surface the dairy aisle items, like Pantry search does, so that search behaves consistently across the app.",
+      "acceptanceCriteria": [
+        "Grocery matchesSearch() matches item name, aisle/aisleSection, category, and notes (currently name-only at GroceryView.swift:137-139)",
+        "Extract a single shared search predicate used by Pantry, Grocery, and the global search (US-461) so scope stays consistent",
+        "Search remains case-insensitive and diacritic-insensitive",
+        "Bulk-select scope pruning (selection limited to visible items) keeps working with the widened predicate",
+        "No measurable typing latency regression on a 200-item list"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "iOS function review: Pantry searches name+category+aisle+allergens (SearchFilterView.swift FoodFilterEngine), Grocery searches name only — inconsistent and surprising. Consolidate into one predicate."
+    },
+    {
+      "id": "US-466",
+      "title": "iOS: Grocery advanced filter sheet + visible view-mode control + bulk-select parity",
+      "description": "As a user with a long grocery list, I want discoverable filtering and an obvious way to switch grouping so that I don't have to hunt through a menu, and bulk actions should behave like they do in Pantry.",
+      "acceptanceCriteria": [
+        "Move the by-aisle / by-recipe view-mode switch out of the centered principal menu into a visible segmented control or labeled toolbar toggle",
+        "Add a Grocery filter affordance for at least: hide/show checked, priority, and aisle/section, with an active-filter summary consistent with US-464",
+        "Auto-exit bulk-select mode after a successful bulk action (mark bought, set aisle, delete) to match PantryView behavior",
+        "Surface bulk-select as a visible toolbar control on Grocery (not buried in the add/overflow menu)",
+        "When bulk actions run while a search/filter is active, show a brief hint that the action applied only to the visible/filtered items"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "iOS function review: Grocery view-mode toggle is buried in a .principal Menu (GroceryView.swift:760-788), has no advanced filter sheet (unlike Pantry), and bulk-select requires an explicit Done tap (Pantry auto-exits). Consolidates several Grocery discoverability gaps."
+    },
+    {
+      "id": "US-467",
+      "title": "iOS: Add sort options to Recipes (parity with Pantry sort)",
+      "description": "As a user browsing a large recipe library, I want to sort by name, rating, total time, or recently added so that I can surface the right recipe without first constructing a filter.",
+      "acceptanceCriteria": [
+        "Add a Recipes sort control (menu or chip) with at least: Name A-Z, Rating (high-low), Total time (quick-slow), Recently added",
+        "Sort composes with active filters (e.g. 'easy Italian, fastest first')",
+        "Selected sort is shown in the UI and persisted per US-463",
+        "Total time sort uses prep+cook minutes and places recipes with no recorded time last (consistent with the time filter rule)",
+        "Default sort matches today's behavior so existing users see no surprise reordering until they choose a sort"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "iOS function review: RecipesView has rich filters but NO sort (order is app-provided array order); Pantry has 5 sort options (SearchFilterView FoodSortOption). Inconsistent and hurts browseability."
+    },
+    {
+      "id": "US-468",
+      "title": "iOS: Recipe favorites — star toggle, Favorites quick chip & filter",
+      "description": "As a user with go-to recipes, I want to star favorites and quickly filter to them so that my best recipes don't get lost in a long list.",
+      "acceptanceCriteria": [
+        "Add a favorite/star toggle on recipe rows (swipe or context menu) and in RecipeDetailView",
+        "Add a '⭐ Favorites' chip to the RecipesView quick-filter rail and a corresponding RecipeFilters dimension",
+        "Persistence is backward-compatible: store favorite as an additive nullable column (or local-only flag) — never drop/rename existing recipe columns (see Migration Rules)",
+        "Favorited recipes are eligible to surface in the Home 'Most loved' area alongside high-rated meals",
+        "Favorite state syncs through the existing offline write-queue and realtime path like other recipe edits",
+        "Unfavoriting removes it from the Favorites filter immediately"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "iOS function review: recipes have a rating field but no explicit favorite (no isFavorite in Models). Most-loved card is purely rating-derived and auto-hides under a 2-meal threshold. Migration must be additive per CLAUDE.md."
+    },
+    {
+      "id": "US-469",
+      "title": "iOS: Pantry-coverage badge on Recipes list rows ('can I make this now?')",
+      "description": "As a user scanning recipes, I want an at-a-glance indicator of how much of each recipe I already have so that I can pick something cookable without opening every recipe.",
+      "acceptanceCriteria": [
+        "RecipeRowView shows a pantry-coverage indicator (percent or icon) computed from pantry + unchecked grocery, reusing RecipeMatcher (same source as the Cookable filter and CookableRecipesSheet)",
+        "Tapping the badge opens the existing missing-ingredients sheet for that recipe",
+        "Coverage updates reactively when foods or grocery items change",
+        "Indicator is accessible (VoiceOver label like 'You have 8 of 10 ingredients')",
+        "Computation is cached/lightweight enough not to jank scrolling on a large recipe list"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "iOS function review: coverage is shown on planner rows (MealPlanView ~664) and in CookableRecipesSheet, but NOT in the main Recipes list — users must open a recipe to judge cookability. Reuse RecipeMatcher.rank."
+    },
+    {
+      "id": "US-470",
+      "title": "iOS: Promote Budget into More -> Tools with deep link and a Grocery nudge",
+      "description": "As a budget-conscious parent, I want Budget reachable without digging through Settings so that weekly spend tracking is actually discoverable.",
+      "acceptanceCriteria": [
+        "Add a Budget entry to the More tab Tools section (alongside Insights/Progress) instead of only living under Settings",
+        "Add a MoreRoute.budget case and deep-link wiring (depends on US-462 pattern)",
+        "Add a lightweight nudge on the Grocery screen to set or review the weekly target when 3+ priced items exist",
+        "Keep the existing Settings path working (or redirect it) so no entry point breaks",
+        "Verify the weekly target @AppStorage value and forecast continue to render correctly from the new entry point"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "iOS function review: BudgetView is buried 3 taps deep (More -> Settings -> Budget), not deep-linkable, and has no nudge from Grocery where spend is incurred."
+    },
+    {
+      "id": "US-471",
+      "title": "iOS: Recurring / repeat-weekly planned meals",
+      "description": "As a parent with weekly routines (e.g. Taco Tuesday), I want to repeat a planned meal on a chosen weekday so that I don't manually recreate the same plan every week.",
+      "acceptanceCriteria": [
+        "Add 'Repeat weekly on <weekday>' to the PlanEntry duplicate menu (extends the existing Tomorrow / Next 3 / Next 7 / Full week / Pick date options)",
+        "User can choose how many weeks to project (bounded, e.g. up to 8) to avoid unbounded inserts",
+        "Repeated entries are created for the same meal slot and audience (kid/family) as the source",
+        "A clear way to undo/remove a generated series (or at least an undo toast for the batch insert)",
+        "Generated rows respect allergen/audience rules already enforced by single add-to-plan"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "iOS function review: planner duplicate submenu (MealPlanView ~743-774) supports one-off copies but no weekly recurrence; weekly patterns must be recreated by hand."
+    },
+    {
+      "id": "US-472",
+      "title": "iOS: Inline actions on the Home 'Expiring soon' sheet",
+      "description": "As a user warned that food is expiring, I want to act on it right there so that I don't have to memorize the item, switch to the Pantry tab, and find it again.",
+      "acceptanceCriteria": [
+        "ExpiringFoodsSheet rows support inline actions: edit, mark used / adjust quantity, add to grocery, and delete",
+        "Actions write through the same offline queue + realtime path as Pantry edits and update the sheet in place",
+        "Remove the 'open the Pantry tab to edit' dead-end note once inline actions exist",
+        "Destructive delete uses a confirmation consistent with Pantry",
+        "Sheet refreshes its expiring window after an action so acted-on items leave the list"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "iOS function review: DashboardHomeView ExpiringFoodsSheet (~441-488) is read-only and explicitly tells the user to switch to Pantry to act — avoidable friction on a primary surface."
+    },
+    {
+      "id": "US-473",
+      "title": "iOS: Make Tonight Mode manually triggerable any time and scope to any meal",
+      "description": "As a user who plans lunches or off-hours, I want to open Tonight-Mode-style suggestions on demand (not only 4-8pm) and for any meal slot so that the feature isn't hidden most of the day.",
+      "acceptanceCriteria": [
+        "Add an always-available entry point to launch the suggestions flow regardless of time of day (keep the 4-8pm panic CTA as an additional nudge)",
+        "Allow choosing the target meal slot (breakfast/lunch/dinner/snack) instead of dinner-only",
+        "Suggestions ranking and per-kid fit chips work for the chosen slot",
+        "Delivery fallback no longer force-closes the sheet — keep it open so the user can take other actions (cook/add missing)",
+        "Selecting a suggestion to plan routes into the existing add-to-plan flow for the chosen slot/date/kid"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "iOS function review: Tonight Mode is time-gated (4-8pm) and dinner-only; the always-available button is effectively hidden, so a built feature is invisible most of the day. Delivery fallback dismisses the whole sheet."
+    },
+    {
+      "id": "US-474",
+      "title": "iOS: Tie feature silos into the workflow — Food Chaining & AI Coach integration",
+      "description": "As a user, I want Food Chaining and the AI Coach to connect to planning and to my data so that insight tools actually drive action instead of being read-only dead-ends.",
+      "acceptanceCriteria": [
+        "Food Chaining: add 'Add chain to plan' and/or 'Add bridge foods to grocery' actions, and let a generated chain be saved/favorited for later",
+        "Food Chaining: add a name-search affordance to the food selectors instead of horizontal-scroll-only when the pantry is large",
+        "AI Coach: add contextual entry points ('Ask coach about this meal/food') from a recipe, a planned meal, and a kid profile that pre-seed the prompt",
+        "AI Coach: persist conversation history per kid (not cleared on close) with the ability to search past answers, and add a MoreRoute/deep link for AI Coach (depends on US-462)",
+        "No external content is sent anywhere new without it being an explicit user action"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "iOS function review: FoodChainingView is read-only with no plan/grocery integration and no name search; AICoachView chat is ephemeral, unsearchable, and not deep-linkable. 'Tie everything together' bucket from the request."
     }
   ]
 }

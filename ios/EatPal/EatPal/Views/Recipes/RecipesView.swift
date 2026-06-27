@@ -10,7 +10,9 @@ struct RecipesView: View {
     // US-272: full filter state. Replaces the single-difficulty pill;
     // search bar binds to `filters.ingredientQuery` so the chip strip
     // can show + clear it like any other filter.
-    @State private var filters = RecipeFilters()
+    // US-463: persisted so the applied filter set survives navigating away
+    // from Recipes (e.g. add-to-plan round-trips) and app relaunch.
+    @AppStorage("recipes.filters") private var filters = RecipeFilters()
     @State private var showingFiltersSheet = false
 
     // US-269: bulk-select mode for recipes.

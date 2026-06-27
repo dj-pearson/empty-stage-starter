@@ -120,6 +120,16 @@ struct MainTabView: View {
         case .progress:
             selectedTab = .more
             morePath = [.progress]
+        case .foodTracker:
+            // US-462: route the remaining Tools onto the More tab's path.
+            selectedTab = .more
+            morePath = [.foodTracker]
+        case .insights:
+            selectedTab = .more
+            morePath = [.insights]
+        case .aiCoach:
+            selectedTab = .more
+            morePath = [.aiCoach]
         }
         // AC4: clear so the identical link fires again next time.
         deepLinkHandler.clearDestination()

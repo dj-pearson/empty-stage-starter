@@ -9,6 +9,8 @@ struct DashboardHomeView: View {
     @State private var scannedBarcode: ScannedBarcodeItem?
     /// US-230: opens the pantry tab pre-filtered to expiring foods.
     @State private var showingExpiringSheet = false
+    /// US-461: app-wide cross-entity search surface.
+    @State private var showingGlobalSearch = false
 
     /// US-240: First active kid that has neither a saved pickinessLevel nor
     /// strategies — these are the parents who will benefit most from the quiz.
@@ -79,6 +81,23 @@ struct DashboardHomeView: View {
             .padding()
         }
         .navigationTitle("Dashboard")
+        // US-461: global search entry point. Available from the primary
+        // landing tab so any entity is one tap away regardless of which tab
+        // owns it.
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showingGlobalSearch = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+                .accessibilityLabel("Search everything")
+            }
+        }
+        .sheet(isPresented: $showingGlobalSearch) {
+            GlobalSearchView()
+                .environmentObject(appState)
+        }
         .refreshable {
             await appState.loadAllData()
         }

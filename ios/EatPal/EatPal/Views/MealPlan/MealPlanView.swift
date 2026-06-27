@@ -65,6 +65,43 @@ struct MealPlanView: View {
         return appState.planEntriesForDate(selectedDate, kidId: kidId)
     }
 
+    // MARK: - Selected-day persistence (US-463)
+
+    /// Per-kid last-selected planner day (kidId -> ISO yyyy-MM-dd) so a
+    /// multi-day planning session survives tab switches and app relaunch
+    /// instead of snapping back to today.
+    @AppStorage("planner.selectedDateByKid") private var selectedDateByKidRaw = "{}"
+
+    private func selectedDateMap() -> [String: String] {
+        guard let data = selectedDateByKidRaw.data(using: .utf8),
+              let map = try? JSONDecoder().decode([String: String].self, from: data)
+        else { return [:] }
+        return map
+    }
+
+    /// Restore the stored day for `kidId`, but never land on a past day —
+    /// a stale date from a previous session would be more confusing than
+    /// today, so anything before today falls back to the current default.
+    private func restoreSelectedDate(for kidId: String?) {
+        guard let kidId,
+              let iso = selectedDateMap()[kidId],
+              let stored = DateFormatter.isoDate.date(from: iso) else { return }
+        let today = Calendar.current.startOfDay(for: Date())
+        if Calendar.current.startOfDay(for: stored) >= today {
+            selectedDate = stored
+        }
+    }
+
+    private func persistSelectedDate() {
+        guard let kidId = appState.activeKidId else { return }
+        var map = selectedDateMap()
+        map[kidId] = selectedDate.isoDateString
+        if let data = try? JSONEncoder().encode(map),
+           let string = String(data: data, encoding: .utf8) {
+            selectedDateByKidRaw = string
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
@@ -144,6 +181,14 @@ struct MealPlanView: View {
             .padding(.vertical)
         }
         .navigationTitle("Meal Plan")
+        // US-463: restore/persist the selected planner day per active kid.
+        .onAppear { restoreSelectedDate(for: appState.activeKidId) }
+        .onChange(of: appState.activeKidId) { _, newKidId in
+            restoreSelectedDate(for: newKidId)
+        }
+        .onChange(of: selectedDate) { _, _ in
+            persistSelectedDate()
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: 12) {
