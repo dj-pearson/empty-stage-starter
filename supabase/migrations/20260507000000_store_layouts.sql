@@ -39,6 +39,20 @@ CREATE TABLE IF NOT EXISTS public.store_layouts (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- CI-fix: store_layouts is created by an earlier migration (20251013172257)
+-- with a different column set; later migrations reference a superset. Ensure
+-- every referenced column exists before indexing/backfilling.
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS slug TEXT;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS banner_image_url TEXT;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS aisle_overrides JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS store_name TEXT;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS store_chain TEXT;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS store_location TEXT;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT false;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS household_id UUID;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE public.store_layouts ALTER COLUMN user_id DROP NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS store_layouts_slug_uq
   ON public.store_layouts(slug);
 

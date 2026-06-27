@@ -1,7 +1,10 @@
+-- CI-fix: this migration duplicates tables already created by
+-- 20251008145000_create_email_marketing_tables.sql. Made idempotent so a
+-- clean replay (where those tables already exist) does not error.
 -- Create email marketing tables
 
 -- Email lists table
-CREATE TABLE public.email_lists (
+CREATE TABLE IF NOT EXISTS public.email_lists (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   description TEXT,
@@ -12,7 +15,7 @@ CREATE TABLE public.email_lists (
 );
 
 -- Email subscribers table
-CREATE TABLE public.email_subscribers (
+CREATE TABLE IF NOT EXISTS public.email_subscribers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT NOT NULL UNIQUE,
   first_name TEXT,
@@ -28,7 +31,7 @@ CREATE TABLE public.email_subscribers (
 );
 
 -- Email campaigns table  
-CREATE TABLE public.email_campaigns (
+CREATE TABLE IF NOT EXISTS public.email_campaigns (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   subject TEXT NOT NULL,
@@ -50,7 +53,7 @@ CREATE TABLE public.email_campaigns (
 );
 
 -- Email templates table
-CREATE TABLE public.email_templates (
+CREATE TABLE IF NOT EXISTS public.email_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   description TEXT,
@@ -69,18 +72,22 @@ ALTER TABLE public.email_campaigns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.email_templates ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for admins only
+DROP POLICY IF EXISTS "Admins can manage email lists" ON public.email_lists;
 CREATE POLICY "Admins can manage email lists"
   ON public.email_lists FOR ALL
   USING (has_role(auth.uid(), 'admin'::app_role));
 
+DROP POLICY IF EXISTS "Admins can manage email subscribers" ON public.email_subscribers;
 CREATE POLICY "Admins can manage email subscribers"
   ON public.email_subscribers FOR ALL
   USING (has_role(auth.uid(), 'admin'::app_role));
 
+DROP POLICY IF EXISTS "Admins can manage email campaigns" ON public.email_campaigns;
 CREATE POLICY "Admins can manage email campaigns"
   ON public.email_campaigns FOR ALL
   USING (has_role(auth.uid(), 'admin'::app_role));
 
+DROP POLICY IF EXISTS "Admins can manage email templates" ON public.email_templates;
 CREATE POLICY "Admins can manage email templates"
   ON public.email_templates FOR ALL
   USING (has_role(auth.uid(), 'admin'::app_role));

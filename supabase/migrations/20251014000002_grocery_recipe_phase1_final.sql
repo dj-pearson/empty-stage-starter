@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS recipe_photos (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE recipe_photos ADD COLUMN IF NOT EXISTS uploaded_by_user_id UUID REFERENCES auth.users(id);
 CREATE INDEX IF NOT EXISTS idx_recipe_photos_recipe_id ON recipe_photos(recipe_id);
 
 -- Recipe Attempts (tracking when recipes are made and rated)

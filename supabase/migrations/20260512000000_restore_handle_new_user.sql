@@ -108,13 +108,17 @@ END $$;
 --    Real admin gating lives in public.user_roles. This is defense in depth.
 --    NOTE: user_profiles.role is stored as TEXT (it gets cast to public.user_role
 --    only inside get_user_role() and the RLS policies), so compare as text.
-UPDATE public.user_profiles
-SET role = 'office_staff'
-WHERE role = 'admin'
-  AND id <> 'dc48c711-f059-443a-b4f2-585be6683c63';
+-- CI-fix: user_profiles is a vestigial out-of-band table (no migration creates
+-- it). Guard so a clean replay where it is absent does not error.
+DO $$
+BEGIN
+  IF to_regclass('public.user_profiles') IS NOT NULL THEN
+    UPDATE public.user_profiles
+    SET role = 'office_staff'
+    WHERE role = 'admin'
+      AND id <> 'dc48c711-f059-443a-b4f2-585be6683c63';
+    ALTER TABLE public.user_profiles
+      ALTER COLUMN role SET DEFAULT 'office_staff';
+  END IF;
+END $$;
 
--- 4. Fix the column default so anything that still inserts here doesn't
---    recreate the bug. (No app code does, but a future contractor or LLM
---    might. Cleanup migration drops the table entirely.)
-ALTER TABLE public.user_profiles
-  ALTER COLUMN role SET DEFAULT 'office_staff';
