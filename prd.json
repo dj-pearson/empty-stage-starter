@@ -7049,7 +7049,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "iOS function review: DashboardHomeView ExpiringFoodsSheet (~441-488) is read-only and explicitly tells the user to switch to Pantry to act — avoidable friction on a primary surface."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: ExpiringFoodsSheet now reads live from AppState (not a static snapshot) and supports inline actions — tap a row to edit (FoodDetailView), leading swipe for 'Used' (decrement qty via updateFood) and 'Grocery' (addGroceryItem), trailing swipe + context menu for Delete (deleteFood) behind a confirmation alert consistent with Pantry. All actions use the same AppState methods as Pantry, inheriting the offline queue + realtime path. The 'open the Pantry tab to edit' footer note was removed; the list refreshes reactively so used/deleted items drop off, and an empty state shows when nothing is expiring. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-473",
