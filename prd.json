@@ -6881,7 +6881,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "iOS function review: app has NO cross-entity search today — four independent .searchable fields (RecipesView.swift:240, PantryView.swift:356, GroceryView.swift:676, MealPlanView.swift:1143) each scoped to one tab. Reuse FoodFilterEngine-style predicates for a shared matcher. Native SwiftUI app at ios/EatPal/EatPal."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: new reusable GlobalSearch engine (Utilities/GlobalSearch.swift) with per-entity predicates + diacritic/case-insensitive normalization, capped/sorted grouped Results, and family-duplicate dedupe for planned meals. New GlobalSearchView (Views/Search/GlobalSearchView.swift) presented as a sheet from a Dashboard toolbar search button: grouped sections (Foods/Recipes/Grocery/Planner) with per-group counts, recent-searches via @AppStorage on empty query, ContentUnavailableView.search on no match. Food -> FoodDetailView, recipe -> RecipeDetailView (pushed in-sheet); grocery -> Grocery tab and planned meal -> Planner on its date via shared DeepLinkHandler. Per-tab .searchable fields left intact. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-462",
