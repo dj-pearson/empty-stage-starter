@@ -3,6 +3,7 @@ package com.eatpal.app.ui.scanner
 import android.Manifest
 import android.util.Log
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -43,7 +44,10 @@ import java.util.concurrent.Executors
  * successfully decoded value and stops scanning (caller decides whether to
  * re-enable). iOS `BarcodeScannerView` parity.
  */
+// ExperimentalGetImage: ImageProxy.getImage() is opt-in; we read it under the
+// ImageAnalysis analyzer to feed ML Kit (the documented CameraX→ML Kit path).
 @OptIn(ExperimentalPermissionsApi::class)
+@ExperimentalGetImage
 @Composable
 fun BarcodeScannerScreen(
     onCancel: () -> Unit,
