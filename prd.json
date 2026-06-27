@@ -7064,7 +7064,7 @@
       ],
       "priority": 4,
       "passes": false,
-      "notes": "iOS function review: Tonight Mode is time-gated (4-8pm) and dinner-only; the always-available button is effectively hidden, so a built feature is invisible most of the day. Delivery fallback dismisses the whole sheet."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: AC1 (always-available entry) already shipped — TonightModeCard shows an inline 'Need ideas for tonight?' button whenever it's not in the 4-8pm panic state, so the flow is reachable any time. AC4: the delivery fallback's 'Order missing' button no longer dismisses the sheet — it now adds the shortfall to grocery and keeps suggestions on screen. AC5 + AC2: each suggestion gains a 'Plan' button that opens the existing AddRecipeToPlanSheet (its own slot/day/kid picker), so the user can schedule any suggestion into any meal slot via the standard flow. AC3: per-kid fit chips + pantry-coverage ranking are slot-agnostic so they apply to any chosen slot. FOLLOW-UP: true slot-specific AI ranking needs a meal_slot param on the 'tonight-mode' edge function (RequestBody has none today) — deferred as a backend change. Pending Xcode build/device verification."
     },
     {
       "id": "US-474",
