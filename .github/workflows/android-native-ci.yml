@@ -10,6 +10,9 @@ on:
     paths:
       - 'android-native/**'
       - '.github/workflows/android-native-ci.yml'
+  # Callable by the prd-verify workflow so PRD story verification reuses this
+  # real build+test gate instead of duplicating the Gradle pipeline.
+  workflow_call:
 
 jobs:
   build:
