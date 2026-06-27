@@ -7034,7 +7034,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "iOS function review: planner duplicate submenu (MealPlanView ~743-774) supports one-off copies but no weekly recurrence; weekly patterns must be recreated by hand."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: added a 'Repeat every <weekday>' submenu to the PlanEntry context menu (alongside the existing Tomorrow/Next 3/Next 7/whole-week/Pick-date duplicate options) with bounded choices For 2 / 4 / 8 weeks. repeatWeekly copies the source entry onto the same weekday (date + 7*k) for the same slot + kid, so allergen/audience rules are inherited (same as Duplicate). The whole batch is undoable via a success toast with an 'Undo' action that deletes the just-inserted rows (optimistic deletePlanEntry reflects immediately). Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-472",

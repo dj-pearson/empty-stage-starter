@@ -818,6 +818,28 @@ struct PlanEntryRow: View {
                 Label("Duplicate", systemImage: "doc.on.doc")
             }
 
+            // US-471: weekly recurrence on the source weekday (e.g. every
+            // Tuesday) for a bounded number of weeks.
+            Menu {
+                Button {
+                    Task { await repeatWeekly(weeks: 2) }
+                } label: {
+                    Label("For 2 weeks", systemImage: "repeat")
+                }
+                Button {
+                    Task { await repeatWeekly(weeks: 4) }
+                } label: {
+                    Label("For 4 weeks", systemImage: "repeat")
+                }
+                Button {
+                    Task { await repeatWeekly(weeks: 8) }
+                } label: {
+                    Label("For 8 weeks", systemImage: "repeat")
+                }
+            } label: {
+                Label("Repeat every \(DateFormatter.dayOfWeek.string(from: date))", systemImage: "repeat")
+            }
+
             Divider()
 
             Button(role: .destructive) {
@@ -1005,6 +1027,54 @@ struct PlanEntryRow: View {
         } else if failed > 0 {
             ToastManager.shared.error("Couldn't duplicate \(entryName)")
         }
+    }
+
+    /// US-471: copy this entry onto the same weekday for the next `weeks`
+    /// weeks (bounded 1...8). Same slot/kid as the source, so allergen +
+    /// audience rules are inherited. The whole batch is undoable via the
+    /// toast action, which deletes the just-inserted rows.
+    private func repeatWeekly(weeks: Int) async {
+        let n = max(1, min(weeks, 8))
+        let targets = (1...n).map { date.addingDays(7 * $0) }
+
+        var insertedIds: [String] = []
+        var failed = 0
+        for target in targets {
+            let copy = PlanEntry(
+                id: UUID().uuidString,
+                userId: entry.userId,
+                kidId: entry.kidId,
+                date: DateFormatter.isoDate.string(from: target),
+                mealSlot: entry.mealSlot,
+                foodId: entry.foodId,
+                recipeId: entry.recipeId
+            )
+            do {
+                try await appState.addPlanEntry(copy)
+                insertedIds.append(copy.id)
+            } catch {
+                failed += 1
+            }
+        }
+
+        HapticManager.success()
+        guard !insertedIds.isEmpty else {
+            if failed > 0 { ToastManager.shared.error("Couldn't repeat \(entryName)") }
+            return
+        }
+
+        let ids = insertedIds
+        let weekday = DateFormatter.dayOfWeek.string(from: date)
+        let suffix = failed > 0 ? " (\(failed) failed)" : ""
+        ToastManager.shared.show(Toast(
+            type: .success,
+            title: "Repeating \(entryName)",
+            message: "\(ids.count) \(weekday)\(ids.count == 1 ? "" : "s")\(suffix)",
+            actionLabel: "Undo",
+            retry: { @MainActor in
+                for id in ids { try? await appState.deletePlanEntry(id) }
+            }
+        ))
     }
 
     private func resultColor(_ result: MealResult) -> Color {
