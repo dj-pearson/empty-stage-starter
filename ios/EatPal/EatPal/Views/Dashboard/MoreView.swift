@@ -20,6 +20,8 @@ enum MoreRoute: Hashable {
     case foodTracker
     case insights
     case aiCoach
+    // US-470: Budget promoted out of Settings into the Tools section.
+    case budget
 }
 
 struct MoreView: View {
@@ -98,6 +100,22 @@ struct MoreView: View {
                     } icon: {
                         Image(systemName: "chart.pie.fill")
                             .foregroundStyle(.purple)
+                    }
+                }
+
+                // US-470: Budget promoted here from deep inside Settings.
+                NavigationLink(value: MoreRoute.budget) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Budget")
+                                .font(.body)
+                            Text("Weekly spend forecast and target")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "dollarsign.circle.fill")
+                            .foregroundStyle(.green)
                     }
                 }
 
@@ -205,6 +223,8 @@ struct MoreView: View {
                 InsightsView()
             case .aiCoach:
                 AICoachView()
+            case .budget:
+                BudgetView()
             }
         }
     }

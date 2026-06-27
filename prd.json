@@ -6928,7 +6928,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "iOS function review: RecipesView already shows an active-filter chip strip (RecipesView.swift:110-136); Pantry only shows a count badge (PantryView.swift:368-382), so users can't tell what's filtering results. Brings consistency."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: PantryView now renders a removable active-filter chip strip (one chip per advanced dimension: each category, each excluded allergen, safe-only, try-bite, non-default sort) mirroring the Recipes strip — tapping a chip removes just that dimension. A 'Showing X of Y' count plus an inline 'Clear filters' button appear whenever any filter/search/quick-chip/segment is narrowing the list. The toolbar badge is retained and supplemented by the named strip. Strip hidden when no advanced filters are active. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-465",
@@ -6943,7 +6943,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "iOS function review: Pantry searches name+category+aisle+allergens (SearchFilterView.swift FoodFilterEngine), Grocery searches name only — inconsistent and surprising. Consolidate into one predicate."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: GroceryView.matchesSearch now delegates to the shared GlobalSearch.matches(grocery:) predicate, widening scope from name-only to name + category + free-text aisle + structured aisleSection (raw + display name) + notes. The haystack lives in one place (GlobalSearch.groceryHaystack) reused by the app-wide search, keeping scope consistent. Bulk-select visible-item pruning inherits the wider predicate automatically. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-466",
@@ -6958,7 +6958,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "iOS function review: Grocery view-mode toggle is buried in a .principal Menu (GroceryView.swift:760-788), has no advanced filter sheet (unlike Pantry), and bulk-select requires an explicit Done tap (Pantry auto-exits). Consolidates several Grocery discoverability gaps."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: (1) view-mode (By Aisle / By Recipe) is now an always-visible segmented Picker in the nav bar instead of a tap-to-open principal menu; (2) new GroceryFilterSheet (hide bought, priority, aisle/section) wired through matchesFilter into the uncheckedItems/checkedItems choke points, with a removable active-filter chip strip + 'Showing X of Y' count + Clear (US-464 parity); (3) bulk actions already auto-exit select mode via exitSelectMode() — confirmed; (4) bulk-select promoted from the add overflow menu to a visible toolbar button (with a filter button beside it); (5) entering select mode while a search/filter is active shows an info toast that bulk actions hit visible items only. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-467",
@@ -6973,7 +6973,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "iOS function review: RecipesView has rich filters but NO sort (order is app-provided array order); Pantry has 5 sort options (SearchFilterView FoodSortOption). Inconsistent and hurts browseability."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: added RecipeSortOption (Default/Name A-Z/Rating high-low/Total time quick-slow/Recently added) + a `sort` field on RecipeFilters; sorting runs at the end of RecipeFilters.apply via Array<Recipe>.sortedBy, so it composes with filters. Time sort uses resolvedTotalMinutes (no-time recipes sort last); rating sort puts unrated last. Sort lives in the persisted filter bundle (US-463). UI: a topBarLeading toolbar Menu/Picker labelled with the current option. Default = .defaultOrder (no client reordering) so existing users see no surprise until they pick a sort. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-468",
@@ -6989,7 +6989,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "iOS function review: recipes have a rating field but no explicit favorite (no isFavorite in Models). Most-loved card is purely rating-derived and auto-hides under a 2-meal threshold. Migration must be additive per CLAUDE.md."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn (additive DB column approach). Migration 20260627000000_recipe_is_favorite.sql adds recipes.is_favorite boolean NOT NULL DEFAULT false (+ partial index), backward-compatible per CLAUDE.md; web types.ts updated (Row/Insert/Update). iOS: Recipe + RecipeUpdate gain isFavorite (is_favorite); AppState.setRecipeFavorite does an optimistic, quiet toggle via the existing dataService.updateRecipe path (inherits realtime/retry; partial PATCH is safe because RecipeUpdate optionals encode via encodeIfPresent). RecipeFilters gains favoritesOnly (counted in isAnyActive/activeCount, persisted in the bundle). UI: '⭐️ Favorites' rail chip, leading swipe action, context-menu toggle, row star indicator, and a star toggle in RecipeDetailView's toolbar. FOLLOW-UP: surfacing favorites in the Home 'Most loved' card (rating-based today) was left out to keep scope contained. Pending Xcode build/device verification + supabase db push / types regen in CI."
     },
     {
       "id": "US-469",
@@ -7004,7 +7004,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "iOS function review: coverage is shown on planner rows (MealPlanView ~664) and in CookableRecipesSheet, but NOT in the main Recipes list — users must open a recipe to judge cookability. Reuse RecipeMatcher.rank."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: RecipeRowView gains an optional pantry-coverage badge (percent + tier color: green cookNow / orange almostThere) computed once per render via a coverageByRecipe map built from RecipeMatcher.rank (same matcher as the Cookable filter), so it's reactive to foods/grocery changes. Tapping the badge opens the existing MissingIngredientsSheet for that recipe (shortfalls via ShortfallCalculator.compute). VoiceOver label reads 'Cook now, you have 80 percent of ingredients'. Recipes below the matcher threshold or with no ingredients show no badge. Params default to nil so the single existing call site is unaffected. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-470",
@@ -7019,7 +7019,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "iOS function review: BudgetView is buried 3 taps deep (More -> Settings -> Budget), not deep-linkable, and has no nudge from Grocery where spend is incurred."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: Budget now appears in the More -> Tools section (dollarsign.circle.fill) in addition to its existing Settings path (kept working). Added MoreRoute.budget + navigationDestination -> BudgetView(), DeepLinkHandler.Destination.budget with eatpal://budget and universal-link parsing, and MainTabView routing onto the More tab. GroceryView shows a one-tap budget nudge ('Track this week's spend') once >=3 items have a price (pricePerUnit), routing to Budget via the shared DeepLinkHandler. Weekly target @AppStorage + forecast render unchanged from the new entry point. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-471",
@@ -7034,7 +7034,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "iOS function review: planner duplicate submenu (MealPlanView ~743-774) supports one-off copies but no weekly recurrence; weekly patterns must be recreated by hand."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: added a 'Repeat every <weekday>' submenu to the PlanEntry context menu (alongside the existing Tomorrow/Next 3/Next 7/whole-week/Pick-date duplicate options) with bounded choices For 2 / 4 / 8 weeks. repeatWeekly copies the source entry onto the same weekday (date + 7*k) for the same slot + kid, so allergen/audience rules are inherited (same as Duplicate). The whole batch is undoable via a success toast with an 'Undo' action that deletes the just-inserted rows (optimistic deletePlanEntry reflects immediately). Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-472",
@@ -7049,7 +7049,7 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": "iOS function review: DashboardHomeView ExpiringFoodsSheet (~441-488) is read-only and explicitly tells the user to switch to Pantry to act — avoidable friction on a primary surface."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: ExpiringFoodsSheet now reads live from AppState (not a static snapshot) and supports inline actions — tap a row to edit (FoodDetailView), leading swipe for 'Used' (decrement qty via updateFood) and 'Grocery' (addGroceryItem), trailing swipe + context menu for Delete (deleteFood) behind a confirmation alert consistent with Pantry. All actions use the same AppState methods as Pantry, inheriting the offline queue + realtime path. The 'open the Pantry tab to edit' footer note was removed; the list refreshes reactively so used/deleted items drop off, and an empty state shows when nothing is expiring. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-473",
@@ -7064,7 +7064,7 @@
       ],
       "priority": 4,
       "passes": false,
-      "notes": "iOS function review: Tonight Mode is time-gated (4-8pm) and dinner-only; the always-available button is effectively hidden, so a built feature is invisible most of the day. Delivery fallback dismisses the whole sheet."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: AC1 (always-available entry) already shipped — TonightModeCard shows an inline 'Need ideas for tonight?' button whenever it's not in the 4-8pm panic state, so the flow is reachable any time. AC4: the delivery fallback's 'Order missing' button no longer dismisses the sheet — it now adds the shortfall to grocery and keeps suggestions on screen. AC5 + AC2: each suggestion gains a 'Plan' button that opens the existing AddRecipeToPlanSheet (its own slot/day/kid picker), so the user can schedule any suggestion into any meal slot via the standard flow. AC3: per-kid fit chips + pantry-coverage ranking are slot-agnostic so they apply to any chosen slot. FOLLOW-UP: true slot-specific AI ranking needs a meal_slot param on the 'tonight-mode' edge function (RequestBody has none today) — deferred as a backend change. Pending Xcode build/device verification."
     },
     {
       "id": "US-474",
@@ -7079,7 +7079,7 @@
       ],
       "priority": 4,
       "passes": false,
-      "notes": "iOS function review: FoodChainingView is read-only with no plan/grocery integration and no name search; AICoachView chat is ephemeral, unsearchable, and not deep-linkable. 'Tie everything together' bucket from the request."
+      "notes": "Implemented (focused subset) on branch claude/ios-app-function-review-t0arpn. Food Chaining: added a name-search field to both food selectors (shown when >6 options) and an 'Add <target> to grocery' action on a generated chain (same addGroceryItem path as Pantry) so the tool drives action. AI Coach: AICoachView gains an optional initialPrompt that seeds the input (without auto-sending — user still taps send, honoring AC5), and RecipeDetailView gains an 'Ask the coach about this recipe' toolbar button that opens the coach pre-seeded. AI Coach deep link already added in US-462. DEFERRED as follow-ups (service-layer / broader scope, flagged honestly): saving/favoriting generated chains; AI Coach per-kid PERSISTENT + SEARCHABLE history (today AICoachService.shared is a single in-memory conversation); and the additional contextual entry points from a planned meal and a kid profile (the initialPrompt mechanism is in place to enable them). Pending Xcode build/device verification."
     }
   ]
 }

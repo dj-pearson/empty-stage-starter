@@ -41,6 +41,63 @@ struct PantryView: View {
         filters.activeCount
     }
 
+    // US-464: true when anything (quick chips, segment, search, or advanced
+    // filters) is narrowing the list — drives the "showing X of Y" count.
+    private var isFiltering: Bool {
+        hasActiveFilters
+            || !searchText.isEmpty
+            || selectedCategory != nil
+            || filterMode != .all
+    }
+
+    /// US-464: removable chips for each active *advanced* filter so the user
+    /// sees what's hiding foods and can clear one dimension without opening
+    /// the sheet (parity with the Recipes active-filter strip). Quick chips /
+    /// segment are already visible above, so they're not duplicated here.
+    private var activeFilterChips: [PantryActiveChip] {
+        var chips: [PantryActiveChip] = []
+
+        for category in filters.categories.sorted(by: { $0.rawValue < $1.rawValue }) {
+            chips.append(PantryActiveChip(
+                id: "cat-\(category.rawValue)",
+                label: "\(category.icon) \(category.displayName)"
+            ) { filters.categories.remove(category) })
+        }
+
+        for allergen in filters.allergens.sorted() {
+            chips.append(PantryActiveChip(
+                id: "allergen-\(allergen)",
+                label: "🚫 \(allergen)"
+            ) { filters.allergens.remove(allergen) })
+        }
+
+        if filters.safeOnly {
+            chips.append(PantryActiveChip(id: "safe", label: "✅ Safe only") {
+                filters.safeOnly = false
+            })
+        }
+
+        if filters.tryBiteOnly {
+            chips.append(PantryActiveChip(id: "trybite", label: "🌱 Try bite") {
+                filters.tryBiteOnly = false
+            })
+        }
+
+        if filters.sortOption != .nameAsc {
+            chips.append(PantryActiveChip(id: "sort", label: "↕︎ \(filters.sortOption.rawValue)") {
+                filters.sortOption = .nameAsc
+            })
+        }
+
+        return chips
+    }
+
+    private struct PantryActiveChip {
+        let id: String
+        let label: String
+        let remove: () -> Void
+    }
+
     private var availableAllergens: [String] {
         let all = appState.foods.compactMap(\.allergens).flatMap { $0 }
         return Array(Set(all)).sorted()
@@ -132,6 +189,52 @@ struct PantryView: View {
                 .pickerStyle(.segmented)
                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 .popoverTip(swipeTip)
+            }
+
+            // US-464: active advanced-filter chips + "showing X of Y" count so
+            // the user can see and undo what's filtering the list inline.
+            if isFiltering {
+                Section {
+                    if !activeFilterChips.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(activeFilterChips, id: \.id) { chip in
+                                    Button {
+                                        HapticManager.selection()
+                                        chip.remove()
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Text(chip.label).font(.caption.weight(.semibold))
+                                            Image(systemName: "xmark")
+                                                .font(.caption2.weight(.semibold))
+                                        }
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(Color.accentColor.opacity(0.15), in: Capsule())
+                                        .foregroundStyle(Color.accentColor)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                    }
+
+                    HStack {
+                        Text("Showing \(filteredFoods.count) of \(appState.foods.count)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if hasActiveFilters {
+                            Button("Clear filters") {
+                                HapticManager.selection()
+                                filters = PantryFilters()
+                            }
+                            .font(.caption.weight(.semibold))
+                        }
+                    }
+                }
             }
 
             // Foods List

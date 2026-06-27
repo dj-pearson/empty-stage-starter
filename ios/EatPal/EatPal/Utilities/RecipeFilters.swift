@@ -31,8 +31,18 @@ struct RecipeFilters: Equatable, Codable {
     /// unchecked grocery items).
     var cookableOnly: Bool = false
 
+    /// US-468: when true, only show recipes the user has starred.
+    var favoritesOnly: Bool = false
+
     /// Max total time (prep + cook) in minutes. nil = any.
     var maxTotalMinutes: Int?
+
+    /// US-467: result ordering. Orthogonal to the filter dimensions — not
+    /// counted in `isAnyActive`/`activeCount` (it never hides recipes), but
+    /// it persists with the rest of the bundle. Defaults to `.defaultOrder`
+    /// (the app's existing order) so existing users see no surprise
+    /// reordering until they pick a sort.
+    var sort: RecipeSortOption = .defaultOrder
 
     // MARK: - Convenience
 
@@ -44,6 +54,7 @@ struct RecipeFilters: Equatable, Codable {
             || !requiredFoodIds.isEmpty
             || !ingredientQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || cookableOnly
+            || favoritesOnly
             || maxTotalMinutes != nil
     }
 
@@ -56,6 +67,7 @@ struct RecipeFilters: Equatable, Codable {
         if !requiredFoodIds.isEmpty { n += 1 }
         if !ingredientQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { n += 1 }
         if cookableOnly { n += 1 }
+        if favoritesOnly { n += 1 }
         if maxTotalMinutes != nil { n += 1 }
         return n
     }
@@ -93,6 +105,8 @@ struct RecipeFilters: Equatable, Codable {
             .lowercased()
 
         return recipes.filter { recipe in
+            if favoritesOnly, recipe.isFavorite != true { return false }
+
             if let difficulty, recipe.difficultyLevel != difficulty { return false }
 
             if let max = maxTotalMinutes {
@@ -139,6 +153,50 @@ struct RecipeFilters: Equatable, Codable {
             if let cookableIds, !cookableIds.contains(recipe.id) { return false }
 
             return true
+        }
+        .sortedBy(sort)
+    }
+}
+
+// MARK: - Sort (US-467)
+
+/// Recipes had filters but no sort (Pantry has 5 options). These bring
+/// parity: browse a large library without first constructing a filter.
+enum RecipeSortOption: String, CaseIterable, Codable {
+    /// The app's existing order (as loaded) — no client-side reordering.
+    case defaultOrder = "Default"
+    case nameAsc = "Name (A–Z)"
+    case ratingDesc = "Rating (high–low)"
+    case timeAsc = "Total time (quick–slow)"
+    case recentlyAdded = "Recently added"
+}
+
+extension Array where Element == Recipe {
+    /// Stable ordering for each sort option. Recipes with no rating or no
+    /// resolvable time sort last so a busy-weeknight "quickest first" view
+    /// surfaces real times instead of unknowns.
+    func sortedBy(_ option: RecipeSortOption) -> [Recipe] {
+        switch option {
+        case .defaultOrder:
+            return self
+        case .nameAsc:
+            return sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        case .ratingDesc:
+            return sorted {
+                let a = $0.rating ?? -1
+                let b = $1.rating ?? -1
+                if a != b { return a > b }
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+        case .timeAsc:
+            return sorted {
+                let a = $0.resolvedTotalMinutes ?? Int.max
+                let b = $1.resolvedTotalMinutes ?? Int.max
+                if a != b { return a < b }
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+        case .recentlyAdded:
+            return sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
         }
     }
 }
