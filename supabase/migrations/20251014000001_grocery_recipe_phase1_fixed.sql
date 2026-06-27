@@ -265,6 +265,11 @@ CREATE TABLE IF NOT EXISTS food_aisle_mappings (
   UNIQUE(food_id, store_aisle_id)
 );
 
+-- CI-fix: reconcile with the earlier phase1 food_aisle_mappings (divergent columns).
+ALTER TABLE food_aisle_mappings ADD COLUMN IF NOT EXISTS food_id UUID REFERENCES foods(id) ON DELETE CASCADE;
+ALTER TABLE food_aisle_mappings ADD COLUMN IF NOT EXISTS store_aisle_id UUID REFERENCES store_aisles(id) ON DELETE CASCADE;
+ALTER TABLE food_aisle_mappings ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id);
+ALTER TABLE recipe_photos ADD COLUMN IF NOT EXISTS uploaded_by_user_id UUID REFERENCES auth.users(id);
 CREATE INDEX IF NOT EXISTS idx_food_aisle_mappings_food_id ON food_aisle_mappings(food_id);
 CREATE INDEX IF NOT EXISTS idx_food_aisle_mappings_aisle_id ON food_aisle_mappings(store_aisle_id);
 

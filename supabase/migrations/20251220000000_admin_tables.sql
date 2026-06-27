@@ -72,6 +72,7 @@ CREATE INDEX IF NOT EXISTS idx_admin_system_health_type_time ON public.admin_sys
 -- RLS for system health
 ALTER TABLE public.admin_system_health ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Admins can view system health" ON public.admin_system_health;
 CREATE POLICY "Admins can view system health"
   ON public.admin_system_health FOR SELECT
   USING (
@@ -82,6 +83,7 @@ CREATE POLICY "Admins can view system health"
     )
   );
 
+DROP POLICY IF EXISTS "System can insert metrics" ON public.admin_system_health;
 CREATE POLICY "System can insert metrics"
   ON public.admin_system_health FOR INSERT
   WITH CHECK (TRUE); -- Allow Edge Functions to insert via service role
@@ -295,12 +297,13 @@ CREATE INDEX IF NOT EXISTS idx_revenue_interventions_status ON public.revenue_in
 CREATE INDEX IF NOT EXISTS idx_revenue_cohort_month ON public.revenue_cohort_retention(cohort_month DESC);
 
 -- RLS for revenue tables
-ALTER TABLE public.revenue_metrics_daily ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class WHERE relname='revenue_metrics_daily' AND relkind='r') THEN ALTER TABLE public.revenue_metrics_daily ENABLE ROW LEVEL SECURITY; END IF; END $$;
 ALTER TABLE public.revenue_churn_predictions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.revenue_interventions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.revenue_cohort_retention ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class WHERE relname='revenue_cohort_retention' AND relkind='r') THEN ALTER TABLE public.revenue_cohort_retention ENABLE ROW LEVEL SECURITY; END IF; END $$;
 
-CREATE POLICY "Admins can view revenue metrics"
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class WHERE relname='revenue_metrics_daily' AND relkind='r') THEN
+EXECUTE $pol$ CREATE POLICY "Admins can view revenue metrics"
   ON public.revenue_metrics_daily FOR SELECT
   USING (
     EXISTS (
@@ -308,7 +311,8 @@ CREATE POLICY "Admins can view revenue metrics"
       WHERE user_roles.user_id = auth.uid()
       AND user_roles.role = 'admin'
     )
-  );
+  ); $pol$;
+END IF; END $$;
 
 CREATE POLICY "Admins can view churn predictions"
   ON public.revenue_churn_predictions FOR SELECT
@@ -330,7 +334,8 @@ CREATE POLICY "Admins can manage interventions"
     )
   );
 
-CREATE POLICY "Admins can view cohort data"
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class WHERE relname='revenue_cohort_retention' AND relkind='r') THEN
+EXECUTE $pol$ CREATE POLICY "Admins can view cohort data"
   ON public.revenue_cohort_retention FOR SELECT
   USING (
     EXISTS (
@@ -338,20 +343,25 @@ CREATE POLICY "Admins can view cohort data"
       WHERE user_roles.user_id = auth.uid()
       AND user_roles.role = 'admin'
     )
-  );
+  ); $pol$;
+END IF; END $$;
 
 -- System policies for automated updates
-CREATE POLICY "System can update revenue metrics"
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class WHERE relname='revenue_metrics_daily' AND relkind='r') THEN
+EXECUTE $pol$ CREATE POLICY "System can update revenue metrics"
   ON public.revenue_metrics_daily FOR ALL
-  WITH CHECK (TRUE);
+  WITH CHECK (TRUE); $pol$;
+END IF; END $$;
 
 CREATE POLICY "System can update churn predictions"
   ON public.revenue_churn_predictions FOR ALL
   WITH CHECK (TRUE);
 
-CREATE POLICY "System can update cohort data"
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class WHERE relname='revenue_cohort_retention' AND relkind='r') THEN
+EXECUTE $pol$ CREATE POLICY "System can update cohort data"
   ON public.revenue_cohort_retention FOR ALL
-  WITH CHECK (TRUE);
+  WITH CHECK (TRUE); $pol$;
+END IF; END $$;
 
 -- ============================================================================
 -- 6. Quiz Responses Table
@@ -395,6 +405,10 @@ CREATE TABLE IF NOT EXISTS public.quiz_leads (
 );
 
 -- Indexes for quiz tables
+-- CI-fix: quiz_responses is also created by an earlier migration with a
+-- different column set; ensure indexed columns exist before indexing.
+ALTER TABLE public.quiz_responses ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+ALTER TABLE public.quiz_responses ADD COLUMN IF NOT EXISTS personality_type TEXT;
 CREATE INDEX IF NOT EXISTS idx_quiz_responses_session ON public.quiz_responses(session_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_responses_user ON public.quiz_responses(user_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_responses_type ON public.quiz_responses(personality_type);
@@ -577,9 +591,13 @@ COMMENT ON TABLE public.crm_connections IS 'CRM integration connections (HubSpot
 COMMENT ON TABLE public.crm_sync_logs IS 'CRM sync operation logs';
 COMMENT ON TABLE public.automation_workflows IS 'Automation workflow definitions';
 COMMENT ON TABLE public.workflow_executions IS 'Workflow execution history';
-COMMENT ON TABLE public.revenue_metrics_daily IS 'Daily revenue and subscription metrics';
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class WHERE relname='revenue_metrics_daily' AND relkind='r') THEN
+EXECUTE $c$ COMMENT ON TABLE public.revenue_metrics_daily IS 'Daily revenue and subscription metrics'; $c$;
+END IF; END $$;
 COMMENT ON TABLE public.revenue_churn_predictions IS 'ML-based churn predictions per user';
 COMMENT ON TABLE public.revenue_interventions IS 'Churn prevention interventions';
-COMMENT ON TABLE public.revenue_cohort_retention IS 'Monthly cohort retention analysis';
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class WHERE relname='revenue_cohort_retention' AND relkind='r') THEN
+EXECUTE $c$ COMMENT ON TABLE public.revenue_cohort_retention IS 'Monthly cohort retention analysis'; $c$;
+END IF; END $$;
 COMMENT ON TABLE public.quiz_responses IS 'Picky eater quiz responses';
 COMMENT ON TABLE public.quiz_leads IS 'Email leads from quiz completions';
