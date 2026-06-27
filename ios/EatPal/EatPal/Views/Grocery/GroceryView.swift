@@ -66,6 +66,12 @@ struct GroceryView: View {
     // US-270: cookable-recipes empty-state CTA.
     @State private var showingCookable = false
 
+    // US-466: session-scoped list filters + their sheet.
+    @State private var showingFilterSheet = false
+    @State private var hideChecked = false
+    @State private var priorityFilter: String?
+    @State private var aisleFilter: GroceryAisle?
+
     /// US-276: Restock suggestions computed off the user's preference
     /// add_history. Refreshed on appear and after every grocery edit so
     /// items dropped onto the list disappear from "Suggested for you".
@@ -90,11 +96,67 @@ struct GroceryView: View {
     private var contextMenuTip = ContextMenuTip()
 
     private var uncheckedItems: [GroceryItem] {
-        appState.groceryItems.filter { !$0.checked && matchesSearch($0) }
+        appState.groceryItems.filter { !$0.checked && matchesSearch($0) && matchesFilter($0) }
     }
 
     private var checkedItems: [GroceryItem] {
-        appState.groceryItems.filter { $0.checked && matchesSearch($0) }
+        // US-466: "Hide bought" suppresses the completed section entirely.
+        guard !hideChecked else { return [] }
+        return appState.groceryItems.filter { $0.checked && matchesSearch($0) && matchesFilter($0) }
+    }
+
+    // MARK: - US-466 list filters
+
+    /// Advanced (non-search) filters applied alongside `matchesSearch`.
+    private func matchesFilter(_ item: GroceryItem) -> Bool {
+        if let priority = priorityFilter, (item.priority ?? "medium") != priority { return false }
+        if let aisle = aisleFilter, item.aisleSectionEnum != aisle { return false }
+        return true
+    }
+
+    private var hasActiveGroceryFilter: Bool {
+        hideChecked || priorityFilter != nil || aisleFilter != nil
+    }
+
+    private var activeGroceryFilterCount: Int {
+        (hideChecked ? 1 : 0) + (priorityFilter != nil ? 1 : 0) + (aisleFilter != nil ? 1 : 0)
+    }
+
+    private var isFiltering: Bool {
+        hasActiveGroceryFilter || !searchText.isEmpty
+    }
+
+    /// Aisles actually present on the list, so the filter picker stays short.
+    private var availableAisles: [GroceryAisle] {
+        Array(Set(appState.groceryItems.compactMap(\.aisleSectionEnum)))
+            .sorted { $0.displayName < $1.displayName }
+    }
+
+    /// Removable chips describing each active advanced filter (US-464 parity).
+    private var activeGroceryFilterChips: [GroceryActiveChip] {
+        var chips: [GroceryActiveChip] = []
+        if hideChecked {
+            chips.append(GroceryActiveChip(id: "hide-checked", label: "🙈 Hide bought") {
+                hideChecked = false
+            })
+        }
+        if let priority = priorityFilter {
+            chips.append(GroceryActiveChip(id: "priority", label: "⚑ \(priority.capitalized) priority") {
+                priorityFilter = nil
+            })
+        }
+        if let aisle = aisleFilter {
+            chips.append(GroceryActiveChip(id: "aisle", label: "📍 \(aisle.displayName)") {
+                aisleFilter = nil
+            })
+        }
+        return chips
+    }
+
+    private struct GroceryActiveChip {
+        let id: String
+        let label: String
+        let remove: () -> Void
     }
 
     /// US-263: group by aisleSection when present (32-value store
@@ -578,6 +640,55 @@ struct GroceryView: View {
                 .popoverTip(swipeTip)
             }
 
+            // US-466: active-filter chips + "showing X of Y" count (parity
+            // with the Pantry strip) so the user can see and undo what's
+            // narrowing the list.
+            if isFiltering {
+                Section {
+                    if !activeGroceryFilterChips.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(activeGroceryFilterChips, id: \.id) { chip in
+                                    Button {
+                                        HapticManager.selection()
+                                        chip.remove()
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Text(chip.label).font(.caption.weight(.semibold))
+                                            Image(systemName: "xmark")
+                                                .font(.caption2.weight(.semibold))
+                                        }
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(Color.accentColor.opacity(0.15), in: Capsule())
+                                        .foregroundStyle(Color.accentColor)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                    }
+
+                    HStack {
+                        Text("Showing \(uncheckedItems.count + checkedItems.count) of \(appState.groceryItems.count)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if hasActiveGroceryFilter {
+                            Button("Clear filters") {
+                                HapticManager.selection()
+                                hideChecked = false
+                                priorityFilter = nil
+                                aisleFilter = nil
+                            }
+                            .font(.caption.weight(.semibold))
+                        }
+                    }
+                }
+            }
+
             // US-276: Suggested for you (restock predictions). Tappable
             // chips that drop the item onto the grocery list with the
             // user's saved preferences. Hidden when empty so we don't
@@ -757,38 +868,26 @@ struct GroceryView: View {
                 .accessibilityHint("Live camera that overlays chips on every product on your list")
             }
 
-            // US-264: View-mode toggle. Placed near the title so it
-            // reads as a list-display switcher rather than a write
-            // action; uses a Menu with checkmarks so the current mode
-            // is glanceable without opening the menu twice.
+            // US-264 / US-466: View-mode toggle. Now an always-visible
+            // segmented control instead of a tap-to-open menu so By Recipe
+            // mode is discoverable at a glance.
             ToolbarItem(placement: .principal) {
-                Menu {
-                    ForEach(GroceryViewMode.allCases, id: \.self) { mode in
-                        Button {
-                            if viewMode != mode {
-                                HapticManager.selection()
-                                viewModeRaw = mode.rawValue
-                            }
-                        } label: {
-                            Label(mode.title, systemImage: mode.icon)
-                            if viewMode == mode {
-                                Image(systemName: "checkmark")
-                            }
+                Picker("View mode", selection: Binding(
+                    get: { viewMode },
+                    set: { newMode in
+                        if viewMode != newMode {
+                            HapticManager.selection()
+                            viewModeRaw = newMode.rawValue
                         }
                     }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: viewMode.icon)
-                            .imageScale(.small)
-                        Text(viewMode.title)
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                        Image(systemName: "chevron.down")
-                            .imageScale(.small)
-                            .foregroundStyle(.secondary)
+                )) {
+                    ForEach(GroceryViewMode.allCases, id: \.self) { mode in
+                        Text(mode.title).tag(mode)
                     }
-                    .accessibilityLabel("Grocery view mode: \(viewMode.title)")
                 }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 220)
+                .accessibilityLabel("Grocery view mode")
             }
 
             // US-269: select-mode toggle. When active, the Cancel button
@@ -806,6 +905,40 @@ struct GroceryView: View {
 
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: 12) {
+                    // US-466: filter + bulk-select surfaced as visible controls
+                    // (bulk-select was previously buried in the add menu).
+                    if !isSelecting {
+                        Button {
+                            HapticManager.lightImpact()
+                            showingFilterSheet = true
+                        } label: {
+                            Image(systemName: activeGroceryFilterCount > 0
+                                ? "line.3.horizontal.decrease.circle.fill"
+                                : "line.3.horizontal.decrease.circle")
+                        }
+                        .accessibilityLabel(activeGroceryFilterCount > 0
+                            ? "Filter list, \(activeGroceryFilterCount) active"
+                            : "Filter list")
+
+                        Button {
+                            HapticManager.lightImpact()
+                            isSelecting = true
+                            selectedIds.removeAll()
+                            // US-466: make the filtered scope explicit so bulk
+                            // actions on a narrowed list aren't a surprise.
+                            if isFiltering {
+                                ToastManager.shared.info(
+                                    "Selecting visible items only",
+                                    message: "A search or filter is active."
+                                )
+                            }
+                        } label: {
+                            Image(systemName: "checkmark.circle")
+                        }
+                        .disabled(appState.groceryItems.isEmpty)
+                        .accessibilityLabel("Select multiple")
+                    }
+
                     Menu {
                         Button {
                             showingAddItem = true
@@ -889,17 +1022,8 @@ struct GroceryView: View {
 
                         Divider()
 
-                        // US-269: enter bulk-select mode.
-                        Button {
-                            HapticManager.lightImpact()
-                            isSelecting = true
-                            selectedIds.removeAll()
-                        } label: {
-                            Label("Select multiple", systemImage: "checkmark.circle")
-                        }
-                        .disabled(appState.groceryItems.isEmpty)
-
-                        Divider()
+                        // US-466: "Select multiple" promoted to a visible
+                        // toolbar button above; no longer buried here.
 
                         if GroceryTripActivityService.shared.isActive {
                             Button(role: .destructive) {
@@ -1017,6 +1141,15 @@ struct GroceryView: View {
         }
         .sheet(isPresented: $showingAddItem) {
             AddGroceryItemView()
+        }
+        .sheet(isPresented: $showingFilterSheet) {
+            GroceryFilterSheet(
+                hideChecked: $hideChecked,
+                priorityFilter: $priorityFilter,
+                aisleFilter: $aisleFilter,
+                availableAisles: availableAisles
+            )
+            .presentationDetents([.medium])
         }
         .sheet(isPresented: $showingQuickAdd) {
             QuickAddGrocerySheet()
@@ -1774,6 +1907,69 @@ struct EditGroceryItemView: View {
                 "Couldn't save changes",
                 message: "Please try again."
             )
+        }
+    }
+}
+
+// MARK: - Grocery Filter Sheet (US-466)
+
+/// Compact list-filter sheet: hide bought items, narrow by priority, and
+/// narrow by aisle/section. Session-scoped (bindings owned by GroceryView).
+private struct GroceryFilterSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var hideChecked: Bool
+    @Binding var priorityFilter: String?
+    @Binding var aisleFilter: GroceryAisle?
+    let availableAisles: [GroceryAisle]
+
+    private let priorities = ["high", "medium", "low"]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Status") {
+                    Toggle("Hide bought items", isOn: $hideChecked)
+                }
+
+                Section("Priority") {
+                    Picker("Priority", selection: $priorityFilter) {
+                        Text("Any").tag(String?.none)
+                        ForEach(priorities, id: \.self) { priority in
+                            Text(priority.capitalized).tag(String?.some(priority))
+                        }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                }
+
+                if !availableAisles.isEmpty {
+                    Section("Aisle") {
+                        Picker("Aisle", selection: $aisleFilter) {
+                            Text("Any").tag(GroceryAisle?.none)
+                            ForEach(availableAisles, id: \.self) { aisle in
+                                Text(aisle.displayName).tag(GroceryAisle?.some(aisle))
+                            }
+                        }
+                        .pickerStyle(.inline)
+                        .labelsHidden()
+                    }
+                }
+
+                Section {
+                    Button("Reset filters", role: .destructive) {
+                        hideChecked = false
+                        priorityFilter = nil
+                        aisleFilter = nil
+                    }
+                }
+            }
+            .navigationTitle("Filter list")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }

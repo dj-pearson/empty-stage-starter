@@ -6958,7 +6958,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "iOS function review: Grocery view-mode toggle is buried in a .principal Menu (GroceryView.swift:760-788), has no advanced filter sheet (unlike Pantry), and bulk-select requires an explicit Done tap (Pantry auto-exits). Consolidates several Grocery discoverability gaps."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: (1) view-mode (By Aisle / By Recipe) is now an always-visible segmented Picker in the nav bar instead of a tap-to-open principal menu; (2) new GroceryFilterSheet (hide bought, priority, aisle/section) wired through matchesFilter into the uncheckedItems/checkedItems choke points, with a removable active-filter chip strip + 'Showing X of Y' count + Clear (US-464 parity); (3) bulk actions already auto-exit select mode via exitSelectMode() — confirmed; (4) bulk-select promoted from the add overflow menu to a visible toolbar button (with a filter button beside it); (5) entering select mode while a search/filter is active shows an info toast that bulk actions hit visible items only. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-467",
