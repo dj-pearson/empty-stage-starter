@@ -6912,7 +6912,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "iOS function review: Pantry filter vars and Recipes `filters`/`searchText` are plain @State (reset every launch); MealPlanView selectedDate resets to today on tab switch. Grocery already persists viewMode via @AppStorage — inconsistent. This is the core 'filtering is hard' complaint."
+      "notes": "Implemented on branch claude/ios-app-function-review-t0arpn: RecipeFilters and a new PantryFilters bundle now conform to Codable + JSON-backed RawRepresentable and are stored via @AppStorage ('recipes.filters', 'pantry.filters') so advanced filters + sort survive navigation and relaunch (Cuisine/FoodCategory/FoodSortOption gained Codable). Planner selectedDate persists per active kid via @AppStorage 'planner.selectedDateByKid', clamped so a stale past day falls back to today (onAppear + onChange of activeKidId/selectedDate). Quick chips + search stay transient; reset affordances already exist (SearchFilterView 'Reset All Filters', Recipes 'All' chip + active-filter strip, planner 'Today'). New installs default to no filters / name A-Z / today. Pending Xcode build/device verification (no Swift toolchain in env)."
     },
     {
       "id": "US-464",

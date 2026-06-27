@@ -21,11 +21,9 @@ struct PantryView: View {
     @State private var showingDeleteConfirm = false
     // US-416: single-item delete confirmation (parity with bulk delete).
     @State private var foodPendingDeletion: Food?
-    @State private var filterCategories: Set<FoodCategory> = []
-    @State private var filterAllergens: Set<String> = []
-    @State private var filterSafeOnly = false
-    @State private var filterTryBiteOnly = false
-    @State private var sortOption: FoodSortOption = .nameAsc
+    // US-463: advanced filter state persisted across launches (was 5 @State
+    // vars reset every session). Quick chips + search remain transient.
+    @AppStorage("pantry.filters") private var filters = PantryFilters()
 
     private var swipeTip = SwipePantryTip()
 
@@ -36,15 +34,11 @@ struct PantryView: View {
     }
 
     private var hasActiveFilters: Bool {
-        !filterCategories.isEmpty || !filterAllergens.isEmpty || filterSafeOnly || filterTryBiteOnly || sortOption != .nameAsc
+        filters.isActive
     }
 
     private var activeFilterCount: Int {
-        var count = filterCategories.count + filterAllergens.count
-        if filterSafeOnly { count += 1 }
-        if filterTryBiteOnly { count += 1 }
-        if sortOption != .nameAsc { count += 1 }
-        return count
+        filters.activeCount
     }
 
     private var availableAllergens: [String] {
@@ -71,11 +65,11 @@ struct PantryView: View {
         foods = FoodFilterEngine.apply(
             foods: foods,
             searchText: searchText,
-            categories: filterCategories,
-            excludeAllergens: filterAllergens,
-            safeOnly: filterSafeOnly,
-            tryBiteOnly: filterTryBiteOnly,
-            sortOption: sortOption
+            categories: filters.categories,
+            excludeAllergens: filters.allergens,
+            safeOnly: filters.safeOnly,
+            tryBiteOnly: filters.tryBiteOnly,
+            sortOption: filters.sortOption
         )
 
         return foods
@@ -540,11 +534,11 @@ struct PantryView: View {
         }
         .sheet(isPresented: $showingFilters) {
             SearchFilterView(
-                selectedCategories: $filterCategories,
-                selectedAllergens: $filterAllergens,
-                safeOnly: $filterSafeOnly,
-                tryBiteOnly: $filterTryBiteOnly,
-                sortOption: $sortOption,
+                selectedCategories: $filters.categories,
+                selectedAllergens: $filters.allergens,
+                safeOnly: $filters.safeOnly,
+                tryBiteOnly: $filters.tryBiteOnly,
+                sortOption: $filters.sortOption,
                 availableAllergens: availableAllergens
             )
             .presentationDetents([.medium, .large])
