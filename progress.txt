@@ -3098,3 +3098,20 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - VERIFIED: vite build exit 0 (dist produced — deployable gate); eslint exit 0 on all 8 changed files; database-prioritization + data-harmonization unit tests pass; isolated tsc on the alias-free changed files (file-utils/food-repo/usda/database-prioritization) reports no real type errors. Full `tsc -b` remains too slow to run here and carries the known baseline backlog; these edits are conservative type-narrowings that add no new errors.
 - US-342 remains passes=FALSE: any-style occurrences in src 262 -> 240 (307 -> 240 across slices 1-3); "npm run lint passes" still needs the unrelated non-any backlog cleared. Continue file-by-file.
 - Remaining false: 38.
+
+## 2026-06-27 - PRD verification harness (prd-verify GitHub Action) + story triage
+- CONTEXT: 68 stories remain passes=false. Triaged into buckets via git history + classifier:
+  - 30 iOS stories ALREADY IMPLEMENTED (commits exist) but never flipped — the prior agent kept them false honestly because there's no Swift toolchain in this Linux/web sandbox to build/verify: US-302..308, US-361, US-423, US-429, US-431, US-435, US-437, US-445, US-450, US-451, US-461..474.
+  - 3 Android stories implemented, same situation: US-213, US-214, US-222.
+  - 2 web stories partially done, gated on a CLEAN typecheck+lint: US-342 (ban `any`, 240 occurrences remain), US-344 (select('*') hot paths).
+  - 4 manual/ops, never auto-flippable: US-323 (prod migration deploy — needs prod creds), US-313 (Xcode + on-device test), US-314 (owner-gated Expo/RN removal), US-261 (manual Xcode watchOS target setup).
+  - 29 net-new iOS stories with NO implementation yet: US-147/148/149, US-248/249/251/252/253/254/258/259/266/267/268/271, US-370/371/399, US-440/444/447/449/452/453/454/455/457/458/459.
+- DECISION (user): build a verification GitHub Action that runs the REAL CI gates and flips passes=true ONLY when a story's gate goes green AND an implementation exists. No blind-flipping; everything stays false until CI confirms.
+- BUILT:
+  - scripts/ralph/verify-stories.mjs — engine. Per false story: classify gate (web|ios|android|manual), check implementation-present (`git log --grep US-XXX`), and flip ONLY if gate green + impl present. Manual stories never flip; net-new (no commit) stay "awaiting-implementation"; gate-red stays false. Writes prd.json with JSON.stringify(…,2) (no trailing newline) for a minimal diff + appends this log + emits prd-verify-report.json. Dry-run by default; --apply to write.
+  - .github/workflows/prd-verify.yml — workflow_dispatch. Runs web-gate (STRICT typecheck/lint/test/build), ios-gate (reuses ios-ci.yml), android-gate (reuses android-native-ci.yml), then a flip job (fetch-depth:0) that runs the engine with GATE_*=needs.<gate>.result and commits/pushes flips with [skip ci]. permissions: contents: write.
+  - ios-ci.yml + android-native-ci.yml — added `workflow_call:` so prd-verify reuses them instead of duplicating the macOS/Gradle pipelines.
+- VERIFIED (in-sandbox, dry-run): engine evaluates all 68; with a simulated green iOS gate it flips exactly the 30 implemented iOS stories and holds the rest (29 awaiting-impl, 3 android, 2 web, 4 manual); --apply produces valid JSON + minimal diff; reverted (no real gate is green here).
+- NEXT: run the `PRD Verify` workflow (Actions → PRD Verify → Run workflow on this branch). A green iOS gate auto-flips the 30 iOS stories; green Android flips the 3; a clean web gate flips US-342/344 once their backlog is cleared. The 4 manual + 29 net-new stories stay false by design.
+- Remaining false: 68 (0 flipped in-sandbox — by design, awaiting CI gates).
+---

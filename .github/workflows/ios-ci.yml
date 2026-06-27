@@ -16,6 +16,9 @@ on:
         description: 'Branch or commit to build (defaults to current)'
         required: false
         default: ''
+  # Callable by the prd-verify workflow so PRD story verification reuses this
+  # real build+test gate instead of duplicating the macOS pipeline.
+  workflow_call:
 
 concurrency:
   group: ios-ci-${{ github.ref }}

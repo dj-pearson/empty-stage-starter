@@ -102,3 +102,24 @@ If there are still stories with `passes: false`, end your response normally (ano
 - Commit frequently
 - Keep CI green
 - Read the Codebase Patterns section in progress.txt before starting
+
+## PRD Verification Harness (prd-verify)
+
+Stories that can't be verified in a Linux/web sandbox (iOS-native Swift,
+Android-native Kotlin, prod-deploy ops) are NOT flipped by hand. Instead:
+
+- `scripts/ralph/verify-stories.mjs` flips `passes: true` for a `passes: false`
+  story only when (a) an implementation commit references its id AND (b) the CI
+  gate that can verify it is green. Run `node scripts/ralph/verify-stories.mjs`
+  for a dry-run report; `--apply` to write. Gate results come from env
+  `GATE_WEB` / `GATE_IOS` / `GATE_ANDROID` (GitHub job-result vocabulary).
+- `.github/workflows/prd-verify.yml` (workflow_dispatch) runs the real gates —
+  web (strict typecheck/lint/test/build), iOS (reuses `ios-ci.yml`), Android
+  (reuses `android-native-ci.yml`) — then commits the flips with `[skip ci]`.
+- Classification lives in `verify-stories.mjs`: `MANUAL` (never auto-flip — prod
+  deploys, device tests, owner-gated removals), `ANDROID`, `WEB`; everything
+  else defaults to the `ios` gate. Net-new stories with no commit stay
+  `awaiting-implementation` until built.
+
+So the loop is: implement a story → push → run **PRD Verify** → green gate flips
+it. Don't set `passes: true` by hand for anything you can't build locally.
