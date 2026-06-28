@@ -126,7 +126,11 @@ private fun CameraPreview(onBarcode: (String) -> Unit) {
                         analysis.setAnalyzer(
                             analysisExecutor,
                             object : ImageAnalysis.Analyzer {
-                                @OptIn(ExperimentalGetImage::class)
+                                // androidx.annotation.OptIn (NOT kotlin.OptIn) —
+                                // ExperimentalGetImage is an androidx @RequiresOptIn
+                                // marker, so the androidx.annotation.experimental
+                                // lint check only accepts the androidx opt-in.
+                                @androidx.annotation.OptIn(ExperimentalGetImage::class)
                                 override fun analyze(proxy: ImageProxy) {
                                     val mediaImage = proxy.image
                                     if (mediaImage == null || alreadyDelivered) {
