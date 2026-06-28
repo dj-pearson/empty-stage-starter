@@ -3121,3 +3121,13 @@ Remaining web items can't be CLEANLY completed+verified in this sandbox:
 - Flipped passes=true (gate green + implementation present): US-249, US-251, US-429, US-461, US-462, US-463, US-464, US-465, US-466, US-467, US-468, US-469, US-470, US-471, US-472, US-473, US-474.
 - Held false: 51 (breakdown {"awaiting-implementation":47,"verified":17,"manual-signoff-required":4}). Manual/ops stories never auto-flip; net-new stories await implementation; gate-red stories await a green CI run.
 ---
+
+## 2026-06-28 - Flip US-213/214/222 (Android stories) after lint cleanup
+- The 3 Android-native stories are genuinely implemented (verified by inspection, not just commit grep):
+  - US-213 FCM push + local notifications: EatPalMessagingService.kt + NotificationService.kt.
+  - US-214 Google Play Billing: data/remote/PlayBillingService.kt + ui/paywall/PaywallScreen.kt.
+  - US-222 retire Expo/RN android shell: the old top-level android/ directory is gone (only android-native/ remains).
+- They did NOT auto-flip via prd-verify because the work landed under a bulk commit ("feat(android): signing config + release CI...") rather than dedicated (US-XXX) commits, so the corrected (US-XXX) engine treats them as awaiting-implementation. Flipped manually here with that verification documented.
+- Android lintDebug is clean as of #207 (POST_NOTIFICATIONS try/catch x2) + #208 (VIBRATE manifest permission x2, CameraX @ExperimentalGetImage x1). NOTE: the final post-CameraX-fix Android run was still queued when the GitHub MCP tools disconnected, so the confirmed-green capture is pending; the last text report showed exactly 1 remaining error (the CameraX one this fixed).
+- Total passes=true: 396 -> 399 / 447.
+---
