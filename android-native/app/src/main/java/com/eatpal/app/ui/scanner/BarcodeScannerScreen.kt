@@ -44,10 +44,11 @@ import java.util.concurrent.Executors
  * successfully decoded value and stops scanning (caller decides whether to
  * re-enable). iOS `BarcodeScannerView` parity.
  */
-// ExperimentalGetImage: ImageProxy.getImage() is opt-in; we read it under the
-// ImageAnalysis analyzer to feed ML Kit (the documented CameraX→ML Kit path).
-@OptIn(ExperimentalPermissionsApi::class)
-@ExperimentalGetImage
+// @OptIn(ExperimentalGetImage): ImageProxy.getImage() is opt-in; we CONSUME it
+// for this function body (incl. the analyzer lambda) to feed ML Kit. Must be
+// @OptIn, not the bare @ExperimentalGetImage marker — the marker would instead
+// propagate the opt-in requirement to callers (e.g. PantryScreen).
+@OptIn(ExperimentalPermissionsApi::class, ExperimentalGetImage::class)
 @Composable
 fun BarcodeScannerScreen(
     onCancel: () -> Unit,
