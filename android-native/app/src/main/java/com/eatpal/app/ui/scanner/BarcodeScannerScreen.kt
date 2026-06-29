@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -44,10 +45,7 @@ import java.util.concurrent.Executors
  * successfully decoded value and stops scanning (caller decides whether to
  * re-enable). iOS `BarcodeScannerView` parity.
  */
-// ExperimentalGetImage: ImageProxy.getImage() is opt-in; we read it under the
-// ImageAnalysis analyzer to feed ML Kit (the documented CameraX→ML Kit path).
 @OptIn(ExperimentalPermissionsApi::class)
-@ExperimentalGetImage
 @Composable
 fun BarcodeScannerScreen(
     onCancel: () -> Unit,
@@ -122,28 +120,41 @@ private fun CameraPreview(onBarcode: (String) -> Unit) {
                         it.setSurfaceProvider(previewView.surfaceProvider)
                     }
                     val analyzer = ImageAnalysis.Builder().build().also { analysis ->
-                        analysis.setAnalyzer(analysisExecutor) { proxy ->
-                            val mediaImage = proxy.image
-                            if (mediaImage == null || alreadyDelivered) {
-                                proxy.close()
-                                return@setAnalyzer
-                            }
-                            val inputImage = InputImage.fromMediaImage(
-                                mediaImage,
-                                proxy.imageInfo.rotationDegrees,
-                            )
-                            scanner.process(inputImage)
-                                .addOnSuccessListener { barcodes ->
-                                    barcodes.firstOrNull { !it.rawValue.isNullOrBlank() }?.let {
-                                        alreadyDelivered = true
-                                        onBarcode(it.rawValue ?: "")
+                        // Explicit Analyzer object so @OptIn sits directly on the
+                        // method that reads proxy.image — lint doesn't honour a
+                        // function-level @OptIn across the analyzer lambda scope.
+                        analysis.setAnalyzer(
+                            analysisExecutor,
+                            object : ImageAnalysis.Analyzer {
+                                // androidx.annotation.OptIn (NOT kotlin.OptIn) —
+                                // ExperimentalGetImage is an androidx @RequiresOptIn
+                                // marker, so the androidx.annotation.experimental
+                                // lint check only accepts the androidx opt-in.
+                                @androidx.annotation.OptIn(ExperimentalGetImage::class)
+                                override fun analyze(proxy: ImageProxy) {
+                                    val mediaImage = proxy.image
+                                    if (mediaImage == null || alreadyDelivered) {
+                                        proxy.close()
+                                        return
                                     }
+                                    val inputImage = InputImage.fromMediaImage(
+                                        mediaImage,
+                                        proxy.imageInfo.rotationDegrees,
+                                    )
+                                    scanner.process(inputImage)
+                                        .addOnSuccessListener { barcodes ->
+                                            barcodes.firstOrNull { !it.rawValue.isNullOrBlank() }?.let {
+                                                alreadyDelivered = true
+                                                onBarcode(it.rawValue ?: "")
+                                            }
+                                        }
+                                        .addOnFailureListener { e ->
+                                            Log.w("BarcodeScanner", "decode failed", e)
+                                        }
+                                        .addOnCompleteListener { proxy.close() }
                                 }
-                                .addOnFailureListener { e ->
-                                    Log.w("BarcodeScanner", "decode failed", e)
-                                }
-                                .addOnCompleteListener { proxy.close() }
-                        }
+                            },
+                        )
                     }
 
                     runCatching {
