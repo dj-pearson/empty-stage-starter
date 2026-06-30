@@ -143,3 +143,4 @@ scripts/ralph/.last-branch
 
 # Transient PRD verification report (uploaded as a CI artifact, never committed)
 prd-verify-report.json
+.claude-flow/metrics/consolidation.json
