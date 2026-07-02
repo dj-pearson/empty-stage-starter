@@ -19,11 +19,11 @@ struct PantryView: View {
     @State private var selectedIds: Set<String> = []
     @State private var showingChangeCategory = false
     @State private var showingDeleteConfirm = false
-    @State private var filterCategories: Set<FoodCategory> = []
-    @State private var filterAllergens: Set<String> = []
-    @State private var filterSafeOnly = false
-    @State private var filterTryBiteOnly = false
-    @State private var sortOption: FoodSortOption = .nameAsc
+    // US-416: single-item delete confirmation (parity with bulk delete).
+    @State private var foodPendingDeletion: Food?
+    // US-463: advanced filter state persisted across launches (was 5 @State
+    // vars reset every session). Quick chips + search remain transient.
+    @AppStorage("pantry.filters") private var filters = PantryFilters()
 
     private var swipeTip = SwipePantryTip()
 
@@ -34,15 +34,68 @@ struct PantryView: View {
     }
 
     private var hasActiveFilters: Bool {
-        !filterCategories.isEmpty || !filterAllergens.isEmpty || filterSafeOnly || filterTryBiteOnly || sortOption != .nameAsc
+        filters.isActive
     }
 
     private var activeFilterCount: Int {
-        var count = filterCategories.count + filterAllergens.count
-        if filterSafeOnly { count += 1 }
-        if filterTryBiteOnly { count += 1 }
-        if sortOption != .nameAsc { count += 1 }
-        return count
+        filters.activeCount
+    }
+
+    // US-464: true when anything (quick chips, segment, search, or advanced
+    // filters) is narrowing the list — drives the "showing X of Y" count.
+    private var isFiltering: Bool {
+        hasActiveFilters
+            || !searchText.isEmpty
+            || selectedCategory != nil
+            || filterMode != .all
+    }
+
+    /// US-464: removable chips for each active *advanced* filter so the user
+    /// sees what's hiding foods and can clear one dimension without opening
+    /// the sheet (parity with the Recipes active-filter strip). Quick chips /
+    /// segment are already visible above, so they're not duplicated here.
+    private var activeFilterChips: [PantryActiveChip] {
+        var chips: [PantryActiveChip] = []
+
+        for category in filters.categories.sorted(by: { $0.rawValue < $1.rawValue }) {
+            chips.append(PantryActiveChip(
+                id: "cat-\(category.rawValue)",
+                label: "\(category.icon) \(category.displayName)"
+            ) { filters.categories.remove(category) })
+        }
+
+        for allergen in filters.allergens.sorted() {
+            chips.append(PantryActiveChip(
+                id: "allergen-\(allergen)",
+                label: "🚫 \(allergen)"
+            ) { filters.allergens.remove(allergen) })
+        }
+
+        if filters.safeOnly {
+            chips.append(PantryActiveChip(id: "safe", label: "✅ Safe only") {
+                filters.safeOnly = false
+            })
+        }
+
+        if filters.tryBiteOnly {
+            chips.append(PantryActiveChip(id: "trybite", label: "🌱 Try bite") {
+                filters.tryBiteOnly = false
+            })
+        }
+
+        if filters.sortOption != .nameAsc {
+            chips.append(PantryActiveChip(id: "sort", label: "↕︎ \(filters.sortOption.rawValue)") {
+                filters.sortOption = .nameAsc
+            })
+        }
+
+        return chips
+    }
+
+    private struct PantryActiveChip {
+        let id: String
+        let label: String
+        let remove: () -> Void
     }
 
     private var availableAllergens: [String] {
@@ -69,11 +122,11 @@ struct PantryView: View {
         foods = FoodFilterEngine.apply(
             foods: foods,
             searchText: searchText,
-            categories: filterCategories,
-            excludeAllergens: filterAllergens,
-            safeOnly: filterSafeOnly,
-            tryBiteOnly: filterTryBiteOnly,
-            sortOption: sortOption
+            categories: filters.categories,
+            excludeAllergens: filters.allergens,
+            safeOnly: filters.safeOnly,
+            tryBiteOnly: filters.tryBiteOnly,
+            sortOption: filters.sortOption
         )
 
         return foods
@@ -84,7 +137,10 @@ struct PantryView: View {
             .sorted { $0.key < $1.key }
     }
 
-    var body: some View {
+    // US-429/build-fix: extracted the List + toolbar into its own property so
+    // the `body` expression (this content + ~11 presentation modifiers) stays
+    // under the Swift type-checker's complexity budget.
+    private var pantryContent: some View {
         List {
             // US-289: insanely-fast quick-add bar. Lives above category
             // chips so it's the first input target on the screen. Hidden
@@ -133,6 +189,52 @@ struct PantryView: View {
                 .pickerStyle(.segmented)
                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 .popoverTip(swipeTip)
+            }
+
+            // US-464: active advanced-filter chips + "showing X of Y" count so
+            // the user can see and undo what's filtering the list inline.
+            if isFiltering {
+                Section {
+                    if !activeFilterChips.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(activeFilterChips, id: \.id) { chip in
+                                    Button {
+                                        HapticManager.selection()
+                                        chip.remove()
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Text(chip.label).font(.caption.weight(.semibold))
+                                            Image(systemName: "xmark")
+                                                .font(.caption2.weight(.semibold))
+                                        }
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(Color.accentColor.opacity(0.15), in: Capsule())
+                                        .foregroundStyle(Color.accentColor)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                    }
+
+                    HStack {
+                        Text("Showing \(filteredFoods.count) of \(appState.foods.count)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if hasActiveFilters {
+                            Button("Clear filters") {
+                                HapticManager.selection()
+                                filters = PantryFilters()
+                            }
+                            .font(.caption.weight(.semibold))
+                        }
+                    }
+                }
             }
 
             // Foods List
@@ -189,10 +291,15 @@ struct PantryView: View {
                                         Button {
                                             HapticManager.lightImpact()
                                             Task {
-                                                try? await appState.updateFood(
-                                                    food.id,
-                                                    updates: FoodUpdate(quantity: (food.quantity ?? 0) + 1)
-                                                )
+                                                // US-416: do/catch — appState.updateFood already
+                                                // rolls back the optimistic change and surfaces an
+                                                // error toast on failure (was a silent try?).
+                                                do {
+                                                    try await appState.updateFood(
+                                                        food.id,
+                                                        updates: FoodUpdate(quantity: (food.quantity ?? 0) + 1)
+                                                    )
+                                                } catch { /* rolled back + toasted in AppState */ }
                                                 await TipEvents.didSwipePantry.donate()
                                             }
                                         } label: {
@@ -204,10 +311,12 @@ struct PantryView: View {
                                         Button {
                                             HapticManager.selection()
                                             Task {
-                                                try? await appState.updateFood(
-                                                    food.id,
-                                                    updates: FoodUpdate(isSafe: !food.isSafe)
-                                                )
+                                                do {
+                                                    try await appState.updateFood(
+                                                        food.id,
+                                                        updates: FoodUpdate(isSafe: !food.isSafe)
+                                                    )
+                                                } catch { /* rolled back + toasted in AppState */ }
                                                 await TipEvents.didSwipePantry.donate()
                                             }
                                         } label: {
@@ -222,8 +331,8 @@ struct PantryView: View {
                                 .swipeActions(edge: .trailing, allowsFullSwipe: !isSelecting) {
                                     if !isSelecting {
                                         Button(role: .destructive) {
-                                            HapticManager.error()
-                                            Task { try? await appState.deleteFood(food.id) }
+                                            // US-416: confirm before deleting.
+                                            foodPendingDeletion = food
                                         } label: {
                                             Label("Delete", systemImage: "trash")
                                         }
@@ -241,11 +350,12 @@ struct PantryView: View {
                                                     checked: false,
                                                     addedVia: "restock"
                                                 )
-                                                try? await appState.addGroceryItem(item)
-                                                ToastManager.shared.success(
-                                                    "Added to grocery",
-                                                    message: food.name
-                                                )
+                                                // US-416: only confirm on success — addGroceryItem
+                                                // already toasts (added / queued / error); the old
+                                                // try? fired a false "Added to grocery" even on failure.
+                                                do {
+                                                    try await appState.addGroceryItem(item)
+                                                } catch { /* toasted in AppState */ }
                                                 await TipEvents.didSwipePantry.donate()
                                             }
                                         } label: {
@@ -270,8 +380,11 @@ struct PantryView: View {
                                                     checked: false,
                                                     addedVia: "restock"
                                                 )
-                                                try? await appState.addGroceryItem(item)
-                                                ToastManager.shared.success("Added to grocery", message: food.name)
+                                                // US-416: see swipe action — only the AppState
+                                                // toast should fire (no false success on failure).
+                                                do {
+                                                    try await appState.addGroceryItem(item)
+                                                } catch { /* toasted in AppState */ }
                                             }
                                         } label: {
                                             Label("Add to Grocery", systemImage: "cart.fill.badge.plus")
@@ -280,10 +393,12 @@ struct PantryView: View {
                                         Button {
                                             HapticManager.selection()
                                             Task {
-                                                try? await appState.updateFood(
-                                                    food.id,
-                                                    updates: FoodUpdate(isSafe: !food.isSafe)
-                                                )
+                                                do {
+                                                    try await appState.updateFood(
+                                                        food.id,
+                                                        updates: FoodUpdate(isSafe: !food.isSafe)
+                                                    )
+                                                } catch { /* rolled back + toasted in AppState */ }
                                             }
                                         } label: {
                                             Label(
@@ -295,10 +410,12 @@ struct PantryView: View {
                                         Button {
                                             HapticManager.selection()
                                             Task {
-                                                try? await appState.updateFood(
-                                                    food.id,
-                                                    updates: FoodUpdate(isTryBite: !food.isTryBite)
-                                                )
+                                                do {
+                                                    try await appState.updateFood(
+                                                        food.id,
+                                                        updates: FoodUpdate(isTryBite: !food.isTryBite)
+                                                    )
+                                                } catch { /* rolled back + toasted in AppState */ }
                                             }
                                         } label: {
                                             Label(
@@ -316,8 +433,8 @@ struct PantryView: View {
                                         }
 
                                         Button(role: .destructive) {
-                                            HapticManager.error()
-                                            Task { try? await appState.deleteFood(food.id) }
+                                            // US-416: confirm before deleting.
+                                            foodPendingDeletion = food
                                         } label: {
                                             Label("Delete", systemImage: "trash")
                                         }
@@ -447,6 +564,10 @@ struct PantryView: View {
                 }
             }
         }
+    }
+
+    var body: some View {
+        pantryContent
         .sheet(isPresented: $showingAddFood) {
             AddFoodView()
         }
@@ -481,6 +602,23 @@ struct PantryView: View {
         } message: {
             Text("This can't be undone.")
         }
+        // US-416: single-item delete confirmation + failure surfacing, matching
+        // the bulk-delete guard (was a bare swipe `try?` with no confirm).
+        .confirmationDialog(
+            "Delete \(foodPendingDeletion?.name ?? "this food")?",
+            isPresented: Binding(
+                get: { foodPendingDeletion != nil },
+                set: { if !$0 { foodPendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let food = foodPendingDeletion { deleteFood(food) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This can't be undone.")
+        }
         .sheet(item: $selectedFood) { food in
             FoodDetailView(food: food)
         }
@@ -499,11 +637,11 @@ struct PantryView: View {
         }
         .sheet(isPresented: $showingFilters) {
             SearchFilterView(
-                selectedCategories: $filterCategories,
-                selectedAllergens: $filterAllergens,
-                safeOnly: $filterSafeOnly,
-                tryBiteOnly: $filterTryBiteOnly,
-                sortOption: $sortOption,
+                selectedCategories: $filters.categories,
+                selectedAllergens: $filters.allergens,
+                safeOnly: $filters.safeOnly,
+                tryBiteOnly: $filters.tryBiteOnly,
+                sortOption: $filters.sortOption,
                 availableAllergens: availableAllergens
             )
             .presentationDetents([.medium, .large])
@@ -610,6 +748,25 @@ struct PantryView: View {
         }
     }
 
+    /// US-416: delete a single food with confirmation already given, surfacing
+    /// failures (retryable) instead of the old silent swipe `try?` that let a
+    /// failed delete silently reappear on the next load.
+    private func deleteFood(_ food: Food) {
+        Task {
+            do {
+                try await appState.deleteFood(food.id)
+                HapticManager.success()
+            } catch {
+                HapticManager.error()
+                ToastManager.shared.error(
+                    "Couldn't delete \(food.name)",
+                    message: "Please try again.",
+                    retry: { deleteFood(food) }
+                )
+            }
+        }
+    }
+
     private func exitSelectMode() {
         selectedIds.removeAll()
         isSelecting = false
@@ -706,9 +863,13 @@ struct FoodRowView: View {
                 } label: {
                     Image(systemName: "minus.circle.fill")
                         .foregroundStyle(.secondary)
+                        // US-423: 44pt tap target on the stock stepper.
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(displayQuantity <= 0)
+                .accessibilityLabel("Decrease quantity")
 
                 Button {
                     showQuantityAdjust = true
@@ -736,8 +897,12 @@ struct FoodRowView: View {
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .foregroundStyle(.secondary)
+                        // US-423: 44pt tap target on the stock stepper.
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Increase quantity")
             }
 
             Image(systemName: "chevron.right")
@@ -754,10 +919,13 @@ struct FoodRowView: View {
     private func adjust(by delta: Double) {
         let newQty = max(0, displayQuantity + delta)
         Task {
-            try? await appState.updateFood(
-                food.id,
-                updates: FoodUpdate(quantity: newQty)
-            )
+            // US-416: do/catch — AppState rolls back + toasts on failure.
+            do {
+                try await appState.updateFood(
+                    food.id,
+                    updates: FoodUpdate(quantity: newQty)
+                )
+            } catch { /* rolled back + toasted in AppState */ }
         }
     }
 }
@@ -822,11 +990,15 @@ struct QuantityAdjustSheet: View {
 
                 Button {
                     Task {
-                        try? await appState.updateFood(
-                            food.id,
-                            updates: FoodUpdate(quantity: draft)
-                        )
-                        dismiss()
+                        // US-416: only dismiss on success so a failed save keeps
+                        // the sheet open (AppState rolls back + toasts the error).
+                        do {
+                            try await appState.updateFood(
+                                food.id,
+                                updates: FoodUpdate(quantity: draft)
+                            )
+                            dismiss()
+                        } catch { /* rolled back + toasted in AppState */ }
                     }
                 } label: {
                     Text("Save")
@@ -1013,9 +1185,17 @@ struct AddFoodView: View {
         // US-364: dedup against the pantry — if a food with the same name
         // already exists, increment its quantity instead of inserting a
         // duplicate row (mergeOrAddFood auto-applies the merge).
-        try? await appState.mergeOrAddFood(food)
-        isSubmitting = false
-        dismiss()
+        // US-442: surface failures and only dismiss on success so the user
+        // never loses input thinking the food was saved.
+        defer { isSubmitting = false }
+        do {
+            try await appState.mergeOrAddFood(food)
+            HapticManager.success()
+            dismiss()
+        } catch {
+            ToastManager.shared.show(error, as: { .save(entity: "foods", underlying: $0) })
+            HapticManager.error()
+        }
     }
 }
 
@@ -1126,21 +1306,25 @@ struct FoodDetailView: View {
                             // Clearing an existing date via this UI isn't
                             // wired (would need a sentinel-aware encoder); the
                             // workaround is to set it to a far-future date.
-                            try? await appState.updateFood(
-                                food.id,
-                                updates: FoodUpdate(
-                                    name: name,
-                                    category: category.rawValue,
-                                    isSafe: isSafe,
-                                    isTryBite: isTryBite,
-                                    quantity: quantity,
-                                    unit: unit,
-                                    expiryDate: hasExpiry
-                                        ? DateFormatter.isoDate.string(from: expiryDate)
-                                        : nil
+                            // US-416: only dismiss on success so a failed save
+                            // doesn't silently drop the user's edits.
+                            do {
+                                try await appState.updateFood(
+                                    food.id,
+                                    updates: FoodUpdate(
+                                        name: name,
+                                        category: category.rawValue,
+                                        isSafe: isSafe,
+                                        isTryBite: isTryBite,
+                                        quantity: quantity,
+                                        unit: unit,
+                                        expiryDate: hasExpiry
+                                            ? DateFormatter.isoDate.string(from: expiryDate)
+                                            : nil
+                                    )
                                 )
-                            )
-                            dismiss()
+                                dismiss()
+                            } catch { /* rolled back + toasted in AppState */ }
                         }
                     }
                     .frame(maxWidth: .infinity)

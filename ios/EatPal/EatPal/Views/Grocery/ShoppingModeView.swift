@@ -87,10 +87,11 @@ struct ShoppingModeView: View {
                 }
             }
             .preferredColorScheme(.dark)
-            // Forcing accessibility1 yields ~1.4× system-font scaling without
-            // hard-coding pt sizes — respects user's existing dynamic-type
-            // preference for those who already run larger.
-            .dynamicTypeSize(.accessibility1)
+            // US-424: floor at accessibility1 (~1.4× scaling) for in-store
+            // glanceability, but as a *minimum* so users who run even larger
+            // Dynamic Type aren't downsized. A fixed `.accessibility1` would
+            // have capped them, contrary to the intent below.
+            .dynamicTypeSize(.accessibility1...)
             .navigationTitle("Shopping")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

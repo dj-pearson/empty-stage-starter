@@ -170,7 +170,19 @@ final class StoreKitService: ObservableObject {
 
     func restorePurchases() async {
         isLoading = true
-        try? await AppStore.sync()
+        errorMessage = nil
+        // US-460: surface AppStore.sync() failures so "nothing to restore" is
+        // distinguishable from "restore failed", and record it for telemetry,
+        // instead of swallowing the error with try?.
+        do {
+            try await AppStore.sync()
+        } catch {
+            SentryService.leaveBreadcrumb(
+                category: "storekit",
+                message: "AppStore.sync failed during restore: \(error)"
+            )
+            errorMessage = "Couldn't reach the App Store to restore purchases. Check your connection and try again."
+        }
         await updateCustomerProductStatus()
         // US-375: AppStore.sync() + updateCustomerProductStatus only refresh
         // local entitlements; the server apple_subscriptions row was never

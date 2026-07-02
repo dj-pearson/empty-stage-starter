@@ -23,4 +23,4 @@ CREATE INDEX IF NOT EXISTS idx_user_subscriptions_user_status
 
 -- Audit log queries: queried by user + created_at
 CREATE INDEX IF NOT EXISTS idx_login_history_user_created
-  ON public.login_history (user_id, created_at);
+  ON public.login_history (user_id, logged_in_at);

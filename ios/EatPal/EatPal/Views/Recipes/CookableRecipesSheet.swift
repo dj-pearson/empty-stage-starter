@@ -11,6 +11,8 @@ struct CookableRecipesSheet: View {
     @State private var matches: [RecipeMatcher.Match] = []
     @State private var addingMissingFor: String?
     @State private var inspectedRecipe: Recipe?
+    // US-418: recipe being pushed onto the plan via the real add-to-plan sheet.
+    @State private var planningRecipe: Recipe?
 
     var body: some View {
         NavigationStack {
@@ -28,7 +30,7 @@ struct CookableRecipesSheet: View {
                                 MatchRow(
                                     match: match,
                                     onAddMissing: { Task { await addMissingToGrocery(for: match) } },
-                                    onAddToPlan: { Task { await addRecipeToPlan(match.recipe) } },
+                                    onAddToPlan: { planningRecipe = match.recipe },
                                     onInspect: { inspectedRecipe = match.recipe },
                                     isAddingMissing: addingMissingFor == match.id
                                 )
@@ -50,6 +52,18 @@ struct CookableRecipesSheet: View {
             }
             .sheet(item: $inspectedRecipe) { recipe in
                 RecipeDetailView(recipe: recipe)
+            }
+            // US-418: real add-to-plan flow (date/slot/child picker), replacing
+            // the previous toast stub that claimed an add it never performed.
+            .sheet(item: $planningRecipe) { recipe in
+                AddRecipeToPlanSheet(recipe: recipe) { added in
+                    AnalyticsService.track(.cookableRecipeAddedToPlan)
+                    ToastManager.shared.success(
+                        "Added to plan",
+                        message: added.name
+                    )
+                    HapticManager.success()
+                }
             }
             .onAppear { recompute() }
             .onChange(of: appState.recipes) { _, _ in recompute() }
@@ -115,21 +129,6 @@ struct CookableRecipesSheet: View {
         }
         recompute()
     }
-
-    /// Per the AC, tapping "Add to plan" should open AddPlanEntryView with
-    /// the recipe pre-selected. The full deep-link wiring (DeepLinkHandler
-    /// route + cross-tab nav) is bigger than this sheet should own —
-    /// surface a toast nudge for now and dismiss; users land back on the
-    /// Recipes tab where they can long-press the recipe to plan it.
-    private func addRecipeToPlan(_ recipe: Recipe) async {
-        AnalyticsService.track(.cookableRecipeAddedToPlan)
-        ToastManager.shared.info(
-            "Open the meal plan",
-            message: "Then tap a slot to add \(recipe.name)."
-        )
-        HapticManager.lightImpact()
-        dismiss()
-    }
 }
 
 // MARK: - Match row
@@ -181,8 +180,11 @@ private struct MatchRow: View {
                                 .font(.caption)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(Color.orange.opacity(0.12), in: Capsule())
-                                .foregroundStyle(.orange)
+                                // US-425: the orange capsule signals "missing";
+                                // use a high-contrast label color for the text
+                                // (orange-on-light-orange was low contrast).
+                                .background(Color.orange.opacity(0.18), in: Capsule())
+                                .foregroundStyle(.primary)
                         }
                     }
                 }

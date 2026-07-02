@@ -48,6 +48,9 @@ struct Recipe: Identifiable, Codable, Equatable {
     var difficultyLevel: String?
     var kidFriendlyScore: Double?
     var nutritionInfo: NutritionInfo?
+    /// US-468: explicit user favorite. Optional/defaulted so payloads from
+    /// older rows (pre-migration) still decode cleanly.
+    var isFavorite: Bool?
     var createdAt: String?
     var updatedAt: String?
 
@@ -79,6 +82,7 @@ struct Recipe: Identifiable, Codable, Equatable {
         case difficultyLevel = "difficulty_level"
         case kidFriendlyScore = "kid_friendly_score"
         case nutritionInfo = "nutrition_info"
+        case isFavorite = "is_favorite"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -98,6 +102,7 @@ struct Recipe: Identifiable, Codable, Equatable {
         if let imageUrl = updates.imageUrl { self.imageUrl = imageUrl }
         if let additionalIngredients = updates.additionalIngredients { self.additionalIngredients = additionalIngredients }
         if let tips = updates.tips { self.tips = tips }
+        if let isFavorite = updates.isFavorite { self.isFavorite = isFavorite }
     }
 }
 
@@ -116,6 +121,7 @@ struct RecipeUpdate: Codable {
     var imageUrl: String?
     var additionalIngredients: String?
     var tips: String?
+    var isFavorite: Bool?
 
     enum CodingKeys: String, CodingKey {
         case name, description, instructions, category, tags, rating, servings, tips
@@ -125,5 +131,6 @@ struct RecipeUpdate: Codable {
         case difficultyLevel = "difficulty_level"
         case imageUrl = "image_url"
         case additionalIngredients = "additional_ingredients"
+        case isFavorite = "is_favorite"
     }
 }

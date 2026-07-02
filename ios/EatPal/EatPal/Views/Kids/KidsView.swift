@@ -4,6 +4,8 @@ struct KidsView: View {
     @EnvironmentObject var appState: AppState
     @State private var showingAddKid = false
     @State private var selectedKid: Kid?
+    // US-417: confirm destructive child deletion before it runs.
+    @State private var kidPendingDeletion: Kid?
 
     var body: some View {
         List {
@@ -30,7 +32,9 @@ struct KidsView: View {
                         .onTapGesture { selectedKid = kid }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
-                                Task { try? await appState.deleteKid(kid.id) }
+                                // US-417: confirm before deleting — this cascades
+                                // streaks, plan entries and other child data.
+                                kidPendingDeletion = kid
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
@@ -58,6 +62,41 @@ struct KidsView: View {
         }
         .refreshable {
             await appState.loadAllData()
+        }
+        // US-417: confirmation + error surfacing for child deletion.
+        .confirmationDialog(
+            "Delete \(kidPendingDeletion?.name ?? "this child")?",
+            isPresented: Binding(
+                get: { kidPendingDeletion != nil },
+                set: { if !$0 { kidPendingDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: kidPendingDeletion
+        ) { kid in
+            Button("Delete", role: .destructive) {
+                deleteKid(kid)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("This also removes their meal plans, streaks and progress. This can't be undone.")
+        }
+    }
+
+    /// US-417: delete with failure surfaced (and retryable) instead of a
+    /// silent `try?` that let a failed delete silently reappear on next load.
+    private func deleteKid(_ kid: Kid) {
+        Task {
+            do {
+                try await appState.deleteKid(kid.id)
+                HapticManager.success()
+            } catch {
+                HapticManager.error()
+                ToastManager.shared.error(
+                    "Couldn't delete \(kid.name)",
+                    message: "Please try again.",
+                    retry: { deleteKid(kid) }
+                )
+            }
         }
     }
 }
@@ -271,6 +310,8 @@ struct KidDetailView: View {
 
     // US-240: Picky-eater quiz sheet
     @State private var showingQuiz = false
+    // US-413: guard against double-submit and surface save failures.
+    @State private var isSaving = false
 
     var body: some View {
         NavigationStack {
@@ -351,20 +392,10 @@ struct KidDetailView: View {
 
                 Section {
                     Button("Save Changes") {
-                        Task {
-                            try? await appState.updateKid(
-                                kid.id,
-                                updates: KidUpdate(
-                                    name: name,
-                                    age: age,
-                                    pickinessLevel: pickinessLevel,
-                                    notes: notes.isEmpty ? nil : notes
-                                )
-                            )
-                            dismiss()
-                        }
+                        Task { await save() }
                     }
                     .frame(maxWidth: .infinity)
+                    .disabled(name.isEmpty || isSaving)
                 }
             }
             .navigationTitle(kid.name)
@@ -396,6 +427,32 @@ struct KidDetailView: View {
                     pickinessLevel = level
                 }
             }
+        }
+    }
+
+    /// US-413: only dismiss on confirmed success; on failure surface a toast
+    /// and keep the sheet open so the user doesn't silently lose their edits.
+    private func save() async {
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            try await appState.updateKid(
+                kid.id,
+                updates: KidUpdate(
+                    name: name,
+                    age: age,
+                    pickinessLevel: pickinessLevel,
+                    notes: notes.isEmpty ? nil : notes
+                )
+            )
+            HapticManager.success()
+            dismiss()
+        } catch {
+            HapticManager.error()
+            ToastManager.shared.error(
+                "Couldn't save changes",
+                message: "Please try again."
+            )
         }
     }
 

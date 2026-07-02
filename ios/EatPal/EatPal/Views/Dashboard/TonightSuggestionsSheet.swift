@@ -13,6 +13,8 @@ struct TonightSuggestionsSheet: View {
     @State private var loading = false
     @State private var loadStartedAt: Date?
     @State private var cookingRecipeId: String?
+    // US-473: recipe being scheduled via the add-to-plan sheet.
+    @State private var planningRecipe: Recipe?
 
     var body: some View {
         NavigationStack {
@@ -36,6 +38,12 @@ struct TonightSuggestionsSheet: View {
         }
         .sheet(item: cookingRecipeBinding) { recipe in
             TonightCookSheet(recipe: recipe)
+        }
+        // US-473: schedule a suggestion via the standard add-to-plan flow
+        // (its own slot / day / kid picker).
+        .sheet(item: $planningRecipe) { recipe in
+            AddRecipeToPlanSheet(recipe: recipe) { _ in }
+                .environmentObject(appState)
         }
         .task {
             initSelection()
@@ -71,7 +79,8 @@ struct TonightSuggestionsSheet: View {
                                 rank: index,
                                 kids: appState.kids,
                                 onCook: { onCook(s, rank: index) },
-                                onAddMissing: { onAddMissing(s) }
+                                onAddMissing: { onAddMissing(s) },
+                                onAddToPlan: { onAddToPlan(s) }
                             )
                         }
                         if let top = suggestions.first, top.pantryCoveragePct < 0.4 {
@@ -146,9 +155,12 @@ struct TonightSuggestionsSheet: View {
             Spacer()
             Button {
                 AnalyticsService.track(.tonightDeliveryFallbackChosen)
-                dismiss()
+                // US-473: don't force-close the sheet — add the shortfall to
+                // the grocery list and keep suggestions on screen so the user
+                // can still cook / plan / refresh.
+                onAddMissing(top)
             } label: {
-                Label("Order missing", systemImage: "cart")
+                Label("Add missing", systemImage: "cart")
                     .font(.subheadline)
             }
             .buttonStyle(.bordered)
@@ -166,6 +178,13 @@ struct TonightSuggestionsSheet: View {
             missingCount: s.missingIngredients.count
         ))
         cookingRecipeId = s.recipeId
+    }
+
+    /// US-473: open the standard add-to-plan picker for this suggestion's
+    /// recipe so the user can schedule it into any meal slot / day / kid.
+    private func onAddToPlan(_ s: TonightModeService.Suggestion) {
+        guard let recipe = appState.recipes.first(where: { $0.id == s.recipeId }) else { return }
+        planningRecipe = recipe
     }
 
     private func onAddMissing(_ s: TonightModeService.Suggestion) {
@@ -243,6 +262,8 @@ private struct TonightSuggestionCard: View {
     let kids: [Kid]
     let onCook: () -> Void
     let onAddMissing: () -> Void
+    // US-473: schedule this suggestion into the planner (pick slot/day/kid).
+    let onAddToPlan: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -366,6 +387,15 @@ private struct TonightSuggestionCard: View {
                 }
                 .buttonStyle(.bordered)
             }
+
+            // US-473: schedule into the planner for any meal slot.
+            Button(action: onAddToPlan) {
+                Label("Plan", systemImage: "calendar.badge.plus")
+                    .font(.subheadline)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel("Add to meal plan")
+
             Spacer(minLength: 0)
         }
     }

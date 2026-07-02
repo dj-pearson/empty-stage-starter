@@ -1,14 +1,14 @@
-interface NutrientEntry {
+export interface HarmonizedNutrient {
   name: string;
   value: number;
   unit: string;
 }
 
-interface FoodSearchResult {
+interface HarmonizationSource {
   source: string;
   name?: string;
   calories?: number;
-  nutrients?: NutrientEntry[];
+  nutrients?: HarmonizedNutrient[];
   product_name?: string;
   nutriments?: {
     energy_value?: number;
@@ -16,16 +16,20 @@ interface FoodSearchResult {
     [key: string]: number | undefined;
   };
   description?: string;
-  foodNutrients?: Array<{ nutrientName: string; unitName: string; value: number }>;
+  foodNutrients?: Array<{
+    nutrientName: string;
+    unitName: string;
+    value: number;
+  }>;
 }
 
-interface HarmonizedFood {
+export interface HarmonizedFood {
   name: string;
   calories: number;
-  nutrients: NutrientEntry[];
+  nutrients: HarmonizedNutrient[];
 }
 
-export function harmonizeFoodData(results: FoodSearchResult[]): HarmonizedFood | null {
+export function harmonizeFoodData(results: HarmonizationSource[]): HarmonizedFood | null {
   if (!results || results.length === 0) {
     return null;
   }
@@ -39,7 +43,7 @@ export function harmonizeFoodData(results: FoodSearchResult[]): HarmonizedFood |
   const nutrientMap: Map<string, { value: number; unit: string }> = new Map();
 
   // Prioritize local data
-  const localResult = results.find((r) => r.source === 'local');
+  const localResult = results.find(r => r.source === 'local');
   if (localResult) {
     harmonized.name = localResult.name ?? '';
     harmonized.calories = localResult.calories ?? 0;
@@ -47,7 +51,7 @@ export function harmonizeFoodData(results: FoodSearchResult[]): HarmonizedFood |
   }
 
   // Process Open Food Facts data
-  const openFoodFactsResult = results.find((r) => r.source === 'openfoodfacts');
+  const openFoodFactsResult = results.find(r => r.source === 'openfoodfacts');
   if (openFoodFactsResult) {
     if (!harmonized.name && openFoodFactsResult.product_name) {
       harmonized.name = openFoodFactsResult.product_name;
@@ -66,7 +70,7 @@ export function harmonizeFoodData(results: FoodSearchResult[]): HarmonizedFood |
   }
 
   // Process USDA data
-  const usdaResult = results.find((r) => r.source === 'usda');
+  const usdaResult = results.find(r => r.source === 'usda');
   if (usdaResult && usdaResult.foodNutrients) {
     if (!harmonized.name && usdaResult.description) {
       harmonized.name = usdaResult.description;

@@ -10,19 +10,27 @@ struct BarcodeScannerView: View {
     @State private var scannedCode: String?
     @State private var cameraPermission: AVAuthorizationStatus = .notDetermined
     @State private var torchOn = false
+    // US-420: surface hardware/input acquisition failure instead of a frozen
+    // black screen.
+    @State private var cameraUnavailable = false
 
     var body: some View {
         NavigationStack {
             ZStack {
                 if cameraPermission == .authorized {
-                    CameraPreview(
-                        scannedCode: $scannedCode,
-                        torchOn: $torchOn
-                    )
-                    .ignoresSafeArea()
+                    if cameraUnavailable {
+                        cameraUnavailableView
+                    } else {
+                        CameraPreview(
+                            scannedCode: $scannedCode,
+                            torchOn: $torchOn,
+                            onSetupFailed: { cameraUnavailable = true }
+                        )
+                        .ignoresSafeArea()
 
-                    // Overlay with scanning frame
-                    scannerOverlay
+                        // Overlay with scanning frame
+                        scannerOverlay
+                    }
                 } else if cameraPermission == .denied || cameraPermission == .restricted {
                     cameraPermissionDeniedView
                 } else {
@@ -43,10 +51,26 @@ struct BarcodeScannerView: View {
                         Image(systemName: torchOn ? "flashlight.on.fill" : "flashlight.off.fill")
                             .foregroundStyle(.white)
                     }
+                    // US-423: label the icon-only torch toggle for VoiceOver.
+                    .accessibilityLabel(torchOn ? "Turn off flashlight" : "Turn on flashlight")
                 }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
             .onAppear {
+                checkCameraPermission()
+            }
+            .onDisappear {
+                // US-420: make sure the torch can't stay lit after the scanner
+                // closes (teardown also kills the session via dismantleUIView).
+                torchOn = false
+            }
+            // US-420: returning from Settings (where the user may have just
+            // granted access) should refresh the denied screen, not leave it stuck.
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: UIApplication.willEnterForegroundNotification
+                )
+            ) { _ in
                 checkCameraPermission()
             }
             .onChange(of: scannedCode) { _, newValue in
@@ -56,6 +80,29 @@ struct BarcodeScannerView: View {
                     dismiss()
                 }
             }
+        }
+    }
+
+    // MARK: - Camera Unavailable
+
+    private var cameraUnavailableView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+
+            Text("Camera Unavailable")
+                .font(.headline)
+
+            Text("We couldn't start the camera. Close and try again, or restart your device.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            Button("Close") { dismiss() }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
         }
     }
 
@@ -166,15 +213,24 @@ struct ScanLineView: View {
 struct CameraPreview: UIViewRepresentable {
     @Binding var scannedCode: String?
     @Binding var torchOn: Bool
+    var onSetupFailed: (() -> Void)?
 
     func makeUIView(context: Context) -> CameraPreviewUIView {
         let view = CameraPreviewUIView()
         view.delegate = context.coordinator
+        view.onSetupFailed = onSetupFailed
         return view
     }
 
     func updateUIView(_ uiView: CameraPreviewUIView, context: Context) {
         uiView.setTorch(torchOn)
+    }
+
+    // US-420: tear the capture session down (stop running + torch off) when the
+    // representable is removed, so the camera/torch don't keep running after the
+    // scanner is dismissed.
+    static func dismantleUIView(_ uiView: CameraPreviewUIView, coordinator: Coordinator) {
+        uiView.teardown()
     }
 
     func makeCoordinator() -> Coordinator {
@@ -212,9 +268,19 @@ struct CameraPreview: UIViewRepresentable {
 
 class CameraPreviewUIView: UIView {
     weak var delegate: AVCaptureMetadataOutputObjectsDelegate?
+    // US-420: surfaced to SwiftUI so device/input acquisition failure shows a
+    // 'Camera unavailable' state instead of a frozen black screen.
+    var onSetupFailed: (() -> Void)?
 
     private let captureSession = AVCaptureSession()
     private var previewLayer: AVCaptureVideoPreviewLayer?
+    // US-420: keep the session's own device so the torch is driven through the
+    // exact input we configured (not AVCaptureDevice.default, which can resolve
+    // to a different device).
+    private var videoDevice: AVCaptureDevice?
+    private var isConfigured = false
+    // US-420: do capture configuration off the main thread.
+    private let sessionQueue = DispatchQueue(label: "com.eatpal.barcode.session")
 
     private static let supportedBarcodeTypes: [AVMetadataObject.ObjectType] = [
         .ean13, .ean8, .upce, .code128, .code39
@@ -230,52 +296,78 @@ class CameraPreviewUIView: UIView {
         if window != nil {
             setupCamera()
         } else {
-            captureSession.stopRunning()
+            sessionQueue.async { [weak self] in self?.captureSession.stopRunning() }
+        }
+    }
+
+    /// US-420: stop the session and kill the torch when the view is dismantled.
+    func teardown() {
+        setTorch(false)
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            if self.captureSession.isRunning { self.captureSession.stopRunning() }
         }
     }
 
     func setTorch(_ on: Bool) {
-        guard let device = AVCaptureDevice.default(for: .video),
+        guard let device = videoDevice ?? AVCaptureDevice.default(for: .video),
               device.hasTorch else { return }
-        try? device.lockForConfiguration()
-        device.torchMode = on ? .on : .off
-        device.unlockForConfiguration()
+        do {
+            try device.lockForConfiguration()
+            device.torchMode = on ? .on : .off
+            device.unlockForConfiguration()
+        } catch {
+            // Torch is non-critical; don't crash if it can't be locked.
+            SentryService.leaveBreadcrumb(
+                category: "scanner",
+                message: "Torch toggle failed: \(error.localizedDescription)",
+                level: .warning
+            )
+        }
     }
 
     private func setupCamera() {
-        guard !captureSession.isRunning else { return }
+        guard !isConfigured else { return }
+        isConfigured = true
 
-        captureSession.beginConfiguration()
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.captureSession.beginConfiguration()
 
-        guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
-              let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
-              captureSession.canAddInput(videoInput) else {
-            captureSession.commitConfiguration()
-            return
-        }
+            guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+                  let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
+                  self.captureSession.canAddInput(videoInput) else {
+                self.captureSession.commitConfiguration()
+                self.isConfigured = false
+                DispatchQueue.main.async { self.onSetupFailed?() }
+                return
+            }
+            self.videoDevice = videoDevice
+            self.captureSession.addInput(videoInput)
 
-        captureSession.addInput(videoInput)
+            let metadataOutput = AVCaptureMetadataOutput()
+            guard self.captureSession.canAddOutput(metadataOutput) else {
+                self.captureSession.commitConfiguration()
+                self.isConfigured = false
+                DispatchQueue.main.async { self.onSetupFailed?() }
+                return
+            }
 
-        let metadataOutput = AVCaptureMetadataOutput()
-        guard captureSession.canAddOutput(metadataOutput) else {
-            captureSession.commitConfiguration()
-            return
-        }
+            self.captureSession.addOutput(metadataOutput)
+            metadataOutput.setMetadataObjectsDelegate(self.delegate, queue: .main)
+            metadataOutput.metadataObjectTypes = Self.supportedBarcodeTypes
 
-        captureSession.addOutput(metadataOutput)
-        metadataOutput.setMetadataObjectsDelegate(delegate, queue: .main)
-        metadataOutput.metadataObjectTypes = Self.supportedBarcodeTypes
+            self.captureSession.commitConfiguration()
 
-        captureSession.commitConfiguration()
+            DispatchQueue.main.async {
+                let preview = AVCaptureVideoPreviewLayer(session: self.captureSession)
+                preview.videoGravity = .resizeAspectFill
+                preview.frame = self.bounds
+                self.layer.addSublayer(preview)
+                self.previewLayer = preview
+            }
 
-        let preview = AVCaptureVideoPreviewLayer(session: captureSession)
-        preview.videoGravity = .resizeAspectFill
-        preview.frame = bounds
-        layer.addSublayer(preview)
-        previewLayer = preview
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.captureSession.startRunning()
+            self.captureSession.startRunning()
         }
     }
 }

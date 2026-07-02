@@ -47,27 +47,57 @@ final class ThumbnailImageCache {
     func image(for url: URL) async -> UIImage? {
         if let cached = cachedImage(for: url) { return cached }
         networkFetchCount += 1
-        guard let (data, _) = try? await session.data(from: url),
-              let image = UIImage(data: data) else { return nil }
-        store(image, for: url)
-        return image
+        // US-427: don't swallow failures silently — log them so CDN/storage
+        // regressions are visible, and let the caller render a terminal
+        // fallback instead of an endless spinner.
+        do {
+            let (data, _) = try await session.data(from: url)
+            guard let image = UIImage(data: data) else {
+                SentryService.leaveBreadcrumb(
+                    category: "image",
+                    message: "Thumbnail decode failed for \(url.absoluteString)"
+                )
+                return nil
+            }
+            store(image, for: url)
+            return image
+        } catch {
+            SentryService.leaveBreadcrumb(
+                category: "image",
+                message: "Thumbnail fetch failed for \(url.absoluteString): \(error.localizedDescription)"
+            )
+            return nil
+        }
     }
 }
 
 @MainActor
 final class ThumbnailImageLoader: ObservableObject {
     @Published var image: UIImage?
+    // US-427: distinguish "loading" (show spinner) from "failed/no image"
+    // (show the bare placeholder) so a broken URL doesn't spin forever.
+    @Published var isLoading = false
+    @Published var didFail = false
 
     func load(_ url: URL?) async {
         guard let url else {
             image = nil
+            isLoading = false
+            didFail = false
             return
         }
         if let cached = ThumbnailImageCache.shared.cachedImage(for: url) {
             image = cached
+            isLoading = false
+            didFail = false
             return
         }
-        image = await ThumbnailImageCache.shared.image(for: url)
+        isLoading = true
+        didFail = false
+        let loaded = await ThumbnailImageCache.shared.image(for: url)
+        image = loaded
+        isLoading = false
+        didFail = (loaded == nil)
     }
 }
 
@@ -88,7 +118,7 @@ struct CachedAsyncImage<Placeholder: View>: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: size.width, height: size.height)
                     .clipped()
-            } else if url != nil {
+            } else if url != nil && loader.isLoading {
                 placeholder()
                     .overlay {
                         ProgressView()
@@ -96,6 +126,8 @@ struct CachedAsyncImage<Placeholder: View>: View {
                     }
                     .frame(width: size.width, height: size.height)
             } else {
+                // US-427: no URL, or the load failed — show the bare placeholder
+                // (category icon / initials) instead of an endless spinner.
                 placeholder()
                     .frame(width: size.width, height: size.height)
             }
@@ -115,14 +147,16 @@ struct AvatarView: View {
     let size: CGFloat
     var backgroundColor: Color = AppTheme.Colors.primaryLight
 
-    private var initialsUrl: URL? {
+    // US-427: returns the avatar photo URL (the old name "initialsUrl" was
+    // misleading — it never had anything to do with initials).
+    private var imageURL: URL? {
         guard let urlString = imageUrl, !urlString.isEmpty else { return nil }
         return URL(string: urlString)
     }
 
     var body: some View {
         CachedAsyncImage(
-            url: initialsUrl,
+            url: imageURL,
             size: CGSize(width: size, height: size)
         ) {
             initialsView

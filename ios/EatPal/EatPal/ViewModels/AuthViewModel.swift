@@ -96,6 +96,11 @@ final class AuthViewModel: ObservableObject {
                     SentryService.setUserId(session?.user.id.uuidString)
                     SentryService.leaveBreadcrumb(category: "auth", message: "signed in")
                 case .signedOut:
+                    // US-432: a failed refresh-token (expired session / JWT
+                    // expired) is surfaced by Supabase as a .signedOut event —
+                    // flipping to .unauthenticated here routes the user back to
+                    // AuthView for re-auth instead of stranding them in
+                    // MainTabView with every fetch failing on an expired token.
                     self.authState = .unauthenticated
                     self.applySession(nil)
                     self.clearForm()
@@ -216,12 +221,16 @@ final class AuthViewModel: ObservableObject {
         isSubmitting = false
     }
 
-    func signOut() async {
+    /// US-432: throws so the caller can sequence local-data clearing *after* a
+    /// successful session sign-out (and surface a failure) instead of wiping
+    /// local data while the session is still alive.
+    func signOut() async throws {
         do {
             try await authService.signOut()
             AnalyticsService.track(.signOutCompleted)
         } catch {
             errorMessage = error.localizedDescription
+            throw error
         }
     }
 

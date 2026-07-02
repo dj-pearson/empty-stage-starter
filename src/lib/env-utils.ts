@@ -68,11 +68,9 @@ export function getEnv(key: string, fallback: string = ''): string {
     return process.env[key] as string;
   }
 
-  if (typeof import.meta !== 'undefined') {
-    const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-    if (metaEnv?.[key]) {
-      return metaEnv[key] as string;
-    }
+  const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+  if (typeof import.meta !== 'undefined' && metaEnv?.[key]) {
+    return metaEnv[key] as string;
   }
 
   return fallback;

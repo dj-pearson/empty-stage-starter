@@ -36,6 +36,11 @@ final class ShareViewController: UIViewController {
         }
     }
 
+    /// US-451: cap on shared plain text before it enters the parser. Share
+    /// extensions run under a tight (~30-120 MB) jetsam limit; a huge pasted
+    /// selection would otherwise be loaded whole and re-parsed on every edit.
+    private static let maxSharedTextLength = 20_000
+
     // MARK: - Item extraction
 
     private func extractSharedContent() async -> SharedContent {
@@ -52,12 +57,19 @@ final class ShareViewController: UIViewController {
 
             for provider in attachments {
                 // Direct URL — Safari, most browsers, recipe sites.
+                // US-451: only accept a real web URL. Some apps vend a *file*
+                // URL (a shared PDF/photo) as UTType.url; routing that to the
+                // recipe parser dead-ends in a network error, so reject
+                // file/non-http(s) schemes and let it fall through to text.
                 if directURL == nil,
                    provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
                     if let url = try? await provider.loadItem(
                         forTypeIdentifier: UTType.url.identifier,
                         options: nil
-                    ) as? URL {
+                    ) as? URL,
+                       !url.isFileURL,
+                       let scheme = url.scheme?.lowercased(),
+                       scheme == "http" || scheme == "https" {
                         directURL = url
                     }
                 }
@@ -69,7 +81,9 @@ final class ShareViewController: UIViewController {
                         forTypeIdentifier: UTType.plainText.identifier,
                         options: nil
                     ) as? String {
-                        sharedText = text
+                        // US-451: bound the text so the extension can't be
+                        // pushed past its memory budget by a huge selection.
+                        sharedText = String(text.prefix(Self.maxSharedTextLength))
                     }
                 }
             }

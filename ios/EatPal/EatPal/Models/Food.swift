@@ -118,7 +118,7 @@ struct FoodUpdate: Codable {
     }
 }
 
-enum FoodCategory: String, CaseIterable {
+enum FoodCategory: String, CaseIterable, Codable {
     case protein
     case carb
     case dairy

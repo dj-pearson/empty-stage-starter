@@ -1,6 +1,7 @@
 import Foundation
 import WatchConnectivity
 import Combine
+import WidgetKit
 
 /// US-237: watchOS-side mirror of the iPhone's AppState (snapshot only).
 ///
@@ -73,6 +74,10 @@ final class WatchSessionStore: NSObject, ObservableObject {
         // US-407: write to the shared App Group store so the complication
         // extension reads the same data.
         WatchSnapshotStore.save(snapshot)
+        // US-450: nudge the complication timelines so a freshly-received
+        // snapshot (new dinner, checked-off groceries) shows on the watch
+        // face promptly instead of waiting up to the next scheduled reload.
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     private func loadCachedSnapshot() {

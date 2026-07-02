@@ -57,7 +57,9 @@ struct CookModeView: View {
 
             ScrollView {
                 Text(steps[currentStep])
-                    .font(.title3)
+                    // US-424: larger scalable style for in-kitchen legibility
+                    // (was .title3 — small for reading at arm's length).
+                    .font(.title2)
                     .multilineTextAlignment(.center)
                     .padding()
                     .id(currentStep) // re-identify so transitions animate per step

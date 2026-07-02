@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var showingPaywall = false
     @State private var showingDeleteAccountAlert = false
     @State private var isDeletingAccount = false
+    @State private var isSigningOut = false
     @State private var deleteAccountError: String?
     @StateObject private var store = StoreKitService.shared
 
@@ -179,8 +180,15 @@ struct SettingsView: View {
                 Button(role: .destructive) {
                     showingSignOutAlert = true
                 } label: {
-                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.forward")
+                    HStack {
+                        Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.forward")
+                        if isSigningOut {
+                            Spacer()
+                            ProgressView()
+                        }
+                    }
                 }
+                .disabled(isSigningOut)
 
                 Button(role: .destructive) {
                     showingDeleteAccountAlert = true
@@ -206,8 +214,21 @@ struct SettingsView: View {
         .alert("Sign Out?", isPresented: $showingSignOutAlert) {
             Button("Sign Out", role: .destructive) {
                 Task {
-                    appState.clearData()
-                    await authViewModel.signOut()
+                    isSigningOut = true
+                    defer { isSigningOut = false }
+                    do {
+                        // US-432: sign out the session FIRST, then clear local
+                        // data only on success — so a failed sign-out can't
+                        // leave local data wiped while the session is still alive.
+                        try await authViewModel.signOut()
+                        appState.clearData()
+                    } catch {
+                        HapticManager.error()
+                        ToastManager.shared.error(
+                            "Couldn't sign out",
+                            message: "Please check your connection and try again."
+                        )
+                    }
                 }
             }
             Button("Cancel", role: .cancel) {}

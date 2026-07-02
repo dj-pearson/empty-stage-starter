@@ -206,9 +206,12 @@ private struct TextSkeleton: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(0..<lines, id: \.self) { index in
+                // US-428: the full-width lines must use maxWidth — `.frame(width:
+                // .infinity)` is invalid and renders at a degenerate width.
                 RoundedRectangle(cornerRadius: 3)
                     .fill(Color(.systemGray5))
-                    .frame(width: index == lines - 1 ? 160 : .infinity, height: 12)
+                    .frame(height: 12)
+                    .frame(maxWidth: index == lines - 1 ? 160 : .infinity, alignment: .leading)
                     .shimmer()
             }
         }

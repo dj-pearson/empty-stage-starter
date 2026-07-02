@@ -1,0 +1,140 @@
+name: PRD Verify
+
+# Verifies prd.json user stories that can't be checked in a local Linux/web
+# sandbox by running the REAL CI gates (web build+test, iOS build+test, Android
+# build+test) and flipping `passes: true` ONLY for stories whose gate goes green
+# AND that already have an implementation in history. Nothing is blind-flipped:
+# manual/ops stories never auto-flip, net-new stories without an implementation
+# stay false, and any story whose gate is red stays false until a green run.
+#
+# Entry points:
+#  - pull_request -> main: a PR touching a verification surface (iOS, Android,
+#    web src, prd.json, or these workflows) runs the gates and, when a gate is
+#    green, commits the resulting passes=true flips ONTO THE PR BRANCH. Merging
+#    the PR carries the flips into main — so flags only change through review,
+#    never a direct push to protected main.
+#  - workflow_dispatch: same pipeline on demand (dry-run option via `apply`).
+# The flip commit carries [skip ci] and is pushed by GITHUB_TOKEN, so it can't
+# loop back and re-trigger CI.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'android-native/**'
+      - 'src/**'
+      - 'prd.json'
+      - 'scripts/ralph/verify-stories.mjs'
+      - '.github/workflows/prd-verify.yml'
+      - '.github/workflows/ios-ci.yml'
+      - '.github/workflows/android-native-ci.yml'
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Write flips back to prd.json/progress.txt (false = dry-run report only)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prd-verify-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  web-gate:
+    name: Web gate (strict)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      # STRICT (unlike ci.yml's non-blocking backlog gates): a web story
+      # (US-342 ban `any`, US-344 select-column hot paths) only counts as
+      # verified when typecheck + lint + tests + build are genuinely clean.
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm run test:run
+      - name: Build
+        run: npm run build
+
+  ios-gate:
+    name: iOS gate
+    uses: ./.github/workflows/ios-ci.yml
+
+  android-gate:
+    name: Android gate
+    uses: ./.github/workflows/android-native-ci.yml
+
+  flip:
+    name: Flip verified stories
+    runs-on: ubuntu-latest
+    needs: [web-gate, ios-gate, android-gate]
+    if: ${{ always() }}
+    # apply=false only when a dispatch explicitly asks for a dry-run; PRs always apply.
+    env:
+      APPLY: ${{ (github.event_name == 'workflow_dispatch' && inputs.apply == false) && 'false' || 'true' }}
+      TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Check out the PR head branch (not the detached merge ref) so flips
+          # can be pushed back onto it. Full history so the engine can detect
+          # "an implementation commit references US-XXX" for each story.
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run verification engine
+        env:
+          GATE_WEB: ${{ needs.web-gate.result }}
+          GATE_IOS: ${{ needs.ios-gate.result }}
+          GATE_ANDROID: ${{ needs.android-gate.result }}
+          VERIFY_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ "$APPLY" = "false" ]; then
+            node scripts/ralph/verify-stories.mjs | tee "$GITHUB_STEP_SUMMARY"
+          else
+            node scripts/ralph/verify-stories.mjs --apply | tee "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Commit flipped flags
+        if: ${{ env.APPLY != 'false' }}
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- prd.json progress.txt; then
+            echo "No stories flipped — nothing to commit."
+            exit 0
+          fi
+          git add prd.json progress.txt
+          git commit -m "chore(prd): flip CI-verified stories to passes=true [skip ci]"
+          # Retry push a few times for transient network/ref races.
+          n=0
+          until [ $n -ge 4 ]; do
+            git push origin "HEAD:${TARGET_BRANCH}" && break
+            n=$((n+1))
+            echo "push failed, retry $n…"; sleep $((2 ** n))
+            git pull --rebase origin "${TARGET_BRANCH}" || true
+          done
+
+      - name: Upload verification report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: prd-verify-report
+          path: prd-verify-report.json
+          if-no-files-found: ignore
+          retention-days: 30

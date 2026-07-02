@@ -71,6 +71,19 @@ struct PickyEaterQuizView: View {
                             }
                         }
                         .padding(.horizontal)
+
+                        // US-434: let the user go back and correct a mis-tap
+                        // instead of being locked into a forward-only quiz.
+                        if currentQuestion > 0 {
+                            Button {
+                                goBack()
+                            } label: {
+                                Label("Back", systemImage: "chevron.left")
+                                    .font(.subheadline)
+                            }
+                            .padding(.top, 8)
+                            .accessibilityLabel("Go back to the previous question")
+                        }
                     }
 
                     Spacer()
@@ -108,9 +121,22 @@ struct PickyEaterQuizView: View {
         }
     }
 
+    /// US-434: step back a question, dropping the answer being re-taken so the
+    /// answers array stays aligned with the question index.
+    private func goBack() {
+        guard currentQuestion > 0 else { return }
+        if !answers.isEmpty { answers.removeLast() }
+        accessibleWithAnimation(reduceMotion: reduceMotion) {
+            currentQuestion -= 1
+        }
+        HapticManager.selection()
+    }
+
     private func calculatePersonality() -> PickyEaterPersonality {
         let score = answers.reduce(0, +)
         let maxScore = questions.count * 3
+        // US-434: guard against divide-by-zero if the question set is ever empty.
+        guard maxScore > 0 else { return .routineReliant }
 
         let percentage = Double(score) / Double(maxScore)
 

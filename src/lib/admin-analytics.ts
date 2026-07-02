@@ -66,7 +66,7 @@ export interface AdminNotification {
   severity: string;
   title: string;
   message: string;
-  metadata: any;
+  metadata: Record<string, unknown>;
   is_read: boolean;
   created_at: string;
 }
@@ -191,15 +191,15 @@ const { data, error } = await supabase
 /**
  * Get feature adoption metrics
  */
-export async function getFeatureAdoption(): Promise<
-  Array<{
-    feature: string;
-    users_using: number;
-    adoption_rate_pct: number;
-    total_usage_count: number;
-    last_used: string;
-  }>
-> {
+export interface FeatureAdoption {
+  feature: string;
+  users_using: number;
+  adoption_rate_pct: number;
+  total_usage_count: number;
+  last_used: string;
+}
+
+export async function getFeatureAdoption(): Promise<FeatureAdoption[]> {
   try {
 const { data, error } = await supabase
       .from("admin_feature_adoption")
@@ -211,7 +211,7 @@ const { data, error } = await supabase
       return [];
     }
 
-    return data as any[];
+    return (data ?? []) as unknown as FeatureAdoption[];
   } catch (error) {
     logger.error("Failed to fetch feature adoption:", error);
     return [];
@@ -299,7 +299,7 @@ const { error } = await supabase
 /**
  * Get user retention cohort data
  */
-export async function getUserRetention(): Promise<any[]> {
+export async function getUserRetention(): Promise<Record<string, unknown>[]> {
   try {
 const { data, error } = await supabase
       .from("admin_user_retention")
@@ -311,7 +311,7 @@ const { data, error } = await supabase
       return [];
     }
 
-    return data || [];
+    return (data ?? []) as unknown as Record<string, unknown>[];
   } catch (error) {
     logger.error("Failed to fetch user retention:", error);
     return [];
@@ -321,7 +321,7 @@ const { data, error } = await supabase
 /**
  * Get error tracking data
  */
-export async function getErrorTracking(): Promise<any[]> {
+export async function getErrorTracking(): Promise<Record<string, unknown>[]> {
   try {
 const { data, error } = await supabase
       .from("admin_error_tracking")
@@ -333,7 +333,7 @@ const { data, error } = await supabase
       return [];
     }
 
-    return data || [];
+    return (data ?? []) as unknown as Record<string, unknown>[];
   } catch (error) {
     logger.error("Failed to fetch error tracking:", error);
     return [];

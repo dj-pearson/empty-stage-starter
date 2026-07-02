@@ -629,24 +629,25 @@ class UserSegmentationService {
   /**
    * Map database row to Segment
    */
-  private mapRowToSegment(row: any): Segment {
+  private mapRowToSegment(rawRow: unknown): Segment {
+    const row = rawRow as Record<string, unknown>;
     return {
-      id: row.id,
-      name: row.name,
-      displayName: row.display_name,
-      description: row.description,
+      id: row.id as string,
+      name: row.name as string,
+      displayName: row.display_name as string,
+      description: row.description as string | undefined,
       segmentType: row.segment_type as SegmentType,
-      filterCriteria: row.filter_criteria || {},
-      cohortType: row.cohort_type,
-      cohortValue: row.cohort_value,
-      color: row.color || '#6366f1',
-      icon: row.icon || 'users',
+      filterCriteria: (row.filter_criteria as Record<string, unknown>) || {},
+      cohortType: row.cohort_type as string | undefined,
+      cohortValue: row.cohort_value as string | undefined,
+      color: (row.color as string) || '#6366f1',
+      icon: (row.icon as string) || 'users',
       isActive: row.is_active !== false,
       isSystem: row.is_system === true,
-      memberCount: row.member_count || 0,
-      lastCalculatedAt: row.last_calculated_at,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at || row.created_at,
+      memberCount: (row.member_count as number) || 0,
+      lastCalculatedAt: row.last_calculated_at as string | undefined,
+      createdAt: row.created_at as string,
+      updatedAt: (row.updated_at as string) || (row.created_at as string),
     };
   }
 }

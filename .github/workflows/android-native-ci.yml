@@ -10,6 +10,9 @@ on:
     paths:
       - 'android-native/**'
       - '.github/workflows/android-native-ci.yml'
+  # Callable by the prd-verify workflow so PRD story verification reuses this
+  # real build+test gate instead of duplicating the Gradle pipeline.
+  workflow_call:
 
 jobs:
   build:
@@ -57,6 +60,15 @@ jobs:
 
       - name: Lint (debug)
         run: ./gradlew :app:lintDebug --stacktrace
+
+      # lintDebug aborts on errors but only prints the FIRST one to the console.
+      # Dump the full text report so every lint error is visible in the Actions
+      # log (the HTML artifact isn't reachable from every environment).
+      - name: Print lint report on failure
+        if: failure()
+        run: |
+          f=$(find app/build -name 'lint-results-debug.txt' 2>/dev/null | head -1)
+          if [ -n "$f" ]; then echo "=== $f ==="; cat "$f"; else echo "No lint text report found."; fi
 
       - name: Assemble debug APK
         run: ./gradlew :app:assembleDebug --stacktrace

@@ -245,12 +245,16 @@ export function deepClone<T>(obj: T): T {
 /**
  * Deep merge objects
  */
-export function deepMerge<T extends Record<string, unknown>>(target: T, ...sources: Partial<T>[]): T {
+export function deepMerge<T extends Record<string, unknown>>(
+  target: T,
+  ...sources: Partial<T>[]
+): T {
   if (sources.length === 0) return target;
 
   const source = sources.shift();
   if (!source) return deepMerge(target, ...sources);
 
+  const mutableTarget = target as Record<string, unknown>;
   for (const key in source) {
     if (Object.prototype.hasOwnProperty.call(source, key)) {
       const sourceValue = source[key];
@@ -264,12 +268,12 @@ export function deepMerge<T extends Record<string, unknown>>(target: T, ...sourc
         typeof targetValue === 'object' &&
         !Array.isArray(targetValue)
       ) {
-        target[key] = deepMerge(
+        mutableTarget[key] = deepMerge(
           { ...(targetValue as Record<string, unknown>) },
           sourceValue as Record<string, unknown>
-        ) as T[Extract<keyof T, string>];
+        );
       } else {
-        target[key] = sourceValue as T[Extract<keyof T, string>];
+        mutableTarget[key] = sourceValue;
       }
     }
   }

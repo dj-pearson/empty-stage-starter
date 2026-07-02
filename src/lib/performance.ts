@@ -18,24 +18,30 @@ export interface PerformanceMetric {
   timestamp: number;
 }
 
-// Precise shapes for non-standard PerformanceEntry / Performance / Navigator
-// fields not yet in the DOM lib typings (US-342: replaces `as any` casts).
-interface LCPEntry extends PerformanceEntry {
+/**
+ * Precise shapes for non-standard / experimental performance + navigator APIs
+ * that are not in the base lib.dom typings.
+ */
+interface LargestContentfulPaintEntry extends PerformanceEntry {
   renderTime: number;
   loadTime: number;
 }
+
 interface FirstInputEntry extends PerformanceEntry {
   processingStart: number;
 }
+
 interface LayoutShiftEntry extends PerformanceEntry {
-  hadRecentInput: boolean;
   value: number;
+  hadRecentInput: boolean;
 }
+
 interface PerformanceMemory {
   usedJSHeapSize: number;
   totalJSHeapSize: number;
   jsHeapSizeLimit: number;
 }
+
 interface NetworkInformation {
   effectiveType?: string;
   downlink?: number;
@@ -120,7 +126,7 @@ export function measureLCP(callback?: (metric: PerformanceMetric) => void): void
   try {
     const observer = new PerformanceObserver((list) => {
       const entries = list.getEntries();
-      const lastEntry = entries[entries.length - 1] as LCPEntry;
+      const lastEntry = entries[entries.length - 1] as LargestContentfulPaintEntry;
 
       const metric: PerformanceMetric = {
         name: 'LCP',
@@ -404,7 +410,8 @@ export function monitorMemoryUsage(): void {
   if (typeof window === 'undefined' || !('memory' in performance)) return;
 
   try {
-    const memory = (performance as Performance & { memory: PerformanceMemory }).memory;
+    const memory = (performance as Performance & { memory?: PerformanceMemory }).memory;
+    if (!memory) return;
 
     if (process.env.NODE_ENV === 'development') {
       logger.info('[Memory Usage]', {

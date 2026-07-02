@@ -4,9 +4,13 @@ struct DashboardHomeView: View {
     @EnvironmentObject var appState: AppState
     @State private var showingScanner = false
     @State private var showingAddFood = false
+    // US-418: the "New Recipe" quick action was a no-op; present the editor.
+    @State private var showingAddRecipe = false
     @State private var scannedBarcode: ScannedBarcodeItem?
     /// US-230: opens the pantry tab pre-filtered to expiring foods.
     @State private var showingExpiringSheet = false
+    /// US-461: app-wide cross-entity search surface.
+    @State private var showingGlobalSearch = false
 
     /// US-240: First active kid that has neither a saved pickinessLevel nor
     /// strategies — these are the parents who will benefit most from the quiz.
@@ -70,12 +74,30 @@ struct DashboardHomeView: View {
                 // Quick Actions
                 QuickActionsSection(
                     onAddFood: { showingAddFood = true },
-                    onScanBarcode: { showingScanner = true }
+                    onScanBarcode: { showingScanner = true },
+                    onNewRecipe: { showingAddRecipe = true }
                 )
             }
             .padding()
         }
         .navigationTitle("Dashboard")
+        // US-461: global search entry point. Available from the primary
+        // landing tab so any entity is one tap away regardless of which tab
+        // owns it.
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showingGlobalSearch = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+                .accessibilityLabel("Search everything")
+            }
+        }
+        .sheet(isPresented: $showingGlobalSearch) {
+            GlobalSearchView()
+                .environmentObject(appState)
+        }
         .refreshable {
             await appState.loadAllData()
         }
@@ -92,11 +114,15 @@ struct DashboardHomeView: View {
         .sheet(isPresented: $showingAddFood) {
             AddFoodView()
         }
+        .sheet(isPresented: $showingAddRecipe) {
+            AddRecipeView()
+        }
         .sheet(item: $scannedBarcode) { item in
             ScannedProductView(barcode: item.code)
         }
         .sheet(isPresented: $showingExpiringSheet) {
-            ExpiringFoodsSheet(foods: expiringFoods)
+            ExpiringFoodsSheet()
+                .environmentObject(appState)
         }
     }
 }
@@ -217,8 +243,18 @@ struct TodayMealSummaryCard: View {
     }
 
     private func foodNames(for entries: [PlanEntry]) -> String {
+        // US-446: resolve recipe-based meals by recipe name too. Previously a
+        // plan entry with a recipeId (and empty/unknown foodId) resolved to
+        // nothing and silently vanished from "today's meals".
         entries.compactMap { entry in
-            appState.foods.first { $0.id == entry.foodId }?.name
+            if let food = appState.foods.first(where: { $0.id == entry.foodId }) {
+                return food.name
+            }
+            if let recipeId = entry.recipeId,
+               let recipe = appState.recipes.first(where: { $0.id == recipeId }) {
+                return recipe.name
+            }
+            return nil
         }.joined(separator: ", ")
     }
 }
@@ -291,6 +327,7 @@ struct DashboardStatCard: View {
 struct QuickActionsSection: View {
     var onAddFood: () -> Void = {}
     var onScanBarcode: () -> Void = {}
+    var onNewRecipe: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -304,7 +341,7 @@ struct QuickActionsSection: View {
             ], spacing: 12) {
                 QuickActionButton(title: "Add Food", icon: "plus.circle.fill", color: .green, action: onAddFood)
                 QuickActionButton(title: "Scan Barcode", icon: "barcode.viewfinder", color: .blue, action: onScanBarcode)
-                QuickActionButton(title: "New Recipe", icon: "book.fill", color: .orange, action: {})
+                QuickActionButton(title: "New Recipe", icon: "book.fill", color: .orange, action: onNewRecipe)
             }
         }
     }
@@ -422,40 +459,87 @@ private struct ExpiringSoonCard: View {
 /// Read-only sheet listing expiring foods sorted soonest-first. Designed
 /// for the "skim & decide" use case before opening Pantry to actually edit.
 private struct ExpiringFoodsSheet: View {
+    @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
-    let foods: [Food]
 
+    // US-472: inline edit / delete state so the user can act without
+    // switching to the Pantry tab.
+    @State private var editingFood: Food?
+    @State private var foodPendingDeletion: Food?
+
+    /// Read live from AppState (not a static snapshot) so used/deleted items
+    /// drop off the list immediately.
     private var sorted: [Food] {
-        foods.sorted {
-            ($0.daysUntilExpiry ?? .max) < ($1.daysUntilExpiry ?? .max)
-        }
+        appState.foods
+            .filter { ($0.daysUntilExpiry ?? .max) <= 7 }
+            .sorted { ($0.daysUntilExpiry ?? .max) < ($1.daysUntilExpiry ?? .max) }
     }
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    ForEach(sorted) { food in
-                        HStack(spacing: 12) {
-                            let category = FoodCategory(rawValue: food.category)
-                            Text(category?.icon ?? "🍽")
-                                .font(.title2)
+                    if sorted.isEmpty {
+                        ContentUnavailableView(
+                            "Nothing expiring",
+                            systemImage: "checkmark.seal",
+                            description: Text("No foods are within 7 days of expiring.")
+                        )
+                    } else {
+                        ForEach(sorted) { food in
+                            Button {
+                                editingFood = food
+                            } label: {
+                                row(for: food)
+                            }
+                            .buttonStyle(.plain)
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                Button {
+                                    Task { await markUsed(food) }
+                                } label: {
+                                    Label("Used", systemImage: "minus.circle")
+                                }
+                                .tint(.orange)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(food.name)
-                                    .font(.body)
-                                    .fontWeight(.medium)
-                                    .strikethrough(food.isExpired, color: .red)
-                                if let days = food.daysUntilExpiry {
-                                    ExpiryChip(days: days)
+                                Button {
+                                    Task { await addToGrocery(food) }
+                                } label: {
+                                    Label("Grocery", systemImage: "cart.fill.badge.plus")
+                                }
+                                .tint(.blue)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    foodPendingDeletion = food
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
                                 }
                             }
-                            Spacer()
+                            .contextMenu {
+                                Button {
+                                    editingFood = food
+                                } label: {
+                                    Label("Edit", systemImage: "pencil")
+                                }
+                                Button {
+                                    Task { await markUsed(food) }
+                                } label: {
+                                    Label("Mark 1 used", systemImage: "minus.circle")
+                                }
+                                Button {
+                                    Task { await addToGrocery(food) }
+                                } label: {
+                                    Label("Add to Grocery", systemImage: "cart.fill.badge.plus")
+                                }
+                                Divider()
+                                Button(role: .destructive) {
+                                    foodPendingDeletion = food
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                         }
                     }
-                } footer: {
-                    Text("To edit or delete a food, open the Pantry tab.")
-                        .font(.caption2)
                 }
             }
             .listStyle(.insetGrouped)
@@ -466,7 +550,74 @@ private struct ExpiringFoodsSheet: View {
                     Button("Done") { dismiss() }
                 }
             }
+            .sheet(item: $editingFood) { food in
+                FoodDetailView(food: food)
+                    .environmentObject(appState)
+            }
+            .alert(
+                "Remove from pantry?",
+                isPresented: Binding(
+                    get: { foodPendingDeletion != nil },
+                    set: { if !$0 { foodPendingDeletion = nil } }
+                ),
+                presenting: foodPendingDeletion
+            ) { food in
+                Button("Delete", role: .destructive) {
+                    Task { try? await appState.deleteFood(food.id) }
+                    foodPendingDeletion = nil
+                }
+                Button("Cancel", role: .cancel) { foodPendingDeletion = nil }
+            } message: { food in
+                Text("Delete \(food.name) from your pantry?")
+            }
         }
+    }
+
+    @ViewBuilder
+    private func row(for food: Food) -> some View {
+        HStack(spacing: 12) {
+            let category = FoodCategory(rawValue: food.category)
+            Text(category?.icon ?? "🍽")
+                .font(.title2)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(food.name)
+                    .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+                    .strikethrough(food.isExpired, color: .red)
+                if let days = food.daysUntilExpiry {
+                    ExpiryChip(days: days)
+                }
+            }
+            Spacer()
+            if let qty = food.quantity {
+                Text(qty.formatted())
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// US-472: decrement on-hand quantity by one (floored at zero), reusing
+    /// the same AppState update path as the Pantry (offline queue + realtime).
+    private func markUsed(_ food: Food) async {
+        let next = max(0, (food.quantity ?? 0) - 1)
+        try? await appState.updateFood(food.id, updates: FoodUpdate(quantity: next))
+    }
+
+    private func addToGrocery(_ food: Food) async {
+        let item = GroceryItem(
+            id: UUID().uuidString,
+            userId: "",
+            name: food.name,
+            category: food.category,
+            quantity: 1,
+            unit: food.unit ?? "count",
+            checked: false,
+            addedVia: "restock"
+        )
+        try? await appState.addGroceryItem(item)
     }
 }
 

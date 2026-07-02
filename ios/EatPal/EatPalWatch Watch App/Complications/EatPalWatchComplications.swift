@@ -128,7 +128,10 @@ struct GroceryProvider: TimelineProvider {
     private func buildEntry() -> GroceryEntry {
         let snapshot = SnapshotLoader.load()
         let total = snapshot.totalGroceryCount
-        let remaining = snapshot.grocery.count
+        // US-450: use the uncapped unchecked count (total − checked) so the
+        // complication doesn't under-report when the list exceeds the 50-row
+        // snapshot cap.
+        let remaining = max(0, total - snapshot.checkedGroceryCount)
         return GroceryEntry(date: Date(), remaining: remaining, total: total)
     }
 }

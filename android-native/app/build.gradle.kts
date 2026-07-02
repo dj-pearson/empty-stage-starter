@@ -145,6 +145,16 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    lint {
+        // Keep the text report focused on errors (warnings never block the
+        // build). The CI workflow cats the generated text report on failure so
+        // lint errors are diagnosable straight from the Actions log. NOTE: AGP's
+        // `textOutput = file("stdout")` writes a literal file named `stdout`
+        // rather than the console stream, so we surface the report from CI instead.
+        textReport = true
+        ignoreWarnings = true
+    }
 }
 
 dependencies {

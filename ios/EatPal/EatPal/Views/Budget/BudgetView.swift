@@ -64,7 +64,9 @@ struct BudgetView: View {
                 // Weekly forecast — primary number on the screen.
                 forecastSection
 
-                if weeklyTarget > 0 {
+                // US-433: a target vs. a mixed-currency total can't be compared
+                // meaningfully, so only show progress for a single-currency list.
+                if weeklyTarget > 0 && groceryCurrency != nil {
                     targetProgressSection
                 }
 
@@ -102,7 +104,10 @@ struct BudgetView: View {
                         Text("This week's grocery")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Text(BudgetService.format(groceryTotal, currency: groceryCurrency))
+                        // US-433: when the list mixes currencies a single sum is
+                        // meaningless — show a dash and rely on the warning below
+                        // rather than a locale-formatted number that lies.
+                        Text(groceryCurrency == nil ? "—" : BudgetService.format(groceryTotal, currency: groceryCurrency))
                             .font(.title)
                             .fontWeight(.bold)
                             .monospacedDigit()
@@ -115,7 +120,7 @@ struct BudgetView: View {
                 // US-372: read the forecast as one labeled stat.
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("This week's grocery")
-                .accessibilityValue(BudgetService.format(groceryTotal, currency: groceryCurrency))
+                .accessibilityValue(groceryCurrency == nil ? "Mixed currencies" : BudgetService.format(groceryTotal, currency: groceryCurrency))
 
                 if unpricedGroceryCount > 0 {
                     Label(
@@ -157,14 +162,19 @@ struct BudgetView: View {
                 HStack {
                     Text("Target")
                     Spacer()
-                    Text(BudgetService.format(weeklyTarget))
+                    // US-456: format the target in the same currency the rest
+                    // of the section uses (progressCopy), not the default.
+                    Text(BudgetService.format(weeklyTarget, currency: groceryCurrency))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                 }
 
+                // US-456: fill to 100% at the target (over-budget state is shown
+                // by progressTint + progressCopy), instead of only ~67% full
+                // when the user is exactly on budget.
                 ProgressView(
-                    value: min(groceryTotal, weeklyTarget * 1.5),
-                    total: weeklyTarget * 1.5
+                    value: min(groceryTotal, weeklyTarget),
+                    total: weeklyTarget
                 )
                 .tint(progressTint)
 
@@ -187,6 +197,12 @@ struct BudgetView: View {
                     .multilineTextAlignment(.trailing)
                     .frame(width: 100)
                     .monospacedDigit()
+                    // US-433: clamp to a sane non-negative range so a stray
+                    // entry can't produce negative/absurd progress math.
+                    .onChange(of: weeklyTarget) { _, newValue in
+                        let clamped = min(max(newValue, 0), 100_000)
+                        if clamped != newValue { weeklyTarget = clamped }
+                    }
                 Text(groceryCurrency ?? BudgetService.defaultCurrencyCode)
                     .foregroundStyle(.tertiary)
                     .font(.caption)

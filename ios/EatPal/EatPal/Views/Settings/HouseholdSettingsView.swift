@@ -4,6 +4,8 @@ import SwiftUI
 /// generate an invite code to add someone, accept a code from another
 /// device, and revoke pending invites or members.
 struct HouseholdSettingsView: View {
+    // US-432: refresh the shared data after joining so it appears live.
+    @EnvironmentObject var appState: AppState
     @State private var household: Household?
     @State private var members: [HouseholdMember] = []
     @State private var openInvites: [HouseholdInviteCode] = []
@@ -347,9 +349,12 @@ struct HouseholdSettingsView: View {
         do {
             _ = try await HouseholdService.acceptInvite(code: joinCode)
             HapticManager.success()
-            joinSuccess = "Joined! Reload the app to see the shared data."
             joinCode = ""
             await load()
+            // US-432: pull the shared household data into AppState so it shows
+            // up immediately instead of asking the user to restart the app.
+            await appState.loadAllData()
+            joinSuccess = "Joined! Shared data is now syncing."
         } catch {
             joinError = (error as? LocalizedError)?.errorDescription
                 ?? error.localizedDescription
@@ -445,5 +450,6 @@ private struct ShareSheet: UIViewControllerRepresentable {
 #Preview {
     NavigationStack {
         HouseholdSettingsView()
+            .environmentObject(AppState())
     }
 }

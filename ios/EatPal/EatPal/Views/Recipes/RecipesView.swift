@@ -10,7 +10,9 @@ struct RecipesView: View {
     // US-272: full filter state. Replaces the single-difficulty pill;
     // search bar binds to `filters.ingredientQuery` so the chip strip
     // can show + clear it like any other filter.
-    @State private var filters = RecipeFilters()
+    // US-463: persisted so the applied filter set survives navigating away
+    // from Recipes (e.g. add-to-plan round-trips) and app relaunch.
+    @AppStorage("recipes.filters") private var filters = RecipeFilters()
     @State private var showingFiltersSheet = false
 
     // US-269: bulk-select mode for recipes.
@@ -21,7 +23,26 @@ struct RecipesView: View {
     // US-270: cookable-recipes sheet entry.
     @State private var showingCookable = false
 
+    // US-469: recipe whose missing-ingredients sheet is open (from a tapped
+    // coverage badge).
+    @State private var coverageSheetRecipe: Recipe?
+
     private var swipeTip = SwipeRecipeTip()
+
+    /// US-469: per-recipe pantry coverage, computed once per render via the
+    /// same RecipeMatcher used by the Cookable filter. Recipes below the
+    /// matcher's display threshold (or with no ingredients) are absent — they
+    /// simply show no badge. Reactive to foods/grocery changes.
+    private var coverageByRecipe: [String: RecipeMatcher.Match] {
+        Dictionary(
+            RecipeMatcher.rank(
+                recipes: appState.recipes,
+                pantry: appState.foods,
+                groceryItems: appState.groceryItems
+            ).map { ($0.recipe.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
 
     /// Cuisines surfaced inline in the chip row. The full list lives in
     /// the filter sheet; this is just the top-of-mind set so people can
@@ -65,6 +86,14 @@ struct RecipesView: View {
                         ) {
                             HapticManager.selection()
                             filters.cookableOnly.toggle()
+                        }
+                        // US-468: quick filter to starred recipes.
+                        CategoryChip(
+                            title: "⭐️ Favorites",
+                            isSelected: filters.favoritesOnly
+                        ) {
+                            HapticManager.selection()
+                            filters.favoritesOnly.toggle()
                         }
                         ForEach(["easy", "medium", "hard"], id: \.self) { level in
                             CategoryChip(
@@ -167,7 +196,12 @@ struct RecipesView: View {
                                 .font(.title3)
                                 .accessibilityLabel(selectedIds.contains(recipe.id) ? "Selected" : "Not selected")
                         }
-                        RecipeRowView(recipe: recipe)
+                        RecipeRowView(
+                            recipe: recipe,
+                            coverage: coverageByRecipe[recipe.id]?.coverage,
+                            coverageTier: coverageByRecipe[recipe.id]?.tier,
+                            onCoverageTap: { coverageSheetRecipe = recipe }
+                        )
                     }
                         .contentShape(Rectangle())
                         .onTapGesture {
@@ -195,6 +229,20 @@ struct RecipesView: View {
                                 }
                                 .tint(.blue)
                                 .accessibilityLabel("Add \(recipe.name) ingredients to grocery list")
+
+                                // US-468: star / unstar via swipe.
+                                Button {
+                                    Task { await appState.setRecipeFavorite(recipe.id, !(recipe.isFavorite ?? false)) }
+                                } label: {
+                                    Label(
+                                        (recipe.isFavorite ?? false) ? "Unfavorite" : "Favorite",
+                                        systemImage: (recipe.isFavorite ?? false) ? "star.slash" : "star.fill"
+                                    )
+                                }
+                                .tint(.yellow)
+                                .accessibilityLabel((recipe.isFavorite ?? false)
+                                    ? "Remove \(recipe.name) from favorites"
+                                    : "Add \(recipe.name) to favorites")
                             }
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: !isSelecting) {
@@ -208,6 +256,17 @@ struct RecipesView: View {
                             }
                         }
                         .contextMenu {
+                            // US-468: star / unstar.
+                            Button {
+                                HapticManager.selection()
+                                Task { await appState.setRecipeFavorite(recipe.id, !(recipe.isFavorite ?? false)) }
+                            } label: {
+                                Label(
+                                    (recipe.isFavorite ?? false) ? "Remove Favorite" : "Add to Favorites",
+                                    systemImage: (recipe.isFavorite ?? false) ? "star.slash" : "star"
+                                )
+                            }
+
                             Button {
                                 HapticManager.success()
                                 Task { await addRecipeIngredientsToGrocery(recipe) }
@@ -239,6 +298,23 @@ struct RecipesView: View {
         .navigationTitle(isSelecting ? "\(selectedIds.count) selected" : "Recipes")
         .searchable(text: $searchText, prompt: "Search by name or ingredient…")
         .toolbar {
+            // US-467: sort control (parity with Pantry). Composes with the
+            // active filters so "easy Italian, fastest first" is possible.
+            ToolbarItem(placement: .topBarLeading) {
+                if !isSelecting {
+                    Menu {
+                        Picker("Sort", selection: $filters.sort) {
+                            ForEach(RecipeSortOption.allCases, id: \.self) { option in
+                                Text(option.rawValue).tag(option)
+                            }
+                        }
+                    } label: {
+                        Label("Sort: \(filters.sort.rawValue)", systemImage: "arrow.up.arrow.down")
+                    }
+                    .accessibilityLabel("Sort recipes")
+                }
+            }
+
             // US-269: select-mode entry + Done.
             ToolbarItem(placement: .primaryAction) {
                 if isSelecting {
@@ -322,6 +398,15 @@ struct RecipesView: View {
         .sheet(item: $selectedRecipe) { recipe in
             RecipeDetailView(recipe: recipe)
         }
+        // US-469: missing-ingredients sheet from a tapped coverage badge.
+        .sheet(item: $coverageSheetRecipe) { recipe in
+            MissingIngredientsSheet(
+                recipe: recipe,
+                shortfalls: ShortfallCalculator.compute(recipe: recipe, pantry: appState.foods),
+                onFinish: { _ in }
+            )
+            .environmentObject(appState)
+        }
         .sheet(isPresented: $showingCookable) {
             CookableRecipesSheet()
                 .environmentObject(appState)
@@ -344,6 +429,13 @@ struct RecipesView: View {
         .refreshable {
             await appState.loadAllData()
         }
+        // US-441: when the search/filter changes, drop any selection that's no
+        // longer visible so bulk actions can never touch filter-hidden recipes
+        // and the None/All toggle label stays truthful.
+        .onChange(of: filteredRecipes.map(\.id)) { _, visibleIds in
+            guard isSelecting else { return }
+            selectedIds.formIntersection(visibleIds)
+        }
     }
 
     // MARK: - US-269 bulk actions
@@ -353,18 +445,26 @@ struct RecipesView: View {
         isSelecting = false
     }
 
+    /// US-441: selection scoped to what's currently visible. Bulk ops act on
+    /// this, never on the raw `selectedIds`, so hidden recipes are never hit.
+    private var visibleSelectedIds: Set<String> {
+        selectedIds.intersection(filteredRecipes.map(\.id))
+    }
+
     private func bulkAddIngredientsToGrocery() async {
-        guard !selectedIds.isEmpty else { return }
+        let ids = visibleSelectedIds
+        guard !ids.isEmpty else { return }
         do {
-            try await appState.bulkAddRecipesToGrocery(selectedIds)
+            try await appState.bulkAddRecipesToGrocery(ids)
             exitSelectMode()
         } catch { }
     }
 
     private func bulkDelete() async {
-        guard !selectedIds.isEmpty else { return }
+        let ids = visibleSelectedIds
+        guard !ids.isEmpty else { return }
         do {
-            try await appState.bulkDeleteRecipes(selectedIds)
+            try await appState.bulkDeleteRecipes(ids)
             exitSelectMode()
         } catch { }
     }
@@ -442,6 +542,19 @@ struct RecipesView: View {
 struct RecipeRowView: View {
     @EnvironmentObject var appState: AppState
     let recipe: Recipe
+    // US-469: optional pantry-coverage badge. nil = no badge (low coverage
+    // or no ingredients). Defaults keep other call sites unchanged.
+    var coverage: Double? = nil
+    var coverageTier: RecipeMatcher.Tier? = nil
+    var onCoverageTap: (() -> Void)? = nil
+
+    private var coverageColor: Color {
+        switch coverageTier {
+        case .cookNow: return .green
+        case .almostThere: return .orange
+        default: return .secondary
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -451,9 +564,18 @@ struct RecipeRowView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(recipe.name)
-                        .font(.body)
-                        .fontWeight(.semibold)
+                    HStack(spacing: 4) {
+                        // US-468: favorite indicator.
+                        if recipe.isFavorite == true {
+                            Image(systemName: "star.fill")
+                                .font(.caption)
+                                .foregroundStyle(.yellow)
+                                .accessibilityLabel("Favorite")
+                        }
+                        Text(recipe.name)
+                            .font(.body)
+                            .fontWeight(.semibold)
+                    }
 
                     if let description = recipe.description, !description.isEmpty {
                         Text(description)
@@ -478,6 +600,24 @@ struct RecipeRowView: View {
             }
 
             HStack(spacing: 12) {
+                // US-469: at-a-glance "can I make this now?" badge. Tapping it
+                // opens the missing-ingredients sheet for one-tap restock.
+                if let coverage, let coverageTier {
+                    Button {
+                        onCoverageTap?()
+                    } label: {
+                        Label("\(Int((coverage * 100).rounded()))%", systemImage: "basket.fill")
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(coverageColor.opacity(0.15), in: Capsule())
+                            .foregroundStyle(coverageColor)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(coverageTier.displayName), you have \(Int((coverage * 100).rounded())) percent of ingredients")
+                    .accessibilityHint("Opens missing ingredients")
+                }
+
                 if let prepTime = recipe.prepTime {
                     Label(prepTime, systemImage: "timer")
                         .font(.caption2)
@@ -528,6 +668,8 @@ struct RecipeDetailView: View {
     @State private var showingEditRecipe = false
     // US-359: step-by-step cooking mode.
     @State private var showingCookMode = false
+    // US-474: contextual AI Coach entry point seeded with this recipe.
+    @State private var showingCoach = false
 
     // US-357: add-to-meal-plan flow. `pendingShortfallRecipe` carries the
     // just-planned recipe across the picker's dismissal so we can compute the
@@ -831,6 +973,26 @@ struct RecipeDetailView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                 }
+                // US-468: favorite toggle.
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        let isFav = currentRecipe.isFavorite ?? false
+                        Task { await appState.setRecipeFavorite(currentRecipe.id, !isFav) }
+                    } label: {
+                        Image(systemName: (currentRecipe.isFavorite ?? false) ? "star.fill" : "star")
+                            .foregroundStyle((currentRecipe.isFavorite ?? false) ? .yellow : .secondary)
+                    }
+                    .accessibilityLabel((currentRecipe.isFavorite ?? false) ? "Remove from favorites" : "Add to favorites")
+                }
+                // US-474: ask the AI Coach about this recipe (seeds the prompt).
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showingCoach = true
+                    } label: {
+                        Image(systemName: "bubble.left.and.text.bubble.right")
+                    }
+                    .accessibilityLabel("Ask the coach about this recipe")
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         showingEditRecipe = true
@@ -841,6 +1003,14 @@ struct RecipeDetailView: View {
             }
             .sheet(isPresented: $showingEditRecipe) {
                 EditRecipeView(recipe: currentRecipe)
+            }
+            .sheet(isPresented: $showingCoach) {
+                NavigationStack {
+                    AICoachView(
+                        initialPrompt: "Give me tips to help my child enjoy \"\(currentRecipe.name)\"."
+                    )
+                    .environmentObject(appState)
+                }
             }
             // US-359: step-by-step cooking mode.
             .fullScreenCover(isPresented: $showingCookMode) {
@@ -928,12 +1098,14 @@ private struct DetailShortfallContext: Identifiable {
 /// US-357: compact picker to drop a recipe onto the planner (date + meal slot
 /// + child). Inserts the plan entry and reports back via `onAdded` so the
 /// detail view can run the missing-ingredient shortfall check.
-private struct AddRecipeToPlanSheet: View {
+// US-418: made non-private so the "What can I make?" sheet can reuse the
+// real add-to-plan flow instead of a toast stub.
+struct AddRecipeToPlanSheet: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
 
     let recipe: Recipe
-    var onAdded: (Recipe) -> Void
+    var onAdded: (Recipe) -> Void = { _ in }
 
     @State private var date = Date()
     @State private var mealSlot: MealSlot = .dinner
@@ -1446,17 +1618,30 @@ struct AddRecipeView: View {
 
     private func createRecipe() async {
         isSubmitting = true
+        // US-413: always reset the submitting flag so a failed create doesn't
+        // leave the Create button stuck disabled.
+        defer { isSubmitting = false }
+
         let tagList = tags.isEmpty ? nil :
             tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
 
         let recipeId = UUID().uuidString
         var imageUrl: String? = remoteImageUrl
         if let image = recipeImage {
-            imageUrl = try? await ImageUploadService.upload(
-                image: image,
-                folder: .recipes,
-                id: recipeId
-            )
+            // US-413: surface upload failure instead of silently dropping the
+            // photo; fall back to any imported remote image and warn.
+            do {
+                imageUrl = try await ImageUploadService.upload(
+                    image: image,
+                    folder: .recipes,
+                    id: recipeId
+                )
+            } catch {
+                ToastManager.shared.warning(
+                    "Couldn't upload photo",
+                    message: "Saved the recipe without the new image."
+                )
+            }
         }
 
         let trimmedAdditional = additionalIngredients.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1481,8 +1666,19 @@ struct AddRecipeView: View {
             difficultyLevel: difficulty
         )
 
-        try? await appState.addRecipe(recipe)
-        dismiss()
+        // US-413: only dismiss on confirmed success; on failure surface a toast
+        // and keep the form open so the user doesn't lose their input.
+        do {
+            try await appState.addRecipe(recipe)
+            HapticManager.success()
+            dismiss()
+        } catch {
+            HapticManager.error()
+            ToastManager.shared.error(
+                "Couldn't create recipe",
+                message: "Please try again."
+            )
+        }
     }
 }
 

@@ -55,6 +55,13 @@ class EatPalMessagingService : FirebaseMessagingService() {
             .setAutoCancel(true)
             .build()
 
-        runCatching { NotificationManagerCompat.from(this).notify(id, notification) }
+        // Explicitly handle the SecurityException lint flags for [MissingPermission]
+        // (POST_NOTIFICATIONS, API 33+). runCatching isn't recognised by lint as
+        // handling it; a try/catch is — same pattern as LocalNotificationReceiver.
+        try {
+            NotificationManagerCompat.from(this).notify(id, notification)
+        } catch (_: SecurityException) {
+            // POST_NOTIFICATIONS denied — drop the push silently.
+        }
     }
 }

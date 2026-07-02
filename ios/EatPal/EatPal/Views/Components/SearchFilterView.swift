@@ -1,12 +1,53 @@
 import SwiftUI
 
 /// Sort options for food lists.
-enum FoodSortOption: String, CaseIterable {
+enum FoodSortOption: String, CaseIterable, Codable {
     case nameAsc = "Name (A–Z)"
     case nameDesc = "Name (Z–A)"
     case categoryAsc = "Category (A–Z)"
     case newestFirst = "Newest First"
     case oldestFirst = "Oldest First"
+}
+
+/// US-463: bundled, persistable Pantry advanced-filter state. Lives in
+/// `@AppStorage` (via JSON-backed `RawRepresentable`) so categories,
+/// excluded allergens, status toggles, and sort survive app relaunch
+/// instead of resetting to defaults every session. Quick chips
+/// (category/segment) and the search field stay transient by design.
+struct PantryFilters: Equatable, Codable {
+    var categories: Set<FoodCategory> = []
+    var allergens: Set<String> = []
+    var safeOnly: Bool = false
+    var tryBiteOnly: Bool = false
+    var sortOption: FoodSortOption = .nameAsc
+
+    var isActive: Bool {
+        !categories.isEmpty || !allergens.isEmpty || safeOnly || tryBiteOnly || sortOption != .nameAsc
+    }
+
+    var activeCount: Int {
+        var count = categories.count + allergens.count
+        if safeOnly { count += 1 }
+        if tryBiteOnly { count += 1 }
+        if sortOption != .nameAsc { count += 1 }
+        return count
+    }
+}
+
+extension PantryFilters: RawRepresentable {
+    init?(rawValue: String) {
+        guard let data = rawValue.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode(PantryFilters.self, from: data)
+        else { return nil }
+        self = decoded
+    }
+
+    var rawValue: String {
+        guard let data = try? JSONEncoder().encode(self),
+              let string = String(data: data, encoding: .utf8)
+        else { return "{}" }
+        return string
+    }
 }
 
 /// Advanced search & filter sheet for the pantry.

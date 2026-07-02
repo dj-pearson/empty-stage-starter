@@ -7937,6 +7937,7 @@ export type Database = {
           id: string
           image_url: string | null
           instructions: string | null
+          is_favorite: boolean
           kid_friendly_score: number | null
           last_made_date: string | null
           name: string
@@ -7968,6 +7969,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           instructions?: string | null
+          is_favorite?: boolean
           kid_friendly_score?: number | null
           last_made_date?: string | null
           name: string
@@ -7999,6 +8001,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           instructions?: string | null
+          is_favorite?: boolean
           kid_friendly_score?: number | null
           last_made_date?: string | null
           name?: string

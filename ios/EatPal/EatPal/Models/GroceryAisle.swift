@@ -60,6 +60,21 @@ enum GroceryAisle: String, CaseIterable, Codable {
     // MARK: Catch-all
     case other
 
+    // MARK: - Forward-compatible decoding
+
+    /// Decode unknown raw values (e.g. a new aisle added server-side after this
+    /// build shipped) to `.other` instead of throwing and dropping the whole
+    /// row. Required by the CLAUDE.md backward-compatibility rule. See US-437.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = GroceryAisle(rawValue: raw) ?? .other
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
     // MARK: - Display
 
     var displayName: String {

@@ -57,6 +57,12 @@ struct UnifiedScannerView: View {
     @State private var showingDiscardConfirm = false
     // US-392: torch toggle for dark aisles on the modern scanner path.
     @State private var torchOn = false
+    // US-420: camera authorization gate (nil = still checking). The modern
+    // DataScanner path assumed access was granted and showed a black screen
+    // when it wasn't.
+    @State private var cameraAuthorized: Bool?
+    // US-420: guard against onComplete firing twice before dismiss propagates.
+    @State private var hasCompleted = false
 
     init(
         initialMode: Mode = .barcode,
@@ -71,16 +77,83 @@ struct UnifiedScannerView: View {
 
     var body: some View {
         if #available(iOS 17.0, *), DataScannerViewController.isSupported {
-            modernScanner
+            // US-420: gate the modern path on camera authorization so a denied
+            // user gets a clear prompt instead of a black scanner.
+            Group {
+                switch cameraAuthorized {
+                case .some(true):
+                    modernScanner
+                case .some(false):
+                    cameraDeniedView
+                case .none:
+                    ProgressView()
+                        .controlSize(.large)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(.black)
+                }
+            }
+            .task { await resolveCameraPermission() }
         } else {
             // Fall back to the legacy AVFoundation barcode scanner so the
             // feature still works on older devices. Text-mode isn't available
             // on the fallback path — we force Barcode mode.
             BarcodeScannerView { barcode in
-                onComplete(.barcode(barcode))
-                dismiss()
+                complete(.barcode(barcode))
             }
         }
+    }
+
+    // MARK: - Camera permission (US-420)
+
+    private func resolveCameraPermission() async {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            cameraAuthorized = true
+        case .notDetermined:
+            cameraAuthorized = await AVCaptureDevice.requestAccess(for: .video)
+        case .denied, .restricted:
+            cameraAuthorized = false
+        @unknown default:
+            cameraAuthorized = false
+        }
+    }
+
+    private var cameraDeniedView: some View {
+        NavigationStack {
+            VStack(spacing: AppTheme.Spacing.lg) {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 44))
+                    .foregroundStyle(.secondary)
+                Text("Camera access needed")
+                    .font(.headline)
+                Text("Enable camera access in Settings to scan barcodes and lists.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(AppTheme.Spacing.xl)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+
+    /// US-420: single-shot completion so a fast double-recognition can't emit
+    /// two results / present two sheets before `dismiss()` lands.
+    private func complete(_ result: Result) {
+        guard !hasCompleted else { return }
+        hasCompleted = true
+        onComplete(result)
+        dismiss()
     }
 
     // MARK: - Modern scanner (iOS 17 / DataScannerViewController)
@@ -135,8 +208,7 @@ struct UnifiedScannerView: View {
                 if mode == .groceryList {
                     ToolbarItem(placement: .primaryAction) {
                         Button("Done") {
-                            onComplete(.text(collectedText))
-                            dismiss()
+                            complete(.text(collectedText))
                         }
                         .foregroundStyle(.white)
                         .disabled(collectedText.isEmpty)
@@ -263,8 +335,7 @@ struct UnifiedScannerView: View {
                   let payload = barcode.payloadStringValue,
                   !payload.isEmpty else { return }
             HapticManager.success()
-            onComplete(.barcode(payload))
-            dismiss()
+            complete(.barcode(payload))
         case .text(let text):
             // In list mode, tapping a line force-adds it (helps with low-confidence).
             guard mode == .groceryList else { return }

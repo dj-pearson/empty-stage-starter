@@ -4,6 +4,11 @@ import Foundation
 enum BarcodeService {
     private static let baseURL = "https://world.openfoodfacts.org/api/v2/product"
 
+    /// US-460: a transient server-side failure (rate limit / 5xx), distinct
+    /// from a genuine "product not found" (which returns nil). Lets the caller
+    /// offer a retry instead of telling the user the product doesn't exist.
+    struct TransientLookupError: Error { let statusCode: Int }
+
     struct ProductResult {
         let name: String
         let category: String
@@ -39,8 +44,22 @@ enum BarcodeService {
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            return nil
+        }
+        // US-460: distinguish a transient failure (429 rate limit / 5xx) from a
+        // genuine miss. Open Food Facts does issue 429s; treating those as
+        // "not found" silently degrades the scan. Throw so the caller can retry.
+        switch httpResponse.statusCode {
+        case 200:
+            break
+        case 429, 500...599:
+            SentryService.leaveBreadcrumb(
+                category: "barcode",
+                message: "Open Food Facts transient \(httpResponse.statusCode) for \(barcode)"
+            )
+            throw TransientLookupError(statusCode: httpResponse.statusCode)
+        default:
             return nil
         }
 

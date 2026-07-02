@@ -34,6 +34,17 @@ enum MealSlotAppEnum: String, AppEnum {
         case .snack: return [MealSlot.snack1.rawValue, MealSlot.snack2.rawValue]
         }
     }
+
+    /// US-445: natural-language label for spoken dialog (instead of the raw
+    /// enum value).
+    var displayName: String {
+        switch self {
+        case .breakfast: return "breakfast"
+        case .lunch: return "lunch"
+        case .dinner: return "dinner"
+        case .snack: return "snack"
+        }
+    }
 }
 
 enum MealResultAppEnum: String, AppEnum {
@@ -47,6 +58,15 @@ enum MealResultAppEnum: String, AppEnum {
         .tasted: "Tasted",
         .refused: "Refused"
     ]
+
+    /// US-445: past-tense label for spoken dialog (instead of the raw value).
+    var spokenLabel: String {
+        switch self {
+        case .ate: return "eaten"
+        case .tasted: return "tasted"
+        case .refused: return "refused"
+        }
+    }
 }
 
 // MARK: - Log meal result intent
@@ -71,6 +91,12 @@ struct LogMealResultIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        // US-445: guard for an active session so a Shortcut run while signed
+        // out gives clear guidance instead of resolving to an empty result.
+        guard (try? await SupabaseManager.client.auth.session) != nil else {
+            return .result(dialog: "Open EatPal and sign in first to log meals.")
+        }
+
         let todayString = DateFormatter.isoDate.string(from: Date())
 
         do {
@@ -85,7 +111,7 @@ struct LogMealResultIntent: AppIntent {
                     category: "intent",
                     message: "LogMealResultIntent: no entry for \(slot.rawValue)"
                 )
-                return .result(dialog: IntentDialog(stringLiteral: "You don't have \(slot.rawValue) planned today in EatPal."))
+                return .result(dialog: IntentDialog(stringLiteral: "You don't have \(slot.displayName) planned today in EatPal."))
             }
 
             let domainResult = mapResult(result)
@@ -104,7 +130,7 @@ struct LogMealResultIntent: AppIntent {
                 message: "LogMealResultIntent: \(matches.count) entry(ies) marked \(domainResult)"
             )
 
-            let dialogMessage = "Logged \(slot.rawValue) as \(result.rawValue) for \(matches.count) meal\(matches.count == 1 ? "" : "s") today."
+            let dialogMessage = "Logged \(slot.displayName) as \(result.spokenLabel) for \(matches.count) meal\(matches.count == 1 ? "" : "s") today."
             return .result(dialog: IntentDialog(stringLiteral: dialogMessage))
         } catch {
             SentryService.capture(error, extras: ["intent": "LogMealResult"])

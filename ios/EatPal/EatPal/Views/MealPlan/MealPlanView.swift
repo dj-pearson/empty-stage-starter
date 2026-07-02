@@ -65,6 +65,43 @@ struct MealPlanView: View {
         return appState.planEntriesForDate(selectedDate, kidId: kidId)
     }
 
+    // MARK: - Selected-day persistence (US-463)
+
+    /// Per-kid last-selected planner day (kidId -> ISO yyyy-MM-dd) so a
+    /// multi-day planning session survives tab switches and app relaunch
+    /// instead of snapping back to today.
+    @AppStorage("planner.selectedDateByKid") private var selectedDateByKidRaw = "{}"
+
+    private func selectedDateMap() -> [String: String] {
+        guard let data = selectedDateByKidRaw.data(using: .utf8),
+              let map = try? JSONDecoder().decode([String: String].self, from: data)
+        else { return [:] }
+        return map
+    }
+
+    /// Restore the stored day for `kidId`, but never land on a past day —
+    /// a stale date from a previous session would be more confusing than
+    /// today, so anything before today falls back to the current default.
+    private func restoreSelectedDate(for kidId: String?) {
+        guard let kidId,
+              let iso = selectedDateMap()[kidId],
+              let stored = DateFormatter.isoDate.date(from: iso) else { return }
+        let today = Calendar.current.startOfDay(for: Date())
+        if Calendar.current.startOfDay(for: stored) >= today {
+            selectedDate = stored
+        }
+    }
+
+    private func persistSelectedDate() {
+        guard let kidId = appState.activeKidId else { return }
+        var map = selectedDateMap()
+        map[kidId] = selectedDate.isoDateString
+        if let data = try? JSONEncoder().encode(map),
+           let string = String(data: data, encoding: .utf8) {
+            selectedDateByKidRaw = string
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
@@ -144,6 +181,14 @@ struct MealPlanView: View {
             .padding(.vertical)
         }
         .navigationTitle("Meal Plan")
+        // US-463: restore/persist the selected planner day per active kid.
+        .onAppear { restoreSelectedDate(for: appState.activeKidId) }
+        .onChange(of: appState.activeKidId) { _, newKidId in
+            restoreSelectedDate(for: newKidId)
+        }
+        .onChange(of: selectedDate) { _, _ in
+            persistSelectedDate()
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: 12) {
@@ -248,13 +293,25 @@ struct MealPlanView: View {
                             Task {
                                 guard let kidId = appState.activeKidId else { return }
                                 let targetStart = copyTargetDate.weekDates.first ?? copyTargetDate
-                                try? await MealPlanTemplateService.shared.copyWeekPlan(
-                                    from: weekStart,
-                                    to: targetStart,
-                                    kidId: kidId,
-                                    appState: appState
-                                )
-                                showingCopyWeek = false
+                                // US-415: surface success/failure and only close
+                                // the sheet on a confirmed copy.
+                                do {
+                                    try await MealPlanTemplateService.shared.copyWeekPlan(
+                                        from: weekStart,
+                                        to: targetStart,
+                                        kidId: kidId,
+                                        appState: appState
+                                    )
+                                    HapticManager.success()
+                                    ToastManager.shared.success("Week copied")
+                                    showingCopyWeek = false
+                                } catch {
+                                    HapticManager.error()
+                                    ToastManager.shared.error(
+                                        "Couldn't copy week",
+                                        message: "Please try again."
+                                    )
+                                }
                             }
                         }
                     }
@@ -282,11 +339,53 @@ struct MealPlanView: View {
             Button("Clear", role: .destructive) {
                 Task {
                     guard let kidId = appState.activeKidId else { return }
-                    try? await MealPlanTemplateService.shared.deleteWeekPlan(
-                        weekStart: weekStart,
-                        kidId: kidId,
-                        appState: appState
-                    )
+                    // US-415: surface success/failure instead of a silent try?
+                    // that left entries to reappear on next load with no notice.
+                    // Snapshot the whole week first so this bulk-destructive
+                    // action can be undone (parity with Clear Completed grocery
+                    // and the remove-from-plan undo above).
+                    let snapshot = (0..<7).flatMap { offset -> [PlanEntry] in
+                        let date = Calendar.current.date(
+                            byAdding: .day, value: offset, to: weekStart
+                        ) ?? weekStart
+                        return appState.planEntriesForDate(date, kidId: kidId)
+                    }
+                    do {
+                        try await MealPlanTemplateService.shared.deleteWeekPlan(
+                            weekStart: weekStart,
+                            kidId: kidId,
+                            appState: appState
+                        )
+                        HapticManager.success()
+                        if snapshot.isEmpty {
+                            ToastManager.shared.success("Week cleared")
+                        } else {
+                            ToastManager.shared.show(Toast(
+                                type: .success,
+                                title: "Week cleared",
+                                actionLabel: "Undo",
+                                retry: {
+                                    do {
+                                        for entry in snapshot {
+                                            try await appState.addPlanEntry(entry)
+                                        }
+                                        HapticManager.success()
+                                    } catch {
+                                        ToastManager.shared.error(
+                                            "Couldn't undo",
+                                            message: "Some meals may need to be re-added manually."
+                                        )
+                                    }
+                                }
+                            ))
+                        }
+                    } catch {
+                        HapticManager.error()
+                        ToastManager.shared.error(
+                            "Couldn't clear week",
+                            message: "Please try again."
+                        )
+                    }
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -410,6 +509,12 @@ struct DayChip: View {
     let isToday: Bool
     let action: () -> Void
 
+    // US-424: scale the chip with Dynamic Type so the day-of-week label and
+    // date number don't clip at larger accessibility text sizes (was a fixed
+    // 44x56 frame).
+    @ScaledMetric(relativeTo: .title3) private var chipWidth: CGFloat = 44
+    @ScaledMetric(relativeTo: .title3) private var chipHeight: CGFloat = 56
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 4) {
@@ -421,7 +526,7 @@ struct DayChip: View {
                     .font(.title3)
                     .fontWeight(isSelected ? .bold : .regular)
             }
-            .frame(width: 44, height: 56)
+            .frame(minWidth: chipWidth, minHeight: chipHeight)
             .background(
                 isSelected ? Color.green :
                     isToday ? Color.green.opacity(0.15) :
@@ -472,7 +577,11 @@ struct MealSlotCard: View {
                 Button(action: onAdd) {
                     Image(systemName: "plus.circle.fill")
                         .foregroundStyle(.green)
+                        // US-423: ensure a 44pt hit target for the primary add.
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel("Add to \(slot.displayName)")
             }
 
             // Entries
@@ -709,6 +818,28 @@ struct PlanEntryRow: View {
                 Label("Duplicate", systemImage: "doc.on.doc")
             }
 
+            // US-471: weekly recurrence on the source weekday (e.g. every
+            // Tuesday) for a bounded number of weeks.
+            Menu {
+                Button {
+                    Task { await repeatWeekly(weeks: 2) }
+                } label: {
+                    Label("For 2 weeks", systemImage: "repeat")
+                }
+                Button {
+                    Task { await repeatWeekly(weeks: 4) }
+                } label: {
+                    Label("For 4 weeks", systemImage: "repeat")
+                }
+                Button {
+                    Task { await repeatWeekly(weeks: 8) }
+                } label: {
+                    Label("For 8 weeks", systemImage: "repeat")
+                }
+            } label: {
+                Label("Repeat every \(DateFormatter.dayOfWeek.string(from: date))", systemImage: "repeat")
+            }
+
             Divider()
 
             Button(role: .destructive) {
@@ -719,7 +850,7 @@ struct PlanEntryRow: View {
                 if appState.wasRecentlyMarkedMade(entry.id) {
                     showingDeleteRestore = true
                 } else {
-                    Task { try? await appState.deletePlanEntry(entry.id) }
+                    removeEntry(restoreFirst: false, allowUndo: true)
                 }
             } label: {
                 Label("Remove from plan", systemImage: "trash")
@@ -732,13 +863,11 @@ struct PlanEntryRow: View {
             titleVisibility: .visible
         ) {
             Button("Restore ingredients & remove") {
-                Task {
-                    await appState.undoMealMade(entry.id)
-                    try? await appState.deletePlanEntry(entry.id)
-                }
+                // US-415: surface failures; no undo (pantry was re-credited).
+                removeEntry(restoreFirst: true, allowUndo: false)
             }
             Button("Just remove", role: .destructive) {
-                Task { try? await appState.deletePlanEntry(entry.id) }
+                removeEntry(restoreFirst: false, allowUndo: true)
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -788,6 +917,43 @@ struct PlanEntryRow: View {
     }
 
     // MARK: - Result logging (US-231)
+
+    /// US-415: remove an entry, surfacing failures (was a silent try?) and —
+    /// for the plain remove — offering an Undo that re-adds it. `restoreFirst`
+    /// covers the made-meal path that restores pantry stock before removing.
+    private func removeEntry(restoreFirst: Bool, allowUndo: Bool) {
+        let snapshot = entry
+        Task {
+            if restoreFirst { await appState.undoMealMade(snapshot.id) }
+            do {
+                try await appState.deletePlanEntry(snapshot.id)
+                HapticManager.success()
+                if allowUndo {
+                    ToastManager.shared.show(Toast(
+                        type: .success,
+                        title: "Removed from plan",
+                        actionLabel: "Undo",
+                        retry: {
+                            do { try await appState.addPlanEntry(snapshot) }
+                            catch {
+                                ToastManager.shared.error(
+                                    "Couldn't undo",
+                                    message: "Please re-add the meal manually."
+                                )
+                            }
+                        }
+                    ))
+                }
+            } catch {
+                HapticManager.error()
+                ToastManager.shared.error(
+                    "Couldn't remove meal",
+                    message: "Please try again.",
+                    retry: { removeEntry(restoreFirst: restoreFirst, allowUndo: allowUndo) }
+                )
+            }
+        }
+    }
 
     /// Persists the result, then surfaces the optional 1-5 feedback sheet.
     /// Pulled out so the confirmationDialog and contextMenu paths share
@@ -861,6 +1027,54 @@ struct PlanEntryRow: View {
         } else if failed > 0 {
             ToastManager.shared.error("Couldn't duplicate \(entryName)")
         }
+    }
+
+    /// US-471: copy this entry onto the same weekday for the next `weeks`
+    /// weeks (bounded 1...8). Same slot/kid as the source, so allergen +
+    /// audience rules are inherited. The whole batch is undoable via the
+    /// toast action, which deletes the just-inserted rows.
+    private func repeatWeekly(weeks: Int) async {
+        let n = max(1, min(weeks, 8))
+        let targets = (1...n).map { date.addingDays(7 * $0) }
+
+        var insertedIds: [String] = []
+        var failed = 0
+        for target in targets {
+            let copy = PlanEntry(
+                id: UUID().uuidString,
+                userId: entry.userId,
+                kidId: entry.kidId,
+                date: DateFormatter.isoDate.string(from: target),
+                mealSlot: entry.mealSlot,
+                foodId: entry.foodId,
+                recipeId: entry.recipeId
+            )
+            do {
+                try await appState.addPlanEntry(copy)
+                insertedIds.append(copy.id)
+            } catch {
+                failed += 1
+            }
+        }
+
+        HapticManager.success()
+        guard !insertedIds.isEmpty else {
+            if failed > 0 { ToastManager.shared.error("Couldn't repeat \(entryName)") }
+            return
+        }
+
+        let ids = insertedIds
+        let weekday = DateFormatter.dayOfWeek.string(from: date)
+        let suffix = failed > 0 ? " (\(failed) failed)" : ""
+        ToastManager.shared.show(Toast(
+            type: .success,
+            title: "Repeating \(entryName)",
+            message: "\(ids.count) \(weekday)\(ids.count == 1 ? "" : "s")\(suffix)",
+            actionLabel: "Undo",
+            retry: { @MainActor in
+                for id in ids { try? await appState.deletePlanEntry(id) }
+            }
+        ))
     }
 
     private func resultColor(_ result: MealResult) -> Color {

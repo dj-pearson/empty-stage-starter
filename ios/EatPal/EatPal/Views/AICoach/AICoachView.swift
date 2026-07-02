@@ -5,6 +5,13 @@ struct AICoachView: View {
     @StateObject private var coachService = AICoachService.shared
     @ObservedObject private var network = NetworkMonitor.shared
     @State private var messageText = ""
+    /// US-474: optional pre-seeded prompt from a contextual entry point
+    /// (e.g. "Ask the coach about this recipe"). Only fills the input — the
+    /// user still taps send, so nothing is sent without an explicit action.
+    var initialPrompt: String? = nil
+    @State private var didSeedPrompt = false
+    // US-422: confirm before wiping the conversation.
+    @State private var showingClearConfirm = false
     @FocusState private var isInputFocused: Bool
 
     private var activeKid: Kid? {
@@ -142,6 +149,9 @@ struct AICoachView: View {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.title2)
                         .foregroundStyle(messageText.trimmingCharacters(in: .whitespaces).isEmpty ? .gray : .green)
+                        // US-423: meet the 44pt minimum tap target.
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .disabled(messageText.trimmingCharacters(in: .whitespaces).isEmpty || coachService.isLoading)
                 .accessibilityLabel("Send message")
@@ -155,15 +165,42 @@ struct AICoachView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    coachService.clearChat()
+                    // US-422: only prompt when there's a real conversation to
+                    // lose; an empty/intro-only thread just resets quietly.
+                    if coachService.messages.contains(where: { $0.role == .user }) {
+                        showingClearConfirm = true
+                    } else {
+                        coachService.clearChat()
+                    }
                 } label: {
                     Image(systemName: "arrow.counterclockwise")
                 }
                 .accessibilityLabel("Reset conversation")
             }
         }
+        .confirmationDialog(
+            "Clear this conversation?",
+            isPresented: $showingClearConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Clear", role: .destructive) {
+                coachService.clearChat()
+                HapticManager.selection()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently removes your coaching chat history.")
+        }
         .onTapGesture {
             isInputFocused = false
+        }
+        .onAppear {
+            // US-474: seed the contextual prompt once, without auto-sending.
+            guard !didSeedPrompt, let prompt = initialPrompt, !prompt.isEmpty,
+                  messageText.isEmpty else { return }
+            didSeedPrompt = true
+            messageText = prompt
+            isInputFocused = true
         }
     }
 

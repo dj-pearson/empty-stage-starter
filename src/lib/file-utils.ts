@@ -375,7 +375,7 @@ export function downloadJSON(data: unknown, filename: string = 'data.json'): voi
  * Download CSV as file
  */
 export function downloadCSV(
-  data: Record<string, unknown>[],
+  data: Array<Record<string, unknown>>,
   filename: string = 'data.csv',
   headers?: string[]
 ): void {
@@ -556,12 +556,12 @@ export async function createThumbnail(
 /**
  * Batch upload files with progress
  */
-export async function batchUpload<T = unknown>(
+export async function batchUpload(
   files: File[],
-  uploadFn: (file: File) => Promise<T>,
+  uploadFn: (file: File) => Promise<unknown>,
   onProgress?: (progress: number, file: File, index: number) => void
-): Promise<T[]> {
-  const results: T[] = [];
+): Promise<unknown[]> {
+  const results: unknown[] = [];
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
@@ -626,7 +626,7 @@ export async function parseCSV(file: File): Promise<Record<string, string>[]> {
   if (lines.length === 0) return [];
 
   const headers = lines[0].split(',').map((h) => h.trim());
-  const data = [];
+  const data: Record<string, string>[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const values = lines[i].split(',').map((v) => v.trim());
