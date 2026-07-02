@@ -34,6 +34,7 @@ import {
   AlertTriangle,
   RefreshCw,
   Clock,
+  ImageIcon,
   FileText,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -74,6 +75,8 @@ export function BlogCMSManager() {
   const [webhookUrl, setWebhookUrl] = useState("");
   const [testingWebhook, setTestingWebhook] = useState(false);
   const [resendingWebhook, setResendingWebhook] = useState<string | null>(null);
+  const [generatingImage, setGeneratingImage] = useState<string | null>(null);
+  const [generateImageWithPost, setGenerateImageWithPost] = useState(true);
 
   // Title bank management
   const [titleBankInsights, setTitleBankInsights] = useState<Record<string, unknown> | null>(null);
@@ -317,6 +320,7 @@ export function BlogCMSManager() {
             keywords: keywords,
             targetAudience: "Parents of picky eaters and young children",
             useTitleBank: useTitleBank,
+            generateImage: generateImageWithPost,
           },
         }
       );
@@ -480,6 +484,38 @@ export function BlogCMSManager() {
       toast.error((error instanceof Error ? error.message : undefined) || "Failed to generate social posts");
     } finally {
       setGeneratingSocial(null);
+    }
+  };
+
+  const handleGenerateImage = async (postId: string) => {
+    setGeneratingImage(postId);
+    try {
+      const { data, error } = await invokeEdgeFunction("generate-image", {
+        body: {
+          source: "blog",
+          recordId: postId,
+          imageType: "featured",
+          size: "1536x1024",
+          autoApply: true,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      toast.success("Featured image generated and applied.");
+      await loadPosts();
+    } catch (error: unknown) {
+      logger.error("Error generating blog image:", error);
+      toast.error(
+        (error instanceof Error ? error.message : undefined) ||
+          "Failed to generate image"
+      );
+    } finally {
+      setGeneratingImage(null);
     }
   };
 
@@ -693,6 +729,24 @@ export function BlogCMSManager() {
                           </>
                         )}
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleGenerateImage(post.id)}
+                        disabled={generatingImage === post.id}
+                      >
+                        {generatingImage === post.id ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-1" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <ImageIcon className="h-4 w-4 mr-1" />
+                            Generate Image
+                          </>
+                        )}
+                      </Button>
                       {(post.status || "").toLowerCase() !== "published" ? (
                         <Button
                           size="sm"
@@ -784,6 +838,25 @@ export function BlogCMSManager() {
                     No titles in bank. Click "Title Bank" button to populate.
                   </div>
                 )}
+            </div>
+
+            <div className="p-4 bg-teal-50 border border-teal-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <Label
+                  htmlFor="generate-image"
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <ImageIcon className="h-4 w-4" />
+                  Generate a featured image (used for the page & social preview)
+                </Label>
+                <input
+                  id="generate-image"
+                  type="checkbox"
+                  checked={generateImageWithPost}
+                  onChange={(e) => setGenerateImageWithPost(e.target.checked)}
+                  className="w-4 h-4"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
