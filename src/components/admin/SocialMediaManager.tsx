@@ -38,6 +38,7 @@ import {
   XCircle,
   Settings,
   Sparkles,
+  ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -86,6 +87,7 @@ export function SocialMediaManager() {
     total_impressions: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [generatingImage, setGeneratingImage] = useState<string | null>(null);
   const [showPostDialog, setShowPostDialog] = useState(false);
   const [showAccountDialog, setShowAccountDialog] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>();
@@ -349,6 +351,35 @@ export function SocialMediaManager() {
     } catch (error: unknown) {
       logger.error("Error resending to webhook:", error);
       toast.error((error instanceof Error ? error.message : undefined) || "Failed to resend to webhook");
+    }
+  };
+
+  const handleGenerateImage = async (postId: string) => {
+    setGeneratingImage(postId);
+    try {
+      const { data, error } = await invokeEdgeFunction("generate-image", {
+        body: {
+          source: "social",
+          recordId: postId,
+          size: "1024x1024",
+          autoApply: true,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) {
+        toast.error(data.error);
+        return;
+      }
+      toast.success("Image generated and attached to post.");
+      loadPosts();
+    } catch (error: unknown) {
+      logger.error("Error generating social image:", error);
+      toast.error(
+        (error instanceof Error ? error.message : undefined) ||
+          "Failed to generate image"
+      );
+    } finally {
+      setGeneratingImage(null);
     }
   };
 
@@ -642,6 +673,19 @@ export function SocialMediaManager() {
                         </div>
                         <div className="flex items-center gap-2 ml-4">
                           {getStatusBadge(post.status)}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleGenerateImage(post.id)}
+                            disabled={generatingImage === post.id}
+                          >
+                            {generatingImage === post.id ? (
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary mr-1" />
+                            ) : (
+                              <ImageIcon className="h-3 w-3 mr-1" />
+                            )}
+                            Image
+                          </Button>
                           {post.status === "draft" && (
                             <Button size="sm" onClick={() => handlePublishPost(post.id)}>
                               <Send className="h-3 w-3 mr-1" />

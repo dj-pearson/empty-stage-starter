@@ -1,6 +1,10 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { AIServiceV2 } from "../_shared/ai-service-v2.ts";
+import {
+  buildPromptFromContext,
+  generateAndStoreImage,
+} from "../_shared/image-gen.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -79,6 +83,7 @@ export default async (req: Request) => {
       autoPublish = false,
       webhookUrl,
       useTitleBank = true,
+      generateImage = false,
     } = await req.json();
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -497,6 +502,42 @@ Format:
       postData = postResult;
       console.log("Blog post saved:", postData.id);
 
+      // ─── Optional: Generate & attach a featured/OG image ───────────
+      // Best-effort: a failure here must not block publishing.
+      if (generateImage) {
+        const openaiKey = Deno.env.get("OPENAI_GLOBAL_API");
+        if (!openaiKey) {
+          console.warn("generateImage requested but OPENAI_GLOBAL_API not set");
+        } else {
+          try {
+            const imgPrompt = buildPromptFromContext({
+              title: postData.title,
+              excerpt: postData.excerpt,
+              source: "blog",
+            });
+            const { imageUrl } = await generateAndStoreImage(supabase, {
+              prompt: imgPrompt,
+              source: "blog",
+              recordId: postData.id,
+              imageType: "featured",
+              size: "1536x1024",
+              openaiKey,
+              track: true,
+            });
+            // Use the same image for featured + OG (page metadata).
+            await supabase
+              .from("blog_posts")
+              .update({ featured_image_url: imageUrl, og_image_url: imageUrl })
+              .eq("id", postData.id);
+            postData.featured_image_url = imageUrl;
+            postData.og_image_url = imageUrl;
+            console.log("Generated blog image:", imageUrl);
+          } catch (imgErr) {
+            console.error("Blog image generation failed (non-fatal):", imgErr);
+          }
+        }
+      }
+
       // ─── Auto-Publish: Generate Social Content & Webhook ───────────
       if (autoPublish) {
         const blogUrl = `https://tryeatpal.com/blog/${slug}`;
@@ -597,6 +638,13 @@ STRICT OUTPUT: Return ONLY valid JSON, no markdown, no code fences:
               blog_url: blogUrl,
               blog_slug: slug,
               blog_excerpt: blogContent.excerpt || "",
+              featured_image_url: postData.featured_image_url || null,
+              og_image_url:
+                postData.og_image_url || postData.featured_image_url || null,
+              // images[] gives Pinterest/Instagram routers a ready array.
+              images: postData.featured_image_url
+                ? [postData.featured_image_url]
+                : [],
               social_title:
                 parsedSocial.title || blogContent.title,
               short_form:

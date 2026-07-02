@@ -24,6 +24,7 @@ interface BlogPostData {
   content: string;
   excerpt: string;
   featured_image_url: string | null;
+  og_image_url: string | null;
   published_at: string;
   reading_time_minutes: number | null;
   views: number;
@@ -67,6 +68,7 @@ const BlogPost = () => {
         content,
         excerpt,
         featured_image_url,
+        og_image_url,
         published_at,
         reading_time_minutes,
         views,
@@ -357,7 +359,7 @@ const BlogPost = () => {
         description={post.meta_description || post.excerpt || `Read ${post.title} on the EatPal blog - expert advice on picky eating and family nutrition.`}
         canonicalUrl={articleUrl}
         ogType="article"
-        ogImage={post.featured_image_url || "https://tryeatpal.com/Cover.webp"}
+        ogImage={post.og_image_url || post.featured_image_url || "https://tryeatpal.com/Cover.webp"}
         ogImageAlt={post.title}
         keywords={articleKeywords.join(", ")}
         aiPurpose={`This article from EatPal discusses ${category?.name || "picky eating and nutrition"}. ${post.excerpt || ""}`}

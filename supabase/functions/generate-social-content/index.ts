@@ -1,6 +1,10 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { AIServiceV2 } from "../_shared/ai-service-v2.ts";
+import {
+  buildPromptFromContext,
+  generateAndStoreImage,
+} from "../_shared/image-gen.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,6 +61,7 @@ export default async (req: Request) => {
       url,
       autoPublish = false,
       webhookUrl,
+      generateImage = false,
     } = await req.json();
 
     let topicToUse = topic || title;
@@ -237,6 +242,41 @@ STRICT OUTPUT: Return ONLY valid JSON (RFC 8259), no markdown, no code fences, n
           tag.substring(1)
         );
 
+        // ─── Optional: Generate a square social image ──────────────────
+        // Best-effort: a failure here must not block publishing.
+        let socialImageUrl: string | null = null;
+        if (generateImage) {
+          const openaiKey = Deno.env.get("OPENAI_GLOBAL_API");
+          if (!openaiKey) {
+            console.warn(
+              "generateImage requested but OPENAI_GLOBAL_API not set"
+            );
+          } else {
+            try {
+              const imgPrompt = buildPromptFromContext({
+                title: socialContent.title || topicToUse,
+                excerpt: excerpt,
+                source: "social",
+              });
+              const { imageUrl } = await generateAndStoreImage(supabase, {
+                prompt: imgPrompt,
+                source: "social",
+                imageType: "featured",
+                size: "1024x1024",
+                openaiKey,
+                track: true,
+              });
+              socialImageUrl = imageUrl;
+              console.log("Generated social image:", imageUrl);
+            } catch (imgErr) {
+              console.error(
+                "Social image generation failed (non-fatal):",
+                imgErr
+              );
+            }
+          }
+        }
+
         const { data: postData, error: postError } = await supabase
           .from("social_posts")
           .insert([
@@ -251,6 +291,7 @@ STRICT OUTPUT: Return ONLY valid JSON (RFC 8259), no markdown, no code fences, n
               published_at: new Date().toISOString(),
               link_url: linkUrl,
               hashtags,
+              image_urls: socialImageUrl ? [socialImageUrl] : null,
             },
           ])
           .select()
@@ -268,6 +309,7 @@ STRICT OUTPUT: Return ONLY valid JSON (RFC 8259), no markdown, no code fences, n
               short_form: socialContent.twitter || "",
               long_form: socialContent.facebook || "",
               url: linkUrl,
+              images: socialImageUrl ? [socialImageUrl] : [],
               hashtags:
                 hashtags.length > 0
                   ? hashtags
