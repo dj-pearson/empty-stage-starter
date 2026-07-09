@@ -135,6 +135,8 @@ export default async (req: Request): Promise<Response> => {
 
     return json({ mode: 'ingest', chunks: chunks.length, ids: inserted });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    // Log the detail server-side; never return raw exception text to callers.
+    console.error('agent-knowledge-ingest error:', err instanceof Error ? err.stack ?? err.message : err);
+    return json({ error: 'Internal error' }, 500);
   }
 };

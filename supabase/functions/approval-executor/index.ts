@@ -174,7 +174,10 @@ export default async (req: Request): Promise<Response> => {
       .eq('status', 'draft')
       .lt('expires_at', nowIso)
       .select('id');
-    if (error) return json({ error: error.message }, 500);
+    if (error) {
+      console.error('approval-executor sweep error:', error.message);
+      return json({ error: 'Internal error' }, 500);
+    }
     return json({ mode: 'sweep', expired: expired?.length ?? 0 });
   }
 
@@ -187,7 +190,10 @@ export default async (req: Request): Promise<Response> => {
     .select('id, agent_id, run_id, action_type, payload, status')
     .eq('id', approvalId)
     .maybeSingle();
-  if (loadErr) return json({ error: loadErr.message }, 500);
+  if (loadErr) {
+    console.error('approval-executor load error:', loadErr.message);
+    return json({ error: 'Internal error' }, 500);
+  }
   if (!approval) return json({ error: 'approval not found' }, 404);
 
   const guard = canExecute(approval.status);
@@ -222,6 +228,7 @@ export default async (req: Request): Promise<Response> => {
     return json({ approvalId, status: 'executed', result });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    console.error('approval-executor execution error:', err instanceof Error ? err.stack ?? message : err);
     const now = new Date();
     const { payload: failedPayload, attempts } = withExecFailure(payload, message);
     // Row stays 'approved' so it can be retried.
@@ -254,7 +261,9 @@ export default async (req: Request): Promise<Response> => {
         ),
       );
     }
-    return json({ approvalId, status: 'approved', error: message, attempts }, 502);
+    // Generic response; the detailed error is persisted to the audit log and
+    // (after the retry budget) an escalation for admin review.
+    return json({ approvalId, status: 'approved', error: 'execution failed', attempts }, 502);
   }
 };
 

@@ -199,8 +199,9 @@ export default async (req: Request): Promise<Response> => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return new Response(JSON.stringify({ error: message, summary }), {
+    // Log the detail server-side; never return raw exception text to callers.
+    console.error('agent-dispatcher error:', err instanceof Error ? err.stack ?? err.message : err);
+    return new Response(JSON.stringify({ error: 'Internal error', summary }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
