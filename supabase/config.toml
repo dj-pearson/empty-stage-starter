@@ -59,3 +59,7 @@ verify_jwt = false
 # Agentic OS — invoked by pg_cron; auth via internal X-Cron-Secret / service role
 [functions.agent-dispatcher]
 verify_jwt = false
+
+# Agentic OS — admin-only knowledge base ingest (JWT verified + admin role check)
+[functions.agent-knowledge-ingest]
+verify_jwt = true

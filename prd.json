@@ -118,8 +118,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migration 20260709000004 enables pgvector, creates agent_knowledge (vector(1536) embedding, hnsw cosine index, admin RLS, updated_at trigger) and RPC match_agent_knowledge(query_embedding, match_count, min_similarity) -> id/title/content/similarity. functions/_shared/chunk.ts pure chunker (~1000 chars, overlap, clamps to avoid infinite loop; 5 tests). functions/agent-knowledge-ingest/index.ts: admin JWT + user_roles check, {source,title,content} -> chunk -> OpenAI text-embedding-3-small -> insert; plus {backfill:true} mode to embed null-embedding rows. Seed migration 20260709000005 inserts 11 real EatPal FAQ entries from src/pages/FAQ.tsx (embeddings backfilled post-deploy). config.toml agent-knowledge-ingest verify_jwt=true. types.ts extended (table + RPC). Typecheck passes."
     },
     {
       "id": "US-482",
