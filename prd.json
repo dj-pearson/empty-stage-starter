@@ -16,8 +16,8 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migration 20260709000000_agent_core_schema.sql creates agent_definitions + agent_runs (admin-only RLS via user_roles pattern, additive-only, updated_at trigger, indexes on enabled/domain/agent/status/started_at). types.ts extended with both tables. Typecheck passes."
     },
     {
       "id": "US-476",
@@ -32,8 +32,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migration 20260709000001_agent_approval_escalation_audit.sql creates agent_approvals, agent_escalations, agent_audit_log. Audit log is append-only (REVOKE UPDATE,DELETE from authenticated+anon; admin SELECT/INSERT policies only). All three admin-only RLS. FK-aware indexes. types.ts extended. Typecheck passes."
     },
     {
       "id": "US-477",
