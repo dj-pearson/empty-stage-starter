@@ -27,6 +27,16 @@ import {
   type EscalationTier,
   type EscalationSeverity,
 } from './agent-approvals.ts';
+import { sumCost, isCostCapReached, exceedsBudget } from './budget.ts';
+
+/** Thrown mid-run when accumulated cost passes the agent's remaining budget. */
+export class BudgetExceededError extends Error {}
+
+function startOfUtcDay(now: Date): Date {
+  const d = new Date(now.getTime());
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -69,6 +79,7 @@ export interface AgentDefinition {
   id: string;
   name: string;
   model: string;
+  domain?: string | null;
   system_prompt?: string | null;
   autonomy_policy?: Record<string, unknown> | null;
   daily_cost_cap_usd?: number | null;
@@ -174,7 +185,7 @@ export interface RunAgentOptions {
 
 export interface RunAgentResult {
   runId: string;
-  status: 'succeeded' | 'failed';
+  status: 'succeeded' | 'failed' | 'skipped';
   output?: unknown;
   error?: string;
   tokensIn: number;
@@ -277,6 +288,85 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   const supabase = serviceClient();
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
 
+  const dailyCap =
+    typeof agentDefinition.daily_cost_cap_usd === 'number'
+      ? agentDefinition.daily_cost_cap_usd
+      : null;
+  const dayStartIso = startOfUtcDay(new Date()).toISOString();
+
+  // Today's spend for this agent, used for both the pre-run cap check and the
+  // mid-loop abort threshold.
+  const { data: priorRuns } = await supabase
+    .from('agent_runs')
+    .select('cost_usd')
+    .eq('agent_id', agentDefinition.id)
+    .gte('started_at', dayStartIso);
+  const todaySpendBeforeRun = sumCost(priorRuns ?? []);
+
+  // --- Pre-run guardrail: skip entirely if already at/over the daily cap ---
+  if (isCostCapReached(todaySpendBeforeRun, dailyCap)) {
+    const now = new Date();
+    const { data: skipRow } = await supabase
+      .from('agent_runs')
+      .insert({
+        agent_id: agentDefinition.id,
+        trigger,
+        status: 'skipped',
+        input,
+        output: { reason: 'cost_cap', todaySpendUsd: todaySpendBeforeRun, dailyCapUsd: dailyCap },
+        started_at: now.toISOString(),
+        finished_at: now.toISOString(),
+      })
+      .select('id')
+      .single();
+    const skipId = (skipRow?.id as string | undefined) ?? '';
+
+    // First cap trip of the day (the row above is included in the count, so the
+    // very first trip yields a count of 1) raises a tier-2 escalation once.
+    const { count: capTripsToday } = await supabase
+      .from('agent_runs')
+      .select('id', { count: 'exact', head: true })
+      .eq('agent_id', agentDefinition.id)
+      .eq('status', 'skipped')
+      .gte('started_at', dayStartIso)
+      .filter('output->>reason', 'eq', 'cost_cap');
+
+    if ((capTripsToday ?? 1) <= 1) {
+      const { data: escRow } = await supabase
+        .from('agent_escalations')
+        .insert(
+          buildEscalationRow(
+            {
+              runId: skipId || null,
+              agentId: agentDefinition.id,
+              tier: 2,
+              severity: 'medium',
+              domain: agentDefinition.domain ?? null,
+              title: `Daily cost cap reached: ${agentDefinition.name}`,
+              context: { todaySpendUsd: todaySpendBeforeRun, dailyCapUsd: dailyCap },
+            },
+            now,
+          ),
+        )
+        .select('id')
+        .single();
+      await supabase.from('agent_audit_log').insert(
+        buildAuditRow(
+          {
+            actor: agentDefinition.name,
+            action: 'agent.cost_cap_reached',
+            subjectType: 'agent_escalation',
+            subjectId: (escRow?.id as string | undefined) ?? null,
+            detail: { todaySpendUsd: todaySpendBeforeRun, dailyCapUsd: dailyCap },
+          },
+          now,
+        ),
+      );
+    }
+
+    return { runId: skipId, status: 'skipped', tokensIn: 0, tokensOut: 0, costUsd: 0 };
+  }
+
   // Create the run row up front so an early crash still leaves a trace.
   const { data: runRow, error: insertErr } = await supabase
     .from('agent_runs')
@@ -295,6 +385,12 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     usage.tokensIn += u.input_tokens ?? 0;
     usage.tokensOut += u.output_tokens ?? 0;
     usage.costUsd = computeCostUsd(agentDefinition.model, usage.tokensIn, usage.tokensOut);
+    // Mid-loop guardrail: abort gracefully once the day total passes the cap.
+    if (exceedsBudget(todaySpendBeforeRun, usage.costUsd, dailyCap)) {
+      throw new BudgetExceededError(
+        `daily budget exceeded: today $${todaySpendBeforeRun.toFixed(4)} + run $${usage.costUsd.toFixed(4)} > cap $${dailyCap}`,
+      );
+    }
   };
 
   const requireKey = (): string => {
