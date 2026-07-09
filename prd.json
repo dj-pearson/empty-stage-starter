@@ -67,8 +67,8 @@
         "Tests pass"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Pure cron logic in functions/_shared/cron.ts (parseCron/isValidCron/cronMatches/previousFireTime/isAgentDue, UTC, Vixie dow OR-semantics, 0/7 Sunday) and dispatch decision in functions/_shared/dispatch.ts (decideDispatch: disabled/global_pause/cost_cap/not_due/already_running precedence). agent-dispatcher/index.ts loads enabled agents, computes last-run/running/today-spend, invokes agent-<name>, records 'skipped' runs with reason (not_due suppressed), idempotent via running-run check. Migration 20260709000002 schedules pg_cron every 5min via a Vault-sourced SECURITY DEFINER wrapper (no hardcoded secrets), defensive if pg_cron/pg_net absent. config.toml agent-dispatcher verify_jwt=false + internal X-Cron-Secret/service-role gate. 24 unit tests pass (src/lib/agentSchedule.test.ts, agentDispatch.test.ts). Typecheck passes."
     },
     {
       "id": "US-479",

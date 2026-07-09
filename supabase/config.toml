@@ -55,3 +55,7 @@ verify_jwt = true
 
 [functions.stripe-webhook]
 verify_jwt = false
+
+# Agentic OS — invoked by pg_cron; auth via internal X-Cron-Secret / service role
+[functions.agent-dispatcher]
+verify_jwt = false
