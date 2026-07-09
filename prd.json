@@ -84,8 +84,8 @@
         "Tests pass"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "functions/_shared/agent-approvals.ts (pure): approvalOutcome/isAutoExecuteAllowed/buildApprovalRow/buildEscalationRow/buildAuditRow. agent-runtime now exposes requestApproval() (inserts agent_approvals draft, or 'approved' when autonomy_policy.autoExecute allowlists the actionType, audited agent.approval_drafted/agent.approval_auto_approved) and escalate() (inserts agent_escalations open row, audited agent.escalation_raised); both write agent_audit_log. No direct side-effect helpers exposed to handlers (documented invariant retained). 12 unit tests cover draft-default, auto-approve, and audit rows for both paths. Typecheck passes."
     },
     {
       "id": "US-480",

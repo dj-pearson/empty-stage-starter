@@ -18,6 +18,15 @@
 
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://esm.sh/zod@3.23.8';
+import {
+  buildApprovalRow,
+  buildEscalationRow,
+  buildAuditRow,
+  approvalOutcome,
+  type AutonomyPolicy,
+  type EscalationTier,
+  type EscalationSeverity,
+} from './agent-approvals.ts';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -97,6 +106,29 @@ export interface AgentContext {
   converse: (opts: ConverseOptions) => Promise<ClaudeResult>;
   /** Ask the model for JSON matching a Zod schema; retries once on invalid. */
   structured: <T>(opts: StructuredOptions<T>) => Promise<T>;
+  /**
+   * Draft-first outward action. Inserts an agent_approvals row (status 'draft'
+   * unless the agent's autonomy_policy allowlists the action type, in which
+   * case 'approved') and an agent_audit_log entry. Returns the approval id.
+   * The action is NEVER performed here — the approval-executor (US-482) does.
+   */
+  requestApproval: (opts: RequestApprovalOptions) => Promise<string>;
+  /** Raise a human escalation (agent_escalations) + audit entry. Returns id. */
+  escalate: (opts: EscalateOptions) => Promise<string>;
+}
+
+export interface RequestApprovalOptions {
+  actionType: string;
+  payload: unknown;
+  expiresInHours?: number;
+}
+
+export interface EscalateOptions {
+  tier: EscalationTier;
+  severity: EscalationSeverity;
+  domain?: string | null;
+  title?: string | null;
+  context?: unknown;
 }
 
 export interface ClaudeCallOptions {
@@ -368,6 +400,86 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     }
   };
 
+  const policy = (agentDefinition.autonomy_policy ?? null) as AutonomyPolicy | null;
+
+  const requestApproval = async (aOpts: RequestApprovalOptions): Promise<string> => {
+    const now = new Date();
+    const approvalRow = buildApprovalRow(
+      {
+        runId,
+        agentId: agentDefinition.id,
+        actionType: aOpts.actionType,
+        payload: aOpts.payload,
+        policy,
+        expiresInHours: aOpts.expiresInHours,
+      },
+      now,
+    );
+    const { data, error } = await supabase
+      .from('agent_approvals')
+      .insert(approvalRow)
+      .select('id')
+      .single();
+    if (error || !data) {
+      throw new Error(`requestApproval: failed to insert approval: ${error?.message ?? 'unknown'}`);
+    }
+    const approvalId = data.id as string;
+
+    const outcome = approvalOutcome(policy, aOpts.actionType);
+    await supabase.from('agent_audit_log').insert(
+      buildAuditRow(
+        {
+          actor: agentDefinition.name,
+          action: outcome.auditAction,
+          subjectType: 'agent_approval',
+          subjectId: approvalId,
+          detail: { actionType: aOpts.actionType, status: outcome.status, runId },
+        },
+        now,
+      ),
+    );
+    return approvalId;
+  };
+
+  const escalate = async (eOpts: EscalateOptions): Promise<string> => {
+    const now = new Date();
+    const escalationRow = buildEscalationRow(
+      {
+        runId,
+        agentId: agentDefinition.id,
+        tier: eOpts.tier,
+        severity: eOpts.severity,
+        domain: eOpts.domain,
+        title: eOpts.title,
+        context: eOpts.context,
+      },
+      now,
+    );
+    const { data, error } = await supabase
+      .from('agent_escalations')
+      .insert(escalationRow)
+      .select('id')
+      .single();
+    if (error || !data) {
+      throw new Error(`escalate: failed to insert escalation: ${error?.message ?? 'unknown'}`);
+    }
+    const escalationId = data.id as string;
+
+    await supabase.from('agent_audit_log').insert(
+      buildAuditRow(
+        {
+          actor: agentDefinition.name,
+          action: 'agent.escalation_raised',
+          subjectType: 'agent_escalation',
+          subjectId: escalationId,
+          detail: { tier: eOpts.tier, severity: eOpts.severity, domain: eOpts.domain ?? null, runId },
+        },
+        now,
+      ),
+    );
+    return escalationId;
+  };
+
   const ctx: AgentContext = {
     runId,
     agent: agentDefinition,
@@ -377,6 +489,8 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     claude,
     converse,
     structured,
+    requestApproval,
+    escalate,
   };
 
   // Execute the handler and finalize the run either way.
