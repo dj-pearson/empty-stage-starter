@@ -44,6 +44,9 @@ web-build/
 
 # claude-flow / swarm tooling state (machine-local, not source)
 .claude/settings.local.json
+.claude/proven-config.json
+.claude/.proven-config-version
+.claude/scheduled_tasks.lock
 .claude-flow/
 .swarm/
 ruvector.db
