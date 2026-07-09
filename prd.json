@@ -136,8 +136,8 @@
         "Tests pass"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "functions/_shared/approval-exec.ts pure guards (canExecute status machine, isExpired sweep, currentAttempts/shouldEscalateAfterFailure retry budget=3, withExecSuccess/withExecFailure payload merges; 11 tests). functions/approval-executor/index.ts: auth via service-role/X-Cron-Secret or admin JWT; execute mode dispatches by action_type -> send_email (Resend), social_webhook (SOCIAL_WEBHOOK_URL), github_issue (GitHub REST + GITHUB_TOKEN); idempotent (executed=no-op, only approved executes); writes result onto payload._exec + agent_audit_log; on failure keeps 'approved', records error, raises tier-2 escalation after 3 attempts; sweep mode marks drafts past expires_at 'expired'. Dispatcher invokes the sweep each cycle (summary.expiredApprovals). config.toml approval-executor verify_jwt=false. Typecheck + 62 tests pass."
     },
     {
       "id": "US-483",

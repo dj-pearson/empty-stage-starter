@@ -63,3 +63,7 @@ verify_jwt = false
 # Agentic OS — admin-only knowledge base ingest (JWT verified + admin role check)
 [functions.agent-knowledge-ingest]
 verify_jwt = true
+
+# Agentic OS — approval executor; internal service/cron or admin JWT (checked in fn)
+[functions.approval-executor]
+verify_jwt = false

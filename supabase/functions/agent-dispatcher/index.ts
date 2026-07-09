@@ -69,6 +69,7 @@ export default async (req: Request): Promise<Response> => {
     invoked: [] as string[],
     skipped: [] as Array<{ agent: string; reason: SkipReason }>,
     errors: [] as Array<{ agent: string; error: string }>,
+    expiredApprovals: 0,
   };
 
   try {
@@ -170,6 +171,27 @@ export default async (req: Request): Promise<Response> => {
         });
         summary.errors.push({ agent: agentName, error: message });
       }
+    }
+
+    // Expiry sweep: ask the approval-executor to expire stale drafts (US-482).
+    try {
+      const sweepResp = await fetch(`${supabaseUrl}/functions/v1/approval-executor`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${serviceKey}`,
+          ...(cronSecret ? { 'X-Cron-Secret': cronSecret } : {}),
+        },
+        body: JSON.stringify({ sweep: true }),
+      });
+      const sweepData = (await sweepResp.json().catch(() => ({}))) as { expired?: number };
+      if (sweepResp.ok) summary.expiredApprovals = sweepData.expired ?? 0;
+      else summary.errors.push({ agent: 'approval-executor:sweep', error: `status ${sweepResp.status}` });
+    } catch (err) {
+      summary.errors.push({
+        agent: 'approval-executor:sweep',
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
 
     return new Response(JSON.stringify(summary), {
