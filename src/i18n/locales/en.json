@@ -27,5 +27,48 @@
     "welcomeTitle": "Welcome to EatPal",
     "welcomeSubtitle": "Evidence-based meal planning for picky eaters and ARFID.",
     "getStarted": "Get started"
+  },
+  "agents": {
+    "title": "Agentic OS Command Center",
+    "subtitle": "Monitor and control every autonomous agent from one place.",
+    "tabs": {
+      "agents": "Agents",
+      "approvals": "Approvals",
+      "escalations": "Escalations",
+      "runs": "Runs",
+      "audit": "Audit"
+    },
+    "comingSoon": "Coming soon",
+    "registry": {
+      "empty": "No agents are registered yet.",
+      "loadError": "Failed to load agents",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "lastRun": "Last run",
+      "neverRun": "Never run",
+      "todaySpend": "Today's spend",
+      "noCap": "no cap",
+      "toggleOn": "Agent enabled",
+      "toggleOff": "Agent disabled",
+      "toggleError": "Failed to update agent"
+    },
+    "killSwitch": {
+      "activeTitle": "All agents are paused",
+      "activeBody": "The global kill switch is on. No agent will run until it is turned off.",
+      "idleTitle": "Global kill switch",
+      "idleBody": "Pause every agent immediately in an emergency.",
+      "pause": "Pause all agents",
+      "resume": "Resume agents",
+      "confirmTitle": "Pause all agents?",
+      "confirmBody": "This immediately stops every agent from running until you resume. In-flight runs finish; no new runs start.",
+      "confirmPause": "Pause everything",
+      "paused": "All agents paused",
+      "resumed": "Agents resumed",
+      "error": "Failed to update the kill switch"
+    },
+    "badges": {
+      "pendingApprovals": "{{count}} pending approvals",
+      "openEscalations": "{{count}} open escalations"
+    }
   }
 }
