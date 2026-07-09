@@ -155,7 +155,7 @@
       ],
       "priority": 9,
       "passes": false,
-      "notes": ""
+      "notes": "Code complete and type-clean (0 errors in the added files: AdminAgents page, AgentCommandCenter, AgentRegistry; App.tsx /admin/agents lazy route with ProtectedRoute requireAdmin; agents i18n namespace). Production build passes. NOT marked passing: per user direction, the project-wide tsc -b baseline (~1239 pre-existing errors in 146 unrelated files, surfaced after untracking stale .tsbuildinfo) must be fixed before the Typecheck-passes AC can be honestly met. Browser verification also pending live Supabase admin creds."
     },
     {
       "id": "US-484",
