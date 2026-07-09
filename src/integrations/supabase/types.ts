@@ -223,6 +223,104 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_definitions: {
+        Row: {
+          autonomy_policy: Json
+          created_at: string
+          daily_cost_cap_usd: number
+          description: string | null
+          domain: string | null
+          enabled: boolean
+          id: string
+          model: string
+          name: string
+          schedule_cron: string | null
+          system_prompt: string | null
+          updated_at: string
+        }
+        Insert: {
+          autonomy_policy?: Json
+          created_at?: string
+          daily_cost_cap_usd?: number
+          description?: string | null
+          domain?: string | null
+          enabled?: boolean
+          id?: string
+          model?: string
+          name: string
+          schedule_cron?: string | null
+          system_prompt?: string | null
+          updated_at?: string
+        }
+        Update: {
+          autonomy_policy?: Json
+          created_at?: string
+          daily_cost_cap_usd?: number
+          description?: string | null
+          domain?: string | null
+          enabled?: boolean
+          id?: string
+          model?: string
+          name?: string
+          schedule_cron?: string | null
+          system_prompt?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      agent_runs: {
+        Row: {
+          agent_id: string
+          cost_usd: number | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          input: Json | null
+          output: Json | null
+          started_at: string
+          status: string
+          tokens_in: number | null
+          tokens_out: number | null
+          trigger: string | null
+        }
+        Insert: {
+          agent_id: string
+          cost_usd?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          input?: Json | null
+          output?: Json | null
+          started_at?: string
+          status: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          trigger?: string | null
+        }
+        Update: {
+          agent_id?: string
+          cost_usd?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          input?: Json | null
+          output?: Json | null
+          started_at?: string
+          status?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          trigger?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_runs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_coach_conversations: {
         Row: {
           conversation_title: string | null

@@ -16,8 +16,8 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migration supabase/migrations/20260709000000_agent_core_schema.sql creates agent_definitions (name unique, model default claude-haiku-4-5, autonomy_policy jsonb, daily_cost_cap_usd default 5, enabled default false, updated_at trigger) and agent_runs (FK->agent_definitions ON DELETE CASCADE, status CHECK running/succeeded/failed/skipped, token/cost accounting). Additive only. Admin-only RLS via user_roles pattern (matches admin_alerts). Indexes include partial idx_agent_runs_running for dispatcher idempotency (US-478) and agent_id+started_at for daily-spend sums (US-480). types.ts hand-regenerated with both tables + agent_runs FK relationship; validates in isolation (tsc exit 0). Full tsc -b is pathologically slow (>28min) in this container but emits no errors."
     },
     {
       "id": "US-476",
