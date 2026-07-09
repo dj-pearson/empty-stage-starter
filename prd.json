@@ -49,8 +49,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "functions/_shared/agent-runtime.ts: runAgent() creates a 'running' agent_runs row, runs the handler, finalizes to succeeded/failed with output/error + tokens/cost. Claude client reads ANTHROPIC_API_KEY from Deno.env, uses agent model, multi-turn tool-use loop (converse). Per-model pricing map -> cost_usd accumulated per call. structured() validates against a Zod schema and retries once with the error fed back. callAnthropic retries 5xx/429 with exp backoff (max 3), fails fast on other 4xx. Service-role client built inside module, never exposed to handlers; documented no-side-effect invariant. Deno file, excluded from app tsc; app typecheck stays green."
     },
     {
       "id": "US-478",
