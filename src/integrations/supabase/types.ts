@@ -3638,6 +3638,39 @@ export type Database = {
           },
         ]
       }
+      content_calendar: {
+        Row: {
+          content_type: string
+          created_at: string
+          id: string
+          keywords: string[]
+          rationale: string | null
+          scheduled_for: string | null
+          status: string
+          topic: string
+        }
+        Insert: {
+          content_type: string
+          created_at?: string
+          id?: string
+          keywords?: string[]
+          rationale?: string | null
+          scheduled_for?: string | null
+          status?: string
+          topic: string
+        }
+        Update: {
+          content_type?: string
+          created_at?: string
+          id?: string
+          keywords?: string[]
+          rationale?: string | null
+          scheduled_for?: string | null
+          status?: string
+          topic?: string
+        }
+        Relationships: []
+      }
       delivery_order_history: {
         Row: {
           created_at: string | null

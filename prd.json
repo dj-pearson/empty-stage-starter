@@ -472,8 +472,8 @@
         "Typecheck passes"
       ],
       "priority": 28,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migration supabase/migrations/20260709000018_content_calendar.sql creates public.content_calendar (id, topic, content_type CHECK blog/social, keywords text[], rationale, status CHECK proposed/approved/generated/published/rejected default proposed, scheduled_for date, created_at) with admin-only RLS + status/type indexes (distinct from the pre-existing blog_content_calendar — no collision), and seeds the 'content-calendar' agent (domain marketing, haiku, weekly '0 14 * * 1', enabled FALSE) with the seed keyword list in autonomy_policy.content_keywords. functions/agent-content-calendar/index.ts (verify_jwt=false + internal secret; runAgent): reads seedKeywords from autonomy_policy, builds the existing-fingerprint set from content_calendar topics + blog_posts published titles, asks Claude (ctx.structuredOutput, ProposalsSchema) for 3 blog + 5 social topics, dedupeProposals against existing + intra-batch, inserts survivors as status 'proposed', and drafts a tier-2 approval per proposal via ctx.requestApproval({actionType:'content_topic'}) carrying calendar_id — so topics are approved BEFORE any generation spend (AC4). AC5: approval-executor EXTENDED with a content_topic executor (internal, no external side effect) that flips the content_calendar row to status 'approved' on approval. Pure logic functions/_shared/content-calendar-logic.ts (normalizeTopic, dedupeProposals existing+intra-batch+empty-drop, seedKeywords) with 4 Deno tests. config.toml adds [functions.agent-content-calendar] verify_jwt=false. types.ts regenerated with content_calendar. Verified: content assertions pass in Node; content function + modified approval-executor + shared modules tsc exit 0 (ambient Deno shims); types.ts strict tsc exit 0. (deno test runner not installable — esm.sh/deno.land 403 via proxy.)"
     },
     {
       "id": "US-503",

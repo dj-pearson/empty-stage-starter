@@ -63,6 +63,9 @@ verify_jwt = false
 # Weekly household digest agent: invoked by the dispatcher with the internal secret.
 [functions.agent-weekly-digest]
 verify_jwt = false
+# Content calendar agent: invoked by the dispatcher with the internal secret.
+[functions.agent-content-calendar]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 

@@ -131,10 +131,29 @@ async function executeGithubIssue(payload: Record<string, unknown>): Promise<unk
   return { issue_url: issue.html_url ?? null, issue_number: issue.number ?? null };
 }
 
+/**
+ * content_topic: an internal (no external side effect) action — approving a
+ * proposed content topic just advances its content_calendar row to 'approved'
+ * (US-502), gating any downstream generation spend.
+ */
+async function executeContentTopic(payload: Record<string, unknown>): Promise<unknown> {
+  const calendarId = payload.calendar_id;
+  if (typeof calendarId !== 'string') throw new Error('content_topic requires calendar_id');
+  const db = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    { auth: { persistSession: false } },
+  );
+  const { error } = await db.from('content_calendar').update({ status: 'approved' }).eq('id', calendarId);
+  if (error) throw new Error(`content_topic approve failed: ${error.message}`);
+  return { calendar_id: calendarId, status: 'approved' };
+}
+
 const EXECUTORS: Record<string, (p: Record<string, unknown>) => Promise<unknown>> = {
   send_email: executeSendEmail,
   social_webhook: executeSocialWebhook,
   github_issue: executeGithubIssue,
+  content_topic: executeContentTopic,
 };
 
 // ---------------------------------------------------------------------------
