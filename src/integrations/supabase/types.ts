@@ -310,6 +310,33 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_churn_scores: {
+        Row: {
+          household_id: string
+          id: string
+          reasons: Json
+          risk: string
+          score: number
+          scored_at: string
+        }
+        Insert: {
+          household_id: string
+          id?: string
+          reasons?: Json
+          risk: string
+          score: number
+          scored_at?: string
+        }
+        Update: {
+          household_id?: string
+          id?: string
+          reasons?: Json
+          risk?: string
+          score?: number
+          scored_at?: string
+        }
+        Relationships: []
+      }
       agent_definitions: {
         Row: {
           autonomy_policy: Json

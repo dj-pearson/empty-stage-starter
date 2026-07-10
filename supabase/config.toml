@@ -51,6 +51,9 @@ verify_jwt = false
 # Lifecycle event detector: invoked by the dispatcher with the internal secret.
 [functions.agent-event-detector]
 verify_jwt = false
+# Churn-risk scoring agent: invoked by the dispatcher with the internal secret.
+[functions.agent-churn-score]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 

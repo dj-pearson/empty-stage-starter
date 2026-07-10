@@ -388,8 +388,8 @@
         "Typecheck passes"
       ],
       "priority": 23,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migration supabase/migrations/20260709000013_churn_scores.sql creates public.agent_churn_scores (id, household_id, score int CHECK 0..100, risk CHECK low/medium/high, reasons jsonb, scored_at) with admin-only RLS + a (household_id, scored_at DESC) index for prev-week lookup, and seeds the 'churn-score' agent (domain growth, haiku, weekly '0 6 * * 1', enabled FALSE). functions/agent-churn-score/index.ts (verify_jwt=false + internal secret; runAgent): weekly, BOUNDED PAGE (25 households) — batched set-based fetch of plan_entries/grocery_lists/kids/household_members/prior churn scores, then user_subscriptions for member users; per household computeFeatures (days since last plan/grocery/any-activity, active-subscription flag, kids count, days since signup) fed to Claude haiku via ctx.structuredOutput (Zod {score, risk low|medium|high, reasons[1..5], suggested_action}); score clamped to 0..100 (clampScore) and inserted into agent_churn_scores. A household that crossedIntoHigh (new risk 'high' AND most-recent prior risk not 'high') gets a tier-2 growth escalation carrying reasons + suggested_action + features. Pure logic functions/_shared/churn-logic.ts (computeFeatures with maxIso any-activity + active-sub set, crossedIntoHigh, clampScore) with 4 Deno tests. config.toml adds [functions.agent-churn-score] verify_jwt=false. types.ts regenerated with agent_churn_scores. Verified: churn assertions pass in Node; churn function + runtime + logic tsc exit 0 (ambient Deno shims); types.ts strict tsc exit 0. (deno test runner not installable — esm.sh/deno.land 403 via proxy.)"
     },
     {
       "id": "US-498",
