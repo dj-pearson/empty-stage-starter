@@ -11,6 +11,10 @@ enable_signup = true
 # Edge Functions Configuration
 [functions.health-check]
 verify_jwt = false
+# Agentic OS dispatcher: no JWT (called by pg_cron); guarded by an internal
+# shared secret (AGENT_DISPATCH_SECRET) checked inside the function.
+[functions.agent-dispatcher]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 
