@@ -305,8 +305,8 @@
         "Tests pass"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migration supabase/migrations/20260709000009_escalation_rules.sql creates public.agent_escalation_rules (id, domain, condition jsonb, tier CHECK 2/3, severity CHECK low/medium/high/critical, enabled default true, description, created_at) with admin-only RLS + partial enabled index, and seeds 5 rules idempotently (WHERE NOT EXISTS by description): billing/refund->tier2 medium; legal or data-deletion->tier3 high; security keywords->tier3 critical; angry sentiment->tier2 medium; no-reply-after-24h SLA->tier2 medium. Pure engine functions/_shared/escalation-rules.ts: a small JSON condition DSL (clause operators field+equals/field+in/anyKeyword substring/olderThanHours/statusIn, AND within a clause; {any:[...]} for OR) evaluated by matchClause/matchCondition; evaluateEscalationRules(input, rules) returns all matched rules; topEscalation(matches) collapses to the highest tier-then-severity carrying all reasons+rule_ids. 9 Deno tests (escalation-rules_test.ts) cover each seeded rule, the no-match case, top-collapse, and disabled-rule skipping. Triage agent (US-490) REFACTORED (functions/agent-support-triage/index.ts): removed the hardcoded classificationToEscalation (support-triage-logic.ts + its test deleted); now loads enabled agent_escalation_rules once per run and, for each newly-triaged ticket, builds a RuleInput (category/sentiment/priority/status/lowercased text/ageHours) and files topEscalation via ctx.escalate (with an open-escalation idempotency guard, no storms). Added the dispatcher-run SLA sweep: owed tickets (status new/triaged/awaiting_reply) with updated_at older than 24h are re-evaluated through the same rules engine (the SLA rule matches on ageHours+statusIn) and escalated. types.ts regenerated with agent_escalation_rules. Verified: engine 13 assertions pass in Node; escalation-rules+runtime+refactored-triage tsc exit 0 (ambient Deno shims); types.ts strict tsc exit 0. (deno test runner not installable — esm.sh/deno.land 403 via proxy.)"
     },
     {
       "id": "US-493",

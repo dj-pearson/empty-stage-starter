@@ -355,6 +355,39 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_escalation_rules: {
+        Row: {
+          condition: Json
+          created_at: string
+          description: string | null
+          domain: string | null
+          enabled: boolean
+          id: string
+          severity: string
+          tier: number
+        }
+        Insert: {
+          condition?: Json
+          created_at?: string
+          description?: string | null
+          domain?: string | null
+          enabled?: boolean
+          id?: string
+          severity: string
+          tier: number
+        }
+        Update: {
+          condition?: Json
+          created_at?: string
+          description?: string | null
+          domain?: string | null
+          enabled?: boolean
+          id?: string
+          severity?: string
+          tier?: number
+        }
+        Relationships: []
+      }
       agent_escalations: {
         Row: {
           agent_id: string | null
