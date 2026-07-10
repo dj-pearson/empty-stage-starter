@@ -247,6 +247,20 @@ serve(async (req) => {
         subject_id: approval.id,
         detail: { action_type: approval.action_type, result },
       });
+
+      // Write a github_issue URL back to its source support ticket as an
+      // internal note (US-493), so the ticket thread links to the filed issue.
+      const ticketId = (payload as Record<string, unknown>).ticket_id;
+      const issueUrl = (result as { issue_url?: string } | null)?.issue_url;
+      if (approval.action_type === 'github_issue' && typeof ticketId === 'string' && issueUrl) {
+        await db.from('support_messages').insert({
+          ticket_id: ticketId,
+          sender: 'agent',
+          body: `Bug filed as a GitHub issue: ${issueUrl}`,
+          metadata: { internal: true, kind: 'bug_issue', issue_url: issueUrl },
+        });
+      }
+
       return json({ status: 'executed', result }, 200, cors);
     } catch (execErr) {
       const message = execErr instanceof Error ? execErr.message : String(execErr);
