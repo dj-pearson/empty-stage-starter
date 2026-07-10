@@ -288,8 +288,8 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "functions/agent-support-answer/index.ts (verify_jwt=false + internal secret; loads 'support-answer' def; runAgent for cost logging; own service-role client): processes a bounded batch (5) of support_tickets in status 'triaged' AND category 'how_to', oldest-first. Per ticket: idempotency guard skips tickets that already have an open agent_escalations row (context->>ticket_id match); embeds subject+body via OpenAI text-embedding-3-small; retrieves top MATCH_COUNT (4) via the match_agent_knowledge RPC (min_similarity 0 so weak retrieval is distinguishable in code); only when the top match >= MIN_SIMILARITY (0.75) does it ask Claude (sonnet) via ctx.structuredOutput (Zod {reply, confidence low|medium|high}) to answer ONLY from the retrieved entries. decideAnswer() then gates: draft only when retrieval is confident AND model confidence is not low, else escalate. Draft path -> ctx.requestApproval({actionType:'send_email'}) with payload {to, subject (replySubject adds Re: once), body, ticket_id, knowledge_used:[{id,title,similarity}] for the approval preview}, expires 72h, and moves the ticket to 'awaiting_reply'. Low-confidence/no-match path -> tier-2 customer_service escalation (no draft), ticket left 'triaged' (the open-escalation guard prevents re-processing/duplicate cost). Returns {processed, drafted, escalated, skipped}. Pure logic functions/_shared/support-answer-logic.ts (retrievalConfident, decideAnswer, knowledgeUsed rounded, replySubject, MIN_SIMILARITY) with 4 Deno tests. Migration supabase/migrations/20260709000008_support_answer_agent.sql seeds the 'support-answer' agent (sonnet, 5-min, enabled FALSE, ON CONFLICT DO NOTHING). config.toml adds [functions.agent-support-answer] verify_jwt=false. Verified: handler+runtime+logic tsc exit 0 (ambient Deno shims); all answer-logic assertions pass in Node (deno test runner not installable — esm.sh/deno.land 403 via proxy). No frontend/types.ts change."
     },
     {
       "id": "US-492",
