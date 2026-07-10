@@ -66,6 +66,9 @@ verify_jwt = false
 # Content calendar agent: invoked by the dispatcher with the internal secret.
 [functions.agent-content-calendar]
 verify_jwt = false
+# Blog writer agent: invoked by the dispatcher with the internal secret.
+[functions.agent-blog-writer]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 

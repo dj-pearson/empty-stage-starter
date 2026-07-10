@@ -149,11 +149,54 @@ async function executeContentTopic(payload: Record<string, unknown>): Promise<un
   return { calendar_id: calendarId, status: 'approved' };
 }
 
+/**
+ * blog_post: publish an approved blog draft (US-503) through the blog_posts
+ * table (the BlogPost page renders JSON-LD via ArticleSchema), and advance the
+ * source content_calendar row to 'published'.
+ */
+async function executeBlogPost(payload: Record<string, unknown>): Promise<unknown> {
+  const db = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    { auth: { persistSession: false } },
+  );
+  const title = payload.title as string | undefined;
+  const slug = payload.slug as string | undefined;
+  const body = payload.body as string | undefined;
+  if (!title || !slug || !body) throw new Error('blog_post requires title, slug, body');
+
+  const hero = (payload.hero_image_url as string) ?? null;
+  const { data: post, error } = await db
+    .from('blog_posts')
+    .insert({
+      title,
+      slug,
+      content: body,
+      excerpt: (payload.excerpt as string) ?? null,
+      meta_description: (payload.meta_description as string) ?? null,
+      featured_image_url: hero,
+      og_image_url: hero,
+      reading_time_minutes: (payload.reading_time_minutes as number) ?? null,
+      status: 'published',
+      published_at: new Date().toISOString(),
+      ai_generated: true,
+    })
+    .select('id, slug')
+    .single();
+  if (error || !post) throw new Error(`blog publish failed: ${error?.message ?? 'unknown'}`);
+
+  if (typeof payload.calendar_id === 'string') {
+    await db.from('content_calendar').update({ status: 'published' }).eq('id', payload.calendar_id);
+  }
+  return { post_id: post.id, slug: post.slug, url: `https://tryeatpal.com/blog/${post.slug}` };
+}
+
 const EXECUTORS: Record<string, (p: Record<string, unknown>) => Promise<unknown>> = {
   send_email: executeSendEmail,
   social_webhook: executeSocialWebhook,
   github_issue: executeGithubIssue,
   content_topic: executeContentTopic,
+  blog_post: executeBlogPost,
 };
 
 // ---------------------------------------------------------------------------
