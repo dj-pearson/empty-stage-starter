@@ -338,8 +338,8 @@
         "Tests pass"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Closes the support conversation loop. (1) approval-executor 'send_email' for support replies (payload.ticket_id present): embeds a [EPT-<ticket_id>] token in the subject at send time (withTicketToken, idempotent) so inbound replies match; after a successful send appends a support_messages row (sender 'agent', body = reply) and moves the ticket to 'awaiting_user' via a GUARDED transition (canTransition). (2) functions/support-reply-webhook/index.ts (verify_jwt=false; internal AGENT_DISPATCH_SECRET OR admin JWT): inbound mode parses the subject token, appends a 'user' message, and sets status back to 'new' so triage re-runs (reopens awaiting_user/resolved tickets); mode 'admin_reply' (admin) records a 'sender:admin' message, emails the user via Resend with the ticket token, and sets 'awaiting_user'; mode 'resolve' (admin) sets status 'resolved' + resolved_at (+ optional internal resolution note). All status changes go through the canTransition guard (illegal transitions are no-ops, message still recorded). (3) Pure lifecycle logic functions/_shared/support-status-logic.ts: canTransition (explicit allowed-transition map incl. reopen resolved->new; no-op allowed), withTicketToken/parseTicketToken ([EPT-<uuid>], case-insensitive) with 6 Deno tests covering legal/illegal/no-op transitions and token round-trip. config.toml adds [functions.support-reply-webhook] verify_jwt=false. No schema change (reuses existing support_tickets.resolved_at + support_messages). Verified: support-status assertions pass in Node; support-reply-webhook + modified approval-executor + shared modules tsc exit 0 (ambient Deno shims). (deno test runner not installable — esm.sh/deno.land 403 via proxy.)"
     },
     {
       "id": "US-495",

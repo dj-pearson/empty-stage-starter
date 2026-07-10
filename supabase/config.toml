@@ -39,6 +39,9 @@ verify_jwt = false
 # Bug-reporter agent: invoked by the dispatcher with the internal secret.
 [functions.agent-bug-reporter]
 verify_jwt = false
+# Support reply intake: inbound (internal secret) or admin reply/resolve (admin JWT).
+[functions.support-reply-webhook]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 

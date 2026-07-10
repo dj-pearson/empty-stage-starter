@@ -31,6 +31,7 @@ import { authenticateRequest } from '../_shared/auth.ts';
 import { isAdmin } from '../_shared/admin.ts';
 import { validateExternalUrl, fetchWithTimeout } from '../_shared/url-validator.ts';
 import { buildEscalation } from '../_shared/agent-approval-logic.ts';
+import { withTicketToken, canTransition } from '../_shared/support-status-logic.ts';
 import {
   decideExecution,
   payloadWithSuccess,
@@ -57,10 +58,15 @@ async function executeSendEmail(payload: Record<string, unknown>): Promise<unkno
   if (!apiKey) throw new Error('RESEND_API_KEY is not configured');
 
   const to = payload.to;
-  const subject = payload.subject;
+  let subject = payload.subject as string | undefined;
   const html = (payload.html ?? payload.body) as string | undefined;
   if (!to || !subject || !html) {
     throw new Error('send_email payload requires to, subject, and html/body');
+  }
+
+  // Support replies embed a subject token so inbound replies match the ticket.
+  if (typeof payload.ticket_id === 'string') {
+    subject = withTicketToken(subject, payload.ticket_id);
   }
 
   const res = await fetch('https://api.resend.com/emails', {
@@ -248,9 +254,10 @@ serve(async (req) => {
         detail: { action_type: approval.action_type, result },
       });
 
+      const ticketId = (payload as Record<string, unknown>).ticket_id;
+
       // Write a github_issue URL back to its source support ticket as an
       // internal note (US-493), so the ticket thread links to the filed issue.
-      const ticketId = (payload as Record<string, unknown>).ticket_id;
       const issueUrl = (result as { issue_url?: string } | null)?.issue_url;
       if (approval.action_type === 'github_issue' && typeof ticketId === 'string' && issueUrl) {
         await db.from('support_messages').insert({
@@ -259,6 +266,27 @@ serve(async (req) => {
           body: `Bug filed as a GitHub issue: ${issueUrl}`,
           metadata: { internal: true, kind: 'bug_issue', issue_url: issueUrl },
         });
+      }
+
+      // Support reply sent (US-494): append the agent message to the thread and
+      // move the ticket to 'awaiting_user' (guarded transition).
+      if (approval.action_type === 'send_email' && typeof ticketId === 'string') {
+        const replyBody = ((payload as Record<string, unknown>).body ??
+          (payload as Record<string, unknown>).html) as string | undefined;
+        await db.from('support_messages').insert({
+          ticket_id: ticketId,
+          sender: 'agent',
+          body: replyBody ?? '(reply sent)',
+          metadata: { kind: 'reply', approval_id: approval.id },
+        });
+        const { data: t } = await db
+          .from('support_tickets')
+          .select('status')
+          .eq('id', ticketId)
+          .maybeSingle();
+        if (t && canTransition(t.status, 'awaiting_user')) {
+          await db.from('support_tickets').update({ status: 'awaiting_user' }).eq('id', ticketId);
+        }
       }
 
       return json({ status: 'executed', result }, 200, cors);
