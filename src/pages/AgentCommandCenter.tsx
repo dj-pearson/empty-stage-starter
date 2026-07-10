@@ -24,6 +24,8 @@ import { AgentRegistryTab } from '@/components/admin/agents/AgentRegistryTab';
 import { ApprovalsTab } from '@/components/admin/agents/ApprovalsTab';
 import { EscalationsTab } from '@/components/admin/agents/EscalationsTab';
 import { RunsTab } from '@/components/admin/agents/RunsTab';
+import { AuditTab } from '@/components/admin/agents/AuditTab';
+import { logAgentAudit } from '@/lib/agentAudit';
 
 const TAB_KEYS = ['registry', 'approvals', 'escalations', 'runs', 'audit'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
@@ -104,6 +106,14 @@ export default function AgentCommandCenter() {
       return;
     }
     setGlobalPause(next);
+    const { data: auth } = await supabase.auth.getUser();
+    if (auth.user) {
+      void logAgentAudit({
+        actor: auth.user.id,
+        action: next ? 'global_pause_on' : 'global_pause_off',
+        subjectType: 'agent_system_settings',
+      });
+    }
     toast.success(next ? t('agents.killSwitch.pausedToast') : t('agents.killSwitch.resumedToast'));
   }
 
@@ -197,11 +207,9 @@ export default function AgentCommandCenter() {
         <TabsContent value="runs">
           <RunsTab />
         </TabsContent>
-        {(['audit'] as const).map((key) => (
-          <TabsContent key={key} value={key}>
-            <p className="text-muted-foreground py-12 text-center">{t('agents.comingSoon')}</p>
-          </TabsContent>
-        ))}
+        <TabsContent value="audit">
+          <AuditTab />
+        </TabsContent>
       </Tabs>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>

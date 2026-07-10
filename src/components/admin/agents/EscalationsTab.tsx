@@ -29,6 +29,7 @@ import {
   distinctDomains,
   type EscalationLike,
 } from '@/lib/escalationQueue';
+import { logAgentAudit } from '@/lib/agentAudit';
 
 interface EscalationRow extends EscalationLike {
   agent_id: string | null;
@@ -136,6 +137,14 @@ export function EscalationsTab({ onChange }: EscalationsTabProps) {
         .update({ status: 'acknowledged', assigned_to: auth.user?.id ?? null })
         .eq('id', row.id);
       if (error) throw error;
+      if (auth.user) {
+        void logAgentAudit({
+          actor: auth.user.id,
+          action: 'escalation_acknowledged',
+          subjectType: 'agent_escalation',
+          subjectId: row.id,
+        });
+      }
       reconcile(row.id, 'acknowledged');
       toast.success(t('agents.escalations.acknowledgedToast'));
     } catch (err) {
@@ -165,6 +174,16 @@ export function EscalationsTab({ onChange }: EscalationsTabProps) {
         })
         .eq('id', row.id);
       if (error) throw error;
+      const { data: auth } = await supabase.auth.getUser();
+      if (auth.user) {
+        void logAgentAudit({
+          actor: auth.user.id,
+          action: 'escalation_resolved',
+          subjectType: 'agent_escalation',
+          subjectId: row.id,
+          detail: { note },
+        });
+      }
       reconcile(row.id, 'resolved');
       toast.success(t('agents.escalations.resolvedToast'));
       setResolving(null);

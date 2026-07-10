@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { logAgentAudit } from '@/lib/agentAudit';
 import type { Database } from '@/integrations/supabase/types';
 
 type AgentDefinition = Database['public']['Tables']['agent_definitions']['Row'];
@@ -115,6 +116,16 @@ export function AgentRegistryTab() {
       );
       toast.error(t('agents.registry.toggleError', { name: card.agent.name }));
       return;
+    }
+    const { data: auth } = await supabase.auth.getUser();
+    if (auth.user) {
+      void logAgentAudit({
+        actor: auth.user.id,
+        action: next ? 'agent_enabled' : 'agent_disabled',
+        subjectType: 'agent_definition',
+        subjectId: card.agent.id,
+        detail: { name: card.agent.name },
+      });
     }
     toast.success(
       next

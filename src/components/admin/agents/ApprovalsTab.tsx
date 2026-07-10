@@ -26,6 +26,7 @@ import {
   type ApprovalLike,
 } from '@/lib/approvalQueue';
 import type { Json } from '@/integrations/supabase/types';
+import { logAgentAudit } from '@/lib/agentAudit';
 
 interface ApprovalRow {
   id: string;
@@ -152,6 +153,15 @@ export function ApprovalsTab({ onChange }: ApprovalsTabProps) {
         })
         .eq('id', row.id);
       if (error) throw error;
+      if (auth.user) {
+        void logAgentAudit({
+          actor: auth.user.id,
+          action: 'approval_approved',
+          subjectType: 'agent_approval',
+          subjectId: row.id,
+          detail: { action_type: row.action_type },
+        });
+      }
       // Fire-and-forward to the executor; failure there keeps status 'approved'
       // for retry and does not put the row back in the draft queue.
       await invokeEdgeFunction('approval-executor', { body: { approval_id: row.id } });
@@ -186,6 +196,15 @@ export function ApprovalsTab({ onChange }: ApprovalsTabProps) {
         })
         .eq('id', row.id);
       if (error) throw error;
+      if (auth.user) {
+        void logAgentAudit({
+          actor: auth.user.id,
+          action: 'approval_rejected',
+          subjectType: 'agent_approval',
+          subjectId: row.id,
+          detail: { action_type: row.action_type, reason },
+        });
+      }
       removeRow(row.id);
       toast.success(t('agents.approvals.rejectedToast'));
       setRejecting(null);

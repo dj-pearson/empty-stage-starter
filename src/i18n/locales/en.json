@@ -194,6 +194,37 @@
         "error": "Error",
         "none": "—"
       }
+    },
+    "audit": {
+      "empty": "No audit entries match these filters.",
+      "loadError": "Could not load the audit log. Please try again.",
+      "human": "Human",
+      "agent": "Agent",
+      "export": "Export CSV",
+      "exportEmpty": "Nothing to export.",
+      "filters": {
+        "actor": "Actor",
+        "action": "Action",
+        "subjectType": "Subject type",
+        "from": "From",
+        "to": "To",
+        "actorPlaceholder": "Filter by actor",
+        "actionPlaceholder": "Filter by action",
+        "allSubjects": "All subjects",
+        "clear": "Clear filters"
+      },
+      "table": {
+        "time": "Time",
+        "actor": "Actor",
+        "action": "Action",
+        "subject": "Subject",
+        "detail": "Detail"
+      },
+      "pagination": {
+        "prev": "Previous",
+        "next": "Next",
+        "page": "Page {{page}} of {{total}}"
+      }
     }
   }
 }
