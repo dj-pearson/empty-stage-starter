@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, ShieldCheck } from 'lucide-react';
 import { AgentRegistryTab } from '@/components/admin/agents/AgentRegistryTab';
+import { ApprovalsTab } from '@/components/admin/agents/ApprovalsTab';
 
 const TAB_KEYS = ['registry', 'approvals', 'escalations', 'runs', 'audit'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
@@ -47,29 +48,31 @@ export default function AgentCommandCenter() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [updatingPause, setUpdatingPause] = useState(false);
 
+  const refreshCounts = useCallback(async () => {
+    const [approvals, escalations] = await Promise.all([
+      supabase.from('agent_approvals').select('id', { count: 'exact', head: true }).eq('status', 'draft'),
+      supabase.from('agent_escalations').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+    ]);
+    setPendingApprovals(approvals.count ?? 0);
+    setOpenEscalations(escalations.count ?? 0);
+  }, []);
+
   useEffect(() => {
     let active = true;
     (async () => {
-      const [settings, approvals, escalations] = await Promise.all([
-        supabase.from('agent_system_settings').select('global_pause').limit(1).maybeSingle(),
-        supabase
-          .from('agent_approvals')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'draft'),
-        supabase
-          .from('agent_escalations')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'open'),
-      ]);
+      const settings = await supabase
+        .from('agent_system_settings')
+        .select('global_pause')
+        .limit(1)
+        .maybeSingle();
       if (!active) return;
       setGlobalPause(settings.data?.global_pause ?? false);
-      setPendingApprovals(approvals.count ?? 0);
-      setOpenEscalations(escalations.count ?? 0);
+      await refreshCounts();
     })();
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshCounts]);
 
   function selectTab(tab: TabKey) {
     setSearchParams((prev) => {
@@ -169,7 +172,10 @@ export default function AgentCommandCenter() {
         <TabsContent value="registry">
           <AgentRegistryTab />
         </TabsContent>
-        {(['approvals', 'escalations', 'runs', 'audit'] as const).map((key) => (
+        <TabsContent value="approvals">
+          <ApprovalsTab onChange={refreshCounts} />
+        </TabsContent>
+        {(['escalations', 'runs', 'audit'] as const).map((key) => (
           <TabsContent key={key} value={key}>
             <p className="text-muted-foreground py-12 text-center">{t('agents.comingSoon')}</p>
           </TabsContent>

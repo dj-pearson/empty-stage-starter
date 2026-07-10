@@ -81,6 +81,37 @@
       "succeeded": "Succeeded",
       "failed": "Failed",
       "skipped": "Skipped"
+    },
+    "approvals": {
+      "empty": "No drafts waiting for review.",
+      "loadError": "Could not load the approval queue. Please try again.",
+      "created": "Drafted",
+      "expires": "Expires",
+      "noExpiry": "No expiry",
+      "templated": "Templated",
+      "fields": {
+        "subject": "Subject",
+        "body": "Body",
+        "caption": "Caption",
+        "title": "Title"
+      },
+      "imageAlt": "Draft image preview",
+      "save": "Save edits",
+      "approve": "Approve",
+      "reject": "Reject",
+      "selectForBulk": "Select for bulk approve",
+      "bulkApprove": "Bulk approve ({{count}})",
+      "bulkHint": "Select two or more templated drafts of the same type to bulk approve.",
+      "savedToast": "Edits saved.",
+      "approvedToast": "Approved and sent for execution.",
+      "rejectedToast": "Draft rejected.",
+      "bulkApprovedToast": "Approved {{count}} drafts.",
+      "actionError": "That action failed. Please try again.",
+      "rejectTitle": "Reject this draft?",
+      "rejectBody": "Add a short reason. It is recorded on the approval and visible in the audit log.",
+      "rejectReasonPlaceholder": "Reason for rejection",
+      "rejectConfirm": "Reject draft",
+      "reasonRequired": "A reason is required to reject."
     }
   }
 }
