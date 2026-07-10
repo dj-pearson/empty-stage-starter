@@ -27,5 +27,60 @@
     "welcomeTitle": "Welcome to EatPal",
     "welcomeSubtitle": "Evidence-based meal planning for picky eaters and ARFID.",
     "getStarted": "Get started"
+  },
+  "agents": {
+    "title": "Agent Command Center",
+    "subtitle": "Configure, monitor, and control the Agentic OS from one place.",
+    "metaTitle": "Agent Command Center — EatPal Admin",
+    "tabs": {
+      "registry": "Agents",
+      "approvals": "Approvals",
+      "escalations": "Escalations",
+      "runs": "Runs",
+      "audit": "Audit"
+    },
+    "comingSoon": "This view arrives in a later release.",
+    "badges": {
+      "pendingApprovals": "{{count}} pending approvals",
+      "openEscalations": "{{count}} open escalations"
+    },
+    "killSwitch": {
+      "activeTitle": "All agents are paused",
+      "activeBody": "The global kill switch is on. No agent will run until it is resumed.",
+      "inactiveTitle": "Agents are running",
+      "inactiveBody": "The Agentic OS is active. Use the kill switch to pause every agent at once.",
+      "pauseAll": "Pause all agents",
+      "resumeAll": "Resume agents",
+      "confirmPauseTitle": "Pause every agent?",
+      "confirmPauseBody": "This turns on the global kill switch. Every scheduled agent stops running until you resume. In-flight runs finish, but nothing new starts.",
+      "confirmResumeTitle": "Resume agents?",
+      "confirmResumeBody": "This turns off the global kill switch. Enabled agents will run again on their schedules.",
+      "confirm": "Confirm",
+      "pausedToast": "Global kill switch on — all agents paused.",
+      "resumedToast": "Global kill switch off — agents resumed.",
+      "error": "Could not update the kill switch. Please try again."
+    },
+    "registry": {
+      "empty": "No agents are registered yet.",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "enable": "Enable",
+      "disable": "Disable",
+      "domainless": "No domain",
+      "lastRun": "Last run",
+      "neverRun": "Never run",
+      "todaySpend": "Today's spend",
+      "capOf": "of {{cap}} cap",
+      "enabledToast": "{{name}} enabled.",
+      "disabledToast": "{{name}} disabled.",
+      "toggleError": "Could not update {{name}}. Please try again.",
+      "loadError": "Could not load agents. Please try again."
+    },
+    "status": {
+      "running": "Running",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "skipped": "Skipped"
+    }
   }
 }
