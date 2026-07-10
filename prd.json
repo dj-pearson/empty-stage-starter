@@ -102,8 +102,8 @@
         "Tests pass"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migration supabase/migrations/20260709000003_agent_system_settings.sql creates the agent_system_settings singleton (global_pause bool default false, digest_emails text[] default '{}', updated_at) — singleton enforced by a unique index on ((TRUE)), seeded idempotently (INSERT ... WHERE NOT EXISTS), updated_at trigger, admin-only RLS via user_roles pattern. Additive only. Dispatcher already reads global_pause and skips all agents when paused (US-478 decideDispatch + index.ts). Runtime guardrails added in functions/_shared/agent-runtime.ts: (1) pre-run — sums today's cost_usd for the agent (dayStart snapshot) and if capReached records a 'skipped' agent_runs row (reason 'cost cap') without invoking the handler; (2) mid-loop — enforceBudget() runs after every Claude call (both complete() and structuredOutput()) and throws BudgetAbortError once prior spend + this run's cost strictly exceeds the cap, caught to finalize the run gracefully; (3) first cap trip of the day per agent (pre-run OR mid-run) inserts one tier-2 agent_escalations row (domain 'budget', idempotent via a same-day domain='budget' count guard) + audit entry. AgentRunResult status union extended with 'skipped'. Pure, network-free logic extracted to functions/_shared/agent-budget-logic.ts (capReached >=, remainingBudgetUsd clamped, shouldAbortMidRun strict >, sumTodaySpend) with 17 assertions covering cap-reached skip and mid-loop abort (agent-budget-logic_test.ts). types.ts hand-regenerated with agent_system_settings (alphabetical, Relationships []). Verified: types.ts strict tsc exit 0; runtime+budget+approval modules tsc exit 0 against ambient Deno shims; all 17 pure-logic assertions pass in Node (deno test runner not installable locally — esm.sh/deno.land 403 via proxy, matching prior US notes)."
     },
     {
       "id": "US-481",

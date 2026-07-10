@@ -471,6 +471,27 @@ export type Database = {
           },
         ]
       }
+      agent_system_settings: {
+        Row: {
+          digest_emails: string[]
+          global_pause: boolean
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          digest_emails?: string[]
+          global_pause?: boolean
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          digest_emails?: string[]
+          global_pause?: boolean
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ai_coach_conversations: {
         Row: {
           conversation_title: string | null
