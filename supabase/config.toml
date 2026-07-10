@@ -26,6 +26,10 @@ verify_jwt = false
 # internal dispatch secret checked inside the function.
 [functions.agent-digest]
 verify_jwt = false
+# Support intake: public contact form (anonymous allowed); optional JWT links
+# the ticket to the user; rate-limited per email inside the function.
+[functions.support-intake]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 

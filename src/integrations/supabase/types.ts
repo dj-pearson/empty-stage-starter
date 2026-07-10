@@ -12013,6 +12013,41 @@ export type Database = {
           },
         ]
       }
+      support_messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          metadata: Json
+          sender: string
+          ticket_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          sender: string
+          ticket_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          sender?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_response_templates: {
         Row: {
           avg_resolution_time_hours: number | null
@@ -12207,12 +12242,15 @@ export type Database = {
           context: Json | null
           created_at: string | null
           description: string
+          email: string | null
           id: string
           priority: string | null
           resolved_at: string | null
           resolved_by: string | null
+          sentiment: string | null
           status: string | null
           subject: string
+          tier: number | null
           updated_at: string | null
           user_id: string | null
         }
@@ -12222,12 +12260,15 @@ export type Database = {
           context?: Json | null
           created_at?: string | null
           description: string
+          email?: string | null
           id?: string
           priority?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
+          sentiment?: string | null
           status?: string | null
           subject: string
+          tier?: number | null
           updated_at?: string | null
           user_id?: string | null
         }
@@ -12237,12 +12278,15 @@ export type Database = {
           context?: Json | null
           created_at?: string | null
           description?: string
+          email?: string | null
           id?: string
           priority?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
+          sentiment?: string | null
           status?: string | null
           subject?: string
+          tier?: number | null
           updated_at?: string | null
           user_id?: string | null
         }
