@@ -32,8 +32,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migration supabase/migrations/20260709000001_agent_approval_escalation_audit.sql creates agent_approvals (status CHECK draft/approved/rejected/executed/expired default draft, run_id+agent_id FKs ON DELETE SET NULL, reviewed_by->auth.users, expires_at), agent_escalations (tier CHECK 2/3, severity CHECK, status CHECK open/acknowledged/resolved default open, assigned_to->auth.users), and agent_audit_log (append-only: REVOKE UPDATE,DELETE from authenticated+anon; admin SELECT+INSERT policies only, no UPDATE/DELETE policy). Admin-only RLS on all three via user_roles pattern. Partial indexes for draft queue (US-484), expiry sweep (US-482), and escalation ordering (US-485). types.ts hand-regenerated with all three tables + FK relationships, alphabetically ordered; isolation tsc exit 0. Additive only, no new type errors (pre-existing repo backlog unchanged)."
     },
     {
       "id": "US-477",
