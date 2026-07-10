@@ -58,6 +58,19 @@ serve(async (req) => {
   const now = new Date();
 
   try {
+    // Expiry sweep (US-482): mark drafts past expires_at as 'expired'. Delegated
+    // to the approval-executor so expiry lives in the same place as execution.
+    // Non-fatal — a sweep failure must not block the dispatch cycle.
+    try {
+      await fetch(`${FUNCTIONS_BASE()}/approval-executor`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-agent-dispatch-secret': expected },
+        body: JSON.stringify({ sweep: true }),
+      });
+    } catch (err) {
+      console.error('approval expiry sweep failed:', err);
+    }
+
     // Global kill switch (agent_system_settings arrives in US-480; tolerate its absence).
     let globalPause = false;
     try {

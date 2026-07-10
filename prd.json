@@ -136,8 +136,8 @@
         "Tests pass"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "functions/approval-executor/index.ts: given {approval_id}, loads the agent_approvals row and dispatches by action_type — send_email (Resend api.resend.com/emails, EMAIL_FROM fallback), social_webhook (POST to SOCIAL_WEBHOOK_URL, SSRF-guarded via _shared validateExternalUrl + fetchWithTimeout), github_issue (GitHub REST api.github.com/repos/{owner}/{repo}/issues with GITHUB_TOKEN, repo from payload.repo|GITHUB_REPO, returns html_url+number). Idempotent + transition-guarded: only 'approved' executes; 'executed' is a 200 idempotent no-op; draft/rejected/expired -> 409 (draft->approved->executed enforced by pure decideExecution). On success: status->'executed', result merged into payload._execution, audit 'action_executed' with the message id/post ref/issue URL. On failure: status stays 'approved', payload._execution.attempts incremented + last_error recorded, audit 'action_execution_failed'; a tier-2 escalation (domain 'execution') is filed once attempts reach 3 (shouldEscalateFailure). Expiry sweep: {sweep:true} bulk-updates status 'draft' rows past expires_at to 'expired' + one audit row; the dispatcher now calls approval-executor {sweep:true} each cycle (non-fatal). Auth (verify_jwt=false): internal AGENT_DISPATCH_SECRET header (dispatcher sweep) OR admin JWT (UI execute); all DB writes via service-role client. Pure, network-free logic in functions/_shared/approval-execution-logic.ts (decideExecution, readExecutionState, payloadWithSuccess/Failure, shouldEscalateFailure MAX 3, isExpired) with 13 Deno tests covering transition guards, idempotency, 3-strikes accounting, and expiry (approval-execution-logic_test.ts). config.toml adds [functions.approval-executor] verify_jwt=false. No schema/types change (execution bookkeeping lives in existing payload jsonb). Verified: executor+dispatcher+url-validator+logic tsc exit 0 against ambient Deno shims; all 16 pure-logic assertions pass in Node (deno test runner not installable — esm.sh/deno.land 403 via proxy)."
     },
     {
       "id": "US-483",
