@@ -84,8 +84,8 @@
         "Tests pass"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "agent-runtime ctx now exposes requestApproval({actionType,payload,expiresInHours}) -> inserts agent_approvals draft row + agent_audit_log entry, returns approval id; and escalate({tier,severity,domain,title,context}) -> inserts agent_escalations row + audit entry. autonomy_policy.autoExecute allowlist makes the approval 'approved' (still executed only by the US-482 executor) audited as 'auto-approved by policy'; otherwise 'draft' audited 'approval_requested'. Row/audit construction extracted to pure functions/_shared/agent-approval-logic.ts (resolveApprovalStatus/buildApproval/buildEscalation) — 6 Deno tests cover draft-default, auto-approve, expiry, and audit action strings for both paths. Documented DRAFT-FIRST INVARIANT on AgentContext: no direct email/webhook/HTTP side-effect helpers exposed to handlers; the service-role client stays module-private. Deno-typechecked clean."
     },
     {
       "id": "US-480",

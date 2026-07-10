@@ -23,6 +23,11 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://esm.sh/zod@3.25.76';
+import {
+  buildApproval,
+  buildEscalation,
+  type AutonomyPolicy,
+} from './agent-approval-logic.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -85,7 +90,28 @@ export interface StructuredOutputParams<T> {
   maxTokens?: number;
 }
 
-/** Context handed to each agent handler. Deliberately does NOT expose the DB client. */
+export interface RequestApprovalParams {
+  actionType: string;
+  payload?: Json;
+  expiresInHours?: number;
+}
+
+export interface EscalateParams {
+  tier: number;
+  severity: string;
+  domain?: string;
+  title: string;
+  context?: Json;
+}
+
+/**
+ * Context handed to each agent handler. Deliberately does NOT expose the DB
+ * client, nor any direct email/webhook/HTTP side-effect helper (see the
+ * DRAFT-FIRST INVARIANT below): handlers may only reach the outside world by
+ * drafting an approval (executed later by the approval-executor, US-482) or by
+ * escalating to a human. This makes it structurally impossible for an agent to
+ * send an email, hit a webhook, or open an issue directly.
+ */
 export interface AgentContext {
   runId: string;
   agent: AgentDefinition;
@@ -93,6 +119,18 @@ export interface AgentContext {
   complete(params: CompleteParams): Promise<CompleteResult>;
   /** One-shot JSON completion validated against a Zod schema (retries once). */
   structuredOutput<T>(params: StructuredOutputParams<T>): Promise<T>;
+  /**
+   * Draft an outward-facing action for human review. Inserts an agent_approvals
+   * row (status 'draft', or 'approved' when the agent's autonomy_policy
+   * allowlists the action type) and writes an agent_audit_log entry. Returns the
+   * new approval id. It NEVER performs the action itself.
+   */
+  requestApproval(params: RequestApprovalParams): Promise<string>;
+  /**
+   * Raise a tier-2/3 escalation for a human. Inserts an agent_escalations row
+   * and writes an audit entry. Returns the new escalation id.
+   */
+  escalate(params: EscalateParams): Promise<string>;
   /** Current accumulated usage for this run (read-only snapshot). */
   usage(): Usage;
 }
@@ -402,11 +440,66 @@ export async function runAgent(params: RunAgentParams): Promise<AgentRunResult> 
     throw new Error(`Structured output failed schema validation: ${lastError}`);
   }
 
+  async function requestApproval(p: RequestApprovalParams): Promise<string> {
+    const { approval, audit } = buildApproval(
+      {
+        agentId: agentDefinition.id,
+        agentName: agentDefinition.name,
+        runId,
+        actionType: p.actionType,
+        payload: p.payload,
+        expiresInHours: p.expiresInHours,
+        autonomyPolicy: (agentDefinition.autonomy_policy ?? null) as AutonomyPolicy | null,
+      },
+      new Date(),
+    );
+
+    const { data: row, error } = await db
+      .from('agent_approvals')
+      .insert(approval)
+      .select('id')
+      .single();
+    if (error || !row) {
+      throw new Error(`Failed to create approval: ${error?.message ?? 'unknown'}`);
+    }
+    await db.from('agent_audit_log').insert({ ...audit, subject_id: row.id });
+    return row.id as string;
+  }
+
+  async function escalate(p: EscalateParams): Promise<string> {
+    const { escalation, audit } = buildEscalation(
+      {
+        agentId: agentDefinition.id,
+        agentName: agentDefinition.name,
+        runId,
+        tier: p.tier,
+        severity: p.severity,
+        domain: p.domain,
+        title: p.title,
+        context: p.context,
+      },
+      new Date(),
+    );
+
+    const { data: row, error } = await db
+      .from('agent_escalations')
+      .insert(escalation)
+      .select('id')
+      .single();
+    if (error || !row) {
+      throw new Error(`Failed to create escalation: ${error?.message ?? 'unknown'}`);
+    }
+    await db.from('agent_audit_log').insert({ ...audit, subject_id: row.id });
+    return row.id as string;
+  }
+
   const ctx: AgentContext = {
     runId,
     agent: agentDefinition,
     complete,
     structuredOutput,
+    requestApproval,
+    escalate,
     usage: () => ({ ...usage }),
   };
 
