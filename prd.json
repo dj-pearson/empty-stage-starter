@@ -238,8 +238,8 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "functions/agent-digest/index.ts (verify_jwt=false, gated by internal AGENT_DISPATCH_SECRET header; service-role client): two modes. 'instant' — given {escalation_id}, loads the escalation, no-ops unless tier=3, reads agent_system_settings.digest_emails, and Resend-emails each recipient buildInstantEmail(title/severity/domain/tier + deep link to /admin/agents?tab=escalations). 'daily' — computes open tier-2 count, pending approvals grouped by action_type, yesterday's UTC agent spend, and yesterday's failed-run count; sends nothing (audited 'digest_skipped') when dailyHasContent() is false (nothing actionable) OR no recipients; otherwise Resend-emails buildDailyDigest to all recipients. Every send/skip recorded in agent_audit_log (actor 'agent-digest', action digest_sent/digest_skipped). Migration supabase/migrations/20260709000005_agent_digest.sql: SECURITY DEFINER invoke_agent_digest(mode, escalation_id) reads Vault (fallback app.settings GUCs) base URL + secret and pg_net POSTs the function (no hardcoded secrets); an AFTER INSERT trigger on agent_escalations WHEN (NEW.tier=3) fires invoke_agent_digest('instant', NEW.id) (guarded for pg_net absence, non-fatal); pg_cron schedules 'agent-digest-daily' at '0 8 * * *' -> invoke_agent_digest('daily'). All guarded/idempotent for envs lacking pg_cron/pg_net/vault. config.toml adds [functions.agent-digest] verify_jwt=false. Pure logic functions/_shared/agent-digest-logic.ts (escapeHtml, yesterdayUtcWindow, groupApprovalsByActionType, dailyHasContent [spend-only does NOT trigger a send], buildInstantEmail, buildDailyDigest) with 8 Deno tests incl. XSS-escaping of a malicious title (agent-digest-logic_test.ts). No schema/types change. Verified: agent-digest+logic tsc exit 0 against ambient Deno shims; all 10 pure-logic assertions pass in Node (deno test runner not installable — esm.sh/deno.land 403 via proxy)."
     },
     {
       "id": "US-489",

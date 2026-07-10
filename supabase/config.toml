@@ -22,6 +22,10 @@ verify_jwt = true
 # accepts the internal dispatch secret (sweep) OR an admin JWT (execute).
 [functions.approval-executor]
 verify_jwt = false
+# Agentic OS digest: no JWT; called only by pg_cron / DB trigger with the
+# internal dispatch secret checked inside the function.
+[functions.agent-digest]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 
