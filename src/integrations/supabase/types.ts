@@ -418,6 +418,39 @@ export type Database = {
           },
         ]
       }
+      agent_knowledge: {
+        Row: {
+          content: string
+          created_at: string
+          embedding: string | null
+          id: string
+          metadata: Json
+          source: string | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          source?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          source?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       agent_runs: {
         Row: {
           agent_id: string
@@ -14933,6 +14966,19 @@ export type Database = {
         Returns: undefined
       }
       mark_report_viewed: { Args: { p_report_id: string }; Returns: undefined }
+      match_agent_knowledge: {
+        Args: {
+          match_count: number
+          min_similarity: number
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          id: string
+          similarity: number
+          title: string
+        }[]
+      }
       normalize_title: { Args: { title_text: string }; Returns: string }
       parse_quantity: { Args: { quantity_str: string }; Returns: number }
       populate_title_bank: { Args: { titles_json: Json }; Returns: number }

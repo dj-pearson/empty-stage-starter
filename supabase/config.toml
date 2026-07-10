@@ -15,6 +15,9 @@ verify_jwt = false
 # shared secret (AGENT_DISPATCH_SECRET) checked inside the function.
 [functions.agent-dispatcher]
 verify_jwt = false
+# Agentic OS knowledge-base ingest: JWT-authenticated, admin-gated inside the fn.
+[functions.agent-knowledge-ingest]
+verify_jwt = true
 [functions.calculate-food-similarity]
 verify_jwt = true
 

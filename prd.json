@@ -118,8 +118,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migration supabase/migrations/20260709000004_agent_knowledge.sql: CREATE EXTENSION IF NOT EXISTS vector (idempotent); public.agent_knowledge (id, source, title, content NOT NULL, embedding vector(1536), metadata jsonb, created_at/updated_at) with HNSW cosine index (vector_cosine_ops), a (source,title) btree for the idempotent-replace path, updated_at trigger, admin-only RLS (user_roles pattern). RPC public.match_agent_knowledge(query_embedding vector(1536), match_count int, min_similarity float) RETURNS TABLE(id,title,content,similarity) — cosine similarity = 1-(embedding<=>q), filtered by min_similarity, ordered nearest-first, LIMIT GREATEST(match_count,0); SECURITY INVOKER so admin RLS is respected and agents query it via service role. functions/agent-knowledge-ingest/index.ts (serve+cors+authenticateRequest+assertAdmin, admin-only): accepts {source,title,content} or {seed:true}; chunks content, batch-embeds via OpenAI text-embedding-3-small (1536), idempotent per (source,title) (delete-then-insert), stores chunk_index/chunk_count in metadata; 503 when OPENAI_API_KEY unset, 400 on missing title/content or oversized (>50k) content. Embedding chosen to match 1536-dim column. Pure word-aware chunker functions/_shared/agent-knowledge-chunk.ts (~1000 chars, 150 overlap, never splits a word, no empty chunks, no data loss) + 7 Deno tests (agent-knowledge-chunk_test.ts). Seed: functions/agent-knowledge-ingest/seed-data.ts exports 15 real EatPal FAQ entries lifted verbatim from src/pages/FAQ.tsx (>=10 required), loaded via {seed:true}. config.toml adds [functions.agent-knowledge-ingest] verify_jwt=true. types.ts hand-regenerated with agent_knowledge table (embedding as string|null per pgvector serialization) + match_agent_knowledge RPC, alphabetical. Verified: types.ts strict tsc exit 0; ingest+chunk+seed modules tsc exit 0 against ambient Deno shims; all 7 chunker assertions pass in Node (deno test runner not installable — esm.sh/deno.land 403 via proxy)."
     },
     {
       "id": "US-482",
