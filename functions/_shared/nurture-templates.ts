@@ -74,6 +74,21 @@ export const NURTURE_TEMPLATES: Record<string, (ctx: TemplateContext) => { subje
   }),
 };
 
+/**
+ * Generative templates (US-500): the body is written per-household by Claude,
+ * not from a static string, and is reviewed individually (templated:false).
+ * The engine special-cases these; renderTemplate is NOT used for them.
+ */
+export const GENERATIVE_TEMPLATES = new Set(['winback_1', 'winback_2']);
+export function isGenerativeTemplate(key: string): boolean {
+  return GENERATIVE_TEMPLATES.has(key);
+}
+
+/** Wrap a generative body with the standard footer (unsubscribe). */
+export function wrapGenerativeBody(body: string, ctx: TemplateContext): string {
+  return wrap(body, ctx);
+}
+
 /** Render a template by key, falling back to a generic body for unknown keys. */
 export function renderTemplate(key: string, ctx: TemplateContext): RenderedTemplate {
   const tmpl = NURTURE_TEMPLATES[key];
