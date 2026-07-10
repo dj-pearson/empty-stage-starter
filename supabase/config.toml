@@ -54,6 +54,12 @@ verify_jwt = false
 # Churn-risk scoring agent: invoked by the dispatcher with the internal secret.
 [functions.agent-churn-score]
 verify_jwt = false
+# Nurture sequence engine: invoked by the dispatcher with the internal secret.
+[functions.agent-nurture-engine]
+verify_jwt = false
+# Public unsubscribe endpoint: the signed token is the authorization.
+[functions.nurture-unsubscribe]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 

@@ -4120,6 +4120,27 @@ export type Database = {
           },
         ]
       }
+      email_suppressions: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          reason: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          reason?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          reason?: string | null
+        }
+        Relationships: []
+      }
       email_templates: {
         Row: {
           category: string | null
@@ -6933,6 +6954,74 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      nurture_enrollments: {
+        Row: {
+          created_at: string
+          current_step: number
+          household_id: string | null
+          id: string
+          next_step_at: string | null
+          sequence_id: string
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          current_step?: number
+          household_id?: string | null
+          id?: string
+          next_step_at?: string | null
+          sequence_id: string
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          current_step?: number
+          household_id?: string | null
+          id?: string
+          next_step_at?: string | null
+          sequence_id?: string
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nurture_enrollments_sequence_id_fkey"
+            columns: ["sequence_id"]
+            isOneToOne: false
+            referencedRelation: "nurture_sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nurture_sequences: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          name: string
+          steps: Json
+          trigger_event: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          name: string
+          steps?: Json
+          trigger_event: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          name?: string
+          steps?: Json
+          trigger_event?: string
+        }
+        Relationships: []
       }
       nutrition: {
         Row: {
