@@ -48,6 +48,9 @@ verify_jwt = false
 # Public CSAT rating endpoint: the signed token is the authorization.
 [functions.csat-rate]
 verify_jwt = false
+# Lifecycle event detector: invoked by the dispatcher with the internal secret.
+[functions.agent-event-detector]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 

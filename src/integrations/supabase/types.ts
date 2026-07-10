@@ -451,6 +451,33 @@ export type Database = {
           },
         ]
       }
+      agent_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          household_id: string | null
+          id: string
+          payload: Json
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          household_id?: string | null
+          id?: string
+          payload?: Json
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          household_id?: string | null
+          id?: string
+          payload?: Json
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       agent_knowledge: {
         Row: {
           content: string
