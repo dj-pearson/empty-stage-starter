@@ -330,6 +330,14 @@ serve(async (req) => {
         });
       }
 
+      // Social post published (US-504): advance its source calendar row.
+      if (approval.action_type === 'social_webhook' && typeof (payload as Record<string, unknown>).calendar_id === 'string') {
+        await db
+          .from('content_calendar')
+          .update({ status: 'published' })
+          .eq('id', (payload as Record<string, unknown>).calendar_id as string);
+      }
+
       // Support reply sent (US-494): append the agent message to the thread and
       // move the ticket to 'awaiting_user' (guarded transition).
       if (approval.action_type === 'send_email' && typeof ticketId === 'string') {
