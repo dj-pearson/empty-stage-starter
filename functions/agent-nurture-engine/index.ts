@@ -17,6 +17,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { z } from 'https://esm.sh/zod@3.25.76';
 import { runAgent, type AgentDefinition, type Json } from '../_shared/agent-runtime.ts';
 import {
   shouldEnroll,
@@ -27,7 +28,9 @@ import {
   type NurtureSequence,
   type NurtureEnrollment,
 } from '../_shared/nurture-logic.ts';
-import { renderTemplate } from '../_shared/nurture-templates.ts';
+import { renderTemplate, NURTURE_TEMPLATES, type TemplateContext } from '../_shared/nurture-templates.ts';
+
+const EncouragementSchema = z.object({ encouragement: z.string() });
 
 const AGENT_NAME = 'nurture-engine';
 const ENROLL_LOOKBACK_HOURS = 26;
@@ -212,7 +215,32 @@ serve(async (req) => {
         if (email) {
           const token = await signEmailToken(email, tokenSecret);
           const unsubscribeUrl = `${functionsBase()}/nurture-unsubscribe?t=${encodeURIComponent(token)}`;
-          const rendered = renderTemplate(step.template_key, { unsubscribeUrl });
+
+          // Personalize known templates: real merge fields + a short Claude line.
+          let mergeCtx: TemplateContext = { unsubscribeUrl };
+          if (step.template_key in NURTURE_TEMPLATES) {
+            const [kids, foods] = await Promise.all([
+              db.from('kids').select('id', { count: 'exact', head: true }).eq('household_id', hid),
+              db.from('foods').select('id', { count: 'exact', head: true }).eq('household_id', hid),
+            ]);
+            const kidCount = kids.count ?? 0;
+            const foodsAdded = foods.count ?? 0;
+            let encouragement = '';
+            try {
+              const out = await ctx.structuredOutput<{ encouragement: string }>({
+                schema: EncouragementSchema,
+                prompt:
+                  `Write at most 2 warm, specific sentences of encouragement for an EatPal parent ` +
+                  `receiving the "${step.template_key}" onboarding email. They have added ${foodsAdded} ` +
+                  `food(s) and ${kidCount} child profile(s). No greeting or signature — just the encouragement. JSON: {"encouragement": "..."}.`,
+              });
+              encouragement = out.encouragement;
+            } catch {
+              encouragement = '';
+            }
+            mergeCtx = { unsubscribeUrl, kidCount, foodsAdded, encouragement };
+          }
+          const rendered = renderTemplate(step.template_key, mergeCtx);
           await ctx.requestApproval({
             actionType: 'send_email',
             payload: {

@@ -30,8 +30,48 @@ function wrap(inner: string, ctx: TemplateContext): string {
   return `<div style="font-family:system-ui,sans-serif;max-width:520px">${inner}${footer(ctx)}</div>`;
 }
 
+function encouragementLine(ctx: TemplateContext): string {
+  const e = typeof ctx.encouragement === 'string' ? ctx.encouragement.trim() : '';
+  return e ? `<p>${e}</p>` : '';
+}
+
 export const NURTURE_TEMPLATES: Record<string, (ctx: TemplateContext) => { subject: string; body: string }> = {
-  // Onboarding templates are registered here in US-499.
+  // Onboarding sequence (US-499). Merge fields: kidCount, foodsAdded, encouragement.
+  welcome: (ctx) => ({
+    subject: 'Welcome to EatPal 🎉',
+    body:
+      `<h2>Welcome to EatPal!</h2>
+       <p>You're set up to build calmer, more confident mealtimes for your family.</p>
+       ${encouragementLine(ctx)}
+       <p>Start by adding your child's safe foods — that's the foundation for personalized plans.</p>
+       <p><a href="https://tryeatpal.com/pantry">Add your first foods →</a></p>`,
+  }),
+  add_kid: (ctx) => ({
+    subject: 'Add your child to get personalized plans',
+    body:
+      `<h2>One quick step to unlock plans</h2>
+       <p>Add your child's profile so EatPal can tailor try-bites and meal plans to their needs.</p>
+       ${encouragementLine(ctx)}
+       <p><a href="https://tryeatpal.com/kids">Add your child →</a></p>`,
+  }),
+  first_plan: (ctx) => ({
+    subject: 'Ready for your first meal plan?',
+    body:
+      `<h2>Let's make your first plan</h2>
+       <p>You've added ${Number(ctx.foodsAdded ?? 0)} food(s) and ${Number(ctx.kidCount ?? 0)} child profile(s). ` +
+      `Generate a 7-day plan built around safe foods with gentle try-bites.</p>
+       ${encouragementLine(ctx)}
+       <p><a href="https://tryeatpal.com/planner">Create your plan →</a></p>`,
+  }),
+  week1_recap: (ctx) => ({
+    subject: 'Your first week with EatPal',
+    body:
+      `<h2>Look how far you've come</h2>
+       <p>In your first week you added ${Number(ctx.foodsAdded ?? 0)} food(s) across ${Number(ctx.kidCount ?? 0)} child profile(s).</p>
+       ${encouragementLine(ctx)}
+       <p>Keep the momentum — small, consistent exposures are what expand a picky eater's diet.</p>
+       <p><a href="https://tryeatpal.com/dashboard">Open your dashboard →</a></p>`,
+  }),
 };
 
 /** Render a template by key, falling back to a generic body for unknown keys. */
