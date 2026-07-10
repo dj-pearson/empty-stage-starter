@@ -11962,6 +11962,38 @@ export type Database = {
           },
         ]
       }
+      support_csat: {
+        Row: {
+          comment: string | null
+          created_at: string
+          id: string
+          score: number
+          ticket_id: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          score: number
+          ticket_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          score?: number
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_csat_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: true
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_kb_articles: {
         Row: {
           auto_generated: boolean | null

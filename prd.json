@@ -355,8 +355,8 @@
         "Typecheck passes"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migration supabase/migrations/20260709000011_csat.sql creates public.support_csat (id, ticket_id UNIQUE FK ON DELETE CASCADE — enforces one rating/ticket = single-use, score int CHECK 1..5, comment, created_at) with admin-only RLS, and seeds the 'csat' agent (customer_service, haiku, hourly '0 * * * *', enabled FALSE, ON CONFLICT DO NOTHING). functions/agent-csat/index.ts (verify_jwt=false + internal secret; runAgent): selects resolved tickets with resolved_at older than 24h and a non-null email; per ticket SUPPRESSES if a support_csat row already exists (rated) OR a prior CSAT send_email approval exists (payload->>kind='csat' & ticket_id) — one email max per ticket; otherwise signs a token, builds the templated rating email and submits via ctx.requestApproval({actionType:'send_email', payload templated:true, kind:'csat', ticket_id}). functions/csat-rate/index.ts is the PUBLIC rating endpoint (verify_jwt=false; the signed token IS the auth): verifies the token+score, inserts support_csat ONCE (the UNIQUE constraint makes it single-use — a duplicate returns a friendly 'already rated' page), files a tier-2 customer_service escalation when scoreEscalates (score<=2), and returns a simple thank-you HTML page. Pure logic functions/_shared/csat-logic.ts: HMAC-SHA256 signed token (signCsatToken/verifyCsatToken via Web Crypto, constant-time compare, base64url), scoreEscalates, isValidScore, ratingLinks (1..5 -> functions/csat-rate), buildCsatEmail (5 buttons) — 7 Deno tests incl. token round-trip, wrong-secret rejection, and tamper rejection. config.toml adds [functions.agent-csat] and [functions.csat-rate] verify_jwt=false. types.ts regenerated with support_csat. Verified: all CSAT assertions (incl. crypto token) pass in Node (Node 22 Web Crypto); agent-csat + csat-rate + shared modules tsc exit 0 (ambient Deno shims); types.ts strict tsc exit 0. (deno test runner not installable — esm.sh/deno.land 403 via proxy.)"
     },
     {
       "id": "US-496",
