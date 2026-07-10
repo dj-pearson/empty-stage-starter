@@ -272,8 +272,8 @@
         "Tests pass"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "functions/agent-support-triage/index.ts — first agent handler on the shared runtime (US-477). verify_jwt=false + internal AGENT_DISPATCH_SECRET gate; loads the 'support-triage' agent_definitions row (service role) and runs runAgent() so the run is logged with token/cost accounting. Handler creates its OWN service-role client (the runtime deliberately withholds a DB client from handlers — draft-first invariant), fetches a bounded batch (10) of support_tickets in status 'new' oldest-first, and per ticket: ctx.structuredOutput() classifies via Claude haiku against a Zod enum schema (category bug|billing|how_to|feature_request|account_data|other, sentiment positive|neutral|frustrated|angry, priority low|medium|high|urgent, tier 1-3), writes category/sentiment/priority/tier back and advances status to 'triaged', and when classificationToEscalation() returns non-null files a tier-2/3 escalation via ctx.escalate (domain 'customer_service', context carries ticket_id/email/reasons/classification). Returns {processed, triaged, escalated}. Pure mapping functions/_shared/support-triage-logic.ts: classificationToEscalation — tier 3/high for urgent priority OR account_data; tier 2/medium for angry sentiment OR billing; highest tier wins with all reasons; null when routine — with 6 Deno tests (support-triage-logic_test.ts). Migration supabase/migrations/20260709000007_support_triage_agent.sql: widens support_tickets.category CHECK to the UNION of old + triage categories (adds how_to, account_data — the widening flagged during US-489, backward-compatible) and seeds the 'support-triage' agent_definitions row (domain customer_service, haiku, schedule '*/5 * * * *', enabled FALSE, ON CONFLICT(name) DO NOTHING). config.toml adds [functions.agent-support-triage] verify_jwt=false. Verified: handler+runtime+logic tsc exit 0 against ambient Deno shims; all 7 mapping assertions pass in Node (deno test runner not installable — esm.sh/deno.land 403 via proxy). No frontend/types.ts change."
     },
     {
       "id": "US-491",

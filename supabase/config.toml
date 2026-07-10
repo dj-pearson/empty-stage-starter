@@ -30,6 +30,9 @@ verify_jwt = false
 # the ticket to the user; rate-limited per email inside the function.
 [functions.support-intake]
 verify_jwt = false
+# Support triage agent: invoked by the dispatcher with the internal secret.
+[functions.agent-support-triage]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 
