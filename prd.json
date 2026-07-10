@@ -16,8 +16,8 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migration supabase/migrations/20260709000000_agent_core_schema.sql creates agent_definitions (name unique, model default claude-haiku-4-5, autonomy_policy jsonb, daily_cost_cap_usd default 5, enabled default false, updated_at trigger) and agent_runs (FK->agent_definitions ON DELETE CASCADE, status CHECK running/succeeded/failed/skipped, token/cost accounting). Additive only. Admin-only RLS via user_roles pattern (matches admin_alerts). Indexes include partial idx_agent_runs_running for dispatcher idempotency (US-478) and agent_id+started_at for daily-spend sums (US-480). types.ts hand-regenerated with both tables + agent_runs FK relationship; validates in isolation (tsc exit 0). Full tsc -b is pathologically slow (>28min) in this container but emits no errors."
     },
     {
       "id": "US-476",
@@ -32,8 +32,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migration supabase/migrations/20260709000001_agent_approval_escalation_audit.sql creates agent_approvals (status CHECK draft/approved/rejected/executed/expired default draft, run_id+agent_id FKs ON DELETE SET NULL, reviewed_by->auth.users, expires_at), agent_escalations (tier CHECK 2/3, severity CHECK, status CHECK open/acknowledged/resolved default open, assigned_to->auth.users), and agent_audit_log (append-only: REVOKE UPDATE,DELETE from authenticated+anon; admin SELECT+INSERT policies only, no UPDATE/DELETE policy). Admin-only RLS on all three via user_roles pattern. Partial indexes for draft queue (US-484), expiry sweep (US-482), and escalation ordering (US-485). types.ts hand-regenerated with all three tables + FK relationships, alphabetically ordered; isolation tsc exit 0. Additive only, no new type errors (pre-existing repo backlog unchanged)."
     },
     {
       "id": "US-477",
@@ -49,8 +49,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "functions/_shared/agent-runtime.ts exports runAgent({agentDefinition,trigger,input,tools,handler}): opens agent_runs 'running', runs handler, finalizes 'succeeded'/'failed' with output/error. ctx.complete() = multi-turn tool-use loop (executes toolExecutors, feeds tool_result back, MAX_TOOL_TURNS guard); ctx.structuredOutput() = Zod-validated JSON with exactly one retry on failure. callAnthropic() reads ANTHROPIC_API_KEY, uses agent model, retries retryable statuses + network errors with exponential backoff (max 3 attempts). Token/cost accumulated per call and persisted to the run row after every call via MODEL_PRICING (USD/MTok). Service-role client is module-private (getServiceClient closure), NOT on ctx — handlers make their own. Documented invariant: no email/webhook/HTTP side-effect helpers exposed (those come via requestApproval/escalate in US-479). Pure exports computeCostUsd/backoffMs/extractJson. Deno-typechecked clean (deno check via npm import-map redirect since esm.sh is proxy-blocked locally; committed file keeps esm.sh imports per repo convention)."
     },
     {
       "id": "US-478",
@@ -67,8 +67,8 @@
         "Tests pass"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "functions/agent-dispatcher/index.ts loads scheduled agent_definitions, gathers per-agent facts (global pause, last run, in-flight run, today's spend) and applies pure decideDispatch(). Records a 'skipped' agent_runs row with reason (disabled/global pause/cost cap) for due-but-blocked agents; idempotent — an agent with a 'running' run is a noop (never double-invoked). Due+clear agents delegate to agent-<name> handler with the internal secret. Pure, network-free, unit-tested modules: functions/_shared/cron.ts (parseCron/matchesCron/previousMatch/isDue — full 5-field cron incl. step/range/list, dom|dow OR-semantics, dow 7=Sun, UTC) and functions/_shared/agent-dispatch-logic.ts (decideDispatch). 18 Deno tests pass (agent-dispatch-logic_test.ts). Migration 20260709000002 schedules pg_cron '*/5 * * * *' -> invoke_agent_dispatcher() which pg_net POSTs the function; URL+secret from Vault (fallback app.settings GUCs), no hardcoded secrets; fully guarded for envs lacking pg_cron/pg_net/vault. config.toml adds [functions.agent-dispatcher] verify_jwt=false with internal AGENT_DISPATCH_SECRET header check. Deno-typechecked clean."
     },
     {
       "id": "US-479",
@@ -84,8 +84,8 @@
         "Tests pass"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "agent-runtime ctx now exposes requestApproval({actionType,payload,expiresInHours}) -> inserts agent_approvals draft row + agent_audit_log entry, returns approval id; and escalate({tier,severity,domain,title,context}) -> inserts agent_escalations row + audit entry. autonomy_policy.autoExecute allowlist makes the approval 'approved' (still executed only by the US-482 executor) audited as 'auto-approved by policy'; otherwise 'draft' audited 'approval_requested'. Row/audit construction extracted to pure functions/_shared/agent-approval-logic.ts (resolveApprovalStatus/buildApproval/buildEscalation) — 6 Deno tests cover draft-default, auto-approve, expiry, and audit action strings for both paths. Documented DRAFT-FIRST INVARIANT on AgentContext: no direct email/webhook/HTTP side-effect helpers exposed to handlers; the service-role client stays module-private. Deno-typechecked clean."
     },
     {
       "id": "US-480",

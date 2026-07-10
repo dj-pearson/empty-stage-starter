@@ -223,6 +223,254 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_approvals: {
+        Row: {
+          action_type: string
+          agent_id: string | null
+          created_at: string
+          expires_at: string | null
+          id: string
+          payload: Json
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          run_id: string | null
+          status: string
+        }
+        Insert: {
+          action_type: string
+          agent_id?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          payload?: Json
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          run_id?: string | null
+          status?: string
+        }
+        Update: {
+          action_type?: string
+          agent_id?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          payload?: Json
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          run_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_approvals_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_approvals_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_audit_log: {
+        Row: {
+          action: string
+          actor: string
+          created_at: string
+          detail: Json
+          id: string
+          subject_id: string | null
+          subject_type: string | null
+        }
+        Insert: {
+          action: string
+          actor: string
+          created_at?: string
+          detail?: Json
+          id?: string
+          subject_id?: string | null
+          subject_type?: string | null
+        }
+        Update: {
+          action?: string
+          actor?: string
+          created_at?: string
+          detail?: Json
+          id?: string
+          subject_id?: string | null
+          subject_type?: string | null
+        }
+        Relationships: []
+      }
+      agent_definitions: {
+        Row: {
+          autonomy_policy: Json
+          created_at: string
+          daily_cost_cap_usd: number
+          description: string | null
+          domain: string | null
+          enabled: boolean
+          id: string
+          model: string
+          name: string
+          schedule_cron: string | null
+          system_prompt: string | null
+          updated_at: string
+        }
+        Insert: {
+          autonomy_policy?: Json
+          created_at?: string
+          daily_cost_cap_usd?: number
+          description?: string | null
+          domain?: string | null
+          enabled?: boolean
+          id?: string
+          model?: string
+          name: string
+          schedule_cron?: string | null
+          system_prompt?: string | null
+          updated_at?: string
+        }
+        Update: {
+          autonomy_policy?: Json
+          created_at?: string
+          daily_cost_cap_usd?: number
+          description?: string | null
+          domain?: string | null
+          enabled?: boolean
+          id?: string
+          model?: string
+          name?: string
+          schedule_cron?: string | null
+          system_prompt?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      agent_escalations: {
+        Row: {
+          agent_id: string | null
+          assigned_to: string | null
+          context: Json
+          created_at: string
+          domain: string | null
+          id: string
+          resolution_note: string | null
+          resolved_at: string | null
+          run_id: string | null
+          severity: string
+          status: string
+          tier: number
+          title: string
+        }
+        Insert: {
+          agent_id?: string | null
+          assigned_to?: string | null
+          context?: Json
+          created_at?: string
+          domain?: string | null
+          id?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          run_id?: string | null
+          severity: string
+          status?: string
+          tier: number
+          title: string
+        }
+        Update: {
+          agent_id?: string | null
+          assigned_to?: string | null
+          context?: Json
+          created_at?: string
+          domain?: string | null
+          id?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          run_id?: string | null
+          severity?: string
+          status?: string
+          tier?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_escalations_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_escalations_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_runs: {
+        Row: {
+          agent_id: string
+          cost_usd: number | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          input: Json | null
+          output: Json | null
+          started_at: string
+          status: string
+          tokens_in: number | null
+          tokens_out: number | null
+          trigger: string | null
+        }
+        Insert: {
+          agent_id: string
+          cost_usd?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          input?: Json | null
+          output?: Json | null
+          started_at?: string
+          status: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          trigger?: string | null
+        }
+        Update: {
+          agent_id?: string
+          cost_usd?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          input?: Json | null
+          output?: Json | null
+          started_at?: string
+          status?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          trigger?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_runs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_coach_conversations: {
         Row: {
           conversation_title: string | null

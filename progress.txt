@@ -31,3 +31,11 @@
 
 ## 2026-07-07 - Epic: Agentic OS (ralph/agentic-os)
 Archived previous run (platform-hardening-v2, US-001..US-474 all passing) to archive/2026-07-07-platform-hardening-v2/. Fresh run starts at US-475.
+
+## 2026-07-10 - Agentic OS verification notes (branch claude/prd-stories-quality-quantity-6meqwj)
+- Web typecheck (`npm run typecheck` = tsc -b) has a large PRE-EXISTING backlog (~1238 errors across 146 files, e.g. SEOManager.tsx, activity-tracker.ts). ci.yml treats it as a NON-BLOCKING warning ("burn the backlog down, then make this a hard gate"); tsconfig-bypass.json excludes the worst files. prd-verify.yml's web gate is STRICT but only gates web stories touching src/. For agent stories, "Typecheck passes" == introduces NO NEW errors. Verify additive types.ts edits in isolation: `npx tsc --noEmit --skipLibCheck src/integrations/supabase/types.ts`.
+- Full `tsc -b` is pathologically slow here (~28 min). Baseline error count to compare against: 1238.
+- Deno is NOT preinstalled; install with `npm i -g deno` (the deno.land script is proxy-blocked, npm works). esm.sh is ALSO proxy-blocked (403), but registry.npmjs.org + jsr.io are allowlisted. To `deno check`/`deno test` edge functions that import from esm.sh, use an import map redirecting esm.sh URLs to npm: specifiers — see scratchpad/deno-check-map.json:
+    deno check --import-map=<map> functions/_shared/agent-runtime.ts
+  Committed edge-function code keeps esm.sh imports (repo convention; Supabase Edge fetches esm.sh at deploy). The import map is a LOCAL verification aid only, never committed.
+- Agent runtime: functions/_shared/agent-runtime.ts. runAgent() owns a module-private service-role client for agent_runs bookkeeping (never exposed to handlers). ctx gives handlers complete() (multi-turn tool loop) + structuredOutput() (Zod, 1 retry). Pure exports for reuse/tests: computeCostUsd, backoffMs, extractJson. Model pricing map in MODEL_PRICING (USD/MTok).
