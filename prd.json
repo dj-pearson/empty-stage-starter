@@ -455,8 +455,8 @@
         "Typecheck passes"
       ],
       "priority": 27,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Migration supabase/migrations/20260709000017_weekly_digest.sql adds households.weekly_digest_opt_in BOOLEAN NOT NULL DEFAULT FALSE (additive; partial index for opted-in) and seeds the 'weekly-digest' agent (growth, weekly '0 15 * * 0', enabled FALSE). functions/agent-weekly-digest/index.ts (verify_jwt=false + internal secret; runAgent): weekly, for opted-in households (weekly_digest_opt_in=true, bounded 200) computes the week's stats from real data — plan_entries created in the last 7 days + foods added in the last 7 days (computeWeeklyStats -> plansMade, activeDays distinct-day count, newFoodsTried); SKIPS households with no activity (hasActivity false -> no empty digests, AC5), no resolvable email, or a suppressed email. Claude writes ONLY a 1-2 sentence encouragement (ctx.structuredOutput, EncouragementSchema); the rest is deterministic renderDigest (stats list with correct singular/plural, encouragement slot, dashboard CTA, unsubscribe footer using a signed nurture-unsubscribe token). Each draft is submitted via ctx.requestApproval({actionType:'send_email'}) with templated:true + kind:'digest' so the admin can BULK-APPROVE the week's digests in one action (AC4). Pure logic functions/_shared/weekly-digest-logic.ts (computeWeeklyStats, hasActivity, renderDigest) with 5 Deno tests covering stats/distinct-days, empty, the skip gate, pluralization, and encouragement present/absent. config.toml adds [functions.agent-weekly-digest] verify_jwt=false. types.ts: households gains weekly_digest_opt_in. Verified: digest assertions pass in Node; digest function + logic + runtime tsc exit 0 (ambient Deno shims); types.ts strict tsc exit 0. (deno test runner not installable — esm.sh/deno.land 403 via proxy.)"
     },
     {
       "id": "US-502",

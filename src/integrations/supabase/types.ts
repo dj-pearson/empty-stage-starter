@@ -5466,18 +5466,21 @@ export type Database = {
           id: string
           name: string
           updated_at: string | null
+          weekly_digest_opt_in: boolean
         }
         Insert: {
           created_at?: string | null
           id?: string
           name?: string
           updated_at?: string | null
+          weekly_digest_opt_in?: boolean
         }
         Update: {
           created_at?: string | null
           id?: string
           name?: string
           updated_at?: string | null
+          weekly_digest_opt_in?: boolean
         }
         Relationships: []
       }
