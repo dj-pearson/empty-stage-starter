@@ -39,3 +39,9 @@ Archived previous run (platform-hardening-v2, US-001..US-474 all passing) to arc
     deno check --import-map=<map> functions/_shared/agent-runtime.ts
   Committed edge-function code keeps esm.sh imports (repo convention; Supabase Edge fetches esm.sh at deploy). The import map is a LOCAL verification aid only, never committed.
 - Agent runtime: functions/_shared/agent-runtime.ts. runAgent() owns a module-private service-role client for agent_runs bookkeeping (never exposed to handlers). ctx gives handlers complete() (multi-turn tool loop) + structuredOutput() (Zod, 1 retry). Pure exports for reuse/tests: computeCostUsd, backoffMs, extractJson. Model pricing map in MODEL_PRICING (USD/MTok).
+
+## prd-verify — CI verification pass (ref ab3a3176b8c5a49d717b0e7eeef3127c40d086df)
+- Gates: web=failure, ios=success, android=success.
+- Flipped passes=true (gate green + implementation present): US-480, US-481, US-482, US-483.
+- Held false: 32 (breakdown {"verified":4,"awaiting-implementation":32}). Manual/ops stories never auto-flip; net-new stories await implementation; gate-red stories await a green CI run.
+---
