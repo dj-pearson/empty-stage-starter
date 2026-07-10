@@ -49,8 +49,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "functions/_shared/agent-runtime.ts exports runAgent({agentDefinition,trigger,input,tools,handler}): opens agent_runs 'running', runs handler, finalizes 'succeeded'/'failed' with output/error. ctx.complete() = multi-turn tool-use loop (executes toolExecutors, feeds tool_result back, MAX_TOOL_TURNS guard); ctx.structuredOutput() = Zod-validated JSON with exactly one retry on failure. callAnthropic() reads ANTHROPIC_API_KEY, uses agent model, retries retryable statuses + network errors with exponential backoff (max 3 attempts). Token/cost accumulated per call and persisted to the run row after every call via MODEL_PRICING (USD/MTok). Service-role client is module-private (getServiceClient closure), NOT on ctx — handlers make their own. Documented invariant: no email/webhook/HTTP side-effect helpers exposed (those come via requestApproval/escalate in US-479). Pure exports computeCostUsd/backoffMs/extractJson. Deno-typechecked clean (deno check via npm import-map redirect since esm.sh is proxy-blocked locally; committed file keeps esm.sh imports per repo convention)."
     },
     {
       "id": "US-478",
