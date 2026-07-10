@@ -206,8 +206,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "src/components/admin/agents/RunsTab.tsx (rendered in the /admin/agents 'runs' tab): a paginated agent_runs table (join agent_definitions(name)) with filters for agent (Select from agent_definitions), status (all/running/succeeded/failed/skipped), and a date range (From/To native date inputs applied as started_at gte/lte). Failed runs get a destructive row tint and a one-click 'Show failed only' quick filter. Pagination via Supabase .range() with count:'exact' (RUNS_PAGE_SIZE 25) and Prev/Next + 'Page x of y' — no unbounded select of all runs; any filter change resets to page 0. A run-detail Sheet drawer shows trigger, status, started/finished, duration, token counts (in/out), cost, and pretty-printed input/output/error blocks. Cost panel: a last-14-days stacked BarChart (recharts) of daily spend grouped by agent (pure buildDailySpendSeries fills per-agent day buckets, UTC), plus a per-agent 'today's cap utilization' Progress list (pure capUtilization; turns destructive at >=100%). The 14-day chart query is date-bounded (not the unbounded list). All copy under i18next 'agents.runs'; Intl.* currency/date formatting. Pure logic in src/lib/runsDashboard.ts (pageRange, pageCount, formatDuration, capUtilization, utcDayKey, buildDailySpendSeries) with 10 vitest assertions (runsDashboard.test.ts). Verified: vitest 10/10 pass; scoped strict tsc -> zero errors in my files; production Vite build exit 0 (built 58s, recharts imports resolve); real-Chromium Playwright smoke on /admin/agents?tab=runs -> 0 relevant JS errors. Full authenticated data render not exercisable in-sandbox (no live Supabase admin session)."
     },
     {
       "id": "US-487",

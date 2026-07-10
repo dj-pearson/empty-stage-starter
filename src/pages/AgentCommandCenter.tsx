@@ -23,6 +23,7 @@ import { AlertTriangle, ShieldCheck } from 'lucide-react';
 import { AgentRegistryTab } from '@/components/admin/agents/AgentRegistryTab';
 import { ApprovalsTab } from '@/components/admin/agents/ApprovalsTab';
 import { EscalationsTab } from '@/components/admin/agents/EscalationsTab';
+import { RunsTab } from '@/components/admin/agents/RunsTab';
 
 const TAB_KEYS = ['registry', 'approvals', 'escalations', 'runs', 'audit'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
@@ -193,7 +194,10 @@ export default function AgentCommandCenter() {
         <TabsContent value="escalations">
           <EscalationsTab onChange={refreshCounts} />
         </TabsContent>
-        {(['runs', 'audit'] as const).map((key) => (
+        <TabsContent value="runs">
+          <RunsTab />
+        </TabsContent>
+        {(['audit'] as const).map((key) => (
           <TabsContent key={key} value={key}>
             <p className="text-muted-foreground py-12 text-center">{t('agents.comingSoon')}</p>
           </TabsContent>
