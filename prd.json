@@ -189,8 +189,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "src/components/admin/agents/EscalationsTab.tsx (rendered in the /admin/agents 'escalations' tab): lists agent_escalations sorted tier desc -> severity desc -> created_at desc (pure sortEscalations); tier-3 rows highlighted with destructive card styling + destructive Tier badge; severity badge color-coded. Row 'Show detail' toggle expands the context jsonb into a readable key/value <dl> (pure flattenContext humanizes snake_case/camelCase keys, renders nested objects/arrays as compact JSON) rather than a raw dump. Actions: Acknowledge (open rows only) -> status 'acknowledged' + assigned_to = current user; Resolve -> Dialog requires a non-empty resolution_note, sets status 'resolved' + resolved_at (resolved rows show the note read-only). Filters: status Select (all/open/acknowledged/resolved, re-queries) and domain Select (distinctDomains from loaded rows, client-filter). Rows reconcile in place after actions (dropped from view when their new status no longer matches the active filter); sonner toasts throughout. Command Center header gains an open tier-3 count badge (destructive, only when >0) linking to the escalations tab; refreshCounts now also computes the open-tier-3 count. All copy under i18next 'agents.escalations'; Intl.* for dates. Pure logic in src/lib/escalationQueue.ts (severityRank, sortEscalations non-mutating, humanizeKey, flattenContext, distinctDomains) with 8 vitest assertions (escalationQueue.test.ts). Verified: vitest 8/8 pass; scoped strict tsc -> zero errors in my files; production Vite build exit 0 (built 1m1s); real-Chromium Playwright smoke on /admin/agents?tab=escalations -> 0 relevant JS errors. Full authenticated data render not exercisable in-sandbox (no live Supabase admin session)."
     },
     {
       "id": "US-486",

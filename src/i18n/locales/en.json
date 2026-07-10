@@ -112,6 +112,43 @@
       "rejectReasonPlaceholder": "Reason for rejection",
       "rejectConfirm": "Reject draft",
       "reasonRequired": "A reason is required to reject."
+    },
+    "escalations": {
+      "empty": "No escalations match these filters.",
+      "loadError": "Could not load escalations. Please try again.",
+      "openTier3Badge": "{{count}} open tier-3",
+      "tier": "Tier {{tier}}",
+      "created": "Raised",
+      "assignedToYou": "Assigned to you",
+      "assigned": "Assigned",
+      "showDetail": "Show detail",
+      "hideDetail": "Hide detail",
+      "acknowledge": "Acknowledge",
+      "resolve": "Resolve",
+      "resolvedNote": "Resolution",
+      "acknowledgedToast": "Escalation acknowledged.",
+      "resolvedToast": "Escalation resolved.",
+      "actionError": "That action failed. Please try again.",
+      "resolveTitle": "Resolve this escalation?",
+      "resolveBody": "Add a short resolution note. It is recorded on the escalation and in the audit log.",
+      "resolveNotePlaceholder": "What was done to resolve this",
+      "resolveConfirm": "Mark resolved",
+      "noteRequired": "A resolution note is required.",
+      "filters": {
+        "status": "Status",
+        "domain": "Domain",
+        "allStatuses": "All statuses",
+        "allDomains": "All domains",
+        "open": "Open",
+        "acknowledged": "Acknowledged",
+        "resolved": "Resolved"
+      },
+      "severity": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "critical": "Critical"
+      }
     }
   }
 }

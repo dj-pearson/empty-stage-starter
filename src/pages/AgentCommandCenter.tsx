@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { AlertTriangle, ShieldCheck } from 'lucide-react';
 import { AgentRegistryTab } from '@/components/admin/agents/AgentRegistryTab';
 import { ApprovalsTab } from '@/components/admin/agents/ApprovalsTab';
+import { EscalationsTab } from '@/components/admin/agents/EscalationsTab';
 
 const TAB_KEYS = ['registry', 'approvals', 'escalations', 'runs', 'audit'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
@@ -45,16 +46,23 @@ export default function AgentCommandCenter() {
   const [globalPause, setGlobalPause] = useState<boolean | null>(null);
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [openEscalations, setOpenEscalations] = useState(0);
+  const [openTier3, setOpenTier3] = useState(0);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [updatingPause, setUpdatingPause] = useState(false);
 
   const refreshCounts = useCallback(async () => {
-    const [approvals, escalations] = await Promise.all([
+    const [approvals, escalations, tier3] = await Promise.all([
       supabase.from('agent_approvals').select('id', { count: 'exact', head: true }).eq('status', 'draft'),
       supabase.from('agent_escalations').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+      supabase
+        .from('agent_escalations')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'open')
+        .eq('tier', 3),
     ]);
     setPendingApprovals(approvals.count ?? 0);
     setOpenEscalations(escalations.count ?? 0);
+    setOpenTier3(tier3.count ?? 0);
   }, []);
 
   useEffect(() => {
@@ -124,6 +132,13 @@ export default function AgentCommandCenter() {
               {t('agents.badges.openEscalations', { count: openEscalations })}
             </Badge>
           </button>
+          {openTier3 > 0 && (
+            <button type="button" onClick={() => selectTab('escalations')}>
+              <Badge variant="destructive" className="cursor-pointer">
+                {t('agents.escalations.openTier3Badge', { count: openTier3 })}
+              </Badge>
+            </button>
+          )}
         </div>
       </header>
 
@@ -175,7 +190,10 @@ export default function AgentCommandCenter() {
         <TabsContent value="approvals">
           <ApprovalsTab onChange={refreshCounts} />
         </TabsContent>
-        {(['escalations', 'runs', 'audit'] as const).map((key) => (
+        <TabsContent value="escalations">
+          <EscalationsTab onChange={refreshCounts} />
+        </TabsContent>
+        {(['runs', 'audit'] as const).map((key) => (
           <TabsContent key={key} value={key}>
             <p className="text-muted-foreground py-12 text-center">{t('agents.comingSoon')}</p>
           </TabsContent>
