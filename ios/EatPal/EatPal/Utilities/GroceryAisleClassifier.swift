@@ -27,11 +27,34 @@ extension GroceryAisle {
         // are more specific (compound words, prefixed terms) so they
         // beat shorter substrings.
         for (aisle, keywords) in priorityOrderedKeywords {
-            for kw in keywords where needle.contains(kw) {
+            for kw in keywords where matchesKeyword(kw, in: needle) {
                 return aisle
             }
         }
         return .other
+    }
+
+    /// True when `keyword` occurs in `needle` starting at a word boundary —
+    /// the start of the string or right after a non-alphanumeric character.
+    /// US-454: this replaces raw `contains`, which produced false positives
+    /// like "oil" matching "toilet"/"broil"/"foil" or "spoiled". Matching at
+    /// the *left* boundary (rather than requiring a right boundary too) still
+    /// honors the table's intentional stem prefixes ("anchov" → "anchovies")
+    /// and trailing-space tokens ("egg ", "fish ", "pasta ").
+    private static func matchesKeyword(_ keyword: String, in needle: String) -> Bool {
+        guard !keyword.isEmpty else { return false }
+        var searchStart = needle.startIndex
+        while let range = needle.range(of: keyword, range: searchStart..<needle.endIndex) {
+            if range.lowerBound == needle.startIndex {
+                return true
+            }
+            let before = needle[needle.index(before: range.lowerBound)]
+            if !before.isLetter && !before.isNumber {
+                return true
+            }
+            searchStart = needle.index(after: range.lowerBound)
+        }
+        return false
     }
 
     /// Ordered list (priority high → low). Each tuple is one aisle and
@@ -63,7 +86,7 @@ extension GroceryAisle {
             "pita", "naan", "bagel", "english muffin", "sourdough", "focaccia"
         ]),
         (.eggs, [
-            "egg yolk", "egg white", "egg "
+            "egg yolk", "egg white", "eggs", "egg "
         ]),
         (.seafood, [
             "salmon", "tuna", "shrimp", "scallop", "crab", "lobster",
@@ -119,7 +142,9 @@ extension GroceryAisle {
             "ketchup", "mustard", "mayonnaise", "mayo",
             "hot sauce", "sriracha", "tabasco",
             "honey", "maple syrup", "syrup",
-            "salt", "pepper", "cinnamon", "nutmeg", "paprika",
+            "salt", "black pepper", "white pepper", "peppercorn",
+            "ground pepper", "red pepper flake", "crushed red pepper",
+            "cayenne", "cinnamon", "nutmeg", "paprika",
             "cumin", "chili powder", "garlic powder", "onion powder",
             "italian seasoning", "bay leaf", "thyme", "rosemary",
             "oregano", "sage", "dried basil", "dried parsley",
