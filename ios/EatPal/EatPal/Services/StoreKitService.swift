@@ -142,7 +142,10 @@ final class StoreKitService: ObservableObject {
             case .success(let verification):
                 let transaction = try checkVerified(verification)
                 await updateCustomerProductStatus()
-                await validateTransactionOnServer(transaction: transaction)
+                await validateTransactionOnServer(
+                    transaction: transaction,
+                    jwsRepresentation: verification.jwsRepresentation
+                )
                 await transaction.finish()
                 isLoading = false
                 return transaction
@@ -191,7 +194,10 @@ final class StoreKitService: ObservableObject {
         // original_transaction_id.
         for await result in StoreKit.Transaction.currentEntitlements {
             if let transaction = try? checkVerified(result) {
-                await validateTransactionOnServer(transaction: transaction)
+                await validateTransactionOnServer(
+                    transaction: transaction,
+                    jwsRepresentation: result.jwsRepresentation
+                )
             }
         }
         isLoading = false
@@ -206,7 +212,10 @@ final class StoreKitService: ObservableObject {
                 do {
                     let transaction = try await self.checkVerified(result)
                     await self.updateCustomerProductStatus()
-                    await self.validateTransactionOnServer(transaction: transaction)
+                    await self.validateTransactionOnServer(
+                        transaction: transaction,
+                        jwsRepresentation: result.jwsRepresentation
+                    )
                     await transaction.finish()
                 } catch {
                     // US-376: surface verification failures in Sentry instead
@@ -272,7 +281,14 @@ final class StoreKitService: ObservableObject {
     /// checked `auth.uid() = user_id`, a tampered client could have written
     /// status:"active" for a product it never bought. Now only Apple-signed
     /// transactions are honored server-side.
-    private func validateTransactionOnServer(transaction: StoreKit.Transaction) async {
+    ///
+    /// `jwsRepresentation` is the Apple-signed JWS from the transaction's
+    /// `VerificationResult` (StoreKit exposes it on the wrapper, not on the
+    /// unwrapped `Transaction`); it's what the server verifies.
+    private func validateTransactionOnServer(
+        transaction: StoreKit.Transaction,
+        jwsRepresentation: String
+    ) async {
         struct ValidateRequest: Encodable { let jws: String }
         struct ValidateResponse: Decodable {
             let tier: String
@@ -285,7 +301,7 @@ final class StoreKitService: ObservableObject {
         do {
             let _: ValidateResponse = try await EdgeFunctions.invoke(
                 "validate-apple-transaction",
-                body: ValidateRequest(jws: transaction.jwsRepresentation)
+                body: ValidateRequest(jws: jwsRepresentation)
             )
         } catch {
             // US-376: a failed validation must be observable — report to Sentry
