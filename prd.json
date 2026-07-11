@@ -1140,8 +1140,8 @@
         "Migration is additive (CREATE INDEX, ideally CONCURRENTLY where supported)"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: performance | Source: code-review 2026-07-11] 897 CREATE INDEX total but only 78 on user_id / 37 on household_id across ~290 tables; some RLS-filtered columns likely unindexed."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: performance | Source: code-review 2026-07-11] 897 CREATE INDEX total but only 78 on user_id / 37 on household_id across ~290 tables; some RLS-filtered columns likely unindexed. | VERIFIED 2026-07-11: Migration 20260711000003 adds covering indexes on RLS-predicate/FK columns for high-write tables: idx_plan_entries_household_date (household_id,date — covers the windowed load equality+range), idx_plan_entries_user_id, idx_grocery_items_household_id. food_attempts already covered by existing idx_food_attempts_kid (no user_id/household_id column; RLS scopes via kid_id). Additive CREATE INDEX IF NOT EXISTS (not CONCURRENTLY — Supabase migrations are transactional; documented). VERIFIED on real pg16: all 3 indexes created, migration idempotent, migration-lint clean."
     },
     {
       "id": "US-549",
