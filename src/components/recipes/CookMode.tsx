@@ -73,20 +73,23 @@ export function CookMode({ recipeName, instructions, onClose }: CookModeProps) {
     };
   }, []);
 
-  // Timer countdown
+  // Timer countdown. US-543: depend ONLY on the running flag so the interval is
+  // created once when the timer starts (not torn down + recreated every tick,
+  // which is what including timerSeconds in the deps caused). The functional
+  // updater reads the latest value and stops itself at 0.
   useEffect(() => {
-    if (!timerRunning || timerSeconds === null || timerSeconds <= 0) return;
+    if (!timerRunning) return;
     const interval = setInterval(() => {
       setTimerSeconds((prev) => {
         if (prev === null || prev <= 1) {
           setTimerRunning(false);
-          return 0;
+          return prev === null ? null : 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [timerRunning, timerSeconds]);
+  }, [timerRunning]);
 
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);

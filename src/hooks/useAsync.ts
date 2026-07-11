@@ -212,6 +212,19 @@ export function usePoll<T>(
   const isMountedRef = useRef(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // US-543: keep the caller's (often inline / unmemoized) callbacks in refs so
+  // `poll` is stable and the interval effect below depends only on
+  // isPolling/interval — otherwise a new asyncFunction each render tore down and
+  // recreated the interval on every render.
+  const asyncFunctionRef = useRef(asyncFunction);
+  asyncFunctionRef.current = asyncFunction;
+  const onSuccessRef = useRef(onSuccess);
+  onSuccessRef.current = onSuccess;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  const stopOnErrorRef = useRef(stopOnError);
+  stopOnErrorRef.current = stopOnError;
+
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
@@ -225,25 +238,25 @@ export function usePoll<T>(
     setState((prev) => ({ ...prev, loading: true }));
 
     try {
-      const data = await asyncFunction();
+      const data = await asyncFunctionRef.current();
 
       if (isMountedRef.current) {
         setState({ data, error: null, loading: false });
-        onSuccess?.(data);
+        onSuccessRef.current?.(data);
       }
     } catch (error) {
       const err = error as Error;
 
       if (isMountedRef.current) {
         setState((prev) => ({ ...prev, error: err, loading: false }));
-        onError?.(err);
+        onErrorRef.current?.(err);
 
-        if (stopOnError) {
+        if (stopOnErrorRef.current) {
           setIsPolling(false);
         }
       }
     }
-  }, [asyncFunction, onSuccess, onError, stopOnError]);
+  }, []);
 
   useEffect(() => {
     if (isPolling) {
@@ -259,7 +272,7 @@ export function usePoll<T>(
         }
       };
     }
-  }, [isPolling, poll, interval]);
+  }, [isPolling, interval, poll]);
 
   const start = useCallback(() => {
     setIsPolling(true);

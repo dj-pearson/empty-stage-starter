@@ -1075,8 +1075,8 @@
         "useUndoRedo replaces double JSON.stringify equality with a cheaper structural/dirty check"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: performance | Source: code-review 2026-07-11] Locations: src/hooks/useDebounce.ts:54-79; useAsync.ts:224-262; useClickOutside.ts:26-52,76-99; components/recipes/CookMode.tsx:76-89; hooks/useUndoRedo.ts:37."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: performance | Source: code-review 2026-07-11] Locations: src/hooks/useDebounce.ts:54-79; useAsync.ts:224-262; useClickOutside.ts:26-52,76-99; components/recipes/CookMode.tsx:76-89; hooks/useUndoRedo.ts:37. | VERIFIED 2026-07-11: Stabilized churny hooks: useDebouncedCallback stores timer+callback in refs and returns a useCallback-stable fn (identity changes only on delay change; invokes latest callback) — no setState-per-call. usePoll keeps asyncFunction/onSuccess/onError/stopOnError in refs so poll is stable; interval effect deps = [isPolling, interval, poll]. useClickOutside(+Multiple) keeps handler in a ref (deps [ref/refs, enabled]); documented refs-must-be-memoized for the Multiple variant. CookMode countdown depends only on [timerRunning] (was recreating the interval every tick via timerSeconds dep); functional updater self-stops at 0. useUndoRedo adds Object.is fast-path before the deep JSON compare (skips serialization when the reference is unchanged). Tests: useDebounce.test (stability + latest-callback), useUndoRedo.test (ref/deep-equal no-push, undo/redo, functional updater). 55 hooks/recipes tests pass."
     },
     {
       "id": "US-544",
