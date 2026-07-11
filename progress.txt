@@ -66,4 +66,9 @@ Completed P1 batch this loop (US-516..US-524, each committed + pushed, passes:tr
 - 523 SECURITY DEFINER search_path (migration 20260711000002, data-driven ALTER; verified on real pg16).
 - 524 jspdf 4.2.1 + npm audit fix (prod tree 0 crit/0 high; moderates documented in SECURITY.md).
 All new _shared logic has tests in functions/_shared/helpers_test.ts (the CI-run file) — 25 helpers tests + agent-approval-logic_test all green.
-REMAINING P1 (web/React, need vitest): US-525 realtime debounce drops events (src/lib/utils.ts debounce is trailing; used by Grocery/Plan/Kids/Recipes realtime handlers), US-526 cache-can-overwrite-server race (AppContext load precedence, US-341 contract), US-527 recipe-migration heuristic (!id.includes('-') always empty; generateId returns `${Date.now()}-${rand}`). Then P2 US-528..548, P3 US-545/546/549..553.
+- 525 realtime: removed trailing debounce in Grocery/Plan/Kids/Recipes realtime handlers (was coalescing distinct events); fold every payload. Tests in realtimeApply.test.ts.
+- 526 load precedence: serverLoadAppliedRef guard in AppContext so a late cache hydrate can't overwrite server data (US-341). Test in AppContext.precedence.test.tsx (delayed-cache race).
+- 527 recipe migration: src/lib/recipeMigration.ts selectLocalOnlyRecipes/isUuid — detect local-only by non-UUID shape (old !id.includes('-') always empty). Test recipeMigration.test.ts.
+
+*** ALL 12 PRIORITY-1 STORIES (US-516..US-527) DONE as of 2026-07-11. ***
+REMAINING: P2 = US-528..544, US-547, US-548 (17 stories); P3 = US-545, US-546, US-549..553 (7 stories). All are quality/perf/a11y/hardening (no criticals left). Next loop iteration: pick highest-priority pending story from prd.json (passes:false), implement, verify (npm run test:run for web / deno test helpers_test.ts + local maps for edge fns / local pg16 for migrations), mark passes:true via scratchpad/mark_done.py, update this file, commit + push. Verification tooling recap is above in this same dated section.
