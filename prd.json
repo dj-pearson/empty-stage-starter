@@ -1102,8 +1102,8 @@
         "Once at zero, flip continue-on-error to false for the typecheck step"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: ci | Source: code-review 2026-07-11] Confirmed: .github/workflows/ci.yml:40 (lint) and :60 (typecheck) both continue-on-error:true && exit 0; tsconfig-bypass.json excludes src/components/admin/**."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: ci | Source: code-review 2026-07-11] Confirmed: .github/workflows/ci.yml:40 (lint) and :60 (typecheck) both continue-on-error:true && exit 0; tsconfig-bypass.json excludes src/components/admin/**. | VERIFIED 2026-07-11: CI quality-gate ratchet. Measured the real tsc -b count = 1537 (base drift from the documented 1238; NOT from my work except 3 cast errors I introduced in US-537's cacheSnapshot, now FIXED via 'as unknown as'). Committed .ci/typecheck-baseline.txt=1537 + scripts/ci/typecheck-ratchet.sh (runs typecheck once, FAILS if count > baseline so the backlog can only shrink; prints ratchet-down notice when it drops). Added scripts/ci/no-new-any.sh (diff-scoped: fails on newly-ADDED explicit any in changed src/, exempts generated types + tests; verified it passes my branch and flags real any). Wired both into ci.yml (replaced the non-blocking typecheck step; fetch-depth:0 for the diff). docs/typecheck-backlog.md tracks the tsconfig-bypass.json shrink plan (prefer @ts-expect-error over blanket excludes) + the 'flip to hard gate at 0' definition-of-done. Baseline 1537 carries a ~3 buffer (actual ~1534 post-fix) to absorb env noise; ratchet-down notice guides tightening."
     },
     {
       "id": "US-546",

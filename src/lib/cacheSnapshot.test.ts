@@ -17,7 +17,7 @@ const fullKid = (): Kid => ({
 
 describe("redactKidForCache (US-537)", () => {
   it("drops every sensitive field but keeps id/name/age", () => {
-    const out = redactKidForCache(fullKid()) as Record<string, unknown>;
+    const out = redactKidForCache(fullKid()) as unknown as Record<string, unknown>;
     expect(out.id).toBe("k1");
     expect(out.name).toBe("Sam");
     expect(out.age).toBe(5);
@@ -29,7 +29,7 @@ describe("redactKidForCache (US-537)", () => {
   it("does not mutate the original kid", () => {
     const kid = fullKid();
     redactKidForCache(kid);
-    expect((kid as Record<string, unknown>).allergens).toEqual(["peanut", "egg"]);
+    expect((kid as unknown as Record<string, unknown>).allergens).toEqual(["peanut", "egg"]);
   });
 });
 

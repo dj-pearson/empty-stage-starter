@@ -24,7 +24,7 @@ export const SENSITIVE_KID_FIELDS = [
 
 /** Drop sensitive fields from a kid before caching. */
 export function redactKidForCache(kid: Kid): Kid {
-  const out = { ...(kid as Record<string, unknown>) };
+  const out = { ...(kid as unknown as Record<string, unknown>) };
   for (const field of SENSITIVE_KID_FIELDS) delete out[field];
   return out as unknown as Kid;
 }
