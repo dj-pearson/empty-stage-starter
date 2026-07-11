@@ -273,7 +273,11 @@ export default function AccountSettings() {
         supabase.from("plan_entries").select("*").eq("user_id", user.id),
         supabase.from("grocery_items").select("*").eq("user_id", user.id),
         supabase.from("grocery_lists").select("*").eq("user_id", user.id),
-        supabase.from("meal_plan_generations").select("*").eq("user_id", user.id),
+        // meal_plan_generations' row type in the stale generated types.ts makes
+        // the .eq() column inference collapse to an unrelated union (part of the
+        // typecheck backlog, US-545) — keep the cast until types.ts is regenerated.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase.from("meal_plan_generations") as any).select("*").eq("user_id", user.id),
         supabase
           .from("user_subscriptions")
           .select("*, plan:subscription_plans(name)")
