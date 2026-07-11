@@ -1047,8 +1047,8 @@
         "Bundle analysis confirms gsap is not in the initial Planner chunk"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: performance | Source: code-review 2026-07-11] Confirmed: src/components/AnimatedSection.tsx:2 imports unused motion; src/pages/Planner.tsx:6 statically imports GSAPCalendarMealPlanner which imports gsap + gsap/Draggable at module top."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: performance | Source: code-review 2026-07-11] Confirmed: src/components/AnimatedSection.tsx:2 imports unused motion; src/pages/Planner.tsx:6 statically imports GSAPCalendarMealPlanner which imports gsap + gsap/Draggable at module top. | VERIFIED 2026-07-11: AnimatedSection: removed unused 'motion' import (kept LazyMotion/domAnimation/m). Planner: GSAPCalendarMealPlanner is now lazy(() => import(...)) behind <Suspense> at both usage sites (family + single-child). BUNDLE VERIFIED via npx vite build: Planner-*.js uses import('./GSAPCalendarMealPlanner-*.js') (dynamic) with 0 gsap internals (gsap.registerPlugin/Draggable absent); gsap sits in its own vendor-gsap chunk (149.87kB) + the lazy GSAPCalendarMealPlanner chunk (41.44kB), no longer static in the initial Planner chunk."
     },
     {
       "id": "US-542",

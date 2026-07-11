@@ -3,7 +3,6 @@ import { Helmet } from "react-helmet-async";
 import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { GSAPCalendarMealPlanner } from "@/components/GSAPCalendarMealPlanner";
 import { FoodSelectorDialog } from "@/components/FoodSelectorDialog";
 import { DetailedTrackingDialog } from "@/components/DetailedTrackingDialog";
 import { MobileMealPlanner } from "@/components/meal-planner/MobileMealPlanner";
@@ -32,6 +31,9 @@ import { logger } from "@/lib/logger";
 import { lazy, Suspense } from "react";
 import { VarietyFatigueBanner } from "@/components/VarietyFatigueBanner";
 
+// US-541: lazy-load the GSAP planner so gsap + gsap/Draggable are code-split
+// into their own chunk instead of statically bloating the Planner bundle.
+const GSAPCalendarMealPlanner = lazy(() => import("@/components/GSAPCalendarMealPlanner").then(m => ({ default: m.GSAPCalendarMealPlanner })));
 const SaveMealPlanTemplateDialog = lazy(() => import("@/components/SaveMealPlanTemplateDialog").then(m => ({ default: m.SaveMealPlanTemplateDialog })));
 const MealPlanTemplateGallery = lazy(() => import("@/components/MealPlanTemplateGallery").then(m => ({ default: m.MealPlanTemplateGallery })));
 
@@ -774,26 +776,28 @@ export default function Planner() {
                       View Details
                     </Button>
                   </div>
-                  <GSAPCalendarMealPlanner
-                    weekStart={currentWeekStart}
-                    planEntries={planEntries}
-                    foods={foods}
-                    recipes={recipes}
-                    kids={kids}
-                    kidId={kid.id}
-                    kidName={kid.name}
-                    kidAge={kidAge !== null ? kidAge : undefined}
-                    kidWeight={
-                      kid.weight_kg ? Number(kid.weight_kg) : undefined
-                    }
-                    onUpdateEntry={handleUpdateEntry}
-                    onAddEntry={handleAddEntry}
-                    onOpenFoodSelector={handleOpenFoodSelector}
-                    onCopyToChild={handleCopyToChild}
-                    onCopyWeek={handleCopyWeek}
-                    onClearWeek={handleClearWeek}
-                    onOpenMissingForRecipe={openMissingIngredientsForRecipe}
-                  />
+                  <Suspense fallback={<div className="py-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
+                    <GSAPCalendarMealPlanner
+                      weekStart={currentWeekStart}
+                      planEntries={planEntries}
+                      foods={foods}
+                      recipes={recipes}
+                      kids={kids}
+                      kidId={kid.id}
+                      kidName={kid.name}
+                      kidAge={kidAge !== null ? kidAge : undefined}
+                      kidWeight={
+                        kid.weight_kg ? Number(kid.weight_kg) : undefined
+                      }
+                      onUpdateEntry={handleUpdateEntry}
+                      onAddEntry={handleAddEntry}
+                      onOpenFoodSelector={handleOpenFoodSelector}
+                      onCopyToChild={handleCopyToChild}
+                      onCopyWeek={handleCopyWeek}
+                      onClearWeek={handleClearWeek}
+                      onOpenMissingForRecipe={openMissingIngredientsForRecipe}
+                    />
+                  </Suspense>
                 </div>
               );
             })}
@@ -801,26 +805,28 @@ export default function Planner() {
         ) : (
           // Single child mode
           <div aria-live="polite">
-            <GSAPCalendarMealPlanner
-              weekStart={currentWeekStart}
-              planEntries={planEntries}
-              foods={foods}
-              recipes={recipes}
-              kids={kids}
-              kidId={activeKidId}
-              kidName={activeKid!.name}
-              kidAge={activeKid!.age}
-              kidWeight={
-                activeKid!.weight_kg ? Number(activeKid!.weight_kg) : undefined
-              }
-              onUpdateEntry={handleUpdateEntry}
-              onAddEntry={handleAddEntry}
-              onOpenFoodSelector={handleOpenFoodSelector}
-              onCopyToChild={handleCopyToChild}
-              onCopyWeek={handleCopyWeek}
-              onClearWeek={handleClearWeek}
-              onOpenMissingForRecipe={openMissingIngredientsForRecipe}
-            />
+            <Suspense fallback={<div className="py-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
+              <GSAPCalendarMealPlanner
+                weekStart={currentWeekStart}
+                planEntries={planEntries}
+                foods={foods}
+                recipes={recipes}
+                kids={kids}
+                kidId={activeKidId}
+                kidName={activeKid!.name}
+                kidAge={activeKid!.age}
+                kidWeight={
+                  activeKid!.weight_kg ? Number(activeKid!.weight_kg) : undefined
+                }
+                onUpdateEntry={handleUpdateEntry}
+                onAddEntry={handleAddEntry}
+                onOpenFoodSelector={handleOpenFoodSelector}
+                onCopyToChild={handleCopyToChild}
+                onCopyWeek={handleCopyWeek}
+                onClearWeek={handleClearWeek}
+                onOpenMissingForRecipe={openMissingIngredientsForRecipe}
+              />
+            </Suspense>
           </div>
         )}
 
