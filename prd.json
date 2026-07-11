@@ -819,8 +819,8 @@
         "Build and test:run pass after upgrades"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "[Severity: High | Category: security/supply-chain | Source: code-review 2026-07-11] npm audit (omit dev): 36 vulns (2 critical, 11 high). Critical: jspdf (direct), shell-quote (transitive). Most others transitive from tooling."
+      "passes": true,
+      "notes": "[Severity: High | Category: security/supply-chain | Source: code-review 2026-07-11] npm audit (omit dev): 36 vulns (2 critical, 11 high). Critical: jspdf (direct), shell-quote (transitive). Most others transitive from tooling. | VERIFIED 2026-07-11: jspdf 4.2.0->4.2.1 (fixes critical PDF Object Injection GHSA-7x6v-j9x4-qf24, range <=4.2.0). npm audit fix cleared shell-quote critical + all 11 high transitives (axios/lodash/node-forge/undici/ws/tar/@xmldom-xmldom/form-data/etc). Production tree (--omit=dev) now 0 critical / 0 high; 14 remaining moderates are Expo/native build-toolchain requiring a breaking major bump (iOS live) — documented in SECURITY.md with rationale. VERIFIED: npm run test:run 992 passed / 3 skipped; npx vite build succeeds (jspdf chunk builds)."
     },
     {
       "id": "US-525",

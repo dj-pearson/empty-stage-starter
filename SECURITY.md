@@ -397,6 +397,39 @@ SENTRY_AUTH_TOKEN=xxx
 
 ---
 
+## Dependency Vulnerabilities (US-524)
+
+Last reviewed: **2026-07-11**. Command: `npm audit --omit=dev`.
+
+**Resolved this pass:**
+
+- `jspdf` upgraded `4.2.0 → 4.2.1` — fixes the critical PDF Object Injection /
+  HTML Injection advisory (GHSA-7x6v-j9x4-qf24, range `<=4.2.0`). Patch bump, no
+  API change; the three consumers (`src/lib/quiz/pdfGenerator.ts`,
+  `src/lib/budgetCalculator/pdfGenerator.ts`, `src/lib/reportGenerator.ts`) are
+  unaffected.
+- `npm audit fix` (non-breaking) cleared the remaining critical (`shell-quote`)
+  and all high-severity transitive advisories (`axios` SSRF, `lodash`,
+  `node-forge`, `undici`, `ws`, `tar`, `@xmldom/xmldom`, `form-data`,
+  `linkify-it`, `picomatch`, `immutable`).
+- Production dependency tree (`--omit=dev`) now reports **0 critical / 0 high**.
+
+**Remaining (accepted) advisories — 14 moderate, all in the Expo / native build
+toolchain:**
+
+| Package | Advisory | Why deferred |
+| --- | --- | --- |
+| `expo`, `@expo/cli`, `@expo/config*`, `@expo/metro-config`, `@expo/prebuild-config`, `expo-asset`, `expo-constants`, `expo-linking`, `expo-splash-screen`, `xcode` | transitive moderates surfaced via the Expo SDK 54 chain | Fix requires a **breaking major Expo bump**. iOS is live in the App Store; an Expo major upgrade is a separate, deliberately-scheduled migration, not a security hotfix. |
+| `postcss` | XSS via unescaped `</style>` in the CSS string parser | Build-time only (Tailwind/PostCSS pipeline); not reachable at runtime by end users. Fix is a breaking bump pulled through Expo/metro. |
+| `uuid` | missing buffer bounds check in v3/v5/v6 when a `buffer` arg is passed | We do not pass a `buffer` argument; transitive dev/build usage only. Breaking bump via Expo. |
+| `brace-expansion` | zero-step sequence process hang | Transitive; only reached by build tooling, not runtime. |
+
+These are tooling/build-time dependencies with no untrusted-input path in the
+shipped app. They are tracked for the next scheduled Expo SDK upgrade rather
+than force-fixed (which would break the live iOS build).
+
+---
+
 ## Security Checklist
 
 ### Pre-Deployment Checklist
