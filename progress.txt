@@ -74,4 +74,8 @@ All new _shared logic has tests in functions/_shared/helpers_test.ts (the CI-run
 
 P2 progress:
 - US-528 admin gating audit: /admin + /admin-dashboard now <ProtectedRoute requireAdmin>. Audited server-side enforcement — no list-users/update-user fns exist; all admin edge fns call assertAdmin/isAdmin; user_roles RLS requires has_role(admin) on write so no self-grant. Client gate is defense-in-depth only.
+- US-533 verify_jwt guard: functions/_shared/verify-jwt-guard_test.ts (deno test --allow-read, wired into ci.yml) parses config.toml + asserts every verify_jwt=false fn enforces auth in-source (allowlist: health-check, support-intake).
+- US-534 Foods realtime: FoodsContext foods:${hh} channel + applyFoodRealtime + normalizeFoodFromDB (in normalizeEntities.ts); replaced raw Food casts on load/insert/realtime. Tests foodsRealtime.test.ts.
+- US-539 AuthContext dedup: single guarded resolveHousehold(uid) (resolvedUid guard), ensure_user_household at most once/uid. Test AuthContext.dedup.test.tsx.
+Web tests grew: run `npx vitest run src/contexts/ src/lib/` for the touched suites; full `npm run test:run` for a complete pass.
 REMAINING: P2 = US-528..544, US-547, US-548 (17 stories); P3 = US-545, US-546, US-549..553 (7 stories). All are quality/perf/a11y/hardening (no criticals left). Next loop iteration: pick highest-priority pending story from prd.json (passes:false), implement, verify (npm run test:run for web / deno test helpers_test.ts + local maps for edge fns / local pg16 for migrations), mark passes:true via scratchpad/mark_done.py, update this file, commit + push. Verification tooling recap is above in this same dated section.

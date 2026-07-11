@@ -1021,8 +1021,8 @@
         "Add a test asserting a single household resolution for a fresh sign-in"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: correctness | Source: code-review 2026-07-11] Confirmed: src/contexts/AuthContext.tsx:19-54 — both paths call the RPC and setHouseholdId with no dedup."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: correctness | Source: code-review 2026-07-11] Confirmed: src/contexts/AuthContext.tsx:19-54 — both paths call the RPC and setHouseholdId with no dedup. | VERIFIED 2026-07-11: AuthContext now resolves household in one guarded resolveHousehold(uid): both getSession() and the onAuthStateChange INITIAL_SESSION path route through applySession -> resolveHousehold, deduped by a resolvedUid guard (set synchronously before the await) so ensure_user_household/get_user_household_id run at most once per uid; reset on sign-out. Test AuthContext.dedup.test.tsx drives both startup paths for one uid and asserts get_user_household_id called exactly once, ensure 0."
     },
     {
       "id": "US-540",
