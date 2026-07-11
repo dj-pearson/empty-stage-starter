@@ -24,4 +24,11 @@ final class RecipeStepParserTests: XCTestCase {
         XCTAssertTrue(RecipeStepParser.parse(nil).isEmpty)
         XCTAssertTrue(RecipeStepParser.parse("   ").isEmpty)
     }
+
+    func testLeadingDecimalIsNotStrippedAsBullet() {
+        // Regression: the "1." bullet strip must not eat the "1." of "1.5".
+        let raw = "1.5 tsp salt, then stir\n2 cups water"
+        let steps = RecipeStepParser.parse(raw)
+        XCTAssertEqual(steps.first, "1.5 tsp salt, then stir")
+    }
 }
