@@ -90,6 +90,9 @@ verify_jwt = false
 # Auth anomaly detector: invoked by the dispatcher with the internal secret.
 [functions.agent-auth-anomaly]
 verify_jwt = false
+# RLS/permission audit agent: invoked by the dispatcher with the internal secret.
+[functions.agent-rls-audit]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 
