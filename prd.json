@@ -928,8 +928,8 @@
         "calculate-food-similarity calls enforceRateLimit like the other user-facing compute functions"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: security | Source: code-review 2026-07-11] Locations: weekly-nutrition-email/index.ts:22-31; create-checkout/index.ts:104-109; agent-migration-check/index.ts:44; calculate-food-similarity/index.ts."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: security | Source: code-review 2026-07-11] Locations: weekly-nutrition-email/index.ts:22-31; create-checkout/index.ts:104-109; agent-migration-check/index.ts:44; calculate-food-similarity/index.ts. | VERIFIED 2026-07-11: Batch: (1) weekly-nutrition-email compares the Bearer token EXACTLY (slice 'Bearer ' + ===) not substring includes, and got an explicit config.toml verify_jwt=false entry; (2) create-checkout returns generic 'Failed to create checkout session' with Stripe detail logged server-side only (removed details field); (3) agent-migration-check validates raw_url hostname is raw.githubusercontent.com/github.com before attaching GITHUB_TOKEN (skips + warns otherwise); (4) calculate-food-similarity now authenticateRequest + enforceRateLimit('calculate-food-similarity'). US-533 guard updated to recognize CRON_SECRET gate. deno check clean on all 4; guard test green."
     },
     {
       "id": "US-533",

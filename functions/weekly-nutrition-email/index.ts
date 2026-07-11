@@ -20,11 +20,15 @@ export default async (req: Request) => {
   try {
     const authHeader = req.headers.get("Authorization");
     const cronSecret = Deno.env.get("CRON_SECRET");
-    const isServiceRole = authHeader?.includes(
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""
-    );
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    // Exact Bearer-token match, not a substring `includes` (US-532): a substring
+    // check would accept any header that merely CONTAINS the key.
+    const bearer = authHeader?.startsWith("Bearer ")
+      ? authHeader.slice("Bearer ".length)
+      : "";
+    const isServiceRole = !!serviceRoleKey && bearer === serviceRoleKey;
     const isCronJob =
-      cronSecret && req.headers.get("X-Cron-Secret") === cronSecret;
+      !!cronSecret && req.headers.get("X-Cron-Secret") === cronSecret;
 
     if (!isServiceRole && !isCronJob) {
       throw new Error("Unauthorized: Scheduled jobs only");

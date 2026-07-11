@@ -146,3 +146,7 @@ verify_jwt = true
 
 [functions.stripe-webhook]
 verify_jwt = false
+
+# Cron/service-role only; enforces its own exact service-role/cron-secret check.
+[functions.weekly-nutrition-email]
+verify_jwt = false

@@ -95,6 +95,18 @@ serve(async (req) => {
   const flagged: Array<{ file: string; violations: LintViolation[]; sql: string }> = [];
   for (const f of migrationFiles) {
     if (!f.raw_url) continue;
+    // Only attach the GITHUB_TOKEN when raw_url is actually a GitHub host, so a
+    // tampered API response can't exfiltrate the token to a third party (US-532).
+    let rawHost = '';
+    try {
+      rawHost = new URL(f.raw_url).hostname.toLowerCase();
+    } catch {
+      continue;
+    }
+    if (rawHost !== 'raw.githubusercontent.com' && rawHost !== 'github.com') {
+      console.warn(`migration-check: skipping non-GitHub raw_url host ${rawHost}`);
+      continue;
+    }
     const sql = await (await fetch(f.raw_url, { headers: { Authorization: `Bearer ${token}` } })).text().catch(() => '');
     const violations = lintMigrationSql(sql);
     if (hasViolations(violations)) flagged.push({ file: f.filename, violations, sql });

@@ -34,6 +34,7 @@ const PUBLIC_ALLOWLIST = new Set<string>([
  *  - verifyGithubSignature / verifySentrySignature : provider webhook HMAC
  *  - verifyStripeSignature / STRIPE_WEBHOOK_SECRET  : Stripe webhook HMAC
  *  - verifyCsatToken / verifyEmailToken / resolveCsatTokenSecret : signed link token
+ *  - CRON_SECRET  : cron/service-role-only endpoint gated by a shared secret
  */
 const AUTH_PATTERNS = [
   /AGENT_DISPATCH_SECRET/,
@@ -45,6 +46,7 @@ const AUTH_PATTERNS = [
   /verifyCsatToken/,
   /verifyEmailToken/,
   /resolveCsatTokenSecret/,
+  /CRON_SECRET/,
 ];
 
 /** Parse `[functions.NAME]` blocks and their `verify_jwt` value from config.toml. */
