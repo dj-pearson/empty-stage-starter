@@ -90,6 +90,14 @@ enum IngredientTextParser {
         var idx = s.startIndex
         var collected: [Double] = []
         var sawAny = false
+        // True when a *range* separator ("-", "–", "—", " to ") sat between
+        // two collected numbers. A plain space does NOT set it, so "1 8 oz"
+        // (count + package size) is not mistaken for a "1 to 8" range.
+        var sawRangeSeparator = false
+        // Armed when we skip a range separator; promoted to
+        // `sawRangeSeparator` only if the NEXT token is actually another
+        // number, so a trailing compound hyphen ("1 8-ounce") doesn't count.
+        var pendingRangeSep = false
 
         // Loop because "1 1/2" or "1-2" or "1 to 2" emits multiple tokens.
         while idx < s.endIndex {
@@ -99,17 +107,32 @@ enum IngredientTextParser {
             if sawAny {
                 let rest = s[idx...]
                 if rest.hasPrefix(" to ") {
+                    pendingRangeSep = true
                     idx = s.index(idx, offsetBy: 4)
                     continue
                 }
                 let sep = s[idx]
-                if sep == " " || sep == "-" || sep == "–" || sep == "—" {
+                if sep == "-" || sep == "–" || sep == "—" {
+                    pendingRangeSep = true
+                    idx = s.index(after: idx)
+                    continue
+                }
+                if sep == " " {
                     idx = s.index(after: idx)
                     continue
                 }
             }
 
             let ch = s[idx]
+            // A range separator only counts if it was immediately followed by
+            // another number token (this char). Reaching any real token
+            // disarms the pending flag either way.
+            if pendingRangeSep {
+                if ch.isNumber || unicodeFractions[ch] != nil {
+                    sawRangeSeparator = true
+                }
+                pendingRangeSep = false
+            }
 
             // Unicode vulgar fraction: "½", "1½".
             if let frac = unicodeFractions[ch] {
@@ -169,16 +192,19 @@ enum IngredientTextParser {
 
         guard !collected.isEmpty else { return (nil, s) }
 
-        // For a range ("1 to 2", "1-2") we collected two numbers and
-        // want their average. For mixed numbers ("1 1/2") we want the
-        // sum. Heuristic: if every collected value is < 1, sum them
-        // (likely a fraction sequence); otherwise if we collected more
-        // than two we sum (mixed); for exactly two where the second is
-        // larger than the first, average (range).
+        // Three shapes of two-number input:
+        //  1. Range ("1-2", "1 to 2"): a range separator sat between them →
+        //     average.
+        //  2. Count + package size ("1 8 oz", "2 15 oz"): two whole numbers
+        //     with only a space between → the quantity is the count (first).
+        //  3. Mixed number ("1 1/2", "1½"): integer + proper fraction → sum.
+        // Single values and longer fraction sequences fall through to a sum.
         let total: Double
-        if collected.count == 2,
-           collected[0] >= 1, collected[1] >= 1, collected[1] > collected[0] {
+        if collected.count == 2, sawRangeSeparator, collected[1] > collected[0] {
             total = (collected[0] + collected[1]) / 2.0
+        } else if collected.count == 2, !sawRangeSeparator,
+                  collected[0] >= 1, collected[1] >= 1 {
+            total = collected[0]
         } else {
             total = collected.reduce(0, +)
         }

@@ -50,4 +50,29 @@ final class RecipeIngredientParserTests: XCTestCase {
         let rows = RecipeIngredientLegacyParser.parse("milk\n\n  \nbutter", recipeId: "r1")
         XCTAssertEqual(rows.map(\.name), ["milk", "butter"])
     }
+
+    // MARK: - US-453: quantity parsing (count+size vs range vs mixed number)
+
+    func testCountPlusPackageSizeUsesTheCount() {
+        // "1 8 oz package cream cheese" is ONE package, not (1+8)/2 = 4.5.
+        XCTAssertEqual(IngredientTextParser.parse("1 8 oz package cream cheese").quantity, 1)
+        XCTAssertEqual(IngredientTextParser.parse("2 15 oz cans black beans").quantity, 2)
+        XCTAssertEqual(IngredientTextParser.parse("1 14.5 oz can diced tomatoes").quantity, 1)
+    }
+
+    func testCompoundHyphenSizeIsNotARange() {
+        // The hyphen in "8-ounce" is a compound adjective, not a range.
+        XCTAssertEqual(IngredientTextParser.parse("1 8-ounce package cream cheese").quantity, 1)
+    }
+
+    func testHyphenAndWordRangesStillAverage() {
+        XCTAssertEqual(IngredientTextParser.parse("1-2 cups flour").quantity, 1.5)
+        XCTAssertEqual(IngredientTextParser.parse("2 to 3 cloves garlic").quantity, 2.5)
+    }
+
+    func testMixedNumbersStillSum() {
+        XCTAssertEqual(IngredientTextParser.parse("1 1/2 cups sugar").quantity, 1.5)
+        XCTAssertEqual(IngredientTextParser.parse("1½ cups sugar").quantity, 1.5)
+        XCTAssertEqual(IngredientTextParser.parse("1/2 cup milk").quantity, 0.5)
+    }
 }
