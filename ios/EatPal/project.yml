@@ -106,7 +106,10 @@ targets:
         excludes:
           - "Info.plist"
           - "EatPalShareExtension.entitlements"
+          - "PrivacyInfo.xcprivacy"
       - path: Shared
+    resources:
+      - path: EatPalShare/PrivacyInfo.xcprivacy
     info:
       path: EatPalShare/Info.plist
       properties:
@@ -145,7 +148,10 @@ targets:
         excludes:
           - "Info.plist"
           - "EatPalWidgetExtension.entitlements"
+          - "PrivacyInfo.xcprivacy"
       - path: Shared
+    resources:
+      - path: EatPalWidget/PrivacyInfo.xcprivacy
     info:
       path: EatPalWidget/Info.plist
       properties:
