@@ -73,6 +73,24 @@ final class OfflineStoreCacheTests: XCTestCase {
         )
     }
 
+    func testCachePreservesQuantityUnitAisle() {
+        let store = OfflineStore.shared
+        store.purgeAllCachedEntities()
+
+        var f = food("q1", userId: "u1")
+        f.quantity = 3
+        f.unit = "cups"
+        f.aisle = "Baking"
+        f.expiryDate = "2026-01-01"
+        store.cacheFoods([f])
+
+        let loaded = store.loadCachedFoods(userId: "u1").first
+        XCTAssertEqual(loaded?.quantity, 3, "Offline cache must preserve quantity (drives mark-made debits)")
+        XCTAssertEqual(loaded?.unit, "cups")
+        XCTAssertEqual(loaded?.aisle, "Baking")
+        XCTAssertEqual(loaded?.expiryDate, "2026-01-01")
+    }
+
     func testPurgeWipesCacheAndPendingQueue() {
         let store = OfflineStore.shared
 

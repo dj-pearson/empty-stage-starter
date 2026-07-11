@@ -23,6 +23,13 @@ final class CachedFood {
     /// migration adds it to pre-existing rows (which then read as unowned and
     /// are ignored until the next successful sync re-stamps them).
     var ownerUserId: String = ""
+    /// US-452: full JSON-encoded snapshot of the source entity. Preferred on
+    /// read so the cache preserves every field (quantity/unit/aisle/expiry/
+    /// price/…) rather than the lossy subset the typed columns carried — the
+    /// dropped quantity in particular corrupted offline "mark made" pantry
+    /// debits. Additive + optional so lightweight migration is automatic and
+    /// pre-migration rows fall back to the typed-column reconstruction.
+    var payload: Data?
 
     init(from food: Food) {
         self.id = food.id
@@ -34,10 +41,14 @@ final class CachedFood {
         self.barcode = food.barcode
         self.lastSyncedAt = Date()
         self.ownerUserId = food.userId
+        self.payload = try? JSONEncoder().encode(food)
     }
 
     func toFood(userId: String) -> Food {
-        Food(
+        if let payload, let decoded = try? JSONDecoder().decode(Food.self, from: payload) {
+            return decoded
+        }
+        return Food(
             id: id,
             userId: userId,
             name: name,
@@ -59,6 +70,8 @@ final class CachedKid {
     var lastSyncedAt: Date
     /// US-451: owning user id — see `CachedFood.ownerUserId`.
     var ownerUserId: String = ""
+    /// US-452: full JSON snapshot — see `CachedFood.payload`.
+    var payload: Data?
 
     init(from kid: Kid) {
         self.id = kid.id
@@ -67,10 +80,14 @@ final class CachedKid {
         self.pickinessLevel = kid.pickinessLevel
         self.lastSyncedAt = Date()
         self.ownerUserId = kid.userId
+        self.payload = try? JSONEncoder().encode(kid)
     }
 
     func toKid(userId: String) -> Kid {
-        Kid(
+        if let payload, let decoded = try? JSONDecoder().decode(Kid.self, from: payload) {
+            return decoded
+        }
+        return Kid(
             id: id,
             userId: userId,
             name: name,
@@ -91,6 +108,10 @@ final class CachedGroceryItem {
     var lastSyncedAt: Date
     /// US-451: owning user id — see `CachedFood.ownerUserId`.
     var ownerUserId: String = ""
+    /// US-452: full JSON snapshot — see `CachedFood.payload`. Preserves
+    /// aisle/aisleSection/addedVia/priority/sourceRecipeId that the typed
+    /// columns dropped.
+    var payload: Data?
 
     init(from item: GroceryItem) {
         self.id = item.id
@@ -101,10 +122,14 @@ final class CachedGroceryItem {
         self.checked = item.checked
         self.lastSyncedAt = Date()
         self.ownerUserId = item.userId
+        self.payload = try? JSONEncoder().encode(item)
     }
 
     func toGroceryItem(userId: String) -> GroceryItem {
-        GroceryItem(
+        if let payload, let decoded = try? JSONDecoder().decode(GroceryItem.self, from: payload) {
+            return decoded
+        }
+        return GroceryItem(
             id: id,
             userId: userId,
             name: name,
