@@ -570,8 +570,8 @@
         "Typecheck passes"
       ],
       "priority": 34,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "functions/agent-ci-triage/index.ts (verify_jwt=false; shared-secret via x-ci-secret header; event-driven, schedule_cron NULL): parseWorkflowRun normalizes the GitHub Actions workflow_run webhook (repo, runId, conclusion, workflow, prNumber, headBranch); skips non-failure / no-PR events. Fetches the failed job log excerpt via the GitHub API (runs/{id}/jobs -> first failed job -> jobs/{id}/logs, logExcerpt-trimmed tail), and Claude (ctx.structuredOutput ClassificationSchema) classifies is_flake / failing_step / likely_cause / suggested_fix / confidence (AC2). classificationToAction: a flake is RECORDED on the run output with no draft; a real failure drafts a PR comment via ctx.requestApproval({actionType:'pr_comment'}) with repo/pr_number/body/ci_fingerprint (AC3). AC4 dedup: computes failureFingerprint(workflow|pr|failing_step) and, if a prior pr_comment approval with the same fingerprint exists within 24h, files a tier-2 dev_maintenance escalation INSTEAD of a duplicate draft. approval-executor EXTENDED with a pr_comment executor that posts the comment via GitHub REST (issues/{pr}/comments, GITHUB_TOKEN) and returns the comment URL. Pure logic functions/_shared/ci-triage-logic.ts (parseWorkflowRun, classificationToAction, failureFingerprint, logExcerpt) with 5 Deno tests. Migration supabase/migrations/20260709000024_ci_triage_agent.sql seeds the 'ci-triage' agent (dev_maintenance, haiku, event-driven schedule_cron NULL, enabled FALSE). config.toml adds [functions.agent-ci-triage] verify_jwt=false. No types.ts change. Verified: all CI assertions pass in Node; ci function + modified approval-executor + shared modules tsc exit 0 (ambient Deno shims). (deno test runner not installable — esm.sh/deno.land 403 via proxy.)"
     },
     {
       "id": "US-509",

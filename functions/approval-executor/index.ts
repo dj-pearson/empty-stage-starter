@@ -191,12 +191,38 @@ async function executeBlogPost(payload: Record<string, unknown>): Promise<unknow
   return { post_id: post.id, slug: post.slug, url: `https://tryeatpal.com/blog/${post.slug}` };
 }
 
+/** pr_comment: post a comment to a pull request via the GitHub REST API (US-508). */
+async function executePrComment(payload: Record<string, unknown>): Promise<unknown> {
+  const token = Deno.env.get('GITHUB_TOKEN');
+  const repo = payload.repo as string | undefined;
+  const prNumber = payload.pr_number;
+  const body = payload.body as string | undefined;
+  if (!token) throw new Error('GITHUB_TOKEN is not configured');
+  if (!repo || typeof prNumber !== 'number' || !body) {
+    throw new Error('pr_comment requires repo, pr_number, body');
+  }
+  const res = await fetch(`https://api.github.com/repos/${repo}/issues/${prNumber}/comments`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'User-Agent': 'eatpal-agentic-os',
+    },
+    body: JSON.stringify({ body }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`GitHub ${res.status}: ${JSON.stringify(data).slice(0, 300)}`);
+  return { comment_url: (data as { html_url?: string }).html_url ?? null };
+}
+
 const EXECUTORS: Record<string, (p: Record<string, unknown>) => Promise<unknown>> = {
   send_email: executeSendEmail,
   social_webhook: executeSocialWebhook,
   github_issue: executeGithubIssue,
   content_topic: executeContentTopic,
   blog_post: executeBlogPost,
+  pr_comment: executePrComment,
 };
 
 // ---------------------------------------------------------------------------
