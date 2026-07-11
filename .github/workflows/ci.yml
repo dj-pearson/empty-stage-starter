@@ -166,6 +166,11 @@ jobs:
       - name: Deno helper unit tests
         run: deno test functions/_shared/helpers_test.ts
 
+      # US-533: static guard that every verify_jwt=false function enforces its
+      # own auth in-source (reads config.toml + function sources).
+      - name: Deno verify_jwt enforcement guard
+        run: deno test --allow-read functions/_shared/verify-jwt-guard_test.ts
+
       - uses: supabase/setup-cli@v1
         with:
           version: latest

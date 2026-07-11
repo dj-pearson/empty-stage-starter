@@ -941,8 +941,8 @@
         "Test is wired into CI"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: security/ci | Source: code-review 2026-07-11] config.toml sets verify_jwt=false for many agent/automation functions; enforcement rests entirely on in-function secret checks with no automated verification."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: security/ci | Source: code-review 2026-07-11] config.toml sets verify_jwt=false for many agent/automation functions; enforcement rests entirely on in-function secret checks with no automated verification. | VERIFIED 2026-07-11: New functions/_shared/verify-jwt-guard_test.ts: parses [functions.X]/verify_jwt from config.toml, and for each verify_jwt=false function (minus a documented PUBLIC_ALLOWLIST = health-check, support-intake) asserts its index.ts contains a recognized auth pattern (AGENT_DISPATCH_SECRET | authenticateRequest | verifyGithubSignature | verifySentrySignature | verifyStripeSignature | STRIPE_WEBHOOK_SECRET | verifyCsatToken | verifyEmailToken | resolveCsatTokenSecret). Stale config entries with no source dir (test-blog-webhook/generate-image/generate-sitemap) are skipped. Wired into ci.yml as a new step (deno test --allow-read). Verified: 31 gated + stripe (32 checked), 0 unguarded. Has teeth (flagged stripe-webhook until Stripe pattern added)."
     },
     {
       "id": "US-534",
