@@ -202,6 +202,10 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         WKApplication: true
+        # Links the watch app to its iOS companion; the simulator refuses to
+        # install the embedded watch app without it ("Missing
+        # WKCompanionAppBundleIdentifier key in WatchKit 2.0 app's Info.plist").
+        WKCompanionAppBundleIdentifier: com.eatpal.app
     dependencies:
       - target: EatPalWatchComplications
         embed: true
