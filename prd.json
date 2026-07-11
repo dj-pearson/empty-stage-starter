@@ -554,8 +554,8 @@
         "Typecheck passes"
       ],
       "priority": 33,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "functions/agent-dependency-audit/index.ts (verify_jwt=false + internal secret; runAgent): fetches package.json from GitHub raw (raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_DEFAULT_BRANCH||main}/package.json), parseDependencies merges deps+devDeps and pins versions, then queries OSV's public batch API (POST api.osv.dev/v1/querybatch, ecosystem npm) for known vulnerabilities and resolves severities for a bounded set (30) of vuln ids via /v1/vulns/{id} (vulnSeverity: GHSA database_specific.severity or CVSS-score fallback). Claude (ctx.complete) writes the human report — critical vulnerabilities first with a call to action, then high, then safe minor/patch upgrade groupings each with a one-line risk note. Submits the report as a github_issue approval draft titled reportTitle(YYYY-MM-DD) = 'Weekly dependency report <date>' (AC3), labels [dependencies, maintenance]. Any critical finding (hasCritical) ADDITIONALLY files a tier-2 dev_maintenance escalation immediately (AC4). Pure logic functions/_shared/dependency-audit-logic.ts (normalizeVersion strips ^~>=< and skips workspace/file/git/*/latest, parseDependencies, vulnSeverity GHSA+CVSS, hasCritical, countBySeverity, reportTitle) with 5 Deno tests. Migration supabase/migrations/20260709000023_dependency_audit_agent.sql seeds the 'dependency-audit' agent (dev_maintenance, haiku, weekly '0 7 * * 1', enabled FALSE). config.toml adds [functions.agent-dependency-audit] verify_jwt=false. No types.ts change. Verified: all dependency assertions pass in Node; dependency function + runtime tsc exit 0 (ambient Deno shims). (deno test runner not installable — esm.sh/deno.land 403 via proxy.)"
     },
     {
       "id": "US-508",
