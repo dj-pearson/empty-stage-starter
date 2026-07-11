@@ -66,6 +66,7 @@ import { EmailPreferences } from "@/components/EmailPreferences";
 import { DataImport } from "@/components/settings/DataImport";
 import { BindEmailFlow } from "@/components/auth/BindEmailFlow";
 import { useBindStatus } from "@/hooks/useBindStatus";
+import { getErrorMessage } from "@/lib/api-errors";
 
 export default function AccountSettings() {
   const [activeTab, setActiveTab] = useState("profile");
@@ -150,8 +151,8 @@ export default function AccountSettings() {
       if (error) throw error;
       toast.success("Profile updated successfully");
       await loadProfile();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to update profile");
+    } catch (err) {
+      toast.error(getErrorMessage(err) || "Failed to update profile");
     } finally {
       setSavingProfile(false);
     }
@@ -205,8 +206,8 @@ export default function AccountSettings() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to change password");
+    } catch (err) {
+      toast.error(getErrorMessage(err) || "Failed to change password");
     } finally {
       setChangingPassword(false);
     }
@@ -271,10 +272,8 @@ export default function AccountSettings() {
         supabase.from("recipes").select("*").eq("user_id", user.id),
         supabase.from("plan_entries").select("*").eq("user_id", user.id),
         supabase.from("grocery_items").select("*").eq("user_id", user.id),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase.from("grocery_lists") as any).select("*").eq("user_id", user.id),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase.from("meal_plan_generations") as any).select("*").eq("user_id", user.id),
+        supabase.from("grocery_lists").select("*").eq("user_id", user.id),
+        supabase.from("meal_plan_generations").select("*").eq("user_id", user.id),
         supabase
           .from("user_subscriptions")
           .select("*, plan:subscription_plans(name)")

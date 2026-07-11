@@ -5,7 +5,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useFoods, useGrocery, useKids, usePlan } from "@/contexts/AppContext";
 import { FoodCard } from "@/components/FoodCard";
 import { ImportCsvDialog } from "@/components/ImportCsvDialog";
-import { ImageFoodCapture } from "@/components/ImageFoodCapture";
+import { ImageFoodCapture, type FoodIdentification } from "@/components/ImageFoodCapture";
 
 // Lazy load dialogs that are only shown on user action
 const AddFoodDialog = lazy(() => import("@/components/AddFoodDialog").then(m => ({ default: m.AddFoodDialog })));
@@ -460,7 +460,7 @@ export default function Pantry() {
     // If blocked by plan limit, the upgrade modal handles the messaging.
   };
 
-  const handleFoodIdentified = async (foodData: any) => {
+  const handleFoodIdentified = async (foodData: FoodIdentification) => {
     logger.debug("handleFoodIdentified received:", foodData);
     const existingFood = foods.find(
       (f) =>

@@ -23,7 +23,14 @@ import { SwapMealDialog } from "@/components/SwapMealDialog";
 import { MissingIngredientsDialog } from "@/components/MissingIngredientsDialog";
 import { computeRecipeShortfall, type Shortfall } from "@/lib/recipeShortfall";
 import { supabase } from "@/integrations/supabase/client";
+import { parsePlanEntryRows } from "@/lib/normalizeEntities";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
+
+// Shape of a single day in the ai-meal-plan edge-function response.
+interface AiMealPlanDay {
+  date: string;
+  meals: Record<string, string | null>;
+}
 import { format, startOfWeek, addWeeks, subWeeks, addDays } from "date-fns";
 import { calculateAge } from "@/lib/utils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
@@ -234,7 +241,7 @@ export default function Planner() {
       }
 
       const newEntries: PlanEntry[] = [];
-      data.plan.forEach((day: any) => {
+      (data.plan as AiMealPlanDay[]).forEach((day) => {
         Object.entries(day.meals).forEach(([slot, foodId]) => {
           if (foodId) {
             newEntries.push({
@@ -249,7 +256,7 @@ export default function Planner() {
         });
       });
 
-      const dates = data.plan.map((d: any) => d.date);
+      const dates = (data.plan as AiMealPlanDay[]).map((d) => d.date);
       const filteredEntries = planEntries.filter(
         (e) => !dates.includes(e.date) || e.kid_id !== activeKidId
       );
@@ -322,7 +329,7 @@ export default function Planner() {
             .order("date", { ascending: true });
 
           if (planData) {
-            setPlanEntries(planData as any);
+            setPlanEntries(parsePlanEntryRows(planData));
           }
         }
 
@@ -444,7 +451,7 @@ export default function Planner() {
           .order("date", { ascending: true });
 
         if (planData) {
-          setPlanEntries(planData as any);
+          setPlanEntries(parsePlanEntryRows(planData));
         }
       }
 
@@ -526,7 +533,8 @@ export default function Planner() {
           food_id: recipeEntry.food_id,
           recipe_id: recipeEntry.recipe_id,
           is_primary_dish: recipeEntry.is_primary_dish,
-        } as any);
+          result: null,
+        });
       }
 
       const targetKid = kids.find((k) => k.id === targetKidId);
@@ -537,7 +545,8 @@ export default function Planner() {
         date: entry.date,
         meal_slot: entry.meal_slot,
         food_id: entry.food_id,
-      } as any);
+        result: null,
+      });
 
       const targetKid = kids.find((k) => k.id === targetKidId);
       toast.success(`Meal copied to ${targetKid?.name}'s plan`);

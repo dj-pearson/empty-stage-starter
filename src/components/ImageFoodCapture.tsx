@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { FoodCategory } from "@/types";
 import { logger } from "@/lib/logger";
 
-interface FoodIdentification {
+export interface FoodIdentification {
   name: string;
   variety?: string;
   varietyOptions?: string[];
