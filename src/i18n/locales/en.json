@@ -74,7 +74,25 @@
       "enabledToast": "{{name}} enabled.",
       "disabledToast": "{{name}} disabled.",
       "toggleError": "Could not update {{name}}. Please try again.",
-      "loadError": "Could not load agents. Please try again."
+      "loadError": "Could not load agents. Please try again.",
+      "configure": "Configure"
+    },
+    "detail": {
+      "subtitle": "Edit this agent's prompt, schedule, budget, and autonomy. Changes are versioned and audited.",
+      "systemPrompt": "System prompt",
+      "scheduleCron": "Schedule (cron)",
+      "invalidCron": "Enter a valid 5-field cron expression, or leave blank for event-driven agents.",
+      "dailyCap": "Daily cost cap (USD)",
+      "invalidCap": "Enter a non-negative number.",
+      "model": "Model",
+      "autoApprove": "Auto-approve actions",
+      "autoApproveHint": "Checked action types skip human review and execute automatically. Leave unchecked to require approval.",
+      "versionHistory": "Prompt version history",
+      "noVersions": "No saved versions yet. Saving a prompt change creates the first version.",
+      "rollback": "Restore",
+      "save": "Save changes",
+      "savedToast": "Agent configuration saved.",
+      "saveError": "Could not save the configuration. Please try again."
     },
     "status": {
       "running": "Running",

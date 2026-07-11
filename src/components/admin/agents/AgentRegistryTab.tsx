@@ -4,10 +4,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { logAgentAudit } from '@/lib/agentAudit';
+import { AgentDetailDialog } from '@/components/admin/agents/AgentDetailDialog';
 import type { Database } from '@/integrations/supabase/types';
 
 type AgentDefinition = Database['public']['Tables']['agent_definitions']['Row'];
@@ -41,6 +43,8 @@ export function AgentRegistryTab() {
   const [cards, setCards] = useState<AgentCardData[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<AgentDefinition | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -196,10 +200,29 @@ export function AgentRegistryTab() {
                   </span>
                 </span>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  setEditing(agent);
+                  setDetailOpen(true);
+                }}
+              >
+                {t('agents.registry.configure')}
+              </Button>
             </CardContent>
           </Card>
         );
       })}
+      <AgentDetailDialog
+        agent={editing}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onSaved={(updated) =>
+          setCards((prev) => prev.map((c) => (c.agent.id === updated.id ? { ...c, agent: updated } : c)))
+        }
+      />
     </div>
   );
 }
