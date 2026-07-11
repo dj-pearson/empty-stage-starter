@@ -805,8 +805,8 @@
         "Supabase linter security_definer_search_path reports zero findings"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "[Severity: High | Category: db-security | Source: code-review 2026-07-11] Confirmed ~40 migrations declare more SECURITY DEFINER functions than SET search_path clauses (e.g. get_user_subscription, can_add_child). has_role() was already fixed — apply broadly."
+      "passes": true,
+      "notes": "[Severity: High | Category: db-security | Source: code-review 2026-07-11] Confirmed ~40 migrations declare more SECURITY DEFINER functions than SET search_path clauses (e.g. get_user_subscription, can_add_child). has_role() was already fixed — apply broadly. | VERIFIED 2026-07-11: Migration 20260711000002: data-driven DO block runs ALTER FUNCTION ... SET search_path = public, extensions, pg_temp on every SECURITY DEFINER function in public that doesn't already pin it (pg_proc.prosecdef + proconfig check). Covers all ~50 definer fns incl. overloads without listing signatures; additive/backward-compat (no body change); idempotent. VERIFIED end-to-end on a real Postgres 16 cluster: unpinned fns (incl. both get_thing overloads) got pinned, already-pinned skipped, INVOKER ignored, 2nd run no-op. migration-lint clean."
     },
     {
       "id": "US-524",
