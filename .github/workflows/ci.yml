@@ -180,6 +180,11 @@ jobs:
       - name: Deno verify_jwt enforcement guard
         run: deno test --allow-read functions/_shared/verify-jwt-guard_test.ts
 
+      # Pure Apple entitlement logic (product->tier + status derivation) shared
+      # by validate-apple-transaction and app-store-notifications. Hermetic.
+      - name: Deno Apple entitlement unit tests
+        run: deno test supabase/functions/common/apple-entitlement.test.ts
+
       - uses: supabase/setup-cli@v1
         with:
           version: latest

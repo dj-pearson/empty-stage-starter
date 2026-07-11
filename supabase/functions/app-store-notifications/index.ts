@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { compactVerify, importX509, decodeProtectedHeader } from "https://esm.sh/jose@5.9.6";
+import { verifyAppleJWS } from "../common/apple-jws.ts";
 
 // App Store Server Notifications V2 endpoint.
 //
@@ -16,57 +16,14 @@ import { compactVerify, importX509, decodeProtectedHeader } from "https://esm.sh
 //     Version 2 notifications.
 //   - Use "Request a Test Notification" to verify end-to-end.
 //
-// SECURITY:
-//   - The JWS signature is cryptographically verified against the leaf
-//     certificate in the x5c header (tamper-evidence).
-//   - Set the APPLE_ROOT_CA_G3 env var (base64 DER of Apple Root CA - G3,
-//     from https://www.apple.com/certificateauthority/) to PIN the trust
-//     anchor — the chain's root must then equal it. If unset, the handler
-//     logs a warning and proceeds (the only mutation here is a subscription
-//     status change; iOS access is gated client-side, so the blast radius of
-//     an unverified-source event is low — but pinning is recommended).
-//   - Hardening TODO: full X.509 path validation (leaf<-intermediate<-root
-//     signature chain), or verify authoritatively via the App Store Server
-//     API Get Transaction Info endpoint.
+// SECURITY: the JWS signature is verified by the shared verifyAppleJWS helper
+// (see ../common/apple-jws.ts) against the x5c leaf certificate, with optional
+// trust-anchor pinning via APPLE_ROOT_CA_G3.
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const APPLE_ROOT_CA_G3 = Deno.env.get("APPLE_ROOT_CA_G3");
 
 const jsonHeaders = { "Content-Type": "application/json" };
-
-function pemFromDerBase64(b64: string): string {
-  const wrapped = b64.match(/.{1,64}/g)?.join("\n") ?? b64;
-  return `-----BEGIN CERTIFICATE-----\n${wrapped}\n-----END CERTIFICATE-----`;
-}
-
-/**
- * Verify an Apple JWS (compact) and return its decoded JSON payload. Verifies
- * the signature against the x5c leaf certificate and, when configured, pins
- * the chain's root to Apple Root CA - G3.
- */
-async function verifyAppleJWS(jws: string): Promise<Record<string, unknown>> {
-  const header = decodeProtectedHeader(jws);
-  const x5c = header.x5c as string[] | undefined;
-  if (!x5c || x5c.length === 0) {
-    throw new Error("JWS is missing the x5c certificate chain");
-  }
-
-  if (APPLE_ROOT_CA_G3) {
-    const root = x5c[x5c.length - 1];
-    if (root !== APPLE_ROOT_CA_G3) {
-      throw new Error("JWS chain root does not match the pinned Apple Root CA");
-    }
-  } else {
-    console.warn(
-      "APPLE_ROOT_CA_G3 not set — verifying the leaf signature only (no trust-anchor pin). Set it to harden."
-    );
-  }
-
-  const key = await importX509(pemFromDerBase64(x5c[0]), (header.alg as string) || "ES256");
-  const { payload } = await compactVerify(jws, key);
-  return JSON.parse(new TextDecoder().decode(payload)) as Record<string, unknown>;
-}
 
 export default async (req: Request) => {
   if (req.method === "OPTIONS") {
