@@ -33,6 +33,18 @@ import { validateExternalUrl, fetchWithTimeout } from '../_shared/url-validator.
 import { buildEscalation } from '../_shared/agent-approval-logic.ts';
 import { withTicketToken, canTransition } from '../_shared/support-status-logic.ts';
 import {
+  parseRepoAllowlist,
+  isAllowedRepo,
+  isValidEmailRecipient,
+} from '../_shared/outward-payload-validation.ts';
+
+/** Repo allowlist for GitHub writes (GITHUB_ALLOWED_REPOS csv, falling back to GITHUB_REPO). */
+function githubRepoAllowlist(): string[] {
+  return parseRepoAllowlist(
+    Deno.env.get('GITHUB_ALLOWED_REPOS') ?? Deno.env.get('GITHUB_REPO') ?? '',
+  );
+}
+import {
   decideExecution,
   payloadWithSuccess,
   payloadWithFailure,
@@ -62,6 +74,10 @@ async function executeSendEmail(payload: Record<string, unknown>): Promise<unkno
   const html = (payload.html ?? payload.body) as string | undefined;
   if (!to || !subject || !html) {
     throw new Error('send_email payload requires to, subject, and html/body');
+  }
+  // Defense-in-depth (US-522): reject malformed / header-injected recipients.
+  if (!isValidEmailRecipient(to)) {
+    throw new Error('send_email payload.to is not a valid email recipient');
   }
 
   // Support replies embed a subject token so inbound replies match the ticket.
@@ -107,6 +123,10 @@ async function executeGithubIssue(payload: Record<string, unknown>): Promise<unk
   const repo = (payload.repo as string) ?? Deno.env.get('GITHUB_REPO'); // "owner/name"
   if (!token) throw new Error('GITHUB_TOKEN is not configured');
   if (!repo) throw new Error('github_issue requires a repo (payload.repo or GITHUB_REPO)');
+  // Allowlist the target repo (US-522): a payload-supplied repo must be owned.
+  if (!isAllowedRepo(repo, githubRepoAllowlist())) {
+    throw new Error(`github_issue repo not allowlisted: ${repo}`);
+  }
 
   const title = payload.title;
   if (!title) throw new Error('github_issue payload requires a title');
@@ -200,6 +220,10 @@ async function executePrComment(payload: Record<string, unknown>): Promise<unkno
   if (!token) throw new Error('GITHUB_TOKEN is not configured');
   if (!repo || typeof prNumber !== 'number' || !body) {
     throw new Error('pr_comment requires repo, pr_number, body');
+  }
+  // Allowlist the target repo (US-522): a payload-supplied repo must be owned.
+  if (!isAllowedRepo(repo, githubRepoAllowlist())) {
+    throw new Error(`pr_comment repo not allowlisted: ${repo}`);
   }
   const res = await fetch(`https://api.github.com/repos/${repo}/issues/${prNumber}/comments`, {
     method: 'POST',

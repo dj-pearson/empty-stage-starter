@@ -44,6 +44,11 @@ import {
   isFreshStripeEvent,
   isDuplicateInsertError,
 } from './stripe-webhook-logic.ts';
+import {
+  parseRepoAllowlist,
+  isAllowedRepo,
+  isValidEmailRecipient,
+} from './outward-payload-validation.ts';
 
 const CORS = { 'Access-Control-Allow-Origin': 'https://tryeatpal.com' };
 
@@ -371,4 +376,31 @@ Deno.test('isDuplicateInsertError detects unique-violations (redelivered event)'
   assertEquals(isDuplicateInsertError({ code: '23503' }), false);
   assertEquals(isDuplicateInsertError(null), false);
   assertEquals(isDuplicateInsertError('boom'), false);
+});
+
+// ---------------------------------------------------------------------------
+// outward-payload-validation.ts — repo/recipient allowlisting (US-522)
+// ---------------------------------------------------------------------------
+
+Deno.test('isAllowedRepo: only allowlisted owner/name repos pass, fails closed when empty', () => {
+  const allow = parseRepoAllowlist('dj-pearson/empty-stage-starter, Owner/Repo');
+  assert(isAllowedRepo('dj-pearson/empty-stage-starter', allow));
+  assert(isAllowedRepo('owner/repo', allow)); // case-insensitive
+  // A payload-injected foreign repo (the prompt-injection target).
+  assertEquals(isAllowedRepo('attacker/evil', allow), false);
+  // Malformed.
+  assertEquals(isAllowedRepo('not-a-repo', allow), false);
+  // Empty allowlist fails closed.
+  assertEquals(isAllowedRepo('dj-pearson/empty-stage-starter', []), false);
+});
+
+Deno.test('isValidEmailRecipient: valid single/array, rejects injection and junk', () => {
+  assert(isValidEmailRecipient('user@example.com'));
+  assert(isValidEmailRecipient(['a@example.com', 'b@example.org']));
+  assertEquals(isValidEmailRecipient('not-an-email'), false);
+  // Header-injection attempt.
+  assertEquals(isValidEmailRecipient('a@example.com\r\nBcc: victim@x.com'), false);
+  assertEquals(isValidEmailRecipient(''), false);
+  assertEquals(isValidEmailRecipient([]), false);
+  assertEquals(isValidEmailRecipient({ to: 'x' }), false);
 });

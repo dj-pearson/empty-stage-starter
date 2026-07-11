@@ -791,8 +791,8 @@
         "Add tests covering an auto-approve attempt for a send_email/github action being forced to draft"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "[Severity: High | Category: security/injection | Source: code-review 2026-07-11] Confirmed path: _shared/agent-runtime.ts:563-587 (buildApproval promotes to 'approved' when autonomy_policy allowlists the type) + approval-executor/index.ts executes approved rows with no human step."
+      "passes": true,
+      "notes": "[Severity: High | Category: security/injection | Source: code-review 2026-07-11] Confirmed path: _shared/agent-runtime.ts:563-587 (buildApproval promotes to 'approved' when autonomy_policy allowlists the type) + approval-executor/index.ts executes approved rows with no human step. | VERIFIED 2026-07-11: resolveApprovalStatus now forces OUTWARD_ACTION_TYPES (send_email, github_issue, pr_comment, social_webhook, webhook) to 'draft' regardless of autonomy_policy.autoExecute — prompt injection in ingested content can no longer auto-approve an outward action. approval-executor validates payload before execution: github_issue/pr_comment repo must be in GITHUB_ALLOWED_REPOS/GITHUB_REPO allowlist (fail-closed), send_email 'to' must be injection-free valid email(s). New _shared/outward-payload-validation.ts. Updated agent-approval-logic_test (outward always-draft) + new helpers tests. deno check clean; approval-logic 8 + helpers 25 tests pass."
     },
     {
       "id": "US-523",
