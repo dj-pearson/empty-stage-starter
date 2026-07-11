@@ -873,8 +873,8 @@
         "Document findings; add server-side checks where missing"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: security/authorization | Source: code-review 2026-07-11] Confirmed: src/App.tsx:329-346 both use <ProtectedRoute> without requireAdmin (siblings at 348+ use it); pages self-check via useAdminCheck, which is fragile."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: security/authorization | Source: code-review 2026-07-11] Confirmed: src/App.tsx:329-346 both use <ProtectedRoute> without requireAdmin (siblings at 348+ use it); pages self-check via useAdminCheck, which is fragile. | VERIFIED 2026-07-11: Route fix: /admin + /admin-dashboard now use <ProtectedRoute requireAdmin> (mirroring /admin/agents). Audit findings: no list-users/update-user edge fns exist in repo; ALL admin-privileged edge fns verify server-side (update-blog-image, google-indexing, generate-blog-content, generate-social-content, agent-knowledge-ingest all call assertAdmin/isAdmin). user_roles RLS (migration 20260613000004) requires has_role(auth.uid(),'admin') on INSERT/UPDATE/DELETE — a user cannot self-grant admin. No missing server-side checks. Client requireAdmin is now defense-in-depth, not the only boundary."
     },
     {
       "id": "US-529",

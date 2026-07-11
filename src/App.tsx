@@ -328,7 +328,7 @@ const App = () => (
                       <Route
                         path="/admin"
                         element={
-                          <ProtectedRoute>
+                          <ProtectedRoute requireAdmin>
                             <RouteErrorBoundary>
                               <Admin />
                             </RouteErrorBoundary>
@@ -338,7 +338,7 @@ const App = () => (
                       <Route
                         path="/admin-dashboard"
                         element={
-                          <ProtectedRoute>
+                          <ProtectedRoute requireAdmin>
                             <RouteErrorBoundary>
                               <AdminDashboard />
                             </RouteErrorBoundary>
