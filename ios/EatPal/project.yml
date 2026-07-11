@@ -8,6 +8,7 @@ options:
   bundleIdPrefix: com.eatpal
   deploymentTarget:
     iOS: "17.0"
+    watchOS: "10.0"
   xcodeVersion: "26.2"
   createIntermediateGroups: true
   groupSortPosition: top
@@ -79,6 +80,9 @@ targets:
         embed: true
         codeSign: true
       - target: EatPalShareExtension
+        embed: true
+        codeSign: true
+      - target: EatPalWatch
         embed: true
         codeSign: true
     settings:
@@ -166,6 +170,80 @@ targets:
         PRODUCT_NAME: EatPalWidgetExtension
         CODE_SIGN_ENTITLEMENTS: EatPalWidget/EatPalWidgetExtension.entitlements
         PROVISIONING_PROFILE_SPECIFIER: "EatPal Widget App Store"
+        SKIP_INSTALL: YES
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/Frameworks"
+          - "@executable_path/../../Frameworks"
+
+  # -----------------------------------------------------------------
+  # watchOS companion app (US-237) — Today + Grocery screens fed by
+  # WatchConnectivity; embedded in the iPhone app.
+  # -----------------------------------------------------------------
+  EatPalWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: "EatPalWatch Watch App"
+        excludes:
+          - "Info.plist"
+          - "Complications/**"
+          - "README.md"
+          - "EatPalWatch.entitlements"
+          - "EatPalWatchComplications.entitlements"
+      # Shared payload model — the one file that must compile in both the
+      # iPhone and watch processes. The rest of Shared/ pulls in
+      # Supabase/ActivityKit and must NOT be added to the watch targets.
+      - path: Shared/WatchSnapshot.swift
+    info:
+      path: "EatPalWatch Watch App/Info.plist"
+      properties:
+        CFBundleDisplayName: EatPal
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        WKApplication: true
+    dependencies:
+      - target: EatPalWatchComplications
+        embed: true
+        codeSign: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.eatpal.app.watchkitapp
+        PRODUCT_NAME: EatPalWatch
+        CODE_SIGN_ENTITLEMENTS: "EatPalWatch Watch App/EatPalWatch.entitlements"
+        PROVISIONING_PROFILE_SPECIFIER: "EatPal Watch App Store"
+        WATCHOS_DEPLOYMENT_TARGET: "10.0"
+        TARGETED_DEVICE_FAMILY: "4"
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/Frameworks"
+
+  # -----------------------------------------------------------------
+  # watchOS complications (WidgetKit) — Tonight + Grocery; embedded in
+  # the watch app. Separate target because it has its own @main WidgetBundle.
+  # -----------------------------------------------------------------
+  EatPalWatchComplications:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - path: "EatPalWatch Watch App/Complications/EatPalWatchComplications.swift"
+      - path: Shared/WatchSnapshot.swift
+    info:
+      path: "EatPalWatch Watch App/Complications/Info.plist"
+      properties:
+        CFBundleDisplayName: EatPal
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.eatpal.app.watchkitapp.complications
+        PRODUCT_NAME: EatPalWatchComplications
+        CODE_SIGN_ENTITLEMENTS: "EatPalWatch Watch App/EatPalWatchComplications.entitlements"
+        PROVISIONING_PROFILE_SPECIFIER: "EatPal Watch Complications App Store"
+        WATCHOS_DEPLOYMENT_TARGET: "10.0"
+        TARGETED_DEVICE_FAMILY: "4"
         SKIP_INSTALL: YES
         LD_RUNPATH_SEARCH_PATHS:
           - "$(inherited)"
