@@ -968,8 +968,8 @@
         "Add a test: a partial bulk failure leaves client and server consistent; a realtime event during a failed mutation is preserved"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: data-integrity | Source: code-review 2026-07-11] Confirmed: FoodsContext.tsx:132-145 (Promise.all, partial-failure divergence) and src/lib/optimisticMutation.ts:40-55 (setState(snapshot) clobbers concurrent changes)."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: data-integrity | Source: code-review 2026-07-11] Confirmed: FoodsContext.tsx:132-145 (Promise.all, partial-failure divergence) and src/lib/optimisticMutation.ts:40-55 (setState(snapshot) clobbers concurrent changes). | VERIFIED 2026-07-11: Part1 transactional bulk: migration 20260711000004 update_foods_batch(p_updates jsonb) — single all-or-nothing UPDATE via jsonb_to_recordset+coalesce (partial patches), SECURITY INVOKER (RLS-scoped), following bump_grocery_item_quantities. FoodsContext.updateFoods now calls it (cast pattern, types.ts regenerated in CI) instead of Promise.all of N updates. VERIFIED on real pg16: partial patch applies only provided fields; an invalid-category row rolls back the WHOLE batch (Milk unchanged) = all-or-nothing. Part2 non-destructive rollback: optimisticMutation rollbackOptimistic() inverts only the optimistic diff against CURRENT state (by id + reference-equality guard), preserving concurrent realtime inserts/edits/deletes instead of clobbering with a stale snapshot. runOptimisticMutation now T extends {id:string}. Tests: rollbackOptimistic cases + a realtime-insert-during-failed-mutation integration test (row survives). 78 lib+context tests pass."
     },
     {
       "id": "US-536",

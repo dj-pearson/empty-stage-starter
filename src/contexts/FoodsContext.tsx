@@ -183,7 +183,8 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
       }));
       return;
     }
-    // US-320: optimistic bulk update; roll back all if any row fails.
+    // US-320 optimistic + US-535 transactional: one all-or-nothing RPC instead
+    // of Promise.all of N updates (which could partially apply and diverge).
     await runOptimisticMutation<Food>(
       setFoods,
       prev => prev.map(f => {
@@ -191,11 +192,16 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
         return update ? { ...f, ...update.updates } : f;
       }),
       () =>
-        Promise.all(
-          updates.map(({ id, updates: foodUpdates }) =>
-            supabase.from('foods').update(foodUpdates).eq('id', id)
-          )
-        ).then(results => ({ error: results.find(r => r.error)?.error ?? null })),
+        // types.ts is regenerated in CI and doesn't yet list this RPC (matches
+        // the bump_grocery_item_quantities pattern in GroceryContext).
+        (
+          supabase.rpc as unknown as (
+            fn: string,
+            args: Record<string, unknown>,
+          ) => PromiseLike<{ error: unknown }>
+        )('update_foods_batch', {
+          p_updates: updates.map(({ id, updates: foodUpdates }) => ({ id, patch: foodUpdates })),
+        }),
       { logLabel: 'Supabase updateFoods errors:', toastMessage: "Couldn't save all changes — reverted." }
     );
   }, [userId]);
