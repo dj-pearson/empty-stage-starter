@@ -83,6 +83,15 @@ enum IngredientTextParser {
         "⅛": 0.125, "⅜": 0.375, "⅝": 0.625, "⅞": 0.875
     ]
 
+    /// ASCII digit 0–9. `Character.isNumber` is `true` for vulgar-fraction
+    /// glyphs like "½" (and other Unicode number characters), which would let
+    /// the integer digit-walk swallow the "½" in "1½" into an unparseable
+    /// "1½" token. The unicode-fraction glyphs are handled separately, so the
+    /// digit-walk must stay ASCII-only.
+    private static func isASCIIDigit(_ c: Character) -> Bool {
+        c.isASCII && c.isNumber
+    }
+
     /// Scan from the start of `s` and consume any contiguous
     /// numeric / fraction / range tokens. Returns the parsed value
     /// (averaging ranges) and the remainder of the string.
@@ -142,12 +151,13 @@ enum IngredientTextParser {
                 continue
             }
 
-            guard ch.isNumber else { break }
+            guard isASCIIDigit(ch) else { break }
 
             // Walk forward over digits and an optional decimal or
-            // ascii-fraction suffix.
+            // ascii-fraction suffix. ASCII-only so a trailing vulgar fraction
+            // ("1½") isn't swallowed into an unparseable "1½" token.
             var end = idx
-            while end < s.endIndex, s[end].isNumber { end = s.index(after: end) }
+            while end < s.endIndex, isASCIIDigit(s[end]) { end = s.index(after: end) }
 
             // Decimal: "1.5"
             if end < s.endIndex, s[end] == ".",
