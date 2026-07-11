@@ -136,8 +136,7 @@ export default function Pantry() {
     shortcuts: [
       {
         key: "n",
-        ctrlKey: true,
-        metaKey: true,
+        ctrlOrMeta: true,
         description: "New food",
         action: () => {
           setDialogOpen(true);
@@ -146,8 +145,7 @@ export default function Pantry() {
       },
       {
         key: "f",
-        ctrlKey: true,
-        metaKey: true,
+        ctrlOrMeta: true,
         description: "Focus search",
         action: () => {
           searchInputRef.current?.focus();

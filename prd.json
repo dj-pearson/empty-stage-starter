@@ -1060,8 +1060,8 @@
         "Pressing Ctrl+N no longer triggers a plain 'n' shortcut; add a test for modifier combinations"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: correctness | Source: code-review 2026-07-11] Confirmed: src/hooks/useKeyboardShortcuts.ts:53-70 — (ctrlMatches || metaMatches) with default-true branches fires plain shortcuts under a held modifier."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: correctness | Source: code-review 2026-07-11] Confirmed: src/hooks/useKeyboardShortcuts.ts:53-70 — (ctrlMatches || metaMatches) with default-true branches fires plain shortcuts under a held modifier. | VERIFIED 2026-07-11: Rewrote shortcut matching into pure exported matchesShortcut(): each modifier (ctrl/meta/shift/alt) compared independently vs its expected boolean and AND-ed, so Ctrl+N no longer fires a plain 'n' shortcut. Added explicit ctrlOrMeta flag for the 'ctrl-or-cmd' accelerator (fires on either); migrated CommandPalette (collapsed duplicate 'k' entries) and Pantry ('n','f' had both ctrlKey+metaKey) to it. formatShortcut renders ctrlOrMeta as platform accelerator. Dashboard/Navigation palette buttons dispatch synthetic events — still match. Test useKeyboardShortcuts.test.ts (5): plain-under-modifier no-fire, exact ctrl, ctrlOrMeta, independent shift AND, case-insensitive."
     },
     {
       "id": "US-543",

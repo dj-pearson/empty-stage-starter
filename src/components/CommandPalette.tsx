@@ -62,13 +62,7 @@ export function CommandPalette() {
     shortcuts: [
       {
         key: "k",
-        metaKey: true,
-        description: "Open command palette",
-        action: () => setOpen((prev) => !prev),
-      },
-      {
-        key: "k",
-        ctrlKey: true,
+        ctrlOrMeta: true,
         description: "Open command palette",
         action: () => setOpen((prev) => !prev),
       },
