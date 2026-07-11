@@ -6,7 +6,18 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  // US-549: use a real UUID so ids are collision-resistant even for bulk
+  // inserts within the same millisecond (the old `${Date.now()}-${rand}` shared
+  // the ms). Fall back to an RFC4122-v4-shaped string where crypto.randomUUID
+  // is unavailable, so the result is always UUID-shaped.
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 /**

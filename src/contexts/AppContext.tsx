@@ -291,11 +291,24 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
           if (localData) {
             try {
               const parsed = JSON.parse(localData);
-              const localRecipes = parsed.recipes || [];
-              // US-527: detect local-only recipes by UUID shape, not by the
-              // buggy `!id.includes('-')` (generateId() always contains '-', so
-              // that filter was always empty and offline recipes were discarded).
-              const localOnlyRecipes = selectLocalOnlyRecipes(localRecipes, dbRecipes);
+              const localRecipes: Recipe[] = parsed.recipes || [];
+              // US-527/US-549: detect local-only recipes by SERVER PRESENCE, not
+              // id shape (generateId now returns a UUID, so shape can't tell a
+              // local id from a server id). Compare against the loaded page
+              // first; only if some local recipe is missing there do we fetch
+              // the COMPLETE server id set — so a recipe beyond the 200-row page
+              // isn't mis-migrated as a duplicate.
+              const pageIds = new Set(dbRecipes.map((r) => r.id));
+              const maybeLocal = localRecipes.filter((lr) => !pageIds.has(lr.id));
+              let serverRecipeIds = pageIds;
+              if (maybeLocal.length > 0) {
+                const { data: allIdRows } = await supabase
+                  .from('recipes')
+                  .select('id')
+                  .eq('household_id', householdId);
+                serverRecipeIds = new Set((allIdRows as { id: string }[] | null ?? []).map((r) => r.id));
+              }
+              const localOnlyRecipes = selectLocalOnlyRecipes(localRecipes, serverRecipeIds);
               if (localOnlyRecipes.length > 0) {
                 logger.debug(`Migrating ${localOnlyRecipes.length} local recipes to database...`);
                 const bulkPayload = localOnlyRecipes.map((localRecipe: Recipe) => {

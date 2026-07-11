@@ -1153,8 +1153,8 @@
         "No regressions in realtime dedupe-by-id"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "[Severity: Low | Category: correctness | Source: code-review 2026-07-11] Confirmed: src/lib/utils.ts:8-10 generateId = Date.now()+9 random base36 chars; bulk inserts in one tick share the ms."
+      "passes": true,
+      "notes": "[Severity: Low | Category: correctness | Source: code-review 2026-07-11] Confirmed: src/lib/utils.ts:8-10 generateId = Date.now()+9 random base36 chars; bulk inserts in one tick share the ms. | VERIFIED 2026-07-11: generateId() now returns crypto.randomUUID() with an RFC4122-v4 fallback (always UUID-shaped) — collision-safe for same-ms bulk inserts. Aligned US-527 local-recipe detection to the new UUID shape: since id shape can no longer distinguish local from server, selectLocalOnlyRecipes(localRecipes, serverRecipeIds:Set) now detects by SERVER PRESENCE. AppContext builds the complete server-recipe-id set (fetches full id list only when a local recipe is missing from the loaded page) so a recipe beyond the 200-row page isn't mis-migrated. Realtime dedupe-by-id unaffected (server id still differs from optimistic local id, as before). Tests updated: recipeMigration.test (UUID isUuid, server-presence detection). 94 lib+context tests pass."
     },
     {
       "id": "US-550",

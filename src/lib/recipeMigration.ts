@@ -11,19 +11,19 @@ export function isUuid(id: string): boolean {
 
 /**
  * Recipes that exist only in the local cache and must be migrated to the server
- * on first authenticated load (US-527).
+ * on first authenticated load (US-527 / US-549).
  *
- * The previous heuristic `!id.includes('-')` never matched: `generateId()`
- * returns `${Date.now()}-${rand}`, which always contains a '-', so no recipe
- * was ever detected as local-only and offline-created recipes were silently
- * discarded by the wholesale `setRecipes(dbRecipes)`. A recipe is local-only
- * when its id is NOT a UUID (locally-generated ids are not UUIDs) and it isn't
- * already present on the server by id.
+ * History: the original `!id.includes('-')` heuristic never matched, and a
+ * later `!isUuid(id)` heuristic worked only while local ids were non-UUIDs.
+ * Now that `generateId()` returns a real UUID (US-549), id SHAPE can no longer
+ * distinguish local from server ids, so detection is purely by server presence:
+ * a recipe is local-only when its id is absent from the COMPLETE set of server
+ * recipe ids. The caller MUST pass the full server-id set (not a paginated
+ * page) so a server recipe beyond the fetch limit isn't mistaken for local.
  */
 export function selectLocalOnlyRecipes(
   localRecipes: Recipe[],
-  dbRecipes: Recipe[],
+  serverRecipeIds: Set<string>,
 ): Recipe[] {
-  const dbIds = new Set(dbRecipes.map((r) => r.id));
-  return localRecipes.filter((lr) => !isUuid(lr.id) && !dbIds.has(lr.id));
+  return localRecipes.filter((lr) => !serverRecipeIds.has(lr.id));
 }
