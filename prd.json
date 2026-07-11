@@ -1127,8 +1127,8 @@
         "A CI check fails on duplicate migration version prefixes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: backward-compat/ci | Source: code-review 2026-07-11] Locations: 20251103000000_create_seo_management_tables.sql (drops at 16,86,131,181,222,247,296,355), 20251104000000_google_search_console_integration.sql; duplicate prefixes incl. 20251107000000, 20260205000000, 20260512000000, 20260513000000."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: backward-compat/ci | Source: code-review 2026-07-11] Locations: 20251103000000_create_seo_management_tables.sql (drops at 16,86,131,181,222,247,296,355), 20251104000000_google_search_console_integration.sql; duplicate prefixes incl. 20251107000000, 20260205000000, 20260512000000, 20260513000000. | VERIFIED 2026-07-11: AC1 DONE: removed 14 DROP TABLE...CASCADE and made all 14 CREATE TABLE idempotent (IF NOT EXISTS) in the SEO/GSC create migrations, so a re-run can't wipe data. AC3 DONE: scripts/ci/check-migration-prefixes.sh fails on any NEW duplicate migration version prefix, wired into ci.yml migration-test job; grandfathers the 7 pre-existing dupes. AC2 DEFERRED (prod-unsafe): renaming migrations already applied to production gives them a new version Supabase would RE-RUN (duplicate seed INSERTs / non-idempotent DDL errors); resolving safely needs coordinated migration-table surgery in a maintenance window, not a blind file rename. Gate blocks all new dupes so the set can only shrink."
     },
     {
       "id": "US-548",

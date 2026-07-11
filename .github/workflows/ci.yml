@@ -131,6 +131,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # US-547: fail on NEW duplicate migration version prefixes (before spending
+      # time booting Supabase). Pre-existing dupes are grandfathered in-script.
+      - name: Check migration version prefixes
+        run: bash scripts/ci/check-migration-prefixes.sh
+
       - uses: supabase/setup-cli@v1
         with:
           version: latest
