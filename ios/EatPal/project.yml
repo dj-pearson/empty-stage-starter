@@ -210,6 +210,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.eatpal.app.watchkitapp
         PRODUCT_NAME: EatPalWatch
+        # Pin the SDK so the iOS scheme embedding this app still builds it for
+        # watchOS (not the iOS Simulator destination it's embedded under).
+        SDKROOT: watchos
+        SUPPORTED_PLATFORMS: "watchos watchsimulator"
         CODE_SIGN_ENTITLEMENTS: "EatPalWatch Watch App/EatPalWatch.entitlements"
         PROVISIONING_PROFILE_SPECIFIER: "EatPal Watch App Store"
         WATCHOS_DEPLOYMENT_TARGET: "10.0"
@@ -240,6 +244,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.eatpal.app.watchkitapp.complications
         PRODUCT_NAME: EatPalWatchComplications
+        # Pin the SDK so this extension builds for watchOS even though the
+        # iOS scheme pulls it in transitively (via the embedded watch app).
+        SDKROOT: watchos
+        SUPPORTED_PLATFORMS: "watchos watchsimulator"
         CODE_SIGN_ENTITLEMENTS: "EatPalWatch Watch App/EatPalWatchComplications.entitlements"
         PROVISIONING_PROFILE_SPECIFIER: "EatPal Watch Complications App Store"
         WATCHOS_DEPLOYMENT_TARGET: "10.0"
