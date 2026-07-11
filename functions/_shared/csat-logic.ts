@@ -46,6 +46,21 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+/**
+ * Resolve the dedicated CSAT / unsubscribe token signing secret (US-521).
+ *
+ * Returns the configured `CSAT_TOKEN_SECRET` value, or null when it is unset or
+ * empty. Callers MUST fail closed on null rather than fall back to
+ * `AGENT_DISPATCH_SECRET` or an empty string — an empty HMAC key is trivially
+ * reproducible, letting an attacker forge rating/unsubscribe tokens, and
+ * reusing the dispatch secret couples two unrelated trust domains.
+ *
+ * Pure (takes the raw env value) so it is unit-testable without a live env.
+ */
+export function resolveCsatTokenSecret(configured: string | undefined | null): string | null {
+  return configured && configured.length > 0 ? configured : null;
+}
+
 /** Sign a CSAT token binding the ticket id: `<b64url(ticketId)>.<hmac>`. */
 export async function signCsatToken(ticketId: string, secret: string): Promise<string> {
   return `${b64urlEncodeString(ticketId)}.${await hmac(secret, ticketId)}`;

@@ -28,6 +28,7 @@ import {
   type NurtureSequence,
   type NurtureEnrollment,
 } from '../_shared/nurture-logic.ts';
+import { resolveCsatTokenSecret } from '../_shared/csat-logic.ts';
 import {
   renderTemplate,
   NURTURE_TEMPLATES,
@@ -79,7 +80,11 @@ serve(async (req) => {
     .maybeSingle();
   if (!def) return json({ error: `agent '${AGENT_NAME}' is not registered` }, 404);
 
-  const tokenSecret = Deno.env.get('CSAT_TOKEN_SECRET') ?? expected;
+  // Fail closed: unsubscribe links must be signed with the dedicated secret (US-521).
+  const tokenSecret = resolveCsatTokenSecret(Deno.env.get('CSAT_TOKEN_SECRET'));
+  if (!tokenSecret) {
+    return json({ error: 'CSAT_TOKEN_SECRET is not configured' }, 500);
+  }
 
   const result = await runAgent({
     agentDefinition: def as AgentDefinition,

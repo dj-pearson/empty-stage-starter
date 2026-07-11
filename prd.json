@@ -777,8 +777,8 @@
         "Add a test asserting a token signed with an empty/other key is rejected"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "[Severity: High | Category: security/auth | Source: code-review 2026-07-11] Confirmed: csat-rate/index.ts:41 and nurture-unsubscribe/index.ts:33 use `?? ''` so an unset env var yields an empty HMAC key an attacker can reproduce."
+      "passes": true,
+      "notes": "[Severity: High | Category: security/auth | Source: code-review 2026-07-11] Confirmed: csat-rate/index.ts:41 and nurture-unsubscribe/index.ts:33 use `?? ''` so an unset env var yields an empty HMAC key an attacker can reproduce. | VERIFIED 2026-07-11: Added resolveCsatTokenSecret() fail-closed helper in _shared/csat-logic.ts. csat-rate + nurture-unsubscribe return 503 when CSAT_TOKEN_SECRET unset (removed ?? '' and ?? AGENT_DISPATCH_SECRET fallbacks). Sign sites (agent-csat, agent-nurture-engine, agent-weekly-digest) also fail closed (500) so links are always signed with the dedicated key. Test: token signed with other key rejected; resolver null for empty/unset. deno check clean, 19 helpers tests pass."
     },
     {
       "id": "US-522",

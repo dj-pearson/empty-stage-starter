@@ -12,7 +12,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { verifyCsatToken, isValidScore, scoreEscalates } from '../_shared/csat-logic.ts';
+import { verifyCsatToken, isValidScore, scoreEscalates, resolveCsatTokenSecret } from '../_shared/csat-logic.ts';
 import { buildEscalation } from '../_shared/agent-approval-logic.ts';
 
 // deno-lint-ignore no-explicit-any
@@ -38,7 +38,13 @@ serve(async (req) => {
     return page('Invalid link', 'This rating link is invalid or incomplete.', 400);
   }
 
-  const secret = Deno.env.get('CSAT_TOKEN_SECRET') ?? Deno.env.get('AGENT_DISPATCH_SECRET') ?? '';
+  // Fail closed: a dedicated CSAT_TOKEN_SECRET must be configured (US-521).
+  // Never fall back to AGENT_DISPATCH_SECRET or an empty (forgeable) key.
+  const secret = resolveCsatTokenSecret(Deno.env.get('CSAT_TOKEN_SECRET'));
+  if (!secret) {
+    console.error('csat-rate: CSAT_TOKEN_SECRET is not configured — refusing to verify tokens');
+    return page('Temporarily unavailable', 'Ratings are temporarily unavailable. Please try again later.', 503);
+  }
   const ticketId = await verifyCsatToken(token, secret);
   if (!ticketId) {
     return page('Invalid link', 'This rating link could not be verified.', 400);

@@ -30,6 +30,11 @@ import {
   isOwnedUrl,
   DEFAULT_OWNED_HOSTS,
 } from './indexing-allowlist.ts';
+import {
+  resolveCsatTokenSecret,
+  signCsatToken,
+  verifyCsatToken,
+} from './csat-logic.ts';
 
 const CORS = { 'Access-Control-Allow-Origin': 'https://tryeatpal.com' };
 
@@ -264,4 +269,30 @@ Deno.test('isOwnedUrl accepts owned https hosts and rejects everything else', ()
   assertEquals(isOwnedUrl('http://tryeatpal.com/', hosts), false);
   // Malformed.
   assertEquals(isOwnedUrl('not a url', hosts), false);
+});
+
+// ---------------------------------------------------------------------------
+// csat-logic.ts — fail-closed token secret (US-521)
+// ---------------------------------------------------------------------------
+
+Deno.test('resolveCsatTokenSecret is null for unset/empty, value otherwise', () => {
+  assertEquals(resolveCsatTokenSecret(undefined), null);
+  assertEquals(resolveCsatTokenSecret(null), null);
+  assertEquals(resolveCsatTokenSecret(''), null);
+  assertEquals(resolveCsatTokenSecret('s3cret'), 's3cret');
+});
+
+Deno.test('a CSAT token signed with a different key is rejected under the real key', async () => {
+  const real = 'the-real-dedicated-secret';
+  const forgedWithOtherKey = await signCsatToken('ticket-123', 'attacker-guess');
+  assertEquals(await verifyCsatToken(forgedWithOtherKey, real), null);
+
+  // A token signed with the real key still verifies.
+  const legit = await signCsatToken('ticket-123', real);
+  assertEquals(await verifyCsatToken(legit, real), 'ticket-123');
+
+  // The old `?? ''` fallback is unreachable now: the resolver returns null for
+  // an empty/unset secret, so verification never runs with a forgeable key.
+  assertEquals(resolveCsatTokenSecret(''), null);
+  assertEquals(resolveCsatTokenSecret(undefined), null);
 });
