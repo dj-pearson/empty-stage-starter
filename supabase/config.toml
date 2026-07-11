@@ -84,6 +84,9 @@ verify_jwt = false
 # CI failure triage agent: event-driven webhook, shared-secret validated inside.
 [functions.agent-ci-triage]
 verify_jwt = false
+# Migration safety checker: event-driven PR webhook, shared-secret validated inside.
+[functions.agent-migration-check]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 
