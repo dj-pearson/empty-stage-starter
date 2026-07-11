@@ -7,6 +7,7 @@ import { logger } from "@/lib/logger";
 import { handleSupabaseAuthError } from "@/lib/supabaseAuthError";
 import { selectLocalOnlyRecipes } from "@/lib/recipeMigration";
 import { redactSnapshotForCache } from "@/lib/cacheSnapshot";
+import { mergeWindowedPlanEntries } from "@/lib/planWindow";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { FoodsProvider, useFoods } from "./FoodsContext";
 import { KidsProvider, useKids } from "./KidsContext";
@@ -329,7 +330,16 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
             setRecipes(dbRecipes);
           }
         }
-        if (planRes.data) setPlanEntriesState((planRes.data as unknown[]).map((p) => normalizePlanEntryFromDB(p as Record<string, unknown>)));
+        if (planRes.data) {
+          // US-538: the plan_entries fetch is windowed (-30d..+90d). Merge it
+          // with existing state so cached history OUTSIDE the window is not
+          // truncated (and then persisted-away by the write-through cache). The
+          // in-window slice remains server-authoritative.
+          const windowStart = thirtyDaysAgo.toISOString().split('T')[0];
+          const windowEnd = ninetyDaysFromNow.toISOString().split('T')[0];
+          const serverEntries = (planRes.data as unknown[]).map((p) => normalizePlanEntryFromDB(p as Record<string, unknown>));
+          setPlanEntriesState((prev) => mergeWindowedPlanEntries(prev, serverEntries, windowStart, windowEnd));
+        }
         if (groceryRes.data) setGroceryItemsState((groceryRes.data as unknown[]).map((g) => normalizeGroceryItemFromDB(g as Record<string, unknown>)));
       } catch (error) {
         // Don't leave the scope marked as loaded if it failed — clear it so

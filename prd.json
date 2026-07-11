@@ -1008,8 +1008,8 @@
         "Add a test proving an out-of-window cached entry survives an authenticated load"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: data-integrity | Source: code-review 2026-07-11] Confirmed: AppContext.tsx:201-209 filters to -30d..+90d then setPlanEntriesState replaces wholesale; the write-through cache then persists only that window."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: data-integrity | Source: code-review 2026-07-11] Confirmed: AppContext.tsx:201-209 filters to -30d..+90d then setPlanEntriesState replaces wholesale; the write-through cache then persists only that window. | VERIFIED 2026-07-11: New src/lib/planWindow.ts mergeWindowedPlanEntries(prev, serverEntries, windowStart, windowEnd): the plan_entries load is windowed (-30/+90d), so AppContext now MERGES server-window rows with out-of-window cached entries instead of wholesale-replacing (which truncated cached history, then the write-through cache persisted only the window). In-window remains server-authoritative (a deleted-in-window row is not resurrected; server copy wins on id collision). Documented as the ONE exception to the US-341 wholesale-overwrite rule (because the fetch is windowed). Test planWindow.test.ts: out-of-window entry survives, in-window deletion not resurrected, server-wins-on-dup. 72 context/lib tests pass."
     },
     {
       "id": "US-539",
