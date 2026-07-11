@@ -522,8 +522,8 @@
         "Typecheck passes"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "functions/agent-seo-audit/index.ts (verify_jwt=false + internal secret; runAgent; deterministic): fetches {APP_BASE_URL||https://tryeatpal.com}/sitemap.xml, parses <loc> URLs (parseSitemapUrls), and for a bounded page set (30) fetches each page and extracts SEO metadata (extractMeta: title, meta description, canonical, JSON-LD presence, anchor-only internal links). Per-page auditPage flags missing title / missing meta description / missing canonical / missing JSON-LD (on /blog and /recipe paths); detectDuplicates flags shared title/meta across pages; internal links (bounded 40, deduped, absolutized, fragment-stripped) are GET-checked and 404s recorded. ALL outbound fetches are restricted to the production domain — isSameHost check + the _shared SSRF url-validator (validateExternalUrl) + fetchWithTimeout (AC2). Findings are deduped (dedupeAgainstPrior by path|issue fingerprint) against the findings stored in prior OPEN 'SEO audit' marketing escalations; when new findings exist, ONE tier-2 marketing escalation is filed with the per-page fix list + summary (AC3). The audit summary (pagesAudited, totalFindings, newFindings, byIssue) is returned as the run output for the dashboard (AC4). Pure logic functions/_shared/seo-audit-logic.ts (parseSitemapUrls, extractMeta, isSameHost, auditPage, detectDuplicates, fingerprint, dedupeAgainstPrior) with 7 Deno tests; fixed internal-link extraction to anchor-only (<a href>) so canonical/link hrefs aren't mistaken for nav links. Migration supabase/migrations/20260709000021_seo_audit_agent.sql seeds the 'seo-audit' agent (marketing, weekly '0 5 * * 1', enabled FALSE). config.toml adds [functions.agent-seo-audit] verify_jwt=false. No types.ts change. Verified: all 7 SEO assertions pass in Node; seo function + url-validator + runtime tsc exit 0 (ambient Deno shims). (deno test runner not installable — esm.sh/deno.land 403 via proxy.)"
     },
     {
       "id": "US-506",

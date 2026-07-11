@@ -72,6 +72,9 @@ verify_jwt = false
 # Social post agent: invoked by the dispatcher with the internal secret.
 [functions.agent-social-writer]
 verify_jwt = false
+# SEO audit agent: invoked by the dispatcher with the internal secret.
+[functions.agent-seo-audit]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 
