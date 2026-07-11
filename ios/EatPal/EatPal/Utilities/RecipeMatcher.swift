@@ -174,12 +174,32 @@ enum RecipeMatcher {
         return fallback
     }
 
-    /// Lowercase + drop trailing 's' for naive plural matching. Good
-    /// enough to merge "Apple" / "apples" / "Apples". Internationalization
-    /// is out of scope for v1 — the AC is US-only foods.
+    /// Lowercase + naive singularization for plural matching. Handles the
+    /// three common English plural shapes so coverage scoring merges them:
+    ///   -ies → -y   ("berries" → "berry")
+    ///   -es  → ""    for -o/-x/-s/-z/-ch/-sh stems ("tomatoes" → "tomato",
+    ///                 "boxes" → "box", "dishes" → "dish")
+    ///   -s   → ""    everything else ("apples" → "apple")
+    /// Matching runs both sides through this, so any over-stem is symmetric
+    /// (can't create a false match). Internationalization is out of scope for
+    /// v1 — the AC is US-only foods.
     private static func canonicalize(_ s: String) -> String {
         let lowered = s.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        guard lowered.count > 3, lowered.hasSuffix("s") else { return lowered }
-        return String(lowered.dropLast())
+        guard lowered.count > 3 else { return lowered }
+
+        if lowered.count > 4, lowered.hasSuffix("ies") {
+            return String(lowered.dropLast(3)) + "y"
+        }
+        if lowered.count > 4, lowered.hasSuffix("es") {
+            let stem = String(lowered.dropLast(2))
+            if let last = stem.last,
+               "oxsz".contains(last) || stem.hasSuffix("ch") || stem.hasSuffix("sh") {
+                return stem
+            }
+        }
+        if lowered.hasSuffix("s") {
+            return String(lowered.dropLast())
+        }
+        return lowered
     }
 }
