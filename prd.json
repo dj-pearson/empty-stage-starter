@@ -901,8 +901,8 @@
         "sanitizeHtml adds rel='noopener noreferrer' to any anchor carrying target (afterSanitizeAttributes hook)"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: security/xss | Source: code-review 2026-07-11] Locations: RecipeExportActions.tsx:142,179,184; InvoicesList.tsx:125; schema/WebSiteSchema.tsx:86; schema/ComparisonSchema.tsx:105; lib/sanitize.ts:100-102. Recipes flow through shared/admin templates, so not purely self-XSS."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: security/xss | Source: code-review 2026-07-11] Locations: RecipeExportActions.tsx:142,179,184; InvoicesList.tsx:125; schema/WebSiteSchema.tsx:86; schema/ComparisonSchema.tsx:105; lib/sanitize.ts:100-102. Recipes flow through shared/admin templates, so not purely self-XSS. | VERIFIED 2026-07-11: RecipeExportActions escapes recipe.name (title) + content (pre) via new escapeHtml() before document.write. InvoicesList sanitizes generate-invoice HTML client-side via new sanitizeDocumentHtml() (DOMPurify WHOLE_DOCUMENT) at both sinks (Blob + document.write) — generate-invoice fn is not in this repo so server escaping can't be confirmed. WebSiteSchema + ComparisonSchema now inject JSON-LD via useEffect + scriptTag.textContent (like RecipeSchema) instead of dangerouslySetInnerHTML+JSON.stringify. sanitizeHtml adds an afterSanitizeAttributes DOMPurify hook stamping rel='noopener noreferrer' on any anchor with target. Tests: sanitize.test.ts (45, +escapeHtml/rel/document) + SchemaInjection.test.tsx (3, incl </script> break-out)."
     },
     {
       "id": "US-531",

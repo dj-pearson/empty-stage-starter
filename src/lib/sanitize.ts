@@ -1,5 +1,15 @@
 import DOMPurify from "dompurify";
 
+// US-530: force reverse-tabnabbing protection. DOMPurify allows `target`/`rel`
+// but nothing was setting rel, so a sanitized `target="_blank"` link could omit
+// rel="noopener" and let the opened page reach back via window.opener. This
+// hook (registered once at module load) stamps rel on any anchor with a target.
+DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+  if (node.nodeName === "A" && node.hasAttribute("target")) {
+    node.setAttribute("rel", "noopener noreferrer");
+  }
+});
+
 /**
  * Centralized input sanitization utilities for user-generated content.
  *
@@ -104,6 +114,35 @@ export function sanitizeHtml(dirty: string): string {
     RETURN_DOM: false,
     RETURN_DOM_FRAGMENT: false,
   });
+}
+
+/**
+ * Escape the five HTML-significant characters. Pure (no DOM), so it is safe to
+ * use when BUILDING an HTML string for document.write / a print window, where a
+ * raw user-derived value could otherwise inject markup (US-530).
+ */
+export function escapeHtml(value: string): string {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => {
+    switch (ch) {
+      case "&": return "&amp;";
+      case "<": return "&lt;";
+      case ">": return "&gt;";
+      case '"': return "&quot;";
+      default: return "&#39;";
+    }
+  });
+}
+
+/**
+ * Sanitize a FULL HTML document (with <html>/<head>/<body>) — e.g. a generated
+ * invoice opened via a Blob or document.write. Strips scripts / event handlers
+ * while preserving the document structure and inline styles (US-530). Use this
+ * when rendering server-generated HTML you cannot independently confirm escapes
+ * every user-derived field.
+ */
+export function sanitizeDocumentHtml(dirty: string): string {
+  if (!dirty) return "";
+  return DOMPurify.sanitize(dirty, { WHOLE_DOCUMENT: true });
 }
 
 /**
