@@ -914,8 +914,8 @@
         "Refresh-token rotation remains enabled"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: security/auth | Source: code-review 2026-07-11] Confirmed: src/integrations/supabase/client.ts:150,160 configure storage:localStorage, storageKey:'sb-auth-token'. Standard Supabase-web tradeoff; call out + compensate."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: security/auth | Source: code-review 2026-07-11] Confirmed: src/integrations/supabase/client.ts:150,160 configure storage:localStorage, storageKey:'sb-auth-token'. Standard Supabase-web tradeoff; call out + compensate. | VERIFIED 2026-07-11: Evaluated @supabase/ssr httpOnly-cookie session storage: NOT adopted. Web app is a static Cloudflare Pages SPA (deploy=pages deploy dist, no SSR/_worker.js), so cookie storage would require an auth-proxy Pages Function/Worker rearchitecture (@supabase/ssr targets server-rendered frameworks that read/set cookies per request). Documented in docs/security/web-session-storage.md. AC2 compensating control IN PLACE: US-529 CSP hardening (script-src no unsafe-inline/eval, zero inline scripts) blocks the injected-script path that would read the localStorage token. AC3: refresh-token rotation stays enabled — extracted the client auth flags to exported WEB_AUTH_SECURITY (autoRefreshToken:true, flowType pkce, persistSession) and pinned them in client.auth-options.test.ts (3 tests pass). PKCE keeps the token out of the URL fragment; session stays origin-scoped via storageKey."
     },
     {
       "id": "US-532",
