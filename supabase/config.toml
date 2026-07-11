@@ -99,6 +99,9 @@ verify_jwt = false
 # Weekly business KPI report agent: invoked by the dispatcher with the internal secret.
 [functions.agent-kpi-report]
 verify_jwt = false
+# Agent self-evaluation report: invoked by the dispatcher with the internal secret.
+[functions.agent-self-eval]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 

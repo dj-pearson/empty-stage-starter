@@ -27,6 +27,7 @@ import {
 } from '@/lib/approvalQueue';
 import type { Json } from '@/integrations/supabase/types';
 import { logAgentAudit } from '@/lib/agentAudit';
+import { recordApprovalFeedback, payloadEditDistance } from '@/lib/agentFeedback';
 
 interface ApprovalRow {
   id: string;
@@ -35,6 +36,7 @@ interface ApprovalRow {
   created_at: string;
   expires_at: string | null;
   agent_id: string | null;
+  run_id: string | null;
   agent_definitions: { name: string } | null;
 }
 
@@ -64,7 +66,7 @@ export function ApprovalsTab({ onChange }: ApprovalsTabProps) {
       setLoading(true);
       const { data, error } = await supabase
         .from('agent_approvals')
-        .select('id, action_type, payload, created_at, expires_at, agent_id, agent_definitions(name)')
+        .select('id, action_type, payload, created_at, expires_at, agent_id, run_id, agent_definitions(name)')
         .eq('status', 'draft')
         .order('created_at', { ascending: false });
       if (!active) return;
@@ -141,6 +143,7 @@ export function ApprovalsTab({ onChange }: ApprovalsTabProps) {
   async function approve(row: ApprovalRow) {
     setBusyFor(row.id, true);
     try {
+      const wasEdited = Boolean(edits[row.id]);
       const merged = await persistEdits(row);
       const { data: auth } = await supabase.auth.getUser();
       const { error } = await supabase
@@ -162,6 +165,17 @@ export function ApprovalsTab({ onChange }: ApprovalsTabProps) {
           detail: { action_type: row.action_type },
         });
       }
+      // Feedback record (US-514): edited approvals carry the draft-vs-approved
+      // edit distance so the self-eval agent can measure first-attempt quality.
+      void recordApprovalFeedback({
+        approvalId: row.id,
+        runId: row.run_id,
+        agentId: row.agent_id,
+        actionType: row.action_type,
+        decision: wasEdited ? 'edited' : 'approved',
+        editDistance: wasEdited ? payloadEditDistance(row.payload, merged) : null,
+        reviewedBy: auth.user?.id ?? null,
+      });
       // Fire-and-forward to the executor; failure there keeps status 'approved'
       // for retry and does not put the row back in the draft queue.
       await invokeEdgeFunction('approval-executor', { body: { approval_id: row.id } });
@@ -205,6 +219,17 @@ export function ApprovalsTab({ onChange }: ApprovalsTabProps) {
           detail: { action_type: row.action_type, reason },
         });
       }
+      // Feedback record (US-514): rejections carry the reviewer's reason so the
+      // self-eval agent can surface the top rejection patterns per agent.
+      void recordApprovalFeedback({
+        approvalId: row.id,
+        runId: row.run_id,
+        agentId: row.agent_id,
+        actionType: row.action_type,
+        decision: 'rejected',
+        rejectionReason: reason,
+        reviewedBy: auth.user?.id ?? null,
+      });
       removeRow(row.id);
       toast.success(t('agents.approvals.rejectedToast'));
       setRejecting(null);

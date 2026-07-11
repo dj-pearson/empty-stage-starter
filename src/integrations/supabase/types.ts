@@ -505,6 +505,67 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_feedback: {
+        Row: {
+          action_type: string | null
+          agent_id: string | null
+          approval_id: string | null
+          created_at: string
+          decision: string
+          edit_distance: number | null
+          id: string
+          rejection_reason: string | null
+          reviewed_by: string | null
+          run_id: string | null
+        }
+        Insert: {
+          action_type?: string | null
+          agent_id?: string | null
+          approval_id?: string | null
+          created_at?: string
+          decision: string
+          edit_distance?: number | null
+          id?: string
+          rejection_reason?: string | null
+          reviewed_by?: string | null
+          run_id?: string | null
+        }
+        Update: {
+          action_type?: string | null
+          agent_id?: string | null
+          approval_id?: string | null
+          created_at?: string
+          decision?: string
+          edit_distance?: number | null
+          id?: string
+          rejection_reason?: string | null
+          reviewed_by?: string | null
+          run_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_feedback_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_feedback_approval_id_fkey"
+            columns: ["approval_id"]
+            isOneToOne: false
+            referencedRelation: "agent_approvals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_feedback_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_knowledge: {
         Row: {
           content: string
