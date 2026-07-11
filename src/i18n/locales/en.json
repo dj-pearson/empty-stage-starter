@@ -27,5 +27,222 @@
     "welcomeTitle": "Welcome to EatPal",
     "welcomeSubtitle": "Evidence-based meal planning for picky eaters and ARFID.",
     "getStarted": "Get started"
+  },
+  "agents": {
+    "title": "Agent Command Center",
+    "subtitle": "Configure, monitor, and control the Agentic OS from one place.",
+    "metaTitle": "Agent Command Center — EatPal Admin",
+    "tabs": {
+      "registry": "Agents",
+      "approvals": "Approvals",
+      "escalations": "Escalations",
+      "runs": "Runs",
+      "audit": "Audit"
+    },
+    "comingSoon": "This view arrives in a later release.",
+    "badges": {
+      "pendingApprovals": "{{count}} pending approvals",
+      "openEscalations": "{{count}} open escalations"
+    },
+    "killSwitch": {
+      "activeTitle": "All agents are paused",
+      "activeBody": "The global kill switch is on. No agent will run until it is resumed.",
+      "inactiveTitle": "Agents are running",
+      "inactiveBody": "The Agentic OS is active. Use the kill switch to pause every agent at once.",
+      "pauseAll": "Pause all agents",
+      "resumeAll": "Resume agents",
+      "confirmPauseTitle": "Pause every agent?",
+      "confirmPauseBody": "This turns on the global kill switch. Every scheduled agent stops running until you resume. In-flight runs finish, but nothing new starts.",
+      "confirmResumeTitle": "Resume agents?",
+      "confirmResumeBody": "This turns off the global kill switch. Enabled agents will run again on their schedules.",
+      "confirm": "Confirm",
+      "pausedToast": "Global kill switch on — all agents paused.",
+      "resumedToast": "Global kill switch off — agents resumed.",
+      "error": "Could not update the kill switch. Please try again."
+    },
+    "registry": {
+      "empty": "No agents are registered yet.",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "enable": "Enable",
+      "disable": "Disable",
+      "domainless": "No domain",
+      "lastRun": "Last run",
+      "neverRun": "Never run",
+      "todaySpend": "Today's spend",
+      "capOf": "of {{cap}} cap",
+      "enabledToast": "{{name}} enabled.",
+      "disabledToast": "{{name}} disabled.",
+      "toggleError": "Could not update {{name}}. Please try again.",
+      "loadError": "Could not load agents. Please try again.",
+      "configure": "Configure"
+    },
+    "detail": {
+      "subtitle": "Edit this agent's prompt, schedule, budget, and autonomy. Changes are versioned and audited.",
+      "systemPrompt": "System prompt",
+      "scheduleCron": "Schedule (cron)",
+      "invalidCron": "Enter a valid 5-field cron expression, or leave blank for event-driven agents.",
+      "dailyCap": "Daily cost cap (USD)",
+      "invalidCap": "Enter a non-negative number.",
+      "model": "Model",
+      "autoApprove": "Auto-approve actions",
+      "autoApproveHint": "Checked action types skip human review and execute automatically. Leave unchecked to require approval.",
+      "versionHistory": "Prompt version history",
+      "noVersions": "No saved versions yet. Saving a prompt change creates the first version.",
+      "rollback": "Restore",
+      "save": "Save changes",
+      "savedToast": "Agent configuration saved.",
+      "saveError": "Could not save the configuration. Please try again."
+    },
+    "status": {
+      "running": "Running",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "skipped": "Skipped"
+    },
+    "approvals": {
+      "empty": "No drafts waiting for review.",
+      "loadError": "Could not load the approval queue. Please try again.",
+      "created": "Drafted",
+      "expires": "Expires",
+      "noExpiry": "No expiry",
+      "templated": "Templated",
+      "fields": {
+        "subject": "Subject",
+        "body": "Body",
+        "caption": "Caption",
+        "title": "Title"
+      },
+      "imageAlt": "Draft image preview",
+      "save": "Save edits",
+      "approve": "Approve",
+      "reject": "Reject",
+      "selectForBulk": "Select for bulk approve",
+      "bulkApprove": "Bulk approve ({{count}})",
+      "bulkHint": "Select two or more templated drafts of the same type to bulk approve.",
+      "savedToast": "Edits saved.",
+      "approvedToast": "Approved and sent for execution.",
+      "rejectedToast": "Draft rejected.",
+      "bulkApprovedToast": "Approved {{count}} drafts.",
+      "actionError": "That action failed. Please try again.",
+      "rejectTitle": "Reject this draft?",
+      "rejectBody": "Add a short reason. It is recorded on the approval and visible in the audit log.",
+      "rejectReasonPlaceholder": "Reason for rejection",
+      "rejectConfirm": "Reject draft",
+      "reasonRequired": "A reason is required to reject."
+    },
+    "escalations": {
+      "empty": "No escalations match these filters.",
+      "loadError": "Could not load escalations. Please try again.",
+      "openTier3Badge": "{{count}} open tier-3",
+      "tier": "Tier {{tier}}",
+      "created": "Raised",
+      "assignedToYou": "Assigned to you",
+      "assigned": "Assigned",
+      "showDetail": "Show detail",
+      "hideDetail": "Hide detail",
+      "acknowledge": "Acknowledge",
+      "resolve": "Resolve",
+      "resolvedNote": "Resolution",
+      "acknowledgedToast": "Escalation acknowledged.",
+      "resolvedToast": "Escalation resolved.",
+      "actionError": "That action failed. Please try again.",
+      "resolveTitle": "Resolve this escalation?",
+      "resolveBody": "Add a short resolution note. It is recorded on the escalation and in the audit log.",
+      "resolveNotePlaceholder": "What was done to resolve this",
+      "resolveConfirm": "Mark resolved",
+      "noteRequired": "A resolution note is required.",
+      "filters": {
+        "status": "Status",
+        "domain": "Domain",
+        "allStatuses": "All statuses",
+        "allDomains": "All domains",
+        "open": "Open",
+        "acknowledged": "Acknowledged",
+        "resolved": "Resolved"
+      },
+      "severity": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "critical": "Critical"
+      }
+    },
+    "runs": {
+      "empty": "No runs match these filters.",
+      "loadError": "Could not load runs. Please try again.",
+      "costTitle": "Spend — last 14 days",
+      "costEmpty": "No spend recorded in the last 14 days.",
+      "capUtilTitle": "Today's cap utilization",
+      "filters": {
+        "agent": "Agent",
+        "status": "Status",
+        "allAgents": "All agents",
+        "allStatuses": "All statuses",
+        "from": "From",
+        "to": "To",
+        "showFailed": "Show failed only",
+        "clear": "Clear filters"
+      },
+      "table": {
+        "agent": "Agent",
+        "status": "Status",
+        "trigger": "Trigger",
+        "started": "Started",
+        "duration": "Duration",
+        "cost": "Cost",
+        "view": "View"
+      },
+      "pagination": {
+        "prev": "Previous",
+        "next": "Next",
+        "page": "Page {{page}} of {{total}}"
+      },
+      "detail": {
+        "title": "Run detail",
+        "trigger": "Trigger",
+        "status": "Status",
+        "started": "Started",
+        "finished": "Finished",
+        "duration": "Duration",
+        "tokens": "Tokens (in / out)",
+        "cost": "Cost",
+        "input": "Input",
+        "output": "Output",
+        "error": "Error",
+        "none": "—"
+      }
+    },
+    "audit": {
+      "empty": "No audit entries match these filters.",
+      "loadError": "Could not load the audit log. Please try again.",
+      "human": "Human",
+      "agent": "Agent",
+      "export": "Export CSV",
+      "exportEmpty": "Nothing to export.",
+      "filters": {
+        "actor": "Actor",
+        "action": "Action",
+        "subjectType": "Subject type",
+        "from": "From",
+        "to": "To",
+        "actorPlaceholder": "Filter by actor",
+        "actionPlaceholder": "Filter by action",
+        "allSubjects": "All subjects",
+        "clear": "Clear filters"
+      },
+      "table": {
+        "time": "Time",
+        "actor": "Actor",
+        "action": "Action",
+        "subject": "Subject",
+        "detail": "Detail"
+      },
+      "pagination": {
+        "prev": "Previous",
+        "next": "Next",
+        "page": "Page {{page}} of {{total}}"
+      }
+    }
   }
 }

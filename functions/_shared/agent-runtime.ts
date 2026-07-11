@@ -28,6 +28,11 @@ import {
   buildEscalation,
   type AutonomyPolicy,
 } from './agent-approval-logic.ts';
+import {
+  capReached,
+  shouldAbortMidRun,
+  sumTodaySpend,
+} from './agent-budget-logic.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -144,11 +149,26 @@ export interface RunAgentParams {
 }
 
 export interface AgentRunResult {
+  /** Id of the run row (the 'running' row, or the 'skipped' row for a cap skip). */
   runId: string;
-  status: 'succeeded' | 'failed';
+  status: 'succeeded' | 'failed' | 'skipped';
   output?: Json;
   error?: string;
+  /** Reason the run was skipped before execution (e.g. 'cost cap'). */
+  skippedReason?: string;
   usage: Usage;
+}
+
+/**
+ * Thrown internally when accumulated cost overruns the agent's remaining daily
+ * budget mid-loop. Caught by runAgent, which finalizes the run gracefully
+ * rather than treating it as a handler crash.
+ */
+class BudgetAbortError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'BudgetAbortError';
+  }
 }
 
 // Anthropic message shapes (minimal, structural).
@@ -305,6 +325,13 @@ export function extractJson(text: string): unknown {
 
 const nowIso = () => new Date().toISOString();
 
+/** Start of the current UTC day (ISO), for summing an agent's daily spend. */
+function startOfUtcDay(now: Date): string {
+  return new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  ).toISOString();
+}
+
 // ---------------------------------------------------------------------------
 // runAgent
 // ---------------------------------------------------------------------------
@@ -312,6 +339,84 @@ const nowIso = () => new Date().toISOString();
 export async function runAgent(params: RunAgentParams): Promise<AgentRunResult> {
   const { agentDefinition, trigger, input, tools, handler } = params;
   const db = getServiceClient();
+
+  const startedAt = new Date();
+  const dayStart = startOfUtcDay(startedAt);
+  const capUsd = agentDefinition.daily_cost_cap_usd ?? null;
+
+  // --- Budget guardrail: sum today's spend BEFORE opening the run (US-480). ---
+  // A single snapshot taken at run start; the mid-loop abort compares this run's
+  // accumulated cost against this same baseline (no re-querying per call).
+  let todaySpendBeforeRun = 0;
+  {
+    const { data: todayRuns } = await db
+      .from('agent_runs')
+      .select('cost_usd')
+      .eq('agent_id', agentDefinition.id)
+      .gte('started_at', dayStart);
+    todaySpendBeforeRun = sumTodaySpend(
+      (todayRuns ?? []) as Array<{ cost_usd: number | null }>,
+    );
+  }
+
+  // First cap trip of the day -> a single tier-2 escalation (idempotent per day).
+  async function escalateCapTrip(runId: string | null, phase: 'pre-run' | 'mid-run'): Promise<void> {
+    const { count } = await db
+      .from('agent_escalations')
+      .select('id', { count: 'exact', head: true })
+      .eq('agent_id', agentDefinition.id)
+      .eq('domain', 'budget')
+      .gte('created_at', dayStart);
+    if ((count ?? 0) > 0) return; // already escalated a cap trip today
+
+    const { escalation, audit } = buildEscalation(
+      {
+        agentId: agentDefinition.id,
+        agentName: agentDefinition.name,
+        runId,
+        tier: 2,
+        severity: 'medium',
+        domain: 'budget',
+        title: `Daily cost cap reached: ${agentDefinition.name}`,
+        context: {
+          capUsd,
+          todaySpendUsd: todaySpendBeforeRun,
+          phase,
+        },
+      },
+      new Date(),
+    );
+    const { data: row } = await db
+      .from('agent_escalations')
+      .insert(escalation)
+      .select('id')
+      .single();
+    if (row) await db.from('agent_audit_log').insert({ ...audit, subject_id: row.id });
+  }
+
+  // Cap already reached -> record a 'skipped' run and do not invoke the handler.
+  if (capReached({ capUsd, todaySpendUsd: todaySpendBeforeRun })) {
+    const { data: skipped } = await db
+      .from('agent_runs')
+      .insert({
+        agent_id: agentDefinition.id,
+        trigger,
+        status: 'skipped',
+        input: input ?? {},
+        output: { skipped_reason: 'cost cap' },
+        finished_at: startedAt.toISOString(),
+      })
+      .select('id')
+      .single();
+    const skippedId: string = skipped?.id ?? '';
+    await escalateCapTrip(skippedId || null, 'pre-run');
+    return {
+      runId: skippedId,
+      status: 'skipped',
+      skippedReason: 'cost cap',
+      usage: { tokensIn: 0, tokensOut: 0, costUsd: 0 },
+    };
+  }
 
   const { data: run, error: insertError } = await db
     .from('agent_runs')
@@ -351,6 +456,19 @@ export async function runAgent(params: RunAgentParams): Promise<AgentRunResult> 
     usage.costUsd = Math.round((usage.costUsd + computeCostUsd(model, inTok, outTok)) * 1_000_000) / 1_000_000;
   }
 
+  // Mid-loop budget enforcement (US-480): after each Claude call, abort the run
+  // gracefully once this run's accumulated cost overruns the remaining daily
+  // budget. Throwing here unwinds the tool-use loop; runAgent's catch finalizes
+  // the run and escalates the first cap trip of the day.
+  function enforceBudget(): void {
+    if (shouldAbortMidRun(capUsd, todaySpendBeforeRun, usage.costUsd)) {
+      throw new BudgetAbortError(
+        `Daily cost cap exceeded mid-run (cap $${capUsd}, ` +
+          `prior spend $${todaySpendBeforeRun}, this run $${usage.costUsd})`,
+      );
+    }
+  }
+
   const model = agentDefinition.model;
 
   async function complete(p: CompleteParams): Promise<CompleteResult> {
@@ -366,6 +484,7 @@ export async function runAgent(params: RunAgentParams): Promise<AgentRunResult> 
       });
       accumulate(model, resp);
       await persistUsage();
+      enforceBudget();
 
       convo.push({ role: 'assistant', content: resp.content });
 
@@ -418,6 +537,7 @@ export async function runAgent(params: RunAgentParams): Promise<AgentRunResult> 
       });
       accumulate(model, resp);
       await persistUsage();
+      enforceBudget();
 
       const text = extractText(resp.content);
       try {
@@ -530,6 +650,11 @@ export async function runAgent(params: RunAgentParams): Promise<AgentRunResult> 
         finished_at: nowIso(),
       })
       .eq('id', runId);
+    // A mid-run budget abort is a guardrail trip, not a handler bug: escalate the
+    // first cap trip of the day (idempotent) alongside the graceful finalization.
+    if (err instanceof BudgetAbortError) {
+      await escalateCapTrip(runId, 'mid-run');
+    }
     return { runId, status: 'failed', error: message, usage: { ...usage } };
   }
 }
