@@ -40,6 +40,10 @@ import {
   verifyGithubSignature,
   verifySentrySignature,
 } from './webhook-signatures.ts';
+import {
+  isFreshStripeEvent,
+  isDuplicateInsertError,
+} from './stripe-webhook-logic.ts';
 
 const CORS = { 'Access-Control-Allow-Origin': 'https://tryeatpal.com' };
 
@@ -341,4 +345,30 @@ Deno.test('verifySentrySignature verifies hex HMAC and enforces timestamp tolera
     await verifySentrySignature(body, sig, secret, { timestamp: '1000', nowSeconds: 99999 }),
     false,
   );
+});
+
+// ---------------------------------------------------------------------------
+// stripe-webhook-logic.ts — idempotency + ordering (US-519)
+// ---------------------------------------------------------------------------
+
+Deno.test('isFreshStripeEvent: a stale updated after a newer deleted is rejected', () => {
+  // A subscription.deleted (created=200) was applied; a late
+  // subscription.updated (created=100) must NOT reactivate it.
+  assertEquals(isFreshStripeEvent(100, 200), false);
+  // A newer event applies.
+  assertEquals(isFreshStripeEvent(300, 200), true);
+  // Equal timestamps still apply (idempotent replay handled separately).
+  assertEquals(isFreshStripeEvent(200, 200), true);
+  // First event on a fresh row always applies.
+  assertEquals(isFreshStripeEvent(100, null), true);
+  // A guarded row with no ordering info on the incoming event is skipped.
+  assertEquals(isFreshStripeEvent(null, 200), false);
+});
+
+Deno.test('isDuplicateInsertError detects unique-violations (redelivered event)', () => {
+  assertEquals(isDuplicateInsertError({ code: '23505' }), true);
+  assertEquals(isDuplicateInsertError({ message: 'duplicate key value violates unique constraint' }), true);
+  assertEquals(isDuplicateInsertError({ code: '23503' }), false);
+  assertEquals(isDuplicateInsertError(null), false);
+  assertEquals(isDuplicateInsertError('boom'), false);
 });

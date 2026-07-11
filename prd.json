@@ -750,8 +750,8 @@
         "Add tests: duplicate event is a no-op; stale 'active' after 'deleted' does not reactivate"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "[Severity: High | Category: security/payments | Source: code-review 2026-07-11] Confirmed at functions/stripe-webhook/index.ts:124-213 — signature verified but no event.id dedup and no ordering guard."
+      "passes": true,
+      "notes": "[Severity: High | Category: security/payments | Source: code-review 2026-07-11] Confirmed at functions/stripe-webhook/index.ts:124-213 — signature verified but no event.id dedup and no ordering guard. | VERIFIED 2026-07-11: Migration 20260711000001 adds public.stripe_webhook_events (event_id PK, RLS on/no policies = service-role only) + additive nullable user_subscriptions.last_stripe_event_created. Handler inserts event.id (dup PK -> 200 no-op) and guards every subscription mutation with isFreshStripeEvent(event.created, row.last_stripe_event_created) so a late updated can't overwrite a newer deleted. Pure logic in _shared/stripe-webhook-logic.ts; tests: stale-after-deleted rejected, duplicate detection. deno check clean, 23 helpers tests pass."
     },
     {
       "id": "US-520",
