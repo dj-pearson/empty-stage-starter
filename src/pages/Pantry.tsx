@@ -1129,9 +1129,9 @@ export default function Pantry() {
               </div>
             ) : suggestions.length > 0 ? (
               <div className="space-y-3">
-                {suggestions.map((suggestion, index) => (
+                {suggestions.map((suggestion) => (
                   <Card
-                    key={index}
+                    key={suggestion.name}
                     className="hover:shadow-md transition-shadow"
                   >
                     <CardContent className="p-4">

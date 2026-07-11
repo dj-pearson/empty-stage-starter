@@ -1088,8 +1088,8 @@
         "User-facing error state (not just console) on load failure"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: correctness | Source: code-review 2026-07-11] Confirmed: src/components/AIMealCoach.tsx:70-134 — no cancellation; errors only logged; loadConversations effect has empty deps while reading user."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: correctness | Source: code-review 2026-07-11] Confirmed: src/components/AIMealCoach.tsx:70-134 — no cancellation; errors only logged; loadConversations effect has empty deps while reading user. | VERIFIED 2026-07-11: AIMealCoach: loadMessages effect uses an ignore flag (cleanup sets ignore=true) so a slow load is discarded when activeConversation changes mid-flight — loadMessages checks isStale() before setMessages/setLoadError/setLoading. loadConversations effect now depends on [userId] (from useAuth) instead of [] so it (re)runs when auth resolves rather than reading a possibly-null user once. Added user-facing loadError state + Retry button (role=alert), not just console. Verified: no NEW test failures (only the 5 pre-existing environmental React-null files fail); AIMealCoach module transpiles."
     },
     {
       "id": "US-545",
@@ -1192,8 +1192,8 @@
         "Any icon-only buttons flagged during the fix get aria-labels"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "[Severity: Low | Category: a11y/correctness | Source: code-review 2026-07-11] Locations: AIMealCoach.tsx:80-82; Recipes.tsx:762,773; Pantry.tsx:1134-1136."
+      "passes": true,
+      "notes": "[Severity: Low | Category: a11y/correctness | Source: code-review 2026-07-11] Locations: AIMealCoach.tsx:80-82; Recipes.tsx:762,773; Pantry.tsx:1134-1136. | VERIFIED 2026-07-11: AIMealCoach scrollIntoView uses behavior: prefersReducedMotion ? 'auto' : 'smooth' via useReducedMotion(). Recipes suggestion Card keyed by suggestion.name (was index), food_names Badge keyed by foodName; Pantry suggestion Card keyed by suggestion.name. Icon-only buttons got aria-labels: delete-conversation ('Delete conversation'), send ('Send message'). Skeleton [...Array] placeholder lists keep index keys (static, no stable id — appropriate)."
     },
     {
       "id": "US-553",
