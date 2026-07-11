@@ -707,8 +707,8 @@
         "No new typecheck errors; existing behavior for admins preserved"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "[Severity: High | Category: security/auth+ssrf | Source: code-review 2026-07-11] Confirmed: functions/update-blog-image/index.ts uses authenticateRequest (line 42) but NO assertAdmin, then uses SUPABASE_SERVICE_ROLE_KEY (line 55) to fetch a user-supplied URL and overwrite featured_image. RLS is bypassed by service role."
+      "passes": true,
+      "notes": "[Severity: High | Category: security/auth+ssrf | Source: code-review 2026-07-11] Confirmed: functions/update-blog-image/index.ts uses authenticateRequest (line 42) but NO assertAdmin, then uses SUPABASE_SERVICE_ROLE_KEY (line 55) to fetch a user-supplied URL and overwrite featured_image. RLS is bypassed by service role. | VERIFIED 2026-07-11: Added assertAdmin gate + blog-post existence check; replaced plain fetch with safeFetch (DNS-resolving validation on every redirect hop) + readCappedBody 10MB cap in functions/update-blog-image/index.ts. deno check clean; tests in helpers_test.ts."
     },
     {
       "id": "US-517",
@@ -722,8 +722,8 @@
         "Add a test asserting a URL whose A-record resolves to a private range is rejected"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "[Severity: High | Category: security/ssrf | Source: code-review 2026-07-11] Confirmed at functions/parse-recipe/index.ts:202-216 (validateUrl does no DNS resolution; plain fetch follows redirects). update-blog-image shares this and is covered by US-516."
+      "passes": true,
+      "notes": "[Severity: High | Category: security/ssrf | Source: code-review 2026-07-11] Confirmed at functions/parse-recipe/index.ts:202-216 (validateUrl does no DNS resolution; plain fetch follows redirects). update-blog-image shares this and is covered by US-516. | VERIFIED 2026-07-11: parse-recipe now uses safeFetch (manual redirect re-validation) + readCappedBody 5MB text cap. Audited other user-supplied URL fetchers: only parse-recipe/update-blog-image were unguarded (others fetch first-party/config/same-host URLs already validated). Added DNS-private-range rejection test."
     },
     {
       "id": "US-518",
@@ -736,8 +736,8 @@
         "Add a test for the allowlist and admin gate"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "[Severity: High | Category: security/auth | Source: code-review 2026-07-11] Confirmed at functions/google-indexing/index.ts:199-268 — only authenticateRequest; caller controls urls + type incl. URL_DELETED with the site's service account."
+      "passes": true,
+      "notes": "[Severity: High | Category: security/auth | Source: code-review 2026-07-11] Confirmed at functions/google-indexing/index.ts:199-268 — only authenticateRequest; caller controls urls + type incl. URL_DELETED with the site's service account. | VERIFIED 2026-07-11: google-indexing now admin-gated (assertAdmin) + owned-hostname allowlist (functions/_shared/indexing-allowlist.ts, exact-host https-only). URL_DELETED restricted via admin+owned. Allowlist + admin-gate tests pass."
     },
     {
       "id": "US-519",

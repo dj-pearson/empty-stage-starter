@@ -20,6 +20,16 @@ import { resolvePriceId, getAllowedPriceIds } from './stripe-prices.ts';
 import { isHouseholdMember, assertHouseholdMember } from './household.ts';
 import { isAdmin, assertAdmin } from './admin.ts';
 import { enforceRateLimit } from './rate-limit.ts';
+import {
+  validateExternalUrl,
+  safeFetch,
+  readCappedBody,
+} from './url-validator.ts';
+import {
+  ownedHosts,
+  isOwnedUrl,
+  DEFAULT_OWNED_HOSTS,
+} from './indexing-allowlist.ts';
 
 const CORS = { 'Access-Control-Allow-Origin': 'https://tryeatpal.com' };
 
@@ -151,4 +161,107 @@ Deno.test('enforceRateLimit: null when allowed, 429 when exceeded', async () => 
 Deno.test('enforceRateLimit fails closed (429) when the RPC errors', async () => {
   const res = await enforceRateLimit(mockClient({ rate: 'error' }), 'u', 'ep', CORS);
   assertEquals(res?.status, 429);
+});
+
+// ---------------------------------------------------------------------------
+// url-validator.ts — SSRF hardening (US-516 / US-517)
+// ---------------------------------------------------------------------------
+
+Deno.test('validateExternalUrl rejects a hostname whose A-record resolves to a private range', async () => {
+  const original = Deno.resolveDns;
+  // Stub DNS so a "public looking" hostname resolves to a private IP
+  // (the DNS-rebinding attack the validator must block).
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).resolveDns = (_host: string, _type: string) =>
+    Promise.resolve(['10.0.0.5']);
+  try {
+    const res = await validateExternalUrl('https://evil.example.com/path');
+    assertEquals(res.valid, false);
+    assert(/private/i.test(res.error ?? ''));
+  } finally {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).resolveDns = original;
+  }
+});
+
+Deno.test('validateExternalUrl allows a hostname resolving to a public IP', async () => {
+  const original = Deno.resolveDns;
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).resolveDns = (_host: string, _type: string) =>
+    Promise.resolve(['93.184.216.34']);
+  try {
+    const res = await validateExternalUrl('https://example.com/');
+    assertEquals(res.valid, true);
+  } finally {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).resolveDns = original;
+  }
+});
+
+Deno.test('safeFetch re-validates a redirect Location and blocks a redirect to a private address', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalDns = Deno.resolveDns;
+  // Public on first resolve so the initial URL passes; the redirect target is
+  // a literal private IP which validateUrl rejects without needing DNS.
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).resolveDns = () => Promise.resolve(['93.184.216.34']);
+  // deno-lint-ignore no-explicit-any
+  (globalThis as any).fetch = () =>
+    Promise.resolve(
+      new Response(null, {
+        status: 302,
+        headers: { location: 'http://169.254.169.254/latest/meta-data/' },
+      }),
+    );
+  try {
+    const res = await safeFetch('https://example.com/start');
+    assertEquals(res.valid, false);
+    assert((res.error ?? '').length > 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).resolveDns = originalDns;
+  }
+});
+
+Deno.test('readCappedBody rejects a body over the cap (streamed) and accepts one under it', async () => {
+  const big = new Response(new Uint8Array(50));
+  const over = await readCappedBody(big, 10);
+  assertEquals(over.ok, false);
+
+  const small = new Response(new Uint8Array(5));
+  const under = await readCappedBody(small, 10);
+  assertEquals(under.ok, true);
+  if (under.ok) assertEquals(under.bytes.byteLength, 5);
+});
+
+Deno.test('readCappedBody rejects early on an oversized Content-Length header', async () => {
+  const res = new Response('x', { headers: { 'content-length': '999999999' } });
+  const out = await readCappedBody(res, 1024);
+  assertEquals(out.ok, false);
+});
+
+// ---------------------------------------------------------------------------
+// indexing-allowlist.ts — google-indexing owned-host gate (US-518)
+// ---------------------------------------------------------------------------
+
+Deno.test('ownedHosts parses env override and falls back to defaults', () => {
+  assertEquals(ownedHosts(undefined), DEFAULT_OWNED_HOSTS);
+  assertEquals(ownedHosts(''), DEFAULT_OWNED_HOSTS);
+  assertEquals(ownedHosts('  '), DEFAULT_OWNED_HOSTS);
+  assertEquals(ownedHosts('a.com, b.com ,C.COM'), ['a.com', 'b.com', 'c.com']);
+});
+
+Deno.test('isOwnedUrl accepts owned https hosts and rejects everything else', () => {
+  const hosts = ['tryeatpal.com', 'www.tryeatpal.com'];
+  assert(isOwnedUrl('https://tryeatpal.com/blog/post', hosts));
+  assert(isOwnedUrl('https://www.tryeatpal.com/', hosts));
+  // Third-party host — the de-index / quota-burn attack.
+  assertEquals(isOwnedUrl('https://evil.com/', hosts), false);
+  // Subdomain not explicitly allowlisted.
+  assertEquals(isOwnedUrl('https://sneaky.tryeatpal.com/', hosts), false);
+  // Non-https.
+  assertEquals(isOwnedUrl('http://tryeatpal.com/', hosts), false);
+  // Malformed.
+  assertEquals(isOwnedUrl('not a url', hosts), false);
 });

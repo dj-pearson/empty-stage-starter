@@ -147,3 +147,113 @@ export async function fetchWithTimeout(
     clearTimeout(timer);
   }
 }
+
+/** Default cap on the number of bytes read from an external response body (10 MB). */
+export const MAX_EXTERNAL_BYTES = 10 * 1024 * 1024;
+
+/** Default maximum number of redirect hops to follow (each re-validated). */
+export const MAX_REDIRECTS = 3;
+
+/**
+ * Fetch a user-supplied external URL with full SSRF protection.
+ *
+ * Unlike a plain `fetch`, this:
+ *  - runs the DNS-resolving `validateExternalUrl` on the initial URL AND on
+ *    every redirect hop (blocks redirect-to-metadata / DNS-rebinding attacks);
+ *  - uses `redirect: 'manual'` so a `Location` is never followed before it has
+ *    been re-validated;
+ *  - bounds each hop with `fetchWithTimeout`.
+ *
+ * The returned `response` (when `valid`) is the final, already-followed
+ * response. Callers MUST read its body with `readCappedBody` to enforce a size
+ * limit — the size cap is deliberately not applied here so callers can choose
+ * their own limit and decode as bytes or text.
+ */
+export async function safeFetch(
+  urlString: string,
+  init: RequestInit = {},
+  opts: { timeoutMs?: number; maxRedirects?: number } = {}
+): Promise<{ valid: boolean; error?: string; response?: Response }> {
+  const maxRedirects = opts.maxRedirects ?? MAX_REDIRECTS;
+  let current = urlString;
+
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    const check = await validateExternalUrl(current);
+    if (!check.valid) return { valid: false, error: check.error };
+
+    const res = await fetchWithTimeout(
+      current,
+      { ...init, redirect: 'manual' },
+      opts.timeoutMs
+    );
+
+    // Manual redirect handling: re-validate the Location before following.
+    if (res.status >= 300 && res.status < 400 && res.headers.has('location')) {
+      const location = res.headers.get('location')!;
+      // Release the connection before following.
+      await res.body?.cancel().catch(() => {});
+      let next: string;
+      try {
+        next = new URL(location, current).toString();
+      } catch {
+        return { valid: false, error: 'Invalid redirect Location header' };
+      }
+      current = next;
+      continue;
+    }
+
+    return { valid: true, response: res };
+  }
+
+  return { valid: false, error: 'Too many redirects' };
+}
+
+/**
+ * Read a response body while enforcing a maximum byte cap.
+ *
+ * Rejects early on a declared `Content-Length` over the cap, and also streams
+ * defensively so a server that lies about (or omits) `Content-Length` cannot
+ * exhaust memory. Returns the raw bytes on success.
+ */
+export async function readCappedBody(
+  response: Response,
+  maxBytes: number = MAX_EXTERNAL_BYTES
+): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
+  const declared = response.headers.get('content-length');
+  if (declared && Number(declared) > maxBytes) {
+    await response.body?.cancel().catch(() => {});
+    return { ok: false, error: 'Response body exceeds maximum allowed size' };
+  }
+
+  if (!response.body) {
+    const buf = new Uint8Array(await response.arrayBuffer());
+    if (buf.byteLength > maxBytes) {
+      return { ok: false, error: 'Response body exceeds maximum allowed size' };
+    }
+    return { ok: true, bytes: buf };
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) {
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => {});
+        return { ok: false, error: 'Response body exceeds maximum allowed size' };
+      }
+      chunks.push(value);
+    }
+  }
+
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { ok: true, bytes: out };
+}

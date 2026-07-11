@@ -24,8 +24,11 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
-import { validateUrl } from '../_shared/url-validator.ts';
+import { safeFetch, readCappedBody } from '../_shared/url-validator.ts';
 import { authenticateRequest } from '../_shared/auth.ts';
+
+/** Cap the fetched recipe page so a single request can't exhaust memory. */
+const MAX_HTML_BYTES = 5 * 1024 * 1024; // 5 MB
 
 interface ParsedRecipe {
   name: string;
@@ -198,31 +201,40 @@ serve(async (req) => {
       );
     }
 
-    // Validate URL (SSRF protection)
-    const urlValidation = validateUrl(url);
-    if (!urlValidation.valid) {
-      return new Response(
-        JSON.stringify({ error: urlValidation.error }),
-        { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
-      );
-    }
-
-    // Fetch the recipe page
-    const pageResponse = await fetch(url, {
+    // Fetch the recipe page with SSRF protection: DNS-resolving validation on
+    // the initial URL and every redirect hop, manual redirects re-validated
+    // before following, and a fetch timeout.
+    const fetchResult = await safeFetch(url, {
       headers: {
         'User-Agent': 'EatPal Recipe Parser/1.0',
         'Accept': 'text/html',
       },
     });
+    if (!fetchResult.valid || !fetchResult.response) {
+      return new Response(
+        JSON.stringify({ error: fetchResult.error ?? 'Invalid URL' }),
+        { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
+      );
+    }
+    const pageResponse = fetchResult.response;
 
     if (!pageResponse.ok) {
+      await pageResponse.body?.cancel().catch(() => {});
       return new Response(
         JSON.stringify({ error: `Failed to fetch URL: HTTP ${pageResponse.status}` }),
         { status: 422, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }
 
-    const html = await pageResponse.text();
+    // Cap the response body size before decoding to text.
+    const capped = await readCappedBody(pageResponse, MAX_HTML_BYTES);
+    if (!capped.ok) {
+      return new Response(
+        JSON.stringify({ error: capped.error, max_bytes: MAX_HTML_BYTES }),
+        { status: 413, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
+      );
+    }
+    const html = new TextDecoder().decode(capped.bytes);
 
     // Try JSON-LD first, then fallback to HTML parsing
     const jsonLdData = extractJsonLd(html);
