@@ -214,11 +214,15 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
   }, [userId]);
 
   const refreshFoods = useCallback(async () => {
-    if (userId) {
-      const { data } = await supabase.from('foods').select('*').order('name', { ascending: true }).limit(500);
+    // US-550: always scope by household_id (defense-in-depth alongside RLS)
+    // instead of relying on RLS with an unscoped select.
+    if (userId && householdId) {
+      const { data } = await supabase.from('foods').select('*')
+        .eq('household_id', householdId)
+        .order('name', { ascending: true }).limit(500);
       if (data) setFoods((data as Record<string, unknown>[]).map(normalizeFoodFromDB));
     }
-  }, [userId]);
+  }, [userId, householdId]);
 
   const value = useMemo(() => ({
     foods, setFoods, addFood, updateFood, deleteFood, addFoods, updateFoods, deleteFoods, refreshFoods

@@ -162,11 +162,14 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshKids = useCallback(async () => {
-    if (userId) {
-      const { data } = await supabase.from('kids').select('*').order('created_at', { ascending: true });
+    // US-550: always scope by household_id (defense-in-depth alongside RLS).
+    if (userId && householdId) {
+      const { data } = await supabase.from('kids').select('*')
+        .eq('household_id', householdId)
+        .order('created_at', { ascending: true });
       if (data) setKids((data as unknown[]).map((k) => normalizeKidFromDB(k as Record<string, unknown>)));
     }
-  }, [userId]);
+  }, [userId, householdId]);
 
   const value = useMemo(() => ({
     kids, setKids, activeKidId, setActiveKidId, addKid, updateKid, deleteKid, setActiveKid, refreshKids

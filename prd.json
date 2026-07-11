@@ -1166,8 +1166,8 @@
         "Behavior unchanged for the scoped path; add a test asserting the filter is applied"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "[Severity: Low | Category: security | Source: code-review 2026-07-11] Locations: AppContext.tsx:189-213, FoodsContext.tsx:163, RecipesContext.tsx:313-314, KidsContext.tsx:164 — unscoped selects rely solely on RLS."
+      "passes": true,
+      "notes": "[Severity: Low | Category: security | Source: code-review 2026-07-11] Locations: AppContext.tsx:189-213, FoodsContext.tsx:163, RecipesContext.tsx:313-314, KidsContext.tsx:164 — unscoped selects rely solely on RLS. | VERIFIED 2026-07-11: Removed dead unscoped ternary branches in AppContext load effect (effect is gated on householdId, so every query now unconditionally .eq('household_id', householdId)). refreshFoods/refreshKids/refreshRecipes now gate on userId && householdId and add .eq('household_id', householdId) instead of relying solely on RLS. Defense-in-depth; scoped-path behavior unchanged. Test AppContext.householdScope.test.tsx records .eq calls and asserts all 5 domain tables filtered by household_id on load."
     },
     {
       "id": "US-551",

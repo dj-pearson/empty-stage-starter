@@ -309,15 +309,16 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
   }, [userId]);
 
   const refreshRecipes = useCallback(async () => {
-    if (userId) {
+    // US-550: always scope by household_id (defense-in-depth alongside RLS).
+    if (userId && householdId) {
       // US-323: degrade to a plain select if the recipe_ingredients embed isn't
       // available, so recipes still load instead of 400-ing the whole list.
       const { data } = await selectRecipesWithFallback((sel) =>
-        supabase.from('recipes').select(sel).order('created_at', { ascending: true }),
+        supabase.from('recipes').select(sel).eq('household_id', householdId).order('created_at', { ascending: true }),
       );
       if (data) setRecipes((data as unknown[]).map((r) => normalizeRecipeFromDB(r as RecipeRowWithIngredients)));
     }
-  }, [userId]);
+  }, [userId, householdId]);
 
   const value = useMemo(() => ({
     recipes, setRecipes, addRecipe, updateRecipe, deleteRecipe, refreshRecipes

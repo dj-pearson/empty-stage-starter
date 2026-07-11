@@ -223,30 +223,20 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         const ninetyDaysFromNow = new Date();
         ninetyDaysFromNow.setDate(ninetyDaysFromNow.getDate() + 90);
 
+        // US-550: this effect is gated on householdId above, so every query is
+        // always household-scoped (the previous unscoped ternary branches were
+        // dead code that relied solely on RLS).
         const [kidsRes, foodsRes, recipesRes, planRes, groceryRes] = await Promise.all([
-          householdId
-            ? supabase.from('kids').select('*').eq('household_id', householdId).order('created_at', { ascending: true })
-            : supabase.from('kids').select('*').order('created_at', { ascending: true }),
-          householdId
-            ? supabase.from('foods').select('*').eq('household_id', householdId).order('name', { ascending: true }).limit(500)
-            : supabase.from('foods').select('*').order('name', { ascending: true }).limit(500),
+          supabase.from('kids').select('*').eq('household_id', householdId).order('created_at', { ascending: true }),
+          supabase.from('foods').select('*').eq('household_id', householdId).order('name', { ascending: true }).limit(500),
           // US-323: degrade to a plain select if the recipe_ingredients embed
           // isn't deployed in this environment, so recipes still load.
-          householdId
-            ? selectRecipesWithFallback((sel) => supabase.from('recipes').select(sel).eq('household_id', householdId).order('created_at', { ascending: true }).limit(200))
-            : selectRecipesWithFallback((sel) => supabase.from('recipes').select(sel).order('created_at', { ascending: true }).limit(200)),
-          householdId
-            ? supabase.from('plan_entries').select('*').eq('household_id', householdId)
-                .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
-                .lte('date', ninetyDaysFromNow.toISOString().split('T')[0])
-                .order('date', { ascending: true })
-            : supabase.from('plan_entries').select('*')
-                .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
-                .lte('date', ninetyDaysFromNow.toISOString().split('T')[0])
-                .order('date', { ascending: true }),
-          householdId
-            ? supabase.from('grocery_items').select('*').eq('household_id', householdId).order('created_at', { ascending: true }).limit(500)
-            : supabase.from('grocery_items').select('*').order('created_at', { ascending: true }).limit(500)
+          selectRecipesWithFallback((sel) => supabase.from('recipes').select(sel).eq('household_id', householdId).order('created_at', { ascending: true }).limit(200)),
+          supabase.from('plan_entries').select('*').eq('household_id', householdId)
+            .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
+            .lte('date', ninetyDaysFromNow.toISOString().split('T')[0])
+            .order('date', { ascending: true }),
+          supabase.from('grocery_items').select('*').eq('household_id', householdId).order('created_at', { ascending: true }).limit(500)
         ]);
 
         // US-316: expired-JWT / 401 / PGRST301 come back as result.error (not
