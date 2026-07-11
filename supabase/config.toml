@@ -75,6 +75,9 @@ verify_jwt = false
 # SEO audit agent: invoked by the dispatcher with the internal secret.
 [functions.agent-seo-audit]
 verify_jwt = false
+# Sentry triage agent: event-driven webhook, shared-secret validated inside.
+[functions.agent-sentry-triage]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 

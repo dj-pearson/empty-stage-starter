@@ -538,8 +538,8 @@
         "Typecheck passes"
       ],
       "priority": 32,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "functions/agent-sentry-triage/index.ts (verify_jwt=false; shared-secret via x-sentry-secret header validated inside; event-driven — schedule_cron NULL, invoked by a Sentry webhook): parseSentryEvent normalizes varied Sentry payload shapes ({data:{event|issue}}, {event}, bare) into {fingerprint, title, culprit, release, route, count/timesSeen, level, stack}. Dedup (AC2): computes sentryFingerprint and looks up an existing open/approved/executed github_issue approval with payload->>sentry_fingerprint == fp; if found, increments payload.occurrences and returns WITHOUT re-drafting (counted, not re-drafted). Otherwise runAgent -> Claude haiku assesses severity + user_impact (ctx.structuredOutput, AssessmentSchema). If isCrashRateSpike (event.count >= crashSpikeThreshold from autonomy_policy, default 100) -> files a tier-3 dev_maintenance escalation instead of a draft (AC4); else -> ctx.requestApproval({actionType:'github_issue'}) with buildIssueTitle + buildIssueBody (stack, release, affected route, occurrence count, assessment), labels [bug, sentry, severity], sentry_fingerprint + occurrences in payload. Pure logic functions/_shared/sentry-triage-logic.ts (sentryFingerprint fingerprint>culprit>title, isCrashRateSpike, crashSpikeThreshold config-or-100, buildIssueTitle, buildIssueBody) with 5 Deno tests. Migration supabase/migrations/20260709000022_sentry_triage_agent.sql seeds the 'sentry-triage' agent (dev_maintenance, haiku, event-driven schedule_cron NULL, autonomy_policy {crash_spike_threshold:100}, enabled FALSE). config.toml adds [functions.agent-sentry-triage] verify_jwt=false. No types.ts change. Verified: all sentry assertions pass in Node; sentry function + runtime tsc exit 0 (ambient Deno shims). (deno test runner not installable — esm.sh/deno.land 403 via proxy.)"
     },
     {
       "id": "US-507",
