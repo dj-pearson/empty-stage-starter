@@ -995,8 +995,8 @@
         "Sign-out reliably scrubs the cache; add a test"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: security/data-integrity | Source: code-review 2026-07-11] Confirmed: AppContext.tsx:146-159 serializes the full snapshot (names, ages, allergens, restrictions, goals) to localStorage; mobile uses expo-secure-store, web has no equivalent. Also the save/clear race at 157-159 vs 327-343."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: security/data-integrity | Source: code-review 2026-07-11] Confirmed: AppContext.tsx:146-159 serializes the full snapshot (names, ages, allergens, restrictions, goals) to localStorage; mobile uses expo-secure-store, web has no equivalent. Also the save/clear race at 157-159 vs 327-343. | VERIFIED 2026-07-11: New src/lib/cacheSnapshot.ts redactSnapshotForCache/redactKidForCache drops sensitive child fields (allergens, dietary_restrictions, health_goals, texture/flavor prefs, notes, date_of_birth, profile_picture_url) from the plaintext web cache, keeping id/name/age for offline paint. AppContext save refactored to a cancelable timer + signedOutRef guard: SIGNED_OUT cancels the pending save and blocks re-writes after removeItem; signedOutRef reset on next authenticated load. hydratedRef prevents persisting an all-empty snapshot over a valid cache before the server responds. Tests: cacheSnapshot.test.ts (redaction, no-mutation) + AppContext.cache.test.tsx (PII redacted in persisted payload; sign-out scrubs + no late PII re-write). 66 context tests pass."
     },
     {
       "id": "US-538",

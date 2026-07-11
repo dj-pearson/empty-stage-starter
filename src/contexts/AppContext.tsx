@@ -1,11 +1,12 @@
 import React, { useCallback, useMemo, useEffect, useRef, createContext, useContext } from "react";
 import { Food, Kid, PlanEntry, GroceryItem, Recipe } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
-import { generateId, debounce } from "@/lib/utils";
+import { generateId } from "@/lib/utils";
 import { getStorage } from "@/lib/platform";
 import { logger } from "@/lib/logger";
 import { handleSupabaseAuthError } from "@/lib/supabaseAuthError";
 import { selectLocalOnlyRecipes } from "@/lib/recipeMigration";
+import { redactSnapshotForCache } from "@/lib/cacheSnapshot";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { FoodsProvider, useFoods } from "./FoodsContext";
 import { KidsProvider, useKids } from "./KidsContext";
@@ -155,21 +156,41 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Save to storage whenever data changes (platform-aware, debounced)
-  const debouncedSaveRef = useRef(
-    debounce(async (data: Record<string, unknown>) => {
+  // Save to storage whenever data changes (platform-aware, debounced).
+  // US-537: a cancelable timer (not the fire-and-forget utils debounce) so a
+  // pending save carrying child PII can be cancelled on sign-out and never
+  // re-writes the cache after it has been scrubbed.
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const signedOutRef = useRef(false);
+  // Don't persist an all-empty snapshot before anything has loaded — that would
+  // clobber a valid cache backup before the server responds (US-537).
+  const hydratedRef = useRef(false);
+
+  const persistSnapshot = useCallback((snapshot: Record<string, unknown>) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    if (signedOutRef.current) return;
+    saveTimerRef.current = setTimeout(async () => {
+      if (signedOutRef.current) return; // scrubbed since we were scheduled
       try {
         const storage = await getStorage();
-        await storage.setItem(STORAGE_KEY, JSON.stringify(data));
+        // Minimize sensitive child PII in the plaintext web cache.
+        await storage.setItem(STORAGE_KEY, JSON.stringify(redactSnapshotForCache(snapshot)));
       } catch (error) {
         logger.error("Error saving data to storage:", error);
       }
-    }, 500)
-  );
+    }, 500);
+  }, []);
 
   useEffect(() => {
-    debouncedSaveRef.current({ foods, kids, recipes, activeKidId, planEntries, groceryItems });
-  }, [foods, kids, recipes, activeKidId, planEntries, groceryItems]);
+    if (!hydratedRef.current) {
+      const isEmpty =
+        foods.length === 0 && kids.length === 0 && recipes.length === 0 &&
+        planEntries.length === 0 && groceryItems.length === 0;
+      if (isEmpty) return; // nothing loaded yet — don't overwrite the cache
+      hydratedRef.current = true;
+    }
+    persistSnapshot({ foods, kids, recipes, activeKidId, planEntries, groceryItems });
+  }, [foods, kids, recipes, activeKidId, planEntries, groceryItems, persistSnapshot]);
 
   // Sync with Supabase when authenticated.
   //
@@ -188,6 +209,9 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   // from clobbering the correctly-scoped one.
   useEffect(() => {
     if (!userId || !householdId) return;
+    // A new authenticated session — re-enable cache persistence disabled on a
+    // prior sign-out (US-537).
+    signedOutRef.current = false;
     const scope = `${userId}:${householdId}`;
     if (loadedScopeRef.current === scope) return;
     loadedScopeRef.current = scope;
@@ -347,6 +371,13 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
       if (event !== 'SIGNED_OUT') return;
       loadedScopeRef.current = null;
       serverLoadAppliedRef.current = false;
+      // US-537: block + cancel any pending debounced save so it can't re-write
+      // the cache (with child PII) after we scrub it below.
+      signedOutRef.current = true;
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
       setFoods([]);
       setKids([]);
       setRecipes([]);
