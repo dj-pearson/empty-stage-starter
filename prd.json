@@ -1034,8 +1034,8 @@
         "No behavioral change to the displayed insights; add/adjust a test"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: performance | Source: code-review 2026-07-11] Confirmed: src/pages/InsightsDashboard.tsx:31-119 computes derived data in an effect and stores it in state typed `any`."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: performance | Source: code-review 2026-07-11] Confirmed: src/pages/InsightsDashboard.tsx:31-119 computes derived data in an effect and stores it in state typed `any`. | VERIFIED 2026-07-11: Extracted computeInsights() to src/lib/insights.ts (pure, strongly-typed Insights interface, injectable now). InsightsDashboard replaces useState<any>+useEffect+calculateInsights/calculateFamilyInsights with a single useMemo(() => computeInsights(...), [activeKid,isFamilyMode,kids,foods,planEntries]). Removed the four ': any' JSX casts + obsolete @ts-ignore; dropped unused subDays import. No behavior change. Test insights.test.ts: empty default, per-kid coverage/success metrics/allergen-filtered safe foods, family-mode aggregate."
     },
     {
       "id": "US-541",

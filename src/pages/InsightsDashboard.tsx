@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
 import { Helmet } from "react-helmet-async";
 import { useFoods, useKids, usePlan } from "@/contexts/AppContext";
+import { computeInsights } from "@/lib/insights";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -20,7 +21,7 @@ import {
   XCircle,
   Clock
 } from "lucide-react";
-import { format, subDays } from "date-fns";
+import { format } from "date-fns";
 
 export default function InsightsDashboard() {
   const { kids, activeKidId, setActiveKidId } = useKids();
@@ -28,95 +29,12 @@ export default function InsightsDashboard() {
   const { planEntries } = usePlan();
   const activeKid = kids.find(k => k.id === activeKidId);
   const isFamilyMode = !activeKidId;
-  const [insights, setInsights] = useState<any>({});
 
-  useEffect(() => {
-    if (isFamilyMode && kids.length > 0) {
-      calculateFamilyInsights();
-    } else if (activeKid) {
-      calculateInsights();
-    }
-  }, [activeKid, isFamilyMode, kids, foods, planEntries]);
-
-  const calculateInsights = () => {
-    if (!activeKid) return;
-
-    const kidAllergens = activeKid.allergens || [];
-    const safeFoods = foods.filter(f => f.is_safe && !f.allergens?.some(a => kidAllergens.includes(a)));
-    const tryBites = foods.filter(f => f.is_try_bite && !f.allergens?.some(a => kidAllergens.includes(a)));
-
-    // Food coverage by category
-    const categories = ['protein', 'carb', 'dairy', 'fruit', 'vegetable', 'snack'];
-    const coverage = categories.map(cat => ({
-      category: cat,
-      count: safeFoods.filter(f => f.category === cat).length,
-      percentage: (safeFoods.filter(f => f.category === cat).length / Math.max(safeFoods.length, 1)) * 100
-    }));
-
-    // Recent meal history (last 30 days)
-    const thirtyDaysAgo = format(subDays(new Date(), 30), 'yyyy-MM-dd');
-    const recentEntries = planEntries.filter(e => 
-      e.kid_id === activeKid.id && e.date >= thirtyDaysAgo
-    );
-
-    // Success metrics
-    const completedMeals = recentEntries.filter(e => e.result === 'ate').length;
-    const tastedMeals = recentEntries.filter(e => e.result === 'tasted').length;
-    const refusedMeals = recentEntries.filter(e => e.result === 'refused').length;
-    const totalTracked = completedMeals + tastedMeals + refusedMeals;
-
-    // Unique foods tried
-    const uniqueFoodsTried = new Set(recentEntries.map(e => e.food_id)).size;
-
-    // Try bites tracking
-    const tryBiteEntries = recentEntries.filter(e => {
-      const food = foods.find(f => f.id === e.food_id);
-      return food?.is_try_bite;
-    });
-    const successfulTryBites = tryBiteEntries.filter(e => e.result === 'ate' || e.result === 'tasted').length;
-
-    setInsights({
-      safeFoodsCount: safeFoods.length,
-      tryBitesCount: tryBites.length,
-      coverage,
-      completedMeals,
-      tastedMeals,
-      refusedMeals,
-      totalTracked,
-      successRate: totalTracked > 0 ? ((completedMeals + tastedMeals) / totalTracked) * 100 : 0,
-      uniqueFoodsTried,
-      successfulTryBites,
-      totalTryBites: tryBiteEntries.length
-    });
-  };
-
-  const calculateFamilyInsights = () => {
-    // Aggregate insights across all kids
-    const allSafeFoods = foods.filter(f => f.is_safe);
-    const allTryBites = foods.filter(f => f.is_try_bite);
-
-    const thirtyDaysAgo = format(subDays(new Date(), 30), 'yyyy-MM-dd');
-    const recentEntries = planEntries.filter(e => e.date >= thirtyDaysAgo);
-
-    const completedMeals = recentEntries.filter(e => e.result === 'ate').length;
-    const tastedMeals = recentEntries.filter(e => e.result === 'tasted').length;
-    const refusedMeals = recentEntries.filter(e => e.result === 'refused').length;
-    const totalTracked = completedMeals + tastedMeals + refusedMeals;
-
-    const uniqueFoodsTried = new Set(recentEntries.map(e => e.food_id)).size;
-
-    setInsights({
-      safeFoodsCount: allSafeFoods.length,
-      tryBitesCount: allTryBites.length,
-      completedMeals,
-      tastedMeals,
-      refusedMeals,
-      totalTracked,
-      successRate: totalTracked > 0 ? ((completedMeals + tastedMeals) / totalTracked) * 100 : 0,
-      uniqueFoodsTried,
-      familyMode: true
-    });
-  };
+  // US-540: derive insights with useMemo (typed, no effect+setState(any)).
+  const insights = useMemo(
+    () => computeInsights({ activeKid, isFamilyMode, kids, foods, planEntries }),
+    [activeKid, isFamilyMode, kids, foods, planEntries]
+  );
 
   if (kids.length === 0) {
     return (
@@ -214,8 +132,7 @@ export default function InsightsDashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {insights.coverage?.map((item: any) => (
-            // @ts-ignore - Type mismatch with unknown data structure
+          {insights.coverage?.map((item) => (
             <div key={item.category}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium capitalize">{item.category}</span>
@@ -233,14 +150,14 @@ export default function InsightsDashboard() {
             </div>
           ))}
           
-          {insights.coverage?.some((c: any) => c.count < 2) && (
+          {insights.coverage?.some((c) => c.count < 2) && (
             <Alert className="mt-4">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 Some food groups have low coverage. Try adding more variety in: {
                   insights.coverage
-                    .filter((c: any) => c.count < 2)
-                    .map((c: any) => c.category)
+                    .filter((c) => c.count < 2)
+                    .map((c) => c.category)
                     .join(', ')
                 }
               </AlertDescription>
