@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { PlanEntry } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
@@ -50,6 +50,13 @@ const PlanContext = createContext<PlanContextType | undefined>(undefined);
 export function PlanProvider({ children }: { children: React.ReactNode }) {
   const [planEntries, setPlanEntriesRaw] = useState<PlanEntry[]>([]);
   const { userId, householdId } = useAuth();
+
+  // US-551: keep the latest entries in a ref so copyWeekPlan/deleteWeekPlan can
+  // read current state directly, instead of the impure
+  // `setPlanEntriesRaw(prev => { currentEntries = prev; return prev; })` hack
+  // (a state updater with a side effect double-fires under StrictMode).
+  const planEntriesRef = useRef<PlanEntry[]>(planEntries);
+  planEntriesRef.current = planEntries;
 
   // Real-time subscription for plan_entries
   useEffect(() => {
@@ -140,9 +147,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
     const fromDateObj = new Date(fromDate);
     const toDateObj = new Date(toDate);
 
-    // Read current planEntries via functional ref
-    let currentEntries: PlanEntry[] = [];
-    setPlanEntriesRaw(prev => { currentEntries = prev; return prev; });
+    const currentEntries = planEntriesRef.current;
 
     const weekEntries = currentEntries.filter(entry => {
       const entryDate = new Date(entry.date);
@@ -177,8 +182,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   const deleteWeekPlan = useCallback(async (weekStart: string, kidId: string) => {
     const weekStartObj = new Date(weekStart);
 
-    let currentEntries: PlanEntry[] = [];
-    setPlanEntriesRaw(prev => { currentEntries = prev; return prev; });
+    const currentEntries = planEntriesRef.current;
 
     const entriesToDelete = currentEntries.filter(entry => {
       const entryDate = new Date(entry.date);

@@ -1179,8 +1179,8 @@
         "Behavior verified under StrictMode double-invocation"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "[Severity: Low | Category: correctness | Source: code-review 2026-07-11] Confirmed: src/contexts/PlanContext.tsx:142-143,178-179."
+      "passes": true,
+      "notes": "[Severity: Low | Category: correctness | Source: code-review 2026-07-11] Confirmed: src/contexts/PlanContext.tsx:142-143,178-179. | VERIFIED 2026-07-11: PlanContext: added planEntriesRef (updated each render) so copyWeekPlan/deleteWeekPlan read current entries directly; removed the impure setPlanEntriesRaw(prev => { currentEntries = prev; return prev; }) read-hack (a state updater with a side effect double-fires under StrictMode). Callback deps unchanged (ref is stable). Test PlanContext.weekOps.test.tsx: deleteWeekPlan removes exactly the target week/kid entries under React.StrictMode, and is a no-op when nothing matches. 69 context tests pass."
     },
     {
       "id": "US-552",
