@@ -32,6 +32,11 @@ struct HouseholdSettingsView: View {
     private var householdShareEnabled: Bool = false
 
     var body: some View {
+        gatedBody
+            .premiumGate(.sharedHousehold)
+    }
+
+    private var gatedBody: some View {
         Form {
             if isLoading && household == nil {
                 Section {

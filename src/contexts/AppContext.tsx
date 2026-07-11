@@ -1,15 +1,18 @@
 import React, { useCallback, useMemo, useEffect, useRef, createContext, useContext } from "react";
 import { Food, Kid, PlanEntry, GroceryItem, Recipe } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
-import { generateId, debounce } from "@/lib/utils";
+import { generateId } from "@/lib/utils";
 import { getStorage } from "@/lib/platform";
 import { logger } from "@/lib/logger";
 import { handleSupabaseAuthError } from "@/lib/supabaseAuthError";
+import { selectLocalOnlyRecipes } from "@/lib/recipeMigration";
+import { redactSnapshotForCache } from "@/lib/cacheSnapshot";
+import { mergeWindowedPlanEntries } from "@/lib/planWindow";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { FoodsProvider, useFoods } from "./FoodsContext";
 import { KidsProvider, useKids } from "./KidsContext";
-import { RecipesProvider, useRecipes, normalizeRecipeFromDB, RECIPE_WITH_INGREDIENTS_SELECT, selectRecipesWithFallback } from "./RecipesContext";
-import { normalizeKidFromDB, normalizePlanEntryFromDB, normalizeGroceryItemFromDB } from "@/lib/normalizeEntities";
+import { RecipesProvider, useRecipes, parseRecipeRows, RECIPE_WITH_INGREDIENTS_SELECT, selectRecipesWithFallback } from "./RecipesContext";
+import { parseKidRows, parseFoodRows, parsePlanEntryRows, parseGroceryItemRows } from "@/lib/normalizeEntities";
 import { PlanProvider, usePlan } from "./PlanContext";
 import { GroceryProvider, useGrocery } from "./GroceryContext";
 import type { GroceryAddInput } from "@/lib/groceryMerge";
@@ -108,12 +111,22 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   // load was still in flight. Keying by scope fixes that.
   const loadedScopeRef = useRef<string | null>(null);
 
+  // US-526 precedence guard: set true the moment the server-authoritative load
+  // applies data. The mount cache-hydrate below reads storage asynchronously, so
+  // if the server load resolves first, this flag stops the late cache hydrate
+  // from overwriting fresh server data (which would resurrect a deleted /
+  // cross-device-edited row — a violation of the US-341 precedence contract).
+  const serverLoadAppliedRef = useRef(false);
+
   // Load from storage on mount (platform-aware)
   useEffect(() => {
     const loadData = async () => {
       try {
         const storage = await getStorage();
         const stored = await storage.getItem(STORAGE_KEY);
+        // If the server load already won for this session, never apply the
+        // (now-stale) cache — the server is authoritative once it answers.
+        if (serverLoadAppliedRef.current) return;
         if (stored) {
           const data = JSON.parse(stored);
           setFoods(data.foods || []);
@@ -131,6 +144,8 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         logger.error("Error loading data from storage:", error);
+        // Same precedence guard: don't seed starter data over server data.
+        if (serverLoadAppliedRef.current) return;
         const starterFoods = STARTER_FOODS.map(f => ({ ...f, id: generateId() }));
         setFoods(starterFoods);
         const defaultKid = { id: generateId(), name: "My Child", age: 5 };
@@ -142,21 +157,41 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Save to storage whenever data changes (platform-aware, debounced)
-  const debouncedSaveRef = useRef(
-    debounce(async (data: Record<string, unknown>) => {
+  // Save to storage whenever data changes (platform-aware, debounced).
+  // US-537: a cancelable timer (not the fire-and-forget utils debounce) so a
+  // pending save carrying child PII can be cancelled on sign-out and never
+  // re-writes the cache after it has been scrubbed.
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const signedOutRef = useRef(false);
+  // Don't persist an all-empty snapshot before anything has loaded — that would
+  // clobber a valid cache backup before the server responds (US-537).
+  const hydratedRef = useRef(false);
+
+  const persistSnapshot = useCallback((snapshot: Record<string, unknown>) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    if (signedOutRef.current) return;
+    saveTimerRef.current = setTimeout(async () => {
+      if (signedOutRef.current) return; // scrubbed since we were scheduled
       try {
         const storage = await getStorage();
-        await storage.setItem(STORAGE_KEY, JSON.stringify(data));
+        // Minimize sensitive child PII in the plaintext web cache.
+        await storage.setItem(STORAGE_KEY, JSON.stringify(redactSnapshotForCache(snapshot)));
       } catch (error) {
         logger.error("Error saving data to storage:", error);
       }
-    }, 500)
-  );
+    }, 500);
+  }, []);
 
   useEffect(() => {
-    debouncedSaveRef.current({ foods, kids, recipes, activeKidId, planEntries, groceryItems });
-  }, [foods, kids, recipes, activeKidId, planEntries, groceryItems]);
+    if (!hydratedRef.current) {
+      const isEmpty =
+        foods.length === 0 && kids.length === 0 && recipes.length === 0 &&
+        planEntries.length === 0 && groceryItems.length === 0;
+      if (isEmpty) return; // nothing loaded yet — don't overwrite the cache
+      hydratedRef.current = true;
+    }
+    persistSnapshot({ foods, kids, recipes, activeKidId, planEntries, groceryItems });
+  }, [foods, kids, recipes, activeKidId, planEntries, groceryItems, persistSnapshot]);
 
   // Sync with Supabase when authenticated.
   //
@@ -175,6 +210,9 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   // from clobbering the correctly-scoped one.
   useEffect(() => {
     if (!userId || !householdId) return;
+    // A new authenticated session — re-enable cache persistence disabled on a
+    // prior sign-out (US-537).
+    signedOutRef.current = false;
     const scope = `${userId}:${householdId}`;
     if (loadedScopeRef.current === scope) return;
     loadedScopeRef.current = scope;
@@ -186,30 +224,20 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         const ninetyDaysFromNow = new Date();
         ninetyDaysFromNow.setDate(ninetyDaysFromNow.getDate() + 90);
 
+        // US-550: this effect is gated on householdId above, so every query is
+        // always household-scoped (the previous unscoped ternary branches were
+        // dead code that relied solely on RLS).
         const [kidsRes, foodsRes, recipesRes, planRes, groceryRes] = await Promise.all([
-          householdId
-            ? supabase.from('kids').select('*').eq('household_id', householdId).order('created_at', { ascending: true })
-            : supabase.from('kids').select('*').order('created_at', { ascending: true }),
-          householdId
-            ? supabase.from('foods').select('*').eq('household_id', householdId).order('name', { ascending: true }).limit(500)
-            : supabase.from('foods').select('*').order('name', { ascending: true }).limit(500),
+          supabase.from('kids').select('*').eq('household_id', householdId).order('created_at', { ascending: true }),
+          supabase.from('foods').select('*').eq('household_id', householdId).order('name', { ascending: true }).limit(500),
           // US-323: degrade to a plain select if the recipe_ingredients embed
           // isn't deployed in this environment, so recipes still load.
-          householdId
-            ? selectRecipesWithFallback((sel) => supabase.from('recipes').select(sel).eq('household_id', householdId).order('created_at', { ascending: true }).limit(200))
-            : selectRecipesWithFallback((sel) => supabase.from('recipes').select(sel).order('created_at', { ascending: true }).limit(200)),
-          householdId
-            ? supabase.from('plan_entries').select('*').eq('household_id', householdId)
-                .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
-                .lte('date', ninetyDaysFromNow.toISOString().split('T')[0])
-                .order('date', { ascending: true })
-            : supabase.from('plan_entries').select('*')
-                .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
-                .lte('date', ninetyDaysFromNow.toISOString().split('T')[0])
-                .order('date', { ascending: true }),
-          householdId
-            ? supabase.from('grocery_items').select('*').eq('household_id', householdId).order('created_at', { ascending: true }).limit(500)
-            : supabase.from('grocery_items').select('*').order('created_at', { ascending: true }).limit(500)
+          selectRecipesWithFallback((sel) => supabase.from('recipes').select(sel).eq('household_id', householdId).order('created_at', { ascending: true }).limit(200)),
+          supabase.from('plan_entries').select('*').eq('household_id', householdId)
+            .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
+            .lte('date', ninetyDaysFromNow.toISOString().split('T')[0])
+            .order('date', { ascending: true }),
+          supabase.from('grocery_items').select('*').eq('household_id', householdId).order('created_at', { ascending: true }).limit(500)
         ]);
 
         // US-316: expired-JWT / 401 / PGRST301 come back as result.error (not
@@ -235,9 +263,13 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
           logger.error('Error loading user data from Supabase:', firstError);
         }
 
+        // US-526: from here the server-authoritative load is applying its
+        // slices. Mark it so a late mount cache-hydrate cannot overwrite them.
+        serverLoadAppliedRef.current = true;
+
         if (kidsRes.data) {
           // US-333: normalize on load so the shape matches the realtime path.
-          const loadedKids = (kidsRes.data as unknown[]).map((k) => normalizeKidFromDB(k as Record<string, unknown>));
+          const loadedKids = parseKidRows(kidsRes.data as unknown[]);
           setKids(loadedKids);
           // Preserve a still-valid selection; otherwise default to the first
           // kid. Hard-resetting to null left the app with no child selected
@@ -248,9 +280,9 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
               : (loadedKids[0]?.id ?? null)
           );
         }
-        if (foodsRes.data) setFoods(foodsRes.data as unknown as Food[]);
+        if (foodsRes.data) setFoods(parseFoodRows(foodsRes.data as unknown[]));
         if (recipesRes.data) {
-          const dbRecipes = (recipesRes.data as unknown[]).map((r) => normalizeRecipeFromDB(r as Parameters<typeof normalizeRecipeFromDB>[0]));
+          const dbRecipes = parseRecipeRows(recipesRes.data as unknown[]);
           // Check for local recipes and migrate them. Use the platform-aware
           // storage (not raw localStorage, which is undefined on React Native
           // and would throw here, aborting the whole sync).
@@ -259,10 +291,24 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
           if (localData) {
             try {
               const parsed = JSON.parse(localData);
-              const localRecipes = parsed.recipes || [];
-              const localOnlyRecipes = localRecipes.filter((lr: Recipe) =>
-                !dbRecipes.some(dr => dr.id === lr.id) && !lr.id.includes('-')
-              );
+              const localRecipes: Recipe[] = parsed.recipes || [];
+              // US-527/US-549: detect local-only recipes by SERVER PRESENCE, not
+              // id shape (generateId now returns a UUID, so shape can't tell a
+              // local id from a server id). Compare against the loaded page
+              // first; only if some local recipe is missing there do we fetch
+              // the COMPLETE server id set — so a recipe beyond the 200-row page
+              // isn't mis-migrated as a duplicate.
+              const pageIds = new Set(dbRecipes.map((r) => r.id));
+              const maybeLocal = localRecipes.filter((lr) => !pageIds.has(lr.id));
+              let serverRecipeIds = pageIds;
+              if (maybeLocal.length > 0) {
+                const { data: allIdRows } = await supabase
+                  .from('recipes')
+                  .select('id')
+                  .eq('household_id', householdId);
+                serverRecipeIds = new Set((allIdRows as { id: string }[] | null ?? []).map((r) => r.id));
+              }
+              const localOnlyRecipes = selectLocalOnlyRecipes(localRecipes, serverRecipeIds);
               if (localOnlyRecipes.length > 0) {
                 logger.debug(`Migrating ${localOnlyRecipes.length} local recipes to database...`);
                 const bulkPayload = localOnlyRecipes.map((localRecipe: Recipe) => {
@@ -285,7 +331,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
                   .from('recipes')
                   .select(RECIPE_WITH_INGREDIENTS_SELECT)
                   .order('created_at', { ascending: true });
-                if (updatedRecipes) setRecipes((updatedRecipes as unknown[]).map((r) => normalizeRecipeFromDB(r as Parameters<typeof normalizeRecipeFromDB>[0])));
+                if (updatedRecipes) setRecipes(parseRecipeRows(updatedRecipes as unknown[]));
               } else {
                 setRecipes(dbRecipes);
               }
@@ -297,8 +343,17 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
             setRecipes(dbRecipes);
           }
         }
-        if (planRes.data) setPlanEntriesState((planRes.data as unknown[]).map((p) => normalizePlanEntryFromDB(p as Record<string, unknown>)));
-        if (groceryRes.data) setGroceryItemsState((groceryRes.data as unknown[]).map((g) => normalizeGroceryItemFromDB(g as Record<string, unknown>)));
+        if (planRes.data) {
+          // US-538: the plan_entries fetch is windowed (-30d..+90d). Merge it
+          // with existing state so cached history OUTSIDE the window is not
+          // truncated (and then persisted-away by the write-through cache). The
+          // in-window slice remains server-authoritative.
+          const windowStart = thirtyDaysAgo.toISOString().split('T')[0];
+          const windowEnd = ninetyDaysFromNow.toISOString().split('T')[0];
+          const serverEntries = parsePlanEntryRows(planRes.data as unknown[]);
+          setPlanEntriesState((prev) => mergeWindowedPlanEntries(prev, serverEntries, windowStart, windowEnd));
+        }
+        if (groceryRes.data) setGroceryItemsState(parseGroceryItemRows(groceryRes.data as unknown[]));
       } catch (error) {
         // Don't leave the scope marked as loaded if it failed — clear it so
         // the next render retries instead of showing a permanently empty app.
@@ -328,6 +383,14 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event !== 'SIGNED_OUT') return;
       loadedScopeRef.current = null;
+      serverLoadAppliedRef.current = false;
+      // US-537: block + cancel any pending debounced save so it can't re-write
+      // the cache (with child PII) after we scrub it below.
+      signedOutRef.current = true;
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
       setFoods([]);
       setKids([]);
       setRecipes([]);

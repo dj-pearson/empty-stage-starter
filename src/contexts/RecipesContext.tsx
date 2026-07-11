@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import { z } from "zod";
 import { Recipe, RecipeIngredient } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
-import { generateId, debounce } from "@/lib/utils";
+import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
@@ -26,7 +27,8 @@ export function applyRecipeRealtime(prev: Recipe[], payload: RealtimeRecipePaylo
   if (payload.eventType === 'DELETE') {
     return prev.filter((r) => r.id !== payload.old.id);
   }
-  const incoming = normalizeRecipeFromDB(payload.new);
+  const incoming = parseRecipeRow(payload.new);
+  if (!incoming) return prev; // US-536: drop an invalid realtime row
   const existing = prev.find((r) => r.id === incoming.id);
   if (existing && (!incoming.recipe_ingredients || incoming.recipe_ingredients.length === 0)) {
     incoming.recipe_ingredients = existing.recipe_ingredients;
@@ -141,6 +143,29 @@ export function normalizeRecipeFromDB(r: RecipeRow | RecipeRowWithIngredients): 
   };
 }
 
+// US-536: validate a raw recipe row before normalizing it. A recipe needs at
+// least an id (to dedup by) and a name (the UI renders it); rows missing those
+// are dropped + logged instead of `as unknown as`-asserted into state.
+const recipeRowSchema = z.object({ id: z.string().min(1), name: z.string() }).passthrough();
+
+export function parseRecipeRow(row: unknown): Recipe | null {
+  const parsed = recipeRowSchema.safeParse(row);
+  if (!parsed.success) {
+    logger.warn('Dropping invalid recipe row from Supabase', parsed.error.issues);
+    return null;
+  }
+  return normalizeRecipeFromDB(row as RecipeRowWithIngredients);
+}
+
+export function parseRecipeRows(rows: unknown[]): Recipe[] {
+  const out: Recipe[] = [];
+  for (const row of rows) {
+    const recipe = parseRecipeRow(row);
+    if (recipe !== null) out.push(recipe);
+  }
+  return out;
+}
+
 interface RecipesContextType {
   recipes: Recipe[];
   setRecipes: React.Dispatch<React.SetStateAction<Recipe[]>>;
@@ -161,9 +186,11 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId || !householdId) return;
 
-    const debouncedUpdate = debounce((payload: RealtimeRecipePayload) => {
+    // Apply EVERY payload (US-525): a trailing debounce dropped distinct events
+    // (bulk inserts / DELETE+INSERT pairs) down to the last one.
+    const handleChange = (payload: RealtimeRecipePayload) => {
       setRecipes((prev) => applyRecipeRealtime(prev, payload));
-    }, 300);
+    };
 
     const channelName = `recipes:${householdId}`;
     const channel = supabase
@@ -171,7 +198,7 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'recipes',
         filter: `household_id=eq.${householdId}`,
-      }, debouncedUpdate)
+      }, handleChange)
       .subscribe();
 
     registerSubscription(channelName, 'recipes');
@@ -241,9 +268,11 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw new Error(`Database error: ${error.message}`);
       if (data) {
-        const newRecipe = normalizeRecipeFromDB(data);
-        setRecipes(prev => [...prev, newRecipe]);
-        return newRecipe;
+        const newRecipe = parseRecipeRow(data);
+        if (newRecipe) {
+          setRecipes(prev => [...prev, newRecipe]);
+          return newRecipe;
+        }
       }
       throw new Error('Failed to add recipe');
     } else {
@@ -307,15 +336,16 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
   }, [userId]);
 
   const refreshRecipes = useCallback(async () => {
-    if (userId) {
+    // US-550: always scope by household_id (defense-in-depth alongside RLS).
+    if (userId && householdId) {
       // US-323: degrade to a plain select if the recipe_ingredients embed isn't
       // available, so recipes still load instead of 400-ing the whole list.
       const { data } = await selectRecipesWithFallback((sel) =>
-        supabase.from('recipes').select(sel).order('created_at', { ascending: true }),
+        supabase.from('recipes').select(sel).eq('household_id', householdId).order('created_at', { ascending: true }),
       );
-      if (data) setRecipes((data as unknown[]).map((r) => normalizeRecipeFromDB(r as RecipeRowWithIngredients)));
+      if (data) setRecipes(parseRecipeRows(data as unknown[]));
     }
-  }, [userId]);
+  }, [userId, householdId]);
 
   const value = useMemo(() => ({
     recipes, setRecipes, addRecipe, updateRecipe, deleteRecipe, refreshRecipes

@@ -33,6 +33,7 @@ import {
 import { toast } from "sonner";
 import { FoodCategory, GroceryItem } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
+import { parseGroceryItemRows } from "@/lib/normalizeEntities";
 import { logger } from "@/lib/logger";
 
 // Extended type for grocery items with additional database properties
@@ -488,7 +489,7 @@ export default function Grocery() {
         .order('created_at', { ascending: true });
 
       if (groceryData) {
-        setGroceryItems(groceryData as any);
+        setGroceryItems(parseGroceryItemRows(groceryData));
       }
       const itemsAdded = Number(data) || 0;
       if (itemsAdded > 0) {

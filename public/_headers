@@ -24,12 +24,25 @@
   # DNS prefetch control
   X-DNS-Prefetch-Control: on
 
-  # Content Security Policy
-  # 'unsafe-inline' required for Vite's injected styles and inline <script> tags in SSR/SPA
-  # 'unsafe-eval' scoped to Three.js/shader compilation requirement (used on landing page only)
-  # Cloudflare Pages does not support nonce-based CSP without Workers middleware
+  # Content Security Policy (US-529: hardened — no 'unsafe-inline'/'unsafe-eval' in script-src)
+  # script-src is now strict 'self' + explicit third-party origins:
+  #   - The former inline GA loader was externalized to /ga-loader.js (served from 'self').
+  #   - Vite's inline modulepreload-polyfill is disabled (build.modulePreload.polyfill=false),
+  #     so the built index.html carries zero inline <script>. The ld+json block is data, not
+  #     executable, and is exempt from script-src.
+  #   - 'unsafe-eval' dropped: Three.js/@react-three compile shaders on the GPU via WebGL, not
+  #     JS eval(); no app or vendor code needs eval/new Function.
+  #   - cdn.jsdelivr.net removed (unused — only appeared in a test fixture string).
+  # style-src keeps 'unsafe-inline' (React/Tailwind inline styles + the <noscript> block);
+  #   AC scope is script-src only, and inline styles cannot exfiltrate the session token.
+  # img-src DELIBERATELY stays permissive (https:): the app renders arbitrary-host images it
+  #   does not control — imported recipe/product images (openfoodfacts et al.), CMS blog featured
+  #   images, and user/OAuth avatars (avatar.vercel.sh, lh3.googleusercontent.com, …). A fixed
+  #   allowlist would break these on production. The exfil risk a tight img-src would mitigate
+  #   (an injected <img src=evil?data=…>) already requires script execution, which the hardened
+  #   script-src now blocks — so the marginal benefit is low and the breakage risk is high.
   # Self-hosted Supabase: api.tryeatpal.com, functions.tryeatpal.com
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://js.stripe.com https://*.tryeatpal.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https: blob:; connect-src 'self' https://www.google-analytics.com https://api.tryeatpal.com https://functions.tryeatpal.com wss://api.tryeatpal.com https://api.stripe.com https://*.sentry.io; frame-src 'self' https://js.stripe.com https://hooks.stripe.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests; block-all-mixed-content;
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://js.stripe.com https://*.tryeatpal.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https: blob:; connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com https://api.tryeatpal.com https://functions.tryeatpal.com wss://api.tryeatpal.com https://api.stripe.com https://*.sentry.io; frame-src 'self' https://js.stripe.com https://hooks.stripe.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests; block-all-mixed-content;
 
   # Report CSP violations (for monitoring)
   # Content-Security-Policy-Report-Only: default-src 'self'; report-uri /api/csp-report;

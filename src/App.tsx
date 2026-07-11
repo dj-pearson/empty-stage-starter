@@ -48,6 +48,7 @@ const Analytics = lazy(() => import('./pages/Analytics'));
 const Progress = lazy(() => import('./pages/Progress'));
 const Admin = lazy(() => import('./pages/Admin'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const AgentCommandCenter = lazy(() => import('./pages/AgentCommandCenter'));
 const FoodTracker = lazy(() => import('./pages/FoodTracker'));
 const AICoach = lazy(() => import('./pages/AICoach'));
 const MealBuilder = lazy(() => import('./pages/MealBuilder'));
@@ -327,7 +328,7 @@ const App = () => (
                       <Route
                         path="/admin"
                         element={
-                          <ProtectedRoute>
+                          <ProtectedRoute requireAdmin>
                             <RouteErrorBoundary>
                               <Admin />
                             </RouteErrorBoundary>
@@ -337,9 +338,21 @@ const App = () => (
                       <Route
                         path="/admin-dashboard"
                         element={
-                          <ProtectedRoute>
+                          <ProtectedRoute requireAdmin>
                             <RouteErrorBoundary>
                               <AdminDashboard />
+                            </RouteErrorBoundary>
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/admin/agents"
+                        element={
+                          <ProtectedRoute requireAdmin>
+                            <RouteErrorBoundary>
+                              <Suspense fallback={<LoadingFallback />}>
+                                <AgentCommandCenter />
+                              </Suspense>
                             </RouteErrorBoundary>
                           </ProtectedRoute>
                         }

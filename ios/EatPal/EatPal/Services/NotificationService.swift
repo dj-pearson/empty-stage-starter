@@ -52,9 +52,6 @@ final class NotificationService: ObservableObject {
     /// Stores the device token in Supabase for server-side push.
     func handleDeviceToken(_ deviceToken: Data) async {
         let token = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
-        #if DEBUG
-        print("APNs device token: \(token)")
-        #endif
 
         // US-379: write to the canonical `push_tokens` table (what the
         // process-notification-queue sender reads), scoped to the

@@ -31,8 +31,11 @@
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
 import { authenticateRequest } from '../_shared/auth.ts';
+import { assertAdmin } from '../_shared/admin.ts';
+import { ownedHosts, isOwnedUrl } from '../_shared/indexing-allowlist.ts';
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_INDEXING_API_URL = 'https://indexing.googleapis.com/v3/urlNotifications:publish';
@@ -199,6 +202,16 @@ serve(async (req) => {
   const auth = await authenticateRequest(req);
   if (auth.error) return auth.error;
 
+  // Admin-only: submitting/removing URLs uses the site's service account and
+  // spends a scarce indexing quota. A normal user must not reach it.
+  const anonClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } }
+  );
+  const notAdmin = await assertAdmin(anonClient, auth.user.id, corsHeaders);
+  if (notAdmin) return notAdmin;
+
   // Parse the service account JSON from environment
   const serviceAccountJson = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON');
   if (!serviceAccountJson) {
@@ -248,6 +261,9 @@ serve(async (req) => {
     );
   }
 
+  // Every URL must be one of our own hostnames — reject third-party URLs so a
+  // caller cannot de-index or spam-index sites we do not own.
+  const hosts = ownedHosts(Deno.env.get('INDEXING_ALLOWED_HOSTS'));
   for (const url of body.urls) {
     try {
       new URL(url);
@@ -255,6 +271,12 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: `Invalid URL: ${url}` }),
         { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    }
+    if (!isOwnedUrl(url, hosts)) {
+      return new Response(
+        JSON.stringify({ error: `URL is not on an owned hostname: ${url}` }),
+        { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
   }

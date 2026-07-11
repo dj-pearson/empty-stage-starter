@@ -29,6 +29,7 @@ import {
 import { Recipe, Food } from '@/types';
 import { toast } from 'sonner';
 import { logger } from "@/lib/logger";
+import { escapeHtml } from "@/lib/sanitize";
 
 interface RecipeExportActionsProps {
   recipe: Recipe;
@@ -139,7 +140,7 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Shopping List - ${recipe.name}</title>
+        <title>Shopping List - ${escapeHtml(recipe.name)}</title>
         <style>
           @media print {
             body { 
@@ -176,7 +177,7 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
         </style>
       </head>
       <body>
-        <pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">${content}</pre>
+        <pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">${escapeHtml(content)}</pre>
       </body>
       </html>
     `;

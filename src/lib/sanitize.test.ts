@@ -1,5 +1,34 @@
 import { describe, it, expect } from "vitest";
-import { sanitizeHtml, sanitizeText, sanitizeUrl, sanitizeObject } from "./sanitize";
+import { sanitizeHtml, sanitizeText, sanitizeUrl, sanitizeObject, escapeHtml, sanitizeDocumentHtml } from "./sanitize";
+
+describe("escapeHtml (US-530)", () => {
+  it("escapes the five HTML-significant characters", () => {
+    expect(escapeHtml('<a href="x">Tom & "Jerry" \'s</a>')).toBe(
+      "&lt;a href=&quot;x&quot;&gt;Tom &amp; &quot;Jerry&quot; &#39;s&lt;/a&gt;",
+    );
+  });
+  it("neutralizes a script-injection attempt in a recipe name", () => {
+    const out = escapeHtml("</title><script>alert(1)</script>");
+    expect(out).not.toContain("<script");
+    expect(out).toContain("&lt;script&gt;");
+  });
+});
+
+describe("sanitizeHtml link rel hardening (US-530)", () => {
+  it("adds rel=noopener noreferrer to anchors with target", () => {
+    const out = sanitizeHtml('<a href="https://x.com" target="_blank">x</a>');
+    expect(out).toContain('rel="noopener noreferrer"');
+  });
+});
+
+describe("sanitizeDocumentHtml (US-530)", () => {
+  it("strips scripts from a full HTML document", () => {
+    const dirty = "<html><head><title>Invoice</title></head><body><script>steal()</script><p>Total: $5</p></body></html>";
+    const out = sanitizeDocumentHtml(dirty);
+    expect(out).not.toContain("<script");
+    expect(out).toContain("Total: $5");
+  });
+});
 
 describe("sanitizeHtml", () => {
   it("returns empty string for empty input", () => {

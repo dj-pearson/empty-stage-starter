@@ -96,7 +96,9 @@ final class DeepLinkHandler: ObservableObject {
             if url.pathComponents.contains("import"),
                let raw = url.queryValue(for: "url"),
                let sourceURL = URL(string: raw),
-               (sourceURL.scheme == "https" || sourceURL.scheme == "http") {
+               sourceURL.scheme == "https" {
+                // https only — a crafted `eatpal://recipe/import?url=http://…`
+                // should not trigger a cleartext fetch/parse.
                 Task { await handleRecipeImport(sourceURL: sourceURL) }
             } else {
                 activeDestination = .recipes

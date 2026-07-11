@@ -28,6 +28,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useFoods, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { format } from "date-fns";
 import { cn, calculateAge } from "@/lib/utils";
 import { logger } from "@/lib/logger";
@@ -49,6 +51,7 @@ interface Conversation {
 
 export function AIMealCoach() {
   const { activeKidId, kids } = useKids();
+  const { userId } = useAuth();
   const { foods } = useFoods();
   const { planEntries } = usePlan();
   const { recipes } = useRecipes();
@@ -57,20 +60,28 @@ export function AIMealCoach() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeKid = kids.find((k) => k.id === activeKidId);
 
+  // US-544: reload when the auth user resolves, not just once on mount — a
+  // mount-once effect could read a null user (before auth hydrates) and never
+  // retry.
   useEffect(() => {
-    loadConversations();
-  }, []);
+    if (userId) loadConversations();
+  }, [userId]);
 
   useEffect(() => {
-    if (activeConversation) {
-      loadMessages(activeConversation);
-    }
+    if (!activeConversation) return;
+    // US-544: discard a slow load if the user switched conversations before it
+    // resolved, so a stale response can't overwrite the current thread.
+    let ignore = false;
+    loadMessages(activeConversation, () => ignore);
+    return () => { ignore = true; };
   }, [activeConversation]);
 
   useEffect(() => {
@@ -78,7 +89,8 @@ export function AIMealCoach() {
   }, [messages]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // US-552: respect the user's reduced-motion preference.
+    messagesEndRef.current?.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth" });
   };
 
   const loadConversations = async () => {
@@ -107,9 +119,10 @@ export function AIMealCoach() {
     }
   };
 
-  const loadMessages = async (conversationId: string) => {
+  const loadMessages = async (conversationId: string, isStale: () => boolean = () => false) => {
     try {
       setLoading(true);
+      setLoadError(null);
 
       const { data, error } = await supabase
         .from("ai_coach_messages")
@@ -118,6 +131,7 @@ export function AIMealCoach() {
         .order("created_at", { ascending: true });
 
       if (error) throw error;
+      if (isStale()) return; // a newer conversation was selected — drop this result
 
       setMessages((data || []).map(msg => ({
         id: msg.id,
@@ -126,10 +140,12 @@ export function AIMealCoach() {
         created_at: msg.created_at
       })));
     } catch (error: unknown) {
+      if (isStale()) return;
       logger.error("Error loading messages:", error);
+      setLoadError("Couldn't load this conversation. Please try again.");
       toast.error("Failed to load conversation");
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   };
 
@@ -412,6 +428,7 @@ export function AIMealCoach() {
                         variant="ghost"
                         size="sm"
                         className="h-6 w-6 p-0"
+                        aria-label="Delete conversation"
                         onClick={(e) => {
                           e.stopPropagation();
                           requestDeleteConversation(conv.id);
@@ -482,7 +499,18 @@ export function AIMealCoach() {
             <>
               {/* Messages */}
               <ScrollArea className="flex-1 p-6">
-                {loading && messages.length === 0 ? (
+                {loadError ? (
+                  <div className="text-center py-8 space-y-3" role="alert">
+                    <p className="text-destructive">{loadError}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => activeConversation && loadMessages(activeConversation)}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                ) : loading && messages.length === 0 ? (
                   <div className="flex justify-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
                   </div>
@@ -551,7 +579,7 @@ export function AIMealCoach() {
                     disabled={sending}
                     className="flex-1"
                   />
-                  <Button onClick={sendMessage} disabled={sending || !inputMessage.trim()}>
+                  <Button onClick={sendMessage} disabled={sending || !inputMessage.trim()} aria-label="Send message">
                     {sending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (

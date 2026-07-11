@@ -1,14 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { GroceryItem } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
-import { generateId, debounce } from "@/lib/utils";
+import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
 import { inferFoodCategory } from "@/lib/foodCategoryMap";
 import { planGroceryMerge, splitIngredientBlock, type GroceryAddInput } from "@/lib/groceryMerge";
-import { normalizeGroceryItemFromDB } from "@/lib/normalizeEntities";
+import { parseGroceryItemRow } from "@/lib/normalizeEntities";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -30,7 +30,8 @@ export function applyGroceryItemRealtime(
     const id = (payload.old as { id?: string })?.id;
     return id ? prev.filter((i) => i.id !== id) : prev;
   }
-  const item = normalizeGroceryItemFromDB(payload.new);
+  const item = parseGroceryItemRow(payload.new);
+  if (!item) return prev; // US-536: drop an invalid realtime row
   const idx = prev.findIndex((i) => i.id === item.id);
   if (idx === -1) return [...prev, item];
   const next = prev.slice();
@@ -67,9 +68,14 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId || !householdId) return;
 
-    const debouncedUpdate = debounce((payload: RealtimePayload<Record<string, unknown>>) => {
+    // Apply EVERY payload (US-525). A trailing debounce here coalesced distinct
+    // events (a bulk insert, or a DELETE+INSERT pair within the window) down to
+    // only the last one; each payload is a distinct row change and must be
+    // folded in. applyGroceryItemRealtime is a cheap pure reducer, so there is
+    // no reason to debounce it.
+    const handleChange = (payload: RealtimePayload<Record<string, unknown>>) => {
       setGroceryItemsRaw((prev) => applyGroceryItemRealtime(prev, payload));
-    }, 300);
+    };
 
     // Household-scoped channel name so switching households tears down the old
     // channel and opens a distinct one (no stale/duplicate channels). (US-332)
@@ -79,7 +85,7 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'grocery_items',
         filter: `household_id=eq.${householdId}`
-      }, debouncedUpdate)
+      }, handleChange)
       .subscribe();
 
     registerSubscription(channelName, 'grocery_items');

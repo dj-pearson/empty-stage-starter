@@ -24,7 +24,7 @@ import { handleSupabaseAuthError } from "@/lib/supabaseAuthError";
  * awaited network call resolves. This mirrors the existing
  * `copyWeekPlan`/`deleteWeekPlan` read-current-state pattern in PlanContext.
  */
-export async function runOptimisticMutation<T>(
+export async function runOptimisticMutation<T extends { id: string }>(
   setState: React.Dispatch<React.SetStateAction<T[]>>,
   optimistic: (prev: T[]) => T[],
   serverCall: () => PromiseLike<{ error: unknown }>,
@@ -36,11 +36,13 @@ export async function runOptimisticMutation<T>(
   },
 ): Promise<{ error: unknown } | { error: null }> {
   let snapshot: T[] = [];
+  let optimisticResult: T[] = [];
   let captured = false;
   setState((prev) => {
     snapshot = prev;
+    optimisticResult = optimistic(prev);
     captured = true;
-    return optimistic(prev);
+    return optimisticResult;
   });
 
   const { error } = await serverCall();
@@ -52,7 +54,14 @@ export async function runOptimisticMutation<T>(
   // back so the rejected edit doesn't linger if the user stays.
   const authOutcome = await handleSupabaseAuthError(error);
 
-  if (captured) setState(snapshot);
+  // US-535: NON-DESTRUCTIVE rollback. The old `setState(snapshot)` clobbered any
+  // realtime change that arrived DURING the request. Instead, invert only the
+  // optimistic diff against the CURRENT state (which may include concurrent
+  // realtime inserts/edits/deletes), keyed by id and guarded by reference
+  // equality so a row a realtime event has since replaced is left untouched.
+  if (captured) {
+    setState((current) => rollbackOptimistic(current, snapshot, optimisticResult));
+  }
 
   if (authOutcome === "not-auth-error") {
     toast.error(
@@ -62,4 +71,54 @@ export async function runOptimisticMutation<T>(
   }
 
   return { error };
+}
+
+/**
+ * Reverse an optimistic change against the CURRENT array without discarding
+ * concurrent realtime updates (US-535). Pure + exported for testing.
+ *
+ * For each id, using reference equality to detect "still the optimistic value":
+ *  - existed before + still the optimistic version  -> restore the snapshot row
+ *  - existed before + replaced by a realtime event  -> keep the current row
+ *  - optimistically added + still the optimistic add -> drop it
+ *  - optimistically added + replaced by realtime     -> keep the current row
+ *  - optimistically removed + not concurrently re-added -> re-add the snapshot row
+ */
+export function rollbackOptimistic<T extends { id: string }>(
+  current: T[],
+  snapshot: T[],
+  optimisticResult: T[],
+): T[] {
+  const snapById = new Map(snapshot.map((r) => [r.id, r]));
+  const optById = new Map(optimisticResult.map((r) => [r.id, r]));
+
+  const result: T[] = [];
+  const currentIds = new Set<string>();
+
+  for (const row of current) {
+    currentIds.add(row.id);
+    const snap = snapById.get(row.id);
+    const opt = optById.get(row.id);
+    const isStillOptimistic = opt !== undefined && row === opt;
+
+    if (snap !== undefined) {
+      // Row existed before the mutation: restore its pre-mutation value only if
+      // the current row is still the optimistic one (no concurrent realtime).
+      result.push(isStillOptimistic ? snap : row);
+    } else {
+      // Row did NOT exist before: it was optimistically added (drop it) unless a
+      // realtime event has since replaced that id (keep the realtime version).
+      if (!isStillOptimistic) result.push(row);
+    }
+  }
+
+  // Re-add rows that were optimistically REMOVED and haven't been concurrently
+  // re-added by a realtime event.
+  for (const snap of snapshot) {
+    if (!currentIds.has(snap.id) && !optById.has(snap.id)) {
+      result.push(snap);
+    }
+  }
+
+  return result;
 }

@@ -36,10 +36,13 @@ enum RecipeScaling {
     static func scaleIngredientLine(_ line: String, scale: Double) -> String {
         guard scale != 1.0 else { return line }
 
-        // Match: optional whole int + optional fraction ASCII, OR a unicode
-        // vulgar fraction, OR a decimal number. We deliberately keep this
-        // tolerant — unparseable lines pass through.
-        let pattern = #"^\s*((\d+\s+\d+/\d+)|(\d+/\d+)|(\d*\.?\d+)|([½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]))\s*"#
+        // Match: mixed ASCII ("1 1/2"), ASCII fraction ("1/2"), an integer
+        // glued to a unicode vulgar fraction ("1½" / "1 ½"), a decimal/integer
+        // ("1", "1.5"), OR a bare unicode fraction ("½"). The mixed-unicode
+        // alternative MUST precede the decimal one, else "1½" matches just the
+        // "1" and the "½" survives unscaled ("1½ cups" ×2 → "2 ½ cups"). We
+        // deliberately keep this tolerant — unparseable lines pass through.
+        let pattern = #"^\s*((\d+\s+\d+/\d+)|(\d+/\d+)|(\d+\s*[½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])|(\d*\.?\d+)|([½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]))\s*"#
 
         guard let regex = try? NSRegularExpression(pattern: pattern),
               let match = regex.firstMatch(
@@ -74,8 +77,11 @@ enum RecipeScaling {
     private static func parseQuantity(_ raw: String) -> Double? {
         let trimmed = raw.trimmingCharacters(in: .whitespaces)
 
-        if trimmed.count == 1, let value = vulgarFractions[trimmed.first!] {
-            return value
+        // Trailing unicode vulgar fraction: "½" (whole 0), "1½" or "1 ½".
+        if let last = trimmed.last, let fracValue = vulgarFractions[last] {
+            let wholeStr = trimmed.dropLast().trimmingCharacters(in: .whitespaces)
+            if wholeStr.isEmpty { return fracValue }
+            if let whole = Double(wholeStr) { return whole + fracValue }
         }
 
         // Mixed form "1 1/2"

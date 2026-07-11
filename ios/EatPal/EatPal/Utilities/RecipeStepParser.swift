@@ -10,7 +10,10 @@ enum RecipeStepParser {
         guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
             return []
         }
-        let bullet = #"^\s*(\d+\.|[-*•])\s*"#
+        // The numbered-bullet dot must be followed by whitespace or line end,
+        // else a step that opens with a decimal ("1.5 tsp salt…") gets its
+        // "1." stripped and becomes "5 tsp salt…".
+        let bullet = #"^\s*(\d+\.(?=\s|$)|[-*•])\s*"#
         let regex = try? NSRegularExpression(pattern: bullet)
         let lines = raw
             .components(separatedBy: .newlines)

@@ -33,8 +33,14 @@ export function useUndoRedo<T>(
             ? (newPresent as (prev: T) => T)(currentState.present)
             : newPresent;
 
-        // Don't add to history if state hasn't changed
-        if (JSON.stringify(actualNewPresent) === JSON.stringify(currentState.present)) {
+        // Don't add to history if state hasn't changed. US-543: cheap
+        // reference check first — only fall back to the (expensive) deep
+        // serialize-compare when the references actually differ, so an
+        // unchanged reference never serializes the whole state.
+        if (
+          Object.is(actualNewPresent, currentState.present) ||
+          JSON.stringify(actualNewPresent) === JSON.stringify(currentState.present)
+        ) {
           return currentState;
         }
 

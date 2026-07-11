@@ -37,7 +37,11 @@ struct MealPlanProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (MealPlanEntry) -> Void) {
-        completion(placeholder(in: context))
+        // Show the user's real App Group snapshot for live snapshots; only the
+        // widget-gallery preview gets the representative sample data, so users
+        // never see fabricated meals ("Oatmeal"/"Pasta") in their own widget.
+        let entry = context.isPreview ? placeholder(in: context) : loadFromAppGroup()
+        completion(entry)
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<MealPlanEntry>) -> Void) {

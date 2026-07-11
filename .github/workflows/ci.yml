@@ -20,7 +20,10 @@ jobs:
     name: Lint & Typecheck
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 so the diff-scoped no-new-any gate can reach the base ref.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -56,17 +59,18 @@ jobs:
       # burned down this step is NON-BLOCKING: it surfaces errors as a warning
       # annotation but does not fail the pipeline, so merges stay unblocked.
       # Flip `continue-on-error` to false (hard gate) once the count hits zero.
-      - name: Typecheck (non-blocking until backlog cleared)
-        continue-on-error: true
-        run: |
-          set +e
-          npm run typecheck 2>&1 | tee /tmp/typecheck.log
-          status=${PIPESTATUS[0]}
-          if [ "$status" -ne 0 ]; then
-            count=$(grep -cE 'error TS' /tmp/typecheck.log || true)
-            echo "::warning title=Typecheck backlog::tsc reported ${count} type error(s). Non-blocking for now; burn the backlog down, then make this a hard gate."
-          fi
-          exit 0
+      # US-545: typecheck error-count RATCHET. Runs tsc -b once and FAILS only if
+      # the error count grows beyond .ci/typecheck-baseline.txt — the backlog can
+      # only shrink, never grow. When it hits 0, drop this and make
+      # `npm run typecheck` a plain hard gate. (Plan to shrink the backlog +
+      # tsconfig-bypass.json: docs/typecheck-backlog.md.)
+      - name: Typecheck ratchet
+        run: bash scripts/ci/typecheck-ratchet.sh
+
+      # US-545: fail on newly-introduced explicit `any` in changed src/ files
+      # (diff-scoped; the pre-existing backlog is untouched).
+      - name: No new explicit any (diff-scoped)
+        run: bash scripts/ci/no-new-any.sh "origin/${{ github.base_ref || github.event.repository.default_branch }}"
 
   test:
     name: Unit Tests
@@ -127,6 +131,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # US-547: fail on NEW duplicate migration version prefixes (before spending
+      # time booting Supabase). Pre-existing dupes are grandfathered in-script.
+      - name: Check migration version prefixes
+        run: bash scripts/ci/check-migration-prefixes.sh
+
       - uses: supabase/setup-cli@v1
         with:
           version: latest
@@ -165,6 +174,16 @@ jobs:
       # (auth/household/admin/rate-limit/validation/price-allowlist). No DB needed.
       - name: Deno helper unit tests
         run: deno test functions/_shared/helpers_test.ts
+
+      # US-533: static guard that every verify_jwt=false function enforces its
+      # own auth in-source (reads config.toml + function sources).
+      - name: Deno verify_jwt enforcement guard
+        run: deno test --allow-read functions/_shared/verify-jwt-guard_test.ts
+
+      # Pure Apple entitlement logic (product->tier + status derivation) shared
+      # by validate-apple-transaction and app-store-notifications. Hermetic.
+      - name: Deno Apple entitlement unit tests
+        run: deno test supabase/functions/common/apple-entitlement.test.ts
 
       - uses: supabase/setup-cli@v1
         with:

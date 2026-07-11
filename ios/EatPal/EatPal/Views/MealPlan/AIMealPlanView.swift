@@ -31,6 +31,11 @@ struct AIMealPlanView: View {
     }
 
     var body: some View {
+        gatedBody
+            .premiumGate(.aiMealPlan)
+    }
+
+    private var gatedBody: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {

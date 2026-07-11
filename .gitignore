@@ -44,6 +44,8 @@ web-build/
 
 # claude-flow / swarm tooling state (machine-local, not source)
 .claude/settings.local.json
+.claude/proven-config.json
+.claude/.proven-config-version
 .claude-flow/
 .swarm/
 ruvector.db
@@ -144,3 +146,6 @@ scripts/ralph/.last-branch
 # Transient PRD verification report (uploaded as a CI artifact, never committed)
 prd-verify-report.json
 .claude-flow/metrics/consolidation.json
+
+# Local agent scratchpad (verification import-maps/stubs, not part of the repo)
+scratchpad/

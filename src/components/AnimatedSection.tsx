@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { motion, LazyMotion, domAnimation, m } from 'framer-motion';
+import { LazyMotion, domAnimation, m } from 'framer-motion';
 import { useInView } from '@/hooks/useInView';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 

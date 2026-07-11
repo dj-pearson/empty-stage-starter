@@ -17,6 +17,19 @@ final class CachedFood {
     var allergens: [String]?
     var barcode: String?
     var lastSyncedAt: Date
+    /// US-451: the id of the user who owns this cached row. Load paths filter
+    /// on it so one account's cache can never hydrate into another account's
+    /// session on a shared device. Defaulted so SwiftData lightweight
+    /// migration adds it to pre-existing rows (which then read as unowned and
+    /// are ignored until the next successful sync re-stamps them).
+    var ownerUserId: String = ""
+    /// US-452: full JSON-encoded snapshot of the source entity. Preferred on
+    /// read so the cache preserves every field (quantity/unit/aisle/expiry/
+    /// price/…) rather than the lossy subset the typed columns carried — the
+    /// dropped quantity in particular corrupted offline "mark made" pantry
+    /// debits. Additive + optional so lightweight migration is automatic and
+    /// pre-migration rows fall back to the typed-column reconstruction.
+    var payload: Data?
 
     init(from food: Food) {
         self.id = food.id
@@ -27,10 +40,15 @@ final class CachedFood {
         self.allergens = food.allergens
         self.barcode = food.barcode
         self.lastSyncedAt = Date()
+        self.ownerUserId = food.userId
+        self.payload = try? JSONEncoder().encode(food)
     }
 
     func toFood(userId: String) -> Food {
-        Food(
+        if let payload, let decoded = try? JSONDecoder().decode(Food.self, from: payload) {
+            return decoded
+        }
+        return Food(
             id: id,
             userId: userId,
             name: name,
@@ -50,6 +68,10 @@ final class CachedKid {
     var age: Int?
     var pickinessLevel: String?
     var lastSyncedAt: Date
+    /// US-451: owning user id — see `CachedFood.ownerUserId`.
+    var ownerUserId: String = ""
+    /// US-452: full JSON snapshot — see `CachedFood.payload`.
+    var payload: Data?
 
     init(from kid: Kid) {
         self.id = kid.id
@@ -57,10 +79,15 @@ final class CachedKid {
         self.age = kid.age
         self.pickinessLevel = kid.pickinessLevel
         self.lastSyncedAt = Date()
+        self.ownerUserId = kid.userId
+        self.payload = try? JSONEncoder().encode(kid)
     }
 
     func toKid(userId: String) -> Kid {
-        Kid(
+        if let payload, let decoded = try? JSONDecoder().decode(Kid.self, from: payload) {
+            return decoded
+        }
+        return Kid(
             id: id,
             userId: userId,
             name: name,
@@ -79,6 +106,12 @@ final class CachedGroceryItem {
     var unit: String
     var checked: Bool
     var lastSyncedAt: Date
+    /// US-451: owning user id — see `CachedFood.ownerUserId`.
+    var ownerUserId: String = ""
+    /// US-452: full JSON snapshot — see `CachedFood.payload`. Preserves
+    /// aisle/aisleSection/addedVia/priority/sourceRecipeId that the typed
+    /// columns dropped.
+    var payload: Data?
 
     init(from item: GroceryItem) {
         self.id = item.id
@@ -88,10 +121,15 @@ final class CachedGroceryItem {
         self.unit = item.unit
         self.checked = item.checked
         self.lastSyncedAt = Date()
+        self.ownerUserId = item.userId
+        self.payload = try? JSONEncoder().encode(item)
     }
 
     func toGroceryItem(userId: String) -> GroceryItem {
-        GroceryItem(
+        if let payload, let decoded = try? JSONDecoder().decode(GroceryItem.self, from: payload) {
+            return decoded
+        }
+        return GroceryItem(
             id: id,
             userId: userId,
             name: name,
@@ -220,7 +258,12 @@ final class OfflineStore: ObservableObject {
     }
 
     func loadCachedFoods(userId: String) -> [Food] {
+        // US-451: only hydrate rows owned by the requesting user. A blank
+        // userId (session unavailable) fails closed and returns nothing rather
+        // than leaking another account's cache.
+        guard !userId.isEmpty else { return [] }
         let descriptor = FetchDescriptor<CachedFood>(
+            predicate: #Predicate { $0.ownerUserId == userId },
             sortBy: [SortDescriptor(\.name)]
         )
         let cached = (try? context.fetch(descriptor)) ?? []
@@ -238,7 +281,9 @@ final class OfflineStore: ObservableObject {
     }
 
     func loadCachedKids(userId: String) -> [Kid] {
+        guard !userId.isEmpty else { return [] }
         let descriptor = FetchDescriptor<CachedKid>(
+            predicate: #Predicate { $0.ownerUserId == userId },
             sortBy: [SortDescriptor(\.name)]
         )
         let cached = (try? context.fetch(descriptor)) ?? []
@@ -256,7 +301,9 @@ final class OfflineStore: ObservableObject {
     }
 
     func loadCachedGroceryItems(userId: String) -> [GroceryItem] {
+        guard !userId.isEmpty else { return [] }
         let descriptor = FetchDescriptor<CachedGroceryItem>(
+            predicate: #Predicate { $0.ownerUserId == userId },
             sortBy: [SortDescriptor(\.name)]
         )
         let cached = (try? context.fetch(descriptor)) ?? []
@@ -295,6 +342,22 @@ final class OfflineStore: ObservableObject {
         for mutation in mutations {
             context.delete(mutation)
         }
+        try? context.save()
+        refreshPendingCount()
+    }
+
+    // MARK: - Sign-out / account purge (US-451)
+
+    /// Wipe every locally-cached entity AND the pending-mutation queue. Called
+    /// on sign-out and account deletion so no account's data (pantry, grocery
+    /// list, or children's names/ages/allergens) can survive on the device for
+    /// the next user, and so one account's queued offline writes can't be
+    /// replayed under another account's session (they'd fail RLS anyway).
+    func purgeAllCachedEntities() {
+        try? context.delete(model: CachedFood.self)
+        try? context.delete(model: CachedKid.self)
+        try? context.delete(model: CachedGroceryItem.self)
+        try? context.delete(model: PendingMutation.self)
         try? context.save()
         refreshPendingCount()
     }

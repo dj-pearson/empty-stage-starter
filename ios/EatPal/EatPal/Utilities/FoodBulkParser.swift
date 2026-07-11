@@ -37,11 +37,29 @@ enum FoodBulkParser {
 
             if !namePart.isEmpty,
                let category = FoodCategory(rawValue: categoryPart) {
+                // The name part may still carry a leading quantity/unit
+                // ("2 cups milk, dairy") — pull those off so "2 cups" doesn't
+                // pollute the food name.
+                var name = namePart
+                var quantity: Double?
+                var unit: String?
+                if let lead = leadingQuantity(namePart) {
+                    let remainder = String(namePart[lead.tail...])
+                        .trimmingCharacters(in: .whitespaces)
+                    if !remainder.isEmpty {
+                        let (strippedUnit, strippedName) = stripLeadingUnit(remainder)
+                        if !strippedName.isEmpty {
+                            quantity = lead.value
+                            unit = strippedUnit
+                            name = strippedName
+                        }
+                    }
+                }
                 return ParsedRow(
-                    name: namePart,
+                    name: name,
                     category: category,
-                    quantity: nil,
-                    unit: nil
+                    quantity: quantity,
+                    unit: unit
                 )
             }
         }
@@ -91,7 +109,8 @@ enum FoodBulkParser {
         (.vegetable, [
             "broccoli", "carrot", "lettuce", "spinach", "kale", "tomato",
             "potato", "onion", "pepper", "cucumber", "celery", "zucchini",
-            "squash", "pea", "corn", "mushroom", "asparagus", "cauliflower"
+            "squash", "pea", "corn", "mushroom", "asparagus", "cauliflower",
+            "eggplant"
         ]),
         (.snack, [
             "chip", "candy", "chocolate", "cookie", "popcorn", "pretzel",
@@ -99,14 +118,55 @@ enum FoodBulkParser {
         ]),
     ]
 
+    /// Compound phrases checked before single-word keywords. "peanut butter"
+    /// must not classify as dairy (contains "butter") or vegetable (contains
+    /// "pea") — it's a nut/protein spread.
+    private static let compoundKeywords: [(FoodCategory, [String])] = [
+        (.protein, ["peanut butter", "almond butter", "nut butter", "peanut"]),
+    ]
+
     static func guessCategory(for name: String) -> FoodCategory {
         let normalized = name.lowercased()
-        for (category, keywords) in categoryKeywords {
-            if keywords.contains(where: { normalized.contains($0) }) {
-                return category
-            }
+
+        for (category, phrases) in compoundKeywords
+        where phrases.contains(where: { normalized.contains($0) }) {
+            return category
+        }
+
+        // Whole-word, plural-aware matching so "egg" doesn't match "eggplant"
+        // and "pea" doesn't match "peanut", while "eggs"/"oats"/"beans" still
+        // match their singular keyword.
+        let tokens = Set(
+            normalized
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { !$0.isEmpty }
+                .map(singularize)
+        )
+        for (category, keywords) in categoryKeywords
+        where keywords.contains(where: { tokens.contains(singularize($0)) }) {
+            return category
         }
         return .snack
+    }
+
+    /// Naive English singularization mirroring RecipeMatcher: -ies→-y,
+    /// -es→stem for -o/-x/-s/-z/-ch/-sh stems, else drop a trailing -s.
+    private static func singularize(_ word: String) -> String {
+        guard word.count > 3 else { return word }
+        if word.count > 4, word.hasSuffix("ies") {
+            return String(word.dropLast(3)) + "y"
+        }
+        if word.count > 4, word.hasSuffix("es") {
+            let stem = String(word.dropLast(2))
+            if let last = stem.last,
+               "oxsz".contains(last) || stem.hasSuffix("ch") || stem.hasSuffix("sh") {
+                return stem
+            }
+        }
+        if word.hasSuffix("s") {
+            return String(word.dropLast())
+        }
+        return word
     }
 
     // MARK: - Quantity / unit helpers

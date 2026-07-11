@@ -223,6 +223,491 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_approvals: {
+        Row: {
+          action_type: string
+          agent_id: string | null
+          created_at: string
+          expires_at: string | null
+          id: string
+          payload: Json
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          run_id: string | null
+          status: string
+        }
+        Insert: {
+          action_type: string
+          agent_id?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          payload?: Json
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          run_id?: string | null
+          status?: string
+        }
+        Update: {
+          action_type?: string
+          agent_id?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          payload?: Json
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          run_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_approvals_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_approvals_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_audit_log: {
+        Row: {
+          action: string
+          actor: string
+          created_at: string
+          detail: Json
+          id: string
+          subject_id: string | null
+          subject_type: string | null
+        }
+        Insert: {
+          action: string
+          actor: string
+          created_at?: string
+          detail?: Json
+          id?: string
+          subject_id?: string | null
+          subject_type?: string | null
+        }
+        Update: {
+          action?: string
+          actor?: string
+          created_at?: string
+          detail?: Json
+          id?: string
+          subject_id?: string | null
+          subject_type?: string | null
+        }
+        Relationships: []
+      }
+      agent_churn_scores: {
+        Row: {
+          household_id: string
+          id: string
+          reasons: Json
+          risk: string
+          score: number
+          scored_at: string
+        }
+        Insert: {
+          household_id: string
+          id?: string
+          reasons?: Json
+          risk: string
+          score: number
+          scored_at?: string
+        }
+        Update: {
+          household_id?: string
+          id?: string
+          reasons?: Json
+          risk?: string
+          score?: number
+          scored_at?: string
+        }
+        Relationships: []
+      }
+      agent_definitions: {
+        Row: {
+          autonomy_policy: Json
+          created_at: string
+          daily_cost_cap_usd: number
+          description: string | null
+          domain: string | null
+          enabled: boolean
+          id: string
+          model: string
+          name: string
+          schedule_cron: string | null
+          system_prompt: string | null
+          updated_at: string
+        }
+        Insert: {
+          autonomy_policy?: Json
+          created_at?: string
+          daily_cost_cap_usd?: number
+          description?: string | null
+          domain?: string | null
+          enabled?: boolean
+          id?: string
+          model?: string
+          name: string
+          schedule_cron?: string | null
+          system_prompt?: string | null
+          updated_at?: string
+        }
+        Update: {
+          autonomy_policy?: Json
+          created_at?: string
+          daily_cost_cap_usd?: number
+          description?: string | null
+          domain?: string | null
+          enabled?: boolean
+          id?: string
+          model?: string
+          name?: string
+          schedule_cron?: string | null
+          system_prompt?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      agent_escalation_rules: {
+        Row: {
+          condition: Json
+          created_at: string
+          description: string | null
+          domain: string | null
+          enabled: boolean
+          id: string
+          severity: string
+          tier: number
+        }
+        Insert: {
+          condition?: Json
+          created_at?: string
+          description?: string | null
+          domain?: string | null
+          enabled?: boolean
+          id?: string
+          severity: string
+          tier: number
+        }
+        Update: {
+          condition?: Json
+          created_at?: string
+          description?: string | null
+          domain?: string | null
+          enabled?: boolean
+          id?: string
+          severity?: string
+          tier?: number
+        }
+        Relationships: []
+      }
+      agent_escalations: {
+        Row: {
+          agent_id: string | null
+          assigned_to: string | null
+          context: Json
+          created_at: string
+          domain: string | null
+          id: string
+          resolution_note: string | null
+          resolved_at: string | null
+          run_id: string | null
+          severity: string
+          status: string
+          tier: number
+          title: string
+        }
+        Insert: {
+          agent_id?: string | null
+          assigned_to?: string | null
+          context?: Json
+          created_at?: string
+          domain?: string | null
+          id?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          run_id?: string | null
+          severity: string
+          status?: string
+          tier: number
+          title: string
+        }
+        Update: {
+          agent_id?: string | null
+          assigned_to?: string | null
+          context?: Json
+          created_at?: string
+          domain?: string | null
+          id?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          run_id?: string | null
+          severity?: string
+          status?: string
+          tier?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_escalations_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_escalations_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          household_id: string | null
+          id: string
+          payload: Json
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          household_id?: string | null
+          id?: string
+          payload?: Json
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          household_id?: string | null
+          id?: string
+          payload?: Json
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      agent_feedback: {
+        Row: {
+          action_type: string | null
+          agent_id: string | null
+          approval_id: string | null
+          created_at: string
+          decision: string
+          edit_distance: number | null
+          id: string
+          rejection_reason: string | null
+          reviewed_by: string | null
+          run_id: string | null
+        }
+        Insert: {
+          action_type?: string | null
+          agent_id?: string | null
+          approval_id?: string | null
+          created_at?: string
+          decision: string
+          edit_distance?: number | null
+          id?: string
+          rejection_reason?: string | null
+          reviewed_by?: string | null
+          run_id?: string | null
+        }
+        Update: {
+          action_type?: string | null
+          agent_id?: string | null
+          approval_id?: string | null
+          created_at?: string
+          decision?: string
+          edit_distance?: number | null
+          id?: string
+          rejection_reason?: string | null
+          reviewed_by?: string | null
+          run_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_feedback_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_feedback_approval_id_fkey"
+            columns: ["approval_id"]
+            isOneToOne: false
+            referencedRelation: "agent_approvals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_feedback_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_knowledge: {
+        Row: {
+          content: string
+          created_at: string
+          embedding: string | null
+          id: string
+          metadata: Json
+          source: string | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          source?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          source?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      agent_prompt_versions: {
+        Row: {
+          agent_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          system_prompt: string
+          version: number
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          system_prompt: string
+          version: number
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          system_prompt?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_prompt_versions_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_runs: {
+        Row: {
+          agent_id: string
+          cost_usd: number | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          input: Json | null
+          output: Json | null
+          started_at: string
+          status: string
+          tokens_in: number | null
+          tokens_out: number | null
+          trigger: string | null
+        }
+        Insert: {
+          agent_id: string
+          cost_usd?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          input?: Json | null
+          output?: Json | null
+          started_at?: string
+          status: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          trigger?: string | null
+        }
+        Update: {
+          agent_id?: string
+          cost_usd?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          input?: Json | null
+          output?: Json | null
+          started_at?: string
+          status?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          trigger?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_runs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_system_settings: {
+        Row: {
+          digest_emails: string[]
+          global_pause: boolean
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          digest_emails?: string[]
+          global_pause?: boolean
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          digest_emails?: string[]
+          global_pause?: boolean
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ai_coach_conversations: {
         Row: {
           conversation_title: string | null
@@ -3249,6 +3734,39 @@ export type Database = {
           },
         ]
       }
+      content_calendar: {
+        Row: {
+          content_type: string
+          created_at: string
+          id: string
+          keywords: string[]
+          rationale: string | null
+          scheduled_for: string | null
+          status: string
+          topic: string
+        }
+        Insert: {
+          content_type: string
+          created_at?: string
+          id?: string
+          keywords?: string[]
+          rationale?: string | null
+          scheduled_for?: string | null
+          status?: string
+          topic: string
+        }
+        Update: {
+          content_type?: string
+          created_at?: string
+          id?: string
+          keywords?: string[]
+          rationale?: string | null
+          scheduled_for?: string | null
+          status?: string
+          topic?: string
+        }
+        Relationships: []
+      }
       delivery_order_history: {
         Row: {
           created_at: string | null
@@ -3730,6 +4248,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      email_suppressions: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          reason: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          reason?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          reason?: string | null
+        }
+        Relationships: []
       }
       email_templates: {
         Row: {
@@ -5056,18 +5595,21 @@ export type Database = {
           id: string
           name: string
           updated_at: string | null
+          weekly_digest_opt_in: boolean
         }
         Insert: {
           created_at?: string | null
           id?: string
           name?: string
           updated_at?: string | null
+          weekly_digest_opt_in?: boolean
         }
         Update: {
           created_at?: string | null
           id?: string
           name?: string
           updated_at?: string | null
+          weekly_digest_opt_in?: boolean
         }
         Relationships: []
       }
@@ -6544,6 +7086,74 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      nurture_enrollments: {
+        Row: {
+          created_at: string
+          current_step: number
+          household_id: string | null
+          id: string
+          next_step_at: string | null
+          sequence_id: string
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          current_step?: number
+          household_id?: string | null
+          id?: string
+          next_step_at?: string | null
+          sequence_id: string
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          current_step?: number
+          household_id?: string | null
+          id?: string
+          next_step_at?: string | null
+          sequence_id?: string
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nurture_enrollments_sequence_id_fkey"
+            columns: ["sequence_id"]
+            isOneToOne: false
+            referencedRelation: "nurture_sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nurture_sequences: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          name: string
+          steps: Json
+          trigger_event: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          name: string
+          steps?: Json
+          trigger_event: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          name?: string
+          steps?: Json
+          trigger_event?: string
+        }
+        Relationships: []
       }
       nutrition: {
         Row: {
@@ -11627,6 +12237,38 @@ export type Database = {
           },
         ]
       }
+      support_csat: {
+        Row: {
+          comment: string | null
+          created_at: string
+          id: string
+          score: number
+          ticket_id: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          score: number
+          ticket_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          score?: number
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_csat_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: true
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_kb_articles: {
         Row: {
           auto_generated: boolean | null
@@ -11707,6 +12349,41 @@ export type Database = {
             columns: ["created_from_ticket_id"]
             isOneToOne: false
             referencedRelation: "ticket_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          metadata: Json
+          sender: string
+          ticket_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          sender: string
+          ticket_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          sender?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
             referencedColumns: ["id"]
           },
         ]
@@ -11905,12 +12582,15 @@ export type Database = {
           context: Json | null
           created_at: string | null
           description: string
+          email: string | null
           id: string
           priority: string | null
           resolved_at: string | null
           resolved_by: string | null
+          sentiment: string | null
           status: string | null
           subject: string
+          tier: number | null
           updated_at: string | null
           user_id: string | null
         }
@@ -11920,12 +12600,15 @@ export type Database = {
           context?: Json | null
           created_at?: string | null
           description: string
+          email?: string | null
           id?: string
           priority?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
+          sentiment?: string | null
           status?: string | null
           subject: string
+          tier?: number | null
           updated_at?: string | null
           user_id?: string | null
         }
@@ -11935,12 +12618,15 @@ export type Database = {
           context?: Json | null
           created_at?: string | null
           description?: string
+          email?: string | null
           id?: string
           priority?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
+          sentiment?: string | null
           status?: string | null
           subject?: string
+          tier?: number | null
           updated_at?: string | null
           user_id?: string | null
         }
@@ -14664,6 +15350,19 @@ export type Database = {
         Returns: undefined
       }
       mark_report_viewed: { Args: { p_report_id: string }; Returns: undefined }
+      match_agent_knowledge: {
+        Args: {
+          match_count: number
+          min_similarity: number
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          id: string
+          similarity: number
+          title: string
+        }[]
+      }
       normalize_title: { Args: { title_text: string }; Returns: string }
       parse_quantity: { Args: { quantity_str: string }; Returns: number }
       populate_title_bank: { Args: { titles_json: Json }; Returns: number }

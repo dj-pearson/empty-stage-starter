@@ -1,12 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { PlanEntry } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
-import { generateId, debounce } from "@/lib/utils";
+import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
-import { normalizePlanEntryFromDB } from "@/lib/normalizeEntities";
+import { parsePlanEntryRow } from "@/lib/normalizeEntities";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -26,7 +26,8 @@ export function applyPlanEntryRealtime(
     const id = (payload.old as { id?: string })?.id;
     return id ? prev.filter((e) => e.id !== id) : prev;
   }
-  const entry = normalizePlanEntryFromDB(payload.new);
+  const entry = parsePlanEntryRow(payload.new);
+  if (!entry) return prev; // US-536: drop an invalid realtime row
   const idx = prev.findIndex((e) => e.id === entry.id);
   if (idx === -1) return [...prev, entry];
   const next = prev.slice();
@@ -51,13 +52,22 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   const [planEntries, setPlanEntriesRaw] = useState<PlanEntry[]>([]);
   const { userId, householdId } = useAuth();
 
+  // US-551: keep the latest entries in a ref so copyWeekPlan/deleteWeekPlan can
+  // read current state directly, instead of the impure
+  // `setPlanEntriesRaw(prev => { currentEntries = prev; return prev; })` hack
+  // (a state updater with a side effect double-fires under StrictMode).
+  const planEntriesRef = useRef<PlanEntry[]>(planEntries);
+  planEntriesRef.current = planEntries;
+
   // Real-time subscription for plan_entries
   useEffect(() => {
     if (!userId || !householdId) return;
 
-    const debouncedUpdate = debounce((payload: RealtimePayload<Record<string, unknown>>) => {
+    // Apply EVERY payload (US-525): a trailing debounce dropped distinct events
+    // (bulk inserts / DELETE+INSERT pairs) down to the last one.
+    const handleChange = (payload: RealtimePayload<Record<string, unknown>>) => {
       setPlanEntriesRaw((prev) => applyPlanEntryRealtime(prev, payload));
-    }, 300);
+    };
 
     // Household-scoped channel name so switching households tears down the old
     // channel and opens a distinct one (no stale/duplicate channels). (US-332)
@@ -67,7 +77,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'plan_entries',
         filter: `household_id=eq.${householdId}`
-      }, debouncedUpdate)
+      }, handleChange)
       .subscribe();
 
     registerSubscription(channelName, 'plan_entries');
@@ -138,9 +148,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
     const fromDateObj = new Date(fromDate);
     const toDateObj = new Date(toDate);
 
-    // Read current planEntries via functional ref
-    let currentEntries: PlanEntry[] = [];
-    setPlanEntriesRaw(prev => { currentEntries = prev; return prev; });
+    const currentEntries = planEntriesRef.current;
 
     const weekEntries = currentEntries.filter(entry => {
       const entryDate = new Date(entry.date);
@@ -175,8 +183,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   const deleteWeekPlan = useCallback(async (weekStart: string, kidId: string) => {
     const weekStartObj = new Date(weekStart);
 
-    let currentEntries: PlanEntry[] = [];
-    setPlanEntriesRaw(prev => { currentEntries = prev; return prev; });
+    const currentEntries = planEntriesRef.current;
 
     const entriesToDelete = currentEntries.filter(entry => {
       const entryDate = new Date(entry.date);

@@ -102,9 +102,11 @@ serve(async (req) => {
 
     if (!stripeResponse.ok) {
       const stripeError = await stripeResponse.json();
+      // Log the upstream detail server-side; return only a generic message so
+      // no Stripe internal detail is forwarded to the client (US-532).
       console.error('Stripe error:', stripeError);
       return new Response(
-        JSON.stringify({ error: 'Failed to create checkout session', details: stripeError.error?.message }),
+        JSON.stringify({ error: 'Failed to create checkout session' }),
         { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
       );
     }

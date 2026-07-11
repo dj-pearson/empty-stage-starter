@@ -7,6 +7,10 @@ struct EatPalApp: App {
     @StateObject private var authViewModel = AuthViewModel()
     @StateObject private var appState = AppState()
     @StateObject private var deepLinkHandler = DeepLinkHandler.shared
+    // US-3xx: entitlement source of truth for feature gating. Injected so any
+    // view can read the current tier via @EnvironmentObject and re-render when
+    // a purchase/restore/refund changes it.
+    @StateObject private var storeKit = StoreKitService.shared
 
     init() {
         // Sentry (US-151): must initialise before anything that might crash
@@ -27,6 +31,7 @@ struct EatPalApp: App {
                 .environmentObject(authViewModel)
                 .environmentObject(appState)
                 .environmentObject(deepLinkHandler)
+                .environmentObject(storeKit)
                 .onOpenURL { url in
                     deepLinkHandler.handle(url: url)
                 }
@@ -50,6 +55,13 @@ struct EatPalApp: App {
                     // US-237: hand AppState to the WatchConnectivity service
                     // once it's ready. Idempotent — re-activation is cheap.
                     WatchConnectivityService.shared.start(appState: appState)
+
+                    // Resolve the current entitlement at launch: derive the tier
+                    // from StoreKit's on-device verified entitlements, then let
+                    // the server veto anything refunded/revoked. Without this a
+                    // subscribed user would read as .free until a transaction
+                    // update happened to fire, briefly locking paid features.
+                    await storeKit.updateCustomerProductStatus()
 
                     // US-403/US-404: (re)schedule enabled daily reminders on
                     // launch so persisted toggles actually fire, and so

@@ -15,6 +15,7 @@ import { ArrowLeft, Mail, MessageSquare, Clock, HelpCircle, CheckCircle2, Send }
 import { useState } from "react";
 import { toast } from "sonner";
 import { captureContactFormLead } from "@/lib/lead-capture";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { logger } from "@/lib/logger";
 import { SEOHead } from "@/components/SEOHead";
 import { getPageSEO } from "@/lib/seo-config";
@@ -34,20 +35,38 @@ const Contact = () => {
     setIsSubmitting(true);
 
     try {
-      // Capture lead in database with full automation
+      // Create a trackable support ticket (US-489). This is the source of truth
+      // for the confirmation; lead-capture automation runs alongside it.
+      const { data: intake, error: intakeError } = await invokeEdgeFunction<{
+        ticket_id: string;
+        reference: string;
+      }>("support-intake", {
+        body: {
+          email: formData.email,
+          subject: formData.subject,
+          body: formData.message,
+        },
+      });
+
+      // Lead/marketing automation (best-effort; does not gate the confirmation).
       const result = await captureContactFormLead(
         formData.name,
         formData.email,
         formData.subject,
         formData.message
       );
+      if (!result.success) {
+        logger.error("Lead capture error:", result.error);
+      }
 
-      if (result.success) {
-        toast.success("Message sent! We'll get back to you within 24-48 hours. Check your email for a confirmation.");
+      if (intake?.ticket_id) {
+        toast.success(
+          `Message sent! Your ticket reference is ${intake.reference}. We'll get back to you within 24-48 hours.`
+        );
         setFormData({ name: "", email: "", subject: "", message: "" });
       } else {
         toast.error("There was an issue submitting your message. Please try again or email us directly.");
-        logger.error("Lead capture error:", result.error);
+        logger.error("Support intake error:", intakeError);
       }
     } catch (error) {
       logger.error("Contact form error:", error);
