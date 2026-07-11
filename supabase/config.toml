@@ -93,6 +93,9 @@ verify_jwt = false
 # RLS/permission audit agent: invoked by the dispatcher with the internal secret.
 [functions.agent-rls-audit]
 verify_jwt = false
+# System health & cost anomaly agent: invoked by the dispatcher with the internal secret.
+[functions.agent-health-watch]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 
