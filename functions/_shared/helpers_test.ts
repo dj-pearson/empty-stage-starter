@@ -35,6 +35,11 @@ import {
   signCsatToken,
   verifyCsatToken,
 } from './csat-logic.ts';
+import {
+  hmacSha256Hex,
+  verifyGithubSignature,
+  verifySentrySignature,
+} from './webhook-signatures.ts';
 
 const CORS = { 'Access-Control-Allow-Origin': 'https://tryeatpal.com' };
 
@@ -295,4 +300,45 @@ Deno.test('a CSAT token signed with a different key is rejected under the real k
   // an empty/unset secret, so verification never runs with a forgeable key.
   assertEquals(resolveCsatTokenSecret(''), null);
   assertEquals(resolveCsatTokenSecret(undefined), null);
+});
+
+// ---------------------------------------------------------------------------
+// webhook-signatures.ts — provider HMAC verification (US-520)
+// ---------------------------------------------------------------------------
+
+Deno.test('verifyGithubSignature accepts a correct sha256= HMAC and rejects tampering', async () => {
+  const secret = 'gh-webhook-secret';
+  const body = '{"action":"completed","workflow_run":{"conclusion":"failure"}}';
+  const good = 'sha256=' + (await hmacSha256Hex(secret, body));
+
+  assertEquals(await verifyGithubSignature(body, good, secret), true);
+  // Wrong secret.
+  assertEquals(await verifyGithubSignature(body, good, 'other'), false);
+  // Tampered body (a forged/injected payload).
+  assertEquals(await verifyGithubSignature(body + 'x', good, secret), false);
+  // Missing / mis-formatted header.
+  assertEquals(await verifyGithubSignature(body, null, secret), false);
+  assertEquals(await verifyGithubSignature(body, 'deadbeef', secret), false);
+  // Unset secret fails closed.
+  assertEquals(await verifyGithubSignature(body, good, undefined), false);
+});
+
+Deno.test('verifySentrySignature verifies hex HMAC and enforces timestamp tolerance', async () => {
+  const secret = 'sentry-secret';
+  const body = '{"data":{"event":{"title":"boom"}}}';
+  const sig = await hmacSha256Hex(secret, body);
+
+  assertEquals(await verifySentrySignature(body, sig, secret), true);
+  // Forged header.
+  assertEquals(await verifySentrySignature(body, 'deadbeef', secret), false);
+  // Fresh timestamp within tolerance.
+  assertEquals(
+    await verifySentrySignature(body, sig, secret, { timestamp: '1000', nowSeconds: 1100 }),
+    true,
+  );
+  // Stale timestamp beyond tolerance (replay).
+  assertEquals(
+    await verifySentrySignature(body, sig, secret, { timestamp: '1000', nowSeconds: 99999 }),
+    false,
+  );
 });

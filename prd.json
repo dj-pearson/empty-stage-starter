@@ -764,8 +764,8 @@
         "Add replay protection where the provider supports it (timestamp tolerance)"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "[Severity: High | Category: security/auth | Source: code-review 2026-07-11] Confirmed plaintext header equality at agent-sentry-triage/index.ts:65-67, agent-ci-triage:31-32, agent-migration-check:47-48. Pattern to follow already exists in stripe-webhook."
+      "passes": true,
+      "notes": "[Severity: High | Category: security/auth | Source: code-review 2026-07-11] Confirmed plaintext header equality at agent-sentry-triage/index.ts:65-67, agent-ci-triage:31-32, agent-migration-check:47-48. Pattern to follow already exists in stripe-webhook. | VERIFIED 2026-07-11: New _shared/webhook-signatures.ts (hmacSha256Hex, verifyGithubSignature sha256=, verifySentrySignature + timestamp replay window, constant-time compare). agent-sentry-triage verifies sentry-hook-signature; agent-ci-triage + agent-migration-check verify x-hub-signature-256 over req.text() raw body before JSON.parse. Plaintext header equality removed. Tests cover valid/tampered/wrong-secret/missing/replay. deno check clean, 21 helpers tests pass."
     },
     {
       "id": "US-521",
