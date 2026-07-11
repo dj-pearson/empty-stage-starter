@@ -17,6 +17,12 @@ final class CachedFood {
     var allergens: [String]?
     var barcode: String?
     var lastSyncedAt: Date
+    /// US-451: the id of the user who owns this cached row. Load paths filter
+    /// on it so one account's cache can never hydrate into another account's
+    /// session on a shared device. Defaulted so SwiftData lightweight
+    /// migration adds it to pre-existing rows (which then read as unowned and
+    /// are ignored until the next successful sync re-stamps them).
+    var ownerUserId: String = ""
 
     init(from food: Food) {
         self.id = food.id
@@ -27,6 +33,7 @@ final class CachedFood {
         self.allergens = food.allergens
         self.barcode = food.barcode
         self.lastSyncedAt = Date()
+        self.ownerUserId = food.userId
     }
 
     func toFood(userId: String) -> Food {
@@ -50,6 +57,8 @@ final class CachedKid {
     var age: Int?
     var pickinessLevel: String?
     var lastSyncedAt: Date
+    /// US-451: owning user id — see `CachedFood.ownerUserId`.
+    var ownerUserId: String = ""
 
     init(from kid: Kid) {
         self.id = kid.id
@@ -57,6 +66,7 @@ final class CachedKid {
         self.age = kid.age
         self.pickinessLevel = kid.pickinessLevel
         self.lastSyncedAt = Date()
+        self.ownerUserId = kid.userId
     }
 
     func toKid(userId: String) -> Kid {
@@ -79,6 +89,8 @@ final class CachedGroceryItem {
     var unit: String
     var checked: Bool
     var lastSyncedAt: Date
+    /// US-451: owning user id — see `CachedFood.ownerUserId`.
+    var ownerUserId: String = ""
 
     init(from item: GroceryItem) {
         self.id = item.id
@@ -88,6 +100,7 @@ final class CachedGroceryItem {
         self.unit = item.unit
         self.checked = item.checked
         self.lastSyncedAt = Date()
+        self.ownerUserId = item.userId
     }
 
     func toGroceryItem(userId: String) -> GroceryItem {
@@ -220,7 +233,12 @@ final class OfflineStore: ObservableObject {
     }
 
     func loadCachedFoods(userId: String) -> [Food] {
+        // US-451: only hydrate rows owned by the requesting user. A blank
+        // userId (session unavailable) fails closed and returns nothing rather
+        // than leaking another account's cache.
+        guard !userId.isEmpty else { return [] }
         let descriptor = FetchDescriptor<CachedFood>(
+            predicate: #Predicate { $0.ownerUserId == userId },
             sortBy: [SortDescriptor(\.name)]
         )
         let cached = (try? context.fetch(descriptor)) ?? []
@@ -238,7 +256,9 @@ final class OfflineStore: ObservableObject {
     }
 
     func loadCachedKids(userId: String) -> [Kid] {
+        guard !userId.isEmpty else { return [] }
         let descriptor = FetchDescriptor<CachedKid>(
+            predicate: #Predicate { $0.ownerUserId == userId },
             sortBy: [SortDescriptor(\.name)]
         )
         let cached = (try? context.fetch(descriptor)) ?? []
@@ -256,7 +276,9 @@ final class OfflineStore: ObservableObject {
     }
 
     func loadCachedGroceryItems(userId: String) -> [GroceryItem] {
+        guard !userId.isEmpty else { return [] }
         let descriptor = FetchDescriptor<CachedGroceryItem>(
+            predicate: #Predicate { $0.ownerUserId == userId },
             sortBy: [SortDescriptor(\.name)]
         )
         let cached = (try? context.fetch(descriptor)) ?? []
@@ -295,6 +317,22 @@ final class OfflineStore: ObservableObject {
         for mutation in mutations {
             context.delete(mutation)
         }
+        try? context.save()
+        refreshPendingCount()
+    }
+
+    // MARK: - Sign-out / account purge (US-451)
+
+    /// Wipe every locally-cached entity AND the pending-mutation queue. Called
+    /// on sign-out and account deletion so no account's data (pantry, grocery
+    /// list, or children's names/ages/allergens) can survive on the device for
+    /// the next user, and so one account's queued offline writes can't be
+    /// replayed under another account's session (they'd fail RLS anyway).
+    func purgeAllCachedEntities() {
+        try? context.delete(model: CachedFood.self)
+        try? context.delete(model: CachedKid.self)
+        try? context.delete(model: CachedGroceryItem.self)
+        try? context.delete(model: PendingMutation.self)
         try? context.save()
         refreshPendingCount()
     }

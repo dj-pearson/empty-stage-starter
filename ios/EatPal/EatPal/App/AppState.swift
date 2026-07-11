@@ -349,6 +349,11 @@ final class AppState: ObservableObject {
         groceryLists = []
         groceryItemSources = []
         activeKidId = nil
+        // US-451: also wipe the on-disk SwiftData cache + offline queue.
+        // Clearing only the in-memory arrays left the last user's pantry,
+        // grocery list, and children's PII on disk, where an offline sign-in
+        // by a different account on a shared device would hydrate it.
+        OfflineStore.shared.purgeAllCachedEntities()
     }
 
     // MARK: - Food Operations
