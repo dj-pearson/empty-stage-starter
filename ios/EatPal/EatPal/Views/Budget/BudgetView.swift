@@ -51,6 +51,11 @@ struct BudgetView: View {
     }
 
     var body: some View {
+        gatedBody
+            .premiumGate(.budget)
+    }
+
+    private var gatedBody: some View {
         Form {
             if appState.isLoading && appState.foods.isEmpty && appState.groceryItems.isEmpty {
                 // US-368: skeletons during initial load instead of a flash of

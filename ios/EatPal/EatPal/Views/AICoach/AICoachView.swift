@@ -44,6 +44,11 @@ struct AICoachView: View {
     }
 
     var body: some View {
+        gatedBody
+            .premiumGate(.aiCoach)
+    }
+
+    private var gatedBody: some View {
         VStack(spacing: 0) {
             // Active Kid Context
             if let kid = activeKid {

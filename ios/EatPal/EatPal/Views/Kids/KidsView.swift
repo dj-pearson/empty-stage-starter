@@ -2,10 +2,13 @@ import SwiftUI
 
 struct KidsView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject private var store: StoreKitService
     @State private var showingAddKid = false
     @State private var selectedKid: Kid?
     // US-417: confirm destructive child deletion before it runs.
     @State private var kidPendingDeletion: Kid?
+    // Per-tier kid limit: adding beyond it opens the paywall instead.
+    @State private var showingKidPaywall = false
 
     var body: some View {
         List {
@@ -47,7 +50,16 @@ struct KidsView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    showingAddKid = true
+                    // Free = 1 kid, Pro = 3, Family Plus+ = unlimited. At the
+                    // limit, send the user to the paywall instead of the editor.
+                    if SubscriptionLimits.canAddKid(
+                        currentCount: appState.kids.count,
+                        tier: store.currentTier
+                    ) {
+                        showingAddKid = true
+                    } else {
+                        showingKidPaywall = true
+                    }
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -56,6 +68,9 @@ struct KidsView: View {
         }
         .sheet(isPresented: $showingAddKid) {
             AddKidView()
+        }
+        .sheet(isPresented: $showingKidPaywall) {
+            PaywallView()
         }
         .sheet(item: $selectedKid) { kid in
             KidDetailView(kid: kid)

@@ -142,7 +142,7 @@ final class StoreKitService: ObservableObject {
             case .success(let verification):
                 let transaction = try checkVerified(verification)
                 await updateCustomerProductStatus()
-                await syncSubscriptionToSupabase(transaction: transaction)
+                await validateTransactionOnServer(transaction: transaction)
                 await transaction.finish()
                 isLoading = false
                 return transaction
@@ -191,7 +191,7 @@ final class StoreKitService: ObservableObject {
         // original_transaction_id.
         for await result in StoreKit.Transaction.currentEntitlements {
             if let transaction = try? checkVerified(result) {
-                await syncSubscriptionToSupabase(transaction: transaction)
+                await validateTransactionOnServer(transaction: transaction)
             }
         }
         isLoading = false
@@ -206,7 +206,7 @@ final class StoreKitService: ObservableObject {
                 do {
                     let transaction = try await self.checkVerified(result)
                     await self.updateCustomerProductStatus()
-                    await self.syncSubscriptionToSupabase(transaction: transaction)
+                    await self.validateTransactionOnServer(transaction: transaction)
                     await transaction.finish()
                 } catch {
                     // US-376: surface verification failures in Sentry instead
@@ -232,10 +232,15 @@ final class StoreKitService: ObservableObject {
 
         purchasedProductIDs = purchased
 
-        // Determine highest tier
+        // Determine highest tier from locally-verified StoreKit entitlements…
         let productEnums = purchased.compactMap { SubscriptionProduct(rawValue: $0) }
         let tiers = productEnums.map(\.tier)
         currentTier = tiers.max() ?? .free
+
+        // …then let the server veto anything it knows was refunded/revoked
+        // (see refreshServerEntitlement). Grants stay client-verified; the
+        // server can only reduce access.
+        await refreshServerEntitlement()
     }
 
     // MARK: - Helpers
@@ -257,55 +262,93 @@ final class StoreKitService: ObservableObject {
         }
     }
 
-    /// Syncs the StoreKit subscription to Supabase (`apple_subscriptions`),
-    /// keyed by originalTransactionId so App Store Server Notifications can map
-    /// a refund/revocation back to this user. iOS entitlement gating itself
-    /// stays client-side (StoreKit currentEntitlements); this is the durable
-    /// server-side record + the lookup the refund handler uses.
+    /// Validates a StoreKit transaction on the server and records the
+    /// entitlement in `apple_subscriptions` (keyed by originalTransactionId).
     ///
-    /// Previously this upserted into `user_subscriptions` with no `user_id`
-    /// (a NOT NULL column) and against columns that don't exist — so it
-    /// silently failed and never recorded anything.
-    private func syncSubscriptionToSupabase(transaction: StoreKit.Transaction) async {
-        struct SubscriptionPayload: Encodable {
-            let userId: String
-            let originalTransactionId: String
-            let storeTransactionId: String
-            let productId: String
+    /// The device sends the transaction's Apple-signed `jwsRepresentation` to
+    /// the `validate-apple-transaction` edge function, which verifies Apple's
+    /// signature and upserts the row with the service role from the VERIFIED
+    /// payload. This replaces the old direct client upsert: because RLS only
+    /// checked `auth.uid() = user_id`, a tampered client could have written
+    /// status:"active" for a product it never bought. Now only Apple-signed
+    /// transactions are honored server-side.
+    private func validateTransactionOnServer(transaction: StoreKit.Transaction) async {
+        struct ValidateRequest: Encodable { let jws: String }
+        struct ValidateResponse: Decodable {
+            let tier: String
             let status: String
             let expiresAt: String?
-
-            enum CodingKeys: String, CodingKey {
-                case userId = "user_id"
-                case originalTransactionId = "original_transaction_id"
-                case storeTransactionId = "store_transaction_id"
-                case productId = "product_id"
-                case status
-                case expiresAt = "expires_at"
-            }
         }
+        // No session -> nothing to attribute the purchase to. Skip; a later
+        // restore or launch reconcile picks it up once signed in.
+        guard (try? await SupabaseManager.client.auth.session) != nil else { return }
         do {
-            let session = try await SupabaseManager.client.auth.session
-            let payload = SubscriptionPayload(
-                userId: session.user.id.uuidString.lowercased(),
-                originalTransactionId: String(transaction.originalID),
-                storeTransactionId: String(transaction.id),
-                productId: transaction.productID,
-                status: transaction.revocationDate == nil ? "active" : "revoked",
-                expiresAt: transaction.expirationDate?.ISO8601Format()
+            let _: ValidateResponse = try await EdgeFunctions.invoke(
+                "validate-apple-transaction",
+                body: ValidateRequest(jws: transaction.jwsRepresentation)
             )
-            try await SupabaseManager.client.from("apple_subscriptions")
-                .upsert(payload, onConflict: "original_transaction_id")
-                .execute()
         } catch {
-            // US-376: a failed upsert must be observable — report to Sentry
+            // US-376: a failed validation must be observable — report to Sentry
             // with non-PII product/transaction context (no user_id/email).
             SentryService.capture(error, extras: [
-                "context": "storekit_subscription_sync",
+                "context": "storekit_validate_transaction",
                 "product_id": transaction.productID,
                 "original_transaction_id": String(transaction.originalID)
             ])
         }
+    }
+
+    // MARK: - Server-authoritative reconciliation
+
+    private struct ServerEntitlementRow: Decodable {
+        let productId: String?
+        let status: String
+
+        enum CodingKeys: String, CodingKey {
+            case productId = "product_id"
+            case status
+        }
+    }
+
+    /// Honor any revocation/expiry the backend knows about (e.g. a refund
+    /// reflected by the App Store Server Notifications handler) even if
+    /// StoreKit's on-device `currentEntitlements` still lists the product.
+    ///
+    /// The server can only REDUCE access here — grants still require an
+    /// on-device StoreKit-verified entitlement — so a spoofed backend response
+    /// can't unlock a tier. No-op when signed out or on network failure
+    /// (the locally-derived tier stands).
+    func refreshServerEntitlement() async {
+        guard (try? await SupabaseManager.client.auth.session) != nil else { return }
+        do {
+            let rows: [ServerEntitlementRow] = try await SupabaseManager.client
+                .from("apple_subscriptions")
+                .select("product_id,status")
+                .execute()
+                .value
+            let revoked = Set(rows.filter { $0.status != "active" }.compactMap(\.productId))
+            currentTier = Self.entitledTier(
+                localProductIDs: purchasedProductIDs,
+                revokedProductIDs: revoked
+            )
+        } catch {
+            SentryService.leaveBreadcrumb(
+                category: "storekit",
+                message: "refreshServerEntitlement failed: \(error)"
+            )
+        }
+    }
+
+    /// Pure entitlement resolution: the highest tier among locally-verified
+    /// products, minus any the server marks revoked/expired. Extracted so the
+    /// "server can only reduce" rule is unit-testable without StoreKit.
+    nonisolated static func entitledTier(
+        localProductIDs: Set<String>,
+        revokedProductIDs: Set<String>
+    ) -> SubscriptionTier {
+        let effective = localProductIDs.subtracting(revokedProductIDs)
+        let tiers = effective.compactMap { SubscriptionProduct(rawValue: $0)?.tier }
+        return tiers.max() ?? .free
     }
 }
 
