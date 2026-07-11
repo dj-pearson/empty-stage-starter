@@ -846,8 +846,8 @@
         "AppContext.precedence tests extended to cover the cache-resolves-after-server race and pass"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "[Severity: High | Category: data-integrity | Source: code-review 2026-07-11] Confirmed: src/contexts/AppContext.tsx runs the cache-hydrate effect (112-143) and the Supabase load effect (176-321) concurrently with no ordering guard."
+      "passes": true,
+      "notes": "[Severity: High | Category: data-integrity | Source: code-review 2026-07-11] Confirmed: src/contexts/AppContext.tsx runs the cache-hydrate effect (112-143) and the Supabase load effect (176-321) concurrently with no ordering guard. | VERIFIED 2026-07-11: Added serverLoadAppliedRef guard in AppContext. Mount cache-hydrate reads storage async; it now checks the ref right before applying (both the stored-data and catch/starter fallback paths) and returns if the server load already applied — a late cache hydrate can no longer overwrite server-authoritative data. Server-load effect sets ref=true before applying slices; sign-out resets it. Test: cache with a 50ms-delayed getItem resolves after server; foods stay ['Server Milk']. 3 precedence tests pass."
     },
     {
       "id": "US-527",
@@ -859,8 +859,8 @@
         "Add a test with a locally-generated recipe id proving it is detected as local-only and migrated"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "[Severity: High | Category: data-integrity | Source: code-review 2026-07-11] Confirmed: AppContext.tsx:263-264 filters with !lr.id.includes('-') but generateId() returns `${Date.now()}-${rand}` which always contains '-', so localOnlyRecipes is always empty."
+      "passes": true,
+      "notes": "[Severity: High | Category: data-integrity | Source: code-review 2026-07-11] Confirmed: AppContext.tsx:263-264 filters with !lr.id.includes('-') but generateId() returns `${Date.now()}-${rand}` which always contains '-', so localOnlyRecipes is always empty. | VERIFIED 2026-07-11: New src/lib/recipeMigration.ts: isUuid() + selectLocalOnlyRecipes() detect local-only recipes by non-UUID id shape instead of the broken !id.includes('-') (generateId() always has '-', so localOnly was always empty and offline recipes were discarded by setRecipes(dbRecipes)). AppContext uses selectLocalOnlyRecipes; offline recipes now bulk-migrate on sign-in. Tests: generateId() id detected local-only + migrated, UUID not re-migrated, mixed list. 5 tests pass."
     },
     {
       "id": "US-528",

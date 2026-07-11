@@ -5,6 +5,7 @@ import { generateId, debounce } from "@/lib/utils";
 import { getStorage } from "@/lib/platform";
 import { logger } from "@/lib/logger";
 import { handleSupabaseAuthError } from "@/lib/supabaseAuthError";
+import { selectLocalOnlyRecipes } from "@/lib/recipeMigration";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { FoodsProvider, useFoods } from "./FoodsContext";
 import { KidsProvider, useKids } from "./KidsContext";
@@ -108,12 +109,22 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   // load was still in flight. Keying by scope fixes that.
   const loadedScopeRef = useRef<string | null>(null);
 
+  // US-526 precedence guard: set true the moment the server-authoritative load
+  // applies data. The mount cache-hydrate below reads storage asynchronously, so
+  // if the server load resolves first, this flag stops the late cache hydrate
+  // from overwriting fresh server data (which would resurrect a deleted /
+  // cross-device-edited row — a violation of the US-341 precedence contract).
+  const serverLoadAppliedRef = useRef(false);
+
   // Load from storage on mount (platform-aware)
   useEffect(() => {
     const loadData = async () => {
       try {
         const storage = await getStorage();
         const stored = await storage.getItem(STORAGE_KEY);
+        // If the server load already won for this session, never apply the
+        // (now-stale) cache — the server is authoritative once it answers.
+        if (serverLoadAppliedRef.current) return;
         if (stored) {
           const data = JSON.parse(stored);
           setFoods(data.foods || []);
@@ -131,6 +142,8 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         logger.error("Error loading data from storage:", error);
+        // Same precedence guard: don't seed starter data over server data.
+        if (serverLoadAppliedRef.current) return;
         const starterFoods = STARTER_FOODS.map(f => ({ ...f, id: generateId() }));
         setFoods(starterFoods);
         const defaultKid = { id: generateId(), name: "My Child", age: 5 };
@@ -235,6 +248,10 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
           logger.error('Error loading user data from Supabase:', firstError);
         }
 
+        // US-526: from here the server-authoritative load is applying its
+        // slices. Mark it so a late mount cache-hydrate cannot overwrite them.
+        serverLoadAppliedRef.current = true;
+
         if (kidsRes.data) {
           // US-333: normalize on load so the shape matches the realtime path.
           const loadedKids = (kidsRes.data as unknown[]).map((k) => normalizeKidFromDB(k as Record<string, unknown>));
@@ -260,9 +277,10 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
             try {
               const parsed = JSON.parse(localData);
               const localRecipes = parsed.recipes || [];
-              const localOnlyRecipes = localRecipes.filter((lr: Recipe) =>
-                !dbRecipes.some(dr => dr.id === lr.id) && !lr.id.includes('-')
-              );
+              // US-527: detect local-only recipes by UUID shape, not by the
+              // buggy `!id.includes('-')` (generateId() always contains '-', so
+              // that filter was always empty and offline recipes were discarded).
+              const localOnlyRecipes = selectLocalOnlyRecipes(localRecipes, dbRecipes);
               if (localOnlyRecipes.length > 0) {
                 logger.debug(`Migrating ${localOnlyRecipes.length} local recipes to database...`);
                 const bulkPayload = localOnlyRecipes.map((localRecipe: Recipe) => {
@@ -328,6 +346,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event !== 'SIGNED_OUT') return;
       loadedScopeRef.current = null;
+      serverLoadAppliedRef.current = false;
       setFoods([]);
       setKids([]);
       setRecipes([]);
