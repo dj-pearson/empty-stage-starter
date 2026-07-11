@@ -1114,8 +1114,8 @@
         "No new `any` introduced; count of `any` in these files trends down"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "[Severity: Low | Category: maintainability | Source: code-review 2026-07-11] ~223 `any` occurrences across pages/components/hooks; frequently as setState(data as any) / (supabase.from(...) as any) at the exact boundaries where types matter."
+      "passes": true,
+      "notes": "[Severity: Low | Category: maintainability | Source: code-review 2026-07-11] ~223 `any` occurrences across pages/components/hooks; frequently as setState(data as any) / (supabase.from(...) as any) at the exact boundaries where types matter. | VERIFIED 2026-07-11: Replaced data-boundary any-casts with real types + US-536 normalizers in the named files. Planner: setPlanEntries(planData as any)->parsePlanEntryRows (x2), ai-meal-plan day typed (AiMealPlanDay), copied entries built as typed Omit<PlanEntry,'id'> with result:null (x2). Grocery: setGroceryItems(groceryData as any)->parseGroceryItemRows. Pantry: handleFoodIdentified(foodData:any)->FoodIdentification (now exported from ImageFoodCapture). AccountSettings: catch(err:any)->catch(err)+getErrorMessage (x2); dropped grocery_lists cast (typechecks clean). any in the 5 target files: 14->3 (remaining: 2 inter-dialog store-state props deferred to US-553 + 1 meal_plan_generations cast that's load-bearing — its stale generated row type collapses .eq inference, part of the US-545 backlog). VERIFIED: full tsc -b count 1533 <= 1537 baseline (ratchet passes, net -4); no net-new errors, and the one error removing the cast exposed (meal_plan_generations.eq) was fixed by restoring only that cast. InsightsDashboard already 0 any (US-540)."
     },
     {
       "id": "US-547",
