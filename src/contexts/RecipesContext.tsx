@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { Recipe, RecipeIngredient } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
-import { generateId, debounce } from "@/lib/utils";
+import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
@@ -161,9 +161,11 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId || !householdId) return;
 
-    const debouncedUpdate = debounce((payload: RealtimeRecipePayload) => {
+    // Apply EVERY payload (US-525): a trailing debounce dropped distinct events
+    // (bulk inserts / DELETE+INSERT pairs) down to the last one.
+    const handleChange = (payload: RealtimeRecipePayload) => {
       setRecipes((prev) => applyRecipeRealtime(prev, payload));
-    }, 300);
+    };
 
     const channelName = `recipes:${householdId}`;
     const channel = supabase
@@ -171,7 +173,7 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'recipes',
         filter: `household_id=eq.${householdId}`,
-      }, debouncedUpdate)
+      }, handleChange)
       .subscribe();
 
     registerSubscription(channelName, 'recipes');

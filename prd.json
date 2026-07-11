@@ -833,8 +833,8 @@
         "Add a test simulating multiple distinct payloads inside the debounce window"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "[Severity: High | Category: data-integrity/realtime | Source: code-review 2026-07-11] Confirmed: src/lib/utils.ts debounce is trailing-edge, used by GroceryContext/PlanContext/KidsContext/RecipesContext realtime handlers — only the last event's args survive."
+      "passes": true,
+      "notes": "[Severity: High | Category: data-integrity/realtime | Source: code-review 2026-07-11] Confirmed: src/lib/utils.ts debounce is trailing-edge, used by GroceryContext/PlanContext/KidsContext/RecipesContext realtime handlers — only the last event's args survive. | VERIFIED 2026-07-11: Removed the trailing debounce wrapping the postgres_changes callback in GroceryContext/PlanContext/KidsContext/RecipesContext — it coalesced distinct events (bulk inserts, DELETE+INSERT pairs) to only the last. Each payload now folds directly via the pure applyXRealtime reducer (cheap, no re-fetch); dropped the now-unused debounce import. Tests in realtimeApply.test.ts: bulk-insert applies all rows, DELETE+INSERT pair not coalesced, plan bulk insert. 13 realtime tests pass."
     },
     {
       "id": "US-526",

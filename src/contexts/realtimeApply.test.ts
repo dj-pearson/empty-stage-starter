@@ -70,3 +70,47 @@ describe('applyKidRealtime (US-333)', () => {
     expect(next[0].name).toBe('Samuel');
   });
 });
+
+// US-525: the realtime handlers used to wrap this reducer in a trailing
+// debounce, so multiple distinct payloads arriving within the window were
+// coalesced to only the LAST one. The handlers now fold EVERY payload; these
+// tests pin that "every distinct event is applied" contract.
+describe('realtime handlers apply every distinct payload in a burst (US-525)', () => {
+  it('a bulk INSERT broadcast (many rows within the window) applies all rows', () => {
+    const incoming = [
+      { id: 'g1', name: 'Milk', category: 'dairy' },
+      { id: 'g2', name: 'Eggs', category: 'dairy' },
+      { id: 'g3', name: 'Bread', category: 'bakery' },
+    ];
+    // Fold each payload as the un-debounced handler would, in order.
+    const next = incoming.reduce(
+      (state, row) => applyGroceryItemRealtime(state, payload('INSERT', row)),
+      [] as GroceryItem[],
+    );
+    expect(next.map((r) => r.id)).toEqual(['g1', 'g2', 'g3']);
+  });
+
+  it('a DELETE+INSERT pair within the window is not coalesced to only the last event', () => {
+    const seed: GroceryItem[] = [
+      { id: 'g1', name: 'Milk', quantity: 1, unit: '', checked: false, category: 'dairy' } as GroceryItem,
+    ];
+    // Old bug: a trailing debounce would keep only the INSERT and the g1 DELETE
+    // would be lost. Folding both applies both.
+    const afterDelete = applyGroceryItemRealtime(seed, payload('DELETE', {}, 'g1'));
+    const afterInsert = applyGroceryItemRealtime(afterDelete, payload('INSERT', { id: 'g2', name: 'Eggs', category: 'dairy' }));
+    expect(afterInsert.map((r) => r.id)).toEqual(['g2']); // g1 removed, g2 added
+  });
+
+  it('plan_entries bulk insert applies every distinct entry', () => {
+    const rows = [
+      { id: 'p1', kid_id: 'k1', date: '2026-06-13', meal_slot: 'breakfast', food_id: 'f1', result: 'planned' },
+      { id: 'p2', kid_id: 'k1', date: '2026-06-13', meal_slot: 'lunch', food_id: 'f2', result: 'planned' },
+    ];
+    const next = rows.reduce(
+      (state, row) => applyPlanEntryRealtime(state, payload('INSERT', row)),
+      [] as PlanEntry[],
+    );
+    expect(next).toHaveLength(2);
+    expect(next.map((e) => e.id)).toEqual(['p1', 'p2']);
+  });
+});

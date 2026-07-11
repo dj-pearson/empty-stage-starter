@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { PlanEntry } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
-import { generateId, debounce } from "@/lib/utils";
+import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
@@ -55,9 +55,11 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId || !householdId) return;
 
-    const debouncedUpdate = debounce((payload: RealtimePayload<Record<string, unknown>>) => {
+    // Apply EVERY payload (US-525): a trailing debounce dropped distinct events
+    // (bulk inserts / DELETE+INSERT pairs) down to the last one.
+    const handleChange = (payload: RealtimePayload<Record<string, unknown>>) => {
       setPlanEntriesRaw((prev) => applyPlanEntryRealtime(prev, payload));
-    }, 300);
+    };
 
     // Household-scoped channel name so switching households tears down the old
     // channel and opens a distinct one (no stale/duplicate channels). (US-332)
@@ -67,7 +69,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'plan_entries',
         filter: `household_id=eq.${householdId}`
-      }, debouncedUpdate)
+      }, handleChange)
       .subscribe();
 
     registerSubscription(channelName, 'plan_entries');
