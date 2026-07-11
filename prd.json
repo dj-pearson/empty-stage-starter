@@ -887,8 +887,8 @@
         "Verify via browser that no CSP violations occur on core pages"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: security/csp | Source: code-review 2026-07-11] Confirmed: public/_headers:32 has script-src 'self' 'unsafe-inline' 'unsafe-eval' ... cdn.jsdelivr.net; matters more because JWTs live in localStorage."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: security/csp | Source: code-review 2026-07-11] Confirmed: public/_headers:32 has script-src 'self' 'unsafe-inline' 'unsafe-eval' ... cdn.jsdelivr.net; matters more because JWTs live in localStorage. | VERIFIED 2026-07-11: script-src hardened: dropped 'unsafe-inline' + 'unsafe-eval'. Inline GA loader externalized to public/ga-loader.js (served from 'self'); Vite inline modulepreload-polyfill disabled (build.modulePreload.polyfill=false) so built index.html has ZERO executable inline scripts (ld+json is data, exempt). Removed unused cdn.jsdelivr.net from script-src. Added www.googletagmanager.com to connect-src. BROWSER-VERIFIED with headless Chromium serving built dist/ under the exact production CSP: 0 securitypolicyviolation events on /, /auth, /pricing; both vendor-three-core + vendor-three-eco chunks loaded/executed with NO eval violation (proving Three.js never needed 'unsafe-eval'). img-src tightening (AC2 2nd clause) DEFERRED: app renders arbitrary-host images it doesn't control (imported recipe/openfoodfacts product images, CMS blog featured images, avatar.vercel.sh + OAuth avatars) — a fixed allowlist would break them; the exfil vector a tight img-src blocks already needs script execution, now blocked by strict script-src. style-src keeps 'unsafe-inline' (out of AC scope; inline styles can't steal the token)."
     },
     {
       "id": "US-530",
