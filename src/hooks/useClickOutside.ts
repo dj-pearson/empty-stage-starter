@@ -1,4 +1,4 @@
-import { useEffect, RefObject } from 'react';
+import { useEffect, useRef, RefObject } from 'react';
 
 /**
  * Hook to detect clicks outside of an element
@@ -24,6 +24,12 @@ export function useClickOutside<T extends HTMLElement = HTMLElement>(
   handler: (event: MouseEvent | TouchEvent) => void,
   enabled: boolean = true
 ): void {
+  // US-543: keep the (often inline) handler in a ref so the listeners aren't
+  // torn down and re-added on every render — the effect depends only on
+  // [ref, enabled] now.
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+
   useEffect(() => {
     if (!enabled) {
       return;
@@ -37,7 +43,7 @@ export function useClickOutside<T extends HTMLElement = HTMLElement>(
         return;
       }
 
-      handler(event);
+      handlerRef.current(event);
     };
 
     // Use capture phase to ensure we detect clicks before other handlers
@@ -48,7 +54,7 @@ export function useClickOutside<T extends HTMLElement = HTMLElement>(
       document.removeEventListener('mousedown', listener, true);
       document.removeEventListener('touchstart', listener, true);
     };
-  }, [ref, handler, enabled]);
+  }, [ref, enabled]);
 }
 
 /**
@@ -69,6 +75,12 @@ export function useClickOutsideMultiple<T extends HTMLElement = HTMLElement>(
   handler: (event: MouseEvent | TouchEvent) => void,
   enabled: boolean = true
 ): void {
+  // US-543: handler in a ref so listeners aren't re-added every render. NOTE:
+  // callers should pass a memoized `refs` array (e.g. useMemo) — a fresh array
+  // literal each render still re-runs this effect by identity.
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+
   useEffect(() => {
     if (!enabled) {
       return;
@@ -83,7 +95,7 @@ export function useClickOutsideMultiple<T extends HTMLElement = HTMLElement>(
 
       // If clicked outside all refs, call handler
       if (!clickedInside) {
-        handler(event);
+        handlerRef.current(event);
       }
     };
 
@@ -94,5 +106,5 @@ export function useClickOutsideMultiple<T extends HTMLElement = HTMLElement>(
       document.removeEventListener('mousedown', listener, true);
       document.removeEventListener('touchstart', listener, true);
     };
-  }, [refs, handler, enabled]);
+  }, [refs, enabled]);
 }

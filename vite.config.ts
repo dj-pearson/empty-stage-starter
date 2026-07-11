@@ -50,6 +50,15 @@ export default defineConfig(({ mode }) => ({
     // Optimize for Cloudflare Pages
     outDir: 'dist',
     assetsDir: 'assets',
+    // US-529: Vite injects an INLINE modulepreload-polyfill <script> into
+    // index.html, which would force script-src to keep 'unsafe-inline'. Disable
+    // the polyfill so the built HTML carries zero inline scripts and the CSP can
+    // use a strict `script-src 'self'`. modulepreload is natively supported by
+    // every browser in our support matrix (Safari 16.4+, Chrome/Edge/Firefox);
+    // without the polyfill older engines simply skip the preload hint and fetch
+    // modules via the normal import graph — a minor first-paint cost, not a
+    // functional regression.
+    modulePreload: { polyfill: false },
     sourcemap: mode === 'production' ? 'hidden' : mode === 'development', // Hidden sourcemaps for Sentry in production
     minify: 'esbuild',
     esbuild: mode === 'production' ? {

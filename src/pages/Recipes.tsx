@@ -758,8 +758,8 @@ export default function Recipes() {
             ) : suggestions.length > 0 ? (
               <ScrollArea className="max-h-[60vh]">
                 <div className="space-y-4 pr-4">
-                  {suggestions.map((suggestion, index) => (
-                    <Card key={index} className="hover:shadow-md transition-shadow">
+                  {suggestions.map((suggestion) => (
+                    <Card key={suggestion.name} className="hover:shadow-md transition-shadow">
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1">
@@ -769,8 +769,8 @@ export default function Recipes() {
                             </div>
                             <p className="text-sm text-muted-foreground mb-3">{suggestion.description}</p>
                             <div className="flex flex-wrap gap-2 mb-3">
-                              {suggestion.food_names.map((foodName, i) => (
-                                <Badge key={i} variant="secondary">{foodName}</Badge>
+                              {suggestion.food_names.map((foodName) => (
+                                <Badge key={foodName} variant="secondary">{foodName}</Badge>
                               ))}
                             </div>
                             <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">

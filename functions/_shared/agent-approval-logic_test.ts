@@ -13,6 +13,7 @@ import {
   resolveApprovalStatus,
   buildApproval,
   buildEscalation,
+  isOutwardActionType,
 } from './agent-approval-logic.ts';
 
 const NOW = new Date('2026-07-10T12:00:00Z');
@@ -27,11 +28,21 @@ Deno.test('resolveApprovalStatus: draft by default', () => {
   );
 });
 
-Deno.test('resolveApprovalStatus: approved when allowlisted', () => {
+Deno.test('resolveApprovalStatus: approved when allowlisted (non-outward only)', () => {
+  // Internal (no external side effect) actions may still auto-approve.
   assertEquals(
-    resolveApprovalStatus({ autoExecute: ['send_email'] }, 'send_email'),
+    resolveApprovalStatus({ autoExecute: ['content_topic'] }, 'content_topic'),
     'approved',
   );
+});
+
+Deno.test('resolveApprovalStatus: outward actions are ALWAYS draft, even if allowlisted (US-522)', () => {
+  for (const t of ['send_email', 'github_issue', 'pr_comment', 'social_webhook', 'webhook']) {
+    assert(isOutwardActionType(t));
+    assertEquals(resolveApprovalStatus({ autoExecute: [t] }, t), 'draft');
+  }
+  // A non-outward internal action is not affected.
+  assertEquals(isOutwardActionType('content_topic'), false);
 });
 
 Deno.test('buildApproval: default draft + approval_requested audit', () => {
@@ -58,7 +69,24 @@ Deno.test('buildApproval: default draft + approval_requested audit', () => {
   assertEquals(audit.actor, 'support-answer');
 });
 
-Deno.test('buildApproval: auto-approve when policy allowlists action', () => {
+Deno.test('buildApproval: auto-approve when policy allowlists a NON-outward action', () => {
+  const { approval, audit } = buildApproval(
+    {
+      agentId: 'agent-1',
+      agentName: 'content-calendar',
+      runId: 'run-2',
+      actionType: 'content_topic',
+      payload: {},
+      autonomyPolicy: { autoExecute: ['content_topic'] },
+    },
+    NOW,
+  );
+
+  assertEquals(approval.status, 'approved');
+  assertEquals(audit.action, 'auto-approved by policy');
+});
+
+Deno.test('buildApproval: outward action stays draft even when allowlisted (US-522)', () => {
   const { approval, audit } = buildApproval(
     {
       agentId: 'agent-1',
@@ -71,8 +99,8 @@ Deno.test('buildApproval: auto-approve when policy allowlists action', () => {
     NOW,
   );
 
-  assertEquals(approval.status, 'approved');
-  assertEquals(audit.action, 'auto-approved by policy');
+  assertEquals(approval.status, 'draft');
+  assertEquals(audit.action, 'approval_requested');
 });
 
 Deno.test('buildApproval: no expiry when expiresInHours omitted', () => {

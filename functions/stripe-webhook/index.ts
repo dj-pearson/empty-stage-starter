@@ -17,6 +17,31 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
+import { isFreshStripeEvent, isDuplicateInsertError } from '../_shared/stripe-webhook-logic.ts';
+
+// deno-lint-ignore no-explicit-any
+type SupabaseClient = any;
+
+/**
+ * Ordering guard (US-519): returns true when this event is STALE for the target
+ * subscription row (its `event.created` is older than the newest event already
+ * applied), so the caller should skip the mutation. A row that does not exist
+ * yet, or has no recorded ordering, is never stale.
+ */
+async function isStaleForRow(
+  db: SupabaseClient,
+  matchCol: 'user_id' | 'stripe_subscription_id',
+  matchVal: string,
+  eventCreated: number | null,
+): Promise<boolean> {
+  const { data } = await db
+    .from('user_subscriptions')
+    .select('last_stripe_event_created')
+    .eq(matchCol, matchVal)
+    .maybeSingle();
+  if (!data) return false;
+  return !isFreshStripeEvent(eventCreated, data.last_stripe_event_created);
+}
 
 /** Verify Stripe webhook signature using HMAC-SHA256 */
 async function verifyStripeSignature(
@@ -122,6 +147,7 @@ serve(async (req) => {
     }
 
     const event = JSON.parse(payload);
+    const eventCreated: number | null = typeof event.created === 'number' ? event.created : null;
 
     // Use service role for webhook operations (no user auth context)
     const supabaseClient = createClient(
@@ -129,18 +155,35 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY') ?? '',
     );
 
+    // Idempotency (US-519): record the Stripe event id. A redelivered event hits
+    // the unique primary key and is treated as an already-processed no-op.
+    const { error: dedupeError } = await supabaseClient
+      .from('stripe_webhook_events')
+      .insert({ event_id: event.id, event_type: event.type, event_created: eventCreated });
+    if (dedupeError) {
+      if (isDuplicateInsertError(dedupeError)) {
+        return new Response(
+          JSON.stringify({ received: true, duplicate: true, type: event.type }),
+          { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
+        );
+      }
+      throw dedupeError;
+    }
+
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object;
         const userId = session.metadata?.user_id ?? session.client_reference_id;
 
         if (userId) {
+          if (await isStaleForRow(supabaseClient, 'user_id', userId, eventCreated)) break;
           await supabaseClient.from('user_subscriptions').upsert({
             user_id: userId,
             status: 'active',
             stripe_customer_id: session.customer,
             stripe_subscription_id: session.subscription,
             current_period_start: new Date().toISOString(),
+            last_stripe_event_created: eventCreated,
           }, { onConflict: 'user_id' });
         }
         break;
@@ -151,6 +194,9 @@ serve(async (req) => {
         const userId = subscription.metadata?.user_id;
 
         if (userId) {
+          // Ordering guard: a late (older) update must not overwrite a newer
+          // state such as a prior subscription.deleted (US-519).
+          if (await isStaleForRow(supabaseClient, 'user_id', userId, eventCreated)) break;
           await supabaseClient
             .from('user_subscriptions')
             .update({
@@ -162,15 +208,18 @@ serve(async (req) => {
               current_period_end: subscription.current_period_end
                 ? new Date(subscription.current_period_end * 1000).toISOString()
                 : undefined,
+              last_stripe_event_created: eventCreated,
             })
             .eq('user_id', userId);
         } else {
           // Fallback: look up by stripe_subscription_id
+          if (await isStaleForRow(supabaseClient, 'stripe_subscription_id', subscription.id, eventCreated)) break;
           await supabaseClient
             .from('user_subscriptions')
             .update({
               status: subscription.status === 'active' ? 'active' : subscription.status,
               cancel_at_period_end: subscription.cancel_at_period_end ?? false,
+              last_stripe_event_created: eventCreated,
             })
             .eq('stripe_subscription_id', subscription.id);
         }
@@ -182,14 +231,16 @@ serve(async (req) => {
         const userId = subscription.metadata?.user_id;
 
         if (userId) {
+          if (await isStaleForRow(supabaseClient, 'user_id', userId, eventCreated)) break;
           await supabaseClient
             .from('user_subscriptions')
-            .update({ status: 'canceled' })
+            .update({ status: 'canceled', last_stripe_event_created: eventCreated })
             .eq('user_id', userId);
         } else {
+          if (await isStaleForRow(supabaseClient, 'stripe_subscription_id', subscription.id, eventCreated)) break;
           await supabaseClient
             .from('user_subscriptions')
-            .update({ status: 'canceled' })
+            .update({ status: 'canceled', last_stripe_event_created: eventCreated })
             .eq('stripe_subscription_id', subscription.id);
         }
         break;
@@ -200,9 +251,10 @@ serve(async (req) => {
         const subscriptionId = invoice.subscription;
 
         if (subscriptionId) {
+          if (await isStaleForRow(supabaseClient, 'stripe_subscription_id', subscriptionId, eventCreated)) break;
           await supabaseClient
             .from('user_subscriptions')
-            .update({ status: 'past_due' })
+            .update({ status: 'past_due', last_stripe_event_created: eventCreated })
             .eq('stripe_subscription_id', subscriptionId);
         }
         break;

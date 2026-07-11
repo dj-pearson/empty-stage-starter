@@ -221,4 +221,30 @@ describe('useDebouncedCallback', () => {
     // Callback should not be called after unmount
     expect(callback).not.toHaveBeenCalled();
   });
+
+  it('returns a stable function identity across rerenders unless delay changes (US-543)', () => {
+    const { result, rerender } = renderHook(
+      ({ cb, d }: { cb: () => void; d: number }) => useDebouncedCallback(cb, d),
+      { initialProps: { cb: () => {}, d: 500 } }
+    );
+    const first = result.current;
+    // New (inline) callback, same delay -> identity must NOT change.
+    rerender({ cb: () => {}, d: 500 });
+    expect(result.current).toBe(first);
+    // Delay changed -> a new function is expected.
+    rerender({ cb: () => {}, d: 300 });
+    expect(result.current).not.toBe(first);
+  });
+
+  it('invokes the LATEST callback when the timer fires (US-543)', () => {
+    const calls: string[] = [];
+    const { result, rerender } = renderHook(
+      ({ cb }: { cb: () => void }) => useDebouncedCallback(cb, 500),
+      { initialProps: { cb: () => calls.push('a') } }
+    );
+    act(() => { result.current(); });
+    rerender({ cb: () => calls.push('b') }); // update before the timer fires
+    act(() => { vi.advanceTimersByTime(500); });
+    expect(calls).toEqual(['b']);
+  });
 });

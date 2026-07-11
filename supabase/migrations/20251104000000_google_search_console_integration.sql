@@ -11,9 +11,8 @@
 -- =====================================================
 -- Stores OAuth tokens for Google Search Console API access
 
-DROP TABLE IF EXISTS gsc_oauth_credentials CASCADE;
 
-CREATE TABLE gsc_oauth_credentials (
+CREATE TABLE IF NOT EXISTS gsc_oauth_credentials (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
 
@@ -43,9 +42,8 @@ CREATE INDEX idx_gsc_oauth_expires ON gsc_oauth_credentials(expires_at);
 -- =====================================================
 -- Stores verified Google Search Console properties (websites)
 
-DROP TABLE IF EXISTS gsc_properties CASCADE;
 
-CREATE TABLE gsc_properties (
+CREATE TABLE IF NOT EXISTS gsc_properties (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
 
@@ -91,9 +89,8 @@ ALTER TABLE seo_keywords ADD COLUMN IF NOT EXISTS gsc_last_updated TIMESTAMPTZ;
 -- =====================================================
 -- Historical performance data from GSC for each keyword
 
-DROP TABLE IF EXISTS gsc_keyword_performance CASCADE;
 
-CREATE TABLE gsc_keyword_performance (
+CREATE TABLE IF NOT EXISTS gsc_keyword_performance (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   keyword_id UUID REFERENCES seo_keywords(id) ON DELETE CASCADE,
@@ -131,9 +128,8 @@ CREATE UNIQUE INDEX idx_gsc_keyword_perf_unique ON gsc_keyword_performance(keywo
 -- =====================================================
 -- Performance data for individual pages from GSC
 
-DROP TABLE IF EXISTS gsc_page_performance CASCADE;
 
-CREATE TABLE gsc_page_performance (
+CREATE TABLE IF NOT EXISTS gsc_page_performance (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   property_id UUID REFERENCES gsc_properties(id) ON DELETE CASCADE,
@@ -171,9 +167,8 @@ CREATE UNIQUE INDEX idx_gsc_page_perf_unique ON gsc_page_performance(property_id
 -- =====================================================
 -- Store issues reported by Google Search Console
 
-DROP TABLE IF EXISTS gsc_issues CASCADE;
 
-CREATE TABLE gsc_issues (
+CREATE TABLE IF NOT EXISTS gsc_issues (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   property_id UUID REFERENCES gsc_properties(id) ON DELETE CASCADE,
@@ -213,9 +208,8 @@ CREATE INDEX idx_gsc_issues_severity ON gsc_issues(severity);
 -- =====================================================
 -- Track GSC data synchronization events
 
-DROP TABLE IF EXISTS gsc_sync_log CASCADE;
 
-CREATE TABLE gsc_sync_log (
+CREATE TABLE IF NOT EXISTS gsc_sync_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   property_id UUID REFERENCES gsc_properties(id) ON DELETE CASCADE,

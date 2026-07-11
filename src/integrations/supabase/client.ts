@@ -141,6 +141,33 @@ function createMockClient(): SupabaseClient<Database> {
   return mock as unknown as SupabaseClient<Database>;
 }
 
+// US-531: web session-storage security posture — see
+// docs/security/web-session-storage.md for the full evaluation.
+//
+// The web app is a static SPA on Cloudflare Pages (deploy = `pages deploy dist`,
+// no SSR / _worker.js), so httpOnly cookie session storage (@supabase/ssr) is
+// NOT adoptable without rearchitecting auth behind a Pages Function / Worker
+// proxy — @supabase/ssr is built for server-rendered frameworks that can set and
+// read cookies per request. The session therefore lives in localStorage. The
+// compensating control is the hardened CSP shipped in US-529 (script-src with no
+// 'unsafe-inline'/'unsafe-eval'), which blocks the injected-inline-script path
+// an attacker would use to read that token.
+//
+// These flags are load-bearing for that posture and are pinned by
+// src/integrations/supabase/client.auth-options.test.ts:
+//   - autoRefreshToken: keeps refresh-token rotation working (US-531 AC3);
+//   - flowType 'pkce': OAuth code exchange, no access token in the URL fragment.
+export const WEB_AUTH_SECURITY = {
+  persistSession: true,
+  autoRefreshToken: true,
+  flowType: 'pkce',
+  detectSessionInUrl: true,
+  // Session lives in localStorage, so it is NOT shared across subdomains — each
+  // origin has its own. (An old comment here claimed cookie-based cross-subdomain
+  // sharing, which this config never did.)
+  storageKey: 'sb-auth-token',
+} as const;
+
 // Create supabase client only if configured, otherwise create a mock
 function createSupabaseClient(): SupabaseClient<Database> {
   if (isSupabaseConfigured) {
@@ -148,16 +175,7 @@ function createSupabaseClient(): SupabaseClient<Database> {
     const options: Parameters<typeof createClient>[2] = {
       auth: {
         storage: typeof localStorage !== 'undefined' ? localStorage : undefined,
-        persistSession: true,
-        autoRefreshToken: true,
-        // Use PKCE flow for OAuth - more secure and works better with self-hosted
-        flowType: 'pkce',
-        // Detect session from URL for OAuth callbacks
-        detectSessionInUrl: true,
-        // Session lives in localStorage (above), so it is NOT shared across
-        // subdomains — each origin has its own. (The old comment here claimed
-        // cookie-based cross-subdomain sharing, which this config never did.)
-        storageKey: 'sb-auth-token',
+        ...WEB_AUTH_SECURITY,
       },
       global: {
         headers: {

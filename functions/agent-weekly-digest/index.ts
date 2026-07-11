@@ -18,6 +18,7 @@ import { z } from 'https://esm.sh/zod@3.25.76';
 import { runAgent, type AgentDefinition, type Json } from '../_shared/agent-runtime.ts';
 import { computeWeeklyStats, hasActivity, renderDigest } from '../_shared/weekly-digest-logic.ts';
 import { signEmailToken } from '../_shared/nurture-logic.ts';
+import { resolveCsatTokenSecret } from '../_shared/csat-logic.ts';
 
 const AGENT_NAME = 'weekly-digest';
 const HOUSEHOLD_BATCH = 200;
@@ -53,7 +54,11 @@ serve(async (req) => {
     .maybeSingle();
   if (!def) return json({ error: `agent '${AGENT_NAME}' is not registered` }, 404);
 
-  const tokenSecret = Deno.env.get('CSAT_TOKEN_SECRET') ?? expected;
+  // Fail closed: unsubscribe links must be signed with the dedicated secret (US-521).
+  const tokenSecret = resolveCsatTokenSecret(Deno.env.get('CSAT_TOKEN_SECRET'));
+  if (!tokenSecret) {
+    return json({ error: 'CSAT_TOKEN_SECRET is not configured' }, 500);
+  }
 
   const result = await runAgent({
     agentDefinition: def as AgentDefinition,

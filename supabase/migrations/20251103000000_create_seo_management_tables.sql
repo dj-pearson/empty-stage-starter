@@ -12,10 +12,8 @@
 -- Stores global SEO configuration (meta tags, robots.txt, etc.)
 -- =====================================================
 
--- Drop existing table if it has conflicts
-DROP TABLE IF EXISTS seo_settings CASCADE;
 
-CREATE TABLE seo_settings (
+CREATE TABLE IF NOT EXISTS seo_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Meta Tags
@@ -83,9 +81,8 @@ INSERT INTO seo_settings (
 -- Tracks all SEO audit results over time
 -- =====================================================
 
-DROP TABLE IF EXISTS seo_audit_history CASCADE;
 
-CREATE TABLE seo_audit_history (
+CREATE TABLE IF NOT EXISTS seo_audit_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Audit Details
@@ -128,9 +125,8 @@ CREATE INDEX idx_seo_audit_history_url ON seo_audit_history(url);
 -- Tracks SEO fixes that have been applied
 -- =====================================================
 
-DROP TABLE IF EXISTS seo_fixes_applied CASCADE;
 
-CREATE TABLE seo_fixes_applied (
+CREATE TABLE IF NOT EXISTS seo_fixes_applied (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Fix Details
@@ -178,9 +174,8 @@ CREATE INDEX idx_seo_fixes_applied_at ON seo_fixes_applied(applied_at DESC);
 -- Tracks keyword rankings and performance
 -- =====================================================
 
-DROP TABLE IF EXISTS seo_keywords CASCADE;
 
-CREATE TABLE seo_keywords (
+CREATE TABLE IF NOT EXISTS seo_keywords (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Keyword Details
@@ -219,9 +214,8 @@ CREATE INDEX idx_seo_keywords_priority ON seo_keywords(priority);
 -- Tracks keyword position changes over time
 -- =====================================================
 
-DROP TABLE IF EXISTS seo_keyword_history CASCADE;
 
-CREATE TABLE seo_keyword_history (
+CREATE TABLE IF NOT EXISTS seo_keyword_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   keyword_id UUID NOT NULL REFERENCES seo_keywords(id) ON DELETE CASCADE,
@@ -244,9 +238,8 @@ CREATE INDEX idx_seo_keyword_history_keyword ON seo_keyword_history(keyword_id, 
 -- Stores competitor SEO analysis results
 -- =====================================================
 
-DROP TABLE IF EXISTS seo_competitor_analysis CASCADE;
 
-CREATE TABLE seo_competitor_analysis (
+CREATE TABLE IF NOT EXISTS seo_competitor_analysis (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Competitor Details
@@ -293,9 +286,8 @@ CREATE INDEX idx_seo_competitor_analyzed ON seo_competitor_analysis(analyzed_at 
 -- Tracks SEO scores for individual pages
 -- =====================================================
 
-DROP TABLE IF EXISTS seo_page_scores CASCADE;
 
-CREATE TABLE seo_page_scores (
+CREATE TABLE IF NOT EXISTS seo_page_scores (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Page Details
@@ -352,9 +344,8 @@ CREATE INDEX idx_seo_page_scores_analyzed ON seo_page_scores(last_analyzed_at DE
 -- Tracks automated SEO monitoring events
 -- =====================================================
 
-DROP TABLE IF EXISTS seo_monitoring_log CASCADE;
 
-CREATE TABLE seo_monitoring_log (
+CREATE TABLE IF NOT EXISTS seo_monitoring_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Event Details

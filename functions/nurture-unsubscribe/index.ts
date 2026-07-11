@@ -12,6 +12,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { verifyEmailToken } from '../_shared/nurture-logic.ts';
+import { resolveCsatTokenSecret } from '../_shared/csat-logic.ts';
 
 // deno-lint-ignore no-explicit-any
 type SupabaseClient = any;
@@ -30,7 +31,12 @@ function page(title: string, message: string, status: number): Response {
 serve(async (req) => {
   const url = new URL(req.url);
   const token = url.searchParams.get('t') ?? '';
-  const secret = Deno.env.get('CSAT_TOKEN_SECRET') ?? Deno.env.get('AGENT_DISPATCH_SECRET') ?? '';
+  // Fail closed: a dedicated CSAT_TOKEN_SECRET must be configured (US-521).
+  const secret = resolveCsatTokenSecret(Deno.env.get('CSAT_TOKEN_SECRET'));
+  if (!secret) {
+    console.error('nurture-unsubscribe: CSAT_TOKEN_SECRET is not configured — refusing to verify tokens');
+    return page('Temporarily unavailable', 'Unsubscribe is temporarily unavailable. Please try again later.', 503);
+  }
 
   const email = await verifyEmailToken(token, secret);
   if (!email) return page('Invalid link', 'This unsubscribe link could not be verified.', 400);

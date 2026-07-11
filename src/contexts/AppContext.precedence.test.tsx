@@ -152,4 +152,42 @@ describe('US-341: load precedence (localStorage vs Supabase)', () => {
     await waitFor(() => expect(latest).toEqual(['Server Milk']));
     expect(latest).not.toContain('Stale Local Food');
   });
+
+  it('cache that resolves AFTER the server load does not overwrite server data (US-526)', async () => {
+    // Stale local cache that will hydrate LATE (slow storage read).
+    storageBacking[STORAGE_KEY] = JSON.stringify({
+      foods: [{ id: 'stale', name: 'Stale Local Food', category: 'fruit', is_safe: true, is_try_bite: false }],
+      kids: [{ id: 'k1', name: 'Kid', age: 4 }],
+      recipes: [], planEntries: [], groceryItems: [], activeKidId: 'k1',
+    });
+    sessionUser = { id: 'user-1' };
+    tableData['foods'] = [
+      { id: 'srv', name: 'Server Milk', category: 'dairy', is_safe: true, is_try_bite: false, household_id: 'hh-1' },
+    ];
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: 'hh-1' }];
+
+    // Make ONLY the mount cache-hydrate's getItem resolve late, so the
+    // server-authoritative load applies first and the cache arrives afterward.
+    const platform = await import('@/lib/platform');
+    (platform.getStorage as unknown as { mockResolvedValueOnce: (v: unknown) => void }).mockResolvedValueOnce({
+      getItem: (k: string) =>
+        new Promise((res) => setTimeout(() => res(storageBacking[k] ?? null), 50)),
+      setItem: (k: string, v: string) => { storageBacking[k] = v; return Promise.resolve(); },
+      removeItem: (k: string) => { delete storageBacking[k]; return Promise.resolve(); },
+    });
+
+    let latest: string[] = [];
+    render(
+      <AppProvider>
+        <FoodsProbe onFoods={(n) => { latest = n; }} />
+      </AppProvider>
+    );
+
+    // Server data applies first.
+    await waitFor(() => expect(latest).toEqual(['Server Milk']));
+    // Let the delayed cache hydrate fire; the US-526 guard must suppress it.
+    await new Promise((r) => setTimeout(r, 90));
+    expect(latest).toEqual(['Server Milk']);
+    expect(latest).not.toContain('Stale Local Food');
+  });
 });

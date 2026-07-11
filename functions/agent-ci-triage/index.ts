@@ -8,13 +8,14 @@
  * escalate tier-2 instead of drafting duplicates.
  *
  * POST /agent-ci-triage   (GitHub workflow_run webhook JSON)
- * Auth: verify_jwt=false; shared secret via x-ci-secret header.
+ * Auth: verify_jwt=false; GitHub HMAC over the raw body (x-hub-signature-256).
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://esm.sh/zod@3.25.76';
 import { runAgent, type AgentDefinition, type Json } from '../_shared/agent-runtime.ts';
+import { verifyGithubSignature } from '../_shared/webhook-signatures.ts';
 import {
   parseWorkflowRun,
   classificationToAction,
@@ -68,9 +69,23 @@ async function failedJobLog(repo: string, runId: number, token: string): Promise
 serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   const secret = Deno.env.get('CI_WEBHOOK_SECRET');
-  if (!secret || req.headers.get('x-ci-secret') !== secret) return json({ error: 'Unauthorized' }, 401);
+  if (!secret) return json({ error: 'Webhook not configured' }, 503);
 
-  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  // Verify the GitHub HMAC (X-Hub-Signature-256) over the RAW body (US-520).
+  const rawBody = await req.text();
+  const validSig = await verifyGithubSignature(
+    rawBody,
+    req.headers.get('x-hub-signature-256'),
+    secret,
+  );
+  if (!validSig) return json({ error: 'Unauthorized' }, 401);
+
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(rawBody) as Record<string, unknown>;
+  } catch {
+    return json({ error: 'Invalid JSON body' }, 400);
+  }
   const info = parseWorkflowRun(body);
   if (info.conclusion !== 'failure') return json({ skipped: 'not a failure' }, 200);
   if (!info.repo || !info.runId) return json({ skipped: 'missing repo/run' }, 200);

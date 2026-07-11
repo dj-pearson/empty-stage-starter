@@ -5,7 +5,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useFoods, useGrocery, useKids, usePlan } from "@/contexts/AppContext";
 import { FoodCard } from "@/components/FoodCard";
 import { ImportCsvDialog } from "@/components/ImportCsvDialog";
-import { ImageFoodCapture } from "@/components/ImageFoodCapture";
+import { ImageFoodCapture, type FoodIdentification } from "@/components/ImageFoodCapture";
 
 // Lazy load dialogs that are only shown on user action
 const AddFoodDialog = lazy(() => import("@/components/AddFoodDialog").then(m => ({ default: m.AddFoodDialog })));
@@ -136,8 +136,7 @@ export default function Pantry() {
     shortcuts: [
       {
         key: "n",
-        ctrlKey: true,
-        metaKey: true,
+        ctrlOrMeta: true,
         description: "New food",
         action: () => {
           setDialogOpen(true);
@@ -146,8 +145,7 @@ export default function Pantry() {
       },
       {
         key: "f",
-        ctrlKey: true,
-        metaKey: true,
+        ctrlOrMeta: true,
         description: "Focus search",
         action: () => {
           searchInputRef.current?.focus();
@@ -462,7 +460,7 @@ export default function Pantry() {
     // If blocked by plan limit, the upgrade modal handles the messaging.
   };
 
-  const handleFoodIdentified = async (foodData: any) => {
+  const handleFoodIdentified = async (foodData: FoodIdentification) => {
     logger.debug("handleFoodIdentified received:", foodData);
     const existingFood = foods.find(
       (f) =>
@@ -1131,9 +1129,9 @@ export default function Pantry() {
               </div>
             ) : suggestions.length > 0 ? (
               <div className="space-y-3">
-                {suggestions.map((suggestion, index) => (
+                {suggestions.map((suggestion) => (
                   <Card
-                    key={index}
+                    key={suggestion.name}
                     className="hover:shadow-md transition-shadow"
                   >
                     <CardContent className="p-4">

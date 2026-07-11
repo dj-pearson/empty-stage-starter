@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { logger } from "@/lib/logger";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
+import { sanitizeDocumentHtml } from "@/lib/sanitize";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -79,8 +80,9 @@ export function InvoicesList() {
 
       if (error) throw error;
 
-      // Open HTML invoice in new tab
-      const blob = new Blob([data.html], { type: "text/html" });
+      // Open HTML invoice in new tab (US-530: sanitize the server-generated
+      // HTML client-side since we can't confirm it escapes every field).
+      const blob = new Blob([sanitizeDocumentHtml(data.html)], { type: "text/html" });
       const url = URL.createObjectURL(blob);
       window.open(url, "_blank");
 
@@ -122,7 +124,7 @@ export function InvoicesList() {
         // Open in new window and trigger print
         const printWindow = window.open("", "_blank");
         if (printWindow) {
-          printWindow.document.write(data.html);
+          printWindow.document.write(sanitizeDocumentHtml(data.html));
           printWindow.document.close();
           printWindow.onload = () => {
             printWindow.print();

@@ -1,14 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { Kid } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
-import { generateId, debounce } from "@/lib/utils";
+import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { checkFeatureLimit } from "@/lib/featureLimits";
 import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
-import { normalizeKidFromDB } from "@/lib/normalizeEntities";
+import { parseKidRow, parseKidRows } from "@/lib/normalizeEntities";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -28,7 +28,8 @@ export function applyKidRealtime(
     const id = (payload.old as { id?: string })?.id;
     return id ? prev.filter((k) => k.id !== id) : prev;
   }
-  const kid = normalizeKidFromDB(payload.new);
+  const kid = parseKidRow(payload.new);
+  if (!kid) return prev; // US-536: drop an invalid realtime row
   const idx = prev.findIndex((k) => k.id === kid.id);
   if (idx === -1) return [...prev, kid];
   const next = prev.slice();
@@ -59,9 +60,11 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId || !householdId) return;
 
-    const debouncedUpdate = debounce((payload: RealtimePayload<Record<string, unknown>>) => {
+    // Apply EVERY payload (US-525): a trailing debounce dropped distinct events
+    // (bulk inserts / DELETE+INSERT pairs) down to the last one.
+    const handleChange = (payload: RealtimePayload<Record<string, unknown>>) => {
       setKids((prev) => applyKidRealtime(prev, payload));
-    }, 300);
+    };
 
     // Household-scoped channel name so switching households tears down the old
     // channel and opens a distinct one (no stale/duplicate channels). (US-332)
@@ -71,7 +74,7 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'kids',
         filter: `household_id=eq.${householdId}`
-      }, debouncedUpdate)
+      }, handleChange)
       .subscribe();
 
     registerSubscription(channelName, 'kids');
@@ -160,11 +163,14 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshKids = useCallback(async () => {
-    if (userId) {
-      const { data } = await supabase.from('kids').select('*').order('created_at', { ascending: true });
-      if (data) setKids((data as unknown[]).map((k) => normalizeKidFromDB(k as Record<string, unknown>)));
+    // US-550: always scope by household_id (defense-in-depth alongside RLS).
+    if (userId && householdId) {
+      const { data } = await supabase.from('kids').select('*')
+        .eq('household_id', householdId)
+        .order('created_at', { ascending: true });
+      if (data) setKids(parseKidRows(data as unknown[]));
     }
-  }, [userId]);
+  }, [userId, householdId]);
 
   const value = useMemo(() => ({
     kids, setKids, activeKidId, setActiveKidId, addKid, updateKid, deleteKid, setActiveKid, refreshKids

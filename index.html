@@ -124,31 +124,9 @@
     </noscript>
     <script type="module" src="/src/main.tsx"></script>
 
-    <!-- Google Analytics - Deferred to user interaction or 5s to avoid blocking LCP/FCP -->
-    <script>
-      if (typeof window !== 'undefined') {
-        var gaLoaded = false;
-        function loadGA() {
-          if (gaLoaded) return;
-          gaLoaded = true;
-          var script = document.createElement('script');
-          script.src = 'https://www.googletagmanager.com/gtag/js?id=G-H6792J1CQT';
-          script.async = true;
-          document.head.appendChild(script);
-          script.onload = function() {
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            window.gtag = gtag;
-            gtag('js', new Date());
-            gtag('config', 'G-H6792J1CQT');
-          };
-        }
-        // Load on first user interaction or after 5 seconds
-        window.addEventListener('click', loadGA, { once: true });
-        window.addEventListener('scroll', loadGA, { once: true });
-        window.addEventListener('keydown', loadGA, { once: true });
-        setTimeout(loadGA, 5000);
-      }
-    </script>
+    <!-- Google Analytics - Deferred to user interaction or 5s to avoid blocking LCP/FCP.
+         Externalized to /ga-loader.js so the page carries no inline <script> and the CSP
+         can drop 'unsafe-inline'/'unsafe-eval' from script-src (US-529). -->
+    <script src="/ga-loader.js" defer></script>
   </body>
 </html>

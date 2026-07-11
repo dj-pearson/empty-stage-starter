@@ -3,7 +3,6 @@ import { Helmet } from "react-helmet-async";
 import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { GSAPCalendarMealPlanner } from "@/components/GSAPCalendarMealPlanner";
 import { FoodSelectorDialog } from "@/components/FoodSelectorDialog";
 import { DetailedTrackingDialog } from "@/components/DetailedTrackingDialog";
 import { MobileMealPlanner } from "@/components/meal-planner/MobileMealPlanner";
@@ -24,7 +23,14 @@ import { SwapMealDialog } from "@/components/SwapMealDialog";
 import { MissingIngredientsDialog } from "@/components/MissingIngredientsDialog";
 import { computeRecipeShortfall, type Shortfall } from "@/lib/recipeShortfall";
 import { supabase } from "@/integrations/supabase/client";
+import { parsePlanEntryRows } from "@/lib/normalizeEntities";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
+
+// Shape of a single day in the ai-meal-plan edge-function response.
+interface AiMealPlanDay {
+  date: string;
+  meals: Record<string, string | null>;
+}
 import { format, startOfWeek, addWeeks, subWeeks, addDays } from "date-fns";
 import { calculateAge } from "@/lib/utils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
@@ -32,6 +38,9 @@ import { logger } from "@/lib/logger";
 import { lazy, Suspense } from "react";
 import { VarietyFatigueBanner } from "@/components/VarietyFatigueBanner";
 
+// US-541: lazy-load the GSAP planner so gsap + gsap/Draggable are code-split
+// into their own chunk instead of statically bloating the Planner bundle.
+const GSAPCalendarMealPlanner = lazy(() => import("@/components/GSAPCalendarMealPlanner").then(m => ({ default: m.GSAPCalendarMealPlanner })));
 const SaveMealPlanTemplateDialog = lazy(() => import("@/components/SaveMealPlanTemplateDialog").then(m => ({ default: m.SaveMealPlanTemplateDialog })));
 const MealPlanTemplateGallery = lazy(() => import("@/components/MealPlanTemplateGallery").then(m => ({ default: m.MealPlanTemplateGallery })));
 
@@ -232,7 +241,7 @@ export default function Planner() {
       }
 
       const newEntries: PlanEntry[] = [];
-      data.plan.forEach((day: any) => {
+      (data.plan as AiMealPlanDay[]).forEach((day) => {
         Object.entries(day.meals).forEach(([slot, foodId]) => {
           if (foodId) {
             newEntries.push({
@@ -247,7 +256,7 @@ export default function Planner() {
         });
       });
 
-      const dates = data.plan.map((d: any) => d.date);
+      const dates = (data.plan as AiMealPlanDay[]).map((d) => d.date);
       const filteredEntries = planEntries.filter(
         (e) => !dates.includes(e.date) || e.kid_id !== activeKidId
       );
@@ -320,7 +329,7 @@ export default function Planner() {
             .order("date", { ascending: true });
 
           if (planData) {
-            setPlanEntries(planData as any);
+            setPlanEntries(parsePlanEntryRows(planData));
           }
         }
 
@@ -442,7 +451,7 @@ export default function Planner() {
           .order("date", { ascending: true });
 
         if (planData) {
-          setPlanEntries(planData as any);
+          setPlanEntries(parsePlanEntryRows(planData));
         }
       }
 
@@ -524,7 +533,8 @@ export default function Planner() {
           food_id: recipeEntry.food_id,
           recipe_id: recipeEntry.recipe_id,
           is_primary_dish: recipeEntry.is_primary_dish,
-        } as any);
+          result: null,
+        });
       }
 
       const targetKid = kids.find((k) => k.id === targetKidId);
@@ -535,7 +545,8 @@ export default function Planner() {
         date: entry.date,
         meal_slot: entry.meal_slot,
         food_id: entry.food_id,
-      } as any);
+        result: null,
+      });
 
       const targetKid = kids.find((k) => k.id === targetKidId);
       toast.success(`Meal copied to ${targetKid?.name}'s plan`);
@@ -774,26 +785,28 @@ export default function Planner() {
                       View Details
                     </Button>
                   </div>
-                  <GSAPCalendarMealPlanner
-                    weekStart={currentWeekStart}
-                    planEntries={planEntries}
-                    foods={foods}
-                    recipes={recipes}
-                    kids={kids}
-                    kidId={kid.id}
-                    kidName={kid.name}
-                    kidAge={kidAge !== null ? kidAge : undefined}
-                    kidWeight={
-                      kid.weight_kg ? Number(kid.weight_kg) : undefined
-                    }
-                    onUpdateEntry={handleUpdateEntry}
-                    onAddEntry={handleAddEntry}
-                    onOpenFoodSelector={handleOpenFoodSelector}
-                    onCopyToChild={handleCopyToChild}
-                    onCopyWeek={handleCopyWeek}
-                    onClearWeek={handleClearWeek}
-                    onOpenMissingForRecipe={openMissingIngredientsForRecipe}
-                  />
+                  <Suspense fallback={<div className="py-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
+                    <GSAPCalendarMealPlanner
+                      weekStart={currentWeekStart}
+                      planEntries={planEntries}
+                      foods={foods}
+                      recipes={recipes}
+                      kids={kids}
+                      kidId={kid.id}
+                      kidName={kid.name}
+                      kidAge={kidAge !== null ? kidAge : undefined}
+                      kidWeight={
+                        kid.weight_kg ? Number(kid.weight_kg) : undefined
+                      }
+                      onUpdateEntry={handleUpdateEntry}
+                      onAddEntry={handleAddEntry}
+                      onOpenFoodSelector={handleOpenFoodSelector}
+                      onCopyToChild={handleCopyToChild}
+                      onCopyWeek={handleCopyWeek}
+                      onClearWeek={handleClearWeek}
+                      onOpenMissingForRecipe={openMissingIngredientsForRecipe}
+                    />
+                  </Suspense>
                 </div>
               );
             })}
@@ -801,26 +814,28 @@ export default function Planner() {
         ) : (
           // Single child mode
           <div aria-live="polite">
-            <GSAPCalendarMealPlanner
-              weekStart={currentWeekStart}
-              planEntries={planEntries}
-              foods={foods}
-              recipes={recipes}
-              kids={kids}
-              kidId={activeKidId}
-              kidName={activeKid!.name}
-              kidAge={activeKid!.age}
-              kidWeight={
-                activeKid!.weight_kg ? Number(activeKid!.weight_kg) : undefined
-              }
-              onUpdateEntry={handleUpdateEntry}
-              onAddEntry={handleAddEntry}
-              onOpenFoodSelector={handleOpenFoodSelector}
-              onCopyToChild={handleCopyToChild}
-              onCopyWeek={handleCopyWeek}
-              onClearWeek={handleClearWeek}
-              onOpenMissingForRecipe={openMissingIngredientsForRecipe}
-            />
+            <Suspense fallback={<div className="py-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
+              <GSAPCalendarMealPlanner
+                weekStart={currentWeekStart}
+                planEntries={planEntries}
+                foods={foods}
+                recipes={recipes}
+                kids={kids}
+                kidId={activeKidId}
+                kidName={activeKid!.name}
+                kidAge={activeKid!.age}
+                kidWeight={
+                  activeKid!.weight_kg ? Number(activeKid!.weight_kg) : undefined
+                }
+                onUpdateEntry={handleUpdateEntry}
+                onAddEntry={handleAddEntry}
+                onOpenFoodSelector={handleOpenFoodSelector}
+                onCopyToChild={handleCopyToChild}
+                onCopyWeek={handleCopyWeek}
+                onClearWeek={handleClearWeek}
+                onOpenMissingForRecipe={openMissingIngredientsForRecipe}
+              />
+            </Suspense>
           </div>
         )}
 

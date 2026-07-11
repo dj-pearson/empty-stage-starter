@@ -8,13 +8,14 @@
  * spike above the configured threshold).
  *
  * POST /agent-sentry-triage   (Sentry webhook JSON)
- * Auth: verify_jwt=false; shared secret via x-sentry-secret header.
+ * Auth: verify_jwt=false; Sentry HMAC over the raw body (sentry-hook-signature).
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://esm.sh/zod@3.25.76';
 import { runAgent, type AgentDefinition, type Json } from '../_shared/agent-runtime.ts';
+import { verifySentrySignature } from '../_shared/webhook-signatures.ts';
 import {
   sentryFingerprint,
   isCrashRateSpike,
@@ -63,11 +64,26 @@ serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
   const secret = Deno.env.get('SENTRY_WEBHOOK_SECRET');
-  if (!secret || req.headers.get('x-sentry-secret') !== secret) {
-    return json({ error: 'Unauthorized' }, 401);
-  }
+  if (!secret) return json({ error: 'Webhook not configured' }, 503);
 
-  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  // Verify the provider HMAC over the RAW body (US-520). A leaked header value
+  // can no longer be forged, and an attacker can't inject a payload that would
+  // then drive agent prompts/actions.
+  const rawBody = await req.text();
+  const validSig = await verifySentrySignature(
+    rawBody,
+    req.headers.get('sentry-hook-signature'),
+    secret,
+    { timestamp: req.headers.get('sentry-hook-timestamp') },
+  );
+  if (!validSig) return json({ error: 'Unauthorized' }, 401);
+
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(rawBody) as Record<string, unknown>;
+  } catch {
+    return json({ error: 'Invalid JSON body' }, 400);
+  }
   const event = parseSentryEvent(body);
   const fp = sentryFingerprint(event);
 

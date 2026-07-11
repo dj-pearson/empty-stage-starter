@@ -34,6 +34,8 @@
  * ```
  */
 
+import { useEffect } from "react";
+
 export interface ComparisonItem {
   name: string;
   description: string;
@@ -99,10 +101,23 @@ export function ComparisonSchema({
     }),
   };
 
-  return (
-    <script
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
-    />
-  );
+  // US-530: inject via textContent instead of dangerouslySetInnerHTML so a
+  // value containing `</script>` cannot break out of the JSON-LD block.
+  const json = JSON.stringify(schema);
+  useEffect(() => {
+    const scriptId = "comparison-schema";
+    let scriptTag = document.getElementById(scriptId);
+    if (!scriptTag) {
+      scriptTag = document.createElement("script");
+      scriptTag.id = scriptId;
+      (scriptTag as HTMLScriptElement).type = "application/ld+json";
+      document.head.appendChild(scriptTag);
+    }
+    scriptTag.textContent = json;
+    return () => {
+      document.getElementById(scriptId)?.remove();
+    };
+  }, [json]);
+
+  return null;
 }

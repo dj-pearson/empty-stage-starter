@@ -16,11 +16,35 @@ export interface AutonomyPolicy {
 
 export type ApprovalStatus = 'draft' | 'approved';
 
-/** Draft by default; 'approved' only when the policy allowlists this action type. */
+/**
+ * Outward-facing action types whose payload can derive from ingested
+ * (attacker-influenceable) content. These are ALWAYS draft-first and can never
+ * be auto-approved by an autonomy policy — otherwise prompt injection in
+ * ingested content could produce an unreviewed email or GitHub write (US-522).
+ */
+export const OUTWARD_ACTION_TYPES = [
+  'send_email',
+  'github_issue',
+  'pr_comment',
+  'social_webhook',
+  'webhook',
+] as const;
+
+/** True if the action type is outward-facing and must always require human approval. */
+export function isOutwardActionType(actionType: string): boolean {
+  return (OUTWARD_ACTION_TYPES as readonly string[]).includes(actionType);
+}
+
+/**
+ * Draft by default; 'approved' only when the policy allowlists a NON-outward
+ * action type. Outward-facing actions are forced to 'draft' regardless of the
+ * autonomy policy (US-522).
+ */
 export function resolveApprovalStatus(
   policy: AutonomyPolicy | null | undefined,
   actionType: string,
 ): ApprovalStatus {
+  if (isOutwardActionType(actionType)) return 'draft';
   const list = policy?.autoExecute;
   if (Array.isArray(list) && list.includes(actionType)) return 'approved';
   return 'draft';

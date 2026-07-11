@@ -13,7 +13,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { runAgent, type AgentDefinition, type Json } from '../_shared/agent-runtime.ts';
-import { signCsatToken, ratingLinks, buildCsatEmail } from '../_shared/csat-logic.ts';
+import { signCsatToken, ratingLinks, buildCsatEmail, resolveCsatTokenSecret } from '../_shared/csat-logic.ts';
 
 const AGENT_NAME = 'csat';
 const BATCH_SIZE = 25;
@@ -48,7 +48,11 @@ serve(async (req) => {
     .maybeSingle();
   if (!def) return json({ error: `agent '${AGENT_NAME}' is not registered` }, 404);
 
-  const tokenSecret = Deno.env.get('CSAT_TOKEN_SECRET') ?? expected;
+  // Fail closed: CSAT links must be signed with the dedicated secret (US-521).
+  const tokenSecret = resolveCsatTokenSecret(Deno.env.get('CSAT_TOKEN_SECRET'));
+  if (!tokenSecret) {
+    return json({ error: 'CSAT_TOKEN_SECRET is not configured' }, 500);
+  }
 
   const result = await runAgent({
     agentDefinition: def as AgentDefinition,
