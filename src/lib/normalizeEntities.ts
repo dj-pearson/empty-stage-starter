@@ -15,7 +15,7 @@
  * Applying the SAME normalizer on both the load path and the realtime handler
  * is what removes the "shape drift" a second device used to see.
  */
-import type { GroceryItem, PlanEntry, Kid, FoodCategory } from '@/types';
+import type { GroceryItem, PlanEntry, Kid, Food, FoodCategory } from '@/types';
 
 type Row = Record<string, unknown>;
 
@@ -32,6 +32,22 @@ export function normalizeGroceryItemFromDB(row: Row): GroceryItem {
     unit: typeof row.unit === 'string' ? row.unit : '',
     checked: row.checked === true,
     category: (row.category as FoodCategory) ?? ('snack' as FoodCategory),
+  };
+}
+
+export function normalizeFoodFromDB(row: Row): Food {
+  // foods is snake_case in both DB and client; this guarantees a consistent
+  // shape across the load / insert / realtime paths (US-534): the two flags are
+  // real booleans (never null), category has a default, and allergens is either
+  // an array or absent so `.allergens?.map()` never throws on a realtime row.
+  const quantity = Number(row.quantity);
+  return {
+    ...(row as unknown as Food),
+    is_safe: row.is_safe === true,
+    is_try_bite: row.is_try_bite === true,
+    category: (row.category as FoodCategory) ?? ('snack' as FoodCategory),
+    allergens: asArray(row.allergens),
+    quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : undefined,
   };
 }
 

@@ -955,8 +955,8 @@
         "Add tests for the realtime helper and normalizer"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: data-integrity/realtime | Source: code-review 2026-07-11] Confirmed: FoodsContext has no channel; foods cast raw at AppContext.tsx:251 and FoodsContext.tsx:50,113,164 while other domains normalize."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: data-integrity/realtime | Source: code-review 2026-07-11] Confirmed: FoodsContext has no channel; foods cast raw at AppContext.tsx:251 and FoodsContext.tsx:50,113,164 while other domains normalize. | VERIFIED 2026-07-11: FoodsContext now opens a household-scoped foods:${householdId} postgres_changes channel (cleanup via removeChannel/unregisterSubscription). New applyFoodRealtime helper (dedupe by id, normalize) mirrors Grocery/Plan/Kids. New normalizeFoodFromDB in normalizeEntities.ts (is_safe/is_try_bite -> real booleans, category default, allergens array-or-undefined) applied on every load/insert/realtime path — replaced raw 'as unknown as Food[]' casts in FoodsContext (3) + AppContext (1). Tests: foodsRealtime.test.ts (normalizer + realtime INSERT/UPDATE/DELETE/burst). 63 context tests pass."
     },
     {
       "id": "US-535",

@@ -10,7 +10,7 @@ import { AuthProvider, useAuth } from "./AuthContext";
 import { FoodsProvider, useFoods } from "./FoodsContext";
 import { KidsProvider, useKids } from "./KidsContext";
 import { RecipesProvider, useRecipes, normalizeRecipeFromDB, RECIPE_WITH_INGREDIENTS_SELECT, selectRecipesWithFallback } from "./RecipesContext";
-import { normalizeKidFromDB, normalizePlanEntryFromDB, normalizeGroceryItemFromDB } from "@/lib/normalizeEntities";
+import { normalizeKidFromDB, normalizePlanEntryFromDB, normalizeGroceryItemFromDB, normalizeFoodFromDB } from "@/lib/normalizeEntities";
 import { PlanProvider, usePlan } from "./PlanContext";
 import { GroceryProvider, useGrocery } from "./GroceryContext";
 import type { GroceryAddInput } from "@/lib/groceryMerge";
@@ -265,7 +265,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
               : (loadedKids[0]?.id ?? null)
           );
         }
-        if (foodsRes.data) setFoods(foodsRes.data as unknown as Food[]);
+        if (foodsRes.data) setFoods((foodsRes.data as unknown[]).map((f) => normalizeFoodFromDB(f as Record<string, unknown>)));
         if (recipesRes.data) {
           const dbRecipes = (recipesRes.data as unknown[]).map((r) => normalizeRecipeFromDB(r as Parameters<typeof normalizeRecipeFromDB>[0]));
           // Check for local recipes and migrate them. Use the platform-aware

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react";
 import { Food } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
@@ -6,7 +6,36 @@ import { logger } from "@/lib/logger";
 import { checkFeatureLimit } from "@/lib/featureLimits";
 import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
+import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
+import { normalizeFoodFromDB } from "@/lib/normalizeEntities";
 import { useAuth } from "./AuthContext";
+
+interface RealtimePayload<T> {
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
+  new: T;
+  old: T;
+}
+
+/**
+ * Merge a realtime foods payload into prior state (US-534): normalize the raw
+ * row (booleans/arrays coerced) and dedupe by id — mirrors the Grocery/Plan/Kids
+ * realtime helpers.
+ */
+export function applyFoodRealtime(
+  prev: Food[],
+  payload: RealtimePayload<Record<string, unknown>>,
+): Food[] {
+  if (payload.eventType === 'DELETE') {
+    const id = (payload.old as { id?: string })?.id;
+    return id ? prev.filter((f) => f.id !== id) : prev;
+  }
+  const food = normalizeFoodFromDB(payload.new);
+  const idx = prev.findIndex((f) => f.id === food.id);
+  if (idx === -1) return [...prev, food];
+  const next = prev.slice();
+  next[idx] = food;
+  return next;
+}
 
 interface FoodsContextType {
   foods: Food[];
@@ -25,6 +54,32 @@ const FoodsContext = createContext<FoodsContextType | undefined>(undefined);
 export function FoodsProvider({ children }: { children: React.ReactNode }) {
   const [foods, setFoods] = useState<Food[]>([]);
   const { userId, householdId } = useAuth();
+
+  // Real-time subscription for foods so a food added on one device appears on
+  // another without a reload (US-534) — parity with Grocery/Plan/Kids/Recipes.
+  useEffect(() => {
+    if (!userId || !householdId) return;
+
+    const handleChange = (payload: RealtimePayload<Record<string, unknown>>) => {
+      setFoods((prev) => applyFoodRealtime(prev, payload));
+    };
+
+    const channelName = `foods:${householdId}`;
+    const channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'foods',
+        filter: `household_id=eq.${householdId}`,
+      }, handleChange)
+      .subscribe();
+
+    registerSubscription(channelName, 'foods');
+
+    return () => {
+      unregisterSubscription(channelName);
+      supabase.removeChannel(channel);
+    };
+  }, [userId, householdId]);
 
   const addFood = useCallback(async (food: Omit<Food, "id">): Promise<boolean> => {
     if (userId && householdId) {
@@ -47,7 +102,7 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
         logger.error('Supabase addFood error:', error);
         setFoods(prev => [...prev, { ...food, id: generateId() }]);
       } else if (data) {
-        setFoods(prev => [...prev, data as unknown as Food]);
+        setFoods(prev => [...prev, normalizeFoodFromDB(data as Record<string, unknown>)]);
       }
       return true;
     }
@@ -110,7 +165,7 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
         const localFoods = foodsToAdd.map(f => ({ ...f, id: generateId() }));
         setFoods(prev => [...prev, ...localFoods]);
       } else if (data) {
-        setFoods(prev => [...prev, ...(data as unknown as Food[])]);
+        setFoods(prev => [...prev, ...(data as Record<string, unknown>[]).map(normalizeFoodFromDB)]);
       }
       return true;
     }
@@ -161,7 +216,7 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
   const refreshFoods = useCallback(async () => {
     if (userId) {
       const { data } = await supabase.from('foods').select('*').order('name', { ascending: true }).limit(500);
-      if (data) setFoods(data as unknown as Food[]);
+      if (data) setFoods((data as Record<string, unknown>[]).map(normalizeFoodFromDB));
     }
   }, [userId]);
 
