@@ -8,7 +8,7 @@ import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
 import { inferFoodCategory } from "@/lib/foodCategoryMap";
 import { planGroceryMerge, splitIngredientBlock, type GroceryAddInput } from "@/lib/groceryMerge";
-import { normalizeGroceryItemFromDB } from "@/lib/normalizeEntities";
+import { parseGroceryItemRow } from "@/lib/normalizeEntities";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -30,7 +30,8 @@ export function applyGroceryItemRealtime(
     const id = (payload.old as { id?: string })?.id;
     return id ? prev.filter((i) => i.id !== id) : prev;
   }
-  const item = normalizeGroceryItemFromDB(payload.new);
+  const item = parseGroceryItemRow(payload.new);
+  if (!item) return prev; // US-536: drop an invalid realtime row
   const idx = prev.findIndex((i) => i.id === item.id);
   if (idx === -1) return [...prev, item];
   const next = prev.slice();

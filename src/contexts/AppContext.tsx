@@ -11,8 +11,8 @@ import { mergeWindowedPlanEntries } from "@/lib/planWindow";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { FoodsProvider, useFoods } from "./FoodsContext";
 import { KidsProvider, useKids } from "./KidsContext";
-import { RecipesProvider, useRecipes, normalizeRecipeFromDB, RECIPE_WITH_INGREDIENTS_SELECT, selectRecipesWithFallback } from "./RecipesContext";
-import { normalizeKidFromDB, normalizePlanEntryFromDB, normalizeGroceryItemFromDB, normalizeFoodFromDB } from "@/lib/normalizeEntities";
+import { RecipesProvider, useRecipes, parseRecipeRows, RECIPE_WITH_INGREDIENTS_SELECT, selectRecipesWithFallback } from "./RecipesContext";
+import { parseKidRows, parseFoodRows, parsePlanEntryRows, parseGroceryItemRows } from "@/lib/normalizeEntities";
 import { PlanProvider, usePlan } from "./PlanContext";
 import { GroceryProvider, useGrocery } from "./GroceryContext";
 import type { GroceryAddInput } from "@/lib/groceryMerge";
@@ -269,7 +269,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
 
         if (kidsRes.data) {
           // US-333: normalize on load so the shape matches the realtime path.
-          const loadedKids = (kidsRes.data as unknown[]).map((k) => normalizeKidFromDB(k as Record<string, unknown>));
+          const loadedKids = parseKidRows(kidsRes.data as unknown[]);
           setKids(loadedKids);
           // Preserve a still-valid selection; otherwise default to the first
           // kid. Hard-resetting to null left the app with no child selected
@@ -280,9 +280,9 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
               : (loadedKids[0]?.id ?? null)
           );
         }
-        if (foodsRes.data) setFoods((foodsRes.data as unknown[]).map((f) => normalizeFoodFromDB(f as Record<string, unknown>)));
+        if (foodsRes.data) setFoods(parseFoodRows(foodsRes.data as unknown[]));
         if (recipesRes.data) {
-          const dbRecipes = (recipesRes.data as unknown[]).map((r) => normalizeRecipeFromDB(r as Parameters<typeof normalizeRecipeFromDB>[0]));
+          const dbRecipes = parseRecipeRows(recipesRes.data as unknown[]);
           // Check for local recipes and migrate them. Use the platform-aware
           // storage (not raw localStorage, which is undefined on React Native
           // and would throw here, aborting the whole sync).
@@ -331,7 +331,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
                   .from('recipes')
                   .select(RECIPE_WITH_INGREDIENTS_SELECT)
                   .order('created_at', { ascending: true });
-                if (updatedRecipes) setRecipes((updatedRecipes as unknown[]).map((r) => normalizeRecipeFromDB(r as Parameters<typeof normalizeRecipeFromDB>[0])));
+                if (updatedRecipes) setRecipes(parseRecipeRows(updatedRecipes as unknown[]));
               } else {
                 setRecipes(dbRecipes);
               }
@@ -350,10 +350,10 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
           // in-window slice remains server-authoritative.
           const windowStart = thirtyDaysAgo.toISOString().split('T')[0];
           const windowEnd = ninetyDaysFromNow.toISOString().split('T')[0];
-          const serverEntries = (planRes.data as unknown[]).map((p) => normalizePlanEntryFromDB(p as Record<string, unknown>));
+          const serverEntries = parsePlanEntryRows(planRes.data as unknown[]);
           setPlanEntriesState((prev) => mergeWindowedPlanEntries(prev, serverEntries, windowStart, windowEnd));
         }
-        if (groceryRes.data) setGroceryItemsState((groceryRes.data as unknown[]).map((g) => normalizeGroceryItemFromDB(g as Record<string, unknown>)));
+        if (groceryRes.data) setGroceryItemsState(parseGroceryItemRows(groceryRes.data as unknown[]));
       } catch (error) {
         // Don't leave the scope marked as loaded if it failed — clear it so
         // the next render retries instead of showing a permanently empty app.

@@ -8,7 +8,7 @@ import { checkFeatureLimit } from "@/lib/featureLimits";
 import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
-import { normalizeKidFromDB } from "@/lib/normalizeEntities";
+import { parseKidRow, parseKidRows } from "@/lib/normalizeEntities";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -28,7 +28,8 @@ export function applyKidRealtime(
     const id = (payload.old as { id?: string })?.id;
     return id ? prev.filter((k) => k.id !== id) : prev;
   }
-  const kid = normalizeKidFromDB(payload.new);
+  const kid = parseKidRow(payload.new);
+  if (!kid) return prev; // US-536: drop an invalid realtime row
   const idx = prev.findIndex((k) => k.id === kid.id);
   if (idx === -1) return [...prev, kid];
   const next = prev.slice();
@@ -167,7 +168,7 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
       const { data } = await supabase.from('kids').select('*')
         .eq('household_id', householdId)
         .order('created_at', { ascending: true });
-      if (data) setKids((data as unknown[]).map((k) => normalizeKidFromDB(k as Record<string, unknown>)));
+      if (data) setKids(parseKidRows(data as unknown[]));
     }
   }, [userId, householdId]);
 

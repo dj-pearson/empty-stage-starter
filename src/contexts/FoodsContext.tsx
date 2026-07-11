@@ -7,7 +7,7 @@ import { checkFeatureLimit } from "@/lib/featureLimits";
 import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
-import { normalizeFoodFromDB } from "@/lib/normalizeEntities";
+import { parseFoodRow, parseFoodRows } from "@/lib/normalizeEntities";
 import { useAuth } from "./AuthContext";
 
 interface RealtimePayload<T> {
@@ -29,7 +29,8 @@ export function applyFoodRealtime(
     const id = (payload.old as { id?: string })?.id;
     return id ? prev.filter((f) => f.id !== id) : prev;
   }
-  const food = normalizeFoodFromDB(payload.new);
+  const food = parseFoodRow(payload.new);
+  if (!food) return prev; // US-536: drop an invalid realtime row
   const idx = prev.findIndex((f) => f.id === food.id);
   if (idx === -1) return [...prev, food];
   const next = prev.slice();
@@ -102,7 +103,8 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
         logger.error('Supabase addFood error:', error);
         setFoods(prev => [...prev, { ...food, id: generateId() }]);
       } else if (data) {
-        setFoods(prev => [...prev, normalizeFoodFromDB(data as Record<string, unknown>)]);
+        const inserted = parseFoodRow(data as Record<string, unknown>);
+        if (inserted) setFoods(prev => [...prev, inserted]);
       }
       return true;
     }
@@ -165,7 +167,7 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
         const localFoods = foodsToAdd.map(f => ({ ...f, id: generateId() }));
         setFoods(prev => [...prev, ...localFoods]);
       } else if (data) {
-        setFoods(prev => [...prev, ...(data as Record<string, unknown>[]).map(normalizeFoodFromDB)]);
+        setFoods(prev => [...prev, ...parseFoodRows(data as unknown[])]);
       }
       return true;
     }
@@ -226,7 +228,7 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
       const { data } = await supabase.from('foods').select('*')
         .eq('household_id', householdId)
         .order('name', { ascending: true }).limit(500);
-      if (data) setFoods((data as Record<string, unknown>[]).map(normalizeFoodFromDB));
+      if (data) setFoods(parseFoodRows(data as unknown[]));
     }
   }, [userId, householdId]);
 

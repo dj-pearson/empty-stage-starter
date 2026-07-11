@@ -6,7 +6,7 @@ import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
-import { normalizePlanEntryFromDB } from "@/lib/normalizeEntities";
+import { parsePlanEntryRow } from "@/lib/normalizeEntities";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -26,7 +26,8 @@ export function applyPlanEntryRealtime(
     const id = (payload.old as { id?: string })?.id;
     return id ? prev.filter((e) => e.id !== id) : prev;
   }
-  const entry = normalizePlanEntryFromDB(payload.new);
+  const entry = parsePlanEntryRow(payload.new);
+  if (!entry) return prev; // US-536: drop an invalid realtime row
   const idx = prev.findIndex((e) => e.id === entry.id);
   if (idx === -1) return [...prev, entry];
   const next = prev.slice();

@@ -981,8 +981,8 @@
         "The `as unknown as` casts on data paths are replaced by validated parses"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "[Severity: Medium | Category: correctness | Source: code-review 2026-07-11] Confirmed: pervasive `as unknown as` casts across src/contexts/*.tsx; normalizeEntities does light coercion but no validation."
+      "passes": true,
+      "notes": "[Severity: Medium | Category: correctness | Source: code-review 2026-07-11] Confirmed: pervasive `as unknown as` casts across src/contexts/*.tsx; normalizeEntities does light coercion but no validation. | VERIFIED 2026-07-11: Added Zod schemas + validated parse wrappers at the Supabase data boundary. normalizeEntities.ts: foodRowSchema/kidRowSchema/planEntryRowSchema/groceryItemRowSchema (require only load-bearing fields: id + name, plan needs id+kid_id; .passthrough() so a new column never rejects a row) + parseFoodRow(s)/parseKidRow(s)/parsePlanEntryRow(s)/parseGroceryItemRow(s) that safeParse -> normalize or null+logger.warn. RecipesContext: recipeRowSchema + parseRecipeRow(s). Wired into every load/insert/realtime path across AppContext + Foods/Kids/Plan/Grocery/Recipes contexts, replacing the /.map(normalizeX) casts; realtime applyX helpers return prev (drop the event) on an invalid payload. Test normalizeEntities.test.ts: invalid rows (missing id/name/kid_id) dropped, valid kept, nullable fields + unknown columns tolerated. 784 lib+context tests pass; no-new-any gate clean."
     },
     {
       "id": "US-537",
