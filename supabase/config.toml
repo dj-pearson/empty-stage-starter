@@ -96,6 +96,9 @@ verify_jwt = false
 # System health & cost anomaly agent: invoked by the dispatcher with the internal secret.
 [functions.agent-health-watch]
 verify_jwt = false
+# Weekly business KPI report agent: invoked by the dispatcher with the internal secret.
+[functions.agent-kpi-report]
+verify_jwt = false
 [functions.calculate-food-similarity]
 verify_jwt = true
 
