@@ -693,6 +693,520 @@
       "priority": 41,
       "passes": true,
       "notes": "Migration 20260709000031_agent_prompt_versions.sql adds public.agent_prompt_versions (agent_id fk CASCADE, system_prompt, version, created_by, created_at, UNIQUE(agent_id,version)) with admin-only RLS (SELECT+INSERT, append-only) and a (agent_id, version DESC) index; passes the migration linter (additive). Types hand-regenerated in src/integrations/supabase/types.ts (agent_prompt_versions + the US-514 agent_feedback table). Pure src/lib/agentConfig.ts holds the validation + policy transforms: isValidCron (strict 5-field parser — validates *, ranges, lists, and steps within each field's numeric bounds; rejects wrong field counts, out-of-range values, zero steps, inverted ranges), validateCap (non-negative finite number), KNOWN_ACTION_TYPES (the 6 executor action types), AGENT_MODELS, and getAllowlist/toggleAllowlist over autonomy_policy.autoExecute (preserving other policy keys, sorted). New src/components/admin/agents/AgentDetailDialog.tsx is the agent detail/config editor: edits system_prompt (with a version-history list + per-version Restore), schedule_cron and daily_cost_cap_usd (both with inline validation that disables Save on invalid input), model (Select over AGENT_MODELS), and the auto-approve allowlist (a checkbox per KNOWN_ACTION_TYPE bound to autonomy_policy.autoExecute). Save writes a new agent_prompt_versions row when the prompt changed (version = max+1), updates agent_definitions (system_prompt/schedule_cron/daily_cost_cap_usd/model/autonomy_policy), and logs an agent_audit_log 'agent_config_updated' entry with before/after values; Restore re-saves a prior version's text as a NEW version. Wired into AgentRegistryTab via a per-card Configure button that opens the dialog and refreshes the card on save. i18n: new agents.detail namespace + agents.registry.configure in en.json. Verification: 9 vitest cases in src/lib/agentConfig.test.ts (valid/invalid cron incl. bounds+steps+inverted ranges, cap validation, allowlist read/toggle/preserve) PASS; scoped tsc over agentConfig.ts + AgentDetailDialog.tsx + AgentRegistryTab.tsx against tsconfig.app.json is clean; full vite production build succeeds and a Playwright/Chromium smoke loads /admin/agents (SPA boots, no runtime/import errors; Supabase network calls are expected to fail unauthenticated in the sandbox and are filtered)."
+    },
+    {
+      "id": "US-516",
+      "title": "Broken access control + SSRF in update-blog-image edge function",
+      "description": "As a security owner, I want update-blog-image to require admin and validate outbound fetches so that a non-admin cannot rewrite arbitrary blog hero images or reach internal endpoints via the service role.",
+      "acceptanceCriteria": [
+        "Call assertAdmin(supabase, user.id, corsHeaders) before any work; a non-admin authenticated user receives 403",
+        "Verify the target blog_post_id is within an admin-editable scope before update",
+        "Replace validateUrl with the DNS-resolving validateExternalUrl() from _shared/url-validator.ts for the supplied image_url",
+        "Fetch image with redirect:'manual'; re-validate any Location header before following; use fetchWithTimeout",
+        "Cap the downloaded image body size (reject > configured max) before arrayBuffer()",
+        "No new typecheck errors; existing behavior for admins preserved"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: security/auth+ssrf | Source: code-review 2026-07-11] Confirmed: functions/update-blog-image/index.ts uses authenticateRequest (line 42) but NO assertAdmin, then uses SUPABASE_SERVICE_ROLE_KEY (line 55) to fetch a user-supplied URL and overwrite featured_image. RLS is bypassed by service role."
+    },
+    {
+      "id": "US-517",
+      "title": "Close SSRF hole in parse-recipe (and any user-supplied URL fetch)",
+      "description": "As a security owner, I want parse-recipe to resolve and validate URLs (incl. redirects) before fetching so that DNS-rebinding and redirect-to-metadata attacks are blocked.",
+      "acceptanceCriteria": [
+        "Replace validateUrl() with async validateExternalUrl() (Deno.resolveDns based) from _shared/url-validator.ts",
+        "Set redirect:'manual' on the fetch and re-validate any Location before following it",
+        "Use fetchWithTimeout and cap the response body size",
+        "Audit all other functions that fetch user-supplied URLs and apply the same pattern",
+        "Add a test asserting a URL whose A-record resolves to a private range is rejected"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: security/ssrf | Source: code-review 2026-07-11] Confirmed at functions/parse-recipe/index.ts:202-216 (validateUrl does no DNS resolution; plain fetch follows redirects). update-blog-image shares this and is covered by US-516."
+    },
+    {
+      "id": "US-518",
+      "title": "Add admin gate + domain allowlist to google-indexing",
+      "description": "As a security owner, I want google-indexing restricted to admins and to our own domains so that a normal user cannot de-index production pages or burn the indexing quota.",
+      "acceptanceCriteria": [
+        "Call assertAdmin before submitting to the Indexing API; non-admins receive 403",
+        "Restrict submitted URLs to an allowlist of owned hostnames (reject others)",
+        "Reject type='URL_DELETED' unless caller is admin and URL is owned",
+        "Add a test for the allowlist and admin gate"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: security/auth | Source: code-review 2026-07-11] Confirmed at functions/google-indexing/index.ts:199-268 — only authenticateRequest; caller controls urls + type incl. URL_DELETED with the site's service account."
+    },
+    {
+      "id": "US-519",
+      "title": "Stripe webhook idempotency + out-of-order event protection",
+      "description": "As a billing owner, I want the Stripe webhook to dedupe and order-guard events so that redelivered or out-of-order events cannot reactivate a canceled subscription or double-process.",
+      "acceptanceCriteria": [
+        "Persist processed Stripe event.id in a unique table; insert-or-skip so duplicates are ignored (idempotent)",
+        "Guard subscription state transitions so a late customer.subscription.updated cannot overwrite a customer.subscription.deleted (compare event.created / current state)",
+        "Migration for the processed-events table is additive with RLS (service-role only)",
+        "Add tests: duplicate event is a no-op; stale 'active' after 'deleted' does not reactivate"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: security/payments | Source: code-review 2026-07-11] Confirmed at functions/stripe-webhook/index.ts:124-213 — signature verified but no event.id dedup and no ordering guard."
+    },
+    {
+      "id": "US-520",
+      "title": "Verify provider HMAC signatures on external agent webhooks",
+      "description": "As a security owner, I want inbound provider webhooks to verify HMAC body signatures so that a leaked shared-secret header cannot be forged and untrusted payloads cannot be injected into agent prompts/actions.",
+      "acceptanceCriteria": [
+        "agent-sentry-triage verifies the Sentry sentry-hook-signature HMAC over the raw body",
+        "agent-ci-triage and agent-migration-check verify GitHub x-hub-signature-256 over the raw body",
+        "All comparisons use a constant-time compare; plaintext header equality checks removed",
+        "Add replay protection where the provider supports it (timestamp tolerance)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: security/auth | Source: code-review 2026-07-11] Confirmed plaintext header equality at agent-sentry-triage/index.ts:65-67, agent-ci-triage:31-32, agent-migration-check:47-48. Pattern to follow already exists in stripe-webhook."
+    },
+    {
+      "id": "US-521",
+      "title": "Fail-closed token secrets for CSAT rating and unsubscribe",
+      "description": "As a security owner, I want CSAT/unsubscribe token verification to fail closed and use a dedicated key so that forged ratings and forced unsubscribes are impossible.",
+      "acceptanceCriteria": [
+        "csat-rate and nurture-unsubscribe return an error (fail closed) when no dedicated CSAT_TOKEN_SECRET is configured; the '' fallback is removed",
+        "Use a signing key distinct from AGENT_DISPATCH_SECRET",
+        "Add a test asserting a token signed with an empty/other key is rejected"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: security/auth | Source: code-review 2026-07-11] Confirmed: csat-rate/index.ts:41 and nurture-unsubscribe/index.ts:33 use `?? ''` so an unset env var yields an empty HMAC key an attacker can reproduce."
+    },
+    {
+      "id": "US-522",
+      "title": "Never auto-approve outward actions derived from untrusted content",
+      "description": "As a security owner, I want outward-facing agent actions whose payload derives from ingested (attacker-influenceable) content to always require human approval so that prompt injection cannot cause unreviewed emails or GitHub writes.",
+      "acceptanceCriteria": [
+        "agent-runtime/approval-executor: send_email, github_issue, pr_comment, and webhook actions are never promoted to 'approved' automatically when their payload derives from ingested content",
+        "Validate/allowlist payload.repo and payload.to before execution",
+        "Autonomy policies can no longer auto-approve these outward action types",
+        "Add tests covering an auto-approve attempt for a send_email/github action being forced to draft"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: security/injection | Source: code-review 2026-07-11] Confirmed path: _shared/agent-runtime.ts:563-587 (buildApproval promotes to 'approved' when autonomy_policy allowlists the type) + approval-executor/index.ts executes approved rows with no human step."
+    },
+    {
+      "id": "US-523",
+      "title": "Harden SECURITY DEFINER functions with fixed search_path",
+      "description": "As a DB owner, I want every SECURITY DEFINER function to pin search_path and schema-qualify object references so that the mutable-search_path privilege-escalation vector is closed.",
+      "acceptanceCriteria": [
+        "Every SECURITY DEFINER function has SET search_path = public, pg_temp (or '' with fully-qualified names)",
+        "All table references inside definer functions are schema-qualified",
+        "Migration is additive (CREATE OR REPLACE FUNCTION only) and backward-compatible",
+        "Supabase linter security_definer_search_path reports zero findings"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: db-security | Source: code-review 2026-07-11] Confirmed ~40 migrations declare more SECURITY DEFINER functions than SET search_path clauses (e.g. get_user_subscription, can_add_child). has_role() was already fixed — apply broadly."
+    },
+    {
+      "id": "US-524",
+      "title": "Upgrade vulnerable dependencies (jspdf critical + npm audit backlog)",
+      "description": "As a maintainer, I want known-vulnerable dependencies upgraded so that the app is not shipping code with critical/high CVEs.",
+      "acceptanceCriteria": [
+        "jspdf upgraded to a version without the PDF Object Injection advisory (direct dep, currently ^4.2.0)",
+        "npm audit fix applied for transitive high/critical (axios SSRF, lodash, node-forge, shell-quote, undici, ws, tar, @xmldom/xmldom, form-data)",
+        "Remaining unresolved advisories documented with rationale in SECURITY.md",
+        "Build and test:run pass after upgrades"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: security/supply-chain | Source: code-review 2026-07-11] npm audit (omit dev): 36 vulns (2 critical, 11 high). Critical: jspdf (direct), shell-quote (transitive). Most others transitive from tooling."
+    },
+    {
+      "id": "US-525",
+      "title": "Fix realtime debounce that drops distinct postgres_changes events",
+      "description": "As a user with multiple caregivers, I want every realtime change delivered so that bulk inserts and delete+insert pairs from another device are not silently lost.",
+      "acceptanceCriteria": [
+        "The per-payload trailing debounce in the realtime handlers is replaced: every payload is processed, or payloads are batched and the whole batch is flushed",
+        "A bulk grocery insert broadcast (many INSERTs within 300ms) applies all rows on the receiving device",
+        "A DELETE+INSERT pair within the window is not coalesced to only the last event",
+        "Add a test simulating multiple distinct payloads inside the debounce window"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: data-integrity/realtime | Source: code-review 2026-07-11] Confirmed: src/lib/utils.ts debounce is trailing-edge, used by GroceryContext/PlanContext/KidsContext/RecipesContext realtime handlers — only the last event's args survive."
+    },
+    {
+      "id": "US-526",
+      "title": "Enforce load precedence so cache can never overwrite server data",
+      "description": "As a user, I want a stale localStorage backup to never overwrite freshly-loaded server data so that a deletion or cross-device edit cannot be resurrected (per the US-341 precedence contract).",
+      "acceptanceCriteria": [
+        "Add a load-generation token / guard so a late-resolving cache hydrate cannot apply after the server load",
+        "Skip cache-hydrate for a slice once userId + householdId are known and the server load has applied",
+        "AppContext.precedence tests extended to cover the cache-resolves-after-server race and pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: data-integrity | Source: code-review 2026-07-11] Confirmed: src/contexts/AppContext.tsx runs the cache-hydrate effect (112-143) and the Supabase load effect (176-321) concurrently with no ordering guard."
+    },
+    {
+      "id": "US-527",
+      "title": "Fix recipe-migration heuristic that discards offline-created recipes",
+      "description": "As a user who created recipes before signing in, I want them migrated to the server so that they are not permanently discarded on first authenticated load.",
+      "acceptanceCriteria": [
+        "Local-only recipe detection no longer relies on !id.includes('-'); it uses the generateId/UUID shape (e.g. treat non-UUID as local)",
+        "Recipes created offline are migrated (bulk insert) on sign-in instead of being replaced by setRecipes(dbRecipes)",
+        "Add a test with a locally-generated recipe id proving it is detected as local-only and migrated"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: data-integrity | Source: code-review 2026-07-11] Confirmed: AppContext.tsx:263-264 filters with !lr.id.includes('-') but generateId() returns `${Date.now()}-${rand}` which always contains '-', so localOnlyRecipes is always empty."
+    },
+    {
+      "id": "US-528",
+      "title": "Uniform router-level requireAdmin + server-side admin enforcement audit",
+      "description": "As a security owner, I want /admin and /admin-dashboard gated by requireAdmin and every admin edge function to verify admin server-side so that client-side gating is never the only boundary.",
+      "acceptanceCriteria": [
+        "/admin and /admin-dashboard routes use <ProtectedRoute requireAdmin> like their siblings",
+        "Audit all admin edge functions (e.g. list-users, update-user) and confirm each independently verifies caller admin role via user_roles / is_admin()",
+        "Confirm user_roles RLS prevents a user from self-granting the admin role",
+        "Document findings; add server-side checks where missing"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: security/authorization | Source: code-review 2026-07-11] Confirmed: src/App.tsx:329-346 both use <ProtectedRoute> without requireAdmin (siblings at 348+ use it); pages self-check via useAdminCheck, which is fragile."
+    },
+    {
+      "id": "US-529",
+      "title": "Harden Content-Security-Policy (remove unsafe-inline / unsafe-eval)",
+      "description": "As a security owner, I want a nonce/hash-based CSP so that an injected inline script cannot execute and exfiltrate the localStorage session token.",
+      "acceptanceCriteria": [
+        "script-src no longer contains 'unsafe-inline' or 'unsafe-eval'; inline scripts use nonces/hashes (Cloudflare Pages _worker.js or hashed tags)",
+        "Remove cdn.jsdelivr.net from script-src if unused; tighten img-src away from blanket https:",
+        "App (GA loader, Three.js) still functions with the tightened policy",
+        "Verify via browser that no CSP violations occur on core pages"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: security/csp | Source: code-review 2026-07-11] Confirmed: public/_headers:32 has script-src 'self' 'unsafe-inline' 'unsafe-eval' ... cdn.jsdelivr.net; matters more because JWTs live in localStorage."
+    },
+    {
+      "id": "US-530",
+      "title": "Harden XSS sinks (document.write + JSON-LD injection + link rel)",
+      "description": "As a security owner, I want all raw-HTML sinks escaped/sanitized so that user- or template-authored content cannot inject script.",
+      "acceptanceCriteria": [
+        "RecipeExportActions escapes/sanitizes recipe.name and generated content (or builds the print DOM via textContent) before document.write",
+        "InvoicesList sanitizes invoice HTML client-side or the generate-invoice function is confirmed to escape all user-derived fields",
+        "WebSiteSchema and ComparisonSchema use the scriptTag.textContent pattern (like RecipeSchema) instead of dangerouslySetInnerHTML+JSON.stringify",
+        "sanitizeHtml adds rel='noopener noreferrer' to any anchor carrying target (afterSanitizeAttributes hook)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: security/xss | Source: code-review 2026-07-11] Locations: RecipeExportActions.tsx:142,179,184; InvoicesList.tsx:125; schema/WebSiteSchema.tsx:86; schema/ComparisonSchema.tsx:105; lib/sanitize.ts:100-102. Recipes flow through shared/admin templates, so not purely self-XSS."
+    },
+    {
+      "id": "US-531",
+      "title": "Move Supabase web session off plaintext localStorage where feasible",
+      "description": "As a security owner, I want the session token protected from trivial XSS theft so that an injected script cannot exfiltrate the full session.",
+      "acceptanceCriteria": [
+        "Evaluate @supabase/ssr cookie-based (httpOnly) session storage for the web deployment; adopt if the Cloudflare Pages setup supports it",
+        "If cookies are not adopted, the CSP hardening (US-529) is completed as the compensating control and the tradeoff is documented",
+        "Refresh-token rotation remains enabled"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: security/auth | Source: code-review 2026-07-11] Confirmed: src/integrations/supabase/client.ts:150,160 configure storage:localStorage, storageKey:'sb-auth-token'. Standard Supabase-web tradeoff; call out + compensate."
+    },
+    {
+      "id": "US-532",
+      "title": "Low-severity edge-function hardening batch",
+      "description": "As a maintainer, I want the remaining small edge-function gaps closed so that auth checks are exact and errors do not leak upstream detail.",
+      "acceptanceCriteria": [
+        "weekly-nutrition-email compares the Bearer token exactly (not substring includes) and has an explicit config.toml verify_jwt entry",
+        "create-checkout returns a generic client error and logs the Stripe detail server-side (no upstream message forwarded)",
+        "agent-migration-check asserts raw_url hostname is raw.githubusercontent.com/github.com before attaching GITHUB_TOKEN",
+        "calculate-food-similarity calls enforceRateLimit like the other user-facing compute functions"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: security | Source: code-review 2026-07-11] Locations: weekly-nutrition-email/index.ts:22-31; create-checkout/index.ts:104-109; agent-migration-check/index.ts:44; calculate-food-similarity/index.ts."
+    },
+    {
+      "id": "US-533",
+      "title": "Test that verify_jwt=false functions reject requests without the shared secret",
+      "description": "As a maintainer, I want an automated guard that every internal function with verify_jwt=false enforces its own secret so that one that forgets the check cannot ship exposed.",
+      "acceptanceCriteria": [
+        "A test enumerates functions with verify_jwt=false in config.toml and asserts each returns 401 without AGENT_DISPATCH_SECRET (except explicitly-listed public endpoints e.g. support-intake)",
+        "Intentionally-public functions are documented in an allowlist the test reads",
+        "Test is wired into CI"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: security/ci | Source: code-review 2026-07-11] config.toml sets verify_jwt=false for many agent/automation functions; enforcement rests entirely on in-function secret checks with no automated verification."
+    },
+    {
+      "id": "US-534",
+      "title": "Add Foods realtime subscription + normalization",
+      "description": "As a multi-caregiver user, I want foods to sync live and be normalized consistently so that a food added on one device appears on another without a reload and null fields are coerced.",
+      "acceptanceCriteria": [
+        "FoodsContext opens a household-scoped foods:${householdId} postgres_changes channel with cleanup via removeChannel",
+        "Add applyFoodRealtime helper (dedupe by id, snake->camel) mirroring the other domains",
+        "Add normalizeFoodFromDB and apply it on every food load/insert/realtime path (replacing raw `as unknown as Food[]` casts)",
+        "Add tests for the realtime helper and normalizer"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: data-integrity/realtime | Source: code-review 2026-07-11] Confirmed: FoodsContext has no channel; foods cast raw at AppContext.tsx:251 and FoodsContext.tsx:50,113,164 while other domains normalize."
+    },
+    {
+      "id": "US-535",
+      "title": "Transactional bulk mutations + non-destructive optimistic rollback",
+      "description": "As a user, I want bulk edits to be all-or-nothing and rollbacks to not clobber concurrent changes so that the client and server cannot silently diverge.",
+      "acceptanceCriteria": [
+        "updateFoods uses a single transactional RPC (all-or-nothing), following the bump_grocery_item_quantities pattern, instead of Promise.all of N updates",
+        "optimisticMutation rolls back via inverse operation on the current state (functional updater), not by restoring a stale full-array snapshot",
+        "Add a test: a partial bulk failure leaves client and server consistent; a realtime event during a failed mutation is preserved"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: data-integrity | Source: code-review 2026-07-11] Confirmed: FoodsContext.tsx:132-145 (Promise.all, partial-failure divergence) and src/lib/optimisticMutation.ts:40-55 (setState(snapshot) clobbers concurrent changes)."
+    },
+    {
+      "id": "US-536",
+      "title": "Add Zod validation at the Supabase data boundary",
+      "description": "As a maintainer, I want server rows and realtime payloads validated at the boundary (per CLAUDE.md) so that schema drift is caught and logged instead of crashing the UI downstream.",
+      "acceptanceCriteria": [
+        "Load/insert/realtime rows are parsed through Zod schemas for foods, recipes, kids, plan_entries, grocery_items",
+        "Invalid rows are dropped and logged rather than type-asserted into typed state",
+        "The `as unknown as` casts on data paths are replaced by validated parses"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: correctness | Source: code-review 2026-07-11] Confirmed: pervasive `as unknown as` casts across src/contexts/*.tsx; normalizeEntities does light coercion but no validation."
+    },
+    {
+      "id": "US-537",
+      "title": "Reduce sensitive child PII persisted in web localStorage",
+      "description": "As a privacy owner, I want the plaintext web cache to minimize child health data and clear reliably on sign-out so that PII exposure to XSS / shared devices is reduced.",
+      "acceptanceCriteria": [
+        "The write-through cache excludes or minimizes child allergen/health-goal/dietary fields (or applies a short TTL)",
+        "The pending debounced save is cancelled on SIGNED_OUT and does not re-write after removeItem",
+        "The initial-load guard prevents persisting empty arrays over a valid cached backup before the server responds",
+        "Sign-out reliably scrubs the cache; add a test"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: security/data-integrity | Source: code-review 2026-07-11] Confirmed: AppContext.tsx:146-159 serializes the full snapshot (names, ages, allergens, restrictions, goals) to localStorage; mobile uses expo-secure-store, web has no equivalent. Also the save/clear race at 157-159 vs 327-343."
+    },
+    {
+      "id": "US-538",
+      "title": "plan_entries windowing must not truncate cached history",
+      "description": "As a user paging beyond the default window, I want plan history loaded on demand and merged so that entries outside -30d..+90d are not dropped from local state and the cache.",
+      "acceptanceCriteria": [
+        "The server load no longer wholesale-replaces the plan_entries slice with only the -30/+90d window and then persists that truncated set",
+        "Ranges outside the window are loaded on demand and merged (by id) rather than overwriting",
+        "Add a test proving an out-of-window cached entry survives an authenticated load"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: data-integrity | Source: code-review 2026-07-11] Confirmed: AppContext.tsx:201-209 filters to -30d..+90d then setPlanEntriesState replaces wholesale; the write-through cache then persists only that window."
+    },
+    {
+      "id": "US-539",
+      "title": "Dedupe AuthContext household resolution on startup",
+      "description": "As a user, I want household resolved once on startup so that ensure_user_household is not invoked twice and racing RPCs cannot set conflicting state.",
+      "acceptanceCriteria": [
+        "loadAuth() and the onAuthStateChange INITIAL_SESSION handler resolve household in one place (guarded/memoized by uid)",
+        "ensure_user_household is called at most once per startup",
+        "Add a test asserting a single household resolution for a fresh sign-in"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: correctness | Source: code-review 2026-07-11] Confirmed: src/contexts/AuthContext.tsx:19-54 — both paths call the RPC and setHouseholdId with no dedup."
+    },
+    {
+      "id": "US-540",
+      "title": "InsightsDashboard: derive insights with useMemo, not effect+state",
+      "description": "As a user, I want the insights dashboard to avoid a redundant second render and recompute only when inputs change so that it stays responsive.",
+      "acceptanceCriteria": [
+        "insights is computed via useMemo(() => ..., [foods, planEntries, kids, activeKid]) instead of useEffect + setInsights",
+        "The insights result is properly typed (no `any`)",
+        "No behavioral change to the displayed insights; add/adjust a test"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: performance | Source: code-review 2026-07-11] Confirmed: src/pages/InsightsDashboard.tsx:31-119 computes derived data in an effect and stores it in state typed `any`."
+    },
+    {
+      "id": "US-541",
+      "title": "Bundle-split heavy animation libraries (framer-motion, GSAP)",
+      "description": "As a user, I want heavy animation libs code-split so that the Planner and animated sections do not ship unused/eagerly-loaded bundles.",
+      "acceptanceCriteria": [
+        "AnimatedSection removes the unused `motion` import, keeping only LazyMotion/domAnimation/m",
+        "GSAPCalendarMealPlanner is lazy()-loaded behind <Suspense> (or gsap is dynamically imported inside it) so the Planner chunk no longer statically includes gsap",
+        "Bundle analysis confirms gsap is not in the initial Planner chunk"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: performance | Source: code-review 2026-07-11] Confirmed: src/components/AnimatedSection.tsx:2 imports unused motion; src/pages/Planner.tsx:6 statically imports GSAPCalendarMealPlanner which imports gsap + gsap/Draggable at module top."
+    },
+    {
+      "id": "US-542",
+      "title": "Fix keyboard-shortcut modifier matching logic",
+      "description": "As a user, I want shortcuts to match the exact modifier combination so that plain-key shortcuts do not fire while Ctrl/Cmd is held and native browser shortcuts are not hijacked.",
+      "acceptanceCriteria": [
+        "Each modifier (ctrl, meta, shift, alt) is matched independently against its expected boolean and AND-ed together",
+        "ctrl/meta are only OR-ed when the shortcut explicitly means 'ctrl-or-cmd'",
+        "Pressing Ctrl+N no longer triggers a plain 'n' shortcut; add a test for modifier combinations"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: correctness | Source: code-review 2026-07-11] Confirmed: src/hooks/useKeyboardShortcuts.ts:53-70 — (ctrlMatches || metaMatches) with default-true branches fires plain shortcuts under a held modifier."
+    },
+    {
+      "id": "US-543",
+      "title": "Stabilize churny hooks (timers, intervals, listeners)",
+      "description": "As a maintainer, I want debounce/polling/click-outside/timer hooks to be render-stable so that they don't tear down and recreate effects every render or cause extra renders.",
+      "acceptanceCriteria": [
+        "useDebouncedCallback stores the timer in a ref and returns a useCallback-stable function (no setState-per-call)",
+        "usePolling keeps callbacks in refs and depends only on interval/isPolling",
+        "useClickOutside keeps handler in a ref (or documents that refs must be memoized) so listeners aren't re-added every render",
+        "CookMode countdown depends only on the running flag and uses the functional updater",
+        "useUndoRedo replaces double JSON.stringify equality with a cheaper structural/dirty check"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: performance | Source: code-review 2026-07-11] Locations: src/hooks/useDebounce.ts:54-79; useAsync.ts:224-262; useClickOutside.ts:26-52,76-99; components/recipes/CookMode.tsx:76-89; hooks/useUndoRedo.ts:37."
+    },
+    {
+      "id": "US-544",
+      "title": "Fix AI Coach conversation-switch race condition",
+      "description": "As a user rapidly switching AI Coach conversations, I want stale query results discarded so that messages from a previously-selected conversation don't render under the wrong one.",
+      "acceptanceCriteria": [
+        "loadMessages effect uses an ignore flag / AbortController and discards results if activeConversation changed",
+        "loadConversations effect dependencies are corrected (no empty array while reading user)",
+        "User-facing error state (not just console) on load failure"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: correctness | Source: code-review 2026-07-11] Confirmed: src/components/AIMealCoach.tsx:70-134 — no cancellation; errors only logged; loadConversations effect has empty deps while reading user."
+    },
+    {
+      "id": "US-545",
+      "title": "Add CI quality-gate ratchet for typecheck and lint",
+      "description": "As a maintainer, I want CI to block growth of the type/lint backlog so that no new `any` or type errors merge while the existing debt is burned down.",
+      "acceptanceCriteria": [
+        "CI fails if the tsc -b error count exceeds a committed baseline (currently ~1238) so the backlog cannot grow",
+        "no-explicit-any is a hard error on changed files (diff-scoped lint gate)",
+        "A tracked plan/owner exists to shrink tsconfig-bypass.json; prefer // @ts-expect-error over blanket excludes so coverage self-heals",
+        "Once at zero, flip continue-on-error to false for the typecheck step"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: ci | Source: code-review 2026-07-11] Confirmed: .github/workflows/ci.yml:40 (lint) and :60 (typecheck) both continue-on-error:true && exit 0; tsconfig-bypass.json excludes src/components/admin/**."
+    },
+    {
+      "id": "US-546",
+      "title": "Reduce `any` usage at data boundaries",
+      "description": "As a maintainer, I want data-boundary casts replaced with real types so that schema drift is caught by the compiler (per the CLAUDE.md no-`any` rule).",
+      "acceptanceCriteria": [
+        "Top offenders (InsightsDashboard, Planner, Grocery, Pantry, dashboard/AccountSettings) replace `as any`/`as unknown as` on Supabase data with Database['public']['Tables'][...]['Row'] + normalizers",
+        "No new `any` introduced; count of `any` in these files trends down"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "[Severity: Low | Category: maintainability | Source: code-review 2026-07-11] ~223 `any` occurrences across pages/components/hooks; frequently as setState(data as any) / (supabase.from(...) as any) at the exact boundaries where types matter."
+    },
+    {
+      "id": "US-547",
+      "title": "Migration hygiene: remove DROP..CASCADE and duplicate version prefixes",
+      "description": "As a DB owner, I want forward migrations to be non-destructive and uniquely versioned so that re-runs can't wipe data and apply-order is deterministic.",
+      "acceptanceCriteria": [
+        "The DROP TABLE IF EXISTS <t> CASCADE blocks in the SEO/GSC create migrations are replaced with CREATE TABLE IF NOT EXISTS + additive ALTER ... ADD COLUMN IF NOT EXISTS",
+        "The 7 duplicate migration version prefixes are renumbered to unique monotonically-increasing timestamps",
+        "A CI check fails on duplicate migration version prefixes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: backward-compat/ci | Source: code-review 2026-07-11] Locations: 20251103000000_create_seo_management_tables.sql (drops at 16,86,131,181,222,247,296,355), 20251104000000_google_search_console_integration.sql; duplicate prefixes incl. 20251107000000, 20260205000000, 20260512000000, 20260513000000."
+    },
+    {
+      "id": "US-548",
+      "title": "Add covering indexes on FK / RLS-predicate columns",
+      "description": "As a DB owner, I want indexes on the columns used in RLS predicates and realtime filters so that policy evaluation and joins don't sequential-scan under load.",
+      "acceptanceCriteria": [
+        "Run Supabase unindexed_foreign_keys linter and review seq scans",
+        "Add covering indexes on user_id/household_id/kid_id for high-write tables (plan_entries, grocery_items, food_attempts) where missing",
+        "Migration is additive (CREATE INDEX, ideally CONCURRENTLY where supported)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: performance | Source: code-review 2026-07-11] 897 CREATE INDEX total but only 78 on user_id / 37 on household_id across ~290 tables; some RLS-filtered columns likely unindexed."
+    },
+    {
+      "id": "US-549",
+      "title": "Use crypto.randomUUID for locally-generated ids",
+      "description": "As a maintainer, I want collision-resistant local ids so that offline bulk inserts (which share a millisecond) cannot collide and break dedupe-by-id in realtime merges.",
+      "acceptanceCriteria": [
+        "generateId returns crypto.randomUUID() with a safe fallback for environments lacking it",
+        "Local-id detection (US-527) is aligned to the new UUID shape",
+        "No regressions in realtime dedupe-by-id"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "[Severity: Low | Category: correctness | Source: code-review 2026-07-11] Confirmed: src/lib/utils.ts:8-10 generateId = Date.now()+9 random base36 chars; bulk inserts in one tick share the ms."
+    },
+    {
+      "id": "US-550",
+      "title": "Remove dead unscoped query branches; always apply household filter",
+      "description": "As a security owner, I want client queries to always scope by household_id so that RLS is a second line of defense rather than the only one.",
+      "acceptanceCriteria": [
+        "refreshFoods/refreshKids/refreshRecipes always .eq('household_id', householdId)",
+        "The misleading unscoped ternary branches in the load effect and refresh helpers are removed",
+        "Behavior unchanged for the scoped path; add a test asserting the filter is applied"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "[Severity: Low | Category: security | Source: code-review 2026-07-11] Locations: AppContext.tsx:189-213, FoodsContext.tsx:163, RecipesContext.tsx:313-314, KidsContext.tsx:164 — unscoped selects rely solely on RLS."
+    },
+    {
+      "id": "US-551",
+      "title": "Fix copyWeekPlan/deleteWeekPlan reading state via setState side effect",
+      "description": "As a maintainer, I want current plan entries read from a ref rather than a setState side effect so that the logic is StrictMode-safe and intent is clear.",
+      "acceptanceCriteria": [
+        "copyWeekPlan/deleteWeekPlan read current entries from a planEntriesRef (updated each render) or include planEntries in deps",
+        "The setPlanEntriesRaw(prev => { currentEntries = prev; return prev; }) read-hack is removed",
+        "Behavior verified under StrictMode double-invocation"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "[Severity: Low | Category: correctness | Source: code-review 2026-07-11] Confirmed: src/contexts/PlanContext.tsx:142-143,178-179."
+    },
+    {
+      "id": "US-552",
+      "title": "A11y and list-key correctness cleanups",
+      "description": "As a user relying on reduced motion / assistive tech, I want motion preferences respected and stable list keys so that scrolling and dynamic lists behave correctly.",
+      "acceptanceCriteria": [
+        "AIMealCoach scrollIntoView uses behavior: shouldReduceMotion ? 'auto' : 'smooth' via useReducedMotion()",
+        "Recipes/Pantry suggestion and badge lists key by a stable id/name rather than array index",
+        "Any icon-only buttons flagged during the fix get aria-labels"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "[Severity: Low | Category: a11y/correctness | Source: code-review 2026-07-11] Locations: AIMealCoach.tsx:80-82; Recipes.tsx:762,773; Pantry.tsx:1134-1136."
+    },
+    {
+      "id": "US-553",
+      "title": "Decompose monolithic page/component files",
+      "description": "As a maintainer, I want the largest files split into subcomponents and shared helpers so that they render and memoize independently and duplicated logic is removed.",
+      "acceptanceCriteria": [
+        "SEOManager.tsx (~5.6k lines) is decomposed into feature subcomponents with data hooks extracted",
+        "Pantry.tsx / Grocery.tsx data-fetching is separated from JSX so heavy subtrees can be memoized",
+        "Duplicated insight math (calculateInsights vs calculateFamilyInsights) is extracted to a shared helper"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "[Severity: Low | Category: maintainability | Source: code-review 2026-07-11] Files: src/components/admin/SEOManager.tsx (5593), src/pages/Pantry.tsx (1358), Grocery.tsx (1305), Pricing.tsx (1232), GSAPCalendarMealPlanner.tsx (1236)."
     }
   ]
 }
