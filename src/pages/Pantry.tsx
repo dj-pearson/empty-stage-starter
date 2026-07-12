@@ -20,10 +20,17 @@ import type { PantryQuickAddParse } from "@/lib/pantryQuickAddParser";
 import {
   CATEGORY_CONFIG,
   CATEGORY_ORDER,
-  getStockStatus,
   type SortOption,
   type ViewMode,
 } from "@/components/pantry/pantryConstants";
+import {
+  computeUniqueKidAllergens,
+  computeCategoryCounts,
+  computeStockStats,
+  filterAndSortFoods,
+  groupFoodsByCategory,
+  type StockFilter,
+} from "@/lib/pantryData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -87,8 +94,6 @@ interface FoodSuggestion {
   category: FoodCategory;
   reason: string;
 }
-
-type StockFilter = "all" | "low-stock" | "out-of-stock";
 
 export default function Pantry() {
   const {
@@ -187,81 +192,26 @@ export default function Pantry() {
   });
 
   // === DERIVED DATA ===
+  // Pure derivations live in src/lib/pantryData.ts (unit-tested) so the data
+  // logic is separated from this JSX and the memoized subtrees stay stable (US-553 AC2).
 
-  const uniqueKidAllergens = useMemo(() => {
-    const all = kids.reduce<string[]>((acc, kid) => {
-      if (kid.allergens) return [...acc, ...kid.allergens];
-      return acc;
-    }, []);
-    return [...new Set(all)];
-  }, [kids]);
+  const uniqueKidAllergens = useMemo(() => computeUniqueKidAllergens(kids), [kids]);
 
-  // Category counts
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: foods.length };
-    for (const cat of CATEGORY_ORDER) {
-      counts[cat] = foods.filter((f) => f.category === cat).length;
-    }
-    return counts;
-  }, [foods]);
+  const categoryCounts = useMemo(() => computeCategoryCounts(foods), [foods]);
 
-  // Stock stats
-  const stockStats = useMemo(() => {
-    let lowStock = 0;
-    let outOfStock = 0;
-    let safeCount = 0;
-    let tryBiteCount = 0;
-    for (const f of foods) {
-      const status = getStockStatus(f.quantity);
-      if (status === "low") lowStock++;
-      if (status === "out") outOfStock++;
-      if (f.is_safe) safeCount++;
-      if (f.is_try_bite) tryBiteCount++;
-    }
-    return { lowStock, outOfStock, safeCount, tryBiteCount };
-  }, [foods]);
+  const stockStats = useMemo(() => computeStockStats(foods), [foods]);
 
   // Filtered and sorted foods
-  const processedFoods = useMemo(() => {
-    let result = foods.filter((food) => {
-      if (!food || !food.name) return false;
-      const matchesSearch = food.name
-        .toLowerCase()
-        .includes(debouncedSearchQuery.toLowerCase());
-      const matchesCategory =
-        categoryFilter === "all" || food.category === categoryFilter;
-      const matchesStock =
-        stockFilter === "all" ||
-        (stockFilter === "low-stock" &&
-          getStockStatus(food.quantity) === "low") ||
-        (stockFilter === "out-of-stock" &&
-          getStockStatus(food.quantity) === "out");
-      return matchesSearch && matchesCategory && matchesStock;
-    });
-
-    // Sort
-    switch (sortBy) {
-      case "name":
-        result = [...result].sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      case "low-stock":
-        result = [...result].sort(
-          (a, b) => (a.quantity ?? 0) - (b.quantity ?? 0)
-        );
-        break;
-      case "category":
-        result = [...result].sort((a, b) => {
-          const ai = CATEGORY_ORDER.indexOf(a.category);
-          const bi = CATEGORY_ORDER.indexOf(b.category);
-          return ai - bi || a.name.localeCompare(b.name);
-        });
-        break;
-      case "recent":
-        result = [...result].reverse();
-        break;
-    }
-    return result;
-  }, [foods, debouncedSearchQuery, categoryFilter, stockFilter, sortBy]);
+  const processedFoods = useMemo(
+    () =>
+      filterAndSortFoods(foods, {
+        search: debouncedSearchQuery,
+        category: categoryFilter,
+        stock: stockFilter,
+        sortBy,
+      }),
+    [foods, debouncedSearchQuery, categoryFilter, stockFilter, sortBy]
+  );
 
   // Paginate: show only visibleCount items (load-more pattern)
   const displayedFoods = useMemo(() => processedFoods.slice(0, visibleCount), [processedFoods, visibleCount]);
@@ -283,18 +233,7 @@ export default function Pantry() {
   });
 
   // Grouped by category (for "all" view without search)
-  const groupedFoods = useMemo(() => {
-    const groups: Record<string, Food[]> = {};
-    for (const cat of CATEGORY_ORDER) {
-      groups[cat] = [];
-    }
-    for (const food of processedFoods) {
-      if (groups[food.category]) {
-        groups[food.category].push(food);
-      }
-    }
-    return groups;
-  }, [processedFoods]);
+  const groupedFoods = useMemo(() => groupFoodsByCategory(processedFoods), [processedFoods]);
 
   // Should show grouped view?
   const showGroupedView =
